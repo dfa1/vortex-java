@@ -37,12 +37,14 @@ import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.SequencedMap;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 
 /// Iterates over decoded chunks from a [io.github.dfa1.vortex.reader.VortexReader].
@@ -79,7 +81,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private List<ChunkSpec> chunks;
     private List<ColumnName> projectedNames;
     private List<DType> projectedDtypes;
-    private Map<ColumnName, Layout> columnTopLayouts;
     private Map<ColumnName, DType> columnDtypes;
     private int chunkIndex;
     private int peekedChunkIdx = -1;
@@ -87,7 +88,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private Chunk openChunk;
     private boolean closed;
     private Arena sharedArena;
-    private Map<ColumnName, Array> sharedFullArrays;
+    private Map<Layout, Array> sharedFlats;
 
     public ScanIterator(VortexHandle file, ScanOptions options) {
         this.file = file;
@@ -123,63 +124,89 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
     }
 
-    private static List<ChunkSpec> buildChunks(Map<ColumnName, List<Layout>> columnFlats) {
+    /// Plans the scan by merging every column's chunk grid into one split grid, mirroring the Rust
+    /// reference: `StructReader::register_splits` unions each field's chunk boundaries into a single
+    /// sorted, deduplicated set (`vortex-layout/src/scan/split_by.rs`), and the scan then walks each
+    /// adjacent-boundary window slicing every column's covering chunk to it. The merged grid refines
+    /// every column's grid, so each window lies entirely within exactly one chunk of each column.
+    ///
+    /// This subsumes the previous special cases without regressing them:
+    /// - aligned N-vs-N (all columns share a grid) — every window equals a whole chunk, so decode is
+    ///   direct with no slicing;
+    /// - 1-vs-N (one full-column flat over a chunked column) — the single flat covers every window
+    ///   and is decoded once, then sliced;
+    /// - nested boundaries (emotions-dataset-for-nlp: `label` `[131072 ×3, 23593]` vs `text`'s
+    ///   26-chunk `16384` grid) and disjoint grids (uci-beijing-multi-site-air-quality: numeric
+    ///   `[131072 ×3, 27552]` vs `station`'s `40960/49152/...` grid) both fall out of the union.
+    static List<ChunkSpec> buildChunks(Map<ColumnName, List<Layout>> columnFlats) {
         if (columnFlats.isEmpty()) {
             return List.of();
         }
         ColumnName[] colNames = columnFlats.keySet().toArray(ColumnName[]::new);
         int numCols = colNames.length;
-        int maxChunks = 0;
-        int refCol = 0;
+
+        // Per-column cumulative chunk starts: colStarts[j][c] is the first row of chunk c and the
+        // final entry is the column's total row count. Chunk c spans [colStarts[j][c], colStarts[j][c+1]).
+        long[][] colStarts = new long[numCols][];
         for (int j = 0; j < numCols; j++) {
-            int n = columnFlats.get(colNames[j]).size();
-            if (n > maxChunks) {
-                maxChunks = n;
-                refCol = j;
+            List<Layout> flats = columnFlats.get(colNames[j]);
+            long[] starts = new long[flats.size() + 1];
+            long acc = 0;
+            for (int c = 0; c < flats.size(); c++) {
+                starts[c] = acc;
+                acc += flats.get(c).rowCount();
             }
+            starts[flats.size()] = acc;
+            colStarts[j] = starts;
         }
-        // Detect single-flat columns sharing the chunked range of a wider column.
-        // Other mismatched widths (e.g. 5 flats vs 23 flats) are not supported.
-        boolean[] shared = new boolean[numCols];
-        for (int j = 0; j < numCols; j++) {
-            int n = columnFlats.get(colNames[j]).size();
-            if (n == maxChunks) {
-                continue;
+
+        long[] boundaries = mergedBoundaries(colStarts);
+        int numWindows = boundaries.length - 1;
+        var result = new ArrayList<ChunkSpec>(numWindows);
+        int[] cursor = new int[numCols]; // covering chunk index per column; advances monotonically
+        for (int w = 0; w < numWindows; w++) {
+            long windowStart = boundaries[w];
+            long windowRows = boundaries[w + 1] - windowStart;
+            Layout[] layouts = new Layout[numCols];
+            long[] sliceOffsets = new long[numCols];
+            for (int j = 0; j < numCols; j++) {
+                long[] starts = colStarts[j];
+                int c = cursor[j];
+                // Advance to the chunk whose range contains windowStart (starts[c+1] > windowStart).
+                while (c + 1 < starts.length && starts[c + 1] <= windowStart) {
+                    c++;
+                }
+                cursor[j] = c;
+                List<Layout> flats = columnFlats.get(colNames[j]);
+                if (c >= flats.size()) {
+                    throw new VortexException("scan: column '" + colNames[j]
+                            + "' has no chunk covering rows [" + windowStart + ", "
+                            + (windowStart + windowRows) + ")");
+                }
+                layouts[j] = flats.get(c);
+                sliceOffsets[j] = windowStart - starts[c];
             }
-            if (n == 1) {
-                shared[j] = true;
-            } else {
-                throw new VortexException(
-                        "scan: column '" + colNames[j] + "' has " + n
-                                + " flats but the widest column has " + maxChunks
-                                + "; mixed per-column chunking beyond 1-vs-N is not supported");
-            }
-        }
-        var result = new ArrayList<ChunkSpec>(maxChunks);
-        long sliceStart = 0;
-        for (int i = 0; i < maxChunks; i++) {
-            long chunkRowCount = columnFlats.get(colNames[refCol]).get(i).rowCount();
-            result.add(buildChunkSpec(colNames, columnFlats, shared, i, sliceStart, chunkRowCount));
-            sliceStart += chunkRowCount;
+            result.add(new ChunkSpec(windowRows, colNames, layouts, sliceOffsets));
         }
         return List.copyOf(result);
     }
 
-    private static ChunkSpec buildChunkSpec(ColumnName[] colNames, Map<ColumnName, List<Layout>> columnFlats,
-            boolean[] shared, int chunkIdx, long sliceStart, long chunkRowCount) {
-        int numCols = colNames.length;
-        Layout[] layouts = new Layout[numCols];
-        long[] sliceOffsets = new long[numCols];
-        for (int j = 0; j < numCols; j++) {
-            if (shared[j]) {
-                layouts[j] = null;
-                sliceOffsets[j] = sliceStart;
-            } else {
-                layouts[j] = columnFlats.get(colNames[j]).get(chunkIdx);
-                sliceOffsets[j] = 0L;
+    /// Returns the sorted, deduplicated union of every column's cumulative chunk starts (each ending
+    /// in the column's total row count). The result always contains `0` and the total; adjacent
+    /// entries are the scan's split windows.
+    private static long[] mergedBoundaries(long[][] colStarts) {
+        var set = new TreeSet<Long>();
+        for (long[] starts : colStarts) {
+            for (long s : starts) {
+                set.add(s);
             }
         }
-        return new ChunkSpec(chunkRowCount, colNames, layouts, sliceOffsets);
+        long[] out = new long[set.size()];
+        int i = 0;
+        for (long v : set) {
+            out[i++] = v;
+        }
+        return out;
     }
 
     // ── Layout tree traversal ─────────────────────────────────────────────────
@@ -540,7 +567,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (sharedArena != null) {
             sharedArena.close();
             sharedArena = null;
-            sharedFullArrays = null;
+            sharedFlats = null;
         }
     }
 
@@ -555,7 +582,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         DType rootDtype = file.dtype();
 
         var columnFlats = new LinkedHashMap<ColumnName, List<Layout>>();
-        var columnTopLayouts = new LinkedHashMap<ColumnName, Layout>();
         Map<ColumnName, DType> columnDtypes = new LinkedHashMap<>();
 
         if (rootLayout.isStruct() && rootDtype instanceof DType.Struct structDtype) {
@@ -570,7 +596,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 var flats = new ArrayList<Layout>();
                 collectFlats(colTop, flats);
                 columnFlats.put(colName, flats);
-                columnTopLayouts.put(colName, colTop);
                 columnDtypes.put(colName, colDtype);
             }
         } else {
@@ -578,43 +603,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             collectFlats(rootLayout, flats);
             ColumnName colName = ColumnName.of("_col");
             columnFlats.put(colName, flats);
-            columnTopLayouts.put(colName, rootLayout);
             columnDtypes.put(colName, rootDtype);
         }
 
         projectedNames = List.copyOf(columnDtypes.keySet());
         projectedDtypes = List.copyOf(columnDtypes.values());
-        this.columnTopLayouts = Map.copyOf(columnTopLayouts);
         chunks = buildChunks(columnFlats);
-        decodeSharedColumns(columnFlats, columnTopLayouts, columnDtypes);
-    }
-
-    private void decodeSharedColumns(
-            Map<ColumnName, List<Layout>> columnFlats,
-            Map<ColumnName, Layout> columnTopLayouts,
-            Map<ColumnName, DType> columnDtypes) {
-        int maxFlats = 0;
-        for (List<Layout> flats : columnFlats.values()) {
-            if (flats.size() > maxFlats) {
-                maxFlats = flats.size();
-            }
-        }
-        if (maxFlats <= 1) {
-            return;
-        }
-        for (var entry : columnFlats.entrySet()) {
-            if (entry.getValue().size() != 1) {
-                continue;
-            }
-            if (sharedArena == null) {
-                sharedArena = Arena.ofConfined();
-                sharedFullArrays = new HashMap<>();
-            }
-            ColumnName name = entry.getKey();
-            Layout topLayout = columnTopLayouts.get(name);
-            DType dtype = columnDtypes.get(name);
-            sharedFullArrays.put(name, decodeLayout(topLayout, dtype, sharedArena));
-        }
     }
 
     // A LinkedHashMap preserves schema/projection order (the public columns() contract is a
@@ -640,8 +634,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     /// Builds the column map for [#decodeChunkAt(int)]. Identical decode to [#buildColumnMap]
-    /// except that a shared (single-flat) column is decoded into `arena` and sliced there,
-    /// so the resulting [Chunk] owns every buffer and survives this iterator's close.
+    /// except that a covering chunk spanning several windows is decoded into `arena` and sliced
+    /// there, so the resulting [Chunk] owns every buffer and survives this iterator's close.
     private SequencedMap<ColumnName, Chunk.Column> buildSelfContainedColumnMap(ChunkSpec chunk, Arena arena) {
         Layout[] layouts = chunk.columnLayouts();
         long[] sliceOffsets = chunk.sliceOffsets();
@@ -668,30 +662,44 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return unmodifiable(map);
     }
 
-    private Array decodeOrSliceSelfContained(int colIdx, Layout layout, long sliceStart,
+    private Array decodeOrSliceSelfContained(int colIdx, Layout coveringFlat, long sliceOffset,
                                              long rowCount, Arena arena) {
-        if (layout != null) {
-            return decodeLayout(layout, projectedDtypes.get(colIdx), arena);
-        }
-        // Shared single-flat column: decode its full top layout into THIS chunk's arena and
-        // slice, so the returned Chunk does not reference the iterator's shared arena.
-        ColumnName name = projectedNames.get(colIdx);
         DType dtype = projectedDtypes.get(colIdx);
-        Array full = decodeLayout(columnTopLayouts.get(name), dtype, arena);
-        return sliceArray(full, sliceStart, rowCount, dtype);
+        Array full = decodeLayout(coveringFlat, dtype, arena);
+        if (isWholeFlat(coveringFlat, sliceOffset, rowCount)) {
+            return full;
+        }
+        // Covering chunk spans several windows: slice it into THIS chunk's arena so the returned
+        // Chunk owns every buffer and survives this iterator's close.
+        return sliceArray(full, sliceOffset, rowCount, dtype);
     }
 
-    private Array decodeOrSlice(int colIdx, Layout layout, long sliceStart, long rowCount,
+    private Array decodeOrSlice(int colIdx, Layout coveringFlat, long sliceOffset, long rowCount,
                                 Arena arena) {
-        if (layout != null) {
-            return decodeLayout(layout, projectedDtypes.get(colIdx), arena);
+        DType dtype = projectedDtypes.get(colIdx);
+        if (isWholeFlat(coveringFlat, sliceOffset, rowCount)) {
+            // Fast path: the window is a whole chunk — decode straight into the chunk's arena with
+            // no slice wrapper (aligned N-vs-N and per-chunk decode keep their zero-copy behavior).
+            return decodeLayout(coveringFlat, dtype, arena);
         }
-        Array full = sharedFullArrays.get(projectedNames.get(colIdx));
-        if (full == null) {
-            throw new VortexException("scan: missing shared array for column "
-                    + projectedNames.get(colIdx));
+        // Covering chunk spans several windows: decode it once into the shared arena and slice
+        // zero-copy per window, matching how Rust decodes a chunk once and slices each split range.
+        Array full = sharedCoveringFlat(coveringFlat, dtype);
+        return sliceArray(full, sliceOffset, rowCount, dtype);
+    }
+
+    private static boolean isWholeFlat(Layout coveringFlat, long sliceOffset, long rowCount) {
+        return sliceOffset == 0 && rowCount == coveringFlat.rowCount();
+    }
+
+    /// Decodes `flat` once into the iterator's shared arena and caches it by identity, so a coarse
+    /// chunk that covers several split windows is decoded a single time and then sliced per window.
+    private Array sharedCoveringFlat(Layout flat, DType dtype) {
+        if (sharedArena == null) {
+            sharedArena = Arena.ofConfined();
+            sharedFlats = new IdentityHashMap<>();
         }
-        return sliceArray(full, sliceStart, rowCount, projectedDtypes.get(colIdx));
+        return sharedFlats.computeIfAbsent(flat, f -> decodeLayout(f, dtype, sharedArena));
     }
 
     private static Array sliceArray(Array full, long offset, long length, DType dtype) {
@@ -873,7 +881,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // ── Internal record ───────────────────────────────────────────────────────
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-    private record ChunkSpec(
+    record ChunkSpec(
             long rowCount, ColumnName[] columnNames, Layout[] columnLayouts, long[] sliceOffsets) {
         Layout layoutFor(ColumnName col) {
             for (int i = 0; i < columnNames.length; i++) {

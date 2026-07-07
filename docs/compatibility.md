@@ -62,9 +62,11 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
 `untriaged` runs and reports without failing the build). A scheduled workflow
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
-28 `ok`, 2 known gaps (both misaligned per-column chunk grids,
-[#221](https://github.com/dfa1/vortex-java/issues/221)); 217 slugs untriaged. Fixed so far
-by this suite: lazy dict U8/U16 values ([#206](https://github.com/dfa1/vortex-java/issues/206)),
+30 `ok`, 0 known gaps; 217 slugs untriaged. Fixed so far
+by this suite: misaligned per-column chunk grids
+([#221](https://github.com/dfa1/vortex-java/issues/221) — scan now splits at the merged boundary
+grid, slicing each column's covering chunk per window), lazy dict U8/U16 values
+([#206](https://github.com/dfa1/vortex-java/issues/206)),
 nested struct columns in scan ([#207](https://github.com/dfa1/vortex-java/issues/207)),
 unsigned integers rendered signed ([#208](https://github.com/dfa1/vortex-java/issues/208) /
 [#216](https://github.com/dfa1/vortex-java/issues/216) — silent corruption, incl. wrong filter
