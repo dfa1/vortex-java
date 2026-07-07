@@ -26,7 +26,7 @@ class ScanIteratorChunkGridTest {
     @Test
     void alignedGridsDecodeEveryColumnAsAWholeChunk() {
         // Given two columns with the *same* grid [4, 4] over 8 rows — the aligned N-vs-N fast path.
-        var columnFlats = flats(Map.of(A, new long[]{4, 4}, B, new long[]{4, 4}));
+        var columnFlats = flats(A, new long[]{4, 4}, B, new long[]{4, 4});
 
         // When
         List<ChunkSpec> result = ScanIterator.buildChunks(columnFlats);
@@ -43,7 +43,7 @@ class ScanIteratorChunkGridTest {
     @Test
     void singleFlatColumnSharesTheChunkedGrid() {
         // Given one full-column flat [8] beside a chunked column [4, 4] — the 1-vs-N case.
-        var columnFlats = flats(Map.of(A, new long[]{8}, B, new long[]{4, 4}));
+        var columnFlats = flats(A, new long[]{8}, B, new long[]{4, 4});
 
         // When
         List<ChunkSpec> result = ScanIterator.buildChunks(columnFlats);
@@ -62,9 +62,9 @@ class ScanIteratorChunkGridTest {
         // Given the emotions-dataset-for-nlp shape scaled down: a coarse column [8, 8, 8, 4] (like
         // `label`'s [131072 ×3, 23593]) beside a fine column of 2-row chunks (like `text`'s 16384
         // grid, where 8 = 4 × 2 so every coarse boundary is also a fine boundary).
-        var columnFlats = flats(Map.of(
+        var columnFlats = flats(
                 A, new long[]{8, 8, 8, 4},
-                B, new long[]{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}));
+                B, new long[]{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2});
 
         // When
         List<ChunkSpec> result = ScanIterator.buildChunks(columnFlats);
@@ -94,9 +94,9 @@ class ScanIteratorChunkGridTest {
         // Given the uci-beijing-multi-site-air-quality shape scaled down: [3, 3, 2] vs [4, 4] over 8
         // rows. The boundaries do not nest (3 + 3 = 6 != 4, mirroring 40960 + 49152 != 131072), so
         // neither grid refines the other — the scan must emit windows at the union of boundaries.
-        var columnFlats = flats(Map.of(
+        var columnFlats = flats(
                 A, new long[]{3, 3, 2},
-                B, new long[]{4, 4}));
+                B, new long[]{4, 4});
 
         // When
         List<ChunkSpec> result = ScanIterator.buildChunks(columnFlats);
@@ -134,16 +134,22 @@ class ScanIteratorChunkGridTest {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static Map<ColumnName, List<Layout>> flats(Map<ColumnName, long[]> grids) {
+    /// Builds an insertion-ordered `column -> flats` map for two columns. A [LinkedHashMap] states
+    /// the intended column order explicitly (the planner's output is order-independent and read
+    /// back by name here, but an unordered [Map#of] would hide that intent).
+    private static Map<ColumnName, List<Layout>> flats(ColumnName n1, long[] g1, ColumnName n2, long[] g2) {
         var out = new LinkedHashMap<ColumnName, List<Layout>>();
-        for (var entry : grids.entrySet()) {
-            var list = new ArrayList<Layout>();
-            for (long rows : entry.getValue()) {
-                list.add(new Layout(LayoutId.FLAT, rows, null, List.of(), List.of()));
-            }
-            out.put(entry.getKey(), list);
-        }
+        out.put(n1, toFlats(g1));
+        out.put(n2, toFlats(g2));
         return out;
+    }
+
+    private static List<Layout> toFlats(long[] chunkRows) {
+        var list = new ArrayList<Layout>(chunkRows.length);
+        for (long rows : chunkRows) {
+            list.add(new Layout(LayoutId.FLAT, rows, null, List.of(), List.of()));
+        }
+        return list;
     }
 
     private static List<Long> rowCounts(List<ChunkSpec> chunks) {

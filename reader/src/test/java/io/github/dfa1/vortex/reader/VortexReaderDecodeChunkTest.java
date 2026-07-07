@@ -262,6 +262,54 @@ class VortexReaderDecodeChunkTest {
         }
     }
 
+    // A genuinely DISJOINT per-column chunk grid (issue #221, "beijing" tier): column "a" chunks
+    // [3, 3, 2] and column "b" chunks [4, 4] over the same 8 rows. The boundaries do not nest
+    // ({0,3,6,8} vs {0,4,8}), so neither grid refines the other; the scan must split at the union
+    // {0,3,4,6,8}. "b" is nullable so the coarse-chunk slice also crosses the MaskedArray branch.
+    private static final long[] MIXED_A_ROWS = {3, 3, 2};
+    private static final long[][] MIXED_A = {{10, 11, 12}, {13, 14, 15}, {16, 17}};
+    private static final long[] MIXED_B_ROWS = {4, 4};
+    private static final long[][] MIXED_B = {{20, 21, 22, 23}, {24, 25, 26, 27}};
+    private static final boolean[][] MIXED_B_VALID = {{true, false, true, true}, {true, true, false, true}};
+    private static final List<Long> MIXED_A_EXPECTED = List.of(10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L);
+    private static final List<Long> MIXED_B_EXPECTED =
+            java.util.Arrays.asList(20L, null, 22L, 23L, 24L, 25L, null, 27L);
+
+    @Test
+    void scan_disjointMixedGrid_streamsExactValuesAcrossMergedWindows(@TempDir Path tmp) throws Exception {
+        // This is the value-level ground truth for #221's coarse-sub-chunk slice path. Neither the
+        // Java VortexWriter (its writeChunk requires all columns to agree on row count) nor the JNI
+        // writer (it writes uniform row batches) can EMIT a disjoint per-column grid, so the file is
+        // hand-assembled here; Rust-parity of the fix is covered separately by the size-gated
+        // RaincloudConformanceIntegrationTest (uci-beijing-multi-site-air-quality). Streaming the
+        // whole scan exercises the merged-grid planner end to end AND, by fully iterating, drives
+        // the coarse-flat eviction path (earlier chunks are released while later windows must still
+        // decode correctly). The ground truth is the exact values written into each segment.
+
+        // Given a file whose two columns chunk on disjoint grids [3,3,2] vs [4,4]
+        Path file = writeMixedGridFile(tmp);
+        var windowRowCounts = new ArrayList<Long>();
+        var streamedA = new ArrayList<Long>();
+        var streamedB = new ArrayList<Long>();
+
+        // When streaming the whole scan
+        try (var reader = VortexReader.open(file, registry());
+                var iter = reader.scan(ScanOptions.all())) {
+            iter.forEachRemaining(chunk -> {
+                windowRowCounts.add(chunk.rowCount());
+                streamedA.addAll(values(chunk.column("a")));
+                streamedB.addAll(values(chunk.column("b")));
+            });
+        }
+
+        // Then the scan splits at the merged grid {0,3,4,6,8} -> windows of 3,1,2,2 rows, and every
+        // value (and null) survives the coarse-chunk sub-window slice — including "a"'s middle chunk
+        // sliced at a nonzero offset for window [4,6) and "b"'s first chunk sliced for [0,3)+[3,4).
+        assertThat(windowRowCounts).containsExactly(3L, 1L, 2L, 2L);
+        assertThat(streamedA).isEqualTo(MIXED_A_EXPECTED);
+        assertThat(streamedB).isEqualTo(MIXED_B_EXPECTED);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static ReadRegistry registry() {
@@ -300,6 +348,76 @@ class VortexReaderDecodeChunkTest {
 
     private static Path writeMultiChunkFile(Path dir) throws Exception {
         return writeFile(dir, "multi.vtx", CHUNK_ROWS, COL_A, COL_B, COL_B_VALID);
+    }
+
+    /// Assembles a struct file whose columns chunk on independent grids: "a" over [MIXED_A_ROWS]
+    /// (non-nullable) and "b" over [MIXED_B_ROWS] (nullable). Segment order: a-chunk0..a-chunkN,
+    /// then b-chunk0..b-chunkM. Layout: flat=0, chunked=1, struct=2; array specs: primitive=0,
+    /// bool=1.
+    private static Path writeMixedGridFile(Path dir) throws Exception {
+        List<byte[]> segments = new ArrayList<>();
+        for (long[] chunk : MIXED_A) {
+            segments.add(primitiveSegment(chunk, null));
+        }
+        int bBase = segments.size();
+        for (int k = 0; k < MIXED_B.length; k++) {
+            segments.add(primitiveSegment(MIXED_B[k], MIXED_B_VALID[k]));
+        }
+
+        long[] segOffsets = new long[segments.size()];
+        long[] segLengths = new long[segments.size()];
+        long off = 0;
+        for (int i = 0; i < segments.size(); i++) {
+            segOffsets[i] = off;
+            segLengths[i] = segments.get(i).length;
+            off += segments.get(i).length;
+        }
+
+        int[] aSeg = new int[MIXED_A_ROWS.length];
+        for (int k = 0; k < aSeg.length; k++) {
+            aSeg[k] = k;
+        }
+        int[] bSeg = new int[MIXED_B_ROWS.length];
+        for (int k = 0; k < bSeg.length; k++) {
+            bSeg[k] = bBase + k;
+        }
+
+        ByteBuffer footerBuf = MalformedFiles.buildFooter(
+                new String[]{"vortex.primitive", "vortex.bool"},
+                new String[]{"vortex.flat", "vortex.chunked", "vortex.struct"},
+                segOffsets, segLengths);
+        ByteBuffer dtypeBuf = buildStructDtype();
+        ByteBuffer layoutBuf = buildMixedLayout(aSeg, MIXED_A_ROWS, bSeg, MIXED_B_ROWS);
+
+        return writeVtxFile(dir, "mixed.vtx", segments, footerBuf, dtypeBuf, layoutBuf);
+    }
+
+    /// Layout for the disjoint-grid file: two chunked columns whose flats carry independent
+    /// row counts, so the reader's planner must split at the union of both grids.
+    private static ByteBuffer buildMixedLayout(int[] aSeg, long[] aRows, int[] bSeg, long[] bRows) {
+        var fbb = new FbsBuilder(1024);
+        long total = 0;
+        for (long r : aRows) {
+            total += r;
+        }
+        int chunkedA = buildChunkedColumn(fbb, aSeg, aRows, total);
+        int chunkedB = buildChunkedColumn(fbb, bSeg, bRows, total);
+        int structChildV = FbsLayout.createChildrenVector(fbb, new int[]{chunkedA, chunkedB});
+        int structOff = FbsLayout.createFbsLayout(fbb, 2, total, 0, structChildV, 0);
+        FbsLayout.finishFbsLayoutBuffer(fbb, structOff);
+        return MalformedFiles.slice(fbb);
+    }
+
+    /// Builds one `vortex.chunked` layout node whose children are one `vortex.flat` per chunk,
+    /// each flat carrying its own `rows[k]` row count and single segment index `segIdx[k]`.
+    private static int buildChunkedColumn(FbsBuilder fbb, int[] segIdx, long[] rows, long total) {
+        int[] flatOffs = new int[rows.length];
+        for (int k = 0; k < rows.length; k++) {
+            int segV = FbsLayout.createSegmentsVector(fbb, new long[]{segIdx[k]});
+            flatOffs[k] = FbsLayout.createFbsLayout(fbb, 0, rows[k], 0, 0, segV);
+        }
+        int childV = FbsLayout.createChildrenVector(fbb, flatOffs);
+        return FbsLayout.createFbsLayout(fbb, 1, total, 0, childV, 0);
     }
 
     /// Streams the whole scan of the shared-column file, collecting the per-chunk column "a" and

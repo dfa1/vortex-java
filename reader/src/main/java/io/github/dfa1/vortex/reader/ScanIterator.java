@@ -87,8 +87,20 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private long rowsReturned;
     private Chunk openChunk;
     private boolean closed;
-    private Arena sharedArena;
-    private Map<Layout, Array> sharedFlats;
+    // Coarse chunks that span several split windows are decoded once and cached here (keyed by
+    // layout identity), each in its own confined arena so it can be released the moment the scan
+    // advances past its last covering window — see evictPassedFlats.
+    private Map<Layout, CachedFlat> sharedFlats;
+    // Per projected column, the covering flat of the most recently decoded window; drives eviction.
+    private Layout[] lastCoveringFlats;
+
+    /// A coarse covering flat decoded once and sliced across the windows it spans, together with
+    /// the confined [Arena] that owns its buffers (closed on eviction / iterator close).
+    ///
+    /// @param arena the confined arena owning this flat's decoded buffers
+    /// @param array the decoded flat, sliced per window
+    private record CachedFlat(Arena arena, Array array) {
+    }
 
     public ScanIterator(VortexHandle file, ScanOptions options) {
         this.file = file;
@@ -295,6 +307,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         chunkIndex = peekedChunkIdx + 1;
         peekedChunkIdx = -1;
 
+        evictPassedFlats(spec);
+
         long remaining = options.limit() - rowsReturned;
         long chunkRows = Math.min(spec.rowCount(), remaining);
 
@@ -390,11 +404,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// `null`, since the flat writer does not retain it). Either way a column that is absent
     /// or carries no stats yields [ArrayStats#empty()] per zone.
     ///
-    /// Zone granularity is the layout's, not the scan's. The fallback path is one entry per
-    /// chunk, positionally aligned with [#chunkRowCounts()]. The zone-map path is one entry per
-    /// zone of the stats table: this writer emits one zone per chunk (so the same alignment
-    /// holds), but a file from another writer may use a fixed zone length independent of chunk
-    /// boundaries, in which case the zone count need not match [#chunkRowCounts()].
+    /// Zone granularity is the layout's, not the scan's. The fallback path is one entry per scan
+    /// window, positionally aligned with [#chunkRowCounts()]. Each entry carries the stats of the
+    /// covering chunk of that window, so when columns chunk on different grids a coarse chunk's
+    /// stats repeat across every sub-window it spans (still a conservative min/max/null-count bound
+    /// for each sub-window). The zone-map path is one entry per zone of the stats table: this writer
+    /// emits one zone per chunk (so the same alignment holds), but a file from another writer may
+    /// use a fixed zone length independent of chunk boundaries, in which case the zone count need
+    /// not match [#chunkRowCounts()].
     ///
     /// This is the read-side surface for aggregate push-down (ADR 0013 §6): a reduction can
     /// fold whole zones from these rows and fall back to a streaming decode only for the
@@ -564,9 +581,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             openChunk.close();
         }
         openChunk = null;
-        if (sharedArena != null) {
-            sharedArena.close();
-            sharedArena = null;
+        if (sharedFlats != null) {
+            for (CachedFlat cached : sharedFlats.values()) {
+                cached.arena().close();
+            }
             sharedFlats = null;
         }
     }
@@ -608,6 +626,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         projectedNames = List.copyOf(columnDtypes.keySet());
         projectedDtypes = List.copyOf(columnDtypes.values());
+        lastCoveringFlats = new Layout[projectedNames.size()];
         chunks = buildChunks(columnFlats);
     }
 
@@ -682,8 +701,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             // no slice wrapper (aligned N-vs-N and per-chunk decode keep their zero-copy behavior).
             return decodeLayout(coveringFlat, dtype, arena);
         }
-        // Covering chunk spans several windows: decode it once into the shared arena and slice
-        // zero-copy per window, matching how Rust decodes a chunk once and slices each split range.
+        // Covering chunk spans several windows: decode it once (cached) and slice zero-copy per
+        // window, matching how Rust decodes a chunk once and slices each split range.
         Array full = sharedCoveringFlat(coveringFlat, dtype);
         return sliceArray(full, sliceOffset, rowCount, dtype);
     }
@@ -692,14 +711,37 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return sliceOffset == 0 && rowCount == coveringFlat.rowCount();
     }
 
-    /// Decodes `flat` once into the iterator's shared arena and caches it by identity, so a coarse
-    /// chunk that covers several split windows is decoded a single time and then sliced per window.
+    /// Decodes `flat` once into its own confined arena and caches it by identity, so a coarse chunk
+    /// that covers several split windows is decoded a single time and then sliced per window. The
+    /// arena is released by [#evictPassedFlats] once the scan advances off the flat.
     private Array sharedCoveringFlat(Layout flat, DType dtype) {
-        if (sharedArena == null) {
-            sharedArena = Arena.ofConfined();
+        if (sharedFlats == null) {
             sharedFlats = new IdentityHashMap<>();
         }
-        return sharedFlats.computeIfAbsent(flat, f -> decodeLayout(f, dtype, sharedArena));
+        return sharedFlats.computeIfAbsent(flat, f -> {
+            Arena flatArena = Arena.ofConfined();
+            return new CachedFlat(flatArena, decodeLayout(f, dtype, flatArena));
+        }).array();
+    }
+
+    /// Releases every cached coarse flat the scan has moved past. As `spec` is decoded, a column
+    /// whose covering flat differs from the one it used in the previously decoded window can never
+    /// revisit that earlier flat — the planner's per-column cursor advances monotonically — so its
+    /// arena is closed and its cache entry dropped. Whole-window (uncached) flats are ignored. The
+    /// previously open [Chunk] is already closed here (enforced by [#next()]), so no live slice
+    /// still references the freed arena.
+    private void evictPassedFlats(ChunkSpec spec) {
+        Layout[] current = spec.columnLayouts();
+        for (int j = 0; j < current.length; j++) {
+            Layout previous = lastCoveringFlats[j];
+            if (previous != null && previous != current[j]) {
+                CachedFlat cached = sharedFlats == null ? null : sharedFlats.remove(previous);
+                if (cached != null) {
+                    cached.arena().close();
+                }
+            }
+            lastCoveringFlats[j] = current[j];
+        }
     }
 
     private static Array sliceArray(Array full, long offset, long length, DType dtype) {
