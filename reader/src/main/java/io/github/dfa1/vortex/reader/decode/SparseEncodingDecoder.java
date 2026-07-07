@@ -23,6 +23,7 @@ import io.github.dfa1.vortex.reader.array.LazySparseLongArray;
 import io.github.dfa1.vortex.reader.array.LazySparseShortArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
@@ -63,27 +64,37 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             return decodeVarBin(ctx, n, numPatches, offset, indicesPtype);
         }
 
+        // Row validity mirrors the Rust reference `ValidityVTable<Sparse>`: it is a sparse
+        // bool array whose fill is `fill_value.is_valid()` and whose per-patch value is the
+        // patch value's validity bit. So a position is valid iff (it is a patch AND that
+        // patch is valid) OR (it is unpatched AND the fill is non-null). Dropping either
+        // facet lost nulls: a `fill_value: null` array (world-energy `biofuel_cons_change_pct`
+        // f64?) decoded unpatched rows as 0.0, and a null patch (nuclear_share_energy)
+        // decoded to raw 0 — #226.
+        MemorySegment fillBuf = ctx.buffer(0);
+        ProtoScalarValue fillScalar = decodeFill(fillBuf);
+        boolean fillValid = !isNullScalar(fillScalar);
+
         if (ctx.dtype() instanceof DType.Bool) {
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
             Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
             Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
             Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
-            Array valData = patchValues instanceof MaskedArray m ? m.inner() : patchValues;
-            return new LazySparseBoolArray(ctx.dtype(), n, false, (BoolArray) valData, idxData, offset);
+            BoolArray patchValidity = null;
+            Array valData = patchValues;
+            if (patchValues instanceof MaskedArray m) {
+                valData = m.inner();
+                patchValidity = m.validity();
+            }
+            boolean fillValue = Boolean.TRUE.equals(fillScalar.bool_value());
+            Array result = new LazySparseBoolArray(ctx.dtype(), n, fillValue, (BoolArray) valData, idxData, offset);
+            return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
         }
 
         if (!(ctx.dtype() instanceof DType.Primitive)) {
             throw new VortexException(EncodingId.VORTEX_SPARSE, "expected primitive dtype, got " + ctx.dtype());
         }
         PType valuePtype = ((DType.Primitive) ctx.dtype()).ptype();
-
-        MemorySegment fillBuf = ctx.buffer(0);
-        ProtoScalarValue fillScalar;
-        try {
-            fillScalar = ProtoScalarValue.decode(fillBuf, 0, fillBuf.byteSize());
-        } catch (IOException e) {
-            throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid fill value", e);
-        }
         long fillBits = scalarToLong(fillScalar);
 
         // Lazy path: keep fill bits + decoded patches; no n-sized buffer allocated.
@@ -93,9 +104,14 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
         Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
         Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
-        Array valData = patchValues instanceof MaskedArray m ? m.inner() : patchValues;
+        BoolArray patchValidity = null;
+        Array valData = patchValues;
+        if (patchValues instanceof MaskedArray m) {
+            valData = m.inner();
+            patchValidity = m.validity();
+        }
 
-        return switch (valuePtype) {
+        Array result = switch (valuePtype) {
             case I64, U64 -> new LazySparseLongArray(ctx.dtype(), n, fillBits,
                     (LongArray) valData, idxData, offset);
             case I32, U32 -> new LazySparseIntArray(ctx.dtype(), n, (int) fillBits,
@@ -114,6 +130,59 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                     (ByteArray) valData, idxData, offset);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
         };
+        return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
+    }
+
+    /// Wraps `result` in a [MaskedArray] whose per-row validity is a sparse bool array:
+    /// fill = `fillValid` (the fill scalar is non-null), each patch bit = that patch's
+    /// validity. Returns `result` unchanged only when the fill is non-null and no patch
+    /// carried a null (the all-valid no-regression path).
+    ///
+    /// @param ctx           decode context (allocation arena)
+    /// @param result        the decoded sparse value array
+    /// @param fillValid     `true` when the fill scalar is non-null
+    /// @param patchValidity per-patch validity bits, or `null` when all patches are valid
+    /// @param idxData       sorted absolute patch positions (raw, mask-unwrapped)
+    /// @param numPatches    number of patches
+    /// @param n             logical row count
+    /// @param offset        starting absolute position
+    /// @return `result`, or a [MaskedArray] carrying the lazy per-row validity
+    private static Array withSparseValidity(DecodeContext ctx, Array result, boolean fillValid,
+            BoolArray patchValidity, Array idxData, long numPatches, long n, long offset) {
+        if (fillValid && patchValidity == null) {
+            return result;
+        }
+        BoolArray patchBits = patchValidity != null ? patchValidity : allValid(ctx, numPatches);
+        BoolArray rowValidity = new LazySparseBoolArray(DType.BOOL, n, fillValid, patchBits, idxData, offset);
+        return new MaskedArray(result, rowValidity);
+    }
+
+    /// Builds an all-valid bit-packed [BoolArray] of `len` bits — the patch-validity stand-in
+    /// when the patch values are non-nullable but the fill is null (every patch punches in a
+    /// valid position over an all-invalid base).
+    private static BoolArray allValid(DecodeContext ctx, long len) {
+        MemorySegment bits = ctx.arena().allocate(Math.max(1, (len + 7) >>> 3));
+        bits.fill((byte) 0xFF);
+        return new MaterializedBoolArray(DType.BOOL, len, bits.asReadOnly());
+    }
+
+    private static ProtoScalarValue decodeFill(MemorySegment fillBuf) {
+        try {
+            return ProtoScalarValue.decode(fillBuf, 0, fillBuf.byteSize());
+        } catch (IOException e) {
+            throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid fill value", e);
+        }
+    }
+
+    /// Detects a null fill scalar: either an explicit `null_value`, or a scalar with no
+    /// value-bearing field set (Rust encodes a null fill as `ScalarValue::Null`, and a
+    /// non-null fill always sets exactly one typed field — even integer/float `0`).
+    private static boolean isNullScalar(ProtoScalarValue s) {
+        return s.null_value() != null
+                || (s.bool_value() == null && s.int64_value() == null && s.uint64_value() == null
+                        && s.f32_value() == null && s.f64_value() == null && s.string_value() == null
+                        && s.bytes_value() == null && s.f16_value() == null && s.list_value() == null
+                        && s.variant_value() == null);
     }
 
     private static Array decodeVarBin(

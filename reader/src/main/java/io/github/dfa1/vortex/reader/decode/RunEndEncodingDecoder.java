@@ -55,18 +55,33 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         long n = ctx.rowCount();
         DType endsDtype = new DType.Primitive(endsPtype, false);
         Array endsArr = ctx.decodeChild(0, endsDtype, numRuns);
+        Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
+
+        // Values-side validity mirrors the Rust reference `ValidityVTable<RunEnd>`: a
+        // RunEnd array's validity IS a RunEnd over the same ends whose per-run value is
+        // the run-value's validity bit. Row i's validity is thus the validity of the run
+        // it falls in — expressed lazily as `LazyRunEndBoolArray`, O(numRuns) not O(n)
+        // (n can be huge, e.g. uci-online-retail 499712 rows). A nullable values child
+        // surfaces as a MaskedArray; dropping its mask expanded null runs to a filler
+        // value (e.g. u16? null rows emitting the FoR base) — #225.
+        Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
+        BoolArray valuesValidity = null;
+        Array valuesData = valuesArr;
+        if (valuesArr instanceof MaskedArray m) {
+            valuesData = m.inner();
+            valuesValidity = m.validity();
+        }
 
         if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
-            VarBinArray valuesArr = (VarBinArray) ctx.decodeChild(1, ctx.dtype(), numRuns);
-            MemorySegment endsSeg = ctx.materialize(endsArr);
-            return expandStrings(endsSeg, VarBinArray.toOffsetMode(valuesArr, ctx.arena()), endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+            MemorySegment endsSeg = ctx.materialize(endsData);
+            Array result = expandStrings(endsSeg, VarBinArray.toOffsetMode((VarBinArray) valuesData, ctx.arena()),
+                    endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+            return withRunValidity(result, valuesValidity, endsData, n, offset);
         }
 
         if (ctx.dtype() instanceof DType.Bool) {
-            Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
-            Array valuesData = valuesArr instanceof MaskedArray m ? m.inner() : valuesArr;
-            Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
-            return new LazyRunEndBoolArray(ctx.dtype(), n, (BoolArray) valuesData, endsData, offset);
+            Array result = new LazyRunEndBoolArray(ctx.dtype(), n, (BoolArray) valuesData, endsData, offset);
+            return withRunValidity(result, valuesValidity, endsData, n, offset);
         }
 
         if (!(ctx.dtype() instanceof DType.Primitive p)) {
@@ -77,16 +92,32 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         // Lazy path: wrap values + ends without expanding into an n-sized buffer.
         // VarBin keeps the eager path above — offset rebasing doesn't trivially
         // express as binary-search-on-read.
-        Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
-        Array valuesData = valuesArr instanceof MaskedArray m ? m.inner() : valuesArr;
-        Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
-        return switch (valuePtype) {
+        Array result = switch (valuePtype) {
             case I64, U64 -> new LazyRunEndLongArray(ctx.dtype(), n, (LongArray) valuesData, endsData, offset);
             case I32, U32 -> new LazyRunEndIntArray(ctx.dtype(), n, (IntArray) valuesData, endsData, offset);
             case I16, U16 -> new LazyRunEndShortArray(ctx.dtype(), n, (ShortArray) valuesData, endsData, offset);
             case I8, U8 -> new LazyRunEndByteArray(ctx.dtype(), n, (ByteArray) valuesData, endsData, offset);
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
         };
+        return withRunValidity(result, valuesValidity, endsData, n, offset);
+    }
+
+    /// Wraps `result` in a [MaskedArray] whose per-row validity is a run-end bool array
+    /// over the same run-ends: row `i` is valid iff the run it falls in has a valid value.
+    /// Returns `result` unchanged when the values child carried no validity (all valid).
+    ///
+    /// @param result         the decoded run-end value array
+    /// @param valuesValidity per-run validity bits from the values child, or `null`
+    /// @param endsData       the run-ends array (raw, mask-unwrapped)
+    /// @param n              logical row count
+    /// @param offset         starting absolute position
+    /// @return `result`, or a [MaskedArray] carrying the lazy per-row validity
+    private static Array withRunValidity(Array result, BoolArray valuesValidity, Array endsData, long n, long offset) {
+        if (valuesValidity == null) {
+            return result;
+        }
+        BoolArray rowValidity = new LazyRunEndBoolArray(DType.BOOL, n, valuesValidity, endsData, offset);
+        return new MaskedArray(result, rowValidity);
     }
 
     private static Array expandStrings(
