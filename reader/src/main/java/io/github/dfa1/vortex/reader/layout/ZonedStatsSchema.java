@@ -135,6 +135,52 @@ public final class ZonedStatsSchema {
         return statsTableDtype(columnDtype, presentStats(metadata));
     }
 
+    /// Reconstructs the per-zone stats-table dtype for a newer `vortex.zoned` layout, whose
+    /// metadata carries an ordered list of aggregate-function specs instead of the legacy
+    /// [Stat] bitset.
+    ///
+    /// The shape mirrors Rust's `aggregate_stats_table_dtype`
+    /// ([vortex-layout/src/layouts/zoned/schema.rs](https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/schema.rs)):
+    /// for every aggregate whose state dtype is defined for the column, append one
+    /// `(name, nullable state-dtype)` field, in spec order — no `_is_truncated` flags. Field
+    /// names are the aggregate's canonical [Stat#fieldName()] so the reader can look them up by
+    /// stat; the struct decode itself is positional, so alignment with the encoded table is what
+    /// matters.
+    ///
+    /// Returns `null` when the metadata is not a decodable aggregate-spec blob or names an
+    /// aggregate this reader cannot map to a [Stat] (e.g. `vortex.bounded_max`, whose state is a
+    /// nested struct). Bailing keeps the positional schema faithful: the caller falls back to
+    /// per-chunk stats rather than decoding a misaligned table.
+    ///
+    /// @param columnDtype the column's logical dtype (the `data` child's dtype)
+    /// @param metadata    raw `vortex.zoned` layout metadata
+    /// @return reconstructed non-nullable struct dtype, or `null` when it cannot be reconstructed
+    public static DType.Struct aggregateStatsTableDtype(DType columnDtype, MemorySegment metadata) {
+        List<String> aggregateIds = aggregateIds(metadata);
+        if (aggregateIds == null) {
+            return null;
+        }
+        List<ColumnName> names = new ArrayList<>(aggregateIds.size());
+        List<DType> types = new ArrayList<>(aggregateIds.size());
+        for (String aggregateId : aggregateIds) {
+            Stat stat = statForAggregate(aggregateId);
+            if (stat == null) {
+                // Unknown aggregate — the encoded table has a field here we cannot describe, so
+                // any reconstruction would be positionally misaligned. Bail to the fallback path.
+                return null;
+            }
+            DType stype = statDtype(stat, columnDtype);
+            if (stype == null) {
+                // Rust's schema drops aggregates with no state dtype for this column (e.g.
+                // nan_count over a non-float); skip to stay aligned with the encoded table.
+                continue;
+            }
+            names.add(ColumnName.of(stat.fieldName()));
+            types.add(stype.withNullable(true));
+        }
+        return new DType.Struct(List.copyOf(names), List.copyOf(types), false);
+    }
+
     /// Reconstructs the per-zone stats-table dtype for the given column dtype
     /// and explicit stat list (already decoded from metadata).
     ///
@@ -230,5 +276,171 @@ public final class ZonedStatsSchema {
         // Decimal sum widening and other types are not handled — falls through to null
         // so the stat is dropped from the schema rather than causing a decode mismatch.
         return null;
+    }
+
+    /// First byte of `vortex.zoned` metadata: the protobuf envelope version Rust writes.
+    private static final int AGGREGATE_METADATA_VERSION = 1;
+
+    /// Maps a well-known aggregate-function id (Rust `AggregateFnId`) to the [Stat] whose stored
+    /// dtype and canonical field name it uses in the zone-map table, or `null` when the reader
+    /// has no faithful mapping (nested-state aggregates like `vortex.bounded_max`, or functions
+    /// not stored as a scalar stat).
+    private static Stat statForAggregate(String aggregateId) {
+        return switch (aggregateId) {
+            case "vortex.max" -> Stat.MAX;
+            case "vortex.min" -> Stat.MIN;
+            case "vortex.sum" -> Stat.SUM;
+            case "vortex.null_count" -> Stat.NULL_COUNT;
+            case "vortex.nan_count" -> Stat.NAN_COUNT;
+            case "vortex.is_constant" -> Stat.IS_CONSTANT;
+            case "vortex.is_sorted" -> Stat.IS_SORTED;
+            case "vortex.is_strict_sorted" -> Stat.IS_STRICT_SORTED;
+            case "vortex.uncompressed_size_in_bytes" -> Stat.UNCOMPRESSED_SIZE_IN_BYTES;
+            default -> null;
+        };
+    }
+
+    /// Extracts the ordered aggregate-function ids from `vortex.zoned` metadata.
+    ///
+    /// The metadata is a version byte (value [#AGGREGATE_METADATA_VERSION]) followed by a
+    /// protobuf `ZonedMetadataProto { uint32 zone_len = 1; repeated AggregateSpecProto
+    /// aggregate_specs = 2; }`, where `AggregateSpecProto { string id = 1; bytes options = 2; }`.
+    /// Only the `id` of each spec is needed to reconstruct the table schema.
+    ///
+    /// Returns `null` when the blob is empty, carries an unsupported version, or is not
+    /// well-formed protobuf — signalling the caller to fall back rather than trust a partial parse.
+    private static List<String> aggregateIds(MemorySegment metadata) {
+        if (metadata == null || metadata.byteSize() < 1) {
+            return null;
+        }
+        if ((metadata.get(ValueLayout.JAVA_BYTE, 0) & 0xff) != AGGREGATE_METADATA_VERSION) {
+            return null;
+        }
+        ProtoCursor cursor = new ProtoCursor(metadata, 1, metadata.byteSize());
+        List<String> ids = new ArrayList<>();
+        while (cursor.hasRemaining()) {
+            long tag = cursor.readVarint();
+            if (tag < 0) {
+                return null;
+            }
+            int fieldNumber = (int) (tag >>> 3);
+            int wireType = (int) (tag & 0x7);
+            if (fieldNumber == 2 && wireType == ProtoCursor.WIRE_LEN) {
+                String id = cursor.readAggregateSpecId();
+                if (id == null) {
+                    return null;
+                }
+                ids.add(id);
+            } else if (!cursor.skipField(wireType)) {
+                return null;
+            }
+        }
+        return List.copyOf(ids);
+    }
+
+    /// Minimal forward cursor over a protobuf byte range within a [MemorySegment]. Reads only the
+    /// varints and length-delimited fields the zoned metadata uses; any malformed or unexpected
+    /// wire shape is reported as a failure so the caller can bail rather than misread.
+    private static final class ProtoCursor {
+        static final int WIRE_VARINT = 0;
+        static final int WIRE_I64 = 1;
+        static final int WIRE_LEN = 2;
+        static final int WIRE_I32 = 5;
+
+        private final MemorySegment segment;
+        private long pos;
+        private final long end;
+
+        ProtoCursor(MemorySegment segment, long start, long end) {
+            this.segment = segment;
+            this.pos = start;
+            this.end = end;
+        }
+
+        boolean hasRemaining() {
+            return pos < end;
+        }
+
+        /// Reads a base-128 varint, or `-1` when it runs past the end or exceeds 64 bits.
+        long readVarint() {
+            long result = 0;
+            int shift = 0;
+            while (pos < end) {
+                int b = segment.get(ValueLayout.JAVA_BYTE, pos) & 0xff;
+                pos++;
+                if (shift < 64) {
+                    result |= (long) (b & 0x7f) << shift;
+                }
+                if ((b & 0x80) == 0) {
+                    return result;
+                }
+                shift += 7;
+                if (shift > 63) {
+                    return -1;
+                }
+            }
+            return -1;
+        }
+
+        /// Skips a field of the given wire type, returning `false` on an unknown type or overrun.
+        boolean skipField(int wireType) {
+            return switch (wireType) {
+                case WIRE_VARINT -> readVarint() >= 0;
+                case WIRE_I64 -> advance(8);
+                case WIRE_I32 -> advance(4);
+                case WIRE_LEN -> {
+                    long len = readVarint();
+                    yield len >= 0 && advance(len);
+                }
+                default -> false;
+            };
+        }
+
+        /// Reads an `AggregateSpecProto` length-delimited message and returns its `id` (field 1),
+        /// or `null` if the message is malformed or carries no id.
+        String readAggregateSpecId() {
+            long len = readVarint();
+            if (len < 0 || pos + len > end) {
+                return null;
+            }
+            long messageEnd = pos + len;
+            String id = null;
+            while (pos < messageEnd) {
+                long tag = readVarint();
+                if (tag < 0) {
+                    return null;
+                }
+                int fieldNumber = (int) (tag >>> 3);
+                int wireType = (int) (tag & 0x7);
+                if (fieldNumber == 1 && wireType == WIRE_LEN) {
+                    id = readString(messageEnd);
+                    if (id == null) {
+                        return null;
+                    }
+                } else if (!skipField(wireType)) {
+                    return null;
+                }
+            }
+            return id;
+        }
+
+        private String readString(long limit) {
+            long len = readVarint();
+            if (len < 0 || pos + len > limit) {
+                return null;
+            }
+            byte[] bytes = new byte[(int) len];
+            MemorySegment.copy(segment, ValueLayout.JAVA_BYTE, pos, bytes, 0, (int) len);
+            pos += len;
+            return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+        }
+
+        private boolean advance(long count) {
+            if (count < 0 || pos + count > end) {
+                return false;
+            }
+            pos += count;
+            return true;
+        }
     }
 }

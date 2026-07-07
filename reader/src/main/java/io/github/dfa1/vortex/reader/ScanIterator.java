@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -395,10 +396,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return out;
     }
 
-    /// Decodes the column's `vortex.stats` zone-map table into one [ArrayStats] per zone, or
-    /// returns `null` when the column has no zone map (so the caller falls back to per-chunk
-    /// node stats). The table is a single flat segment encoding a struct with a subset of the
-    /// `min`/`max`/`sum`/`null_count` fields (see [ZonedStatsSchema]); it is decoded into a
+    /// Decodes the column's zone-map table into one [ArrayStats] per zone, or returns `null` when
+    /// the column has no zone map (so the caller falls back to per-chunk node stats). The table is
+    /// a single flat segment encoding a struct with a subset of the `min`/`max`/`sum`/`null_count`
+    /// fields; the schema is reconstructed from the layout metadata (legacy `vortex.stats` bitset
+    /// or newer `vortex.zoned` aggregate specs — see [ZonedStatsSchema]). It is decoded into a
     /// short-lived confined arena and the scalar values are boxed out before the arena closes.
     private List<ArrayStats> decodeZoneTable(ColumnName column) {
         Layout zoned = findZonedLayout(file.layout(), column);
@@ -417,7 +419,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (segIdx < 0 || segIdx >= file.footer().segmentSpecs().size()) {
             return null;
         }
-        DType.Struct statsDtype = ZonedStatsSchema.statsTableDtype(columnDtype, zoned.metadata());
+        // The canonical `vortex.zoned` id (Rust >= 0.76) stores an aggregate-spec metadata blob;
+        // the legacy `vortex.stats` alias (what vortex-java writes) stores a Stat bitset. They
+        // reconstruct the table schema differently — dispatch on the layout id.
+        DType.Struct statsDtype = zoned.layoutId() == LayoutId.ZONED
+                ? ZonedStatsSchema.aggregateStatsTableDtype(columnDtype, zoned.metadata())
+                : ZonedStatsSchema.statsTableDtype(columnDtype, zoned.metadata());
+        if (statsDtype == null || statsDtype.fieldNames().isEmpty()) {
+            return null;
+        }
         long nZones = statsFlat.rowCount();
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
         try (Arena tableArena = Arena.ofConfined()) {

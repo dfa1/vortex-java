@@ -246,10 +246,130 @@ class ZonedStatsSchemaTest {
         }
     }
 
+    @Nested
+    class AggregateStatsTableDtype {
+        @Test
+        void buildsNumericSchemaWithoutTruncationFlags() {
+            // Given — a Rust >= 0.76 `vortex.zoned` column: default numeric aggregates in spec
+            // order. nan_count has no state dtype for i64, so Rust drops it from the table.
+            MemorySegment meta = aggregateMeta(8192,
+                    "vortex.max", "vortex.min", "vortex.sum", "vortex.nan_count", "vortex.null_count");
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+
+            // Then — no `_is_truncated` fields (the new format has none) and nan_count is dropped
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList())
+                    .containsExactly("max", "min", "sum", "null_count");
+            assertThat(schema.fieldTypes()).containsExactly(
+                    new DType.Primitive(PType.I64, true),
+                    new DType.Primitive(PType.I64, true),
+                    new DType.Primitive(PType.I64, true),
+                    new DType.Primitive(PType.U64, true));
+            assertThat(schema.nullable()).isFalse();
+        }
+
+        @Test
+        void keepsNanCountForFloatColumn() {
+            // Given — nan_count resolves to u64 for a float column, so it stays in the table
+            MemorySegment meta = aggregateMeta(1024, "vortex.max", "vortex.nan_count");
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.F64, meta);
+
+            // Then
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList())
+                    .containsExactly("max", "nan_count");
+            assertThat(schema.fieldTypes()).element(1).isEqualTo(new DType.Primitive(PType.U64, true));
+        }
+
+        @Test
+        void bailsOnUnknownAggregate() {
+            // Given — bounded_max stores a nested struct we cannot faithfully describe. Returning a
+            // partial schema would misalign the positional decode, so reconstruction must bail.
+            MemorySegment meta = aggregateMeta(4096, "vortex.bounded_max", "vortex.null_count");
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.UTF8, meta);
+
+            // Then
+            assertThat(schema).isNull();
+        }
+
+        @Test
+        void bailsOnUnsupportedVersion() {
+            // Given — a version byte other than the one Rust writes for `vortex.zoned` metadata
+            MemorySegment meta = aggregateMeta(4096, "vortex.max");
+            meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 2);
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+
+            // Then
+            assertThat(schema).isNull();
+        }
+
+        @Test
+        void bailsOnNullMetadata() {
+            // Given / When — a zoned layout with no metadata cannot be reconstructed
+            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, null);
+
+            // Then
+            assertThat(schema).isNull();
+        }
+
+        @Test
+        void returnsEmptyStructWhenNoAggregatesPresent() {
+            // Given — a well-formed envelope carrying only zone_len, no aggregate specs
+            MemorySegment meta = aggregateMeta(8192);
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+
+            // Then — an empty (non-null) struct; the caller falls back to per-chunk stats
+            assertThat(schema).isNotNull();
+            assertThat(schema.fieldNames()).isEmpty();
+        }
+    }
+
     private static MemorySegment metaWithBitset(int zoneLen, int firstByte) {
         MemorySegment meta = MemorySegment.ofArray(new byte[4 + 1]);
         meta.set(io.github.dfa1.vortex.core.io.VortexFormat.LE_INT, 0, zoneLen);
         meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 4, (byte) firstByte);
         return meta;
+    }
+
+    /// Builds `vortex.zoned` metadata: a version byte (1) followed by a protobuf
+    /// `ZonedMetadataProto { uint32 zone_len = 1; repeated AggregateSpecProto specs = 2; }`,
+    /// where each spec is `AggregateSpecProto { string id = 1; }` (options omitted).
+    private static MemorySegment aggregateMeta(int zoneLen, String... aggregateIds) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        out.write(1); // envelope version
+        writeTag(out, 1, 0); // zone_len, wire VARINT
+        writeVarint(out, zoneLen);
+        for (String id : aggregateIds) {
+            byte[] idBytes = id.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            java.io.ByteArrayOutputStream spec = new java.io.ByteArrayOutputStream();
+            writeTag(spec, 1, 2); // id, wire LEN
+            writeVarint(spec, idBytes.length);
+            spec.writeBytes(idBytes);
+            writeTag(out, 2, 2); // aggregate_specs, wire LEN
+            writeVarint(out, spec.size());
+            out.writeBytes(spec.toByteArray());
+        }
+        return MemorySegment.ofArray(out.toByteArray());
+    }
+
+    private static void writeTag(java.io.ByteArrayOutputStream out, int fieldNumber, int wireType) {
+        writeVarint(out, (fieldNumber << 3) | wireType);
+    }
+
+    private static void writeVarint(java.io.ByteArrayOutputStream out, int value) {
+        int v = value;
+        while ((v & ~0x7f) != 0) {
+            out.write((v & 0x7f) | 0x80);
+            v >>>= 7;
+        }
+        out.write(v);
     }
 }
