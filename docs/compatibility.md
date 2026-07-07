@@ -62,20 +62,13 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
 `untriaged` runs and reports without failing the build). A scheduled workflow
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
-30 `ok`, 0 known gaps; 217 slugs untriaged. Fixed so far
-by this suite: misaligned per-column chunk grids
-([#221](https://github.com/dfa1/vortex-java/issues/221) — scan now splits at the merged boundary
-grid, slicing each column's covering chunk per window), lazy dict U8/U16 values
-([#206](https://github.com/dfa1/vortex-java/issues/206)),
-nested struct columns in scan ([#207](https://github.com/dfa1/vortex-java/issues/207)),
-unsigned integers rendered signed ([#208](https://github.com/dfa1/vortex-java/issues/208) /
-[#216](https://github.com/dfa1/vortex-java/issues/216) — silent corruption, incl. wrong filter
-and Calcite results), RLE over F64 ([#209](https://github.com/dfa1/vortex-java/issues/209)),
-row validity dropped by wrapper decoders
-([#210](https://github.com/dfa1/vortex-java/issues/210) — silent corruption), all-null columns
-in CSV export ([#211](https://github.com/dfa1/vortex-java/issues/211)), narrow dict-offset
-ptypes in string dicts ([#215](https://github.com/dfa1/vortex-java/issues/215)), struct
-columns in CSV export ([#217](https://github.com/dfa1/vortex-java/issues/217)).
+38 `ok`, 2 known gaps (both silent null loss in lazy decoders:
+[#225](https://github.com/dfa1/vortex-java/issues/225) RunEnd run-values validity,
+[#226](https://github.com/dfa1/vortex-java/issues/226) Sparse null fill / nullable patches);
+207 slugs untriaged. Every gap found by earlier rounds is fixed
+([#206](https://github.com/dfa1/vortex-java/issues/206)–[#211](https://github.com/dfa1/vortex-java/issues/211),
+[#215](https://github.com/dfa1/vortex-java/issues/215)–[#217](https://github.com/dfa1/vortex-java/issues/217),
+[#221](https://github.com/dfa1/vortex-java/issues/221)).
 
 ## Encodings
 
