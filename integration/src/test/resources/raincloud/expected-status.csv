@@ -27,16 +27,16 @@ bi-bimbo,untriaged
 bi-citymaxcapita,untriaged
 bi-cmsprovider,untriaged
 bi-commongovernment,untriaged
-bi-corporations,untriaged
+bi-corporations,ok
 bi-eixo,untriaged
 bi-euro2016,untriaged
-bi-food,untriaged
+bi-food,ok
 bi-generico,untriaged
 bi-hashtags,untriaged
 bi-hatred,untriaged
-bi-iglocations1,untriaged
+bi-iglocations1,ok
 bi-iglocations2,untriaged
-bi-iublibrary,untriaged
+bi-iublibrary,ok
 bi-medicare1,untriaged
 bi-medicare2,untriaged
 bi-medicare3,untriaged
@@ -130,7 +130,7 @@ laion-400m,untriaged
 librispeech-test-clean,untriaged
 loan-default-dataset,untriaged
 lung-cancer,untriaged
-marketing-data,untriaged
+marketing-data,ok
 mbpp,untriaged
 medmcqa,untriaged
 mlcourse,untriaged
@@ -171,7 +171,7 @@ peoples-speech-clean-validation,untriaged
 personal-key-indicators-of-heart-disease,untriaged
 pleias-synth,untriaged
 pubmedqa-labeled,untriaged
-sf-salaries,untriaged
+sf-salaries,ok
 slimpajama-6b,untriaged
 squad-v2,untriaged
 stack-overflow-2018-developer-survey,untriaged
@@ -191,7 +191,7 @@ uci-adult,ok
 uci-ai4i-2020-predictive-maintenance,untriaged
 uci-air-quality,ok
 uci-auto-mpg,ok
-uci-automobile,untriaged
+uci-automobile,ok
 uci-bank-marketing,ok
 uci-beijing-multi-site-air-quality,ok
 uci-bike-sharing-dataset,ok
@@ -219,7 +219,7 @@ uci-individual-household-electric-power-consumption,untriaged
 uci-iris,ok
 uci-magic-gamma-telescope,ok
 uci-mushroom,ok
-uci-online-retail,untriaged
+uci-online-retail,gap:225
 uci-online-retail-ii,untriaged
 uci-online-shoppers-purchasing-intention,untriaged
 uci-optical-recognition-of-handwritten-digits,ok
@@ -233,7 +233,7 @@ uci-sms-spam-collection,ok
 uci-spambase,untriaged
 uci-statlog-german-credit-data,untriaged
 uci-student-performance,untriaged
-uci-thyroid-disease,untriaged
+uci-thyroid-disease,ok
 uci-wholesale-customers,untriaged
 uci-wine,ok
 uci-wine-quality,ok
@@ -250,7 +250,7 @@ waxal-dagbani-asr-test,untriaged
 wdi,untriaged
 websight-v01,untriaged
 wikipedia-en,untriaged
-world-energy-consumption,untriaged
+world-energy-consumption,gap:226
 yellow_tripdata_2025,untriaged
 youtube-commons-sample,untriaged
 zoo-animal-classification,untriaged
