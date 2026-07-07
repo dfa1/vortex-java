@@ -275,6 +275,9 @@ public final class VortexWriter implements Closeable {
             case double[] a -> a.length;
             case boolean[] a -> a.length;
             case String[] a -> a.length;
+            // A struct column's row count is its fields' row count (all fields share length,
+            // enforced by StructEncodingEncoder); an empty struct carries no rows.
+            case StructData d -> d.fieldArrays().isEmpty() ? 0L : arrayLength(d.fieldArrays().getFirst());
             case ListData d -> d.outerLen();
             case ListViewData d -> d.outerLen();
             case DateTimePartsData d -> d.timestamps().length;
