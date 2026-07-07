@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
@@ -301,8 +302,10 @@ class SparseEncodingEncoderTest {
         }
 
         @Test
-        void decode_nullValueFill_treatedAsZero() {
-            // Given
+        void decode_nullValueFill_nullsAllUnpatchedRows() {
+            // Given — a null fill with no patches: every position is unpatched, so every row
+            // is null (Rust `ValidityVTable<Sparse>`: fill validity is fill.is_valid()). Before
+            // #226 the null fill's zero bits leaked through as literal 0 values.
             byte[] nullFill = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
             DecodeContext ctx = buildCtx(DTypes.I64, 4, nullFill, meta, new byte[0], new byte[0]);
@@ -310,10 +313,10 @@ class SparseEncodingEncoderTest {
             // When
             Array result = DECODER.decode(ctx);
 
-            // Then
-            LongArray la = (LongArray) result;
+            // Then — all four rows are null
+            MaskedArray masked = (MaskedArray) result;
             for (int i = 0; i < 4; i++) {
-                assertThat(la.getLong(i)).as("index %d", i).isZero();
+                assertThat(masked.isValid(i)).as("valid row %d", i).isFalse();
             }
         }
 
@@ -411,15 +414,16 @@ class SparseEncodingEncoderTest {
             // When
             Array result = DECODER.decode(ctx);
 
-            // Then
-            BoolArray boolArr = (BoolArray) result;
-            assertThat(boolArr.length()).isEqualTo(6L);
-            assertThat(boolArr.getBoolean(0)).isFalse();
-            assertThat(boolArr.getBoolean(1)).isFalse();
+            // Then — patched bits sit at 2 and 5; the null fill nulls every unpatched row (#226),
+            // so only positions 2 and 5 are valid and both carry `true`.
+            MaskedArray masked = (MaskedArray) result;
+            assertThat(masked.length()).isEqualTo(6L);
+            BoolArray boolArr = (BoolArray) masked.inner();
             assertThat(boolArr.getBoolean(2)).isTrue();
-            assertThat(boolArr.getBoolean(3)).isFalse();
-            assertThat(boolArr.getBoolean(4)).isFalse();
             assertThat(boolArr.getBoolean(5)).isTrue();
+            for (int i = 0; i < 6; i++) {
+                assertThat(masked.isValid(i)).as("valid row %d", i).isEqualTo(i == 2 || i == 5);
+            }
         }
     }
 }

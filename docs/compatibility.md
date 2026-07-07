@@ -62,13 +62,12 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
 `untriaged` runs and reports without failing the build). A scheduled workflow
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
-38 `ok`, 2 known gaps (both silent null loss in lazy decoders:
-[#225](https://github.com/dfa1/vortex-java/issues/225) RunEnd run-values validity,
-[#226](https://github.com/dfa1/vortex-java/issues/226) Sparse null fill / nullable patches);
-207 slugs untriaged. Every gap found by earlier rounds is fixed
+40 `ok`, 0 known gaps; 207 slugs untriaged. Every gap found so far is fixed
 ([#206](https://github.com/dfa1/vortex-java/issues/206)–[#211](https://github.com/dfa1/vortex-java/issues/211),
 [#215](https://github.com/dfa1/vortex-java/issues/215)–[#217](https://github.com/dfa1/vortex-java/issues/217),
-[#221](https://github.com/dfa1/vortex-java/issues/221)).
+[#221](https://github.com/dfa1/vortex-java/issues/221),
+[#225](https://github.com/dfa1/vortex-java/issues/225) RunEnd run-values validity,
+[#226](https://github.com/dfa1/vortex-java/issues/226) Sparse null fill / nullable patches).
 
 ## Encodings
 

@@ -219,7 +219,7 @@ uci-individual-household-electric-power-consumption,untriaged
 uci-iris,ok
 uci-magic-gamma-telescope,ok
 uci-mushroom,ok
-uci-online-retail,gap:225
+uci-online-retail,ok
 uci-online-retail-ii,untriaged
 uci-online-shoppers-purchasing-intention,untriaged
 uci-optical-recognition-of-handwritten-digits,ok
@@ -250,7 +250,7 @@ waxal-dagbani-asr-test,untriaged
 wdi,untriaged
 websight-v01,untriaged
 wikipedia-en,untriaged
-world-energy-consumption,gap:226
+world-energy-consumption,ok
 yellow_tripdata_2025,untriaged
 youtube-commons-sample,untriaged
 zoo-animal-classification,untriaged
