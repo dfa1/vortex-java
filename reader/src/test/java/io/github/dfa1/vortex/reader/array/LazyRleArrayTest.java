@@ -522,6 +522,28 @@ class LazyRleArrayTest {
         }
 
         @Test
+        void materializeConstantRunAndEmptyChunk() {
+            // Given a constant-run chunk (1 distinct value) and, separately, an empty chunk
+            // (0 distinct values): materialize's processChunk fast path must emit the lone
+            // value — or 0.0f for the empty pool — for every row without touching indices.
+            var constant = new LazyRleFloatArray(F32, 3, new float[]{6.25f}, new int[1024],
+                    new long[]{0L}, 0L, 1L, 1, 0);
+            var empty = new LazyRleFloatArray(F32, 2, new float[0], new int[1024],
+                    new long[]{0L}, 0L, 0L, 1, 0);
+
+            // When / Then
+            try (var arena = Arena.ofConfined()) {
+                var constantResult = constant.materialize(arena);
+                assertThat(constantResult.getAtIndex(VortexFormat.LE_FLOAT, 0)).isEqualTo(6.25f);
+                assertThat(constantResult.getAtIndex(VortexFormat.LE_FLOAT, 2)).isEqualTo(6.25f);
+
+                var emptyResult = empty.materialize(arena);
+                assertThat(emptyResult.getAtIndex(VortexFormat.LE_FLOAT, 0)).isEqualTo(0.0f);
+                assertThat(emptyResult.getAtIndex(VortexFormat.LE_FLOAT, 1)).isEqualTo(0.0f);
+            }
+        }
+
+        @Test
         void materializeDecodesEveryRow() {
             // Given a mixed chunk; materialize must emit each logical row once, honoring
             // the constant-run fast path only within a chunk (here indices vary).

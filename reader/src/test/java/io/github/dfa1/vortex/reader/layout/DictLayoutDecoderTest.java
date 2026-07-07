@@ -8,11 +8,17 @@ import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DictByteArray;
+import io.github.dfa1.vortex.reader.array.DictShortArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -105,6 +111,89 @@ class DictLayoutDecoderTest {
         assertThat(result).isInstanceOf(IntArray.class).isNotInstanceOf(MaskedArray.class);
     }
 
+    @Test
+    void bytePool_buildsDictByteArray() {
+        // Given — an I8/U8 dictionary pool: buildLazyDictPrimitive must dispatch to DictByteArray,
+        // the narrow-value arm untested until now (real files use byte pools for tiny enum columns).
+        DType u8 = new DType.Primitive(PType.U8, true);
+        Array values = bytePool(11, 22, 33);
+        Array codes = byteCodes(2, 0, 1);
+
+        // When
+        Array result = decode(3, u8, values, codes);
+
+        // Then — a lazy DictByteArray resolving each row through its code
+        assertThat(result).isInstanceOf(DictByteArray.class);
+        ByteArray bytes = (ByteArray) result;
+        assertThat(bytes.getByte(0)).isEqualTo((byte) 33);
+        assertThat(bytes.getByte(1)).isEqualTo((byte) 11);
+        assertThat(bytes.getByte(2)).isEqualTo((byte) 22);
+    }
+
+    @Test
+    void shortPool_buildsDictShortArray() {
+        // Given — an I16/U16 dictionary pool: dispatches to DictShortArray (the 2-byte value arm)
+        DType i16 = new DType.Primitive(PType.I16, true);
+        Array values = shortPool(-100, 200, 300);
+        Array codes = byteCodes(0, 2, 1);
+
+        // When
+        Array result = decode(3, i16, values, codes);
+
+        // Then
+        assertThat(result).isInstanceOf(DictShortArray.class);
+        ShortArray shorts = (ShortArray) result;
+        assertThat(shorts.getShort(0)).isEqualTo((short) -100);
+        assertThat(shorts.getShort(1)).isEqualTo((short) 300);
+        assertThat(shorts.getShort(2)).isEqualTo((short) 200);
+    }
+
+    @Test
+    void poolNull_gathersShortCodes() {
+        // Given — pool-null validity with U16-width codes (a ShortArray): gatherRowValidity's
+        // codes-type switch must take the ShortArray arm to read each code before masking.
+        Array values = new MaskedArray(intPool(10, 20, 30), boolArray(true, false, true));
+        Array codes = shortCodes(0, 1, 2, 1);
+
+        // When
+        Array result = decode(4, I32, values, codes);
+
+        // Then — rows referencing the dead slot 1 are null
+        MaskedArray masked = assertMasked(result);
+        assertValidity(masked, true, false, true, false);
+        assertIntValues(masked, 10, 20, 30, 20);
+    }
+
+    @Test
+    void poolNull_gathersIntCodes() {
+        // Given — pool-null validity with U32-width codes (an IntArray): the IntArray gather arm
+        Array values = new MaskedArray(intPool(10, 20, 30), boolArray(true, false, true));
+        Array codes = intCodes(0, 1, 2, 1);
+
+        // When
+        Array result = decode(4, I32, values, codes);
+
+        // Then
+        MaskedArray masked = assertMasked(result);
+        assertValidity(masked, true, false, true, false);
+        assertIntValues(masked, 10, 20, 30, 20);
+    }
+
+    @Test
+    void poolNull_gathersLongCodes() {
+        // Given — pool-null validity with U64-width codes (a LongArray): the LongArray gather arm
+        Array values = new MaskedArray(intPool(10, 20, 30), boolArray(true, false, true));
+        Array codes = longCodes(0, 1, 2, 1);
+
+        // When
+        Array result = decode(4, I32, values, codes);
+
+        // Then
+        MaskedArray masked = assertMasked(result);
+        assertValidity(masked, true, false, true, false);
+        assertIntValues(masked, 10, 20, 30, 20);
+    }
+
     // ── harness ─────────────────────────────────────────────────────────────────
 
     private static Array decode(long n, DType dtype, Array values, Array codes) {
@@ -128,6 +217,43 @@ class DictLayoutDecoderTest {
         }
         return new MaterializedByteArray(new DType.Primitive(PType.U8, false), codes.length,
                 MemorySegment.ofArray(bytes));
+    }
+
+    private static Array shortCodes(int... codes) {
+        short[] shorts = new short[codes.length];
+        for (int i = 0; i < codes.length; i++) {
+            shorts[i] = (short) codes[i];
+        }
+        return new MaterializedShortArray(new DType.Primitive(PType.U16, false), codes.length,
+                TestSegments.leShorts(shorts));
+    }
+
+    private static Array intCodes(int... codes) {
+        return new MaterializedIntArray(new DType.Primitive(PType.U32, false), codes.length,
+                TestSegments.leInts(codes));
+    }
+
+    private static Array longCodes(long... codes) {
+        return new MaterializedLongArray(new DType.Primitive(PType.U64, false), codes.length,
+                TestSegments.leLongs(codes));
+    }
+
+    private static ByteArray bytePool(int... values) {
+        byte[] bytes = new byte[values.length];
+        for (int i = 0; i < values.length; i++) {
+            bytes[i] = (byte) values[i];
+        }
+        return new MaterializedByteArray(new DType.Primitive(PType.U8, true), values.length,
+                MemorySegment.ofArray(bytes));
+    }
+
+    private static ShortArray shortPool(int... values) {
+        short[] shorts = new short[values.length];
+        for (int i = 0; i < values.length; i++) {
+            shorts[i] = (short) values[i];
+        }
+        return new MaterializedShortArray(new DType.Primitive(PType.I16, true), values.length,
+                TestSegments.leShorts(shorts));
     }
 
     private static BoolArray boolArray(boolean... valid) {

@@ -508,6 +508,53 @@ class DictEncodingDecoderTest {
                     .hasMessageContaining("out of range for pool validity");
         }
 
+        @Test
+        void codesBroadcast_slowPathSetsValidityBits() {
+            // Given — a single-element codes buffer (codesCap == 1 < rowCount == 4, the
+            // ConstantEncoding fan-out shape) forces rowValidity's broadcast slow path
+            // (the `i % codesCap` loop and the setBit S3034 fix site). The lone code points at
+            // valid pool slot 0, so every row is valid and setBit runs on each iteration.
+            ArrayNode codesNode = primitiveNode(0);
+            ArrayNode valuesNode = maskedPrimitiveNode(1, 2);
+            MemorySegment[] segs = {
+                    u8Codes(0),                             // 1 code, broadcast across 4 rows
+                    TestSegments.leInts(10, 20),
+                    boolBitmap(true, false)                 // pool slot 0 valid, slot 1 invalid
+            };
+
+            // When
+            Array result = decodeDict(DType.I32, PType.U8, 2, 4, segs, codesNode, valuesNode);
+
+            // Then — the broadcast code resolves to valid slot 0 for every row
+            MaskedArray masked = assertMasked(result);
+            assertValidity(masked, true, true, true, true);
+            assertIntValues(masked, 10, 10, 10, 10);
+        }
+
+        @ParameterizedTest(name = "codes={0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U16", "U32"})
+        void poolNull_readsWiderCodeWidths(PType codePType) {
+            // Given — codes at the wider widths (U16/U32) with a pool-null slot. rowValidity must
+            // read each code at the correct stride via readCode's U16/U32 arms (only exercised when
+            // pool validity is present), then mask rows whose code points at the dead slot. Here
+            // codesCap == rowCount, so the fast validity loop runs.
+            ArrayNode codesNode = primitiveNode(0);
+            ArrayNode valuesNode = maskedPrimitiveNode(1, 2);
+            MemorySegment[] segs = {
+                    codeSegment(codePType, new long[]{0, 1, 0, 1}),
+                    TestSegments.leInts(10, 20),
+                    boolBitmap(true, false)                 // slot 1 invalid
+            };
+
+            // When
+            Array result = decodeDict(DType.I32, codePType, 2, 4, segs, codesNode, valuesNode);
+
+            // Then — rows referencing the dead slot 1 are null; their expanded value is still present
+            MaskedArray masked = assertMasked(result);
+            assertValidity(masked, true, false, true, false);
+            assertIntValues(masked, 10, 20, 10, 20);
+        }
+
         private Array decodeDict(DType dtype, PType codePType, int valuesLen, long rowCount,
                 MemorySegment[] segs, ArrayNode codesNode, ArrayNode valuesNode) {
             MemorySegment meta = MemorySegment.ofArray(
