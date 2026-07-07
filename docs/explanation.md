@@ -222,7 +222,7 @@ file-level `SegmentSpec[]` table). Five node types exist today:
 | ID              | Constant  | Children  | Role |
 |-----------------|-----------|-----------|------|
 | `vortex.struct` | `STRUCT`  | N         | Row type. One child per column. Root of every file. |
-| `vortex.stats`  | `ZONED`   | 1         | Wraps a child layout and carries per-chunk min/max as zone maps. Pruned at scan time when filter predicate falls outside `[min, max]`. |
+| `vortex.stats`  | `ZONED`   | 1         | Wraps a child layout and carries a per-zone stats table as a zone map. The legacy `vortex.stats` form declares its columns with a `Stat` bitset; the Rust >= 0.76 `vortex.zoned` form declares them with an aggregate-spec list, adding `sum`/`null_count` alongside `min`/`max`. Pruned at scan time when the filter predicate falls outside `[min, max]`. |
 | `vortex.chunked`| `CHUNKED` | M (+1)    | Row-group sequence. Optional stats child at index 0 when `metadata[0] == 1` (per-chunk stats sidecar); remaining children are the data chunks. |
 | `vortex.dict`   | `DICT`    | 2         | Dictionary-encoded leaf. `children[0]` = values layout, `children[1]` = codes layout. `metadata` holds the codes `PType` (varint, proto field 1). Decoder gathers values by code. |
 | `vortex.flat`   | `FLAT`    | 0         | Leaf. References one `SegmentSpec` via `segments[0]`. Decoded by the encoding named in the segment's `arraySpec`, not by `encodingId` itself — see below. |

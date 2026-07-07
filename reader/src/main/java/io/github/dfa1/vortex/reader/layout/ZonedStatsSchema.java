@@ -29,9 +29,12 @@ import java.util.List;
 ///       each get an extra trailing field `max_is_truncated` /
 ///       `min_is_truncated` of type `Bool` (non-nullable).
 ///
-/// `Sum` widening rules and Decimal handling are not yet implemented —
-/// when the column dtype has no resolvable stat dtype the stat is skipped so
-/// the inspector degrades to "no schema" rather than failing.
+/// `Sum` widening for Decimal columns is not yet modeled. The legacy bitset path
+/// ([#statsTableDtype(DType, List)]) skips any stat with no resolvable dtype so the inspector
+/// degrades to "no schema" rather than failing. The aggregate-spec path
+/// ([#aggregateStatsTableDtype(DType, MemorySegment)]) is positional, so it only skips fields Rust
+/// also omits and otherwise returns `null` (fall back to per-chunk stats) rather than emit a
+/// misaligned struct.
 public final class ZonedStatsSchema {
 
     /// Ordinal positions of [Stat] in the Rust enum — kept stable across
@@ -171,14 +174,50 @@ public final class ZonedStatsSchema {
             }
             DType stype = statDtype(stat, columnDtype);
             if (stype == null) {
-                // Rust's schema drops aggregates with no state dtype for this column (e.g.
-                // nan_count over a non-float); skip to stay aligned with the encoded table.
-                continue;
+                if (rustAlsoOmits(stat, columnDtype)) {
+                    // Rust's aggregate_stats_table_dtype also drops this field (its aggregate's
+                    // state_dtype is None for this column), so skipping stays aligned with the
+                    // encoded table.
+                    continue;
+                }
+                // Rust keeps a field here that we cannot map — notably Sum over a Decimal column,
+                // whose state widens to Decimal(precision + 10) (writer.rs default_zoned_aggregate_fns
+                // only emits Sum when Sum.return_dtype is Some, which it is for Decimal). Dropping it
+                // would misalign the positional decode, so bail to per-chunk stats.
+                return null;
             }
             names.add(ColumnName.of(stat.fieldName()));
             types.add(stype.withNullable(true));
         }
         return new DType.Struct(List.copyOf(names), List.copyOf(types), false);
+    }
+
+    /// Reports whether Rust's `aggregate_stats_table_dtype` also omits this aggregate for the given
+    /// column — i.e. the aggregate's `state_dtype` is `None` there, so dropping it keeps our
+    /// positional schema aligned with the encoded table. Any other null resolution means Rust keeps
+    /// a field we cannot describe, and the caller must bail instead.
+    ///
+    /// The two legitimate drops mirror the Rust reference
+    /// ([vortex-array/src/aggregate_fn/fns](https://github.com/spiraldb/vortex/tree/develop/vortex-array/src/aggregate_fn/fns)):
+    /// - `nan_count` returns `None` for non-float columns (`nan_count/mod.rs`);
+    /// - `min`/`max` return `None` when `minmax_supported_dtype` is false — for us that is only
+    ///       `DType.Null`, the sole column for which the min/max resolver yields null.
+    private static boolean rustAlsoOmits(Stat stat, DType columnDtype) {
+        return switch (stat) {
+            case NAN_COUNT -> !isFloatingColumn(columnDtype);
+            case MAX, MIN -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isFloatingColumn(DType columnDtype) {
+        if (columnDtype instanceof DType.Primitive p) {
+            return p.ptype().isFloating();
+        }
+        if (columnDtype instanceof DType.Extension ext) {
+            return isFloatingColumn(ext.storageDType());
+        }
+        return false;
     }
 
     /// Reconstructs the per-zone stats-table dtype for the given column dtype
@@ -400,7 +439,10 @@ public final class ZonedStatsSchema {
         /// or `null` if the message is malformed or carries no id.
         String readAggregateSpecId() {
             long len = readVarint();
-            if (len < 0 || pos + len > end) {
+            // Overflow-safe bound: pos <= end holds throughout, so end - pos never overflows; a
+            // varint-derived len up to Long.MAX_VALUE would overflow pos + len to negative and slip
+            // past a pos + len > end guard, then advance pos past the segment.
+            if (len < 0 || len > end - pos) {
                 return null;
             }
             long messageEnd = pos + len;
@@ -426,7 +468,11 @@ public final class ZonedStatsSchema {
 
         private String readString(long limit) {
             long len = readVarint();
-            if (len < 0 || pos + len > limit) {
+            // Overflow-safe bound (see readAggregateSpecId): compare against limit - pos, never
+            // pos + len. If a prior varint pushed pos past limit, limit - pos is negative and any
+            // non-negative len is rejected, so we never size new byte[(int) len] from an
+            // attacker-controlled, overflowed length.
+            if (len < 0 || len > limit - pos) {
                 return null;
             }
             byte[] bytes = new byte[(int) len];
@@ -436,7 +482,10 @@ public final class ZonedStatsSchema {
         }
 
         private boolean advance(long count) {
-            if (count < 0 || pos + count > end) {
+            // Overflow-safe bound: pos <= end holds throughout, so end - pos never overflows,
+            // whereas pos + count could overflow to negative for a varint-derived count near
+            // Long.MAX_VALUE and slip past a pos + count > end guard.
+            if (count < 0 || count > end - pos) {
                 return false;
             }
             pos += count;
