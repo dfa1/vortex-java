@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.ScanIterator.ChunkSpec;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Unit tests for [ScanIterator#buildChunks(Map)] — the scan planner that merges each column's
 /// chunk grid into one split grid (the Rust reference's `StructReader::register_splits` union of
@@ -118,6 +120,21 @@ class ScanIteratorChunkGridTest {
         assertSlice(result.get(2), B, 4, 0);
         assertSlice(result.get(3), B, 4, 2);
         assertThat(coveringFlat(result.get(2), B)).isSameAs(coveringFlat(result.get(3), B));
+    }
+
+    @Test
+    void columnShorterThanMergedGridThrows() {
+        // Given two columns whose totals disagree — A spans 8 rows [4, 4] but B only 6 [3, 3]. A
+        // well-formed file keeps every column the same length; a malformed/untrusted layout may not.
+        // The merged grid {0, 3, 4, 6, 8} then produces a window [6, 8) that lies beyond B's last
+        // chunk, so the covering-chunk advance loop runs B's cursor off the end. The guard must
+        // surface that as a VortexException rather than an ArrayIndexOutOfBoundsException.
+        var columnFlats = flats(A, new long[]{4, 4}, B, new long[]{3, 3});
+
+        // When / Then
+        assertThatThrownBy(() -> ScanIterator.buildChunks(columnFlats))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("no chunk covering");
     }
 
     @Test

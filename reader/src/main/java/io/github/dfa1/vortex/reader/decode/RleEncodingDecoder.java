@@ -167,7 +167,10 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         return out;
     }
 
-    private static double[] readDoubles(MemorySegment buf, int count) {
+    // Package-private (not private) so the broadcast branch (cap < count, a
+    // ConstantEncoding values pool) is testable directly: through decode() a
+    // constant child always materializes to `count` full elements, so cap == count.
+    static double[] readDoubles(MemorySegment buf, int count) {
         double[] out = new double[count];
         long cap = SegmentBroadcast.capacity(buf, 8);
         for (int i = 0; i < count; i++) {
@@ -176,7 +179,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         return out;
     }
 
-    private static float[] readFloats(MemorySegment buf, int count) {
+    static float[] readFloats(MemorySegment buf, int count) {
         float[] out = new float[count];
         long cap = SegmentBroadcast.capacity(buf, 4);
         for (int i = 0; i < count; i++) {

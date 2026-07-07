@@ -347,6 +347,58 @@ class ZonedStatsSchemaTest {
             assertThat(result).isNotNull();
             assertThat(result.fieldNames()).isEmpty();
         }
+
+        @Test
+        void buildsBooleanAndSizeStatColumns() {
+            // Given — the boolean/size aggregates Rust can emit (is_constant/is_sorted/
+            // is_strict_sorted → nullable Bool; uncompressed_size_in_bytes → nullable U64). These
+            // exercise the statForAggregate arms that the max/min/sum/count tests never reach.
+            MemorySegment meta = aggregateMeta(2048,
+                    "vortex.is_constant", "vortex.is_sorted", "vortex.is_strict_sorted",
+                    "vortex.uncompressed_size_in_bytes");
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+
+            // Then
+            assertThat(result.fieldNames().stream().map(ColumnName::value).toList())
+                    .containsExactly("is_constant", "is_sorted", "is_strict_sorted",
+                            "uncompressed_size_in_bytes");
+            assertThat(result.fieldTypes()).containsExactly(
+                    DType.BOOL.withNullable(true),
+                    DType.BOOL.withNullable(true),
+                    DType.BOOL.withNullable(true),
+                    DType.U64.withNullable(true));
+        }
+
+        @Test
+        void skipsFixedWidthFieldsBeforeSpec() {
+            // Given — an envelope carrying unknown 64-bit and 32-bit fixed-width fields (wire types
+            // I64 and I32) ahead of a real aggregate spec. A forward-compatible reader must skip both
+            // fixed-width fields (the ProtoCursor WIRE_I64/WIRE_I32 skip arms) and still read the spec.
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            writeTag(out, 3, 1); // field 3, wire I64 → advance(8)
+            out.writeBytes(new byte[8]);
+            writeTag(out, 4, 5); // field 4, wire I32 → advance(4)
+            out.writeBytes(new byte[4]);
+            byte[] idBytes = "vortex.max".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            java.io.ByteArrayOutputStream spec = new java.io.ByteArrayOutputStream();
+            writeTag(spec, 1, 2); // id, wire LEN
+            writeVarint(spec, idBytes.length);
+            spec.writeBytes(idBytes);
+            writeTag(out, 2, 2); // aggregate_specs, wire LEN
+            writeVarint(out, spec.size());
+            out.writeBytes(spec.toByteArray());
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+
+            // Then — the fixed-width fields are skipped and only the max spec survives
+            assertThat(result.fieldNames().stream().map(ColumnName::value).toList())
+                    .containsExactly("max");
+        }
     }
 
     @Nested
@@ -414,6 +466,68 @@ class ZonedStatsSchemaTest {
             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
             out.write(1); // envelope version
             writeTag(out, 3, 3); // field 3, wire type 3 (unsupported)
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+
+            // Then
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void bailsOnOverlongVarintOverflow() {
+            // Given — a tag varint of ten continuation bytes: it never terminates and pushes the
+            // shift past 63 bits. readVarint must return -1 (the > 63-bit overflow arm) rather than
+            // silently wrapping, so the caller bails.
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            for (int i = 0; i < 10; i++) {
+                out.write(0x80); // continuation bit set, no terminating byte
+            }
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+
+            // Then
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void bailsOnOverflowTagInsideSpec() {
+            // Given — a framed AggregateSpecProto whose first inner tag is a ten-byte overflow
+            // varint. Inside readAggregateSpecId the tag reads as -1, so it must bail (the inner
+            // `tag < 0` arm) rather than treat the negative value as a field number.
+            byte[] specBytes = new byte[10];
+            java.util.Arrays.fill(specBytes, (byte) 0x80);
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            writeTag(out, 2, 2); // aggregate_specs, wire LEN
+            writeVarint(out, specBytes.length);
+            out.writeBytes(specBytes);
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+
+            // Then
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void bailsOnUnknownWireTypeInsideSpec() {
+            // Given — an AggregateSpecProto whose inner field uses wire type 3 (group start), which
+            // the cursor cannot skip. readAggregateSpecId must bail on the failed skipField, not
+            // loop forever or misread.
+            java.io.ByteArrayOutputStream spec = new java.io.ByteArrayOutputStream();
+            writeTag(spec, 2, 3); // inner field 2, wire type 3 (unsupported)
+            byte[] specBytes = spec.toByteArray();
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            writeTag(out, 2, 2); // aggregate_specs, wire LEN
+            writeVarint(out, specBytes.length);
+            out.writeBytes(specBytes);
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(

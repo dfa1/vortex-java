@@ -204,7 +204,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     private static void setBit(MemorySegment bits, long i) {
         long byteIdx = i >>> 3;
         byte cur = bits.get(ValueLayout.JAVA_BYTE, byteIdx);
-        bits.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i & 7))));
+        bits.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (i & 7))));
     }
 
     private static Array decodeUtf8DictLegacy(DecodeContext ctx, MemorySegment meta) {

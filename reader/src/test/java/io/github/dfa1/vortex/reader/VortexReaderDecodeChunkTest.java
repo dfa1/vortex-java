@@ -310,6 +310,46 @@ class VortexReaderDecodeChunkTest {
         assertThat(streamedB).isEqualTo(MIXED_B_EXPECTED);
     }
 
+    // A NESTED struct column "s" (a vortex.struct under the root struct) with two I64 fields x, y,
+    // stored as ONE full-range subtree beside the per-chunk column "a" [2, 3, 2]. collectFlats treats
+    // the whole struct subtree as a single full-range chunk source, so the scan decodes it once as a
+    // StructArray and slices it per window — the ScanIterator.sliceArray StructArray branch that no
+    // primitive-only file reaches.
+    private static final long[] NESTED_X = {1000, 1001, 1002, 1003, 1004, 1005, 1006};
+    private static final long[] NESTED_Y = {2000, 2001, 2002, 2003, 2004, 2005, 2006};
+    private static final List<Long> NESTED_A_EXPECTED =
+            List.of(10L, 11L, 12L, 13L, 14L, 15L, 16L);
+
+    @Test
+    void scan_nestedStructColumn_slicesEachFieldPerWindow(@TempDir Path tmp) throws Exception {
+        // Given a struct whose second column "s" is itself a struct {x, y} spanning all 7 rows, beside
+        // a per-chunk column "a" chunked [2, 3, 2]. Neither the Java nor JNI writer emits a nested
+        // struct beside a per-chunk column in one file, so it is hand-assembled here.
+        Path file = writeNestedStructFile(tmp);
+        var streamedA = new ArrayList<Long>();
+        var streamedX = new ArrayList<Long>();
+        var streamedY = new ArrayList<Long>();
+
+        // When streaming the whole scan — "s" is decoded once over the full range then sliced into
+        // each merged-grid window {0,2,5,7} via ScanIterator.sliceArray's StructArray arm, which
+        // recursively slices each field into the window.
+        try (var reader = VortexReader.open(file, registry());
+                var iter = reader.scan(ScanOptions.all())) {
+            iter.forEachRemaining(chunk -> {
+                streamedA.addAll(values(chunk.column("a")));
+                io.github.dfa1.vortex.reader.array.StructArray s = chunk.column("s");
+                streamedX.addAll(fieldValues(s, 0));
+                streamedY.addAll(fieldValues(s, 1));
+            });
+        }
+
+        // Then every field value survives the per-window struct slice, including the middle window
+        // [2,5) sliced at a nonzero offset within the single full-range struct.
+        assertThat(streamedA).isEqualTo(NESTED_A_EXPECTED);
+        assertThat(streamedX).containsExactly(1000L, 1001L, 1002L, 1003L, 1004L, 1005L, 1006L);
+        assertThat(streamedY).containsExactly(2000L, 2001L, 2002L, 2003L, 2004L, 2005L, 2006L);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static ReadRegistry registry() {
@@ -328,6 +368,101 @@ class VortexReaderDecodeChunkTest {
                     out.add(Map.of("a", values(chunk.column("a")), "b", values(chunk.column("b")))));
         }
         return out;
+    }
+
+    /// Reads field `fieldIdx` of a (possibly sliced) [StructArray] as a Long list.
+    private static List<Long> fieldValues(io.github.dfa1.vortex.reader.array.StructArray s, int fieldIdx) {
+        return values(s.field(fieldIdx));
+    }
+
+    /// Assembles a struct file: column "a" chunked over [CHUNK_ROWS] (one flat per chunk) and a nested
+    /// struct column "s" {x, y} stored as one full-range struct subtree (flat x, flat y). Segment
+    /// order: a-chunk0..a-chunkN, then x, then y. Layout: flat=0, chunked=1, struct=2; array spec
+    /// vortex.primitive=0.
+    private static Path writeNestedStructFile(Path dir) throws Exception {
+        int numChunks = CHUNK_ROWS.length;
+        List<byte[]> segments = new ArrayList<>();
+        for (int k = 0; k < numChunks; k++) {
+            segments.add(primitiveSegment(COL_A[k], null));
+        }
+        int xSegIdx = segments.size();
+        segments.add(primitiveSegment(NESTED_X, null));
+        int ySegIdx = segments.size();
+        segments.add(primitiveSegment(NESTED_Y, null));
+
+        long[] segOffsets = new long[segments.size()];
+        long[] segLengths = new long[segments.size()];
+        long off = 0;
+        for (int i = 0; i < segments.size(); i++) {
+            segOffsets[i] = off;
+            segLengths[i] = segments.get(i).length;
+            off += segments.get(i).length;
+        }
+
+        ByteBuffer footerBuf = MalformedFiles.buildFooter(
+                new String[]{"vortex.primitive", "vortex.bool"},
+                new String[]{"vortex.flat", "vortex.chunked", "vortex.struct"},
+                segOffsets, segLengths);
+        ByteBuffer dtypeBuf = buildNestedStructDtype();
+        ByteBuffer layoutBuf = buildNestedStructLayout(CHUNK_ROWS, xSegIdx, ySegIdx);
+
+        return writeVtxFile(dir, "nested.vtx", segments, footerBuf, dtypeBuf, layoutBuf);
+    }
+
+    /// Root struct DType {a: I64 non-null, s: struct {x: I64, y: I64} non-null}.
+    private static ByteBuffer buildNestedStructDtype() {
+        var fbb = new FbsBuilder(512);
+        int primA = FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false);
+        int dtA = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primA);
+
+        int primX = FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false);
+        int dtX = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primX);
+        int primY = FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false);
+        int dtY = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primY);
+        int innerNames = FbsStruct_.createNamesVector(fbb,
+                new int[]{fbb.createString("x"), fbb.createString("y")});
+        int innerDtypes = FbsStruct_.createDtypesVector(fbb, new int[]{dtX, dtY});
+        int innerStruct = FbsStruct_.createFbsStruct_(fbb, innerNames, innerDtypes, false);
+        int dtS = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, innerStruct);
+
+        int names = FbsStruct_.createNamesVector(fbb,
+                new int[]{fbb.createString("a"), fbb.createString("s")});
+        int dtypes = FbsStruct_.createDtypesVector(fbb, new int[]{dtA, dtS});
+        int rootStruct = FbsStruct_.createFbsStruct_(fbb, names, dtypes, false);
+        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, rootStruct);
+        FbsDType.finishFbsDTypeBuffer(fbb, dt);
+        return MalformedFiles.slice(fbb);
+    }
+
+    /// Layout: root struct(2) → [chunked "a" (flat per chunk), struct(2) "s" → [flat x, flat y]].
+    /// Both "s" fields are single full-range flats, so the whole subtree is one full-range chunk
+    /// source alongside "a"'s per-chunk grid.
+    private static ByteBuffer buildNestedStructLayout(long[] chunkRows, int xSegIdx, int ySegIdx) {
+        var fbb = new FbsBuilder(1024);
+        int numChunks = chunkRows.length;
+        long total = 0;
+        for (long r : chunkRows) {
+            total += r;
+        }
+        int[] flatOffs = new int[numChunks];
+        for (int k = 0; k < numChunks; k++) {
+            int segV = FbsLayout.createSegmentsVector(fbb, new long[]{k});
+            flatOffs[k] = FbsLayout.createFbsLayout(fbb, 0, chunkRows[k], 0, 0, segV);
+        }
+        int chunkedChildV = FbsLayout.createChildrenVector(fbb, flatOffs);
+        int chunkedA = FbsLayout.createFbsLayout(fbb, 1, total, 0, chunkedChildV, 0);
+
+        int xSegV = FbsLayout.createSegmentsVector(fbb, new long[]{xSegIdx});
+        int flatX = FbsLayout.createFbsLayout(fbb, 0, total, 0, 0, xSegV);
+        int ySegV = FbsLayout.createSegmentsVector(fbb, new long[]{ySegIdx});
+        int flatY = FbsLayout.createFbsLayout(fbb, 0, total, 0, 0, ySegV);
+        int sChildV = FbsLayout.createChildrenVector(fbb, new int[]{flatX, flatY});
+        int structS = FbsLayout.createFbsLayout(fbb, 2, total, 0, sChildV, 0);
+
+        int structChildV = FbsLayout.createChildrenVector(fbb, new int[]{chunkedA, structS});
+        int structOff = FbsLayout.createFbsLayout(fbb, 2, total, 0, structChildV, 0);
+        FbsLayout.finishFbsLayoutBuffer(fbb, structOff);
+        return MalformedFiles.slice(fbb);
     }
 
     private static List<Long> values(Array arr) {

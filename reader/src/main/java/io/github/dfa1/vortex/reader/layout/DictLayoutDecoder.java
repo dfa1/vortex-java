@@ -197,7 +197,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
             if (valid) {
                 long byteIdx = i >>> 3;
                 byte cur = bits.get(ValueLayout.JAVA_BYTE, byteIdx);
-                bits.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i & 7))));
+                bits.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (i & 7))));
             }
         }
         return new MaterializedBoolArray(DType.BOOL, n, bits.asReadOnly());
