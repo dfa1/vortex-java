@@ -77,8 +77,11 @@ import raincloud
 
 max_bytes = int(os.environ["MAX_MB"]) * 1024 * 1024
 snapshot = json.loads(resources.files("raincloud").joinpath("_data/snapshot.json").read_text())
+# `.get(key, 0)` returns 0 only when the key is absent; a snapshot entry can carry
+# an explicit "parquet_bytes": null (not-yet-hashed slug), which .get returns as None.
+# `or 0` coerces both the missing and the null case to 0 so the size cap still applies.
 sizes = {
-    slug: entry.get("parquet_bytes", 0) + entry.get("vortex_bytes", 0)
+    slug: (entry.get("parquet_bytes") or 0) + (entry.get("vortex_bytes") or 0)
     for slug, entry in snapshot["slugs"].items()
 }
 
