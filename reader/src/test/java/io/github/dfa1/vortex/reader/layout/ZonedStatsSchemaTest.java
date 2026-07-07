@@ -256,17 +256,17 @@ class ZonedStatsSchemaTest {
                     "vortex.max", "vortex.min", "vortex.sum", "vortex.nan_count", "vortex.null_count");
 
             // When
-            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
 
             // Then — no `_is_truncated` fields (the new format has none) and nan_count is dropped
-            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList())
+            assertThat(result.fieldNames().stream().map(ColumnName::value).toList())
                     .containsExactly("max", "min", "sum", "null_count");
-            assertThat(schema.fieldTypes()).containsExactly(
+            assertThat(result.fieldTypes()).containsExactly(
                     new DType.Primitive(PType.I64, true),
                     new DType.Primitive(PType.I64, true),
                     new DType.Primitive(PType.I64, true),
                     new DType.Primitive(PType.U64, true));
-            assertThat(schema.nullable()).isFalse();
+            assertThat(result.nullable()).isFalse();
         }
 
         @Test
@@ -275,12 +275,12 @@ class ZonedStatsSchemaTest {
             MemorySegment meta = aggregateMeta(1024, "vortex.max", "vortex.nan_count");
 
             // When
-            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.F64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.F64, meta);
 
             // Then
-            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList())
+            assertThat(result.fieldNames().stream().map(ColumnName::value).toList())
                     .containsExactly("max", "nan_count");
-            assertThat(schema.fieldTypes()).element(1).isEqualTo(new DType.Primitive(PType.U64, true));
+            assertThat(result.fieldTypes()).element(1).isEqualTo(new DType.Primitive(PType.U64, true));
         }
 
         @Test
@@ -290,10 +290,27 @@ class ZonedStatsSchemaTest {
             MemorySegment meta = aggregateMeta(4096, "vortex.bounded_max", "vortex.null_count");
 
             // When
-            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.UTF8, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.UTF8, meta);
 
             // Then
-            assertThat(schema).isNull();
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void bailsForDecimalSumColumn() {
+            // Given — Rust's default_zoned_aggregate_fns emits a `sum` column for a Decimal column
+            // (Sum.return_dtype widens to Decimal(precision + 10)), but this reader cannot map a
+            // decimal sum state. Reconstructing {max, min, null_count} while the encoded table is
+            // {max, min, sum, null_count} would read null_count out of the sum buffer, so the whole
+            // column must fall back to per-chunk (unpruned) stats rather than emit a mis-sized struct.
+            MemorySegment meta = aggregateMeta(8192,
+                    "vortex.max", "vortex.min", "vortex.sum", "vortex.null_count");
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.decimal(20, 4), meta);
+
+            // Then
+            assertThat(result).isNull();
         }
 
         @Test
@@ -303,19 +320,19 @@ class ZonedStatsSchemaTest {
             meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 2);
 
             // When
-            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
 
             // Then
-            assertThat(schema).isNull();
+            assertThat(result).isNull();
         }
 
         @Test
         void bailsOnNullMetadata() {
             // Given / When — a zoned layout with no metadata cannot be reconstructed
-            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, null);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, null);
 
             // Then
-            assertThat(schema).isNull();
+            assertThat(result).isNull();
         }
 
         @Test
@@ -324,11 +341,103 @@ class ZonedStatsSchemaTest {
             MemorySegment meta = aggregateMeta(8192);
 
             // When
-            DType.Struct schema = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
 
             // Then — an empty (non-null) struct; the caller falls back to per-chunk stats
-            assertThat(schema).isNotNull();
-            assertThat(schema.fieldNames()).isEmpty();
+            assertThat(result).isNotNull();
+            assertThat(result.fieldNames()).isEmpty();
+        }
+    }
+
+    @Nested
+    class MalformedAggregateMetadata {
+        // These blobs are untrusted file metadata. Each malformed shape must degrade to the
+        // fallback (null) return — never a raw JDK exception (NegativeArraySizeException /
+        // IndexOutOfBoundsException), which the pre-fix overflow-unsafe bounds checks allowed.
+
+        @Test
+        void bailsOnTruncatedVarint() {
+            // Given — the only field tag is an unterminated varint (continuation bit set, no next
+            // byte); the cursor must fail rather than read past the buffer.
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            out.write(0x80); // dangling varint continuation byte
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+
+            // Then
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void bailsOnOversizedStringLength() {
+            // Given — a framed AggregateSpecProto whose id-string length varint is Long.MAX_VALUE.
+            // The pre-fix `pos + len > limit` guard overflowed to negative and passed, then
+            // `new byte[(int) len]` threw NegativeArraySizeException.
+            java.io.ByteArrayOutputStream spec = new java.io.ByteArrayOutputStream();
+            writeTag(spec, 1, 2); // id, wire LEN
+            writeVarintLong(spec, Long.MAX_VALUE); // absurd string length
+            byte[] specBytes = spec.toByteArray();
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            writeTag(out, 2, 2); // aggregate_specs, wire LEN
+            writeVarint(out, specBytes.length);
+            out.writeBytes(specBytes);
+
+            // When / Then — must not throw NegativeArraySizeException
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void bailsOnOversizedSkippedFieldLength() {
+            // Given — a non-target length-delimited field whose length is Long.MAX_VALUE. The
+            // pre-fix advance guard `pos + count > end` overflowed and advanced pos negative,
+            // throwing IndexOutOfBoundsException on the next read.
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            writeTag(out, 1, 2); // field 1 with wire LEN → skipped, not an aggregate spec
+            writeVarintLong(out, Long.MAX_VALUE);
+
+            // When / Then — must not throw IndexOutOfBoundsException
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void bailsOnUnknownWireType() {
+            // Given — a field using wire type 3 (group start), which the cursor cannot skip.
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            writeTag(out, 3, 3); // field 3, wire type 3 (unsupported)
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+
+            // Then
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void bailsOnMessageLengthPastEnd() {
+            // Given — an aggregate_specs field whose declared length runs past the buffer end.
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            writeTag(out, 2, 2); // aggregate_specs, wire LEN
+            writeVarint(out, 64); // claims 64 bytes...
+            out.write(0x01); // ...but only one follows
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+
+            // Then
+            assertThat(result).isNull();
         }
     }
 
@@ -371,5 +480,16 @@ class ZonedStatsSchemaTest {
             v >>>= 7;
         }
         out.write(v);
+    }
+
+    /// Writes an unsigned base-128 varint of a `long` — used to inject absurd (overflow-inducing)
+    /// lengths like `Long.MAX_VALUE` that a plain `int` varint cannot express.
+    private static void writeVarintLong(java.io.ByteArrayOutputStream out, long value) {
+        long v = value;
+        while ((v & ~0x7fL) != 0) {
+            out.write((int) ((v & 0x7f) | 0x80));
+            v >>>= 7;
+        }
+        out.write((int) v);
     }
 }
