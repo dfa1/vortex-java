@@ -67,10 +67,18 @@ if [ ${#SLUGS[@]} -eq 0 ]; then
 fi
 
 mkdir -p "$(dirname "$MANIFEST")"
-printf '%s\n' "${SLUGS[@]}" | MAX_MB="$MAX_MB" MANIFEST="$MANIFEST" "$VENV/bin/python" - <<'PY'
+
+# `python - <<'PY'` reads the PROGRAM from stdin, so stdin is unavailable for data:
+# piping the slug list into it would collide with the heredoc (the interpreter would
+# either execute the slugs as source or see an empty sys.stdin). Hand the slugs over
+# in a temp file instead and let the program read that.
+SLUGFILE="$(mktemp)"
+trap 'rm -f "$SLUGFILE"' EXIT
+printf '%s\n' "${SLUGS[@]}" > "$SLUGFILE"
+
+MAX_MB="$MAX_MB" MANIFEST="$MANIFEST" SLUGFILE="$SLUGFILE" "$VENV/bin/python" - <<'PY'
 import json
 import os
-import sys
 from importlib import resources
 
 import raincloud
@@ -85,9 +93,12 @@ sizes = {
     for slug, entry in snapshot["slugs"].items()
 }
 
+with open(os.environ["SLUGFILE"]) as fh:
+    slugs = [line.strip() for line in fh if line.strip()]
+
 hydrated, skipped = 0, 0
 with open(os.environ["MANIFEST"], "w") as manifest:
-    for slug in (line.strip() for line in sys.stdin if line.strip()):
+    for slug in slugs:
         size = sizes.get(slug, 0)
         if max_bytes and size > max_bytes:
             print(f"skip {slug}: {size / 1e6:.0f} MB exceeds --max-mb")
