@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `VarBinArray.DictMode` reads dict-value offsets in a ptype-uniform loop: the I32 fast path eliminates the per-row `switch(dictValOffPType)` that blocked C2 vectorization (introduced by #215). ([#243](https://github.com/dfa1/vortex-java/issues/243))
+
 ## [0.12.1] — 2026-07-08
 
 **Null validity** and **real-world file compatibility** are the two themes of this release. The

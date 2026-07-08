@@ -299,10 +299,75 @@ public sealed interface VarBinArray extends Array
 
         @Override
         public void forEachByteLength(IntConsumer c) {
-            for (long i = 0; i < length; i++) {
-                long code = dictReadCode(i);
-                c.accept((int) (dictReadOff(code + 1) - dictReadOff(code)));
+            // Hot loop: hoist both ptype dispatches out of the per-row body so C2 sees a
+            // uniform, fixed-stride loop (CLAUDE.md hot-loop rule). A variable-target
+            // switch(dictValOffPType)/switch(dictCodesPType) per element blocks C2
+            // superword vectorization and adds invariant width/bounds arithmetic on every
+            // row (regression introduced by #215). I32 dict-value offsets are by far the
+            // most common (FSST + most dict encodings emit 32-bit offsets), so the fast
+            // path reads offsets at a constant 4-byte stride and branch-splits the code
+            // read once; wider offset ptypes take the general per-row path.
+            if (dictValOffPType == PType.I32) {
+                forEachI32OffsetByteLength(c);
+            } else {
+                for (long i = 0; i < length; i++) {
+                    long code = dictReadCode(i);
+                    c.accept((int) (dictReadOff(code + 1) - dictReadOff(code)));
+                }
             }
+        }
+
+        /// Fast path of [#forEachByteLength(IntConsumer)] for I32 dict-value offsets: the
+        /// code-ptype switch is hoisted out of the loop so each specialized loop body reads
+        /// codes at a single fixed stride and computes lengths from a constant 4-byte offset
+        /// stride, leaving the per-row body uniform and vectorizable.
+        ///
+        /// @param c consumer called once per row with the byte length at that index
+        private void forEachI32OffsetByteLength(IntConsumer c) {
+            long n = length;
+            switch (dictCodesPType) {
+                case U8 -> {
+                    for (long i = 0; i < n; i++) {
+                        c.accept(i32OffsetLength(
+                                Byte.toUnsignedLong(dictCodesSegs.get(ValueLayout.JAVA_BYTE, i))));
+                    }
+                }
+                case U16 -> {
+                    for (long i = 0; i < n; i++) {
+                        c.accept(i32OffsetLength(
+                                Short.toUnsignedLong(dictCodesSegs.getAtIndex(VortexFormat.LE_SHORT, i))));
+                    }
+                }
+                case U32 -> {
+                    for (long i = 0; i < n; i++) {
+                        c.accept(i32OffsetLength(
+                                Integer.toUnsignedLong(dictCodesSegs.getAtIndex(VortexFormat.LE_INT, i))));
+                    }
+                }
+                case I32 -> {
+                    for (long i = 0; i < n; i++) {
+                        c.accept(i32OffsetLength(dictCodesSegs.getAtIndex(VortexFormat.LE_INT, i)));
+                    }
+                }
+                case I64, U64 -> {
+                    for (long i = 0; i < n; i++) {
+                        c.accept(i32OffsetLength(dictCodesSegs.getAtIndex(VortexFormat.LE_LONG, i)));
+                    }
+                }
+                default -> throw new VortexException("unsupported codes ptype: " + dictCodesPType);
+            }
+        }
+
+        /// Byte length of the dictionary entry `code` when the value offsets are I32:
+        /// `offsets[code + 1] - offsets[code]` read at a constant 4-byte stride. The
+        /// segment access itself bounds-checks, so an out-of-range code is caught without
+        /// the per-row width recomputation that [#dictReadOff(long)] performs.
+        ///
+        /// @param code zero-based dictionary entry index (in `[0, dictSize)`)
+        /// @return the byte length of dictionary entry `code`
+        private int i32OffsetLength(long code) {
+            return dictValOffsets.getAtIndex(VortexFormat.LE_INT, code + 1)
+                    - dictValOffsets.getAtIndex(VortexFormat.LE_INT, code);
         }
 
         @Override
