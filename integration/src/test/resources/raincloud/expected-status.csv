@@ -24,16 +24,16 @@ behavioral-risk-factor-surveillance-system,untriaged
 beir-msmarco,untriaged
 bi-arade,untriaged
 bi-bimbo,untriaged
-bi-citymaxcapita,untriaged
+bi-citymaxcapita,ok
 bi-cmsprovider,untriaged
 bi-commongovernment,untriaged
 bi-corporations,ok
 bi-eixo,untriaged
-bi-euro2016,untriaged
+bi-euro2016,gap:235
 bi-food,ok
 bi-generico,untriaged
 bi-hashtags,untriaged
-bi-hatred,untriaged
+bi-hatred,ok
 bi-iglocations1,ok
 bi-iglocations2,untriaged
 bi-iublibrary,ok
@@ -67,7 +67,7 @@ bi-trainsuk2,untriaged
 bi-uberlandia,untriaged
 bi-uscensus,untriaged
 bi-wins,untriaged
-bi-yalelanguages,untriaged
+bi-yalelanguages,gap:235
 bigscience-p3-eval-subset,untriaged
 building-permit-applications-data,untriaged
 c4-en-validation,untriaged
@@ -82,7 +82,7 @@ coig,untriaged
 coronahack-chest-xraydataset,untriaged
 cosmopedia-stanford,untriaged
 countries-of-the-world,ok
-covid-world-vaccination-progress,untriaged
+covid-world-vaccination-progress,ok
 covid19-data-from-john-hopkins-university,untriaged
 crimes-in-boston,untriaged
 databricks-dolly-15k,untriaged
@@ -117,7 +117,7 @@ hacker-news,untriaged
 heart-disease-health-indicators-dataset,untriaged
 hellaswag,untriaged
 helpsteer2,untriaged
-hotel-booking-demand,untriaged
+hotel-booking-demand,ok
 hotpotqa-fullwiki,untriaged
 housing-prices-dataset,untriaged
 humaneval,untriaged
@@ -139,7 +139,7 @@ mmlu-pro,untriaged
 mmmlu,untriaged
 mmmu,untriaged
 mnist,untriaged
-movies,untriaged
+movies,ok
 new-york-city-airbnb-open-data,untriaged
 news-headlines-dataset-for-sarcasm-detection,untriaged
 nips-papers,untriaged
@@ -203,10 +203,10 @@ uci-cdc-diabetes-health-indicators,untriaged
 uci-census-income,ok
 uci-chronic-kidney-disease,untriaged
 uci-concrete-compressive-strength,untriaged
-uci-credit-approval,untriaged
+uci-credit-approval,ok
 uci-default-of-credit-card-clients,untriaged
 uci-diabetes,untriaged
-uci-diabetes-130-us-hospitals,untriaged
+uci-diabetes-130-us-hospitals,ok
 uci-dry-bean-dataset,ok
 uci-electricityloaddiagrams20112014,untriaged
 uci-energy-efficiency,untriaged
@@ -220,7 +220,7 @@ uci-iris,ok
 uci-magic-gamma-telescope,ok
 uci-mushroom,ok
 uci-online-retail,ok
-uci-online-retail-ii,untriaged
+uci-online-retail-ii,ok
 uci-online-shoppers-purchasing-intention,untriaged
 uci-optical-recognition-of-handwritten-digits,ok
 uci-parkinsons,untriaged
