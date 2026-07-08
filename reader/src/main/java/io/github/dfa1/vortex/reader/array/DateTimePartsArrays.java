@@ -13,26 +13,22 @@ final class DateTimePartsArrays {
     private DateTimePartsArrays() {
     }
 
-    /// Reads `arr[i]` as a signed long. Recurses through [MaskedArray];
-    /// throws on null cells so callers don't silently get garbage for nullable
-    /// columns.
+    /// Reads `arr[i]` as a signed long. Recurses through [MaskedArray] to its
+    /// raw payload without inspecting validity: the decoder intersects component
+    /// validities into the reassembled array's own mask (#235), so a null row's
+    /// filler value here is harmless — callers gate on that outer mask.
     ///
     /// @param arr source typed Array
     /// @param i   row index
     /// @return cell value as long
-    /// @throws VortexException for null cells or unsupported array types
+    /// @throws VortexException for unsupported array types
     static long readLong(Array arr, long i) {
         return switch (arr) {
             case ByteArray a -> a.getByte(i);
             case ShortArray a -> a.getShort(i);
             case IntArray a -> a.getInt(i);
             case LongArray a -> a.getLong(i);
-            case MaskedArray a -> {
-                if (!a.isValid(i)) {
-                    throw new VortexException("DateTimeParts: null cell at index " + i);
-                }
-                yield readLong(a.inner(), i);
-            }
+            case MaskedArray a -> readLong(a.inner(), i);
             default -> throw new VortexException(
                     "DateTimeParts: unsupported child array type: " + arr.getClass().getSimpleName());
         };

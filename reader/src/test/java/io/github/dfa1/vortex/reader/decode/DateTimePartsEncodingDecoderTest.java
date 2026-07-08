@@ -7,7 +7,10 @@ import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.TestArrays;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -124,5 +127,47 @@ class DateTimePartsEncodingDecoderTest {
 
         // When / Then
         assertThatThrownBy(() -> SUT.decode(c)).hasMessageContaining("expected Extension dtype");
+    }
+
+    @Test
+    void decode_nullDaysComponent_propagatesNullRowInsteadOfThrowing() {
+        // Given a days child that decodes to a MaskedArray with row 0 null (as a nullable
+        // RunEnd child does after PR #225) — the decoder must intersect that validity into
+        // the reassembled array's own mask rather than throwing on the null cell (#235)
+        var registry = TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder(), new MaskedDaysDecoder());
+        ArrayNode days = new ArrayNode(MaskedDaysDecoder.ID, null, new ArrayNode[0], new int[0]);
+        ArrayNode seconds = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode subseconds = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DATETIMEPARTS, i64Meta(),
+                new ArrayNode[]{days, seconds, subseconds}, new int[0]);
+        DecodeContext c = new DecodeContext(node, timestampDType(TimeUnit.Milliseconds, true), 2,
+                new MemorySegment[]{TestSegments.leLongs(0L, 0L), TestSegments.leLongs(0L, 0L)},
+                registry, Arena.ofAuto());
+
+        // When
+        Array result = SUT.decode(c);
+
+        // Then — the reassembled array is masked: row 0 is null, row 1 valid and reassembled
+        assertThat(result).isInstanceOf(MaskedArray.class);
+        MaskedArray masked = (MaskedArray) result;
+        assertThat(masked.isValid(0)).isFalse();
+        assertThat(masked.isValid(1)).isTrue();
+        assertThat(((LongArray) masked.inner()).getLong(1)).isEqualTo(SECONDS_PER_DAY * 1000L);
+    }
+
+    /// Stub decoder standing in for a nullable RunEnd days child: returns two days,
+    /// each `1`, with row 0 marked null via the validity bitmap (mirrors PR #225).
+    private static final class MaskedDaysDecoder implements EncodingDecoder {
+        static final EncodingId ID = EncodingId.parse("test.masked-days");
+
+        @Override
+        public EncodingId encodingId() {
+            return ID;
+        }
+
+        @Override
+        public Array decode(DecodeContext ctx) {
+            return new MaskedArray(TestArrays.longs(1L, 1L), TestArrays.bools(false, true));
+        }
     }
 }
