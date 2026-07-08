@@ -33,14 +33,16 @@ class DateTimePartsArraysTest {
     }
 
     @Test
-    void readLong_nullMaskedCell_throws() {
-        // Given — a masked array whose cell is null
+    void readLong_nullMaskedCell_readsInnerFiller() {
+        // Given — a masked array whose cell is null (validity false)
         MaskedArray masked = new MaskedArray(longs(42L, 43L), bools(true, false));
 
-        // When / Then
-        assertThatThrownBy(() -> DateTimePartsArrays.readLong(masked, 1))
-                .isInstanceOf(VortexException.class)
-                .hasMessageContaining("null cell");
+        // When — readLong ignores validity and returns the inner filler value; the
+        // decoder tracks null rows via the reassembled array's own mask instead (#235)
+        long result = DateTimePartsArrays.readLong(masked, 1);
+
+        // Then
+        assertThat(result).isEqualTo(43L);
     }
 
     @Test

@@ -7,10 +7,14 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyDateTimePartsLongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.datetimeparts`.
 ///
@@ -58,8 +62,59 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
         long unitsPerSecond = readUnitsPerSecond(ext);
         long unitsPerDay = SECONDS_PER_DAY * unitsPerSecond;
 
-        return new LazyDateTimePartsLongArray(ctx.dtype(), ctx.rowCount(),
+        // A row is null when ANY component is null (mirrors the Rust reference —
+        // every part must be present to reassemble the epoch count). PR #225 made
+        // nullable RunEnd children surface real nulls as MaskedArray, so unwrap each
+        // component to its raw values, intersect their validities, and re-wrap the
+        // reassembled array with the combined mask instead of throwing (#235).
+        BoolArray validity = null;
+        if (days instanceof MaskedArray masked) {
+            validity = intersect(ctx, validity, masked.validity());
+            days = masked.inner();
+        }
+        if (seconds instanceof MaskedArray masked) {
+            validity = intersect(ctx, validity, masked.validity());
+            seconds = masked.inner();
+        }
+        if (subseconds instanceof MaskedArray masked) {
+            validity = intersect(ctx, validity, masked.validity());
+            subseconds = masked.inner();
+        }
+
+        Array reassembled = new LazyDateTimePartsLongArray(ctx.dtype(), ctx.rowCount(),
                 days, seconds, subseconds, unitsPerDay, unitsPerSecond);
+        return validity != null ? new MaskedArray(reassembled, validity) : reassembled;
+    }
+
+    /// Combines a running validity bitmap with an incoming one via logical AND,
+    /// so that a row stays valid only when every component is valid.
+    ///
+    /// A `null` incoming bitmap means the component is entirely valid and
+    /// leaves `current` unchanged; a `null` `current` adopts `incoming` directly.
+    /// Two non-null bitmaps are AND-ed into a fresh off-heap bitmap allocated
+    /// from the decode arena.
+    ///
+    /// @param ctx      decode context supplying the output arena
+    /// @param current  running combined validity, or `null` if none yet
+    /// @param incoming a component's validity bitmap, or `null` if all-valid
+    /// @return the combined validity bitmap, or `null` when both inputs are all-valid
+    private static BoolArray intersect(DecodeContext ctx, BoolArray current, BoolArray incoming) {
+        if (incoming == null) {
+            return current;
+        }
+        if (current == null) {
+            return incoming;
+        }
+        long n = current.length();
+        MemorySegment bits = ctx.arena().allocate((n + 7) / 8);
+        for (long i = 0; i < n; i++) {
+            if (current.getBoolean(i) && incoming.getBoolean(i)) {
+                long byteIndex = i >>> 3;
+                byte b = bits.get(ValueLayout.JAVA_BYTE, byteIndex);
+                bits.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) ((b & 0xff) | (1 << (i & 7))));
+            }
+        }
+        return new MaterializedBoolArray(DType.BOOL, n, bits.asReadOnly());
     }
 
     /// Returns `TimeUnit.divisor()` for the extension's declared time unit, or
