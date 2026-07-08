@@ -90,28 +90,6 @@ Per-encoding gotchas:
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
 
-## Compute
-
-- [ ] **Compute primitives — encoded-domain specialization & façade** — the remaining ADR-0013
-  follow-ups now the fused kernels have shipped. See [ADR-0013](adr/0013-compute-primitives.md).
-  Done: §4 `Predicate`; §5 `RowFilter` unified over `Predicate`; §6 zone-map aggregate push-down in
-  both tiers — the whole-zone `ZoneReducer` fold wired into `VortexAggregatePushDownRule` (rewrites a
-  whole-table `MIN`/`MAX`/`COUNT`/`SUM`/`AVG` to a single-row `Values`, auto-registered over a bare
-  `jdbc:calcite:` connection), plus the boundary/residual tier so a `SUM`/`MIN`/`MAX`/`COUNT` with a
-  `WHERE` folds fully-selected zones from stats and decodes only the straddling boundary chunks via
-  the fused `Compute.filteredAggregate`. §1–§3 (`Mask`, the `FilterKernel`/`MapKernel`/`ReduceKernel`
-  interfaces) were built then removed for the fused single-pass kernels — no intermediate bitmap.
-  Encoded-domain value specialization was measured as a no-win (decode is dispatch-bound, see
-  `forLoopDictEncoded`); the real dict lever — the monomorphic code-segment scan — shipped as the
-  `DictFilter` lane in both kernels, including multi-leaf `AND`s (the dict leaf drives the scan,
-  residual leaves tested per match). Multi-fork numbers: `fusedFilteredSumDict` 762 → 38 ms/op
-  ≈ 20×; `fusedFilteredAggregateDict` 983 → 46 ms/op ≈ 22×; `fusedFilteredAggregateMulti`
-  (2-leaf `AND` × 2 aggregates) 2269 → 201 ms/op ≈ 11×.
-  Next: the columnar transducer façade — [ADR-0019](adr/0019-columnar-transducer-facade.md)
-  drafted (Proposed): declarative column-bound stages compiled to one fused pass; the remaining
-  measured lever is the multi-aggregate single scan (≈ 2×) plus composition ergonomics for the
-  Calcite boundary tier; review, then implement.
-
 ## Encodings
 
 See [docs/compatibility.md](docs/compatibility.md) for the full encoding support table and S3 fixture status.
