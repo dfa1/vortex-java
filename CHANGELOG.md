@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] — 2026-07-08
+
+**Null validity** and **real-world file compatibility** are the two themes of this release. The
+[Raincloud](https://github.com/spiraldb/raincloud) conformance suite — 247 public datasets written
+by the Python `vortex-data` bindings — exposed a systematic family of silent-corruption bugs where
+nullable encoding children's validity masks were dropped during decode, causing null rows to appear
+as invented values (`0.0`, the FoR base, empty string). All five affected encodings are patched:
+`fastlanes.bitpacked` validity-child chain, `vortex.dict` (eager + layout), `vortex.runend`,
+`vortex.sparse` (primitive + utf8/binary), `vortex.datetimeparts`, and `fastlanes.alprd`.
+Real-world files also uncovered scan failures: mixed per-column chunk grids, nested struct layout,
+FSST-compressed string-dict offsets, RLE double/float pools, narrow-integer dict pools, all-null
+columns, and zone-map stats from the current Rust writer format (`vortex.zoned`). Unsigned integer
+silent-corruption in CSV export and filter predicates is also fixed. The conformance suite itself
+ships as a gate-running weekly workflow plus four per-PR JNI interop fixtures.
+
 ### Fixed
 
 - Per-zone stats from current Rust writers (`vortex.zoned`, vortex-jni 0.76.0) decode again. The 0.76 zoned layout replaced the legacy `vortex.stats` bit-set metadata with an aggregate-function spec list and dropped the per-stat truncation flags; the reader now reconstructs the stats table from that spec list (min/max/sum/null_count), so `columnZoneStats` and aggregate push-down work against those files instead of throwing `ClassCastException`. ([#197](https://github.com/dfa1/vortex-java/pull/197))
