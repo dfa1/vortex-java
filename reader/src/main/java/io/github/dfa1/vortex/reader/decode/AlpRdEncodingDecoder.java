@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpRdDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpRdFloatArray;
@@ -45,14 +46,22 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         long n = ctx.rowCount();
         PType ptype = p.ptype();
 
-        // Lazy path: keep left/right as typed Arrays + patches as a small short[] +
-        // a lazy indices Array. No n-sized output buffer allocated.
+        // Validity mirrors the Rust reference: an ALP-RD array's validity IS its
+        // left_parts child's validity. Decode the child as an Array so a nullable
+        // left_parts surfaces its MaskedArray; capture the mask and re-wrap the decoded
+        // result rather than flattening it (which silently dropped nulls — #234).
         Array leftRaw = ctx.decodeChild(0, DType.U16, n);
-        ShortArray leftArr = (ShortArray) unwrap(leftRaw);
+        BoolArray validity = null;
+        Array leftInner = leftRaw;
+        if (leftRaw instanceof MaskedArray masked) {
+            leftInner = masked.inner();
+            validity = masked.validity();
+        }
+        ShortArray leftArr = (ShortArray) leftInner;
 
         Patches patches = decodePatches(ctx, meta.patches());
 
-        return switch (ptype) {
+        Array decoded = switch (ptype) {
             case F64 -> {
                 Array rightRaw = ctx.decodeChild(1, DType.U64, n);
                 LongArray rightArr = (LongArray) unwrap(rightRaw);
@@ -67,6 +76,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
             }
             default -> throw new VortexException(EncodingId.VORTEX_ALPRD, "unsupported dtype " + ptype);
         };
+        return validity != null ? new MaskedArray(decoded, validity) : decoded;
     }
 
     private static Array unwrap(Array arr) {
