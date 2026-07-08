@@ -331,10 +331,13 @@ class SparseEncodingEncoderTest {
             // When
             Array result = DECODER.decode(ctx);
 
-            // Then
+            // Then — null fill wraps the VarBin values in a MaskedArray whose rows are all
+            // invalid (#232); the inner values are still zero-length strings.
             assertThat(result.length()).isEqualTo(3L);
-            VarBinArray varBin = (VarBinArray) result;
+            MaskedArray masked = (MaskedArray) result;
+            VarBinArray varBin = (VarBinArray) masked.inner();
             for (int i = 0; i < 3; i++) {
+                assertThat(masked.isValid(i)).as("valid index %d", i).isFalse();
                 assertThat(varBin.getByteLength(i)).as("index %d", i).isZero();
             }
         }
@@ -375,14 +378,18 @@ class SparseEncodingEncoderTest {
             // When
             Array result = DECODER.decode(ctx);
 
-            // Then
-            VarBinArray varBin = (VarBinArray) result;
+            // Then — null fill: unpatched rows 0/2/4 are null, patched rows 1/3 carry the
+            // strings and are valid (#232). Unwrap the MaskedArray to reach the VarBin values.
+            MaskedArray masked = (MaskedArray) result;
+            VarBinArray varBin = (VarBinArray) masked.inner();
             assertThat(varBin.length()).isEqualTo(5L);
-            assertThat(varBin.getByteLength(0)).isZero();
+            assertThat(masked.isValid(0)).isFalse();
+            assertThat(masked.isValid(1)).isTrue();
             assertThat(varBin.getString(1)).isEqualTo("hi");
-            assertThat(varBin.getByteLength(2)).isZero();
+            assertThat(masked.isValid(2)).isFalse();
+            assertThat(masked.isValid(3)).isTrue();
             assertThat(varBin.getString(3)).isEqualTo("bye");
-            assertThat(varBin.getByteLength(4)).isZero();
+            assertThat(masked.isValid(4)).isFalse();
         }
 
         @Test
