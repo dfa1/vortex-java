@@ -60,20 +60,22 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
 
         long n = ctx.rowCount();
 
-        if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
-            return decodeVarBin(ctx, n, numPatches, offset, indicesPtype);
-        }
-
         // Row validity mirrors the Rust reference `ValidityVTable<Sparse>`: it is a sparse
         // bool array whose fill is `fill_value.is_valid()` and whose per-patch value is the
         // patch value's validity bit. So a position is valid iff (it is a patch AND that
         // patch is valid) OR (it is unpatched AND the fill is non-null). Dropping either
         // facet lost nulls: a `fill_value: null` array (world-energy `biofuel_cons_change_pct`
         // f64?) decoded unpatched rows as 0.0, and a null patch (nuclear_share_energy)
-        // decoded to raw 0 — #226.
+        // decoded to raw 0 — #226. The Rust vtable is generic over the values encoding, so
+        // utf8/binary sparse reuses it verbatim; not doing so lost the same nulls for string
+        // columns — #232.
         MemorySegment fillBuf = ctx.buffer(0);
         ProtoScalarValue fillScalar = decodeFill(fillBuf);
         boolean fillValid = !isNullScalar(fillScalar);
+
+        if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
+            return decodeVarBin(ctx, n, numPatches, offset, indicesPtype, fillValid);
+        }
 
         if (ctx.dtype() instanceof DType.Bool) {
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
@@ -176,8 +178,11 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
 
     /// Detects a null fill scalar: either an explicit `null_value`, or a scalar with no
     /// value-bearing field set (Rust encodes a null fill as `ScalarValue::Null`, and a
-    /// non-null fill always sets exactly one typed field — even integer/float `0`).
+    /// non-null fill always sets exactly one typed field — even integer/float `0`, or a
+    /// utf8/binary fill via `string_value`/`bytes_value`).
     private static boolean isNullScalar(ProtoScalarValue s) {
+        // keep in sync with ProtoScalarValue components: a new value-bearing field must be
+        // added below, else a non-null fill of that kind is misclassified as null.
         return s.null_value() != null
                 || (s.bool_value() == null && s.int64_value() == null && s.uint64_value() == null
                         && s.f32_value() == null && s.f64_value() == null && s.string_value() == null
@@ -186,21 +191,35 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array decodeVarBin(
-            DecodeContext ctx, long n, long numPatches, long offset, PType indicesPtype
+            DecodeContext ctx, long n, long numPatches, long offset, PType indicesPtype, boolean fillValid
     ) {
+        // Patch positions are decoded as an Array (not just a segment) so the shared
+        // row-validity helper can index them lazily, exactly like the primitive path.
+        DType indicesDtype = new DType.Primitive(indicesPtype, false);
+        Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
+        Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
+
         MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
         if (numPatches == 0) {
             MemorySegment outBytes = ctx.arena().allocate(1);
-            return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+            Array result = new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+            return withSparseValidity(ctx, result, fillValid, null, idxData, 0, n, offset);
         }
 
-        DType indicesDtype = new DType.Primitive(indicesPtype, false);
-        MemorySegment idxSeg = ctx.decodeChildSegment(0, indicesDtype, numPatches);
-        VarBinArray rawValues = (VarBinArray) ctx.decodeChild(1, ctx.dtype(), numPatches);
-        VarBinArray.OffsetMode varBin = VarBinArray.toOffsetMode(rawValues, ctx.arena());
+        // A nullable patch child arrives wrapped in `vortex.masked`; unwrap it to reach the
+        // raw VarBin values and carry the per-patch validity bits into the row validity (#232).
+        Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
+        BoolArray patchValidity = null;
+        Array valData = patchValues;
+        if (patchValues instanceof MaskedArray m) {
+            valData = m.inner();
+            patchValidity = m.validity();
+        }
+        VarBinArray.OffsetMode varBin = VarBinArray.toOffsetMode((VarBinArray) valData, ctx.arena());
         MemorySegment valBytes = varBin.bytesSegment();
         MemorySegment valOffsets = varBin.offsetsSegment();
         PType valOffPtype = varBin.offsetsPtype();
+        MemorySegment idxSeg = ctx.materialize(idxData);
 
         int idxBytes = indicesPtype.byteSize();
         long totalBytes = 0;
@@ -229,7 +248,8 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             outOffsets.setAtIndex(VortexFormat.LE_INT, pos + 1, (int) bytePos);
         }
 
-        return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+        Array result = new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+        return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
     }
 
     private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {
