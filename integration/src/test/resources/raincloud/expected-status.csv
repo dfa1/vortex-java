@@ -29,7 +29,7 @@ bi-cmsprovider,untriaged
 bi-commongovernment,untriaged
 bi-corporations,ok
 bi-eixo,untriaged
-bi-euro2016,gap:235
+bi-euro2016,gap:234
 bi-food,ok
 bi-generico,untriaged
 bi-hashtags,untriaged
@@ -67,7 +67,7 @@ bi-trainsuk2,untriaged
 bi-uberlandia,untriaged
 bi-uscensus,untriaged
 bi-wins,untriaged
-bi-yalelanguages,gap:235
+bi-yalelanguages,ok
 bigscience-p3-eval-subset,untriaged
 building-permit-applications-data,untriaged
 c4-en-validation,untriaged
