@@ -186,6 +186,37 @@ class VarBinArrayTest {
             assertThat(lengths).containsExactly(3, 1, 3);
         }
 
+        /// Exercises the I32-offset fast path of `forEachByteLength` (#243): the common
+        /// FSST/dict shape where value offsets are 32-bit, read at a constant 4-byte stride.
+        @Test
+        void forEachByteLength_i32Offsets_resolvesViaDict() {
+            // Given — dict=["foo","bar"] with I32 offsets, codes=[1,0,1]
+            VarBinArray sut = ofDictWithOffsets(new String[]{"foo", "bar"}, PType.I32, new int[]{1, 0, 1});
+            List<Integer> lengths = new ArrayList<>();
+
+            // When
+            sut.forEachByteLength(lengths::add);
+
+            // Then
+            assertThat(lengths).containsExactly(3, 3, 3);
+        }
+
+        /// Exercises the wide-offset general path of `forEachByteLength` (#243): 64-bit value
+        /// offsets take the per-row `dictReadOff` branch rather than the I32 fast path.
+        @Test
+        void forEachByteLength_i64Offsets_resolvesViaDict() {
+            // Given — dict=["hi","there"] with I64 offsets, codes=[0,1,0,1]
+            VarBinArray sut = ofDictWithOffsets(new String[]{"hi", "there"}, PType.I64,
+                    new int[]{0, 1, 0, 1});
+            List<Integer> lengths = new ArrayList<>();
+
+            // When
+            sut.forEachByteLength(lengths::add);
+
+            // Then
+            assertThat(lengths).containsExactly(2, 5, 2, 5);
+        }
+
         /// The dict-value offsets can arrive at any integer width: FSST-decompressed
         /// values carry I32 offsets, legacy dicts use I64, and narrow sequence-encoded
         /// offsets keep their U8/U16 ptype. `dictReadOff` must read each at its true
