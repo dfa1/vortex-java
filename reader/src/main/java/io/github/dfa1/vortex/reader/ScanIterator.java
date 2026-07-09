@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.OffsetBoolArray;
 import io.github.dfa1.vortex.reader.array.OffsetByteArray;
 import io.github.dfa1.vortex.reader.array.OffsetDoubleArray;
@@ -761,6 +762,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case ShortArray a -> new OffsetShortArray(dtype, length, a, offset);
             case ByteArray a -> new OffsetByteArray(dtype, length, a, offset);
             case BoolArray a -> new OffsetBoolArray(dtype, length, a, offset);
+            case NullArray ignored -> new NullArray(dtype, length);
             case VarBinArray a -> new VarBinArray.SlicedMode(dtype, length, a, offset);
             case StructArray s -> {
                 // A shared nested struct column is decoded once over the full range, then sliced

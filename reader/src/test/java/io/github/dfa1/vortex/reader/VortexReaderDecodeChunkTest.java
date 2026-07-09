@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.fbs.FbsDType;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
+import io.github.dfa1.vortex.core.fbs.FbsNull;
 import io.github.dfa1.vortex.core.fbs.FbsPType;
 import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
 import io.github.dfa1.vortex.core.fbs.FbsStruct_;
@@ -14,7 +15,9 @@ import io.github.dfa1.vortex.core.fbs.FbsType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.NullEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 
 import org.junit.jupiter.api.Test;
@@ -350,12 +353,52 @@ class VortexReaderDecodeChunkTest {
         assertThat(streamedY).containsExactly(2000L, 2001L, 2002L, 2003L, 2004L, 2005L, 2006L);
     }
 
+    // A per-chunk column "a" [3, 2] beside a full-range vortex.null flat "n" that the scan
+    // must slice into windows of 3 and 2 rows. Before #247 sliceArray had no NullArray case
+    // and threw on the second window.
+    private static final long[] NULL_COL_A_ROWS = {3, 2};
+    private static final long[][] NULL_COL_A = {{10, 11, 12}, {13, 14}};
+
+    @Test
+    void scan_sharedNullColumn_slicesNullArrayPerWindow(@TempDir Path tmp) throws Exception {
+        // Given — "a" chunked [3,2], "n" a single full-range flat with vortex.null encoding.
+        // The reader decodes "n" once as NullArray(5) then slices it per scan window;
+        // without #247 the NullArray case was absent from sliceArray and the second window threw.
+        Path file = writeNullColumnFile(tmp);
+        var windowSizes = new ArrayList<Long>();
+        var streamedA = new ArrayList<Long>();
+
+        // When
+        try (var reader = VortexReader.open(file, registryWithNull());
+                var iter = reader.scan(ScanOptions.all())) {
+            iter.forEachRemaining(chunk -> {
+                windowSizes.add(chunk.rowCount());
+                streamedA.addAll(values(chunk.column("a")));
+                Array nullCol = chunk.column("n");
+                assertThat(nullCol).isInstanceOf(NullArray.class);
+                assertThat(nullCol.length()).isEqualTo(chunk.rowCount());
+            });
+        }
+
+        // Then — two windows of 3 and 2 rows; each yields a correctly-sized NullArray
+        assertThat(windowSizes).containsExactly(3L, 2L);
+        assertThat(streamedA).containsExactly(10L, 11L, 12L, 13L, 14L);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static ReadRegistry registry() {
         return ReadRegistry.builder()
                 .register(new PrimitiveEncodingDecoder())
                 .register(new BoolEncodingDecoder())
+                .build();
+    }
+
+    private static ReadRegistry registryWithNull() {
+        return ReadRegistry.builder()
+                .register(new PrimitiveEncodingDecoder())
+                .register(new BoolEncodingDecoder())
+                .register(new NullEncodingDecoder())
                 .build();
     }
 
@@ -821,6 +864,79 @@ class VortexReaderDecodeChunkTest {
             out.write(trailer.array());
         }
         return file;
+    }
+
+    /// Assembles a file with column "a" chunked over [NULL_COL_A_ROWS] and column "n" as a
+    /// single full-range flat encoded with vortex.null (no buffers). The mismatched grids
+    /// (chunked "a" vs full-range "n") force [ScanIterator] to slice the NullArray per window.
+    private static Path writeNullColumnFile(Path dir) throws Exception {
+        List<byte[]> segments = new ArrayList<>();
+        for (long[] chunk : NULL_COL_A) {
+            segments.add(primitiveSegment(chunk, null));
+        }
+        int nullSegIdx = segments.size();
+        segments.add(nullSegment());
+
+        long[] segOffsets = new long[segments.size()];
+        long[] segLengths = new long[segments.size()];
+        long off = 0;
+        for (int i = 0; i < segments.size(); i++) {
+            segOffsets[i] = off;
+            segLengths[i] = segments.get(i).length;
+            off += segments.get(i).length;
+        }
+
+        long total = 0;
+        for (long r : NULL_COL_A_ROWS) {
+            total += r;
+        }
+        int[] aSegs = {0, 1};
+
+        ByteBuffer footerBuf = MalformedFiles.buildFooter(
+                new String[]{"vortex.primitive", "vortex.bool", "vortex.null"},
+                new String[]{"vortex.flat", "vortex.chunked", "vortex.struct"},
+                segOffsets, segLengths);
+        ByteBuffer dtypeBuf = buildNullColumnDtype();
+        ByteBuffer layoutBuf = buildNullColumnLayout(aSegs, NULL_COL_A_ROWS, total, nullSegIdx);
+
+        return writeVtxFile(dir, "null-col.vtx", segments, footerBuf, dtypeBuf, layoutBuf);
+    }
+
+    /// Builds a null segment: vortex.null encoding (index 2 in the null-column footer), no buffers.
+    private static byte[] nullSegment() {
+        return assembleSegment(new byte[0][], fbb -> {
+            int bufs = FbsArrayNode.createBuffersVector(fbb, new int[0]);
+            return FbsArrayNode.createFbsArrayNode(fbb, 2, 0, 0, bufs, 0);
+        });
+    }
+
+    /// Struct DType for the null-column file: "a" non-nullable I64, "n" DType.Null.
+    private static ByteBuffer buildNullColumnDtype() {
+        var fbb = new FbsBuilder(256);
+        int primA = FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false);
+        int dtA = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primA);
+        int nullTbl = FbsNull.createFbsNull(fbb);
+        int dtN = FbsDType.createFbsDType(fbb, FbsType.FbsNull, nullTbl);
+        int names = FbsStruct_.createNamesVector(fbb,
+                new int[]{fbb.createString("a"), fbb.createString("n")});
+        int dtypes = FbsStruct_.createDtypesVector(fbb, new int[]{dtA, dtN});
+        int struct = FbsStruct_.createFbsStruct_(fbb, names, dtypes, false);
+        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, struct);
+        FbsDType.finishFbsDTypeBuffer(fbb, dt);
+        return MalformedFiles.slice(fbb);
+    }
+
+    /// Layout for the null-column file: "a" chunked over aSegs/aRows, "n" a single full-range
+    /// flat over nullSegIdx — the shared / slice-offset shape that triggers sliceArray for "n".
+    private static ByteBuffer buildNullColumnLayout(int[] aSegs, long[] aRows, long total, int nullSegIdx) {
+        var fbb = new FbsBuilder(512);
+        int chunkedA = buildChunkedColumn(fbb, aSegs, aRows, total);
+        int nullSegV = FbsLayout.createSegmentsVector(fbb, new long[]{nullSegIdx});
+        int flatN = FbsLayout.createFbsLayout(fbb, 0, total, 0, 0, nullSegV);
+        int structChildV = FbsLayout.createChildrenVector(fbb, new int[]{chunkedA, flatN});
+        int structOff = FbsLayout.createFbsLayout(fbb, 2, total, 0, structChildV, 0);
+        FbsLayout.finishFbsLayoutBuffer(fbb, structOff);
+        return MalformedFiles.slice(fbb);
     }
 
     private static void writeBuf(OutputStream out, ByteBuffer buf) throws Exception {
