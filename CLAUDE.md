@@ -183,13 +183,22 @@ almost always this.
 
 ## Reference implementation
 
-When stuck on encode/decode behavior, read the Rust reference at
-`https://github.com/spiraldb/vortex` (via `gh api repos/spiraldb/vortex/contents/<path>`):
-`encodings/fastlanes/src/{bitpacking,for}/`, `encodings/sparse/src/`, `encodings/alp/src/alp/`, and
-`https://github.com/spiraldb/fastlanes-rs` (`src/bitpacking.rs`, `src/macros.rs`).
+When stuck on encode/decode behavior, consult **in this order**:
 
-**Never reverse-engineer wire formats by probing bytes.** Read the vtable `serialize`/`deserialize`
-in the Rust source for the exact schema, then implement from spec.
+1. **Format spec** (primary, authoritative) — `https://github.com/vortex-data/vortex/tree/mp/spec/docs/specification`
+   (via `gh api repos/vortex-data/vortex/contents/docs/specification?ref=mp/spec`):
+   - `encoding-format.md` — per-encoding validity table (check this first for null/validity semantics)
+   - `encoding-format/dict-runend-sparse.md` — Dict, RunEnd, Sparse layouts
+   - `encoding-format/alp.md` — ALP and ALP-RD layouts
+   - `encoding-format/misc.md` — DateTimeParts (`vortex.datetimeparts`) and other misc encodings
+
+2. **Rust reference** (implementation detail) — `https://github.com/spiraldb/vortex`
+   (via `gh api repos/spiraldb/vortex/contents/<path>`):
+   `encodings/fastlanes/src/{bitpacking,for}/`, `encodings/sparse/src/`, `encodings/alp/src/alp/`, and
+   `https://github.com/spiraldb/fastlanes-rs` (`src/bitpacking.rs`, `src/macros.rs`).
+
+**Never reverse-engineer wire formats by probing bytes.** Read the spec first, then the Rust
+`serialize`/`deserialize` vtable if the spec is ambiguous.
 
 ## Design decisions
 
