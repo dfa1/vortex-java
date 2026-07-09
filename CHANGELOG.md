@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SparseEncodingDecoder` now asserts exactly two children (`patch_indices`, `patch_values`) and throws `VortexException` on any other count; previously a third child was silently accepted. ([#250](https://github.com/dfa1/vortex-java/issues/250))
 - `DateTimePartsArrays.readLong` now zero-extends unsigned children (`U8`/`U16`/`U32`) instead of sign-extending them; previously a `U16` seconds-within-day value ≥ 32 768 was widened as a negative short, producing a 65 536-second error in the reconstructed timestamp (#252, bi-euro2016 corpus).
 - `RaincloudConformanceIntegrationTest` now writes both the vortex-java and Parquet oracle CSVs to temp files and streams them line-by-line for comparison; previously it materialized both into heap `String` objects, causing OOM for large corpus files (≥157 MB) that were previously hidden by throwing before reaching the corrupted line. ([#254](https://github.com/dfa1/vortex-java/issues/254))
+- `RaincloudConformanceIntegrationTest` oracle now formats `INT32`/`INT64` Parquet columns with a `UINT_32`/`UINT_64` logical-type annotation using `Integer.toUnsignedString`/`Long.toUnsignedString`, matching the unsigned representation that Vortex stores as `U32`/`U64`; previously the Parquet signed interpretation diverged for values above `Integer.MAX_VALUE` (e.g. `total_boosters` in the covid-world-vaccination-progress corpus). ([#253](https://github.com/dfa1/vortex-java/issues/253))
 
 ## [0.12.1] — 2026-07-08
 

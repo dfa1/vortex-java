@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.integration;
 
 import de.siegmar.fastcsv.writer.CsvWriter;
 import dev.hardwood.InputFile;
+import dev.hardwood.metadata.LogicalType;
 import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
@@ -220,6 +221,10 @@ class RaincloudConformanceIntegrationTest {
     /// null rows export as an empty field, valid rows use the JDK canonical
     /// `toString` of the value.
     ///
+    /// INT32/INT64 columns with a `UINT_32`/`UINT_64` logical-type annotation are treated
+    /// as unsigned so their string representation matches the U32/U64 Vortex columns that
+    /// carry the same bits (#253).
+    ///
     /// @param col  the column schema
     /// @param rows the row reader positioned at the current row
     /// @return the formatted cell string
@@ -228,9 +233,10 @@ class RaincloudConformanceIntegrationTest {
         if (col.repetitionType() == RepetitionType.OPTIONAL && rows.isNull(name)) {
             return "";
         }
+        boolean unsignedInt = col.logicalType() instanceof LogicalType.IntType lt && !lt.isSigned();
         return switch (col.type()) {
-            case INT32 -> Integer.toString(rows.getInt(name));
-            case INT64 -> Long.toString(rows.getLong(name));
+            case INT32 -> unsignedInt ? Integer.toUnsignedString(rows.getInt(name)) : Integer.toString(rows.getInt(name));
+            case INT64 -> unsignedInt ? Long.toUnsignedString(rows.getLong(name)) : Long.toString(rows.getLong(name));
             case FLOAT -> Float.toString(rows.getFloat(name));
             case DOUBLE -> Double.toString(rows.getDouble(name));
             case BOOLEAN -> Boolean.toString(rows.getBoolean(name));
