@@ -34,8 +34,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
             meta = new ProtoDeltaMetadata(0L, 0);
         } else {
             try {
-                MemorySegment metaSeg = rawMeta;
-                meta = ProtoDeltaMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                meta = ProtoDeltaMetadata.decode(rawMeta, 0, rawMeta.byteSize());
             } catch (IOException e) {
                 throw new VortexException(EncodingId.FASTLANES_DELTA, "invalid metadata", e);
             }

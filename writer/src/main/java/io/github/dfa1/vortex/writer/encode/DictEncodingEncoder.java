@@ -230,12 +230,11 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     private static int arrayLength(Object data, PType ptype) {
         return switch (ptype) {
             case I8, U8 -> ((byte[]) data).length;
-            case I16, U16 -> ((short[]) data).length;
+            case I16, U16, F16 -> ((short[]) data).length;
             case I32, U32 -> ((int[]) data).length;
             case I64, U64 -> ((long[]) data).length;
             case F32 -> ((float[]) data).length;
             case F64 -> ((double[]) data).length;
-            case F16 -> ((short[]) data).length;
         };
     }
 
@@ -260,7 +259,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 }
                 yield a;
             }
-            case I16, U16 -> {
+            case I16, U16, F16 -> {
                 short[] a = new short[dictSize];
                 int i = 0;
                 for (Object v : uniques) {
@@ -297,14 +296,6 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 int i = 0;
                 for (Object v : uniques) {
                     a[i++] = (Double) v;
-                }
-                yield a;
-            }
-            case F16 -> {
-                short[] a = new short[dictSize];
-                int i = 0;
-                for (Object v : uniques) {
-                    a[i++] = (Short) v;
                 }
                 yield a;
             }

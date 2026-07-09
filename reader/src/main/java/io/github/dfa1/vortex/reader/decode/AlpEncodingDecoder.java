@@ -41,8 +41,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
             meta = new ProtoALPMetadata(0, 0, null);
         } else {
             try {
-                MemorySegment metaSeg = rawMeta;
-                meta = ProtoALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                meta = ProtoALPMetadata.decode(rawMeta, 0, rawMeta.byteSize());
             } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_ALP, "invalid metadata", e);
             }

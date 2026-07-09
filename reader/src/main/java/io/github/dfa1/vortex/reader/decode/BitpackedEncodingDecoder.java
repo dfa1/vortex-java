@@ -40,8 +40,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
             meta = new ProtoBitPackedMetadata(0, 0, null);
         } else {
             try {
-                MemorySegment metaSeg = rawMeta;
-                meta = ProtoBitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                meta = ProtoBitPackedMetadata.decode(rawMeta, 0, rawMeta.byteSize());
             } catch (IOException e) {
                 throw new VortexException(EncodingId.FASTLANES_BITPACKED, "invalid metadata", e);
             }

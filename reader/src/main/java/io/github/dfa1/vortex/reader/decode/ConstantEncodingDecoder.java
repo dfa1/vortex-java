@@ -96,7 +96,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
     /// @param n        row count
     /// @return a lazy constant array of length `n`
     private static Array constantPrimitive(DType outDtype, PType ptype, ProtoScalarValue scalar, long n) {
-        long rawBits = scalarToRawBits(scalar, ptype);
+        long rawBits = scalarToRawBits(scalar);
         return switch (ptype) {
             case I64, U64 -> new LazyConstantLongArray(outDtype, n, rawBits);
             case I32, U32 -> new LazyConstantIntArray(outDtype, n, (int) rawBits);
@@ -142,7 +142,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         return new VarBinArray.OffsetMode(dtype, n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
     }
 
-    private static long scalarToRawBits(ProtoScalarValue scalar, PType ptype) {
+    private static long scalarToRawBits(ProtoScalarValue scalar) {
         if (scalar.int64_value() != null) {
             return scalar.int64_value();
         }

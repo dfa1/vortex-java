@@ -42,8 +42,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
 
         ProtoRunEndMetadata meta;
         try {
-            MemorySegment metaSeg = rawMeta;
-            meta = ProtoRunEndMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            meta = ProtoRunEndMetadata.decode(rawMeta, 0, rawMeta.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_RUNEND, "invalid metadata", e);
         }

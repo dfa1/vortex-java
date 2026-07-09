@@ -136,7 +136,7 @@ public final class CascadingCompressor {
     /// Entry point: encode `data` using the best cascading strategy.
     ///
     /// Cascade parameters (depth, sampling, exclusions) are taken from `ctx`.
-    /// Use [EncodeContext#ofDepth(int, java.lang.foreign.Arena, WriteRegistry)]
+    /// Use [EncodeContext#ofDepth(int, Arena, WriteRegistry)]
     /// to build a context with cascade depth set.
     ///
     /// @param dtype the logical type of the data to encode

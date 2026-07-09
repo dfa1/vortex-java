@@ -75,9 +75,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         // expected to FoR-shift them to non-negative first. Fall back to full type width here
         // so callers without FoR still produce a valid (un-compressed) result.
         if (hasNegative) {
-            int wideBitWidth = typeBits;
-            MemorySegment widePacked = packFastLanes(longs, n, wideBitWidth, typeBits, ctx.arena());
-            byte[] wideMeta = new ProtoBitPackedMetadata(wideBitWidth, 0, null).encode();
+            MemorySegment widePacked = packFastLanes(longs, n, typeBits, typeBits, ctx.arena());
+            byte[] wideMeta = new ProtoBitPackedMetadata(typeBits, 0, null).encode();
             byte[] wideMin = statsBytes(ptype, signedMin);
             byte[] wideMax = statsBytes(ptype, signedMax);
             EncodeNode wideRoot = new EncodeNode(EncodingId.FASTLANES_BITPACKED,

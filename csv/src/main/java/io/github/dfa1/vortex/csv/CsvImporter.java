@@ -23,7 +23,7 @@ import java.util.Map;
 /// Provide a schema via [ImportOptions#withSchema] to skip inference.
 /// Empty cell values are treated as 0 / false / "" for typed columns.
 ///
-/// Import is single-pass streaming. The first [ImportOptions#chunkSize] data rows
+/// Import is single-pass streaming. The first [ImportOptions#chunkSize()] data rows
 /// are buffered to infer the schema (or skipped when a schema is provided), then
 /// all rows — including those first rows — are written in chunks. Memory usage is
 /// O(chunkSize) regardless of file size.
@@ -83,7 +83,7 @@ public final class CsvImporter {
 
             // Generate synthetic column names when the file has no header row.
             if (headers == null) {
-                headers = generateHeaders(firstChunk.get(0).length);
+                headers = generateHeaders(firstChunk.getFirst().length);
             }
 
             DType.Struct schema = options.schema() != null

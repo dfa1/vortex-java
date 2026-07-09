@@ -72,8 +72,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         int nChunks = meta.chunks().size();
         // Buffer layout (matches Rust vortex PcoArray): all chunk metas first, then all pages.
         // buffers[0..nChunks) = chunk metas; buffers[nChunks..) = pages (flattened).
-        int pagesBufOffset = nChunks;
-        int pageBufIdx = pagesBufOffset;
+        int pageBufIdx = nChunks;
         long rawByteOffset = 0L;
 
         long[] batchLowers1 = new long[PcoTansDecoder.BATCH_N];
@@ -663,9 +662,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         int conv1Quantization = 0;
         long conv1Bias = 0L;
         long[] conv1Weights = new long[0];
-        if (deltaVariant == 0) {
-            // NoOp
-        } else if (deltaVariant == 1) {
+        if (deltaVariant == 1) {
             deltaOrder = (int) r.readBits(3);
             secondaryUsesDelta = r.readBits(1) != 0;
         } else if (deltaVariant == 2) {
@@ -688,7 +685,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
             for (int i = 0; i < conv1Order; i++) {
                 conv1Weights[i] = (int) (r.readBits(32) ^ 0x80000000L);
             }
-        } else {
+        } else if (deltaVariant != 0) {
             throw new VortexException(EncodingId.VORTEX_PCO,
                     "pco delta variant " + deltaVariant + " not yet implemented "
                             + "(NoOp=0, Consecutive=1, Lookback=2, Conv1=3 supported)");
@@ -741,8 +738,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_PCO, "missing ProtoPcoMetadata");
         }
         try {
-            MemorySegment metaSeg = raw;
-            return ProtoPcoMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            return ProtoPcoMetadata.decode(raw, 0, raw.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_PCO,
                     "invalid ProtoPcoMetadata: " + e.getMessage());

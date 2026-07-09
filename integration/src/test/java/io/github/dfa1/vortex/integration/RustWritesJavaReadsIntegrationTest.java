@@ -145,7 +145,6 @@ class RustWritesJavaReadsIntegrationTest {
             case F32 -> seg.toArray(ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
             case F16, I16, U16 -> seg.toArray(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
             case I8, U8 -> seg.toArray(ValueLayout.JAVA_BYTE);
-            default -> throw new AssertionError("unsupported ptype: " + ptype);
         };
     }
 
@@ -344,8 +343,8 @@ class RustWritesJavaReadsIntegrationTest {
             var valList = new ArrayList<Double>();
             while (iter.hasNext() && rowsSeen < 10) {
                 try (var c = iter.next()) {
-                    LongArray idCol = (LongArray) c.column("id");
-                    DoubleArray valCol = (DoubleArray) c.column("value");
+                    LongArray idCol = c.column("id");
+                    DoubleArray valCol = c.column("value");
                     long take = Math.min(idCol.length(), 10 - rowsSeen);
                     for (long i = 0; i < take; i++) {
                         idList.add(idCol.getLong(i));
@@ -510,7 +509,7 @@ class RustWritesJavaReadsIntegrationTest {
                     if (i % 5 == 0) {
                         idVec.setNull(i);
                     } else {
-                        idVec.setSafe(i, (long) i);
+                        idVec.setSafe(i, i);
                     }
                 }
                 root.setRowCount(n);

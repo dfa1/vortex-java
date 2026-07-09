@@ -10,7 +10,6 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyDateTimePartsLongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -40,8 +39,7 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
         }
         ProtoDateTimePartsMetadata decoded;
         try {
-            MemorySegment metaSeg = meta;
-            decoded = ProtoDateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            decoded = ProtoDateTimePartsMetadata.decode(meta, 0, meta.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS, "invalid metadata: " + e.getMessage());
         }
@@ -62,59 +60,18 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
         long unitsPerSecond = readUnitsPerSecond(ext);
         long unitsPerDay = SECONDS_PER_DAY * unitsPerSecond;
 
-        // A row is null when ANY component is null (mirrors the Rust reference —
-        // every part must be present to reassemble the epoch count). PR #225 made
-        // nullable RunEnd children surface real nulls as MaskedArray, so unwrap each
-        // component to its raw values, intersect their validities, and re-wrap the
-        // reassembled array with the combined mask instead of throwing (#235).
+        // Validity delegates to the `days` child only; seconds and subseconds are
+        // non-nullable per spec (#251). PR #225/#235: unwrap any MaskedArray from
+        // days and re-wrap the reassembled result with its validity.
         BoolArray validity = null;
         if (days instanceof MaskedArray masked) {
-            validity = intersect(ctx, validity, masked.validity());
+            validity = masked.validity();
             days = masked.inner();
-        }
-        if (seconds instanceof MaskedArray masked) {
-            validity = intersect(ctx, validity, masked.validity());
-            seconds = masked.inner();
-        }
-        if (subseconds instanceof MaskedArray masked) {
-            validity = intersect(ctx, validity, masked.validity());
-            subseconds = masked.inner();
         }
 
         Array reassembled = new LazyDateTimePartsLongArray(ctx.dtype(), ctx.rowCount(),
                 days, seconds, subseconds, unitsPerDay, unitsPerSecond);
         return validity != null ? new MaskedArray(reassembled, validity) : reassembled;
-    }
-
-    /// Combines a running validity bitmap with an incoming one via logical AND,
-    /// so that a row stays valid only when every component is valid.
-    ///
-    /// A `null` incoming bitmap means the component is entirely valid and
-    /// leaves `current` unchanged; a `null` `current` adopts `incoming` directly.
-    /// Two non-null bitmaps are AND-ed into a fresh off-heap bitmap allocated
-    /// from the decode arena.
-    ///
-    /// @param ctx      decode context supplying the output arena
-    /// @param current  running combined validity, or `null` if none yet
-    /// @param incoming a component's validity bitmap, or `null` if all-valid
-    /// @return the combined validity bitmap, or `null` when both inputs are all-valid
-    private static BoolArray intersect(DecodeContext ctx, BoolArray current, BoolArray incoming) {
-        if (incoming == null) {
-            return current;
-        }
-        if (current == null) {
-            return incoming;
-        }
-        long n = current.length();
-        MemorySegment bits = ctx.arena().allocate((n + 7) / 8);
-        for (long i = 0; i < n; i++) {
-            if (current.getBoolean(i) && incoming.getBoolean(i)) {
-                long byteIndex = i >>> 3;
-                byte b = bits.get(ValueLayout.JAVA_BYTE, byteIndex);
-                bits.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) ((b & 0xff) | (1 << (i & 7))));
-            }
-        }
-        return new MaterializedBoolArray(DType.BOOL, n, bits.asReadOnly());
     }
 
     /// Returns `TimeUnit.divisor()` for the extension's declared time unit, or
@@ -126,7 +83,7 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
                     "extension " + ext.extensionId() + " missing TimeUnit metadata byte");
         }
-        TimeUnit unit = TimeUnit.fromTag(extMeta.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
+        TimeUnit unit = TimeUnit.fromTag(extMeta.get(ValueLayout.JAVA_BYTE, 0));
         return unit == TimeUnit.Days ? 1L : unit.divisor();
     }
 }

@@ -92,8 +92,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     private static Array decodeRustProto(DecodeContext ctx, MemorySegment metaBuf) {
         ProtoDictMetadata meta;
         try {
-            MemorySegment metaSeg = metaBuf;
-            meta = ProtoDictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            meta = ProtoDictMetadata.decode(metaBuf, 0, metaBuf.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DICT, "invalid proto metadata", e);
         }
@@ -223,8 +222,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     private static Array decodeUtf8DictProto(DecodeContext ctx, MemorySegment metaBuf) {
         ProtoDictMetadata meta;
         try {
-            MemorySegment metaSeg = metaBuf;
-            meta = ProtoDictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            meta = ProtoDictMetadata.decode(metaBuf, 0, metaBuf.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DICT, "invalid utf8 dict proto metadata", e);
         }

@@ -364,7 +364,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Arena arena = Arena.ofConfined();
         try {
             SequencedMap<ColumnName, Chunk.Column> columns = buildSelfContainedColumnMap(spec, arena);
-            return new Chunk(spec.rowCount(), columns, arena, c -> { });
+            return new Chunk(spec.rowCount(), columns, arena, _ -> { });
         } catch (RuntimeException e) {
             arena.close();
             throw e;
@@ -798,13 +798,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case RowFilter.Column(var col, var predicate) -> {
                 // A valid-but-absent name yields no layout (no pruning), matching the row-level
                 // scan it gates.
-                ColumnName name = col;
-                Layout flat = chunk.layoutFor(name);
+                Layout flat = chunk.layoutFor(col);
                 if (flat == null) {
                     yield false;
                 }
                 ArrayStats stats = readFlatStats(flat);
-                yield canPrune(predicate, stats, flat.rowCount(), columnDType(name));
+                yield canPrune(predicate, stats, flat.rowCount(), columnDType(col));
             }
         };
     }

@@ -120,8 +120,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
                     io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U16.ordinal()), null);
         }
         try {
-            MemorySegment metaSeg = rawMeta;
-            return ProtoALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            return ProtoALPRDMetadata.decode(rawMeta, 0, rawMeta.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_ALPRD, "invalid metadata", e);
         }

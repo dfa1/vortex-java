@@ -27,8 +27,7 @@ public final class VarBinEncodingDecoder implements EncodingDecoder {
         }
         ProtoVarBinMetadata meta;
         try {
-            MemorySegment metaSeg = rawMeta;
-            meta = ProtoVarBinMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            meta = ProtoVarBinMetadata.decode(rawMeta, 0, rawMeta.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_VARBIN, "invalid metadata", e);
         }

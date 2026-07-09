@@ -15,7 +15,7 @@ final class RandomArrays {
 
     static Stream<long[]> i64Arrays(int count) {
         Random rng = new Random(SEED);
-        return IntStream.range(0, count).mapToObj(i -> {
+        return IntStream.range(0, count).mapToObj(_ -> {
             int size = rng.nextInt(10_001);
             long[] arr = new long[size];
             for (int j = 0; j < size; j++) {
@@ -27,7 +27,7 @@ final class RandomArrays {
 
     static Stream<double[]> f64Arrays(int count) {
         Random rng = new Random(SEED);
-        return IntStream.range(0, count).mapToObj(i -> {
+        return IntStream.range(0, count).mapToObj(_ -> {
             int size = rng.nextInt(5_001);
             double[] arr = new double[size];
             for (int j = 0; j < size; j++) {
@@ -43,7 +43,7 @@ final class RandomArrays {
 
     static Stream<float[]> f32Arrays(int count) {
         Random rng = new Random(SEED);
-        return IntStream.range(0, count).mapToObj(i -> {
+        return IntStream.range(0, count).mapToObj(_ -> {
             int size = rng.nextInt(5_001);
             float[] arr = new float[size];
             for (int j = 0; j < size; j++) {
@@ -59,7 +59,7 @@ final class RandomArrays {
 
     static Stream<String[]> asciiStringArrays(int count) {
         Random rng = new Random(SEED);
-        return IntStream.range(0, count).mapToObj(i -> {
+        return IntStream.range(0, count).mapToObj(_ -> {
             int size = rng.nextInt(5_001);
             String[] arr = new String[size];
             for (int j = 0; j < size; j++) {
@@ -71,7 +71,7 @@ final class RandomArrays {
 
     static Stream<String[]> varBinViewStringArrays(int count) {
         Random rng = new Random(SEED);
-        return IntStream.range(0, count).mapToObj(i -> {
+        return IntStream.range(0, count).mapToObj(_ -> {
             int size = rng.nextInt(1_001);
             String[] arr = new String[size];
             for (int j = 0; j < size; j++) {
@@ -83,7 +83,7 @@ final class RandomArrays {
 
     static Stream<String[]> u16DictStringArrays(int count) {
         Random rng = new Random(SEED);
-        return IntStream.range(0, count).mapToObj(i -> {
+        return IntStream.range(0, count).mapToObj(_ -> {
             int targetSize = 257 + rng.nextInt(5_000 - 257 + 1);
             Set<String> unique = new LinkedHashSet<>();
             while (unique.size() < targetSize) {
@@ -95,7 +95,7 @@ final class RandomArrays {
 
     static Stream<String[]> unicodeStringArrays(int count) {
         Random rng = new Random(SEED);
-        return IntStream.range(0, count).mapToObj(i -> {
+        return IntStream.range(0, count).mapToObj(_ -> {
             int size = rng.nextInt(1_001);
             StringBuilder sb = new StringBuilder();
             String[] arr = new String[size];

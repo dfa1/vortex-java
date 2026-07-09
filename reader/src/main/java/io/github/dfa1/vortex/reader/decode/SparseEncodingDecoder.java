@@ -47,8 +47,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         }
         ProtoSparseMetadata sparseMeta;
         try {
-            MemorySegment metaSeg = rawMeta;
-            sparseMeta = ProtoSparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            sparseMeta = ProtoSparseMetadata.decode(rawMeta, 0, rawMeta.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid metadata", e);
         }

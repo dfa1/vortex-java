@@ -31,8 +31,7 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
         }
         ProtoScalarValue scalar;
         try {
-            MemorySegment metaSeg = rawMeta;
-            scalar = ProtoScalarValue.decode(metaSeg, 0, metaSeg.byteSize());
+            scalar = ProtoScalarValue.decode(rawMeta, 0, rawMeta.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.FASTLANES_FOR, "invalid metadata", e);
         }

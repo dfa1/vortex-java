@@ -37,8 +37,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         }
         ProtoSequenceMetadata meta;
         try {
-            MemorySegment seg = metaBuf;
-            meta = ProtoSequenceMetadata.decode(seg, 0, seg.byteSize());
+            meta = ProtoSequenceMetadata.decode(metaBuf, 0, metaBuf.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_SEQUENCE, "invalid metadata", e);
         }

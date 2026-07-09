@@ -42,8 +42,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         MemorySegment rawMeta = ctx.metadata();
         ProtoRLEMetadata meta;
         try {
-            MemorySegment metaSeg = rawMeta;
-            meta = ProtoRLEMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            meta = ProtoRLEMetadata.decode(rawMeta, 0, rawMeta.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.FASTLANES_RLE, "invalid metadata", e);
         }
@@ -137,8 +136,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         for (int i = 0; i < count; i++) {
             long off = (i % cap) * elemSize;
             out[i] = switch (ptype) {
-                case I64 -> buf.get(VortexFormat.LE_LONG, off);
-                case U64 -> buf.get(VortexFormat.LE_LONG, off);
+                case I64, U64 -> buf.get(VortexFormat.LE_LONG, off);
                 default -> throw new VortexException(EncodingId.FASTLANES_RLE, "expected I64/U64, got " + ptype);
             };
         }

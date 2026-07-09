@@ -868,7 +868,7 @@ public final class VortexWriter implements Closeable {
     /// The (nullable) dtype a zone-map stores per-zone min/max in for `dtype`, or `null` when the
     /// column has no recordable min/max. Primitives store the primitive; extension columns unwrap
     /// to their storage primitive (`ExtEncoding` propagates the storage min/max scalars unchanged);
-    /// Utf8 stores the full string value. Matches [ZonedStatsSchema#statDtype]. Binary is excluded:
+    /// Utf8 stores the full string value. Binary is excluded:
     /// `vortex.varbin` records its min/max as string scalars, not `bytes`.
     private static DType zoneMinMaxDtype(DType dtype) {
         return switch (dtype) {
