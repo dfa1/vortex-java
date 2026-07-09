@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConstantEncodingDecoder` now returns `NullArray` for null-scalar constants (proto `null_value` tag); previously decoded as `0`/`false`, silently corrupting nullable columns that the Rust writer encodes as an all-null constant. ([#246](https://github.com/dfa1/vortex-java/issues/246))
 - `ScanIterator.sliceArray` now handles `NullArray`; previously threw on Rust-written files where a null-typed column used a coarser chunk grid than the other columns. ([#247](https://github.com/dfa1/vortex-java/issues/247))
 - `AlpRdEncodingDecoder` now reads `left_parts_ptype` from metadata and rejects any value other than U16 with a `VortexException`; previously the field was silently ignored and U16 was hardcoded, risking a 2-byte stride over a 1-byte buffer for spec-conformant non-Rust writers. ([#249](https://github.com/dfa1/vortex-java/issues/249))
+- `SparseEncodingDecoder` now asserts exactly two children (`patch_indices`, `patch_values`) and throws `VortexException` on any other count; previously a third child was silently accepted. ([#250](https://github.com/dfa1/vortex-java/issues/250))
 
 ## [0.12.1] — 2026-07-08
 

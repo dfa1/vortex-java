@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
@@ -22,6 +23,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 class SparseEncodingDecoderTest {
@@ -185,6 +187,26 @@ class SparseEncodingDecoderTest {
         assertThat(result).isInstanceOf(VarBinArray.class).isNotInstanceOf(MaskedArray.class);
         VarBinArray inner = (VarBinArray) result;
         assertThat(inner.getBytes(1)).containsExactly('b');
+    }
+
+    /// A sparse node with 3 children must be rejected: the spec requires exactly 2
+    /// (patch_indices, patch_values). This is the fail-loud guard against future format
+    /// variants that carry chunk_offsets as a 3rd child (#250).
+    @Test
+    void decode_threeChildren_throws() {
+        // Given — a valid 2-patch sparse node whose ArrayNode has an extra third child
+        ProtoPatchesMetadata patches = new ProtoPatchesMetadata(2, 0, ProtoPType.U32, null, null, null);
+        MemorySegment meta = MemorySegment.ofArray(new ProtoSparseMetadata(patches).encode());
+        ArrayNode dummy = primitiveNode(1);
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_SPARSE, meta,
+                new ArrayNode[]{dummy, dummy, dummy}, new int[]{0});
+        MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(0, 1)};
+        DecodeContext ctx = new DecodeContext(node, DType.F64, 2, segs, REGISTRY, Arena.ofAuto());
+
+        // When / Then — must reject rather than silently ignoring the extra child
+        assertThatThrownBy(() -> SUT.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("2");
     }
 
     private static Array decode(DType dtype, long numPatches, long offset, PType indicesPtype, long n,

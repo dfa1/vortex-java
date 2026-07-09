@@ -52,6 +52,12 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid metadata", e);
         }
 
+        int childCount = ctx.node().children().length;
+        if (childCount != 2) {
+            throw new VortexException(EncodingId.VORTEX_SPARSE,
+                    "expected 2 children (patch_indices, patch_values), got " + childCount + " (#250)");
+        }
+
         ProtoPatchesMetadata patches = sparseMeta.patches();
         long numPatches = patches.len();
         long offset = patches.offset();
