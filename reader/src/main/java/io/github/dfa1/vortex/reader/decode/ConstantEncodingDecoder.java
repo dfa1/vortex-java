@@ -50,6 +50,10 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         if (dtype instanceof DType.Null) {
             return new NullArray(dtype, n);
         }
+        // Null scalar (proto null_value tag present) means every row is null (#246).
+        if (scalar.null_value() != null) {
+            return new NullArray(dtype, n);
+        }
         if (dtype instanceof DType.Variant) {
             // A constant variant wraps a typed inner scalar (Scalar::variant(inner)); the
             // physical storage is the inner-typed constant array. The VariantArray wrapper

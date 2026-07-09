@@ -1,5 +1,9 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoNullValue;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -8,6 +12,7 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -22,6 +27,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.lang.foreign.MemorySegment;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -236,6 +242,34 @@ class ConstantEncodingEncoderTest {
             assertThat(result.length()).isEqualTo(rowCount);
             assertThat(result.getByte(0)).isEqualTo(constant);
             assertThat(result.getByte(rowCount - 1)).isEqualTo(constant);
+        }
+    }
+
+    /// Rust can write a constant array whose scalar is null (proto null_value tag).
+    /// The decoder must return a [NullArray] — not 0 / false (#246).
+    @Nested
+    class NullScalar {
+
+        static Stream<DType> nullableDtypes() {
+            return Stream.of(DTypes.I64_N, DTypes.I32_N, DTypes.F64_N, DTypes.BOOL_N);
+        }
+
+        @ParameterizedTest
+        @MethodSource("nullableDtypes")
+        void decode_nullScalar_returnsNullArray(DType dtype) {
+            // Given — scalar proto with only null_value tag set (Rust-written null constant)
+            ProtoScalarValue nullScalar = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE);
+            EncodeResult encoded = EncodeResult.simple(
+                    EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(nullScalar.encode()));
+            long rowCount = 1_000L;
+
+            // When
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, dtype, REGISTRY);
+            Array result = DECODER.decode(ctx);
+
+            // Then — must be NullArray, not LazyConstant*(value=0) or LazyConstantBool(false)
+            assertThat(result).isInstanceOf(NullArray.class);
+            assertThat(result.length()).isEqualTo(rowCount);
         }
     }
 }

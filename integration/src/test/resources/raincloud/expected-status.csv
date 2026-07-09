@@ -20,7 +20,7 @@ aya-collection-templated,untriaged
 aya-dataset,untriaged
 bank-account-fraud-dataset-neurips-2022,untriaged
 basketball,untriaged
-behavioral-risk-factor-surveillance-system,gap:246
+behavioral-risk-factor-surveillance-system,ok
 beir-msmarco,untriaged
 bi-arade,ok
 bi-bimbo,untriaged
@@ -72,7 +72,7 @@ bigscience-p3-eval-subset,untriaged
 building-permit-applications-data,untriaged
 c4-en-validation,untriaged
 california-housing-prices,ok
-cardiovascular-diseases-risk-prediction-dataset,gap:246
+cardiovascular-diseases-risk-prediction-dataset,ok
 chess,ok
 clickbench-hits,untriaged
 cnn-dailymail,untriaged
@@ -87,12 +87,12 @@ covid19-data-from-john-hopkins-university,untriaged
 crimes-in-boston,untriaged
 databricks-dolly-15k,untriaged
 dbpedia-embeddings,untriaged
-diabetes-health-indicators-dataset,gap:246
+diabetes-health-indicators-dataset,ok
 disease-symptom-description-dataset,untriaged
 docmatix-zero-shot,untriaged
 electric-motor-temperature,untriaged
 emotions-dataset-for-nlp,ok
-fhv_tripdata_2025,gap:246
+fhv_tripdata_2025,ok
 fhvhv_tripdata_2025,untriaged
 finemath-4plus,untriaged
 finepdfs-en-test,untriaged
@@ -110,11 +110,11 @@ glove-6b-200d,untriaged
 glove-6b-50d,untriaged
 goodbooks-10k,untriaged
 google-cluster-trace-2011-machine-events,ok
-green_tripdata_2025,gap:246
+green_tripdata_2025,ok
 gsm8k,untriaged
 gtsrb-german-traffic-sign,ok
 hacker-news,untriaged
-heart-disease-health-indicators-dataset,gap:246
+heart-disease-health-indicators-dataset,ok
 hellaswag,untriaged
 helpsteer2,untriaged
 hotel-booking-demand,ok
@@ -154,7 +154,7 @@ openlibrary-authors,untriaged
 openlibrary-editions,untriaged
 openlibrary-works,untriaged
 openorca,untriaged
-openpowerlifting,gap:246
+openpowerlifting,ok
 osm-germany-nodes,untriaged
 osm-germany-relations,untriaged
 osm-germany-ways,untriaged
@@ -168,7 +168,7 @@ osmi-mental-health-in-tech-2022,untriaged
 osmi-mental-health-in-tech-2023,untriaged
 palmer-archipelago-antarctica-penguin-data,ok
 peoples-speech-clean-validation,untriaged
-personal-key-indicators-of-heart-disease,gap:246
+personal-key-indicators-of-heart-disease,ok
 pleias-synth,untriaged
 pubmedqa-labeled,untriaged
 sf-salaries,ok
@@ -178,7 +178,7 @@ stack-overflow-2018-developer-survey,ok
 stackoverflow-badges,untriaged
 stackoverflow-postlinks,ok
 stackoverflow-posts,untriaged
-stackoverflow-tags,gap:246
+stackoverflow-tags,ok
 stackoverflow-users,untriaged
 synthetic-text-to-sql,untriaged
 temperature-change,ok
