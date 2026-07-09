@@ -36,6 +36,12 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
                     "expected primitive dtype, got " + ctx.dtype());
         }
 
+        PType leftPartsPtype = PType.fromOrdinal(meta.left_parts_ptype().value());
+        if (leftPartsPtype != PType.U16) {
+            throw new VortexException(EncodingId.VORTEX_ALPRD,
+                    "unsupported left_parts_ptype " + leftPartsPtype + " (#249)");
+        }
+
         int rightBitWidth = meta.right_bit_width();
         int dictLen = meta.dict_len();
         short[] dict = new short[dictLen];

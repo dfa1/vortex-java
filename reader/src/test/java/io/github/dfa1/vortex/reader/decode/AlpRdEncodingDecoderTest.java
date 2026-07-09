@@ -16,7 +16,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
 
+import io.github.dfa1.vortex.core.error.VortexException;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 class AlpRdEncodingDecoderTest {
@@ -50,6 +53,25 @@ class AlpRdEncodingDecoderTest {
         DoubleArray inner = (DoubleArray) masked.inner();
         assertThat(inner.getDouble(0)).isCloseTo(1.0, within(1e-12));
         assertThat(inner.getDouble(2)).isCloseTo(1.0, within(1e-12));
+    }
+
+    @Test
+    void decode_unsupportedLeftPartsPtype_throws() {
+        // Given — metadata carrying left_parts_ptype=U8; the decoder must reject it loudly
+        // rather than silently mis-stride over a 1-byte buffer with a 2-byte stride (#249).
+        byte[] meta = new ProtoALPRDMetadata(RIGHT_BIT_WIDTH, 2,
+                List.of(DICT_ONE, DICT_TWO), ProtoPType.U8, null).encode();
+        ArrayNode leftNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode rightNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(meta),
+                new ArrayNode[]{leftNode, rightNode}, new int[0]);
+        MemorySegment[] segs = {leShorts(new short[]{0}), leLongs(new long[]{0})};
+        DecodeContext ctx = new DecodeContext(node, DType.F64, 1, segs, REGISTRY, Arena.ofAuto());
+
+        // When / Then
+        assertThatThrownBy(() -> SUT.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("left_parts_ptype");
     }
 
     @Test
