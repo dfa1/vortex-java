@@ -29,7 +29,7 @@ bi-cmsprovider,untriaged
 bi-commongovernment,untriaged
 bi-corporations,ok
 bi-eixo,untriaged
-bi-euro2016,ok
+bi-euro2016,gap:252
 bi-food,ok
 bi-generico,untriaged
 bi-hashtags,ok
@@ -82,7 +82,7 @@ coig,untriaged
 coronahack-chest-xraydataset,untriaged
 cosmopedia-stanford,untriaged
 countries-of-the-world,ok
-covid-world-vaccination-progress,ok
+covid-world-vaccination-progress,gap:253
 covid19-data-from-john-hopkins-university,untriaged
 crimes-in-boston,untriaged
 databricks-dolly-15k,untriaged

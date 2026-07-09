@@ -14,9 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.opentest4j.TestAbortedException;
 
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -25,7 +26,6 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Real-world cross-implementation conformance over the Raincloud corpus
@@ -83,14 +83,21 @@ class RaincloudConformanceIntegrationTest {
     }
 
     private static void assertMatchesParquetOracle(Path vortex, Path parquet) throws IOException {
-        // Given
-        List<String> oracleLines = oracleLines(parquet);
+        // Given — write both CSVs to temp files; never hold multi-GB strings in heap
+        Path oracleCsv = Files.createTempFile("oracle-", ".csv");
+        Path vortexCsv = Files.createTempFile("vortex-", ".csv");
+        try {
+            writeOracle(parquet, oracleCsv);
 
-        // When
-        List<String> result = exportVortex(vortex);
+            // When
+            CsvExporter.exportCsv(vortex, vortexCsv, ExportOptions.defaults());
 
-        // Then
-        assertLinesMatch(result, oracleLines);
+            // Then
+            assertFilesMatch(vortexCsv, oracleCsv);
+        } finally {
+            Files.deleteIfExists(oracleCsv);
+            Files.deleteIfExists(vortexCsv);
+        }
     }
 
     /// Runs the full conformance check but reports the outcome as an aborted test
@@ -108,64 +115,89 @@ class RaincloudConformanceIntegrationTest {
         throw new TestAbortedException("untriaged slug passes — flip its matrix entry to ok");
     }
 
-    private static void assertStillFails(Path vortex, Path parquet, String status) {
+    private static void assertStillFails(Path vortex, Path parquet, String status) throws IOException {
         // Given / When — a decode gap still reproduces when the export itself throws.
         // Only VortexException (the contractual untrusted-input failure) and, narrowly,
         // IndexOutOfBoundsException count: the latter is itself a bounds-guard bug (#215
         // throws it today) and this arm dies with that fix — a blanket RuntimeException
         // catch would green unrelated regressions (NPEs, ...). No oracle needed here
         // (the oracle may not even read this parquet, e.g. nested columns).
-        List<String> result;
+        Path vortexCsv = Files.createTempFile("vortex-", ".csv");
         try {
-            result = exportVortex(vortex);
-        } catch (VortexException | IndexOutOfBoundsException e) {
-            return;
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            try {
+                CsvExporter.exportCsv(vortex, vortexCsv, ExportOptions.defaults());
+            } catch (VortexException | IndexOutOfBoundsException e) {
+                return; // gap still reproduces as a thrown exception
+            }
+
+            // Then — the export now succeeds, so the gap must still be a silent-corruption
+            // one (e.g. #208): values must still mismatch the oracle. A clean pass means the
+            // gap was fixed: flip the expected-status.csv entry to ok in the same change
+            Path oracleCsv = Files.createTempFile("oracle-", ".csv");
+            try {
+                writeOracle(parquet, oracleCsv);
+                boolean stillMismatches = false;
+                try {
+                    assertFilesMatch(vortexCsv, oracleCsv);
+                } catch (AssertionError ignored) {
+                    stillMismatches = true;
+                }
+                assertThat(stillMismatches)
+                        .as("known gap %s no longer reproduces — flip its matrix entry to ok", status)
+                        .isTrue();
+            } finally {
+                Files.deleteIfExists(oracleCsv);
+            }
+        } finally {
+            Files.deleteIfExists(vortexCsv);
         }
-
-        // Then — the export now succeeds, so the gap must still be a silent-corruption
-        // one (e.g. #208): values must still mismatch the oracle. A clean pass means the
-        // gap was fixed: flip the expected-status.csv entry to ok in the same change
-        List<String> oracleLines = oracleLines(parquet);
-        assertThatThrownBy(() -> assertLinesMatch(result, oracleLines))
-                .as("known gap %s no longer reproduces — flip its matrix entry to ok", status)
-                .isInstanceOf(AssertionError.class);
     }
 
-    private static void assertLinesMatch(List<String> result, List<String> oracleLines) {
-        assertThat(result).hasSameSizeAs(oracleLines);
-        for (int i = 0; i < oracleLines.size(); i++) {
-            assertThat(result.get(i)).as("line %d", i + 1).isEqualTo(oracleLines.get(i));
+    /// Stream-compares two CSV files line by line without loading either into heap.
+    ///
+    /// @param result the vortex-java export
+    /// @param oracle the parquet oracle export
+    /// @throws AssertionError  if any line differs or the files have different lengths
+    /// @throws IOException     if either file cannot be read
+    private static void assertFilesMatch(Path result, Path oracle) throws IOException {
+        try (BufferedReader r = Files.newBufferedReader(result);
+             BufferedReader o = Files.newBufferedReader(oracle)) {
+            long lineNum = 0;
+            String rLine;
+            while ((rLine = r.readLine()) != null) {
+                lineNum++;
+                String oLine = o.readLine();
+                assertThat(oLine).as("oracle ended before vortex output at line %d", lineNum).isNotNull();
+                assertThat(rLine).as("line %d", lineNum).isEqualTo(oLine);
+            }
+            assertThat(o.readLine()).as("vortex output ended before oracle at line %d", lineNum + 1).isNull();
         }
     }
 
-    private static List<String> exportVortex(Path vortex) throws IOException {
-        StringWriter out = new StringWriter();
-        CsvExporter.exportCsv(vortex, out, ExportOptions.defaults());
-        return out.toString().lines().toList();
-    }
-
-    /// Reads the parquet sibling through hardwood; an oracle-side failure (nested
-    /// columns, unsupported physical type) aborts the slug rather than failing it —
-    /// it says nothing about vortex-java. Deliberate asymmetry: an `ok` slug whose
-    /// parquet the oracle cannot read stops being verified (visibly, as skipped) —
-    /// widen the oracle rather than let unverifiable entries fail the build.
-    private static List<String> oracleLines(Path parquet) {
-        StringWriter out = new StringWriter();
-        try {
-            writeOracleCsv(parquet, out);
+    /// Writes the parquet oracle to a file using the same cell rules as `CsvExporter`.
+    /// An oracle-side failure (nested columns, unsupported physical type) aborts the
+    /// slug via [TestAbortedException] rather than failing it — it says nothing about
+    /// vortex-java. An `ok` slug whose parquet cannot be read stops being verified
+    /// (visibly, as skipped) — widen the oracle rather than let unverifiable entries
+    /// fail the build.
+    ///
+    /// @param parquet the parquet sibling
+    /// @param out     the output file to write CSV into
+    /// @throws TestAbortedException if the oracle cannot read this parquet
+    /// @throws IOException          if writing fails
+    private static void writeOracle(Path parquet, Path out) throws IOException {
+        try (Writer writer = Files.newBufferedWriter(out)) {
+            writeOracleCsv(parquet, writer);
         } catch (TestAbortedException e) {
             throw e;
         } catch (Exception e) {
             throw new TestAbortedException("oracle cannot read the parquet sibling: " + e);
         }
-        return out.toString().lines().toList();
     }
 
     /// Oracle: hardwood reads the parquet sibling and emits CSV through the same
     /// fastcsv writer configuration as `CsvExporter`, using its exact cell rules.
-    private static void writeOracleCsv(Path parquet, StringWriter out) throws IOException {
+    private static void writeOracleCsv(Path parquet, Writer out) throws IOException {
         try (ParquetFileReader pfr = ParquetFileReader.open(InputFile.of(parquet));
              RowReader rows = pfr.rowReader();
              CsvWriter csv = CsvWriter.builder().fieldSeparator(',').build(out)) {
