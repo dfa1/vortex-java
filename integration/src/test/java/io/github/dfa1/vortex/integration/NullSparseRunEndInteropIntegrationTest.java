@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -38,12 +39,12 @@ import java.util.function.ObjIntConsumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Gate-running interop cover for null-fill Sparse (#226) and null-run RunEnd (#225) validity.
+/// Gate-running interop cover for null-fill Sparse (#226), null-run RunEnd (#225), and
+/// null-scalar Constant (#246) validity.
 ///
-/// The `RunEnd`/`Sparse` validity fixes are exercised by the weekly Raincloud conformance
-/// corpus only; this test reproduces both shapes on every `verify` run from a JNI-written
-/// (Rust reference) file, so a validity regression reddens the per-PR gate rather than
-/// surfacing a week later.
+/// These fixes are exercised by the weekly Raincloud conformance corpus only; this test
+/// reproduces each shape on every `verify` run from a JNI-written (Rust reference) file,
+/// so a validity regression reddens the per-PR gate rather than surfacing a week later.
 ///
 /// The bundled `vortex-jni` compressor is version-pinned, so its encoding choice for a crafted
 /// input is deterministic — verified by probing: a mostly-null column with a small fraction of
@@ -171,6 +172,44 @@ class NullSparseRunEndInteropIntegrationTest {
         // Then
         assertThat(usedEncodings(file)).contains("vortex.runend");
         assertThat(result).containsExactly(expected);
+    }
+
+    @Test
+    void jniNullConstant_i64_allRowsDecodeNull(@TempDir Path tmp) throws IOException {
+        // Given — a nullable i64 column where every row is null. The JNI compressor encodes
+        // this as vortex.constant with a null scalar; before #246 the decoder produced
+        // LazyConstantLongArray(value=0) — all rows read back as 0 rather than null.
+        Schema schema = new Schema(List.of(Field.nullable("v", new ArrowType.Int(64, true))));
+        Path file = tmp.resolve("null_constant_i64.vtx");
+        writeJni(file, schema, (root, i) -> { /* no setSafe calls — every row stays null */ });
+
+        // When
+        long[] rowCount = {0};
+        long[] nullCount = {0};
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
+                var iter = reader.scan(ScanOptions.all())) {
+            iter.forEachRemaining(chunk -> {
+                Array col = chunk.column("v");
+                rowCount[0] += col.length();
+                if (col instanceof NullArray) {
+                    nullCount[0] += col.length();
+                } else if (col instanceof MaskedArray m) {
+                    for (long i = 0; i < m.length(); i++) {
+                        if (!m.isValid(i)) {
+                            nullCount[0]++;
+                        }
+                    }
+                }
+            });
+        }
+
+        // Then — every row must be null; a regressed decoder returning LazyConstantLongArray(0)
+        // would give nullCount=0 and expose the corruption
+        assertThat(rowCount[0]).isEqualTo(ROWS);
+        assertThat(nullCount[0])
+                .as("all %d rows must decode as null", ROWS)
+                .isEqualTo(ROWS);
+        assertThat(usedEncodings(file)).contains("vortex.constant");
     }
 
     // ── JNI write helper ──────────────────────────────────────────────────────
