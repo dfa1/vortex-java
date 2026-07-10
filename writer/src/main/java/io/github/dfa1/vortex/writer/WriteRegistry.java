@@ -3,12 +3,48 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.AlpRdEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ByteBoolEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ChunkedEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.DateTimePartsEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DecimalBytePartsEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DecimalEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ListViewEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.PatchedEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.SequenceEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.VarBinViewEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.VariantEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ZigZagEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
 
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.TreeMap;
 import java.util.function.Function;
 
@@ -20,7 +56,7 @@ import java.util.function.Function;
 ///
 /// Usage:
 /// ```java
-/// WriteRegistry wr = WriteRegistry.builder().registerServiceLoaded().build();
+/// WriteRegistry wr = WriteRegistry.builder().registerDefaults().build();
 /// VortexWriter.create(channel, schema, WriteOptions.defaults(), wr);
 /// ```
 public final class WriteRegistry {
@@ -33,10 +69,9 @@ public final class WriteRegistry {
         // Order by encoding name so it is stable regardless of enum declaration order. (The id
         // enums sort by ordinal naturally — Enum.compareTo is final — so a Comparator is required.)
         // VortexWriter.create(.., WriteRegistry) selects the first encoder whose accepts() matches
-        // the dtype, so iteration order is significant: a HashMap — or registration order, which
-        // depends on ServiceLoader's unspecified iteration and on how register* calls interleave —
-        // would make selection vary across runs and platforms. The order is now a pure function of
-        // the registered set, however it was assembled.
+        // the dtype, so iteration order is significant: a HashMap would make selection vary across
+        // runs and platforms. Sorting by id makes the order a pure function of the registered set,
+        // independent of how it was assembled.
         this.encoders = sortedByName(encoders, EncodingId::id);
         this.extensions = sortedByName(extensions, ExtensionId::id);
     }
@@ -47,11 +82,11 @@ public final class WriteRegistry {
         return Collections.unmodifiableMap(sorted);
     }
 
-    /// Loads all service-discovered [EncodingEncoder] and [ExtensionEncoder] implementations.
+    /// Loads all built-in [EncodingEncoder] and [ExtensionEncoder] implementations.
     ///
-    /// @return an immutable [WriteRegistry] populated with all service-loaded entries
+    /// @return an immutable [WriteRegistry] populated with all built-in entries
     public static WriteRegistry loadAll() {
-        return builder().registerServiceLoaded().build();
+        return builder().registerDefaults().build();
     }
 
     /// Creates an empty registry with no encoders or extensions registered.
@@ -122,21 +157,51 @@ public final class WriteRegistry {
             return this;
         }
 
-        /// Registers every [EncodingEncoder] and [ExtensionEncoder] discovered via [ServiceLoader].
+        /// Registers all built-in [EncodingEncoder] and [ExtensionEncoder] implementations.
         ///
-        /// The order in which `ServiceLoader` yields providers is unspecified by the JDK, but it
-        /// does not matter here: [#build()] sorts the registered set by id, so the resulting
-        /// registry has the same deterministic order no matter how it was populated.
+        /// Registration order does not matter: [#build()] sorts the registered set by id, so the
+        /// resulting registry has the same deterministic order no matter how it was populated.
         ///
         /// @return this builder, for chaining
-        /// @throws VortexException if a service-loaded entry collides with one already registered
-        public Builder registerServiceLoaded() {
-            for (EncodingEncoder encoder : ServiceLoader.load(EncodingEncoder.class)) {
-                register(encoder);
-            }
-            for (ExtensionEncoder extension : ServiceLoader.load(ExtensionEncoder.class)) {
-                register(extension);
-            }
+        /// @throws VortexException if a built-in entry collides with one already registered
+        public Builder registerDefaults() {
+            register(new AlpEncodingEncoder())
+                    .register(new AlpRdEncodingEncoder())
+                    .register(new BitpackedEncodingEncoder())
+                    .register(new BoolEncodingEncoder())
+                    .register(new ByteBoolEncodingEncoder())
+                    .register(new ChunkedEncodingEncoder())
+                    .register(new ConstantEncodingEncoder())
+                    .register(new DateTimePartsEncodingEncoder())
+                    .register(new DecimalBytePartsEncodingEncoder())
+                    .register(new DecimalEncodingEncoder())
+                    .register(new DeltaEncodingEncoder())
+                    .register(new DictEncodingEncoder())
+                    .register(new ExtEncodingEncoder())
+                    .register(new FixedSizeListEncodingEncoder())
+                    .register(new FrameOfReferenceEncodingEncoder())
+                    .register(new FsstEncodingEncoder())
+                    .register(new ListEncodingEncoder())
+                    .register(new ListViewEncodingEncoder())
+                    .register(new MaskedEncodingEncoder())
+                    .register(new NullEncodingEncoder())
+                    .register(new PatchedEncodingEncoder())
+                    .register(new PcoEncodingEncoder())
+                    .register(new PrimitiveEncodingEncoder())
+                    .register(new RleEncodingEncoder())
+                    .register(new RunEndEncodingEncoder())
+                    .register(new SequenceEncodingEncoder())
+                    .register(new SparseEncodingEncoder())
+                    .register(new StructEncodingEncoder())
+                    .register(new VarBinEncodingEncoder())
+                    .register(new VariantEncodingEncoder())
+                    .register(new VarBinViewEncodingEncoder())
+                    .register(new ZigZagEncodingEncoder())
+                    .register(new ZstdEncodingEncoder());
+            register(DateExtensionEncoder.INSTANCE)
+                    .register(TimeExtensionEncoder.INSTANCE)
+                    .register(TimestampExtensionEncoder.INSTANCE)
+                    .register(UuidExtensionEncoder.INSTANCE);
             return this;
         }
 

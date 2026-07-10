@@ -91,7 +91,7 @@ class ZoneMapPruningTest {
     // Service-loaded so any encoding the writer picks (e.g. ALP for the F32 column) decodes; the
     // tests exercise zone-map pruning, not a specific decoder.
     private static ReadRegistry registry() {
-        return ReadRegistry.builder().registerServiceLoaded().build();
+        return ReadRegistry.builder().registerDefaults().build();
     }
 
     private static final DType.Struct F32_SCHEMA = new DType.Struct(

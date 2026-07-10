@@ -24,7 +24,11 @@ import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.CascadingCompressor;
 import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
@@ -157,16 +161,16 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    /// Builds a [WriteRegistry] from the given encoder list plus all service-loaded extensions.
+    /// Builds a [WriteRegistry] from the given encoder list plus all built-in extension encoders.
     private static WriteRegistry buildRegistry(List<EncodingEncoder> encoders) {
         WriteRegistry.Builder b = WriteRegistry.builder();
         for (EncodingEncoder e : encoders) {
             b.register(e);
         }
-        for (ExtensionEncoder ext :
-                java.util.ServiceLoader.load(ExtensionEncoder.class)) {
-            b.register(ext);
-        }
+        b.register(DateExtensionEncoder.INSTANCE)
+                .register(TimeExtensionEncoder.INSTANCE)
+                .register(TimestampExtensionEncoder.INSTANCE)
+                .register(UuidExtensionEncoder.INSTANCE);
         return b.build();
     }
 

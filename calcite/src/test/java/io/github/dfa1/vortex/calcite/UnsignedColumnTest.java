@@ -114,7 +114,7 @@ class UnsignedColumnTest {
     }
 
     private static ReadRegistry registry() {
-        return ReadRegistry.builder().registerServiceLoaded().build();
+        return ReadRegistry.builder().registerDefaults().build();
     }
 
     private static List<Object[]> drain(VortexTable table) {

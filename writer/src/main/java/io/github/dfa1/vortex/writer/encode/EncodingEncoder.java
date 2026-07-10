@@ -8,8 +8,9 @@ import io.github.dfa1.vortex.core.model.DType;
 /// encoder for a dtype and the [#encode(DType, Object, EncodeContext)] entry
 /// point itself.
 ///
-/// Encoder implementations live in the `writer` module and are registered via
-/// [java.util.ServiceLoader].
+/// Encoder implementations live in the `writer` module. Register via
+/// [io.github.dfa1.vortex.writer.WriteRegistry.Builder#registerDefaults()]
+/// or [io.github.dfa1.vortex.writer.WriteRegistry.Builder#register(EncodingEncoder)].
 public interface EncodingEncoder {
 
     /// @return the wire identifier of this encoding

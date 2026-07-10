@@ -12,14 +12,14 @@ A consumer that only needs to read Vortex files can depend on a strict subset:
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.11.0</version>
+  <version>0.12.1</version>
 </dependency>
 
 <!-- optional: inspector for layout-tree introspection -->
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-inspector</artifactId>
-  <version>0.11.0</version>
+  <version>0.12.1</version>
 </dependency>
 ```
 
@@ -29,8 +29,8 @@ pinned by the vortex BOM); without them, touching a `vortex.zstd` segment fails 
 `VortexException` that names the two artifacts. All other encodings are pure Java.
 
 `./mvnw -pl core,reader,inspector verify` builds the read-only artifact set
-without the writer module on the classpath. `ServiceLoader<EncodingDecoder>`
-resolves only the standalone decoders in `reader`; no encoder class is loaded.
+without the writer module on the classpath. `ReadRegistry.loadAll()` registers
+only the built-in decoders in `reader`; no encoder class is loaded.
 
 ## Known wire-format gaps
 
@@ -172,7 +172,7 @@ passthrough mode to read such files without failing:
 
 ```java
 ReadRegistry registry = ReadRegistry.builder()
-        .registerServiceLoaded()
+        .registerDefaults()
         .allowUnknown()
         .build();
 try (VortexReader vf = VortexReader.open(path, registry)) {

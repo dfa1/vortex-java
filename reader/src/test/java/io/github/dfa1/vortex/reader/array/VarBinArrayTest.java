@@ -186,12 +186,19 @@ class VarBinArrayTest {
             assertThat(lengths).containsExactly(3, 1, 3);
         }
 
-        /// Exercises the I32-offset fast path of `forEachByteLength` (#243): the common
-        /// FSST/dict shape where value offsets are 32-bit, read at a constant 4-byte stride.
-        @Test
-        void forEachByteLength_i32Offsets_resolvesViaDict() {
-            // Given — dict=["foo","bar"] with I32 offsets, codes=[1,0,1]
-            VarBinArray sut = ofDictWithOffsets(new String[]{"foo", "bar"}, PType.I32, new int[]{1, 0, 1});
+        /// Exercises the I32-offset fast path of `forEachByteLength` (#243) for each
+        /// integer codes ptype: the code-ptype switch in `forEachI32OffsetByteLength` must
+        /// handle U8, U16, U32, I32, I64, and U64 codes without regressing to the per-row
+        /// general path. Catches regressions where a new codes ptype is added to the decoder
+        /// but not to the fast-path switch.
+        @ParameterizedTest
+        @EnumSource(value = PType.class, names = {"U8", "U16", "U32", "I32", "I64", "U64"})
+        void forEachByteLength_i32Offsets_codesAtNativeWidth(PType codesPtype) {
+            // Given — dict=["foo","bar"] with I32 offsets, codes=[1,0,1] at the given ptype
+            MemorySegment dictValBytes = MemorySegment.ofArray("foobar".getBytes(StandardCharsets.UTF_8));
+            MemorySegment offsets = packOffsets(new int[]{0, 3, 6}, PType.I32);
+            MemorySegment codes = packCodes(new long[]{1, 0, 1}, codesPtype);
+            VarBinArray sut = VarBinArray.ofDict(UTF8, 3, dictValBytes, offsets, PType.I32, codes, codesPtype);
             List<Integer> lengths = new ArrayList<>();
 
             // When
@@ -199,6 +206,22 @@ class VarBinArrayTest {
 
             // Then
             assertThat(lengths).containsExactly(3, 3, 3);
+        }
+
+        /// Unsupported codes ptype (e.g. F32) inside the I32-offset fast path must throw
+        /// [VortexException] rather than produce corrupt output or an unchecked exception.
+        @Test
+        void forEachByteLength_i32Offsets_unsupportedCodesPtype_throws() {
+            // Given — codes declared as F32 (not a valid dict-codes ptype)
+            MemorySegment dictValBytes = MemorySegment.ofArray("abc".getBytes(StandardCharsets.UTF_8));
+            MemorySegment offsets = packOffsets(new int[]{0, 3}, PType.I32);
+            MemorySegment codes = MemorySegment.ofArray(new byte[4]);
+            VarBinArray sut = VarBinArray.ofDict(UTF8, 1, dictValBytes, offsets, PType.I32, codes, PType.F32);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.forEachByteLength(l -> {}))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("unsupported codes ptype");
         }
 
         /// Exercises the wide-offset general path of `forEachByteLength` (#243): 64-bit value
@@ -268,6 +291,20 @@ class VarBinArrayTest {
             MemorySegment dictCodes = leInts(codes);
             return VarBinArray.ofDict(UTF8, codes.length,
                     dictValBytes, dictValOffsets, offsetsPtype, dictCodes, PType.I32);
+        }
+
+        private static MemorySegment packCodes(long[] codes, PType ptype) {
+            int width = ptype.byteSize();
+            ByteBuffer bb = ByteBuffer.allocate(codes.length * width).order(ByteOrder.LITTLE_ENDIAN);
+            for (long c : codes) {
+                switch (width) {
+                    case 1 -> bb.put((byte) c);
+                    case 2 -> bb.putShort((short) c);
+                    case 4 -> bb.putInt((int) c);
+                    default -> bb.putLong(c);
+                }
+            }
+            return MemorySegment.ofArray(bb.array());
         }
 
         private static MemorySegment packOffsets(int[] offs, PType ptype) {

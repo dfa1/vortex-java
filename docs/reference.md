@@ -209,7 +209,7 @@ Immutable after construction. Build via `ReadRegistry.builder()` or the static c
 | Method                      | Notes                                                                        |
 |-----------------------------|------------------------------------------------------------------------------|
 | `static builder()`          | Returns a fresh `Builder`                                                    |
-| `static loadAll()`          | Immutable registry populated via `ServiceLoader`                             |
+| `static loadAll()`          | Immutable registry populated with all built-in decoders                      |
 | `static empty()`            | Immutable empty registry (strict mode)                                       |
 | `hasDecoder(EncodingId)`    | Lookup                                                                       |
 | `isAllowUnknown()`          | Predicate                                                                    |
@@ -219,12 +219,12 @@ Immutable after construction. Build via `ReadRegistry.builder()` or the static c
 | Method                       | Notes                                                                                    |
 |------------------------------|------------------------------------------------------------------------------------------|
 | `register(EncodingDecoder)`  | Add a custom encoding decoder; throws if already registered                              |
-| `registerServiceLoaded()`    | Add every `EncodingDecoder` discovered via `ServiceLoader`                               |
+| `registerDefaults()`         | Add every built-in `EncodingDecoder`                                                     |
 | `allowUnknown()`             | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray` |
 | `build()`                    | Produce the immutable `ReadRegistry`                                                     |
 
-Register custom encoding decoders via `ServiceLoader` by adding the fully qualified class name to
-`META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder`. Extension decoders
+Register custom encoding decoders programmatically via `register(EncodingDecoder)` — there is no
+`ServiceLoader` discovery. Extension decoders
 (`io.github.dfa1.vortex.reader.extension.ExtensionDecoder`) are not registry-managed: the built-in
 implementations are singletons invoked directly by their `ExtensionId`.
 

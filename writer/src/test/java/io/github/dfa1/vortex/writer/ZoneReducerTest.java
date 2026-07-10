@@ -29,7 +29,7 @@ class ZoneReducerTest {
             List.of(ColumnName.of("v")), List.of(DType.F64), false);
 
     private static ReadRegistry registry() {
-        return ReadRegistry.builder().registerServiceLoaded().build();
+        return ReadRegistry.builder().registerDefaults().build();
     }
 
     private static long[] range(long from, long to) {

@@ -304,7 +304,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 
 ReadRegistry registry = ReadRegistry.builder()
-        .registerServiceLoaded()
+        .registerDefaults()
         .allowUnknown()
         .build();
 

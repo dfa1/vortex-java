@@ -62,8 +62,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     /// Values per zstd frame; `0` (or any non-positive value) means a single frame for the whole array.
     private final long valuesPerFrame;
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader]; compresses each array into
-    /// a single frame.
+    /// Creates an encoder that compresses each array into a single frame.
     public ZstdEncodingEncoder() {
         this(0);
     }

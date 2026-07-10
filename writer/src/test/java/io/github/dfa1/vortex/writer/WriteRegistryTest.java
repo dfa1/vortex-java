@@ -120,8 +120,8 @@ class WriteRegistryTest {
     }
 
     @Test
-    void loadAll_discoversServiceLoadedEncoders() {
-        // Given / When — the module ships encoders via META-INF/services
+    void loadAll_discoversAllBuiltinEncoders() {
+        // Given / When — the module ships all built-in encoders via registerDefaults()
         WriteRegistry sut = WriteRegistry.loadAll();
 
         // Then
@@ -147,13 +147,13 @@ class WriteRegistryTest {
 
     @Test
     void loadAll_encoderOrderIsDeterministicallySortedByName() {
-        // Given — all service-loaded encoders
+        // Given — all built-in encoders
         WriteRegistry registry = WriteRegistry.loadAll();
 
         // When — the encoder names in iteration order
         List<String> result = registry.encoderMap().keySet().stream().map(EncodingId::id).toList();
 
-        // Then — sorted by name, independent of ServiceLoader's unspecified iteration order
+        // Then — sorted by name regardless of registration order
         assertThat(result).isSorted();
     }
 }

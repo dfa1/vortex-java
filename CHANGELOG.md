@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `ReadRegistry` and `WriteRegistry` are now builder-only (no `ServiceLoader`), matching `LayoutRegistry`. `registerServiceLoaded()` is replaced by `registerDefaults()`, which registers all built-in encoders/decoders explicitly; `loadAll()` is unchanged. `ReadRegistry.decoderMap()` is added. Custom encodings register via `register(...)` on the builder instead of a `META-INF/services` file. ([#255](https://github.com/dfa1/vortex-java/issues/255))
+
 ### Fixed
 
 - `VarBinArray.DictMode` reads dict-value offsets in a ptype-uniform loop: the I32 fast path eliminates the per-row `switch(dictValOffPType)` that blocked C2 vectorization (introduced by #215). ([#243](https://github.com/dfa1/vortex-java/issues/243))

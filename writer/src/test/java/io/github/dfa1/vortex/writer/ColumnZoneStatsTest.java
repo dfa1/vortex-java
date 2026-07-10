@@ -56,7 +56,7 @@ class ColumnZoneStatsTest {
     }
 
     private static ReadRegistry registry() {
-        return ReadRegistry.builder().registerServiceLoaded().build();
+        return ReadRegistry.builder().registerDefaults().build();
     }
 
     private static List<ArrayStats> zoneStats(Path file, String column) throws IOException {

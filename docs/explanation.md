@@ -403,12 +403,11 @@ writer.close()
 
 ### How `ReadRegistry` resolves encodings
 
-`ReadRegistry.loadAll()` uses `ServiceLoader` to discover all `EncodingDecoder`
-implementations on the classpath. Each decoder declares its identity via `encodingId()`.
-At decode time the registry maps the typed id from the array node to the right
-`EncodingDecoder` instance and calls `decode(DecodeContext)`.
+`ReadRegistry.loadAll()` registers all built-in `EncodingDecoder` implementations. Each
+decoder declares its identity via `encodingId()`. At decode time the registry maps the typed
+id from the array node to the right `EncodingDecoder` instance and calls `decode(DecodeContext)`.
 
-Custom decoders can be added at build time: `ReadRegistry.builder().registerServiceLoaded().register(myDecoder).build()`.
+Custom decoders can be added at build time: `ReadRegistry.builder().registerDefaults().register(myDecoder).build()`.
 Files with unrecognized IDs throw `VortexException` unless the builder enabled `allowUnknown()`.
 
 ## Testing strategy

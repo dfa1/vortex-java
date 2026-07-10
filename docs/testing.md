@@ -190,8 +190,8 @@ Two [architectural fitness functions](https://www.thoughtworks.com/insights/book
 - `DocsConsistencyTest` — **accuracy**: FQNs resolve, method claims name real methods,
   `META-INF/services` mentions exist, relative links don't dangle.
 - `EncodingTableFitnessTest` — **completeness**: the encodings table in `docs/compatibility.md`
-  lists exactly the encodings the code registers via `ServiceLoader` (id, decoder/encoder class,
-  ✅/❌ flags), asserted not generated — on drift it prints the exact rows to add.
+  lists exactly the encodings the code registers in `ReadRegistry`/`WriteRegistry` (id,
+  decoder/encoder class, ✅/❌ flags), asserted not generated — on drift it prints the exact rows to add.
 
 ## Docs consistency gate
 

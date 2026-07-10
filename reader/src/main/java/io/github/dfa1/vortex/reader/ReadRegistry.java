@@ -4,15 +4,47 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
+import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ByteBoolEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ChunkedEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.DateTimePartsEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.DecimalBytePartsEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.DecimalEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
+import io.github.dfa1.vortex.reader.decode.DeltaEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.DictEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ExtEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.FixedSizeListEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.FsstEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ListEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ListViewEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.MaskedEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.NullEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.PatchedEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.PcoEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.RleEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.RunEndEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.SequenceEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.SparseEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.StructEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.VarBinEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.VarBinViewEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.VariantEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ZstdEncodingDecoder;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.TreeMap;
 
 /// Read-side registry: maps [EncodingId] to [EncodingDecoder] implementations.
@@ -35,11 +67,11 @@ public final class ReadRegistry {
         this.allowUnknown = allowUnknown;
     }
 
-    /// Loads all service-discovered [EncodingDecoder] implementations.
+    /// Loads all built-in [EncodingDecoder] implementations.
     ///
-    /// @return an immutable [ReadRegistry] populated with all service-loaded decoders
+    /// @return an immutable [ReadRegistry] populated with all built-in decoders
     public static ReadRegistry loadAll() {
-        return builder().registerServiceLoaded().build();
+        return builder().registerDefaults().build();
     }
 
     /// Creates an empty registry with no decoders registered.
@@ -54,6 +86,13 @@ public final class ReadRegistry {
     /// @return a fresh builder
     public static Builder builder() {
         return new Builder();
+    }
+
+    /// Returns an unmodifiable view of the registered decoders, keyed by encoding id.
+    ///
+    /// @return immutable decoder map
+    public Map<EncodingId, EncodingDecoder> decoderMap() {
+        return decoders;
     }
 
     /// Returns whether passthrough decode for unknown encoding ids is enabled.
@@ -144,15 +183,44 @@ public final class ReadRegistry {
             return this;
         }
 
-        /// Registers every [EncodingDecoder] discovered via [ServiceLoader].
+        /// Registers all built-in [EncodingDecoder] implementations.
         ///
         /// @return this builder, for chaining
-        /// @throws VortexException if a service-loaded entry collides with one already registered
-        public Builder registerServiceLoaded() {
-            for (EncodingDecoder decoder : ServiceLoader.load(EncodingDecoder.class)) {
-                register(decoder);
-            }
-            return this;
+        /// @throws VortexException if a built-in decoder collides with one already registered
+        public Builder registerDefaults() {
+            return register(new AlpEncodingDecoder())
+                    .register(new AlpRdEncodingDecoder())
+                    .register(new BitpackedEncodingDecoder())
+                    .register(new BoolEncodingDecoder())
+                    .register(new ByteBoolEncodingDecoder())
+                    .register(new ChunkedEncodingDecoder())
+                    .register(new ConstantEncodingDecoder())
+                    .register(new DateTimePartsEncodingDecoder())
+                    .register(new DecimalBytePartsEncodingDecoder())
+                    .register(new DecimalEncodingDecoder())
+                    .register(new DeltaEncodingDecoder())
+                    .register(new DictEncodingDecoder())
+                    .register(new ExtEncodingDecoder())
+                    .register(new FixedSizeListEncodingDecoder())
+                    .register(new FrameOfReferenceEncodingDecoder())
+                    .register(new FsstEncodingDecoder())
+                    .register(new ListEncodingDecoder())
+                    .register(new ListViewEncodingDecoder())
+                    .register(new MaskedEncodingDecoder())
+                    .register(new NullEncodingDecoder())
+                    .register(new PatchedEncodingDecoder())
+                    .register(new PcoEncodingDecoder())
+                    .register(new PrimitiveEncodingDecoder())
+                    .register(new RleEncodingDecoder())
+                    .register(new RunEndEncodingDecoder())
+                    .register(new SequenceEncodingDecoder())
+                    .register(new SparseEncodingDecoder())
+                    .register(new StructEncodingDecoder())
+                    .register(new VarBinEncodingDecoder())
+                    .register(new VariantEncodingDecoder())
+                    .register(new VarBinViewEncodingDecoder())
+                    .register(new ZigZagEncodingDecoder())
+                    .register(new ZstdEncodingDecoder());
         }
 
         /// Enable passthrough decode for unknown encoding ids.

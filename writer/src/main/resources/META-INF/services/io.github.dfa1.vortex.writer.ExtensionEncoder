@@ -1,4 +1,0 @@
-io.github.dfa1.vortex.writer.encode.DateExtensionEncoder
-io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder
-io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder
-io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder

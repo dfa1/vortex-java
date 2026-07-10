@@ -126,7 +126,7 @@ class AllowUnknownIntegrationTest {
         var chunkCount = new AtomicLong();
         var anyUnknown = new AtomicBoolean(false);
         try (VortexReader vf = VortexReader.open(file,
-                ReadRegistry.builder().registerServiceLoaded().allowUnknown().build());
+                ReadRegistry.builder().registerDefaults().allowUnknown().build());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             iter.forEachRemaining(c -> {
                 chunkCount.incrementAndGet();

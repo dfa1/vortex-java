@@ -74,7 +74,7 @@ class VortexAdapterCoverageTest {
     }
 
     private static ReadRegistry registry() {
-        return ReadRegistry.builder().registerServiceLoaded().build();
+        return ReadRegistry.builder().registerDefaults().build();
     }
 
     @Test

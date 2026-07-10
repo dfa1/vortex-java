@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.integration;
 
-import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
-import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
+import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.writer.WriteRegistry;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -27,10 +26,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// *accuracy* (no stale claim); this guards *completeness* (no missing row) — add an encoding
 /// without documenting it and the build goes red.
 ///
-/// Ground truth is the `ServiceLoader` set, not a hand-list: every service-registered
-/// [EncodingDecoder]/[EncodingEncoder] contributes its `encodingId()` wire string, its decode and
-/// encode support, and its implementing class's simple name. The table must match on all four —
-/// id present, decoder class named, encoder class named, ✅/❌ flags correct. It asserts, it never
+/// Ground truth is the `ReadRegistry`/`WriteRegistry` built-in set, not a hand-list: every
+/// registered decoder/encoder contributes its `encodingId()` wire string, its decode and encode
+/// support, and its implementing class's simple name. The table must match on all four — id
+/// present, decoder class named, encoder class named, ✅/❌ flags correct. It asserts, it never
 /// rewrites the doc; on drift the message prints the exact rows to add.
 ///
 /// The `Notes` column is human prose (per-encoding supported dtypes) and is deliberately NOT
@@ -53,13 +52,11 @@ class EncodingTableFitnessTest {
     @BeforeAll
     static void loadGroundTruthAndTable() throws IOException {
         decoderClassById = new TreeMap<>();
-        for (EncodingDecoder decoder : ServiceLoader.load(EncodingDecoder.class)) {
-            decoderClassById.put(decoder.encodingId().id(), decoder.getClass().getSimpleName());
-        }
+        ReadRegistry.loadAll().decoderMap().forEach((id, decoder) ->
+                decoderClassById.put(id.id(), decoder.getClass().getSimpleName()));
         encoderClassById = new TreeMap<>();
-        for (EncodingEncoder encoder : ServiceLoader.load(EncodingEncoder.class)) {
-            encoderClassById.put(encoder.encodingId().id(), encoder.getClass().getSimpleName());
-        }
+        WriteRegistry.loadAll().encoderMap().forEach((id, encoder) ->
+                encoderClassById.put(id.id(), encoder.getClass().getSimpleName()));
 
         Path compat = repoRoot().resolve("docs/compatibility.md");
         String encodingsSection = sliceEncodingsTable(Files.readString(compat));
@@ -103,7 +100,7 @@ class EncodingTableFitnessTest {
         // Given every row in the documented table
         var wrong = new ArrayList<String>();
 
-        // When each is checked against the ServiceLoader ground truth
+        // When each is checked against the registry ground truth
         documented.forEach((id, row) -> {
             boolean known = decoderClassById.containsKey(id) || encoderClassById.containsKey(id);
             if (!known) {

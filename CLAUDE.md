@@ -124,25 +124,25 @@ Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
 - **Zoned** (`vortex.stats`; reads also accept the newer Rust alias `vortex.zoned`) wraps a child with per-chunk min/max for zone-map pruning
 
 Encoding IDs are strings (`"vortex.primitive"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs →
-`EncodingDecoder` via `ServiceLoader`; immutable after construction — register custom decoders on
-the builder: `ReadRegistry.builder().registerServiceLoaded().register(myDecoder).build()`.
+`EncodingDecoder`; immutable after construction, built-in decoders are registered explicitly by
+`registerDefaults()` — register custom decoders on the builder:
+`ReadRegistry.builder().registerDefaults().register(myDecoder).build()`.
 
 ### Adding an encoding
 
 Add an `EncodingId.WellKnown` constant `VORTEX_FOO("vortex.foo")` (re-exported on the interface), then per side:
-- **Decode:** `FooEncodingDecoder implements EncodingDecoder` in `reader.decode` + FQN in
-  `reader/.../META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder`
-- **Encode:** `FooEncodingEncoder implements EncodingEncoder` in `writer.encode` + FQN in
-  `writer/.../META-INF/services/io.github.dfa1.vortex.writer.encode.EncodingEncoder`
+- **Decode:** `FooEncodingDecoder implements EncodingDecoder` in `reader.decode` + a
+  `.register(new FooEncodingDecoder())` call in `ReadRegistry.Builder#registerDefaults()`
+- **Encode:** `FooEncodingEncoder implements EncodingEncoder` in `writer.encode` + a
+  `.register(new FooEncodingEncoder())` call in `WriteRegistry.Builder#registerDefaults()`
 
 ### Adding an extension type
 
 Add `ExtensionId` constant, then per side:
 - **Decode:** singleton `FooExtensionDecoder implements ExtensionDecoder` in `reader.extension` +
-  a `case VORTEX_FOO` in `Chunk.as()` — not registry-managed, **no service file**
-  (`registerServiceLoaded()` only discovers `EncodingDecoder`).
-- **Encode:** `FooExtensionEncoder implements ExtensionEncoder` in `writer` + FQN in
-  `writer/.../META-INF/services/io.github.dfa1.vortex.writer.ExtensionEncoder`
+  a `case VORTEX_FOO` in `Chunk.as()` — not registry-managed.
+- **Encode:** `FooExtensionEncoder implements ExtensionEncoder` in `writer` + a
+  `.register(FooExtensionEncoder.INSTANCE)` call in `WriteRegistry.Builder#registerDefaults()`
 
 ## Memory model
 
@@ -204,17 +204,18 @@ When stuck on encode/decode behavior, consult **in this order**:
 
 - **DType is pluggable only via `Extension`.** `DType` is a sealed interface; downstream code must
   not add variants. Use `new DType.Extension("ip.address", new DType.Primitive(PType.I32, false),
-  null, false)` and register decoders/encoders on the registries (or `ServiceLoader<ExtensionEncoder>`).
+  null, false)` and register decoders/encoders on the registries.
   Mirrors Rust (`vortex.date`, `vortex.uuid`, …). No SPI for DType variants planned.
-- **Layout decode is pluggable via `LayoutDecoder` + `LayoutRegistry`** (`reader.layout`) — the
-  Rust reference registers layouts at runtime, so ours are open too. Builder-registered only
-  (`LayoutRegistry.builder().registerDefaults().register(custom).build()`, pass to
-  `VortexReader.open(path, readRegistry, layoutRegistry)`) — **no service file**, by decision:
-  Rust registers layouts explicitly on the session (no auto-discovery exists there), and a
-  classpath jar must not silently change scan traversal — layout registration stays visible at
-  the open() call site. Encodings keep ServiceLoader because they are leaf codecs with a
-  plausible drop-in-jar ecosystem. Unknown layouts
-  fail loudly (`VortexException`, Rust default; no allowUnknown for layouts). Scope: the SPI covers
+- **Encoding and layout decode are both pluggable via builder-only registries** — no
+  `ServiceLoader`. Encodings register on `ReadRegistry`/`WriteRegistry`
+  (`ReadRegistry.builder().registerDefaults().register(custom).build()`); layouts register on
+  `LayoutRegistry` (`LayoutRegistry.builder().registerDefaults().register(custom).build()`, pass to
+  `VortexReader.open(path, readRegistry, layoutRegistry)`). Builder-registered only, by decision:
+  the Rust reference registers encodings and layouts explicitly on the session (no auto-discovery
+  exists there), and a classpath jar must not silently change decode/scan behavior — registration
+  stays visible at the `open()`/`create()` call site. Unknown encodings can be opted into an
+  allow-unknown passthrough (`ReadRegistry.Builder#allowUnknown()`); unknown layouts always fail
+  loudly (`VortexException`, Rust default; no allowUnknown for layouts). Scope: the layout SPI covers
   full-column subtree decode; zone-map pruning, filtered scans, and chunk planning recognize the
   built-in layouts only.
 - **Small public APIs.** Don't expose internals — when in doubt, leave it out or make it private.
