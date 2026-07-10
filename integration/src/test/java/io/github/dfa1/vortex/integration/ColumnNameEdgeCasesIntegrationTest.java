@@ -4,7 +4,6 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -29,11 +28,10 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /// Cross-compatibility for column-name edge cases nobody advertises, measured against the
 /// Rust (JNI) reference:
 ///
-/// - Blank names (`""`, whitespace-only) are wire-legal — the Rust writer produces them — but
-///   vortex-java refuses them BOTH ways by policy: the writer never emits them and the reader
-///   rejects files carrying them with a message pointing at the producing pipeline. Stricter
-///   than the wire on purpose, like a JSON library refusing a `""` key it could technically
-///   parse (see `VortexWriterTest` / `DTypeStructBuilderTest` / `PostscriptParserDTypeGuardsTest`).
+/// - Blank names (`""`, whitespace-only) are wire-legal — the Rust writer produces them (e.g.
+///   `uci-electricityloaddiagrams20112014` has one at field index 0) — and vortex-java accepts
+///   them on both the read and write paths. `ColumnName` enforces non-null + no ISO-control
+///   characters; blank is explicitly permitted.
 /// - Duplicate field names are legal in Rust's in-memory `StructFields`
 ///   (`vortex-array/src/dtype/struct_.rs`, first-match name access) but REJECTED by its file
 ///   writer: "StructLayout must have unique field names" — the wire contract both writers
@@ -48,29 +46,22 @@ class ColumnNameEdgeCasesIntegrationTest {
     }
 
     @Test
-    void jniWritesEmptyColumnName_javaRejectsItByPolicy(@TempDir Path tmp) throws IOException {
+    void jniWritesEmptyColumnName_javaAcceptsIt(@TempDir Path tmp) throws IOException {
         // Given — the Rust (JNI) writer legitimately produces a file whose first column is
-        // named "" (the wire format permits it)
+        // named "" (blank names are wire-legal and appear in real Raincloud corpus files)
         Path file = tmp.resolve("jni_empty_name.vortex");
         Schema schema = new Schema(List.of(
                 Field.notNullable("", new ArrowType.Int(64, true)),
                 Field.notNullable("x", new ArrowType.Int(64, true))));
         writeJni(file, schema, new long[][]{{1, 2}, {30, 40}});
 
-        // When
+        // When / Then — blank names pass through on both paths; ColumnName allows them
         Throwable result = catchThrowable(() -> {
             try (var reader = VortexReader.open(file)) {
                 assertThat(reader).isNotNull();
             }
         });
-
-        // Then — deliberate strictness beyond the wire: a blank name is almost certainly a bug
-        // in the producing pipeline, and rejecting it loudly beats propagating an unusable name
-        // into name-keyed APIs and SQL identifiers
-        assertThat(result)
-                .isInstanceOf(VortexException.class)
-                .hasMessageContaining("invalid field name in file schema")
-                .hasMessageContaining("blank field name");
+        assertThat(result).isNull();
     }
 
     @Test
