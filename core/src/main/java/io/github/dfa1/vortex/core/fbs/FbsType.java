@@ -33,7 +33,7 @@ public final class FbsType {
     public static final byte FbsBinary = (byte) 6;
 
     /// Member `Struct_` = 7
-    public static final byte FbsStruct_ = (byte) 7;
+    public static final byte FbsStruct = (byte) 7;
 
     /// Member `List` = 8
     public static final byte FbsList = (byte) 8;

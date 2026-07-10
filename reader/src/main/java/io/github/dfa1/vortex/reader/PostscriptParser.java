@@ -13,7 +13,7 @@ import io.github.dfa1.vortex.core.fbs.FbsExtension;
 import io.github.dfa1.vortex.core.fbs.FbsFixedSizeList;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
 import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
-import io.github.dfa1.vortex.core.fbs.FbsStruct_;
+import io.github.dfa1.vortex.core.fbs.FbsStruct;
 import io.github.dfa1.vortex.core.fbs.FbsType;
 import io.github.dfa1.vortex.core.fbs.FbsUtf8;
 import io.github.dfa1.vortex.core.fbs.FbsVariant;
@@ -261,8 +261,8 @@ final class PostscriptParser {
             }
             case FbsType.FbsUtf8 -> new DType.Utf8(fbs.type(new FbsUtf8()).nullable());
             case FbsType.FbsBinary -> new DType.Binary(fbs.type(new FbsBinary()).nullable());
-            case FbsType.FbsStruct_ -> {
-                var s = fbs.type(new FbsStruct_());
+            case FbsType.FbsStruct -> {
+                var s = fbs.type(new FbsStruct());
                 if (s.namesLength() != s.dtypesLength()) {
                     throw new VortexException("struct names/dtypes length mismatch: "
                             + s.namesLength() + " names, " + s.dtypesLength() + " dtypes");

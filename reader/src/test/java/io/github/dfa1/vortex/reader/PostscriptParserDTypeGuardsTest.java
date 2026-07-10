@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
 import io.github.dfa1.vortex.core.fbs.FbsNull;
-import io.github.dfa1.vortex.core.fbs.FbsStruct_;
+import io.github.dfa1.vortex.core.fbs.FbsStruct;
 import io.github.dfa1.vortex.core.fbs.FbsType;
 import org.junit.jupiter.api.Test;
 
@@ -132,10 +132,10 @@ class PostscriptParserDTypeGuardsTest {
         for (int i = 0; i < names.length; i++) {
             nameOffsets[i] = fbb.createString(names[i]);
         }
-        int namesVec = FbsStruct_.createNamesVector(fbb, nameOffsets);
-        int dtypesVec = FbsStruct_.createDtypesVector(fbb, fieldOffsets);
-        int struct = FbsStruct_.createFbsStruct_(fbb, namesVec, dtypesVec, false);
-        int root = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, struct);
+        int namesVec = FbsStruct.createNamesVector(fbb, nameOffsets);
+        int dtypesVec = FbsStruct.createDtypesVector(fbb, fieldOffsets);
+        int struct = FbsStruct.createFbsStruct(fbb, namesVec, dtypesVec, false);
+        int root = FbsDType.createFbsDType(fbb, FbsType.FbsStruct, struct);
         fbb.finish(root);
         return fbb.dataSegment();
     }

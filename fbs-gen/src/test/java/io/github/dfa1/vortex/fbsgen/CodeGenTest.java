@@ -71,7 +71,7 @@ class CodeGenTest {
         String src = generateOne("FbsBuffer.java");
 
         // Then
-        assertThat(src).contains("extends FbsStruct");
+        assertThat(src).contains("extends FbsInlineStruct");
         assertThat(src).contains("8 bytes");
         assertThat(src).contains("public int padding() {\n        return readShort(0) & 0xFFFF;");
         assertThat(src).contains("public int alignmentExponent() {\n        return readByte(2) & 0xFF;");

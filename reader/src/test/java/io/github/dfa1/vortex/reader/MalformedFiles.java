@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
 import io.github.dfa1.vortex.core.fbs.FbsExtension;
 import io.github.dfa1.vortex.core.fbs.FbsFixedSizeList;
 import io.github.dfa1.vortex.core.fbs.FbsList;
-import io.github.dfa1.vortex.core.fbs.FbsStruct_;
+import io.github.dfa1.vortex.core.fbs.FbsStruct;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
 import io.github.dfa1.vortex.core.fbs.FbsPostscriptSegment;
 import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
@@ -68,10 +68,10 @@ final class MalformedFiles {
                     yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsList, list);
                 }
                 case STRUCT -> {
-                    int names = FbsStruct_.createNamesVector(fbb, new int[]{fbb.createString("f")});
-                    int dtypes = FbsStruct_.createDtypesVector(fbb, new int[]{current});
-                    int struct = FbsStruct_.createFbsStruct_(fbb, names, dtypes, false);
-                    yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, struct);
+                    int names = FbsStruct.createNamesVector(fbb, new int[]{fbb.createString("f")});
+                    int dtypes = FbsStruct.createDtypesVector(fbb, new int[]{current});
+                    int struct = FbsStruct.createFbsStruct(fbb, names, dtypes, false);
+                    yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsStruct, struct);
                 }
                 case FIXED_SIZE_LIST -> {
                     int fsl = FbsFixedSizeList.createFbsFixedSizeList(fbb, current, 1L, false);

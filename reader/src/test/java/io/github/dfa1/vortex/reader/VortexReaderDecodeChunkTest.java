@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsNull;
 import io.github.dfa1.vortex.core.fbs.FbsPType;
 import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
-import io.github.dfa1.vortex.core.fbs.FbsStruct_;
+import io.github.dfa1.vortex.core.fbs.FbsStruct;
 import io.github.dfa1.vortex.core.fbs.FbsType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -462,17 +462,17 @@ class VortexReaderDecodeChunkTest {
         int dtX = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primX);
         int primY = FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false);
         int dtY = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primY);
-        int innerNames = FbsStruct_.createNamesVector(fbb,
+        int innerNames = FbsStruct.createNamesVector(fbb,
                 new int[]{fbb.createString("x"), fbb.createString("y")});
-        int innerDtypes = FbsStruct_.createDtypesVector(fbb, new int[]{dtX, dtY});
-        int innerStruct = FbsStruct_.createFbsStruct_(fbb, innerNames, innerDtypes, false);
-        int dtS = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, innerStruct);
+        int innerDtypes = FbsStruct.createDtypesVector(fbb, new int[]{dtX, dtY});
+        int innerStruct = FbsStruct.createFbsStruct(fbb, innerNames, innerDtypes, false);
+        int dtS = FbsDType.createFbsDType(fbb, FbsType.FbsStruct, innerStruct);
 
-        int names = FbsStruct_.createNamesVector(fbb,
+        int names = FbsStruct.createNamesVector(fbb,
                 new int[]{fbb.createString("a"), fbb.createString("s")});
-        int dtypes = FbsStruct_.createDtypesVector(fbb, new int[]{dtA, dtS});
-        int rootStruct = FbsStruct_.createFbsStruct_(fbb, names, dtypes, false);
-        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, rootStruct);
+        int dtypes = FbsStruct.createDtypesVector(fbb, new int[]{dtA, dtS});
+        int rootStruct = FbsStruct.createFbsStruct(fbb, names, dtypes, false);
+        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct, rootStruct);
         FbsDType.finishFbsDTypeBuffer(fbb, dt);
         return MalformedFiles.slice(fbb);
     }
@@ -650,11 +650,11 @@ class VortexReaderDecodeChunkTest {
         int dtA = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primA);
         int primC = FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, true);
         int dtC = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primC);
-        int names = FbsStruct_.createNamesVector(fbb,
+        int names = FbsStruct.createNamesVector(fbb,
                 new int[]{fbb.createString("a"), fbb.createString("c")});
-        int dtypes = FbsStruct_.createDtypesVector(fbb, new int[]{dtA, dtC});
-        int struct = FbsStruct_.createFbsStruct_(fbb, names, dtypes, false);
-        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, struct);
+        int dtypes = FbsStruct.createDtypesVector(fbb, new int[]{dtA, dtC});
+        int struct = FbsStruct.createFbsStruct(fbb, names, dtypes, false);
+        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct, struct);
         FbsDType.finishFbsDTypeBuffer(fbb, dt);
         return MalformedFiles.slice(fbb);
     }
@@ -797,11 +797,11 @@ class VortexReaderDecodeChunkTest {
         int dtA = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primA);
         int primB = FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, true);
         int dtB = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primB);
-        int names = FbsStruct_.createNamesVector(fbb,
+        int names = FbsStruct.createNamesVector(fbb,
                 new int[]{fbb.createString("a"), fbb.createString("b")});
-        int dtypes = FbsStruct_.createDtypesVector(fbb, new int[]{dtA, dtB});
-        int struct = FbsStruct_.createFbsStruct_(fbb, names, dtypes, false);
-        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, struct);
+        int dtypes = FbsStruct.createDtypesVector(fbb, new int[]{dtA, dtB});
+        int struct = FbsStruct.createFbsStruct(fbb, names, dtypes, false);
+        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct, struct);
         FbsDType.finishFbsDTypeBuffer(fbb, dt);
         return MalformedFiles.slice(fbb);
     }
@@ -917,11 +917,11 @@ class VortexReaderDecodeChunkTest {
         int dtA = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, primA);
         int nullTbl = FbsNull.createFbsNull(fbb);
         int dtN = FbsDType.createFbsDType(fbb, FbsType.FbsNull, nullTbl);
-        int names = FbsStruct_.createNamesVector(fbb,
+        int names = FbsStruct.createNamesVector(fbb,
                 new int[]{fbb.createString("a"), fbb.createString("n")});
-        int dtypes = FbsStruct_.createDtypesVector(fbb, new int[]{dtA, dtN});
-        int struct = FbsStruct_.createFbsStruct_(fbb, names, dtypes, false);
-        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, struct);
+        int dtypes = FbsStruct.createDtypesVector(fbb, new int[]{dtA, dtN});
+        int struct = FbsStruct.createFbsStruct(fbb, names, dtypes, false);
+        int dt = FbsDType.createFbsDType(fbb, FbsType.FbsStruct, struct);
         FbsDType.finishFbsDTypeBuffer(fbb, dt);
         return MalformedFiles.slice(fbb);
     }

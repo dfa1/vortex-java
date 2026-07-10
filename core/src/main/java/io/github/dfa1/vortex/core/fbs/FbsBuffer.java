@@ -7,7 +7,7 @@ import javax.annotation.processing.Generated;
 
 /// Reader and builder for the `Buffer` FlatBuffers struct (inline, 8 bytes).
 @Generated("io.github.dfa1.vortex.fbsgen.CodeGen")
-public final class FbsBuffer extends FbsStruct {
+public final class FbsBuffer extends FbsInlineStruct {
 
     /// Positions this reader at a struct.
     /// @param seg the buffer

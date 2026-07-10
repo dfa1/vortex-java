@@ -11,7 +11,7 @@ import java.util.List;
 /// One `.java` file per declaration:
 /// - each `table` becomes a `final class extends FbsTable` with read accessors plus
 ///   `createX`/`startX`/`addX`/`endX`/`finishXBuffer` builders;
-/// - each `struct` becomes a `final class extends FbsStruct` with inline-offset accessors
+/// - each `struct` becomes a `final class extends FbsInlineStruct` with inline-offset accessors
 ///   and an inline `createX` builder;
 /// - each `enum` becomes a constants holder over its underlying integer type;
 /// - each `union` becomes a discriminator-constants holder (NONE = 0, members from 1).
@@ -65,7 +65,8 @@ public final class CodeGen {
     /// @param schemaName the name as written in the `.fbs` schema
     /// @return the Java class name
     private static String className(String schemaName) {
-        return JAVA_NAME_PREFIX + schemaName;
+        String base = schemaName.endsWith("_") ? schemaName.substring(0, schemaName.length() - 1) : schemaName;
+        return JAVA_NAME_PREFIX + base;
     }
 
     // ---- tables ---------------------------------------------------------------
@@ -294,7 +295,7 @@ public final class CodeGen {
         sb.append("/// Reader and builder for the `").append(struct.name()).append("` FlatBuffers struct (inline, ")
                 .append(layout.size()).append(" bytes).\n");
         sb.append(GENERATED_ANNOTATION);
-        sb.append("public final class ").append(name).append(" extends FbsStruct {\n\n");
+        sb.append("public final class ").append(name).append(" extends FbsInlineStruct {\n\n");
         sb.append("""
                     /// Positions this reader at a struct.
                     /// @param seg the buffer
@@ -722,7 +723,7 @@ public final class CodeGen {
     ///
     /// @param javaType   accessor return type
     /// @param readPrefix expression prefix (e.g. a widening cast), or empty
-    /// @param readMethod FbsTable/FbsStruct reader method name
+    /// @param readMethod FbsTable/FbsInlineStruct reader method name
     /// @param readSuffix expression suffix (e.g. an unsigned mask or `!= 0`), or empty
     /// @param zero       default/absent value literal
     private record ScalarIo(String javaType, String readPrefix, String readMethod, String readSuffix, String zero) {

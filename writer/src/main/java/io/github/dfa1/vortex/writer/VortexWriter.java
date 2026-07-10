@@ -326,11 +326,11 @@ public final class VortexWriter implements Closeable {
                 for (int i = 0; i < nameOffsets.length; i++) {
                     nameOffsets[i] = fbb.createString(fieldNames.get(i).value());
                 }
-                int namesVec = io.github.dfa1.vortex.core.fbs.FbsStruct_.createNamesVector(fbb, nameOffsets);
-                int dtypesVec = io.github.dfa1.vortex.core.fbs.FbsStruct_.createDtypesVector(fbb, fieldOffsets);
-                int inner = io.github.dfa1.vortex.core.fbs.FbsStruct_.createFbsStruct_(
+                int namesVec = io.github.dfa1.vortex.core.fbs.FbsStruct.createNamesVector(fbb, nameOffsets);
+                int dtypesVec = io.github.dfa1.vortex.core.fbs.FbsStruct.createDtypesVector(fbb, fieldOffsets);
+                int inner = io.github.dfa1.vortex.core.fbs.FbsStruct.createFbsStruct(
                         fbb, namesVec, dtypesVec, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, inner);
+                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsStruct, inner);
             }
             case DType.Utf8(var nullable) -> {
                 int inner = io.github.dfa1.vortex.core.fbs.FbsUtf8.createFbsUtf8(fbb, nullable);
