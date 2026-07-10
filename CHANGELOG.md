@@ -5,7 +5,19 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.2] — 2026-07-10
+
+**Registry cleanup and schema fidelity** are the two themes of this release. `ReadRegistry` and
+`WriteRegistry` are now builder-only (matching `LayoutRegistry`), replacing `ServiceLoader`
+discovery with explicit `registerDefaults()` calls — registration is now visible at the call site
+instead of hidden in `META-INF/services` files. The `fbs-gen` code generator now strips trailing
+underscores from schema type names before prefixing with `Fbs`, keeping generated Java identifiers
+clean (`FbsStruct_` → `FbsStruct`) while staying wire-identical to the upstream FlatBuffers schema.
+Several correctness fixes land too: blank column names (produced by real Raincloud corpus files)
+are now accepted on both paths; `EncodingId`/`LayoutId` reject control characters; unsigned
+Parquet columns compare correctly; and six decoders receive tighter validation against malformed
+input (`ConstantEncodingDecoder`, `AlpRdEncodingDecoder`, `SparseEncodingDecoder`,
+`DateTimePartsArrays`, `VarBinArray.DictMode`, `ScanIterator`).
 
 ### Changed
 
@@ -25,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DateTimePartsArrays.readLong` now zero-extends unsigned children (`U8`/`U16`/`U32`) instead of sign-extending them; previously a `U16` seconds-within-day value ≥ 32 768 was widened as a negative short, producing a 65 536-second error in the reconstructed timestamp (#252, bi-euro2016 corpus).
 - `RaincloudConformanceIntegrationTest` now writes both the vortex-java and Parquet oracle CSVs to temp files and streams them line-by-line for comparison; previously it materialized both into heap `String` objects, causing OOM for large corpus files (≥157 MB) that were previously hidden by throwing before reaching the corrupted line. ([#254](https://github.com/dfa1/vortex-java/issues/254))
 - `RaincloudConformanceIntegrationTest` oracle now formats `INT32`/`INT64` Parquet columns with a `UINT_32`/`UINT_64` logical-type annotation using `Integer.toUnsignedString`/`Long.toUnsignedString`, matching the unsigned representation that Vortex stores as `U32`/`U64`; previously the Parquet signed interpretation diverged for values above `Integer.MAX_VALUE` (e.g. `total_boosters` in the covid-world-vaccination-progress corpus). ([#253](https://github.com/dfa1/vortex-java/issues/253))
+
+## [Unreleased]
 
 ## [0.12.1] — 2026-07-08
 
