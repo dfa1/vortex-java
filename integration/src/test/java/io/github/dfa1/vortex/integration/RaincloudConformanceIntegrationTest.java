@@ -17,10 +17,13 @@ import org.opentest4j.TestAbortedException;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.PipedReader;
+import java.io.PipedWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -86,20 +89,81 @@ class RaincloudConformanceIntegrationTest {
     }
 
     private static void assertMatchesParquetOracle(Path vortex, Path parquet) throws IOException {
-        // Given — write both CSVs to temp files; never hold multi-GB strings in heap
-        Path oracleCsv = Files.createTempFile("oracle-", ".csv");
-        Path vortexCsv = Files.createTempFile("vortex-", ".csv");
-        try {
-            writeOracle(parquet, oracleCsv);
+        // Given — both producers run in parallel via virtual threads; compare line-by-line
+        // without temp files, cutting wall time roughly in half for large slugs.
+        AtomicReference<Throwable> oracleError = new AtomicReference<>();
+        AtomicReference<Throwable> vortexError = new AtomicReference<>();
+        PipedWriter oracleSink = new PipedWriter();
+        PipedWriter vortexSink = new PipedWriter();
+        try (BufferedReader oracleReader = new BufferedReader(new PipedReader(oracleSink, 1 << 17));
+             BufferedReader vortexReader = new BufferedReader(new PipedReader(vortexSink, 1 << 17))) {
 
-            // When
-            CsvExporter.exportCsv(vortex, vortexCsv, ExportOptions.defaults());
+            Thread oracleThread = Thread.ofVirtual().start(() -> {
+                try (oracleSink) {
+                    writeOracleCsv(parquet, oracleSink);
+                } catch (Throwable t) {
+                    oracleError.set(t);
+                }
+            });
+            Thread vortexThread = Thread.ofVirtual().start(() -> {
+                try (vortexSink) {
+                    CsvExporter.exportCsv(vortex, vortexSink, ExportOptions.defaults());
+                } catch (Throwable t) {
+                    vortexError.set(t);
+                }
+            });
 
-            // Then
-            assertFilesMatch(vortexCsv, oracleCsv);
-        } finally {
-            Files.deleteIfExists(oracleCsv);
-            Files.deleteIfExists(vortexCsv);
+            // When / Then
+            Throwable mainError = null;
+            try {
+                assertFilesMatch(vortexReader, oracleReader);
+            } catch (Throwable t) {
+                mainError = t;
+            }
+
+            try {
+                oracleThread.join();
+                vortexThread.join();
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+
+            // Propagate in priority order: mismatch > decode gap > oracle abort
+            Throwable oe = oracleError.get();
+            Throwable ve = vortexError.get();
+            if (mainError instanceof AssertionError e) {
+                throw e;
+            }
+            if (ve instanceof VortexException e) {
+                throw e;
+            }
+            if (ve instanceof IndexOutOfBoundsException e) {
+                throw e;
+            }
+            if (oe instanceof TestAbortedException e) {
+                throw e;
+            }
+            if (oe != null) {
+                throw new TestAbortedException("oracle cannot read the parquet sibling: " + oe);
+            }
+            if (ve instanceof IOException e) {
+                throw e;
+            }
+            if (ve instanceof RuntimeException e) {
+                throw e;
+            }
+            if (ve != null) {
+                throw new RuntimeException(ve);
+            }
+            if (mainError instanceof IOException e) {
+                throw e;
+            }
+            if (mainError instanceof RuntimeException e) {
+                throw e;
+            }
+            if (mainError != null) {
+                throw new RuntimeException(mainError);
+            }
         }
     }
 
@@ -159,24 +223,32 @@ class RaincloudConformanceIntegrationTest {
         }
     }
 
-    /// Stream-compares two CSV files line by line without loading either into heap.
+    /// Stream-compares two CSV sources line by line without loading either into heap.
     ///
-    /// @param result the vortex-java export
-    /// @param oracle the parquet oracle export
-    /// @throws AssertionError  if any line differs or the files have different lengths
-    /// @throws IOException     if either file cannot be read
+    /// @param result the vortex-java export reader
+    /// @param oracle the parquet oracle reader
+    /// @throws AssertionError if any line differs or the sources have different lengths
+    /// @throws IOException    if either reader throws
+    private static void assertFilesMatch(BufferedReader result, BufferedReader oracle) throws IOException {
+        long lineNum = 0;
+        String rLine;
+        while ((rLine = result.readLine()) != null) {
+            lineNum++;
+            String oLine = oracle.readLine();
+            assertThat(oLine).as("oracle ended before vortex output at line %d", lineNum).isNotNull();
+            assertThat(rLine).as("line %d", lineNum).isEqualTo(oLine);
+        }
+        assertThat(oracle.readLine()).as("vortex output ended before oracle at line %d", lineNum + 1).isNull();
+    }
+
+    /// @param result the vortex-java export file
+    /// @param oracle the parquet oracle file
+    /// @throws AssertionError if any line differs or the files have different lengths
+    /// @throws IOException    if either file cannot be read
     private static void assertFilesMatch(Path result, Path oracle) throws IOException {
         try (BufferedReader r = Files.newBufferedReader(result);
              BufferedReader o = Files.newBufferedReader(oracle)) {
-            long lineNum = 0;
-            String rLine;
-            while ((rLine = r.readLine()) != null) {
-                lineNum++;
-                String oLine = o.readLine();
-                assertThat(oLine).as("oracle ended before vortex output at line %d", lineNum).isNotNull();
-                assertThat(rLine).as("line %d", lineNum).isEqualTo(oLine);
-            }
-            assertThat(o.readLine()).as("vortex output ended before oracle at line %d", lineNum + 1).isNull();
+            assertFilesMatch(r, o);
         }
     }
 

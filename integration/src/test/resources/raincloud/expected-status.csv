@@ -23,12 +23,12 @@ basketball,untriaged
 behavioral-risk-factor-surveillance-system,ok
 beir-msmarco,untriaged
 bi-arade,ok
-bi-bimbo,untriaged
+bi-bimbo,ok
 bi-citymaxcapita,ok
 bi-cmsprovider,untriaged
 bi-commongovernment,untriaged
 bi-corporations,ok
-bi-eixo,untriaged
+bi-eixo,ok
 bi-euro2016,ok
 bi-food,ok
 bi-generico,untriaged
@@ -39,8 +39,8 @@ bi-iglocations2,untriaged
 bi-iublibrary,ok
 bi-medicare1,untriaged
 bi-medicare2,untriaged
-bi-medicare3,untriaged
-bi-medpayment1,untriaged
+bi-medicare3,ok
+bi-medpayment1,ok
 bi-medpayment2,untriaged
 bi-mlb,untriaged
 bi-motos,untriaged
