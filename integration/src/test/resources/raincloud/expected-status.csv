@@ -223,14 +223,14 @@ uci-online-retail,ok
 uci-online-retail-ii,ok
 uci-online-shoppers-purchasing-intention,ok
 uci-optical-recognition-of-handwritten-digits,ok
-uci-parkinsons,gap:256
+uci-parkinsons,ok
 uci-phishing-websites,ok
 uci-predict-students-dropout-and-academic-success,ok
 uci-real-estate-valuation-data-set,ok
 uci-seeds,ok
 uci-seoul-bike-sharing-demand,ok
 uci-sms-spam-collection,ok
-uci-spambase,gap:256
+uci-spambase,ok
 uci-statlog-german-credit-data,ok
 uci-student-performance,ok
 uci-thyroid-disease,ok

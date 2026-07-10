@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Parquet files with duplicate column names now compare correctly. The oracle header de-duplicates names with the Rust Vortex writer's algorithm (first occurrence unmodified, Nth repetition gets ` [N]` suffix) and all row access uses column index rather than name. ([#256](https://github.com/dfa1/vortex-java/issues/256))
 - Blank column names are now accepted on both the read and write paths. The Rust reference legitimately produces them (e.g. `uci-electricityloaddiagrams20112014` has one at field index 0). `ColumnName` now enforces a symmetric policy: non-null and free of control characters (`\n`, `\t`, U+0000, …); blank names such as `""` or `" "` pass through on both paths. ([#255](https://github.com/dfa1/vortex-java/issues/255))
 - `VarBinArray.DictMode` reads dict-value offsets in a ptype-uniform loop: the I32 fast path eliminates the per-row `switch(dictValOffPType)` that blocked C2 vectorization (introduced by #215). ([#243](https://github.com/dfa1/vortex-java/issues/243))
 - `ConstantEncodingDecoder` now returns `NullArray` for null-scalar constants (proto `null_value` tag); previously decoded as `0`/`false`, silently corrupting nullable columns that the Rust writer encodes as an all-null constant. ([#246](https://github.com/dfa1/vortex-java/issues/246))

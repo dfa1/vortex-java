@@ -21,7 +21,9 @@ import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -204,7 +206,16 @@ class RaincloudConformanceIntegrationTest {
              CsvWriter csv = CsvWriter.builder().fieldSeparator(',').build(out)) {
 
             List<ColumnSchema> cols = pfr.getFileSchema().getColumns();
-            csv.writeRecord(cols.stream().map(ColumnSchema::name).toList());
+            // De-duplicate duplicate column names with the Rust Vortex writer's algorithm:
+            // the Nth (N >= 1) occurrence of a base name gets a " [N]" suffix, matching
+            // the de-duplicated names in the Vortex file (#256).
+            Map<String, Integer> seen = new LinkedHashMap<>();
+            List<String> header = new ArrayList<>(cols.size());
+            for (ColumnSchema col : cols) {
+                int count = seen.merge(col.name(), 1, Integer::sum) - 1;
+                header.add(count == 0 ? col.name() : col.name() + " [" + count + "]");
+            }
+            csv.writeRecord(header);
 
             String[] row = new String[cols.size()];
             while (rows.hasNext()) {
@@ -221,6 +232,9 @@ class RaincloudConformanceIntegrationTest {
     /// null rows export as an empty field, valid rows use the JDK canonical
     /// `toString` of the value.
     ///
+    /// Row access uses column index rather than name so that files with duplicate
+    /// column names (#256) read the right column.
+    ///
     /// INT32/INT64 columns with a `UINT_32`/`UINT_64` logical-type annotation are treated
     /// as unsigned so their string representation matches the U32/U64 Vortex columns that
     /// carry the same bits (#253).
@@ -229,22 +243,22 @@ class RaincloudConformanceIntegrationTest {
     /// @param rows the row reader positioned at the current row
     /// @return the formatted cell string
     private static String oracleCell(ColumnSchema col, RowReader rows) {
-        String name = col.name();
-        if (col.repetitionType() == RepetitionType.OPTIONAL && rows.isNull(name)) {
+        int idx = col.columnIndex();
+        if (col.repetitionType() == RepetitionType.OPTIONAL && rows.isNull(idx)) {
             return "";
         }
         boolean unsignedInt = col.logicalType() instanceof LogicalType.IntType lt && !lt.isSigned();
         return switch (col.type()) {
-            case INT32 -> unsignedInt ? Integer.toUnsignedString(rows.getInt(name)) : Integer.toString(rows.getInt(name));
-            case INT64 -> unsignedInt ? Long.toUnsignedString(rows.getLong(name)) : Long.toString(rows.getLong(name));
-            case FLOAT -> Float.toString(rows.getFloat(name));
-            case DOUBLE -> Double.toString(rows.getDouble(name));
-            case BOOLEAN -> Boolean.toString(rows.getBoolean(name));
-            case BYTE_ARRAY -> rows.getString(name);
+            case INT32 -> unsignedInt ? Integer.toUnsignedString(rows.getInt(idx)) : Integer.toString(rows.getInt(idx));
+            case INT64 -> unsignedInt ? Long.toUnsignedString(rows.getLong(idx)) : Long.toString(rows.getLong(idx));
+            case FLOAT -> Float.toString(rows.getFloat(idx));
+            case DOUBLE -> Double.toString(rows.getDouble(idx));
+            case BOOLEAN -> Boolean.toString(rows.getBoolean(idx));
+            case BYTE_ARRAY -> rows.getString(idx);
             // aborts (not fails) the slug: the oracle can't format this physical type
             // yet, which is an oracle limitation rather than a vortex-java gap
             default -> throw new TestAbortedException(
-                    "oracle cannot format parquet type " + col.type() + " (column: " + name + ")");
+                    "oracle cannot format parquet type " + col.type() + " (column: " + col.name() + ")");
         };
     }
 
