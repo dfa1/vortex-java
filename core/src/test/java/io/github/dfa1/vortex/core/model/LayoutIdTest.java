@@ -70,6 +70,15 @@ class LayoutIdTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("FLAT");
         }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"a\nb", "tab\there"})
+        void custom_controlCharId_throwsIllegalArgumentException(String id) {
+            // Given / When / Then — a control char would write a file PostscriptParser crashes on,
+            // so Custom rejects it just as ColumnName does
+            assertThatThrownBy(() -> new LayoutId.Custom(id))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
     }
 
     @Nested

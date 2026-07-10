@@ -140,19 +140,28 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
 
     /// A third-party encoding id whose wire string is not part of the [WellKnown] set.
     ///
-    /// @param id the wire string of this encoding id; must be non-blank and must not collide
-    ///           with a [WellKnown] wire string
+    /// @param id the wire string of this encoding id; must be non-blank, free of ISO control
+    ///           characters, and must not collide with a [WellKnown] wire string
     record Custom(String id) implements EncodingId {
 
-        /// Validates that `id` is a usable custom encoding id.
+        /// Validates that `id` is a usable custom encoding id. A control character would write a
+        /// file that [io.github.dfa1.vortex.core.error.VortexException]-raising parsers crash on,
+        /// so the same policy as [ColumnName#violation(String)] applies here.
         ///
         /// @param id the wire string of this encoding id
         /// @throws NullPointerException     if `id` is `null`
-        /// @throws IllegalArgumentException if `id` is blank or matches a [WellKnown] wire string
+        /// @throws IllegalArgumentException if `id` is blank, contains an ISO control character, or
+        ///                                  matches a [WellKnown] wire string
         public Custom {
             Objects.requireNonNull(id, "id");
             if (id.isBlank()) {
                 throw new IllegalArgumentException("encoding id must not be blank");
+            }
+            for (int i = 0; i < id.length(); i++) {
+                if (Character.isISOControl(id.charAt(i))) {
+                    throw new IllegalArgumentException(
+                            "encoding id contains control character U+%04X".formatted((int) id.charAt(i)));
+                }
             }
             WellKnown wellKnown = WellKnown.byId(id);
             if (wellKnown != null) {
