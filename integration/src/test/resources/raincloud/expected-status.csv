@@ -208,7 +208,7 @@ uci-default-of-credit-card-clients,ok
 uci-diabetes,ok
 uci-diabetes-130-us-hospitals,ok
 uci-dry-bean-dataset,ok
-uci-electricityloaddiagrams20112014,gap:255
+uci-electricityloaddiagrams20112014,ok
 uci-energy-efficiency,ok
 uci-estimation-of-obesity-levels,ok
 uci-forest-fires,ok

@@ -91,13 +91,24 @@ class DTypeStructBuilderTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "   ", "a\nb", "nul\u0000here"})
-    void field_footgunName_throwsIllegalArgumentException(String name) {
-        // Given the friendly path, which enforces the write-side name policy up front:
-        // blank and control-character names are wire-legal footguns vortex-java refuses to write
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"a\nb", "nul\u0000here"})
+    void field_controlCharName_throwsIllegalArgumentException(String name) {
+        // Given — control characters are rejected; blank names are wire-legal and allowed
         var builder = DType.structBuilder();
         // When / Then
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.field(name, DType.I64))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "   "})
+    void field_blankName_succeeds(String name) {
+        // Given — blank names are wire-legal; the Rust reference produces them
+        // When
+        DType.Struct result = DType.structBuilder().field(name, DType.I64).build();
+
+        // Then
+        org.assertj.core.api.Assertions.assertThat(result.fieldNames())
+                .containsExactly(ColumnName.of(name));
     }
 }

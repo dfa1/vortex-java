@@ -3,28 +3,26 @@ package io.github.dfa1.vortex.core.model;
 import java.util.Objects;
 import java.util.Optional;
 
-/// A column (struct field) name that satisfies vortex-java's name policy: non-blank and free
-/// of control characters.
+/// A non-null typed wrapper around a column (struct field) name, free of control characters.
 ///
-/// The wire format itself accepts almost any UTF-8 string — including `""`, whitespace-only
-/// names, and control characters — but those are footguns this implementation refuses on both
-/// sides of the file boundary (the writer never emits them, the reader rejects files carrying
-/// them). A `ColumnName` certifies at construction that a name passed that policy, so code
-/// holding one never re-validates. Printable names of any shape remain legal: `"$$$$$"`,
-/// names with interior spaces, and emoji all round-trip against the reference implementation.
+/// The wire format accepts almost any UTF-8 string — including `""`, whitespace-only names,
+/// and control characters. vortex-java accepts blank names on both the read and write paths
+/// (the Rust reference produces them and they are wire-legal), but still rejects control
+/// characters because they silently break CSV, JSON, SQL identifiers, and other downstream
+/// consumers. Printable names of any shape remain legal: `""`, `"$$$$$"`, names with interior
+/// spaces, and emoji all round-trip against the reference implementation.
 ///
-/// The policy checks live in [#violation(String)] — the single source of truth used by the
-/// schema builder, the writer, and the file parser (which wraps violations in its own
-/// file-context error).
+/// The policy check lives in [#violation(String)] — the single source of truth used by the
+/// schema builder, the writer, and the file parser.
 ///
-/// @param value the validated name; use it wherever a raw column-name string is required
+/// @param value the validated name; non-null and free of control characters
 public record ColumnName(String value) implements Comparable<ColumnName> {
 
-    /// Validates the name against the policy.
+    /// Validates the name against the policy (non-null, no control characters).
     ///
     /// @param value the column name
     /// @throws NullPointerException     if `value` is `null`
-    /// @throws IllegalArgumentException if the name violates the policy ([#violation(String)])
+    /// @throws IllegalArgumentException if the name contains a control character
     public ColumnName {
         Objects.requireNonNull(value, "value");
         Optional<String> violation = violation(value);
@@ -33,12 +31,12 @@ public record ColumnName(String value) implements Comparable<ColumnName> {
         }
     }
 
-    /// Creates a validated column name.
+    /// Creates a validated column name — identical to the compact constructor.
     ///
     /// @param value the column name
     /// @return the validated [ColumnName]
     /// @throws NullPointerException     if `value` is `null`
-    /// @throws IllegalArgumentException if the name violates the policy ([#violation(String)])
+    /// @throws IllegalArgumentException if the name contains a control character
     public static ColumnName of(String value) {
         return new ColumnName(value);
     }
@@ -51,9 +49,6 @@ public record ColumnName(String value) implements Comparable<ColumnName> {
     /// @param name the raw column name to check (must be non-`null`)
     /// @return the policy violation, or empty if `name` is a valid column name
     public static Optional<String> violation(String name) {
-        if (name.isBlank()) {
-            return Optional.of("blank field name (wire-legal, but a footgun vortex-java refuses to write)");
-        }
         for (int i = 0; i < name.length(); i++) {
             if (Character.isISOControl(name.charAt(i))) {
                 return Optional.of("field name contains control character U+%04X"

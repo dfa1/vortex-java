@@ -117,10 +117,10 @@ class VortexWriterTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "   ", "a\nb", "tab\there"})
-    void schema_footgunFieldName_isUnbuildable(String name) {
-        // Given a blank or control-character field name — wire-legal footguns. With ColumnName-
-        // typed fieldNames the schema can't hold one; the write-side strictness is now structural.
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"a\nb", "tab\there"})
+    void schema_controlCharFieldName_isUnbuildable(String name) {
+        // Given a control-character field name — rejected by ColumnName on both read and write.
+        // Blank names are wire-legal and accepted; only control chars break downstream consumers.
         // When / Then
         assertThatThrownBy(() -> new DType.Struct(
                 List.of(ColumnName.of(name)),

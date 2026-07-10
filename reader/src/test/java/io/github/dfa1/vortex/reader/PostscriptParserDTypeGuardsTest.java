@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.fbs.FbsDType;
@@ -14,15 +16,19 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Drives the struct-dtype guards in `PostscriptParser.convertDType` with crafted dtype
 /// FlatBuffers through the package-private [PostscriptParser#parseBlobs] — no file needed.
 ///
-/// Both inputs are files the reference writer refuses to produce ("StructLayout must have
-/// unique field names") or that no writer produces at all (names/dtypes arity desync), so they
-/// only arrive crafted or corrupt — and untrusted input must fail as [VortexException], never
-/// flow into the name-keyed Chunk maps where a duplicate silently drops a column.
+/// The duplicate-name and arity-desync inputs are files the reference writer refuses to produce
+/// ("StructLayout must have unique field names") or that no writer produces at all, so they only
+/// arrive crafted or corrupt — untrusted input must fail as [VortexException], never flow into
+/// the name-keyed Chunk maps where a duplicate silently drops a column. Blank names are
+/// wire-legal and accepted on both read and write paths. Control characters are rejected on
+/// both paths (they break CSV/JSON/SQL downstream); the read path wraps the error as a
+/// [VortexException] with field-index context rather than leaking a raw IllegalArgumentException.
 class PostscriptParserDTypeGuardsTest {
 
     @Test
@@ -53,24 +59,27 @@ class PostscriptParserDTypeGuardsTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "   "})
-    void convertDType_blankFieldName_throwsVortexException(String name) {
-        // Given — a file schema carrying a blank field name (wire-legal; the Rust writer can
-        // produce it) — rejected by policy with a message pointing at the producing pipeline
+    void convertDType_blankFieldName_isAccepted(String name) {
+        // Given — a file schema carrying a blank field name (wire-legal; the reference
+        // implementation produces it, e.g. an empty name at field index 0 in
+        // uci-electricityloaddiagrams20112014). The read path must not reject it (#255).
         MemorySegment dtype = structDType(new String[]{name}, 1);
 
-        // When / Then — footer/layout fixtures hoisted so only the subject call is in the lambda
+        // When
         MemorySegment footer = minimalFooter();
         MemorySegment layout = flatLayout();
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
-                .isInstanceOf(VortexException.class)
-                .hasMessageContaining("invalid field name in file schema")
-                .hasMessageContaining("blank field name");
+        PostscriptParser.ParsedFile result = PostscriptParser.parseBlobs(footer, layout, dtype);
+
+        // Then — the blank name round-trips into the parsed struct dtype verbatim
+        assertThat(result.dtype()).isInstanceOfSatisfying(DType.Struct.class, struct ->
+                assertThat(struct.fieldNames()).containsExactly(new ColumnName(name)));
     }
 
     @Test
     void convertDType_controlCharacterFieldName_throwsVortexException() {
-        // Given — a newline inside a file schema's field name: wire-legal, but it poisons
-        // SQL/CSV/log renderings downstream, so the reader rejects it like the writer does
+        // Given — control characters in column names break downstream consumers (CSV/JSON/SQL);
+        // ColumnName rejects them on both the read and write paths. The read path wraps the
+        // rejection as VortexException with field-index context (#255).
         MemorySegment dtype = structDType(new String[]{"a\nb"}, 1);
 
         // When / Then — footer/layout fixtures hoisted so only the subject call is in the lambda
@@ -78,7 +87,7 @@ class PostscriptParserDTypeGuardsTest {
         MemorySegment layout = flatLayout();
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("control character U+000A");
+                .hasMessageContaining("U+000A");
     }
 
     @Test

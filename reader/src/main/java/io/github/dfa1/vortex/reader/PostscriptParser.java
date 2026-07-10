@@ -278,18 +278,16 @@ final class PostscriptParser {
                         // file, and the name-keyed Chunk API would silently drop a column.
                         throw new VortexException("duplicate field name in file schema: " + name);
                     }
-                    // Same strict name policy as the write side (ColumnName is the single
-                    // source of truth): blank and control-character names are wire-legal but
-                    // almost certainly a bug in the producing pipeline — reject with a message
-                    // that says so rather than propagate unusable names into name-keyed APIs
-                    // and SQL identifiers.
+                    // Blank names are wire-legal and produced by the Rust reference (e.g. an
+                    // empty name at field index 0); ColumnName accepts them. Control characters
+                    // are rejected on both the read and write paths — wrap as VortexException
+                    // here so the caller sees file context rather than a raw IllegalArgumentException.
                     final int fieldIndex = i;
                     io.github.dfa1.vortex.core.model.ColumnName.violation(name).ifPresent(reason -> {
-                        throw new VortexException("invalid field name in file schema (field index "
-                                + fieldIndex + "): " + reason
-                                + " — likely a bug in the pipeline that produced this file");
+                        throw new io.github.dfa1.vortex.core.error.VortexException(
+                                "invalid field name at field index " + fieldIndex + " in file schema: " + reason);
                     });
-                    names.add(io.github.dfa1.vortex.core.model.ColumnName.of(name));
+                    names.add(new io.github.dfa1.vortex.core.model.ColumnName(name));
                 }
                 for (int i = 0; i < s.dtypesLength(); i++) {
                     types.add(convertDType(s.dtypes(i), depth + 1));

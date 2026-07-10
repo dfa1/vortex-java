@@ -164,17 +164,15 @@ public sealed interface DType
 
         /// Adds a named field to the struct under construction.
         ///
-        /// Field names follow the [ColumnName] policy, stricter than the wire format on
-        /// purpose: blank names and control characters are rejected as footguns, on both the
-        /// write and the read side — same spirit as a JSON library refusing a `""` key it
-        /// could technically parse.
+        /// Delegates to [ColumnName#of(String)], which enforces the policy: names must be
+        /// non-null and free of control characters. Blank names are wire-legal and accepted.
         ///
-        /// @param name the field name; non-`null`, non-blank, no control characters, not
-        ///             previously added
+        /// @param name the field name; non-`null`, no control characters, not previously added
         /// @param type the field type
         /// @return this builder
-        /// @throws IllegalArgumentException if `name` is blank, contains a control character,
-        ///         or duplicates a previously added field
+        /// @throws NullPointerException      if `name` is `null`
+        /// @throws IllegalArgumentException  if `name` contains a control character or duplicates
+        ///                                   a previously added field
         public StructBuilder field(String name, DType type) {
             return field(ColumnName.of(name), type);
         }
