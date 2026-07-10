@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `fbs-gen` strips trailing `_` from schema names when generating Java class names (`table Struct_` → `FbsStruct`, `table Bool_` → `FbsBool`); the upstream FlatBuffers schema uses `_` to avoid C++ reserved-name conflicts, which should not appear in Java. The runtime inline-struct base class is renamed `FbsMemorySegment`; `FbsStruct` is now the generated class for the `Struct_` schema table. ([84c912fe](https://github.com/dfa1/vortex-java/commit/84c912fe))
 - `ReadRegistry` and `WriteRegistry` are now builder-only (no `ServiceLoader`), matching `LayoutRegistry`. `registerServiceLoaded()` is replaced by `registerDefaults()`, which registers all built-in encoders/decoders explicitly; `loadAll()` is unchanged. `ReadRegistry.decoderMap()` is added. Custom encodings register via `register(...)` on the builder instead of a `META-INF/services` file. ([#255](https://github.com/dfa1/vortex-java/issues/255))
 
 ### Fixed

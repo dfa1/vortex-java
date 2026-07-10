@@ -17,7 +17,7 @@ import java.lang.foreign.ValueLayout;
 /// directly at `position + fieldOffset`.
 ///
 /// Package-private: only the generated struct accessors in this package extend it.
-class FbsInlineStruct {
+class FbsMemorySegment {
 
     /// The backing buffer.
     protected MemorySegment seg;
@@ -26,7 +26,7 @@ class FbsInlineStruct {
     protected long pos;
 
     /// Creates an unpositioned cursor; call [#init(MemorySegment, long)] before use.
-    protected FbsInlineStruct() {
+    protected FbsMemorySegment() {
     }
 
     /// Positions this cursor at a struct.

@@ -7,7 +7,7 @@ import javax.annotation.processing.Generated;
 
 /// Reader and builder for the `SegmentSpec` FlatBuffers struct (inline, 16 bytes).
 @Generated("io.github.dfa1.vortex.fbsgen.CodeGen")
-public final class FbsSegmentSpec extends FbsInlineStruct {
+public final class FbsSegmentSpec extends FbsMemorySegment {
 
     /// Positions this reader at a struct.
     /// @param seg the buffer

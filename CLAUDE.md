@@ -77,9 +77,9 @@ Regenerate after editing `.fbs`/`.proto` (both generators are in-house, no exter
 Both schema languages are compiled in-process to MemorySegment-native Java, with no
 `flatc`/`protoc` and no `com.google.flatbuffers`/`protobuf-java` runtime (ADR 0017):
 - **`.fbs` → `fbs-gen`** (`io.github.dfa1.vortex.fbsgen`): generates readers extending
-  `FbsTable` (vtable-based) or `FbsInlineStruct` (fixed-offset inline) and builders over
+  `FbsTable` (vtable-based) or `FbsMemorySegment` (fixed-offset inline) and builders over
   `FbsBuilder`, all in the same generated package `io.github.dfa1.vortex.core.fbs`. The
-  runtime base classes `FbsTable`/`FbsInlineStruct` are package-private (only generated
+  runtime base classes `FbsTable`/`FbsMemorySegment` are package-private (only generated
   readers extend them); `FbsBuilder` is public because the writer module assembles FlatBuffers
   with it. Schema names with a trailing `_` (e.g. `Struct_`) have the underscore stripped in
   the generated Java class name (`FbsStruct`) — the upstream uses `_` to avoid C++ conflicts,

@@ -110,11 +110,14 @@ class RaincloudConformanceIntegrationTest {
         try {
             assertMatchesParquetOracle(vortex, parquet);
         } catch (TestAbortedException e) {
+            System.out.println("TRIAGE " + vortex + " => ABORTED " + e.getMessage());
             throw e; // oracle limitation, not a conformance outcome
         } catch (AssertionError | Exception e) {
+            System.out.println("TRIAGE " + vortex + " => FAILS " + e.getMessage());
             throw new TestAbortedException(
                     "untriaged slug fails — classify as gap:<issue> in expected-status.csv: " + e);
         }
+        System.out.println("TRIAGE " + vortex + " => OK");
         throw new TestAbortedException("untriaged slug passes — flip its matrix entry to ok");
     }
 
