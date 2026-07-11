@@ -12,8 +12,10 @@ import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.ListArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
@@ -774,6 +776,24 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     slicedFields.add(sliceArray(s.field(i), offset, length, sd.fieldTypes().get(i)));
                 }
                 yield new StructArray(sd, length, slicedFields);
+            }
+            case ListArray a -> {
+                // Offsets store absolute positions into the shared elements array, so only the
+                // offsets sub-range needs slicing (length+1 entries for the window's row
+                // boundaries); elements stay shared unchanged, same as ListArray#limited.
+                DType.List ld = (DType.List) dtype;
+                Array offsetsSlice = sliceArray(a.offsets(), offset, length + 1, a.offsets().dtype());
+                yield new ListArray(ld, length, a.elements(), offsetsSlice);
+            }
+            case FixedSizeListArray a -> {
+                // Unlike ListArray, element position is computed from the local row index
+                // (row * fixedSize), so the elements sub-range itself must be sliced to the
+                // window's absolute position rather than shared unchanged.
+                DType.FixedSizeList fd = (DType.FixedSizeList) dtype;
+                int fixedSize = a.fixedSize();
+                Array elementsSlice = sliceArray(a.elements(), offset * (long) fixedSize,
+                        length * (long) fixedSize, fd.elementType());
+                yield new FixedSizeListArray(fd, length, elementsSlice);
             }
             default -> throw new VortexException(
                     "scan: cannot slice shared array of type " + full.getClass().getSimpleName());

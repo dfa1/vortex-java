@@ -62,12 +62,18 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
 `untriaged` runs and reports without failing the build). A scheduled workflow
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
-40 `ok`, 0 known gaps; 207 slugs untriaged. Every gap found so far is fixed
+117 `ok`, 0 known gaps; 130 slugs untriaged. Every gap found so far is fixed
 ([#206](https://github.com/dfa1/vortex-java/issues/206)–[#211](https://github.com/dfa1/vortex-java/issues/211),
 [#215](https://github.com/dfa1/vortex-java/issues/215)–[#217](https://github.com/dfa1/vortex-java/issues/217),
 [#221](https://github.com/dfa1/vortex-java/issues/221),
 [#225](https://github.com/dfa1/vortex-java/issues/225) RunEnd run-values validity,
-[#226](https://github.com/dfa1/vortex-java/issues/226) Sparse null fill / nullable patches).
+[#226](https://github.com/dfa1/vortex-java/issues/226) Sparse null fill / nullable patches,
+[#257](https://github.com/dfa1/vortex-java/issues/257) CsvExporter FixedSizeList/List support,
+[#259](https://github.com/dfa1/vortex-java/issues/259) conformance-test pipe deadlock,
+[#261](https://github.com/dfa1/vortex-java/issues/261) oracle repeated/list column support, plus
+two bugs the widened oracle then caught: `CsvExporter` list offsets assumed I32/I64 only (any
+integer width is wire-legal, mirroring `VarBinArray`), and `ScanIterator` could not slice a shared
+`ListArray`/`FixedSizeListArray` spanning several split windows).
 
 ## Encodings
 

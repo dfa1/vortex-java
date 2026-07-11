@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Nullable Utf8/Binary columns are now compressed through the full cascade instead of stored as raw `vortex.varbin`. `MaskedEncodingEncoder` previously encoded its non-null values with a fixed first-match encoder (primitive/varbin), so a nullable low-cardinality string column never reached Dict or FSST — producing files 10–47× larger than the Rust reference on the string-heavy Raincloud corpus (e.g. `uci-mushroom` 22×, `uci-online-retail-ii` 25×). The masked values now run through the same `CascadingCompressor` as dense columns, dropping those ratios to ~2–3×. ([#258](https://github.com/dfa1/vortex-java/issues/258))
+- `ScanIterator` can now slice a shared `ListArray`/`FixedSizeListArray` whose covering flat chunk spans several scan windows (misaligned per-column chunk grids). Previously any scan over such a column threw `VortexException("scan: cannot slice shared array of type ...")` — a real reading gap, not only an export-side one. ([#265](https://github.com/dfa1/vortex-java/issues/265))
+- `CsvExporter` now reads `vortex.list` offsets of any integer width (`I8`/`U8`/`I16`/`U16`, matching `VarBinArray`'s offsets), not only `I32`/`I64`. A narrower-offset list column (e.g. Raincloud's `osm-germany-relations`, whose offsets are `I16`) previously threw `VortexException("unexpected list offsets type: ...")` on export. ([#263](https://github.com/dfa1/vortex-java/issues/263))
 
 ## [0.12.2] — 2026-07-10
 
