@@ -13,6 +13,8 @@ import io.github.dfa1.vortex.csv.ExportOptions;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.opentest4j.TestAbortedException;
 
 import java.io.BufferedReader;
@@ -65,6 +67,7 @@ class RaincloudConformanceIntegrationTest {
     }
 
     @TestFactory
+    @Execution(ExecutionMode.CONCURRENT)
     Stream<DynamicTest> conformancePerSlug() throws IOException {
         Path manifest = manifestPath();
         if (!Files.exists(manifest)) {
@@ -128,12 +131,12 @@ class RaincloudConformanceIntegrationTest {
                 Thread.currentThread().interrupt();
             }
 
-            // Propagate in priority order: mismatch > decode gap > oracle abort
+            // Propagate in priority order: decode gap > oracle abort > mismatch.
+            // Oracle abort ranks above mismatch because a spurious AssertionError("oracle ended
+            // before vortex output") is produced whenever the oracle aborts before writing all
+            // rows — that is an oracle limitation, not a conformance failure.
             Throwable oe = oracleError.get();
             Throwable ve = vortexError.get();
-            if (mainError instanceof AssertionError e) {
-                throw e;
-            }
             if (ve instanceof VortexException e) {
                 throw e;
             }
@@ -141,6 +144,9 @@ class RaincloudConformanceIntegrationTest {
                 throw e;
             }
             if (oe instanceof TestAbortedException e) {
+                throw e;
+            }
+            if (mainError instanceof AssertionError e) {
                 throw e;
             }
             if (oe != null) {
@@ -281,14 +287,26 @@ class RaincloudConformanceIntegrationTest {
              CsvWriter csv = CsvWriter.builder().fieldSeparator(',').build(out)) {
 
             List<ColumnSchema> cols = pfr.getFileSchema().getColumns();
+            // Abort before writing anything if the schema has repeated (list/map) columns.
+            // Such columns cannot be read as scalar values, and leaving the oracle running
+            // would create a header-column-count mismatch that would deadlock the pipe.
+            for (ColumnSchema col : cols) {
+                if (col.maxRepetitionLevel() > 0) {
+                    throw new TestAbortedException(
+                            "oracle cannot format repeated list column: " + col.fieldPath().topLevelName());
+                }
+            }
             // De-duplicate duplicate column names with the Rust Vortex writer's algorithm:
             // the Nth (N >= 1) occurrence of a base name gets a " [N]" suffix, matching
             // the de-duplicated names in the Vortex file (#256).
+            // Use the top-level logical name (e.g. "vector") rather than the leaf name
+            // (e.g. "element" inside a LIST group) so the header matches the Vortex column name.
             Map<String, Integer> seen = new LinkedHashMap<>();
             List<String> header = new ArrayList<>(cols.size());
             for (ColumnSchema col : cols) {
-                int count = seen.merge(col.name(), 1, Integer::sum) - 1;
-                header.add(count == 0 ? col.name() : col.name() + " [" + count + "]");
+                String logicalName = col.fieldPath().topLevelName();
+                int count = seen.merge(logicalName, 1, Integer::sum) - 1;
+                header.add(count == 0 ? logicalName : logicalName + " [" + count + "]");
             }
             csv.writeRecord(header);
 
@@ -319,6 +337,12 @@ class RaincloudConformanceIntegrationTest {
     /// @return the formatted cell string
     private static String oracleCell(ColumnSchema col, RowReader rows) {
         int idx = col.columnIndex();
+        // Repeated list columns (maxRepetitionLevel > 0) cannot be read as a single scalar value.
+        // Abort rather than silently reading only the first element.
+        if (col.maxRepetitionLevel() > 0) {
+            throw new TestAbortedException(
+                    "oracle cannot format repeated list column: " + col.fieldPath().topLevelName());
+        }
         if (col.repetitionType() == RepetitionType.OPTIONAL && rows.isNull(idx)) {
             return "";
         }
