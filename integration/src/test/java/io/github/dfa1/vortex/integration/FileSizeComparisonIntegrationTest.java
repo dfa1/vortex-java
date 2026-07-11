@@ -343,6 +343,84 @@ class FileSizeComparisonIntegrationTest {
     }
 
     @Test
+    void nullableLowCardinalityUtf8_javaVsJni(@TempDir Path tmp) throws IOException {
+        // Given — 50k rows of a nullable low-cardinality Utf8 column (8 distinct short strings,
+        // ~10% nulls), mirroring the Raincloud string-heavy corpus (e.g. uci-mushroom). Before
+        // #258 the masked (nullable) path stored the values as raw VarBin — never reaching the
+        // cascade — so the Java file ran 10-47x larger than Rust. Dict must now win on the inner
+        // values, keeping the file small.
+        int n = 50_000;
+        String[] categories = {"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"};
+        String[] data = new String[n];
+        java.util.Random rng = new java.util.Random(42);
+        for (int i = 0; i < n; i++) {
+            // Every 10th row is null — exercises the vortex.masked validity wrapper.
+            data[i] = (i % 10 == 0) ? null : categories[rng.nextInt(categories.length)];
+        }
+        DType.Struct javaSchema = new DType.Struct(
+                List.of(ColumnName.of("s")), List.of(DType.UTF8.withNullable(true)), false);
+        Schema jniSchema = new Schema(List.of(
+                Field.nullable("s", new ArrowType.Utf8())));
+
+        // When
+        Path javaFile = tmp.resolve("nullable-lowcard-java.vtx");
+        try (FileChannel ch = FileChannel.open(javaFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(
+                     ch, javaSchema, WriteOptions.cascading(3).withGlobalDict(false))) {
+            writer.writeChunk(Map.of(ColumnName.of("s"), data));
+        }
+
+        Path jniFile = tmp.resolve("nullable-lowcard-jni.vtx");
+        String jniUri = jniFile.toAbsolutePath().toUri().toString();
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
+                SESSION, jniUri, jniSchema, new HashMap<>(), ALLOCATOR);
+             VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
+            VarCharVector vec = (VarCharVector) root.getVector("s");
+            vec.allocateNew();
+            for (int i = 0; i < n; i++) {
+                if (data[i] == null) {
+                    vec.setNull(i);
+                } else {
+                    vec.setSafe(i, data[i].getBytes(StandardCharsets.UTF_8));
+                }
+            }
+            root.setRowCount(n);
+            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+            }
+        }
+
+        long javaSize = Files.size(javaFile);
+        long jniSize = Files.size(jniFile);
+        long rawBytes = (long) n * 5;
+        System.out.printf(
+                "[NullableLowCardUtf8] %,d rows  raw=%,d bytes  JNI=%,d bytes  Java=%,d bytes  Java/JNI=%.2fx  Java/raw=%.2fx%n",
+                n, rawBytes, jniSize, javaSize,
+                (double) javaSize / jniSize, (double) javaSize / rawBytes);
+
+        // Then — Java stays well under raw storage: the cascade dict-encodes the masked values
+        // instead of falling through to raw VarBin (the #258 regression, which ran ~20x raw).
+        assertThat(javaSize).as("dict-encoded masked values must beat raw VarBin storage")
+                .isLessThan(rawBytes);
+
+        // Then — Java within 4x of JNI. Rust's per-column dict + tighter chunk layout is still
+        // smaller; the guard's purpose is to catch a regression back to the raw-VarBin masked path.
+        assertThat((double) javaSize / jniSize)
+                .as("nullable low-cardinality Utf8 must not regress to the raw-VarBin masked path")
+                .isLessThan(4.0);
+
+        // Then — Java file is readable, row count and null positions preserved
+        var totalRows = new java.util.concurrent.atomic.AtomicLong();
+        try (VortexReader reader = VortexReader.open(javaFile, ReadRegistry.loadAll());
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
+        }
+        assertThat(totalRows.get()).isEqualTo(n);
+    }
+
+    @Test
     void highCardinalityUtf8_javaVsJni(@TempDir Path tmp) throws IOException {
         // Given — 50k all-distinct short strings. Dict would emit 2-byte codes per row
         // plus the full string table; FSST is the right pick. Validates that the

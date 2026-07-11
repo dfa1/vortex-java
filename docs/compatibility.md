@@ -95,7 +95,7 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 | `vortex.listview`           | `ListViewEncodingDecoder`        | `ListViewEncodingEncoder`        | ✅      | ✅      |                                                                       |
 | `vortex.fixed_size_list`    | `FixedSizeListEncodingDecoder`   | `FixedSizeListEncodingEncoder`   | ✅      | ✅      |                                                                       |
 | `vortex.zstd`               | `ZstdEncodingDecoder`            | `ZstdEncodingEncoder`            | ✅      | ✅      | Primitive, Utf8, Binary                                               |
-| `vortex.masked`             | `MaskedEncodingDecoder`          | `MaskedEncodingEncoder`          | ✅      | ✅      | NullableData carrier; inner picks Primitive / VarBin / FixedSizeList   |
+| `vortex.masked`             | `MaskedEncodingDecoder`          | `MaskedEncodingEncoder`          | ✅      | ✅      | NullableData carrier; inner values cascade (Dict/FSST/ALP/…) when cascading is enabled, else first-match Primitive / VarBin / FixedSizeList |
 | `vortex.decimal`            | `DecimalEncodingDecoder`         | `DecimalEncodingEncoder`         | ✅      | ✅      |                                                                       |
 | `vortex.decimal_byte_parts` | `DecimalBytePartsEncodingDecoder`| `DecimalBytePartsEncodingEncoder`| ✅      | ✅      |                                                                       |
 | `vortex.datetimeparts`      | `DateTimePartsEncodingDecoder`   | `DateTimePartsEncodingEncoder`   | ✅      | ✅      |                                                                       |

@@ -5,6 +5,12 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Nullable Utf8/Binary columns are now compressed through the full cascade instead of stored as raw `vortex.varbin`. `MaskedEncodingEncoder` previously encoded its non-null values with a fixed first-match encoder (primitive/varbin), so a nullable low-cardinality string column never reached Dict or FSST — producing files 10–47× larger than the Rust reference on the string-heavy Raincloud corpus (e.g. `uci-mushroom` 22×, `uci-online-retail-ii` 25×). The masked values now run through the same `CascadingCompressor` as dense columns, dropping those ratios to ~2–3×. ([#258](https://github.com/dfa1/vortex-java/issues/258))
+
 ## [0.12.2] — 2026-07-10
 
 **Registry cleanup and schema fidelity** are the two themes of this release. `ReadRegistry` and

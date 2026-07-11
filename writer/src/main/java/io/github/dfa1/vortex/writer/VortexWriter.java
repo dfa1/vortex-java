@@ -558,7 +558,14 @@ public final class VortexWriter implements Closeable {
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
             if (encodingOverride != null) {
-                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry);
+                // Give overrides the cascade registry + depth when cascading is enabled, so
+                // wrapping encoders (notably MaskedEncodingEncoder for nullable columns) can
+                // compress their inner values through the full CascadingCompressor rather than a
+                // fixed first-match encoder. Without cascading, a depth-0 context is passed and the
+                // override behaves as before.
+                EncodeContext encodeCtx = options.allowedCascading() > 0
+                        ? EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry)
+                        : EncodeContext.of(arena, defaultRegistry);
                 result = encodingOverride.encode(dtype, data, encodeCtx);
             } else if (options.allowedCascading() > 0) {
                 EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry);
