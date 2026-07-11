@@ -18,6 +18,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.opentest4j.TestAbortedException;
 
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.PipedReader;
 import java.io.PipedWriter;
@@ -122,6 +123,14 @@ class RaincloudConformanceIntegrationTest {
                 assertFilesMatch(vortexReader, oracleReader);
             } catch (Throwable t) {
                 mainError = t;
+            } finally {
+                // assertFilesMatch may stop reading early (oracle abort, line mismatch) while a
+                // producer is still writing — closing the read end here, rather than relying on
+                // the outer try-with-resources (which only runs after join() below), unblocks a
+                // producer parked on a full PipedWriter buffer with a "Pipe closed" IOException
+                // instead of hanging join() forever (#259).
+                closeQuietly(vortexReader);
+                closeQuietly(oracleReader);
             }
 
             try {
@@ -170,6 +179,18 @@ class RaincloudConformanceIntegrationTest {
             if (mainError != null) {
                 throw new RuntimeException(mainError);
             }
+        }
+    }
+
+    /// Closes a stream ignoring the outcome, used only to unblock a producer thread
+    /// parked writing to the other end of a pipe before joining it.
+    ///
+    /// @param closeable the stream to close
+    private static void closeQuietly(Closeable closeable) {
+        try {
+            closeable.close();
+        } catch (IOException ignored) {
+            // best effort: only used to unblock a producer thread before join()
         }
     }
 
