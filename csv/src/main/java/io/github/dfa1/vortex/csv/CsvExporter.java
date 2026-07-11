@@ -8,8 +8,10 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.ListArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -153,6 +155,10 @@ public final class CsvExporter {
     /// (or null nested row) becomes a JSON `null`. Only the JSON layer is escaped here; the CSV
     /// writer independently quotes any cell containing the delimiter or a quote character.
     ///
+    /// A fixed-size list column ([FixedSizeListArray]) or variable-length list column ([ListArray]),
+    /// either possibly wrapped in a [MaskedArray] when nullable, renders as a JSON array cell
+    /// `[v0,v1,...]` with elements following the same rules as [#jsonValue(Array, long)].
+    ///
     /// @param arr    the column array to read from
     /// @param rowIdx the zero-based row index within `arr`
     /// @return the rendered cell text
@@ -177,6 +183,12 @@ public final class CsvExporter {
             // Nullable columns decode as MaskedArray: null rows export as an empty field, valid
             // rows defer to the inner values array.
             case MaskedArray ma -> ma.isValid(rowIdx) ? cellValue(ma.inner(), rowIdx) : "";
+            case FixedSizeListArray fla -> jsonArray(fla.elements(), rowIdx * fla.fixedSize(), (rowIdx + 1L) * fla.fixedSize());
+            case ListArray la -> {
+                long start = offsetAt(la.offsets(), rowIdx);
+                long end = offsetAt(la.offsets(), rowIdx + 1);
+                yield jsonArray(la.elements(), start, end);
+            }
             // All-null columns (DType.Null) hold only a row count: every cell is an empty
             // field, same rule as a MaskedArray null row.
             case NullArray ignored -> "";
@@ -215,6 +227,12 @@ public final class CsvExporter {
         return switch (arr) {
             case StructArray sa -> jsonObject(sa, rowIdx);
             case MaskedArray ma -> ma.isValid(rowIdx) ? jsonValue(ma.inner(), rowIdx) : "null";
+            case FixedSizeListArray fla -> jsonArray(fla.elements(), rowIdx * fla.fixedSize(), (rowIdx + 1L) * fla.fixedSize());
+            case ListArray la -> {
+                long start = offsetAt(la.offsets(), rowIdx);
+                long end = offsetAt(la.offsets(), rowIdx + 1);
+                yield jsonArray(la.elements(), start, end);
+            }
             case NullArray ignored -> "null";
             case VarBinArray va -> {
                 StringBuilder sb = new StringBuilder();
@@ -251,6 +269,39 @@ public final class CsvExporter {
             }
         }
         sb.append('"');
+    }
+
+    /// Renders elements `[start, end)` of `elements` as a JSON array `[v0,v1,...]`,
+    /// with each element rendered by [#jsonValue(Array, long)].
+    ///
+    /// @param elements the flat elements array
+    /// @param start    inclusive start index
+    /// @param end      exclusive end index
+    /// @return the rendered JSON array string
+    private static String jsonArray(Array elements, long start, long end) {
+        StringBuilder sb = new StringBuilder("[");
+        for (long i = start; i < end; i++) {
+            if (i > start) {
+                sb.append(',');
+            }
+            sb.append(jsonValue(elements, i));
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    /// Reads offset `idx` from `offsets` as a non-negative long.
+    /// The encoder always writes I64 offsets; I32 is included for forward compatibility.
+    ///
+    /// @param offsets the offsets array
+    /// @param idx     the index to read
+    /// @return the offset value as a non-negative `long`
+    private static long offsetAt(Array offsets, long idx) {
+        return switch (offsets) {
+            case LongArray la -> la.getLong(idx);
+            case IntArray ia -> Integer.toUnsignedLong(ia.getInt(idx));
+            default -> throw new VortexException("unexpected list offsets type: " + offsets.getClass().getSimpleName());
+        };
     }
 
     /// Whether the array's dtype is an unsigned integer, so high-half values must render as

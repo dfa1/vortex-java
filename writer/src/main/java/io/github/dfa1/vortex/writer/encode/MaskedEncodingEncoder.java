@@ -22,7 +22,8 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     private static final List<EncodingEncoder> INNER_FALLBACK = List.of(
             new PrimitiveEncodingEncoder(),
             new VarBinEncodingEncoder(),
-            new FixedSizeListEncodingEncoder());
+            new FixedSizeListEncodingEncoder(),
+            new ListEncodingEncoder());
 
     @Override
     public EncodingId encodingId() {

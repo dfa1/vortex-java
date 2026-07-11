@@ -16,9 +16,11 @@ import java.util.List;
 /// Write-only encoder for `vortex.list`.
 public final class ListEncodingEncoder implements EncodingEncoder {
 
+    // Includes container encoders so nested element types (List[Struct], List[List], List[FixedSizeList]) resolve.
     private static final List<EncodingEncoder> FALLBACK = List.of(
             new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(), new BoolEncodingEncoder(),
-            new NullEncodingEncoder(), new ByteBoolEncodingEncoder());
+            new NullEncodingEncoder(), new ByteBoolEncodingEncoder(), new StructEncodingEncoder(),
+            new FixedSizeListEncodingEncoder(), new ListEncodingEncoder());
 
     @Override
     public EncodingId encodingId() {
@@ -44,8 +46,8 @@ public final class ListEncodingEncoder implements EncodingEncoder {
 
         long nOffsets = ld.outerLen() + 1;
         MemorySegment offsetsBuf = ctx.arena().allocate(nOffsets * Long.BYTES, Long.BYTES);
-        for (int i = 0; i < nOffsets; i++) {
-            offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i, ld.offsets()[i]);
+        for (long i = 0; i < nOffsets; i++) {
+            offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i, ld.offsets()[(int) i]);
         }
         allBuffers.add(offsetsBuf);
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);

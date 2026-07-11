@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
+import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -419,5 +421,104 @@ class CsvExporterTest {
         assertThat(result).containsExactly(
                 "region,data",
                 "north,\"{\"\"name\"\":\"\"origin\"\",\"\"coord\"\":{\"\"lat\"\":1.0,\"\"lon\"\":2.0}}\"");
+    }
+
+    @Test
+    void rendersFixedSizeListColumnAsJsonArray(@TempDir Path tmp) throws Exception {
+        // Given a FixedSizeList[F32, 3] column — the glove vector shape (issue #257);
+        // each row is 3 consecutive floats from the flat elements array.
+        Path vortex = tmp.resolve("fsl.vortex");
+        DType.FixedSizeList vecDtype = new DType.FixedSizeList(DType.F32, 3, false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("label"), ColumnName.of("vec")),
+                List.of(DType.UTF8, vecDtype),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("label"), new String[]{"a", "b"},
+                    ColumnName.of("vec"), new FixedSizeListData(new float[]{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, 2)));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+        List<String> result = Files.readAllLines(csv);
+
+        // Then each row renders as a JSON float array in element order. The CSV layer quotes the
+        // whole cell because the JSON array contains commas.
+        assertThat(result).containsExactly(
+                "label,vec",
+                "a,\"[1.0,2.0,3.0]\"",
+                "b,\"[4.0,5.0,6.0]\"");
+    }
+
+    @Test
+    void rendersListColumnAsJsonArray(@TempDir Path tmp) throws Exception {
+        // Given a List[I64] column with variable-length rows — tests both the offset
+        // reading path and the empty-list edge case (issue #257).
+        Path vortex = tmp.resolve("list.vortex");
+        DType.List listDtype = new DType.List(DType.I64, false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("tag"), ColumnName.of("ids")),
+                List.of(DType.UTF8, listDtype),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("tag"), new String[]{"a", "b", "c"},
+                    ColumnName.of("ids"), new ListData(
+                            new long[]{10L, 20L, 30L},
+                            new long[]{0, 2, 3, 3},   // row 0 → [10,20], row 1 → [30], row 2 → []
+                            3)));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+        List<String> result = Files.readAllLines(csv);
+
+        // Then variable lengths and empty list both render correctly. The CSV layer quotes only the
+        // multi-element cell because its JSON array contains a comma.
+        assertThat(result).containsExactly(
+                "tag,ids",
+                "a,\"[10,20]\"",
+                "b,[30]",
+                "c,[]");
+    }
+
+    @Test
+    void rendersListOfStructsAsJsonArrayOfObjects(@TempDir Path tmp) throws Exception {
+        // Given a List[Struct] column — the osm-germany `members` shape (issue #257);
+        // struct elements inside the list must recurse through jsonValue → jsonObject.
+        Path vortex = tmp.resolve("listofstruct.vortex");
+        DType.Struct memberDtype = new DType.Struct(
+                List.of(ColumnName.of("ref"), ColumnName.of("role")),
+                List.of(DType.I64, DType.UTF8),
+                false);
+        DType.List listDtype = new DType.List(memberDtype, false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("members")),
+                List.of(DType.I64, listDtype),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("id"), new long[]{1L},
+                    ColumnName.of("members"), new ListData(
+                            new StructData(List.of(new long[]{10L, 20L}, new String[]{"", "outer"})),
+                            new long[]{0, 2},
+                            1)));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+        List<String> result = Files.readAllLines(csv);
+
+        // Then each list element renders as a JSON object; the array wraps them
+        assertThat(result).containsExactly(
+                "id,members",
+                "1,\"[{\"\"ref\"\":10,\"\"role\"\":\"\"\"\"},{\"\"ref\"\":20,\"\"role\"\":\"\"outer\"\"}]\"");
     }
 }

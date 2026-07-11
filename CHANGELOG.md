@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `CsvExporter` now renders `FixedSizeList` and `List` columns as JSON array cells (`[v0,v1,...]`), matching the same element-rendering rules used for nested struct fields. Fixes export of Raincloud slugs with vector or list columns (e.g. `glove-*`, `osm-germany-relations`).
+- `VortexWriter` now encodes `vortex.list` columns by default (both flat and cascade paths). Previously only `vortex.fixed_size_list` was registered; `DType.List` columns threw at write time unless a custom registry was supplied.
+
 ### Fixed
 
 - Nullable Utf8/Binary columns are now compressed through the full cascade instead of stored as raw `vortex.varbin`. `MaskedEncodingEncoder` previously encoded its non-null values with a fixed first-match encoder (primitive/varbin), so a nullable low-cardinality string column never reached Dict or FSST — producing files 10–47× larger than the Rust reference on the string-heavy Raincloud corpus (e.g. `uci-mushroom` 22×, `uci-online-retail-ii` 25×). The masked values now run through the same `CascadingCompressor` as dense columns, dropping those ratios to ~2–3×. ([#258](https://github.com/dfa1/vortex-java/issues/258))

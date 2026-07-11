@@ -34,6 +34,7 @@ import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
@@ -101,7 +102,7 @@ public final class VortexWriter implements Closeable {
     private static final List<EncodingEncoder> DEFAULT_CODECS = List.of(
             new AlpEncodingEncoder(), new PrimitiveEncodingEncoder(), new BoolEncodingEncoder(),
             new DictEncodingEncoder(), new VarBinEncodingEncoder(), new ExtEncodingEncoder(),
-            new FixedSizeListEncodingEncoder());
+            new FixedSizeListEncodingEncoder(), new ListEncodingEncoder());
 
     // Base cascade codec list — no Zstd. Zstd is appended (before PrimitiveEncoding) when
     // WriteOptions.enableZstd() is true. See WriteOptions.withZstd(boolean) for the tradeoff.
@@ -187,6 +188,7 @@ public final class VortexWriter implements Closeable {
         codecs.add(new DateTimePartsEncodingEncoder());
         codecs.add(new ExtEncodingEncoder());
         codecs.add(new FixedSizeListEncodingEncoder());
+        codecs.add(new ListEncodingEncoder());
         codecs.add(new ConstantEncodingEncoder());
         codecs.add(new AlpEncodingEncoder());
         codecs.add(new FrameOfReferenceEncodingEncoder());
