@@ -105,9 +105,9 @@ frames-benchmark,untriaged
 ghcn-daily,untriaged
 glass,ok
 global-fossil-co2-emissions-by-country-2002-2022,untriaged
-glove-6b-100d,gap:257
-glove-6b-200d,gap:257
-glove-6b-50d,gap:257
+glove-6b-100d,gap:261
+glove-6b-200d,gap:261
+glove-6b-50d,gap:261
 goodbooks-10k,ok
 google-cluster-trace-2011-machine-events,ok
 green_tripdata_2025,ok
@@ -156,7 +156,7 @@ openlibrary-works,untriaged
 openorca,untriaged
 openpowerlifting,ok
 osm-germany-nodes,untriaged
-osm-germany-relations,gap:257
+osm-germany-relations,gap:261
 osm-germany-ways,untriaged
 osmi-mental-health-in-tech-2016,untriaged
 osmi-mental-health-in-tech-2017,untriaged
