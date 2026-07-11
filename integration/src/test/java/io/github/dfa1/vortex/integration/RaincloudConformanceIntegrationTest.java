@@ -3,10 +3,11 @@ package io.github.dfa1.vortex.integration;
 import de.siegmar.fastcsv.writer.CsvWriter;
 import dev.hardwood.InputFile;
 import dev.hardwood.metadata.LogicalType;
-import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
-import dev.hardwood.schema.ColumnSchema;
+import dev.hardwood.row.PqList;
+import dev.hardwood.row.PqStruct;
+import dev.hardwood.schema.SchemaNode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
@@ -280,7 +281,7 @@ class RaincloudConformanceIntegrationTest {
     }
 
     /// Writes the parquet oracle to a file using the same cell rules as `CsvExporter`.
-    /// An oracle-side failure (nested columns, unsupported physical type) aborts the
+    /// An oracle-side failure (unsupported physical type, MAP column) aborts the
     /// slug via [TestAbortedException] rather than failing it — it says nothing about
     /// vortex-java. An `ok` slug whose parquet cannot be read stops being verified
     /// (visibly, as skipped) — widen the oracle rather than let unverifiable entries
@@ -307,79 +308,170 @@ class RaincloudConformanceIntegrationTest {
              RowReader rows = pfr.rowReader();
              CsvWriter csv = CsvWriter.builder().fieldSeparator(',').build(out)) {
 
-            List<ColumnSchema> cols = pfr.getFileSchema().getColumns();
-            // Abort before writing anything if the schema has repeated (list/map) columns.
-            // Such columns cannot be read as scalar values, and leaving the oracle running
-            // would create a header-column-count mismatch that would deadlock the pipe.
-            for (ColumnSchema col : cols) {
-                if (col.maxRepetitionLevel() > 0) {
-                    throw new TestAbortedException(
-                            "oracle cannot format repeated list column: " + col.fieldPath().topLevelName());
-                }
-            }
+            // One CSV cell per top-level field, mirroring CsvExporter's one-cell-per-Vortex-column
+            // model — not one per leaf column, which for a LIST/STRUCT field would emit multiple
+            // cells for what CsvExporter renders as a single JSON array/object cell (#261).
+            List<SchemaNode> topLevel = pfr.getFileSchema().getRootNode().children();
+
             // De-duplicate duplicate column names with the Rust Vortex writer's algorithm:
             // the Nth (N >= 1) occurrence of a base name gets a " [N]" suffix, matching
             // the de-duplicated names in the Vortex file (#256).
-            // Use the top-level logical name (e.g. "vector") rather than the leaf name
-            // (e.g. "element" inside a LIST group) so the header matches the Vortex column name.
             Map<String, Integer> seen = new LinkedHashMap<>();
-            List<String> header = new ArrayList<>(cols.size());
-            for (ColumnSchema col : cols) {
-                String logicalName = col.fieldPath().topLevelName();
-                int count = seen.merge(logicalName, 1, Integer::sum) - 1;
-                header.add(count == 0 ? logicalName : logicalName + " [" + count + "]");
+            List<String> header = new ArrayList<>(topLevel.size());
+            for (SchemaNode node : topLevel) {
+                int count = seen.merge(node.name(), 1, Integer::sum) - 1;
+                header.add(count == 0 ? node.name() : node.name() + " [" + count + "]");
             }
             csv.writeRecord(header);
 
-            String[] row = new String[cols.size()];
+            String[] row = new String[topLevel.size()];
             while (rows.hasNext()) {
                 rows.next();
-                for (int c = 0; c < cols.size(); c++) {
-                    row[c] = oracleCell(cols.get(c), rows);
+                for (int c = 0; c < topLevel.size(); c++) {
+                    row[c] = oracleCell(topLevel.get(c), rows, c);
                 }
                 csv.writeRecord(row);
             }
         }
     }
 
-    /// Formats a parquet cell with the exact rules of `CsvExporter.cellValue`:
-    /// null rows export as an empty field, valid rows use the JDK canonical
-    /// `toString` of the value.
+    /// Formats one top-level field with the exact rules of `CsvExporter.cellValue`: a null field
+    /// renders as an empty CSV field, a scalar leaf uses the JDK canonical `toString` of the
+    /// value, and a LIST/STRUCT field renders as a JSON array/object cell via
+    /// [#oracleJsonValue(SchemaNode, Object)].
     ///
-    /// Row access uses column index rather than name so that files with duplicate
-    /// column names (#256) read the right column.
+    /// Field access is by index — the field's position among top-level schema children, per
+    /// `dev.hardwood.row.StructAccessor`'s "projected schema order" — rather than by name, so
+    /// that files with duplicate column names (#256) read the right field.
     ///
-    /// INT32/INT64 columns with a `UINT_32`/`UINT_64` logical-type annotation are treated
-    /// as unsigned so their string representation matches the U32/U64 Vortex columns that
-    /// carry the same bits (#253).
+    /// INT32/INT64 leaves with a `UINT_32`/`UINT_64` logical-type annotation are treated as
+    /// unsigned so their string representation matches the U32/U64 Vortex columns that carry the
+    /// same bits (#253); this applies at any nesting depth, not only top-level scalars.
     ///
-    /// @param col  the column schema
-    /// @param rows the row reader positioned at the current row
+    /// @param node       the top-level field's schema node
+    /// @param rows       the row reader positioned at the current row
+    /// @param fieldIndex the field's position among top-level schema children
     /// @return the formatted cell string
-    private static String oracleCell(ColumnSchema col, RowReader rows) {
-        int idx = col.columnIndex();
-        // Repeated list columns (maxRepetitionLevel > 0) cannot be read as a single scalar value.
-        // Abort rather than silently reading only the first element.
-        if (col.maxRepetitionLevel() > 0) {
-            throw new TestAbortedException(
-                    "oracle cannot format repeated list column: " + col.fieldPath().topLevelName());
-        }
-        if (col.repetitionType() == RepetitionType.OPTIONAL && rows.isNull(idx)) {
+    private static String oracleCell(SchemaNode node, RowReader rows, int fieldIndex) {
+        if (rows.isNull(fieldIndex)) {
             return "";
         }
-        boolean unsignedInt = col.logicalType() instanceof LogicalType.IntType lt && !lt.isSigned();
-        return switch (col.type()) {
-            case INT32 -> unsignedInt ? Integer.toUnsignedString(rows.getInt(idx)) : Integer.toString(rows.getInt(idx));
-            case INT64 -> unsignedInt ? Long.toUnsignedString(rows.getLong(idx)) : Long.toString(rows.getLong(idx));
-            case FLOAT -> Float.toString(rows.getFloat(idx));
-            case DOUBLE -> Double.toString(rows.getDouble(idx));
-            case BOOLEAN -> Boolean.toString(rows.getBoolean(idx));
-            case BYTE_ARRAY -> rows.getString(idx);
+        if (node instanceof SchemaNode.GroupNode group) {
+            if (group.isList()) {
+                return oracleJsonArray(group, rows.getList(fieldIndex));
+            }
+            if (group.isMap()) {
+                throw new TestAbortedException("oracle cannot format MAP column: " + group.name());
+            }
+            return oracleJsonObject(group, rows.getStruct(fieldIndex));
+        }
+        SchemaNode.PrimitiveNode prim = (SchemaNode.PrimitiveNode) node;
+        boolean unsignedInt = isUnsignedInt(prim);
+        return switch (prim.type()) {
+            case INT32 -> unsignedInt ? Integer.toUnsignedString(rows.getInt(fieldIndex)) : Integer.toString(rows.getInt(fieldIndex));
+            case INT64 -> unsignedInt ? Long.toUnsignedString(rows.getLong(fieldIndex)) : Long.toString(rows.getLong(fieldIndex));
+            case FLOAT -> Float.toString(rows.getFloat(fieldIndex));
+            case DOUBLE -> Double.toString(rows.getDouble(fieldIndex));
+            case BOOLEAN -> Boolean.toString(rows.getBoolean(fieldIndex));
+            case BYTE_ARRAY -> rows.getString(fieldIndex);
             // aborts (not fails) the slug: the oracle can't format this physical type
             // yet, which is an oracle limitation rather than a vortex-java gap
             default -> throw new TestAbortedException(
-                    "oracle cannot format parquet type " + col.type() + " (column: " + col.name() + ")");
+                    "oracle cannot format parquet type " + prim.type() + " (column: " + prim.name() + ")");
         };
+    }
+
+    /// Renders a nested struct value as a JSON object `{"field":value,...}` with fields in
+    /// schema order, mirroring `CsvExporter.jsonObject`.
+    private static String oracleJsonObject(SchemaNode.GroupNode structNode, PqStruct struct) {
+        List<SchemaNode> fields = structNode.children();
+        StringBuilder sb = new StringBuilder("{");
+        for (int i = 0; i < fields.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            oracleJsonString(sb, fields.get(i).name());
+            sb.append(':').append(oracleJsonValue(fields.get(i), struct.getValue(i)));
+        }
+        return sb.append('}').toString();
+    }
+
+    /// Renders a nested list value as a JSON array `[v0,v1,...]`, mirroring `CsvExporter.jsonArray`.
+    private static String oracleJsonArray(SchemaNode.GroupNode listNode, PqList list) {
+        SchemaNode element = listNode.getListElement();
+        int size = list.size();
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < size; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(oracleJsonValue(element, list.get(i)));
+        }
+        return sb.append(']').toString();
+    }
+
+    /// Renders one decoded struct field / list element as JSON text, mirroring
+    /// `CsvExporter.jsonValue`: a nested object/array for STRUCT/LIST, a quoted escaped string for
+    /// STRING, JSON `null` for a null value, and the bare JDK `toString` for numbers/booleans —
+    /// unsigned for an INT32/INT64 `node` with a `UINT_*` logical-type annotation.
+    ///
+    /// @param node  the value's schema node (its element/field type)
+    /// @param value the decoded value, from [PqStruct#getValue(int)] or [PqList#get(int)]
+    /// @return the rendered JSON text
+    private static String oracleJsonValue(SchemaNode node, Object value) {
+        if (value == null) {
+            return "null";
+        }
+        return switch (value) {
+            case PqStruct struct -> oracleJsonObject((SchemaNode.GroupNode) node, struct);
+            case PqList list -> oracleJsonArray((SchemaNode.GroupNode) node, list);
+            case String s -> {
+                StringBuilder sb = new StringBuilder();
+                oracleJsonString(sb, s);
+                yield sb.toString();
+            }
+            case Integer i -> isUnsignedInt(node) ? Integer.toUnsignedString(i) : Integer.toString(i);
+            case Long l -> isUnsignedInt(node) ? Long.toUnsignedString(l) : Long.toString(l);
+            case Float f -> Float.toString(f);
+            case Double d -> Double.toString(d);
+            case Boolean b -> Boolean.toString(b);
+            default -> throw new TestAbortedException(
+                    "oracle cannot format nested value of type " + value.getClass().getSimpleName());
+        };
+    }
+
+    /// Whether `node` is an INT32/INT64 leaf with a `UINT_*` logical-type annotation (#253):
+    /// `false` for any other node, including `null` (an unresolvable list element schema).
+    private static boolean isUnsignedInt(SchemaNode node) {
+        return node instanceof SchemaNode.PrimitiveNode prim
+                && prim.logicalType() instanceof LogicalType.IntType lt && !lt.isSigned();
+    }
+
+    /// Appends `value` to `sb` as a JSON string literal, mirroring `CsvExporter.jsonString`:
+    /// wrapped in double quotes with `"`, backslash, the standard short escapes, and any other
+    /// control character below `U+0020` escaped as `\\uXXXX`.
+    private static void oracleJsonString(StringBuilder sb, String value) {
+        sb.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                case '\b' -> sb.append("\\b");
+                case '\f' -> sb.append("\\f");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        sb.append('"');
     }
 
     private static Path manifestPath() {

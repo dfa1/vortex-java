@@ -291,7 +291,9 @@ public final class CsvExporter {
     }
 
     /// Reads offset `idx` from `offsets` as a non-negative long.
-    /// The encoder always writes I64 offsets; I32 is included for forward compatibility.
+    /// The encoder picks the narrowest ptype that fits the max offset value (mirroring
+    /// `VarBinArray`'s offsets), so any integer width can appear on the wire; Byte/ShortArray's
+    /// `getInt` already zero-extends U8/U16 per their dtype, so widening to long is exact.
     ///
     /// @param offsets the offsets array
     /// @param idx     the index to read
@@ -300,6 +302,8 @@ public final class CsvExporter {
         return switch (offsets) {
             case LongArray la -> la.getLong(idx);
             case IntArray ia -> Integer.toUnsignedLong(ia.getInt(idx));
+            case ShortArray sa -> sa.getInt(idx);
+            case ByteArray ba -> ba.getInt(idx);
             default -> throw new VortexException("unexpected list offsets type: " + offsets.getClass().getSimpleName());
         };
     }
