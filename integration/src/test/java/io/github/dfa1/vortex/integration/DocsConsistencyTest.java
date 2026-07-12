@@ -46,7 +46,7 @@ class DocsConsistencyTest {
     private static final Pattern SERVICE_FILE = Pattern.compile(
             "META-INF/services/(io\\.github\\.dfa1\\.vortex[A-Za-z0-9_.]+)");
     private static final Pattern MD_LINK = Pattern.compile(
-            "\\]\\((?!https?:|#|mailto:)([^)#\\s]+)(?:#[^)\\s]*)?\\)");
+            "]\\((?!https?:|#|mailto:)([^)#\\s]+)(?:#[^)\\s]*)?\\)");
     private static final Pattern METHOD_CLAIM = Pattern.compile(
             "`([A-Z][A-Za-z0-9_]*+)\\.([a-z][A-Za-z0-9_]*+)\\(");
 

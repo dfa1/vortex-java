@@ -61,6 +61,7 @@ class OhlcEncodingInspectionIntegrationTest {
         return Math.round(v * 100.0) / 100.0;
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static void writeOhlc(Path file, int totalRows, int batchSize) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         var rng = new Random(42L);
@@ -153,6 +154,7 @@ class OhlcEncodingInspectionIntegrationTest {
 
     /// Variant of writeOhlc that cycles through multiple ticker symbols so the
     /// resulting file exercises low-cardinality Utf8 column compression.
+    @SuppressWarnings("SameParameterValue")
     private static void writeOhlcMultiSymbol(Path file, int totalRows, int batchSize,
             String[] symbols) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();

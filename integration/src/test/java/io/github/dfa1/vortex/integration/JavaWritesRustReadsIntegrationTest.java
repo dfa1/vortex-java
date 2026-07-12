@@ -195,6 +195,7 @@ class JavaWritesRustReadsIntegrationTest {
         return doubles.stream().mapToDouble(Double::doubleValue).toArray();
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static float[] readFloatColumn(Path file, String column) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         ScanOptions opts = ScanOptions.builder()
@@ -222,6 +223,7 @@ class JavaWritesRustReadsIntegrationTest {
         return result;
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static short[] readHalfColumn(Path file, String column) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         ScanOptions opts = ScanOptions.builder()
@@ -249,6 +251,7 @@ class JavaWritesRustReadsIntegrationTest {
         return result;
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static int[] readIntColumn(Path file, String column) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         ScanOptions opts = ScanOptions.builder()
@@ -272,6 +275,7 @@ class JavaWritesRustReadsIntegrationTest {
         return ints.stream().mapToInt(Integer::intValue).toArray();
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static String[] readStringColumn(Path file, String column) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         ScanOptions opts = ScanOptions.builder()
@@ -325,6 +329,7 @@ class JavaWritesRustReadsIntegrationTest {
         return RandomArrays.f32Arrays(30);
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static boolean[] readBoolColumn(Path file, String column) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         ScanOptions opts = ScanOptions.builder()
@@ -368,6 +373,7 @@ class JavaWritesRustReadsIntegrationTest {
         return count;
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static long[] readListLongColumn(Path file, String column) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         ScanOptions opts = ScanOptions.builder()

@@ -43,6 +43,7 @@ class VortexInspectorIntegrationTest {
         NativeLoader.loadJni();
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static void writeJni(Path file, int rows) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         var rng = new Random(42L);

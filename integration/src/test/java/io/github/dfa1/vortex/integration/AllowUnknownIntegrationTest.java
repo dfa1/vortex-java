@@ -111,7 +111,7 @@ class AllowUnknownIntegrationTest {
         assertThatThrownBy(() -> {
             try (VortexReader vf = VortexReader.open(file, ReadRegistry.empty());
                  var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
-                iter.forEachRemaining(c -> {});
+                iter.forEachRemaining(_ -> {});
             }
         }).isInstanceOf(VortexException.class);
     }

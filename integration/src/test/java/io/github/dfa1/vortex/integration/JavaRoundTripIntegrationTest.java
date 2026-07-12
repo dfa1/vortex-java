@@ -61,6 +61,7 @@ class JavaRoundTripIntegrationTest {
         assertThat(decoded).containsExactly(data);
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static int[] readIntColumn(Path file, String column) throws IOException {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.columns(column))) {

@@ -290,8 +290,7 @@ class RaincloudConformanceIntegrationTest {
     /// @param parquet the parquet sibling
     /// @param out     the output file to write CSV into
     /// @throws TestAbortedException if the oracle cannot read this parquet
-    /// @throws IOException          if writing fails
-    private static void writeOracle(Path parquet, Path out) throws IOException {
+    private static void writeOracle(Path parquet, Path out) {
         try (Writer writer = Files.newBufferedWriter(out)) {
             writeOracleCsv(parquet, writer);
         } catch (TestAbortedException e) {

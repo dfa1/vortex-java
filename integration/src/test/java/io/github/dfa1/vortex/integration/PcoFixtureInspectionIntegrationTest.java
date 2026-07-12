@@ -166,7 +166,7 @@ class PcoFixtureInspectionIntegrationTest {
         stats.chunksPerArray.add(pm.chunkCount);
         stats.pagesPerArray.add(pm.pageCount);
         if (!pm.firstPageSizes.isEmpty() && stats.firstPageSizes.size() < 10) {
-            stats.firstPageSizes.add(pm.firstPageSizes.get(0));
+            stats.firstPageSizes.add(pm.firstPageSizes.getFirst());
         }
         if (pm.headerBytes != null) {
             stats.headerVersions.merge(hex(pm.headerBytes), 1, Integer::sum);

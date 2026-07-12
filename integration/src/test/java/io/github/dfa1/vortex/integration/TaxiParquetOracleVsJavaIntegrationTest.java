@@ -65,6 +65,7 @@ class TaxiParquetOracleVsJavaIntegrationTest {
         }
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static void writeOracleCsv(Path parquet, Path csv) throws IOException {
         try (ParquetFileReader pfr = ParquetFileReader.open(InputFile.of(parquet));
              RowReader rows = pfr.rowReader();
