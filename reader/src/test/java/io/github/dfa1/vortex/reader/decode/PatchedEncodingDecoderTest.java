@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.encoding.TestSegments;
+import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.model.DType;

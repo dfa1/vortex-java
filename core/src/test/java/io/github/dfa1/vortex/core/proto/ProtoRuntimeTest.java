@@ -33,7 +33,7 @@ class ProtoRuntimeTest {
         }
 
         @Test
-        void varintCanonicalEncodingOf150() throws IOException {
+        void varintCanonicalEncodingOf150() {
             // Given — proto3 spec example: 150 encodes as 0x96 0x01.
             ProtoWriter w = new ProtoWriter();
             w.writeVarint64(150L);
@@ -334,7 +334,7 @@ class ProtoRuntimeTest {
     class Backpatch {
 
         @Test
-        void shortPayloadCompactsLengthVarint() throws IOException {
+        void shortPayloadCompactsLengthVarint() {
             // Given — payload of 3 bytes fits in 1-byte varint length.
             // beginLenDelim reserves 5 bytes; endLenDelim shifts the payload left by 4.
             ProtoWriter w = new ProtoWriter();
@@ -352,7 +352,7 @@ class ProtoRuntimeTest {
         }
 
         @Test
-        void backpatchedMatchesLegacyEmbeddedPattern() throws IOException {
+        void backpatchedMatchesLegacyEmbeddedPattern() {
             // Given — same packed varint payload via backpatch vs. the legacy
             // "temp ProtoWriter + writeEmbedded" pattern. Output bytes must match exactly,
             // proving the backpatch refactor is wire-compatible.

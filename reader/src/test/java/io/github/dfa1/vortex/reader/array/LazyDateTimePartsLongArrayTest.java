@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import org.junit.jupiter.api.Test;
 
-import static io.github.dfa1.vortex.encoding.DTypes.I64;
+import static io.github.dfa1.vortex.core.testing.DTypes.I64;
 import static io.github.dfa1.vortex.reader.array.TestArrays.ints;
 import static io.github.dfa1.vortex.reader.array.TestArrays.longs;
 import static org.assertj.core.api.Assertions.assertThat;

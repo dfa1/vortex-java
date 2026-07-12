@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.reader.array.BoolArray;
-import io.github.dfa1.vortex.encoding.DTypes;
+import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
 import org.junit.jupiter.params.ParameterizedTest;
