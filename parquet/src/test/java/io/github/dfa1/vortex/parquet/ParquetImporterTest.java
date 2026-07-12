@@ -23,7 +23,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -198,7 +197,7 @@ class ParquetImporterTest {
                 assertThat(reader.dtype()).isInstanceOf(DType.Struct.class);
                 DType.Struct schema = (DType.Struct) reader.dtype();
                 assertThat(schema.fieldNames()).contains(ColumnName.of("c_customer_sk"), ColumnName.of("c_first_name"));
-                assertThat(countRows(reader)).isEqualTo(100L);
+                assertThat(reader.layout().rowCount()).isEqualTo(100L);
             }
         }
 
@@ -244,7 +243,7 @@ class ParquetImporterTest {
             try (VortexReader reader = VortexReader.open(vortex)) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
                 assertThat(schema.fieldNames()).containsExactly(ColumnName.of("c_customer_sk"));
-                assertThat(countRows(reader)).isEqualTo(100L);
+                assertThat(reader.layout().rowCount()).isEqualTo(100L);
             }
         }
 
@@ -289,13 +288,5 @@ class ParquetImporterTest {
     private static Path fixture() throws Exception {
         return Path.of(ParquetImporterTest.class
                 .getResource("/fixtures/delta_encoding_optional_column.parquet").toURI());
-    }
-
-    private static long countRows(VortexReader reader) {
-        AtomicLong total = new AtomicLong();
-        try (ScanIterator iter = reader.scan(ScanOptions.all())) {
-            iter.forEachRemaining(c -> total.addAndGet(c.rowCount()));
-        }
-        return total.get();
     }
 }

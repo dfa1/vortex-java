@@ -38,14 +38,6 @@ class ParquetImportIntegrationTest {
 
     private static final int EXPECTED_ROWS = 100;
 
-    private static long countRows(VortexReader reader) {
-        var total = new java.util.concurrent.atomic.AtomicLong();
-        try (ScanIterator iter = reader.scan(ScanOptions.all())) {
-            iter.forEachRemaining(c -> total.addAndGet(c.rowCount()));
-        }
-        return total.get();
-    }
-
     private static long countParquetRows(Path path) throws Exception {
         long total = 0;
         try (ParquetFileReader parquet = ParquetFileReader.open(InputFile.of(path));
@@ -106,7 +98,7 @@ class ParquetImportIntegrationTest {
             DType.Struct schema = (DType.Struct) reader.dtype();
             assertThat(schema.fieldNames().stream().map(io.github.dfa1.vortex.core.model.ColumnName::value).toList()).containsExactlyElementsOf(parquetColumns);
 
-            long vortexRows = countRows(reader);
+            long vortexRows = reader.layout().rowCount();
             assertThat(vortexRows).isEqualTo(EXPECTED_ROWS);
         }
     }
@@ -210,7 +202,7 @@ class ParquetImportIntegrationTest {
         long parquetRows = countParquetRows(parquetFile);
         long vortexRows;
         try (VortexReader reader = VortexReader.open(vortexFile)) {
-            vortexRows = countRows(reader);
+            vortexRows = reader.layout().rowCount();
         }
         assertThat(vortexRows).isEqualTo(parquetRows);
     }
