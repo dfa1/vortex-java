@@ -12,6 +12,14 @@
 - [ ] Performance tests must be peer-reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
 - [ ] **Vector API adoption** — see [ADR-0005](adr/0005-vector-api-adoption.md).
+- [ ] **`DType.Bool` has no RLE/Sparse/Constant encoding** — `RunEndEncodingEncoder`,
+  `RleEncodingEncoder`, `SparseEncodingEncoder`, and `ConstantEncodingEncoder` all `accepts()`
+  only `DType.Primitive`; the sole Bool-capable encoder, `BoolEncodingEncoder`, always emits a raw
+  1-bit/row bitmap. This caps how small a nullable column's `vortex.masked` validity child can get:
+  measured at ~75% of the remaining vortex-jni gap (25 KB of 33 KB) on a 200k-row/10-chunk nullable
+  low-cardinality Utf8 benchmark (`FileSizeComparisonIntegrationTest#nullableLowCardinalityUtf8_multiChunk_globalDict_javaVsJni`,
+  commit 5fe8b544). Needs end-to-end Bool support (write + read) for at least one of RLE/Sparse —
+  comparable effort to the nullable-global-dict fix, not a small tweak.
 
 ## Security
 

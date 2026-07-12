@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Nullable low-cardinality columns now use the shared global dictionary across chunks instead of re-emitting a per-chunk dictionary. The writer previously excluded any nullable column from global-dict candidacy, so a nullable low-cardinality string/numeric column (extremely common in real data — most Raincloud categorical columns have nulls) re-wrote its dictionary in every chunk. Nullable columns now run the same cardinality/ratio gate against their non-null values and emit one shared `vortex.dict` layout with per-chunk masked codes; the reader combines codes-side and pool-side validity per row. On a 200k-row, 10-chunk nullable low-cardinality Utf8 column this shrinks the file 54% (232 KB → 107 KB) and closes the gap to the Rust reference from ~4× to ~1.5×. (internal)
+- `MaskedEncodingEncoder` now encodes an all-valid or all-invalid validity bitmap as `vortex.constant` instead of a raw per-row bitmap. A nullable column chunk with zero nulls previously still paid a full `n/8`-byte bitmap for no information; an all-valid or all-invalid chunk now costs a few bytes regardless of row count. (internal)
 
 ## [0.12.2] — 2026-07-12
 

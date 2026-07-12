@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.MaskedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,10 @@ class MaskedEncodingEncoderTest {
     private static final MaskedEncodingDecoder DECODER = new MaskedEncodingDecoder();
     private static final PrimitiveEncodingEncoder PRIM_ENCODER = new PrimitiveEncodingEncoder();
     private static final BoolEncodingEncoder BOOL_ENCODER = new BoolEncodingEncoder();
+    private static final MaskedEncodingEncoder SUT = new MaskedEncodingEncoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
+    private static final ReadRegistry REGISTRY_WITH_CONSTANT = TestRegistry.ofDecoders(
+            DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder(), new ConstantEncodingDecoder());
 
     private static EncodeResult maskedResult(int[] values, boolean[] validity) {
         DType i32 = DType.I32;
@@ -175,5 +179,63 @@ class MaskedEncodingEncoderTest {
         assertThatThrownBy(() -> DECODER.decode(DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY)))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected 1 or 2 children");
+    }
+
+    @Test
+    void allValidColumn_encodesValidityAsConstant() {
+        // Given
+        DType i32Nullable = new DType.Primitive(PType.I32, true);
+        NullableData data = new NullableData(new int[]{1, 2, 3}, new boolean[]{true, true, true});
+
+        // When
+        EncodeResult result = SUT.encode(i32Nullable, data, EncodeTestHelper.testCtx());
+
+        // Then — the validity child is a vortex.constant scalar, not a raw bitmap
+        assertThat(result.rootNode().children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+
+        // And it still round-trips to an all-valid MaskedArray
+        Array decoded = DECODER.decode(DecodeTestHelper.toDecodeContext(result, 3L, i32Nullable, REGISTRY_WITH_CONSTANT));
+        MaskedArray masked = (MaskedArray) decoded;
+        assertThat(masked.isValid(0)).isTrue();
+        assertThat(masked.isValid(1)).isTrue();
+        assertThat(masked.isValid(2)).isTrue();
+    }
+
+    @Test
+    void allInvalidColumn_encodesValidityAsConstant() {
+        // Given
+        DType i32Nullable = new DType.Primitive(PType.I32, true);
+        NullableData data = new NullableData(new int[]{0, 0, 0}, new boolean[]{false, false, false});
+
+        // When
+        EncodeResult result = SUT.encode(i32Nullable, data, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.rootNode().children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+
+        Array decoded = DECODER.decode(DecodeTestHelper.toDecodeContext(result, 3L, i32Nullable, REGISTRY_WITH_CONSTANT));
+        MaskedArray masked = (MaskedArray) decoded;
+        assertThat(masked.isValid(0)).isFalse();
+        assertThat(masked.isValid(1)).isFalse();
+        assertThat(masked.isValid(2)).isFalse();
+    }
+
+    @Test
+    void mixedValidity_stillEncodesAsRawBitmap() {
+        // Given — a regression guard: mixed validity must not be misdetected as constant
+        DType i32Nullable = new DType.Primitive(PType.I32, true);
+        NullableData data = new NullableData(new int[]{1, 2, 3}, new boolean[]{true, false, true});
+
+        // When
+        EncodeResult result = SUT.encode(i32Nullable, data, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.rootNode().children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_BOOL);
+
+        Array decoded = DECODER.decode(DecodeTestHelper.toDecodeContext(result, 3L, i32Nullable, REGISTRY));
+        MaskedArray masked = (MaskedArray) decoded;
+        assertThat(masked.isValid(0)).isTrue();
+        assertThat(masked.isValid(1)).isFalse();
+        assertThat(masked.isValid(2)).isTrue();
     }
 }

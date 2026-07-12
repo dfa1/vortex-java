@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -43,7 +44,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         }
         DType nonNullable = dtype.withNullable(false);
         EncodeResult valuesResult = encodeValues(nonNullable, values, ctx);
-        EncodeResult validityResult = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeResult validityResult = encodeValidity(validity, ctx);
 
         int valuesBufCount = valuesResult.buffers().size();
         EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), valuesBufCount);
@@ -80,6 +81,35 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
             return new CascadingCompressor(candidates).encode(nonNullable, dense, ctx);
         }
         return pickInner(nonNullable).encode(nonNullable, values, ctx);
+    }
+
+    /// Encodes a masked column's validity bitmap, using `vortex.constant` instead of a raw bitmap
+    /// when every row shares the same validity (the whole chunk is all-valid or all-invalid) — a
+    /// common case that otherwise costs a full `n/8`-byte bitmap for no information.
+    ///
+    /// @param validity per-row validity bitmap
+    /// @param ctx      the encode context
+    /// @return the encoded validity child
+    private static EncodeResult encodeValidity(boolean[] validity, EncodeContext ctx) {
+        if (isConstantValidity(validity)) {
+            boolean value = validity.length == 0 || validity[0];
+            ProtoScalarValue scalar = ProtoScalarValue.ofBoolValue(value);
+            return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.encode()));
+        }
+        return new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+    }
+
+    private static boolean isConstantValidity(boolean[] validity) {
+        if (validity.length == 0) {
+            return true;
+        }
+        boolean first = validity[0];
+        for (boolean b : validity) {
+            if (b != first) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// Returns `values` unchanged, except a `String[]` with null elements is copied with each null
