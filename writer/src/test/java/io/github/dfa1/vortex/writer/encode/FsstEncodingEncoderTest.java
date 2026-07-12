@@ -332,8 +332,9 @@ class FsstEncodingEncoderTest {
     class Metadata {
 
         @Test
-        void encode_metadata_ptypes_areI32() throws Exception {
-            // Given
+        void encode_metadata_ptypes_pickNarrowestThatFits_smallData() throws Exception {
+            // Given — row lengths and cumulative offsets both well under 256, so the narrowest
+            // ptype (U8) should be picked instead of a fixed-width I32 that wastes 3 bytes/row.
             String[] data = {"hello", "world", "hello", "fsst"};
 
             // When
@@ -342,8 +343,42 @@ class FsstEncodingEncoderTest {
             ProtoFSSTMetadata meta = ProtoFSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             // Then
-            assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(6);
-            assertThat(meta.codes_offsets_ptype().value()).isEqualTo(6);
+            assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(PType.U8.ordinal());
+            assertThat(meta.codes_offsets_ptype().value()).isEqualTo(PType.U8.ordinal());
+        }
+
+        @Test
+        void encode_metadata_uncompressedLengthsPType_escalates_pastU8Range() throws Exception {
+            // Given — a single row longer than 255 bytes. Content is irrelevant here: this
+            // ptype tracks raw row length, not compressed size.
+            String[] data = {"a".repeat(300)};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            var metaSeg = result.rootNode().metadata();
+            ProtoFSSTMetadata meta = ProtoFSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+
+            // Then
+            assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(PType.U16.ordinal());
+        }
+
+        @Test
+        void encode_metadata_codesOffsetsPType_escalates_pastU8Range() throws Exception {
+            // Given — 300 single-character rows. Each row is too short for any multi-byte
+            // symbol match, so it compresses to exactly one code byte regardless of how
+            // training ranks candidates; the cumulative codes_offsets total is therefore
+            // deterministically 300, past the U8 range, whether or not "x" makes the table.
+            String[] data = new String[300];
+            java.util.Arrays.fill(data, "x");
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            var metaSeg = result.rootNode().metadata();
+            ProtoFSSTMetadata meta = ProtoFSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+
+            // Then
+            assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(PType.U8.ordinal());
+            assertThat(meta.codes_offsets_ptype().value()).isEqualTo(PType.U16.ordinal());
         }
     }
 }

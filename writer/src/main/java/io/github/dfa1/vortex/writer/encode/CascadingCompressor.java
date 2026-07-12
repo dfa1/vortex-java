@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.IntToLongFunction;
 
 /// Cascading compressor: evaluates multiple encodings on a sample and picks the one
 /// producing the smallest output. With `allowedCascading > 0`, also recurses
@@ -36,6 +37,7 @@ public final class CascadingCompressor {
             case long[] a -> a.length;
             case float[] a -> a.length;
             case double[] a -> a.length;
+            case String[] a -> a.length;
             default -> throw new IllegalArgumentException("unsupported data type: " + data.getClass());
         };
     }
@@ -85,6 +87,12 @@ public final class CascadingCompressor {
             }
             case double[] a -> {
                 double[] out = new double[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
+            case String[] a -> {
+                String[] out = new String[sampleSize];
                 forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
                         System.arraycopy(a, srcOff, out, dstOff, len));
                 yield out;
@@ -151,12 +159,25 @@ public final class CascadingCompressor {
         if (dtype instanceof DType.Struct structDtype) {
             return encodeStruct(structDtype, (StructData) data, ctx);
         }
-        // Non-primitives (extension types): find the accepting encoding and splice
-        // through it so its cascaded children (e.g. datetimeparts → days/seconds/subseconds)
-        // are recursively compressed rather than stored as raw primitives. Honor the
-        // excluded set so spliceResult's notApplicable retry can rotate to the next
-        // accepting encoding (e.g. DateTimePartsEncoding → ExtEncoding when the input
-        // is raw storage rather than DateTimePartsData).
+
+        // Utf8: same sample-and-measure competition as Primitive below (Dict, FSST, VarBin,
+        // Zstd all genuinely compete on measured size) rather than the extension-type
+        // first-match dispatch. No stats are computed — DictEncodingEncoder.expectedRatio()
+        // already defers to this path for Utf8 rather than consuming them — and there is no
+        // cheap analytic "no compression" baseline the way primitiveBytes is for fixed-width
+        // types, so the competition simply keeps whichever accepting encoder measures
+        // smallest (VarBinEncodingEncoder unconditionally accepts Utf8, so a winner always
+        // exists in practice).
+        if (dtype instanceof DType.Utf8) {
+            return competeAndEncode(dtype, data, ctx, ArrayStats.EMPTY, sampleSize -> Long.MAX_VALUE);
+        }
+
+        // Remaining non-primitives (extension types, Binary, List, ...): find the accepting
+        // encoding and splice through it so its cascaded children (e.g. datetimeparts →
+        // days/seconds/subseconds) are recursively compressed rather than stored as raw
+        // primitives. Honor the excluded set so spliceResult's notApplicable retry can rotate
+        // to the next accepting encoding (e.g. DateTimePartsEncoding → ExtEncoding when the
+        // input is raw storage rather than DateTimePartsData).
         if (!(dtype instanceof DType.Primitive p)) {
             return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
@@ -175,6 +196,24 @@ public final class CascadingCompressor {
                                    ? ArrayStats.EMPTY
                                    : ArrayStats.compute(p.ptype(), data, merged);
 
+        return competeAndEncode(dtype, data, ctx, stats, sampleSize -> primitiveBytes(dtype, sampleSize));
+    }
+
+    /// Shared sample-and-measure competition: stats-based skip/always-use sweep, then a
+    /// stratified-sample cost measurement across every remaining accepting encoder, picking
+    /// whichever measures smallest against `baselineFn`'s reference size.
+    ///
+    /// @param dtype      the logical type of the data to encode
+    /// @param data       the full input data
+    /// @param ctx        encoding context supplying the arena, encoder map, and cascade parameters
+    /// @param stats      pre-computed stats for the [EncodingEncoder#expectedRatio] sweep,
+    ///                   or [ArrayStats#EMPTY] when the dtype has no stats support
+    /// @param baselineFn given the sample size, returns the reference size a candidate must
+    ///                   beat to win
+    /// @return the [EncodeResult] produced by the winning encoding
+    private EncodeResult competeAndEncode(
+            DType dtype, Object data, EncodeContext ctx, ArrayStats stats, IntToLongFunction baselineFn
+    ) {
         // First sweep: stats verdicts. ALWAYS_USE short-circuits; SKIP excludes from
         // the sample-encoded competition below; COMPLETE defers to it.
         boolean[] skipMask = new boolean[encodings.size()];
@@ -200,7 +239,7 @@ public final class CascadingCompressor {
         sampleSize = Math.min(sampleSize, n);
         Object sample = (sampleSize < n) ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data;
 
-        long bestSampleSize = primitiveBytes(dtype, sampleSize);
+        long bestSampleSize = baselineFn.applyAsLong(sampleSize);
         EncodingEncoder winner = null;
 
         for (int i = 0; i < encodings.size(); i++) {
@@ -223,8 +262,8 @@ public final class CascadingCompressor {
         }
 
         if (winner == null) {
-            // No encoding beats primitive — fall back
-            return findPrimitiveEncoding(dtype, ctx.excluded()).encode(dtype, data, ctx);
+            // No encoding beats the baseline — fall back to the first accepting encoder
+            return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
 
         // Re-run winner on full data
