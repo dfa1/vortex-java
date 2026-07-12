@@ -264,8 +264,8 @@ of CI / integration-test fallout, plus reviewer time. Not a weekend.
 ### Positive
 
 - **Public API never exposes raw `MemorySegment`** for the read path.
-  `VortexHandle.slice` disappears from the public surface. The SECURITY.md
-  contract is enforced architecturally, not by audit-trail convention.
+  `VortexHandle.slice` disappears from the public surface. The CLAUDE.md
+  §Security contract is enforced architecturally, not by audit-trail convention.
 - **PR #27's 33 `unwrapForSubParser` sites collapse to a handful** —
   only the decoders that genuinely call a sub-parser
   (`ProtoReader`-bound decoders: Constant, Pco, Sparse, plus Zstd's
@@ -353,6 +353,6 @@ of CI / integration-test fallout, plus reviewer time. Not a weekend.
 
 - [PR #27 — `sec(parser): BoundedSegment + audit trail for untrusted asSlice`](https://github.com/dfa1/vortex-java/pull/27)
 - [Phase 1–4 commits — BoundedSegment introduction and migration](https://github.com/dfa1/vortex-java/pull/27/commits)
-- [SECURITY.md — the contract this work hardens](../SECURITY.md)
+- [CLAUDE.md §Security contract](../CLAUDE.md)
 - [CLAUDE.md — current "three touch-points" rule for adding an encoding](../CLAUDE.md)
 - [TODO.md — parser hardening backlog](../TODO.md)

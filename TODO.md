@@ -15,10 +15,8 @@
 
 ## Security
 
-**Contract:** the reader memory-maps and parses untrusted binary input. Every malformed input must
-throw `VortexException`, never `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`,
-`OutOfMemoryError`, `StackOverflowError`, a raw FlatBuffer runtime exception, or a Protobuf
-parser exception. Each entry below is either a known gap, a contract audit, or supporting infra.
+See [CLAUDE.md §Security contract](CLAUDE.md) for the invariant. Each entry below is either a
+known gap, a contract audit, or supporting infra.
 
 ### Per-encoding adversarial tests
 

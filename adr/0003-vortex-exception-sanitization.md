@@ -5,7 +5,7 @@
 - **Deciders:** project maintainer
 - **Related:** [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md),
   [ADR 0004 — Resource caps and `ReadOptions`](0004-resource-caps-read-options.md),
-  [SECURITY.md](../SECURITY.md)
+  [CLAUDE.md §Security contract](../CLAUDE.md)
 
 ## Context
 
@@ -45,7 +45,7 @@ no sanitization contract.
 
 Message sanitization governs *what a `VortexException` says*. A separate,
 orthogonal gap governs *whether a `VortexException` is thrown at all*. The
-reader's contract (SECURITY.md) is: any malformed input throws
+reader's contract (CLAUDE.md §Security contract) is: any malformed input throws
 `VortexException`, never a raw JDK exception. But ~21 `MemorySegment.asSlice`
 call sites take offsets/lengths straight from untrusted layout/footer
 metadata and pass them to the JDK unguarded:
@@ -415,7 +415,7 @@ programmatically inspect exception types, this decision can be revisited.
 
 ## References
 
-- [SECURITY.md — injection threat model](../SECURITY.md)
+- [CLAUDE.md §Security contract](../CLAUDE.md)
 - [PR #27 — `BoundedSegment` + audit trail for untrusted `asSlice`](https://github.com/dfa1/vortex-java/pull/27)
 - [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md)
-- [TODO.md §"Error messages — structural sanitization"](../TODO.md)
+- [TODO.md §"`VortexException` message sanitization"](../TODO.md)

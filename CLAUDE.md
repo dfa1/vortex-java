@@ -184,6 +184,15 @@ if (cap == n) {                                  // fast path: zero modulos, vec
 Profile with JFR (`-prof stack:lines=10`); `idiv`/`sdiv`/arithmetic helpers as the hot frame is
 almost always this.
 
+## Security contract
+
+The reader memory-maps and parses untrusted binary input. Every malformed input must throw
+`VortexException`, never `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`,
+`OutOfMemoryError`, `StackOverflowError`, a raw FlatBuffer runtime exception, or a Protobuf parser
+exception. See [TODO.md §Security](TODO.md) for the current gap list (per-encoding adversarial
+tests, resource caps, fuzz infra) and [ADR 0003](adr/0003-vortex-exception-sanitization.md) /
+[ADR 0004](adr/0004-resource-caps-read-options.md) for the design.
+
 ## Reference implementation
 
 When stuck on encode/decode behavior, consult **in this order**:
