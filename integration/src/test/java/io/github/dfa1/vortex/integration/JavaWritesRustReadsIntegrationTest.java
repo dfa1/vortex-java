@@ -569,7 +569,7 @@ class JavaWritesRustReadsIntegrationTest {
 
     @Test
     void javaWriter_jniReader_fsstUtf8Column(@TempDir Path tmp) throws IOException {
-        // Given — FSST encoding: bigram symbol table, escape fallback for unmatched bytes
+        // Given — FSST encoding: trained variable-length symbol table, escape fallback for unmatched bytes
         Path file = tmp.resolve("java_fsst_utf8.vtx");
         String[] data = {"apple", "banana", "cherry", "apricot", "avocado", "almond"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

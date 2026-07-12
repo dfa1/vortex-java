@@ -620,11 +620,11 @@ class FileSizeComparisonIntegrationTest {
                 (double) javaSize / jniSize,
                 (double) javaSize / rawBytes);
 
-        // Then — Java within 2.5x of JNI. Java's FSST symbol-table builder is still less
-        // aggressive than Rust's on truly random short strings (Linux Rust FSST ≈2.26x
-        // observed); tighten further when FsstEncoding.Encoder gets iterative symbol
-        // training (per the FSST paper).
-        assertThat((double) javaSize / jniSize).isLessThan(2.5);
+        // Then — Java within 2.4x of JNI. On truly random 6-byte strings there is no
+        // repeated substructure for either symbol-table builder to exploit (observed ≈2.26x
+        // with Java's iterative training), so this is close to the escape-scheme floor for
+        // both implementations rather than a training-quality gap.
+        assertThat((double) javaSize / jniSize).isLessThan(2.4);
 
         // Then — Java file is readable and row count matches
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
