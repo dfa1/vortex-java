@@ -15,6 +15,7 @@ import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.MaskedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
+import io.github.dfa1.vortex.writer.WriteRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -237,5 +238,66 @@ class MaskedEncodingEncoderTest {
         assertThat(masked.isValid(0)).isTrue();
         assertThat(masked.isValid(1)).isFalse();
         assertThat(masked.isValid(2)).isTrue();
+    }
+
+    @Test
+    void withCascade_periodicNulls_prefersSparseOverRawBitmap() {
+        // Given — 2000 rows, every 10th null: a clustered/regular pattern (mirrors the real
+        // low-cardinality-Utf8 benchmark) whose patch-index gaps compress far below a raw bitmap
+        // once cascaded (e.g. fastlanes.delta on a near-constant stride).
+        int n = 2_000;
+        int[] values = new int[n];
+        boolean[] validity = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            values[i] = i;
+            validity[i] = i % 10 != 0;
+        }
+        DType i32Nullable = new DType.Primitive(PType.I32, true);
+        NullableData data = new NullableData(values, validity);
+        EncodeContext cascadeCtx = EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.loadAll());
+
+        // When
+        EncodeResult result = SUT.encode(i32Nullable, data, cascadeCtx);
+
+        // Then — the validity child picked vortex.sparse over a raw bitmap
+        assertThat(result.rootNode().children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_SPARSE);
+
+        // And every value and null position round-trips exactly
+        Array decoded = DECODER.decode(DecodeTestHelper.toDecodeContext(result, (long) n, i32Nullable, ReadRegistry.loadAll()));
+        MaskedArray masked = (MaskedArray) decoded;
+        for (int i = 0; i < n; i++) {
+            assertThat(masked.isValid(i)).as("row %d", i).isEqualTo(i % 10 != 0);
+        }
+    }
+
+    @Test
+    void withCascade_denseRandomNulls_keepsRawBitmap() {
+        // Given — ~50% nulls with no exploitable structure: sparse patch overhead (index + value
+        // per minority row) can't beat a raw 1-bit/row bitmap, so the comparison must keep the
+        // bitmap rather than always preferring sparse.
+        int n = 2_000;
+        int[] values = new int[n];
+        boolean[] validity = new boolean[n];
+        java.util.Random rng = new java.util.Random(7);
+        for (int i = 0; i < n; i++) {
+            values[i] = i;
+            validity[i] = rng.nextBoolean();
+        }
+        DType i32Nullable = new DType.Primitive(PType.I32, true);
+        NullableData data = new NullableData(values, validity);
+        EncodeContext cascadeCtx = EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.loadAll());
+
+        // When
+        EncodeResult result = SUT.encode(i32Nullable, data, cascadeCtx);
+
+        // Then
+        assertThat(result.rootNode().children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_BOOL);
+
+        // And it still round-trips exactly
+        Array decoded = DECODER.decode(DecodeTestHelper.toDecodeContext(result, (long) n, i32Nullable, ReadRegistry.loadAll()));
+        MaskedArray masked = (MaskedArray) decoded;
+        for (int i = 0; i < n; i++) {
+            assertThat(masked.isValid(i)).as("row %d", i).isEqualTo(validity[i]);
+        }
     }
 }

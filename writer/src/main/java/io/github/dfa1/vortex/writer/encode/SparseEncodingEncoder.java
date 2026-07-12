@@ -16,6 +16,18 @@ import java.util.List;
 /// Write-only encoder for `vortex.sparse`.
 public final class SparseEncodingEncoder implements EncodingEncoder {
 
+    /// Candidates for compressing a boolean mask's patch-index array ([#encodeBool]) — a sorted,
+    /// often-regular sequence (e.g. a periodic null pattern), so `vortex.sequence`/`fastlanes.delta`
+    /// are tried first. Deliberately separate from [io.github.dfa1.vortex.writer.VortexWriter]'s
+    /// general per-column cascade codec list, which excludes both: adding them there would change
+    /// selection for every dense Primitive column, not just this narrow index-compression case.
+    private static final List<EncodingEncoder> INDEX_CASCADE_CANDIDATES = List.of(
+            new SequenceEncodingEncoder(),
+            new DeltaEncodingEncoder(),
+            new FrameOfReferenceEncodingEncoder(),
+            new BitpackedEncodingEncoder(),
+            new PrimitiveEncodingEncoder());
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_SPARSE;
@@ -181,6 +193,89 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
                 yield a;
             }
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
+        };
+    }
+
+    /// Encodes a boolean mask as `vortex.sparse`: fill = the majority value, patches = the minority
+    /// positions. Unlike the numeric path (hardcoded fill = 0, `expectedRatio`-gated) this always
+    /// builds the result — a two-valued domain has no "wrong" fill to guess, and the patch index
+    /// array is run through the full [CascadingCompressor] so a clustered or regular null pattern
+    /// (e.g. `fastlanes.delta` on a periodic run of nulls) can beat a raw 1-bit/row bitmap. Callers
+    /// compare the returned size against a raw bitmap and keep whichever is smaller.
+    ///
+    /// @param validity per-row boolean array; must contain at least one `true` and one `false`
+    ///                 (an all-same array is cheaper as `vortex.constant` — see [ConstantEncodingEncoder])
+    /// @param ctx      encode context
+    /// @return the encoded `vortex.sparse` result
+    static EncodeResult encodeBool(boolean[] validity, EncodeContext ctx) {
+        int n = validity.length;
+        int trueCount = 0;
+        for (boolean b : validity) {
+            if (b) {
+                trueCount++;
+            }
+        }
+        boolean fillValue = trueCount * 2 >= n;
+        int numPatches = fillValue ? n - trueCount : trueCount;
+        int[] patchIdx = new int[numPatches];
+        int p = 0;
+        for (int i = 0; i < n; i++) {
+            if (validity[i] != fillValue) {
+                patchIdx[p++] = i;
+            }
+        }
+        boolean[] patchVals = new boolean[numPatches];
+        java.util.Arrays.fill(patchVals, !fillValue);
+
+        PType idxPtype = chooseIdxPtype(n);
+        Object idxArr = idxArr(patchIdx, idxPtype);
+
+        ProtoScalarValue fillScalar = ProtoScalarValue.ofBoolValue(fillValue);
+        byte[] fillBytes = fillScalar.encode();
+        MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
+        MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
+
+        DType idxDtype = new DType.Primitive(idxPtype, false);
+        EncodeResult idxResult = new CascadingCompressor(INDEX_CASCADE_CANDIDATES).encode(idxDtype, idxArr, ctx);
+        EncodeResult valResult = new BoolEncodingEncoder().encode(DType.BOOL, patchVals, ctx);
+
+        List<MemorySegment> buffers = new ArrayList<>();
+        buffers.add(fillBuf);
+        buffers.addAll(idxResult.buffers());
+        int valOffset = 1 + idxResult.buffers().size();
+        buffers.addAll(valResult.buffers());
+
+        EncodeNode idxNode = EncodeNode.remapBufferIndices(idxResult.rootNode(), 1);
+        EncodeNode valNode = EncodeNode.remapBufferIndices(valResult.rootNode(), valOffset);
+
+        ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(
+                numPatches, 0L, io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxPtype.ordinal()),
+                null, null, null);
+        byte[] metaBytes = new ProtoSparseMetadata(patchesMeta).encode();
+
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_SPARSE, MemorySegment.ofArray(metaBytes),
+                new EncodeNode[]{idxNode, valNode}, new int[]{0});
+        return new EncodeResult(root, List.copyOf(buffers), null, null);
+    }
+
+    private static Object idxArr(int[] patchIdx, PType idxPtype) {
+        int n = patchIdx.length;
+        return switch (idxPtype) {
+            case U8 -> {
+                byte[] a = new byte[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = (byte) patchIdx[i];
+                }
+                yield a;
+            }
+            case U16 -> {
+                short[] a = new short[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = (short) patchIdx[i];
+                }
+                yield a;
+            }
+            default -> patchIdx;
         };
     }
 

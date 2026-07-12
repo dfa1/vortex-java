@@ -529,12 +529,13 @@ class FileSizeComparisonIntegrationTest {
                 "[NullableMultiChunkUtf8] %,d rows  %d chunks  JNI=%,d bytes  Java=%,d bytes  Java/JNI=%.2fx%n",
                 n, n / batch, jniSize, javaSize, ratio);
 
-        // Then — global dict across chunks closes most of the gap the per-chunk path leaves. The
-        // bound is set from the measured ratio with headroom; it is tighter than the 4.0x guard on
-        // the single-chunk global-dict-disabled test.
+        // Then — global dict across chunks, plus vortex.sparse on the masked codes' validity
+        // (patch indices further compressed via vortex.sequence/fastlanes.delta on the
+        // clustered/regular null pattern), closes most of the gap the per-chunk path leaves.
+        // The bound is set from the measured ratio (~1.17x) with headroom.
         assertThat(ratio)
                 .as("nullable low-cardinality Utf8 with global dict across chunks stays near JNI")
-                .isLessThan(2.5);
+                .isLessThan(1.5);
 
         // Then — Java file is readable, row count preserved.
         var totalRows = new java.util.concurrent.atomic.AtomicLong();

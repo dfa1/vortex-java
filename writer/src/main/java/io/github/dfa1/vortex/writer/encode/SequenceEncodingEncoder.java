@@ -23,6 +23,19 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Primitive;
     }
 
+    /// Cascade-aware entry point. [#encode] throws when `data` isn't a perfect arithmetic sequence
+    /// (e.g. a winner selected on a stratified sample that turns out not to hold over the full
+    /// data) — the cascade's retry contract needs a non-applicable [CascadeStep], not an exception,
+    /// so failures are caught here and reported that way instead.
+    @Override
+    public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        try {
+            return CascadeStep.terminal(encode(dtype, data, ctx));
+        } catch (VortexException e) {
+            return CascadeStep.notApplicable();
+        }
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Primitive p)) {

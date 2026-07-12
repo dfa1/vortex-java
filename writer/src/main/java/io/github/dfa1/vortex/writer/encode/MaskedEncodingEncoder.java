@@ -83,9 +83,14 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         return pickInner(nonNullable).encode(nonNullable, values, ctx);
     }
 
-    /// Encodes a masked column's validity bitmap, using `vortex.constant` instead of a raw bitmap
-    /// when every row shares the same validity (the whole chunk is all-valid or all-invalid) — a
-    /// common case that otherwise costs a full `n/8`-byte bitmap for no information.
+    /// Encodes a masked column's validity bitmap.
+    ///
+    /// Every row sharing the same validity (the whole chunk all-valid or all-invalid) is
+    /// `vortex.constant` — a common case that otherwise costs a full `n/8`-byte bitmap for no
+    /// information. Otherwise, with cascade depth available, also tries `vortex.sparse`
+    /// ([SparseEncodingEncoder#encodeBool]) — a clustered or regular null pattern can compress its
+    /// patch-index array well below a raw bitmap — and keeps whichever candidate is smaller.
+    /// Without cascade depth, or when sparse doesn't win, falls back to a raw `vortex.bool` bitmap.
     ///
     /// @param validity per-row validity bitmap
     /// @param ctx      the encode context
@@ -96,7 +101,20 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
             ProtoScalarValue scalar = ProtoScalarValue.ofBoolValue(value);
             return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.encode()));
         }
-        return new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeResult raw = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        if (ctx.allowedCascading() <= 0) {
+            return raw;
+        }
+        EncodeResult sparse = SparseEncodingEncoder.encodeBool(validity, ctx);
+        return totalBytes(sparse) < totalBytes(raw) ? sparse : raw;
+    }
+
+    private static long totalBytes(EncodeResult result) {
+        long total = 0;
+        for (MemorySegment buf : result.buffers()) {
+            total += buf.byteSize();
+        }
+        return total;
     }
 
     private static boolean isConstantValidity(boolean[] validity) {
