@@ -474,15 +474,21 @@ public final class VortexWriter implements Closeable {
                 }
             }
 
-            if (!firstChunkSeen && options.globalDict()
-                    && !(data instanceof io.github.dfa1.vortex.writer.encode.NullableData)) {
-                // Global dict candidate detection inspects raw primitive/String arrays; nullable
-                // columns route through MaskedEncoding instead of DictEncoding.
+            if (!firstChunkSeen && options.globalDict()) {
+                // Global dict candidate detection inspects raw primitive/String arrays. Nullable
+                // columns (carried as NullableData) run the same cardinality/ratio check against
+                // their values, skipping null positions per the validity bitmap; the reader's dict
+                // lazy-decode already handles masked (nullable) codes children.
+                boolean nullable = data instanceof io.github.dfa1.vortex.writer.encode.NullableData;
+                Object values = nullable
+                        ? ((io.github.dfa1.vortex.writer.encode.NullableData) data).values() : data;
+                boolean[] validity = nullable
+                        ? ((io.github.dfa1.vortex.writer.encode.NullableData) data).validity() : null;
                 boolean candidate = false;
                 if (colDtype instanceof DType.Primitive p) {
-                    candidate = isDictCandidate(p.ptype(), data);
+                    candidate = isDictCandidate(p.ptype(), values, validity);
                 } else if (colDtype instanceof DType.Utf8) {
-                    candidate = isUtf8DictCandidate((String[]) data);
+                    candidate = isUtf8DictCandidate((String[]) values, validity);
                 }
                 if (candidate) {
                     dictCandidates.add(colName);
@@ -1185,9 +1191,14 @@ public final class VortexWriter implements Closeable {
         // mta_tax/Airport_fee/extra columns.
         var counts = new LinkedHashMap<Object, Long>();
         for (Object chunk : chunks) {
-            int len = primitiveArrayLen(chunk, ptype);
+            Object values = chunk instanceof NullableData nd ? nd.values() : chunk;
+            boolean[] validity = chunk instanceof NullableData nd ? nd.validity() : null;
+            int len = primitiveArrayLen(values, ptype);
             for (int i = 0; i < len; i++) {
-                Object v = readPrimitiveElement(chunk, ptype, i);
+                if (validity != null && !validity[i]) {
+                    continue;
+                }
+                Object v = readPrimitiveElement(values, ptype, i);
                 counts.merge(v, 1L, Long::sum);
             }
         }
@@ -1218,8 +1229,10 @@ public final class VortexWriter implements Closeable {
         Object uniqueArr = buildTypedUniqueArray(ptype, valueMap.keySet(), dictSize);
         int valuesSegIdx = writeSegment(dtype, uniqueArr);
 
-        // Write one codes segment per original chunk
-        DType codesDtype = new DType.Primitive(codePType, false);
+        // Write one codes segment per original chunk. When a chunk is nullable, wrap the codes in a
+        // NullableData carrying the same validity so writeSegment emits a vortex.masked wrapper around
+        // the codes — exactly the shape DictLayoutDecoder already decodes (masked codes + pool).
+        DType codesDtype = new DType.Primitive(codePType, dtype.nullable());
         List<Integer> codesSegIdxes = new ArrayList<>();
         List<Long> chunkRowCounts = new ArrayList<>();
         List<Long> chunkNullCounts = new ArrayList<>();
@@ -1227,19 +1240,21 @@ public final class VortexWriter implements Closeable {
         List<byte[]> chunkStatsMax = new ArrayList<>();
         List<byte[]> chunkStatsSum = new ArrayList<>();
         for (Object chunk : chunks) {
-            int len = primitiveArrayLen(chunk, ptype);
-            Object codesArr = buildCodesArray(chunk, ptype, valueMap, codePType, len);
-            codesSegIdxes.add(writeSegment(codesDtype, codesArr));
+            Object chunkValues = chunk instanceof NullableData nd ? nd.values() : chunk;
+            boolean[] chunkValidity = chunk instanceof NullableData nd ? nd.validity() : null;
+            int len = primitiveArrayLen(chunkValues, ptype);
+            Object codesArr = buildCodesArray(chunkValues, ptype, valueMap, codePType, len, chunkValidity);
+            Object codesData = chunkValidity != null ? new NullableData(codesArr, chunkValidity) : codesArr;
+            codesSegIdxes.add(writeSegment(codesDtype, codesData));
             chunkRowCounts.add((long) len);
-            chunkNullCounts.add(chunk instanceof NullableData nd ? countNulls(nd.validity()) : 0L);
+            chunkNullCounts.add(chunkValidity != null ? countNulls(chunkValidity) : 0L);
             // Per-zone min/max + sum over the chunk's logical values (matches the flat primitive
             // path: computed on nd.values(), placeholders included). Lets the dict zone-map prune
             // and aggregate like a plain primitive column.
-            Object values = chunk instanceof NullableData nd ? nd.values() : chunk;
-            byte[][] mm = PrimitiveEncodingEncoder.minMaxStats(ptype, values);
+            byte[][] mm = PrimitiveEncodingEncoder.minMaxStats(ptype, chunkValues);
             chunkStatsMin.add(mm != null ? mm[0] : null);
             chunkStatsMax.add(mm != null ? mm[1] : null);
-            chunkStatsSum.add(PrimitiveEncodingEncoder.sumStat(ptype, values));
+            chunkStatsSum.add(PrimitiveEncodingEncoder.sumStat(ptype, chunkValues));
         }
 
         dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes,
@@ -1248,11 +1263,16 @@ public final class VortexWriter implements Closeable {
 
     private void writeGlobalDictUtf8Column(ColumnName colName, DType.Utf8 dtype, List<Object> chunks)
             throws IOException {
-        // Build global string -> code map across all chunks (insertion order = code value).
+        // Build global string -> code map across all chunks (insertion order = code value). Skip
+        // null (invalid) elements so the dictionary holds only real strings; nullable Utf8 keeps
+        // real null array elements at invalid positions (per ChunkImpl.adaptUtf8).
         var valueMap = new LinkedHashMap<String, Integer>();
         for (Object chunk : chunks) {
-            for (String s : (String[]) chunk) {
-                valueMap.computeIfAbsent(s, _ -> valueMap.size());
+            String[] strs = chunk instanceof NullableData nd ? (String[]) nd.values() : (String[]) chunk;
+            for (String s : strs) {
+                if (s != null) {
+                    valueMap.computeIfAbsent(s, _ -> valueMap.size());
+                }
             }
         }
 
@@ -1275,21 +1295,25 @@ public final class VortexWriter implements Closeable {
         String[] uniques = valueMap.keySet().toArray(new String[0]);
         int valuesSegIdx = writeSegment(dtype, uniques, new VarBinEncodingEncoder());
 
-        // Write one codes segment per original chunk.
-        DType codesDtype = new DType.Primitive(codePType, false);
+        // Write one codes segment per original chunk. When a chunk is nullable, wrap the codes in a
+        // NullableData so writeSegment emits a vortex.masked wrapper — the shape DictLayoutDecoder
+        // already decodes (masked codes + pool).
+        DType codesDtype = new DType.Primitive(codePType, dtype.nullable());
         List<Integer> codesSegIdxes = new ArrayList<>();
         List<Long> chunkRowCounts = new ArrayList<>();
         List<Long> chunkNullCounts = new ArrayList<>();
         List<byte[]> chunkStatsMin = new ArrayList<>();
         List<byte[]> chunkStatsMax = new ArrayList<>();
         for (Object chunk : chunks) {
-            String[] strs = (String[]) chunk;
+            String[] strs = chunk instanceof NullableData nd ? (String[]) nd.values() : (String[]) chunk;
+            boolean[] chunkValidity = chunk instanceof NullableData nd ? nd.validity() : null;
             Object codesArr = buildUtf8CodesArray(strs, valueMap, codePType);
-            codesSegIdxes.add(writeSegment(codesDtype, codesArr));
+            Object codesData = chunkValidity != null ? new NullableData(codesArr, chunkValidity) : codesArr;
+            codesSegIdxes.add(writeSegment(codesDtype, codesData));
             chunkRowCounts.add((long) strs.length);
-            chunkNullCounts.add(0L); // global-dict Utf8 columns are dense (non-nullable)
+            chunkNullCounts.add(chunkValidity != null ? countNulls(chunkValidity) : 0L);
             // Per-zone string min/max over the chunk's values (matches the flat varbin path), so the
-            // dict zone-map prunes like a plain Utf8 column.
+            // dict zone-map prunes like a plain Utf8 column. minMaxStats already skips null elements.
             byte[][] mm = VarBinEncodingEncoder.minMaxStats(strs);
             chunkStatsMin.add(mm != null ? mm[0] : null);
             chunkStatsMax.add(mm != null ? mm[1] : null);
@@ -1300,26 +1324,35 @@ public final class VortexWriter implements Closeable {
                 chunkRowCounts, chunkNullCounts, chunkStatsMin, chunkStatsMax, noSum));
     }
 
+    /// Builds the per-chunk codes array for a global-dict Utf8 column. A null slot emits code `0`
+    /// unconditionally (the null is not looked up in the map); the reader ignores those slots because
+    /// the codes child is masked by the same validity.
     private static Object buildUtf8CodesArray(String[] strs, Map<String, Integer> valueMap, PType codePType) {
         return switch (codePType) {
             case U8 -> {
                 byte[] codes = new byte[strs.length];
                 for (int i = 0; i < strs.length; i++) {
-                    codes[i] = (byte) (int) valueMap.get(strs[i]);
+                    if (strs[i] != null) {
+                        codes[i] = (byte) (int) valueMap.get(strs[i]);
+                    }
                 }
                 yield codes;
             }
             case U16 -> {
                 short[] codes = new short[strs.length];
                 for (int i = 0; i < strs.length; i++) {
-                    codes[i] = (short) (int) valueMap.get(strs[i]);
+                    if (strs[i] != null) {
+                        codes[i] = (short) (int) valueMap.get(strs[i]);
+                    }
                 }
                 yield codes;
             }
             default -> {
                 int[] codes = new int[strs.length];
                 for (int i = 0; i < strs.length; i++) {
-                    codes[i] = valueMap.get(strs[i]);
+                    if (strs[i] != null) {
+                        codes[i] = valueMap.get(strs[i]);
+                    }
                 }
                 yield codes;
             }
@@ -1327,20 +1360,54 @@ public final class VortexWriter implements Closeable {
     }
 
     static boolean isUtf8DictCandidate(String[] data) {
+        return isUtf8DictCandidate(data, null);
+    }
+
+    /// Like [#isUtf8DictCandidate(String[])] but ignores null (invalid) rows when counting distinct
+    /// values, so a nullable low-cardinality column still qualifies for the shared global dictionary.
+    /// The ratio denominator stays the total row count (not the valid-row count), matching the
+    /// per-chunk encoders' convention that null placeholders occupy a row like any other value.
+    ///
+    /// @param data     the string values; null elements at invalid positions are skipped
+    /// @param validity per-row validity bitmap, or `null` meaning every row is valid
+    /// @return `true` if the column's distinct valid-value count is low enough to dictionary-encode
+    static boolean isUtf8DictCandidate(String[] data, boolean[] validity) {
         if (data.length == 0) {
             return false;
         }
         var seen = new java.util.HashSet<String>(GLOBAL_DICT_MAX_CARDINALITY + 1);
-        for (String s : data) {
-            seen.add(s);
+        for (int i = 0; i < data.length; i++) {
+            if ((validity != null && !validity[i]) || data[i] == null) {
+                continue;
+            }
+            seen.add(data[i]);
             if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY) {
                 return false;
             }
+        }
+        if (seen.isEmpty()) {
+            return false;
         }
         return seen.size() * 2 < data.length;
     }
 
     static boolean isDictCandidate(PType ptype, Object data) {
+        return isDictCandidate(ptype, data, null);
+    }
+
+    /// Like [#isDictCandidate(PType, Object)] but ignores null (invalid) rows when counting distinct
+    /// values, so a nullable low-cardinality column still qualifies for the shared global dictionary.
+    /// Null slots hold zero-valued placeholders (per NullableData's contract); skipping them keeps a
+    /// legitimate `0` value from being deduplicated against those placeholders and keeps nulls out of
+    /// the distinct count. The ratio denominator stays the total row count (not the valid-row count),
+    /// matching the per-chunk encoders' convention that a null placeholder occupies a row like any
+    /// other value.
+    ///
+    /// @param ptype    the column's primitive type
+    /// @param data     the packed values array; positions marked invalid by `validity` are skipped
+    /// @param validity per-row validity bitmap, or `null` meaning every row is valid
+    /// @return `true` if the column's distinct valid-value count is low enough to dictionary-encode
+    static boolean isDictCandidate(PType ptype, Object data, boolean[] validity) {
         // Only the carriers the reader's lazy dict decode supports (I32/I64/F64) are admitted.
         // - I8/U8/I16/U16 excluded: dict gives little/no benefit (a U8/U16 code is no smaller
         //   than the value), the Rust compressor does not dict them either (verified by
@@ -1361,10 +1428,16 @@ public final class VortexWriter implements Closeable {
         }
         var seen = new HashSet<>(GLOBAL_DICT_MAX_CARDINALITY + 1);
         for (int i = 0; i < n; i++) {
+            if (validity != null && !validity[i]) {
+                continue;
+            }
             seen.add(readPrimitiveElement(data, ptype, i));
             if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY) {
                 return false;
             }
+        }
+        if (seen.isEmpty()) {
+            return false;
         }
         // Single-value columns fit vortex.constant better than dict (zero dict overhead).
         // Delegate to the cascading compressor.
@@ -1442,10 +1515,22 @@ public final class VortexWriter implements Closeable {
 
     private static Object buildCodesArray(Object data, PType ptype, Map<Object, Integer> valueMap,
             PType codePType, int len) {
+        return buildCodesArray(data, ptype, valueMap, codePType, len, null);
+    }
+
+    /// Builds the per-chunk codes array for a global-dict primitive column. A null slot (validity[i]
+    /// false) emits code `0` unconditionally: the placeholder value there is not looked up in the map
+    /// (it may collide with a real entry, or be absent when that placeholder never appears validly).
+    /// The reader ignores those code-0 slots because the codes child is masked by the same validity.
+    private static Object buildCodesArray(Object data, PType ptype, Map<Object, Integer> valueMap,
+            PType codePType, int len, boolean[] validity) {
         return switch (codePType) {
             case U8 -> {
                 byte[] codes = new byte[len];
                 for (int i = 0; i < len; i++) {
+                    if (validity != null && !validity[i]) {
+                        continue;
+                    }
                     codes[i] = (byte) (int) valueMap.get(readPrimitiveElement(data, ptype, i));
                 }
                 yield codes;
@@ -1453,6 +1538,9 @@ public final class VortexWriter implements Closeable {
             case U16 -> {
                 short[] codes = new short[len];
                 for (int i = 0; i < len; i++) {
+                    if (validity != null && !validity[i]) {
+                        continue;
+                    }
                     codes[i] = (short) (int) valueMap.get(readPrimitiveElement(data, ptype, i));
                 }
                 yield codes;
@@ -1460,6 +1548,9 @@ public final class VortexWriter implements Closeable {
             default -> {
                 int[] codes = new int[len];
                 for (int i = 0; i < len; i++) {
+                    if (validity != null && !validity[i]) {
+                        continue;
+                    }
                     codes[i] = valueMap.get(readPrimitiveElement(data, ptype, i));
                 }
                 yield codes;

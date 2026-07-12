@@ -421,6 +421,146 @@ class FileSizeComparisonIntegrationTest {
     }
 
     @Test
+    void globalDict_nullableMultiChunkUtf8_smallerThanPerChunkDict(@TempDir Path tmp) throws IOException {
+        // Given — a NULLABLE low-cardinality Utf8 column (8 categories, ~10% nulls) spanning several
+        // chunks. Per-chunk-dict mode re-emits the same 8-string dictionary in every chunk; global
+        // mode emits it once, sharing per-chunk masked codes. This is the direct regression guard for
+        // admitting nullable columns to the global dict.
+        int rows = 200_000;
+        int batch = 20_000;
+        String[] categories = {"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"};
+        java.util.Random rng = new java.util.Random(42);
+        String[][] chunks = new String[rows / batch][];
+        for (int c = 0; c < chunks.length; c++) {
+            String[] chunk = new String[batch];
+            for (int i = 0; i < batch; i++) {
+                int r = c * batch + i;
+                chunk[i] = (r % 10 == 0) ? null : categories[rng.nextInt(categories.length)];
+            }
+            chunks[c] = chunk;
+        }
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("s")), List.of(DType.UTF8.withNullable(true)), false);
+
+        // When
+        Path globalDictFile = writeNullableUtf8Chunks(tmp, "gdict-on.vtx", schema, chunks, true);
+        Path perChunkDictFile = writeNullableUtf8Chunks(tmp, "gdict-off.vtx", schema, chunks, false);
+        long globalDictSize = Files.size(globalDictFile);
+        long perChunkDictSize = Files.size(perChunkDictFile);
+
+        // Then — report
+        System.out.printf(
+                "[GlobalDictNullableUtf8] %,d rows  %d chunks  globalDict=%,d bytes  perChunkDict=%,d bytes  saving=%.2f%%%n",
+                rows, chunks.length, globalDictSize, perChunkDictSize,
+                100.0 * (perChunkDictSize - globalDictSize) / perChunkDictSize);
+
+        // Then — global dict is strictly smaller than the per-chunk-dict baseline for identical
+        // nullable data.
+        assertThat(globalDictSize).isLessThan(perChunkDictSize);
+
+        // Then — global dict file readable, row count matches.
+        var totalRows = new java.util.concurrent.atomic.AtomicLong();
+        try (VortexReader reader = VortexReader.open(globalDictFile, ReadRegistry.loadAll());
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
+        }
+        assertThat(totalRows.get()).isEqualTo(rows);
+    }
+
+    @Test
+    void nullableLowCardinalityUtf8_multiChunk_globalDict_javaVsJni(@TempDir Path tmp) throws IOException {
+        // Given — the same nullable low-cardinality column as nullableLowCardinalityUtf8_javaVsJni,
+        // but written across MULTIPLE chunks with global dict ENABLED (default WriteOptions). Global
+        // dict only pays off across chunks (a single chunk sees no benefit over per-chunk dict), so
+        // this exercises the shared-dictionary path the fix adds and measures its ratio against JNI.
+        int n = 200_000;
+        int batch = 20_000;
+        String[] categories = {"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"};
+        String[] data = new String[n];
+        java.util.Random rng = new java.util.Random(42);
+        for (int i = 0; i < n; i++) {
+            data[i] = (i % 10 == 0) ? null : categories[rng.nextInt(categories.length)];
+        }
+        DType.Struct javaSchema = new DType.Struct(
+                List.of(ColumnName.of("s")), List.of(DType.UTF8.withNullable(true)), false);
+        Schema jniSchema = new Schema(List.of(
+                Field.nullable("s", new ArrowType.Utf8())));
+
+        // When — Java: multiple chunks, global dict on (default cascading(3)).
+        Path javaFile = tmp.resolve("nullable-multichunk-java.vtx");
+        try (FileChannel ch = FileChannel.open(javaFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, javaSchema, WriteOptions.cascading(3))) {
+            for (int off = 0; off < n; off += batch) {
+                String[] chunk = new String[batch];
+                System.arraycopy(data, off, chunk, 0, batch);
+                writer.writeChunk(Map.of(ColumnName.of("s"), chunk));
+            }
+        }
+
+        Path jniFile = tmp.resolve("nullable-multichunk-jni.vtx");
+        String jniUri = jniFile.toAbsolutePath().toUri().toString();
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
+                SESSION, jniUri, jniSchema, new HashMap<>(), ALLOCATOR);
+             VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
+            for (int off = 0; off < n; off += batch) {
+                VarCharVector vec = (VarCharVector) root.getVector("s");
+                vec.reset();
+                vec.allocateNew();
+                for (int i = 0; i < batch; i++) {
+                    if (data[off + i] == null) {
+                        vec.setNull(i);
+                    } else {
+                        vec.setSafe(i, data[off + i].getBytes(StandardCharsets.UTF_8));
+                    }
+                }
+                root.setRowCount(batch);
+                try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                    Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                    writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+                }
+            }
+        }
+
+        long javaSize = Files.size(javaFile);
+        long jniSize = Files.size(jniFile);
+        double ratio = (double) javaSize / jniSize;
+        System.out.printf(
+                "[NullableMultiChunkUtf8] %,d rows  %d chunks  JNI=%,d bytes  Java=%,d bytes  Java/JNI=%.2fx%n",
+                n, n / batch, jniSize, javaSize, ratio);
+
+        // Then — global dict across chunks closes most of the gap the per-chunk path leaves. The
+        // bound is set from the measured ratio with headroom; it is tighter than the 4.0x guard on
+        // the single-chunk global-dict-disabled test.
+        assertThat(ratio)
+                .as("nullable low-cardinality Utf8 with global dict across chunks stays near JNI")
+                .isLessThan(2.5);
+
+        // Then — Java file is readable, row count preserved.
+        var totalRows = new java.util.concurrent.atomic.AtomicLong();
+        try (VortexReader reader = VortexReader.open(javaFile, ReadRegistry.loadAll());
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
+        }
+        assertThat(totalRows.get()).isEqualTo(n);
+    }
+
+    /// Writes a nullable Utf8 column across the given per-chunk arrays, with the global-dict option
+    /// toggled. Returns the file path.
+    private static Path writeNullableUtf8Chunks(Path dir, String filename, DType.Struct schema,
+            String[][] chunks, boolean globalDict) throws IOException {
+        Path file = dir.resolve(filename);
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(
+                     ch, schema, WriteOptions.cascading(3).withGlobalDict(globalDict))) {
+            for (String[] chunk : chunks) {
+                writer.writeChunk(Map.of(ColumnName.of("s"), chunk));
+            }
+        }
+        return file;
+    }
+
+    @Test
     void highCardinalityUtf8_javaVsJni(@TempDir Path tmp) throws IOException {
         // Given — 50k all-distinct short strings. Dict would emit 2-byte codes per row
         // plus the full string table; FSST is the right pick. Validates that the

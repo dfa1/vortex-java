@@ -65,14 +65,22 @@ final class DictLayoutDecoder implements LayoutDecoder {
 
         // VarBin (string) dict: VarBinArray is a sealed interface; ofDict returns the
         // lazy DictMode record (no eager expansion into per-row offsets/bytes).
-        if (values instanceof VarBinArray.OffsetMode vb) {
+        // Unwrap a masked (nullable) codes/values child so the string expansion sees the raw
+        // payload; the row-level validity is re-applied by wrapping the result below. This mirrors
+        // the primitive path (buildLazyDictPrimitive) and is the shape a nullable global-dict Utf8
+        // column produces (masked codes + non-nullable pool).
+        BoolArray poolValidity = values instanceof MaskedArray mv ? mv.validity() : null;
+        Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
+        BoolArray codesValidity = codes instanceof MaskedArray mc ? mc.validity() : null;
+        Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;
+        if (valuesData instanceof VarBinArray.OffsetMode vb) {
             // Zip-bomb guard: read the codes as a segment so we can validate the buffer
             // before allocating the expansion output. For direct-mapped encodings (e.g.
             // vortex.primitive), the codes buffer is mmap-bounded and can be much smaller
             // than the claimed rowCount. Full-decode encodings (e.g. bitpacked) already
             // wrote n * elemBytes to the arena during decodeChild above, so their buffer
             // matches n.
-            MemorySegment codesSeg = codes.materialize(arena);
+            MemorySegment codesSeg = codesData.materialize(arena);
             long bufferCodes = codesSeg.byteSize() / codesPType.byteSize();
             if (bufferCodes < n) {
                 throw new VortexException(EncodingId.VORTEX_DICT,
@@ -80,8 +88,15 @@ final class DictLayoutDecoder implements LayoutDecoder {
             }
             MemorySegment valOffsets = vb.offsetsSegment();
             PType valOffPType = vb.offsetsPtype();
-            return VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
+            Array dict = VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
                     codesSeg, codesPType);
+            if (poolValidity == null && codesValidity == null) {
+                return dict;
+            }
+            if (poolValidity == null) {
+                return new MaskedArray(dict, codesValidity);
+            }
+            return new MaskedArray(dict, gatherRowValidity(codesData, codesValidity, poolValidity, n, arena));
         }
         if (dtype instanceof DType.Primitive pDtype) {
             // Zip-bomb guard (lazy path): the codes Array has already been decoded above;

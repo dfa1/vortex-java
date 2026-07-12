@@ -2,8 +2,13 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -12,6 +17,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -232,6 +238,43 @@ class GlobalDictPrimitiveTest {
     }
 
     @Test
+    void lowCardinality_nullableI64_acrossChunks_usesGlobalDict(@TempDir Path tmp) throws IOException {
+        // Given — a NULLABLE low-cardinality I64 column (4 distinct valid values) with ~10% nulls
+        // scattered per chunk. The fix admits nullable numeric columns to the global dict: one shared
+        // dictionary, per-chunk masked codes. Guards both size (one dict, not N per-chunk dicts) and
+        // that null positions round-trip exactly across all chunks.
+        var schema = new DType.Struct(List.of(ColumnName.of("v")),
+                List.of(new DType.Primitive(PType.I64, true)), false);
+        Path file = tmp.resolve("nullable_i64.vortex");
+        long[] dict = {100L, 200L, 300L, 400L};
+        int rowsPerChunk = 1_000;
+        int chunkCount = 5;
+
+        Long[] expected = new Long[rowsPerChunk * chunkCount];
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            // When — every 10th row is null
+            for (int c = 0; c < chunkCount; c++) {
+                Long[] data = new Long[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    Long value = (c + i) % 10 == 0 ? null : dict[(c + i) % dict.length];
+                    data[i] = value;
+                    expected[c * rowsPerChunk + i] = value;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("v"), data));
+            }
+        }
+
+        // Then — file stays small: one shared dict + N chunks of U8 codes + masks.
+        assertThat(Files.size(file)).as("global dict for 5 nullable chunks of 1000 longs").isLessThan(12_000L);
+
+        // And both values AND null positions round-trip exactly across all chunks.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(readNullableLongs(vf, "v")).containsExactly(expected);
+        }
+    }
+
+    @Test
     void i64_globalDictDisabled_roundTrips(@TempDir Path tmp) throws IOException {
         // Given — low-card column but globalDict() off: must fall back to per-chunk encoding and
         // still round-trip, guarding the opt-out branch.
@@ -246,5 +289,22 @@ class GlobalDictPrimitiveTest {
 
         // Then
         assertThat(result).containsExactly(data);
+    }
+
+    /// Reads a nullable I64 column, mapping invalid rows to `null` so null positions are asserted
+    /// alongside values. A nullable dict column decodes to a [MaskedArray] over the long payload.
+    private static List<Long> readNullableLongs(VortexReader vf, String col) {
+        var collected = new ArrayList<Long>();
+        try (var iter = vf.scan(ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                Array arr = c.column(col);
+                MaskedArray masked = arr instanceof MaskedArray m ? m : null;
+                LongArray la = (LongArray) (masked != null ? masked.inner() : arr);
+                for (long i = 0; i < la.length(); i++) {
+                    collected.add(masked != null && !masked.isValid(i) ? null : la.getLong(i));
+                }
+            });
+        }
+        return collected;
     }
 }

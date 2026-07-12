@@ -51,6 +51,44 @@ class VortexWriterDictDecisionTest {
         assertThat(result).isEqualTo(expected);
     }
 
+    // ── isDictCandidate (primitive, nullable) ────────────────────────────────────
+
+    static Stream<Arguments> nullableDictCandidateCases() {
+        // The values array holds a zero placeholder at every null slot (NullableData contract). Nulls
+        // must not count toward cardinality; the ratio denominator stays the total row count.
+        return Stream.of(
+                // 2 distinct valid values (1, 2) over 5 total rows: 2*2 < 5 → candidate. The null slot
+                // (index 2, placeholder 0) is skipped, so 0 does not inflate cardinality to 3.
+                arguments("nulls excluded from cardinality",
+                        new long[]{1, 2, 0, 1, 2}, new boolean[]{true, true, false, true, true}, true),
+                // All-null: no valid values, so never a candidate (nothing to dictionary).
+                arguments("all-null not a candidate",
+                        new long[]{0, 0, 0}, new boolean[]{false, false, false}, false),
+                // Null-heavy but only 2 distinct valid values over 8 total rows (2*2 < 8) → candidate.
+                arguments("null-heavy but low cardinality still passes",
+                        new long[]{1, 0, 0, 2, 0, 1, 0, 2},
+                        new boolean[]{true, false, false, true, false, true, false, true}, true),
+                // Placeholder 0 collides with a legitimate valid 0: skipping nulls keeps 0 as a real
+                // distinct value only from its valid occurrence (2 distinct: 0 and 5).
+                arguments("placeholder zero not deduped against valid zero",
+                        new long[]{0, 0, 5, 0, 5}, new boolean[]{true, false, true, false, true}, true),
+                // validity == null delegates to the all-valid path: single distinct value → not a
+                // candidate (constant encoding wins).
+                arguments("null validity single value", new long[]{7, 7, 7, 7}, null, false));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nullableDictCandidateCases")
+    void isDictCandidate_nullable(String name, long[] data, boolean[] validity, boolean expected) {
+        // Given — an I64 column with the case's values and validity
+
+        // When
+        boolean result = VortexWriter.isDictCandidate(PType.I64, data, validity);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
     // ── isUtf8DictCandidate ──────────────────────────────────────────────────────
 
     static Stream<Arguments> utf8DictCandidateCases() {
@@ -69,6 +107,37 @@ class VortexWriterDictDecisionTest {
 
         // When
         boolean result = VortexWriter.isUtf8DictCandidate(data);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
+    // ── isUtf8DictCandidate (nullable) ───────────────────────────────────────────
+
+    static Stream<Arguments> nullableUtf8DictCandidateCases() {
+        // Nullable Utf8 keeps real null array elements at invalid positions (ChunkImpl.adaptUtf8),
+        // so a null string is skipped whether flagged by the validity array or by being null itself.
+        return Stream.of(
+                // 2 distinct valid strings over 5 total rows (2*2 < 5) → candidate; the null is skipped.
+                arguments("nulls excluded from cardinality",
+                        new String[]{"a", "b", null, "a", "b"},
+                        new boolean[]{true, true, false, true, true}, true),
+                arguments("all-null not a candidate",
+                        new String[]{null, null, null}, new boolean[]{false, false, false}, false),
+                arguments("null-heavy but low cardinality still passes",
+                        new String[]{"a", null, null, "b", null, "a", null, "b"},
+                        new boolean[]{true, false, false, true, false, true, false, true}, true),
+                arguments("null validity delegates to all-valid path",
+                        new String[]{"a", "b", "a", "b", "a"}, null, true));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nullableUtf8DictCandidateCases")
+    void isUtf8DictCandidate_nullable(String name, String[] data, boolean[] validity, boolean expected) {
+        // Given — a string column with the case's values and validity
+
+        // When
+        boolean result = VortexWriter.isUtf8DictCandidate(data, validity);
 
         // Then
         assertThat(result).isEqualTo(expected);

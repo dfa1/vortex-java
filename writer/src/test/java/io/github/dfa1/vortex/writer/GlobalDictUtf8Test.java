@@ -3,7 +3,11 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -12,6 +16,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -63,6 +68,46 @@ class GlobalDictUtf8Test {
                 assertThat(got.get(offset)).isEqualTo(dict[c % dict.length]);
                 assertThat(got.get(offset + 1)).isEqualTo(dict[(c + 1) % dict.length]);
             }
+        }
+    }
+
+    @Test
+    void lowCardinality_nullableUtf8_acrossChunks_usesGlobalDict(@TempDir Path tmp) throws IOException {
+        // Given — a NULLABLE low-cardinality column (8 categories) with ~10% nulls scattered per
+        // chunk. The fix admits nullable columns to the global dict: one shared dictionary, per-chunk
+        // masked codes. This guards both size (one dict, not N per-chunk dicts) and that null
+        // positions round-trip exactly.
+        var schema = new DType.Struct(List.of(ColumnName.of("status")),
+                List.of(DType.UTF8.withNullable(true)), false);
+        Path file = tmp.resolve("nullable_status.vortex");
+        String[] dict = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        int rowsPerChunk = 1_000;
+        int chunkCount = 5;
+
+        String[] expected = new String[rowsPerChunk * chunkCount];
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            // When — every 10th row is null
+            for (int c = 0; c < chunkCount; c++) {
+                String[] data = new String[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    String value = (c + i) % 10 == 0 ? null : dict[(c + i) % dict.length];
+                    data[i] = value;
+                    expected[c * rowsPerChunk + i] = value;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("status"), data));
+            }
+        }
+
+        // Then — file stays small: one shared dict (8 strings) + N chunks of U8 codes + masks.
+        // 5 chunks × 1000 rows × (1 code byte + validity bit) ≈ 5.6 KB; far below N per-chunk dicts.
+        long size = Files.size(file);
+        assertThat(size).as("global dict for 5 nullable chunks of 1000 strings").isLessThan(12_000L);
+
+        // And both values AND null positions round-trip exactly across all chunks.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            List<String> got = readNullableStrings(vf, "status");
+            assertThat(got).containsExactly(expected);
         }
     }
 
@@ -169,5 +214,22 @@ class GlobalDictUtf8Test {
             List<String> got = readAllStrings(vf, "status");
             assertThat(got).containsExactly(data);
         }
+    }
+
+    /// Reads a nullable Utf8 column, mapping invalid rows to `null` so null positions are asserted
+    /// alongside values. A nullable dict column decodes to a [MaskedArray] over the Utf8 payload.
+    private static List<String> readNullableStrings(VortexReader vf, String col) {
+        var collected = new ArrayList<String>();
+        try (var iter = vf.scan(ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                Array arr = c.column(col);
+                MaskedArray masked = arr instanceof MaskedArray m ? m : null;
+                VarBinArray vb = (VarBinArray) (masked != null ? masked.inner() : arr);
+                for (long i = 0; i < vb.length(); i++) {
+                    collected.add(masked != null && !masked.isValid(i) ? null : vb.getString(i));
+                }
+            });
+        }
+        return collected;
     }
 }
