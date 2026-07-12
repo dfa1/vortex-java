@@ -8,10 +8,10 @@
 
 ## Performance
 
-- [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](adr/0006-benchmark-publishing.md).
+- [ ] **Benchmark publishing** — see [ADR-0006](adr/0006-benchmark-publishing.md).
 - [ ] Performance tests must be peer-reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
-- [ ] **Vector API adoption** — deferred; see [ADR-0005](adr/0005-vector-api-adoption.md) for adoption criteria and candidate loops.
+- [ ] **Vector API adoption** — see [ADR-0005](adr/0005-vector-api-adoption.md).
 
 ## Security
 
@@ -44,7 +44,7 @@ Per-encoding gotchas:
 
 ### Resource caps
 
-- [ ] **Implement `ResourceLimits` + `ReadOptions`** — see [ADR-0004](adr/0004-resource-caps-read-options.md) for design, defaults, and enforcement points. Also covers Pco page/bin caps.
+- [ ] **Implement `ResourceLimits` + `ReadOptions`** — see [ADR-0004](adr/0004-resource-caps-read-options.md).
 
 ### Fuzz infrastructure
 
@@ -77,18 +77,12 @@ Per-encoding gotchas:
 
 ## Tooling
 
-- [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop — see [ADR-0016](adr/0016-vortex-arrow-bridge.md)
+- [ ] **`vortex-arrow` bridge module** — see [ADR-0016](adr/0016-vortex-arrow-bridge.md).
 
 ## API
 
-- [ ] **Error messages — structural sanitization of `VortexException`** —
-  Phase E (bounds typing via `IoBounds`) shipped; remaining is Phases A–D (the `Sanitize`
-  helper + `VortexError` catalog). See [ADR-0003](adr/0003-vortex-exception-sanitization.md)
-  for design and phasing.
-- [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
-    - See [ADR-0008](adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
-    - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
-    - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
+- [ ] **`VortexException` message sanitization** — see [ADR-0003](adr/0003-vortex-exception-sanitization.md).
+- [ ] **Domain primitives (unsigned integers via Valhalla)** — see [ADR-0008](adr/0008-domain-primitives-unsigned-integers.md).
 
 ## Encodings
 

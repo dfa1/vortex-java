@@ -22,6 +22,9 @@ currently no limits on:
   rows causes a downstream allocation of `rows * byteWidth` bytes.
 - **Max layout nodes** — flat tree with enormous sibling count escapes the
   depth guard.
+- **Pco page/bin caps** — `PcoEncodingDecoder`/`PcoBin` have no upper bound on
+  `bits_per_offset`, `bin_count`, or per-page row count; in scope for the same
+  `ResourceLimits` mechanism, not a separate cap type.
 
 The fix is a `ResourceLimits` value that is enforced at open/parse time,
 before any byte is decoded.
