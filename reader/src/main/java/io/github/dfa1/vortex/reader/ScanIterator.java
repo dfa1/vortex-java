@@ -77,7 +77,6 @@ import java.util.function.Consumer;
 /// ```
 public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
-
     private final VortexHandle file;
     private final ScanOptions options;
 
@@ -791,8 +790,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 // window's absolute position rather than shared unchanged.
                 DType.FixedSizeList fd = (DType.FixedSizeList) dtype;
                 int fixedSize = a.fixedSize();
-                Array elementsSlice = sliceArray(a.elements(), offset * (long) fixedSize,
-                        length * (long) fixedSize, fd.elementType());
+                Array elementsSlice = sliceArray(a.elements(), offset * fixedSize, length *fixedSize, fd.elementType());
                 yield new FixedSizeListArray(fd, length, elementsSlice);
             }
             default -> throw new VortexException(

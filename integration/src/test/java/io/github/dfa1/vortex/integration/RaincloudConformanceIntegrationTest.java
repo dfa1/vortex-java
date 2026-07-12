@@ -190,7 +190,7 @@ class RaincloudConformanceIntegrationTest {
     private static void closeQuietly(Closeable closeable) {
         try {
             closeable.close();
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // best effort: only used to unblock a producer thread before join()
         }
     }

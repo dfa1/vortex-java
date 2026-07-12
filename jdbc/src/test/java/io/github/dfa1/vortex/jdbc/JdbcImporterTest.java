@@ -27,6 +27,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("SqlNoDataSourceInspection")
 class JdbcImporterTest {
 
     private Connection conn;
@@ -177,10 +178,10 @@ class JdbcImporterTest {
             try (VortexReader reader = VortexReader.open(vortex,
                     io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
-                assertThat(((DType.Extension) schema.fieldTypes().get(1)).nullable()).isTrue();
-                assertThat(((DType.Extension) schema.fieldTypes().get(2)).nullable()).isTrue();
-                assertThat(((DType.Extension) schema.fieldTypes().get(3)).nullable()).isTrue();
-                assertThat(((DType.Extension) schema.fieldTypes().get(4)).nullable()).isTrue();
+                assertThat(schema.fieldTypes().get(1).nullable()).isTrue();
+                assertThat(schema.fieldTypes().get(2).nullable()).isTrue();
+                assertThat(schema.fieldTypes().get(3).nullable()).isTrue();
+                assertThat(schema.fieldTypes().get(4).nullable()).isTrue();
 
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
@@ -389,7 +390,7 @@ class JdbcImporterTest {
             List<Long> checkpoints = new ArrayList<>();
             JdbcImportOptions options = JdbcImportOptions.defaults()
                                                 .withChunkSize(3)
-                                                .withProgressListener((done, total) -> checkpoints.add(done));
+                                                .withProgressListener((done, _) -> checkpoints.add(done));
 
             // When
             JdbcImporter.importQuery(conn, "SELECT * FROM progress_test", vortex, options);
