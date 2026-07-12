@@ -214,6 +214,58 @@ class RleEncodingEncoderTest {
     }
 
     @Nested
+    class Bool {
+
+        private static final ReadRegistry BOOL_REGISTRY = TestRegistry.ofDecoders(
+                DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
+
+        @Test
+        void roundTrip_clusteredRuns() {
+            // Given — 2000 rows, one contiguous invalid stretch (rows 500-999), spanning multiple
+            // FastLanes 1024-row chunks.
+            int n = 2_000;
+            boolean[] data = new boolean[n];
+            for (int i = 0; i < n; i++) {
+                data[i] = i < 500 || i >= 1_000;
+            }
+
+            // When
+            EncodeResult encoded = RleEncodingEncoder.encodeBool(data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, n, DType.BOOL, BOOL_REGISTRY);
+            Array result = DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(n);
+            io.github.dfa1.vortex.reader.array.BoolArray bools = (io.github.dfa1.vortex.reader.array.BoolArray) result;
+            for (int i = 0; i < n; i++) {
+                assertThat(bools.getBoolean(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = {1, 512, 1023, 1024, 1025, 2048, 2049})
+        void roundTrip_variousLengths(int n) {
+            // Given — alternating short runs of true/false, various lengths around chunk boundaries
+            boolean[] data = new boolean[n];
+            for (int i = 0; i < n; i++) {
+                data[i] = (i / 7) % 2 == 0;
+            }
+
+            // When
+            EncodeResult encoded = RleEncodingEncoder.encodeBool(data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, n, DType.BOOL, BOOL_REGISTRY);
+            Array result = DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(n);
+            io.github.dfa1.vortex.reader.array.BoolArray bools = (io.github.dfa1.vortex.reader.array.BoolArray) result;
+            for (int i = 0; i < n; i++) {
+                assertThat(bools.getBoolean(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+    }
+
+    @Nested
     class Decode {
 
         @Test

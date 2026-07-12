@@ -12,15 +12,6 @@
 - [ ] Performance tests must be peer-reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
 - [ ] **Vector API adoption** — see [ADR-0005](adr/0005-vector-api-adoption.md).
-- [ ] **`fastlanes.rle` still has no `DType.Bool` support** — `ConstantEncodingEncoder`,
-  `SparseEncodingEncoder`, and `RunEndEncodingEncoder` all now handle Bool (constant / scattered
-  minority / clustered runs respectively — `MaskedEncodingEncoder` tries all three plus a raw
-  bitmap and keeps the smallest), closing most of the vortex-jni gap on the 200k-row/10-chunk
-  nullable low-cardinality Utf8 benchmark (4× → 1.17×, commits 5fe8b544/ecd47ead/506d036f + this
-  session's RunEnd/Constant additions). `RleEncodingEncoder` (`fastlanes.rle`) is the one
-  remaining Primitive-only holdout; likely low marginal value now that Sparse and RunEnd cover
-  the scattered/clustered cases, but untested. A truly random (high-entropy) validity pattern has
-  no exploitable structure for any of these — that's an information-theoretic floor, not a gap.
 
 ## Security
 

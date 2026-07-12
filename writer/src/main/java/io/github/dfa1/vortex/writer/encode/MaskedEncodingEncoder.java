@@ -88,10 +88,12 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// `vortex.constant` ([ConstantEncodingEncoder]) — a common case that otherwise costs a full
     /// `n/8`-byte bitmap for no information. Otherwise, with cascade depth available, also tries
     /// `vortex.sparse` ([SparseEncodingEncoder#encodeBool] — wins on a dominant value with
-    /// scattered rare flips, its patch-index array compressed further) and `vortex.runend`
+    /// scattered rare flips, its patch-index array compressed further), `vortex.runend`
     /// ([RunEndEncodingEncoder#encodeBool] — wins on long clustered runs of valid/invalid rows,
-    /// regardless of which value dominates), keeping whichever candidate is smallest. Without
-    /// cascade depth, or when neither wins, falls back to a raw `vortex.bool` bitmap.
+    /// regardless of which value dominates), and `fastlanes.rle`
+    /// ([RleEncodingEncoder#encodeBool] — the same clustered-run shape as run-end, FastLanes'
+    /// vectorized chunked layout instead), keeping whichever candidate is smallest. Without
+    /// cascade depth, or when none wins, falls back to a raw `vortex.bool` bitmap.
     ///
     /// @param validity per-row validity bitmap
     /// @param ctx      the encode context
@@ -111,6 +113,10 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         EncodeResult runEnd = RunEndEncodingEncoder.encodeBool(validity, ctx);
         if (totalBytes(runEnd) < totalBytes(best)) {
             best = runEnd;
+        }
+        EncodeResult rle = RleEncodingEncoder.encodeBool(validity, ctx);
+        if (totalBytes(rle) < totalBytes(best)) {
+            best = rle;
         }
         return best;
     }

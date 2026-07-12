@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
+import io.github.dfa1.vortex.reader.array.LazyRleBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyRleByteArray;
 import io.github.dfa1.vortex.reader.array.LazyRleDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyRleFloatArray;
@@ -59,12 +60,6 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             return emptyArray(ctx);
         }
 
-        if (!(ctx.dtype() instanceof DType.Primitive p)) {
-            throw new VortexException(EncodingId.FASTLANES_RLE, "expected Primitive dtype, got " + ctx.dtype());
-        }
-        PType ptype = p.ptype();
-
-        DType valuesDtype = new DType.Primitive(ptype, false);
         DType indicesDtype = new DType.Primitive(indicesPtype, false);
         DType offsetsDtype = new DType.Primitive(offsetsPtype, false);
 
@@ -82,6 +77,23 @@ public final class RleEncodingDecoder implements EncodingDecoder {
                 ctx.decodeChildSegment(2, offsetsDtype, offsetsLen), (int) offsetsLen, offsetsPtype);
         long firstOffset = valuesLen > 0 && valuesIdxOffsets.length > 0 ? valuesIdxOffsets[0] : 0L;
         int numChunks = (int) (indicesLen / FL_CHUNK_SIZE);
+
+        if (ctx.dtype() instanceof DType.Bool) {
+            Array valuesArr = ctx.decodeChild(0, DType.BOOL, valuesLen);
+            Array valuesData = valuesArr instanceof MaskedArray m ? m.inner() : valuesArr;
+            Array boolResult = new LazyRleBoolArray(ctx.dtype(), rowCount, (BoolArray) valuesData,
+                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+            if (indicesValidity == null) {
+                return boolResult;
+            }
+            return new MaskedArray(boolResult, new OffsetBoolArray(DType.BOOL, rowCount, indicesValidity, offset));
+        }
+
+        if (!(ctx.dtype() instanceof DType.Primitive p)) {
+            throw new VortexException(EncodingId.FASTLANES_RLE, "expected Primitive dtype, got " + ctx.dtype());
+        }
+        PType ptype = p.ptype();
+        DType valuesDtype = new DType.Primitive(ptype, false);
 
         MemorySegment valuesSeg = ctx.decodeChildSegment(0, valuesDtype, valuesLen);
         Array result = switch (ptype) {
