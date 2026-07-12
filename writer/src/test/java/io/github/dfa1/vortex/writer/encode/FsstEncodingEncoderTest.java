@@ -57,8 +57,48 @@ class FsstEncodingEncoderTest {
                     Arguments.of("repeated-short", repeat("a", 1)),
                     Arguments.of("repeated-short", repeat("ab", 50)),
                     Arguments.of("all-empty", new String[]{"", "", "", ""}),
-                    Arguments.of("unicode", new String[]{"héllo", "wörld", "こんにちは"})
+                    Arguments.of("unicode", new String[]{"héllo", "wörld", "こんにちは"}),
+                    // Long repeated English text: iterative training should learn 3+ byte symbols
+                    // (e.g. "the ", "brown"), exercising the multi-byte match path end to end.
+                    Arguments.of("repeated-sentence",
+                            repeat("the quick brown fox jumps over the lazy dog", 40)),
+                    // Common English words repeated: many overlapping multi-byte symbols.
+                    Arguments.of("common-words", repeatCycle(
+                            new String[]{"hello", "world", "the", "quick", "brown", "hello", "world"}, 60)),
+                    // Strings all shorter than the 8-byte symbol cap.
+                    Arguments.of("sub-8-byte", new String[]{"a", "ab", "abc", "abcd", "abcde", "abcdef", "abcdefg"}),
+                    // Truly incompressible: single distinct-byte-heavy string. Must round-trip and
+                    // not blow up beyond ~2x raw (the escape-scheme floor).
+                    Arguments.of("incompressible", new String[]{distinctBytes()}),
+                    // Non-ASCII multi-byte UTF-8, repeated so symbols can span codepoint boundaries.
+                    Arguments.of("utf8-repeated", repeat("café ☕ münchen 日本語テスト", 30)),
+                    // Exactly-8-byte symbol repeated: confirms the length-8 boundary encodes/decodes.
+                    Arguments.of("exact-8-byte", repeat("ABCDEFGH", 50))
             );
+        }
+
+        private static String[] repeatCycle(String[] cycle, int times) {
+            String[] arr = new String[cycle.length * times];
+            for (int t = 0; t < times; t++) {
+                System.arraycopy(cycle, 0, arr, t * cycle.length, cycle.length);
+            }
+            return arr;
+        }
+
+        private static String distinctBytes() {
+            // 0x00..0xFF is not valid UTF-8; use the full printable-ASCII + Latin-1 letter range,
+            // each byte distinct so no bigram repeats — the adversarial case for symbol training.
+            StringBuilder sb = new StringBuilder();
+            for (char c = 'a'; c <= 'z'; c++) {
+                sb.append(c);
+            }
+            for (char c = 'A'; c <= 'Z'; c++) {
+                sb.append(c);
+            }
+            for (char c = '0'; c <= '9'; c++) {
+                sb.append(c);
+            }
+            return sb.toString();
         }
 
         private static String[] repeat(String s, int n) {
@@ -115,6 +155,56 @@ class FsstEncodingEncoderTest {
             for (int i = 0; i < values.length; i++) {
                 assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(values[i]);
             }
+        }
+
+        @Test
+        void encode_repeatedText_learnsMultiByteSymbols_compressesBelowRaw() {
+            // Given — highly repetitive text where iterative training should build long symbols.
+            String[] values = repeat("the quick brown fox jumps over the lazy dog", 100);
+            long rawBytes = 0;
+            for (String v : values) {
+                rawBytes += v.getBytes(StandardCharsets.UTF_8).length;
+            }
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
+            long compressedBytes = result.buffers().toArray(MemorySegment[]::new)[2].byteSize();
+            byte maxSymLen = maxSymbolLength(result);
+
+            // Then — real compression (< half raw) proves multi-byte symbols are in play, and the
+            // table contains symbols longer than the old fixed 2-byte limit.
+            assertThat(compressedBytes).isLessThan(rawBytes / 2);
+            assertThat(maxSymLen).isGreaterThan((byte) 2);
+        }
+
+        @Test
+        void encode_incompressible_staysUnderTwiceRaw() {
+            // Given — all-distinct bytes, the adversarial case: no repeated substrings to learn.
+            StringBuilder sb = new StringBuilder();
+            for (char c = 'a'; c <= 'z'; c++) {
+                sb.append(c);
+            }
+            String[] values = {sb.toString()};
+            long rawBytes = sb.toString().getBytes(StandardCharsets.UTF_8).length;
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
+            long compressedBytes = result.buffers().toArray(MemorySegment[]::new)[2].byteSize();
+
+            // Then — must not regress past the escape-scheme floor of ~2x raw.
+            assertThat(compressedBytes).isLessThanOrEqualTo(rawBytes * 2);
+        }
+
+        private static byte maxSymbolLength(EncodeResult result) {
+            MemorySegment symLenBuf = result.buffers().toArray(MemorySegment[]::new)[1];
+            byte max = 0;
+            for (long i = 0; i < symLenBuf.byteSize(); i++) {
+                byte len = symLenBuf.get(ValueLayout.JAVA_BYTE, i);
+                if (len > max) {
+                    max = len;
+                }
+            }
+            return max;
         }
     }
 
