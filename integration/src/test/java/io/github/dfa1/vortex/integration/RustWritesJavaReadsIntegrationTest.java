@@ -39,12 +39,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.ValueLayout;
-import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.ByteOrder;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -54,7 +51,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Cross-compatibility: Rust (JNI) writer → Java reader.
 class RustWritesJavaReadsIntegrationTest {
@@ -220,33 +216,16 @@ class RustWritesJavaReadsIntegrationTest {
         }
     }
 
+    // Cache is keyed by fixture version: the Rust reference rewrites the same file names
+    // with different bytes across versions, so a version-less cache would silently serve
+    // stale bytes after a version bump.
     private static Path downloadIfMissing(Path tmp, String name) throws Exception {
-        // Cache is keyed by fixture version: the Rust reference rewrites the same
-        // file names with different bytes across versions, so a version-less cache
-        // would silently serve stale bytes after a version bump.
-        Path cached = Path.of("/tmp/pco-fixtures", FIXTURE_VERSION, name);
-        if (Files.exists(cached)) {
-            return cached;
-        }
-        Path dest = tmp.resolve(name);
-        var conn = (HttpURLConnection) URI.create(S3_BASE + name).toURL().openConnection();
-        int code = conn.getResponseCode();
-        // S3 occasionally returns a transient 5xx; that is infrastructure noise, not
-        // an interop regression, so skip rather than redden the build. A 4xx (e.g. the
-        // fixture was removed/renamed) is a genuine signal and still fails.
-        assumeTrue(code < 500, () -> "transient S3 error " + code + " for " + name);
-        try (var in = conn.getInputStream()) {
-            Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
-        }
-        return dest;
+        return LocalHttpCache.downloadIfMissing(tmp,
+                Path.of("/tmp/pco-fixtures", FIXTURE_VERSION), URI.create(S3_BASE + name), name);
     }
 
     private static void assumeNetworkAvailable() {
-        try {
-            URI.create("https://vortex-compat-fixtures.s3.amazonaws.com").toURL().openStream().close();
-        } catch (Exception _) {
-            assumeTrue(false, "no network");
-        }
+        LocalHttpCache.assumeNetworkAvailable(URI.create("https://vortex-compat-fixtures.s3.amazonaws.com"));
     }
 
     // ── S3 fixture round-trip: Rust-written pco → Java reader ────────────────

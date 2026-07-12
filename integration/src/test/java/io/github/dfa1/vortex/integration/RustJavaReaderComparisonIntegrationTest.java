@@ -41,9 +41,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -59,25 +56,25 @@ import static org.assertj.core.data.Percentage.withPercentage;
 /// decode. A mismatch in any column value points to a decoding bug in the Java reader.
 class RustJavaReaderComparisonIntegrationTest {
 
+    private static final String FIXTURE_VERSION = "v0.75.0";
     private static final URI BASE =
-            URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.75.0/arrays/");
+            URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/" + FIXTURE_VERSION + "/arrays/");
 
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
-    private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     static {
         NativeLoader.loadJni();
     }
 
-    private static Path download(URI uri, Path dir) throws Exception {
+    private static Path download(URI uri, Path tmp) throws Exception {
         String name = uri.getPath().substring(uri.getPath().lastIndexOf('/') + 1);
-        Path file = dir.resolve(name);
-        HTTP.send(
-                HttpRequest.newBuilder(uri).GET().build(),
-                HttpResponse.BodyHandlers.ofFile(file)
-        );
-        return file;
+        return LocalHttpCache.downloadIfMissing(tmp,
+                Path.of("/tmp/rust-fixtures", FIXTURE_VERSION), uri, name);
+    }
+
+    private static void assumeNetworkAvailable() {
+        LocalHttpCache.assumeNetworkAvailable(URI.create("https://vortex-compat-fixtures.s3.amazonaws.com"));
     }
 
     private static Stats rustStats(Path file) throws Exception {
@@ -403,6 +400,7 @@ class RustJavaReaderComparisonIntegrationTest {
     })
     void rust_vs_javaReader_statsMatch(String fixture, @TempDir Path tmp) throws Exception {
         // Given
+        assumeNetworkAvailable();
         Path local = download(BASE.resolve(fixture), tmp);
         String inspect = VortexInspector.inspect(VortexReader.open(local));
         System.out.println(inspect);

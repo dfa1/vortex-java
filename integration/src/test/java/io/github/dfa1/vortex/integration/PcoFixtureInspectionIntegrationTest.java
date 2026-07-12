@@ -12,13 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.foreign.MemorySegment;
-import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,7 +23,6 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Phase 0 scoping for `vortex.pco` decode port.
 ///
@@ -306,34 +302,16 @@ class PcoFixtureInspectionIntegrationTest {
         return String.valueOf(d);
     }
 
+    // Reuse the version-keyed /tmp/pco-fixtures cache if present. The version segment
+    // matters: the Rust reference rewrites identical file names with different bytes
+    // across versions, so a version-less cache would serve stale bytes after a bump.
     private static Path downloadIfMissing(Path tmp, String name) throws Exception {
-        // Reuse the version-keyed /tmp/pco-fixtures cache if present. The version
-        // segment matters: the Rust reference rewrites identical file names with
-        // different bytes across versions, so a version-less cache would serve
-        // stale bytes after a bump.
-        Path cached = Path.of("/tmp/pco-fixtures", FIXTURE_VERSION, name);
-        if (Files.exists(cached)) {
-            return cached;
-        }
-        Path dest = tmp.resolve(name);
-        var conn = (HttpURLConnection) URI.create(BASE + name).toURL().openConnection();
-        int code = conn.getResponseCode();
-        // S3 occasionally returns a transient 5xx; that is infrastructure noise, not
-        // an interop regression, so skip rather than redden the build. A 4xx (e.g. the
-        // fixture was removed/renamed) is a genuine signal and still fails.
-        assumeTrue(code < 500, () -> "transient S3 error " + code + " for " + name);
-        try (var in = conn.getInputStream()) {
-            Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
-        }
-        return dest;
+        return LocalHttpCache.downloadIfMissing(tmp,
+                Path.of("/tmp/pco-fixtures", FIXTURE_VERSION), URI.create(BASE + name), name);
     }
 
     private static void assumeNetworkAvailable() {
-        try {
-            URI.create("https://vortex-compat-fixtures.s3.amazonaws.com").toURL().openStream().close();
-        } catch (Exception _) {
-            assumeTrue(false, "no network");
-        }
+        LocalHttpCache.assumeNetworkAvailable(URI.create("https://vortex-compat-fixtures.s3.amazonaws.com"));
     }
 
     @Test

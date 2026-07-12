@@ -15,16 +15,13 @@ import io.github.dfa1.vortex.reader.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Round-trip: Parquet (via Hardwood) → Vortex (via ParquetImporter) → VortexReader.
 ///
@@ -60,25 +57,14 @@ class ParquetImportIntegrationTest {
     }
 
     private static Path download(Path tmp, String name) throws Exception {
-        Path cached = Path.of("/tmp/parquet-fixtures", name);
-        if (Files.exists(cached)) {
-            return cached;
-        }
-        Path dest = tmp.resolve(name);
-        try (var in = URI.create(FIXTURE_URL).toURL().openStream()) {
-            Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
-        }
-        return dest;
+        return LocalHttpCache.downloadIfMissing(tmp,
+                Path.of("/tmp/parquet-fixtures"), URI.create(FIXTURE_URL), name);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static void assumeNetworkAvailable() {
-        try {
-            URI.create("https://raw.githubusercontent.com").toURL().openStream().close();
-        } catch (Exception _) {
-            assumeTrue(false, "no network");
-        }
+        LocalHttpCache.assumeNetworkAvailable(URI.create("https://raw.githubusercontent.com"));
     }
 
     @Test
@@ -154,32 +140,20 @@ class ParquetImportIntegrationTest {
     @Test
     void taxiParquet_importedSize_vsOriginal(@TempDir Path tmp) throws Exception {
         // Given — NYC Yellow Taxi 2024-01 (~3M rows, 19 cols, mix of I64 / F64 / I32 / Utf8).
-        // Uses the same parquet file as ParquetVsVortexReadBenchmark (cached in /tmp).
-        Path cached = Path.of("/tmp", "yellow_tripdata_2024-01.parquet");
-        Path src;
-        if (java.nio.file.Files.exists(cached)) {
-            src = cached;
-        } else {
-            // CloudFront rate-limits / blocks some egress IPs (notably GitHub Actions
-            // runners → 403). Skip rather than fail when the download isn't possible.
-            src = tmp.resolve("yellow_tripdata_2024-01.parquet");
-            try (var in = URI.create("https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet")
-                    .toURL().openStream()) {
-                java.nio.file.Files.copy(in, src);
-            } catch (IOException e) {
-                org.junit.jupiter.api.Assumptions.assumeTrue(false,
-                        "could not download taxi parquet: " + e.getMessage());
-                return;
-            }
-        }
+        // Same fixture/cache path as TaxiParquetOracleVsJavaIntegrationTest. CloudFront
+        // rate-limits/blocks some egress IPs (notably GitHub Actions runners → 403), so any
+        // download failure skips rather than fails.
+        Path src = LocalHttpCache.downloadIfMissingOrSkip(tmp, Path.of("/tmp"),
+                URI.create("https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet"),
+                "yellow_tripdata_2024-01.parquet");
         Path vortex = tmp.resolve("taxi.vortex");
 
         // When
         ParquetImporter.importParquet(src, vortex);
 
         // Then
-        long parquetSize = java.nio.file.Files.size(src);
-        long vortexSize = java.nio.file.Files.size(vortex);
+        long parquetSize = Files.size(src);
+        long vortexSize = Files.size(vortex);
         System.out.printf(
                 "[TaxiSizeComparison] Parquet=%,d bytes (%.1f MB)  Vortex=%,d bytes (%.1f MB)  Vortex/Parquet=%.2fx%n",
                 parquetSize, parquetSize / 1_048_576.0,

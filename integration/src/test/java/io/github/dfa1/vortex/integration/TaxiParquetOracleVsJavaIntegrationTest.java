@@ -14,12 +14,12 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Oracle vs SUT correctness test for the parquet importer.
 ///
@@ -33,22 +33,27 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// value exactly.
 class TaxiParquetOracleVsJavaIntegrationTest {
 
-    private static final Path TAXI_PARQUET = Path.of("/tmp/yellow_tripdata_2024-01.parquet");
+    // NYC Yellow Taxi 2024-01, same fixture/cache path as
+    // ParquetImportIntegrationTest.taxiParquet_importedSize_vsOriginal.
+    private static final String TAXI_URL =
+            "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet";
+    private static final String TAXI_NAME = "yellow_tripdata_2024-01.parquet";
 
     @Test
     void parquetImport_csvExport_matchesDirectParquetRead(@TempDir Path tmp) throws Exception {
         // Given
-        assumeTrue(Files.exists(TAXI_PARQUET), "taxi parquet not cached in /tmp — skip");
+        Path taxiParquet = LocalHttpCache.downloadIfMissingOrSkip(
+                tmp, Path.of("/tmp"), URI.create(TAXI_URL), TAXI_NAME);
 
         Path oracleCsv = tmp.resolve("oracle.csv");
         Path sutVortex = tmp.resolve("sut.vortex");
         Path sutCsv = tmp.resolve("sut.csv");
 
         // When — oracle: hardwood → CSV
-        writeOracleCsv(TAXI_PARQUET, oracleCsv);
+        writeOracleCsv(taxiParquet, oracleCsv);
 
         // When — SUT: parquet → vortex → CSV
-        ParquetImporter.importParquet(TAXI_PARQUET, sutVortex);
+        ParquetImporter.importParquet(taxiParquet, sutVortex);
         try (BufferedWriter writer = Files.newBufferedWriter(sutCsv)) {
             CsvExporter.exportCsv(sutVortex, writer, ExportOptions.defaults());
         }
