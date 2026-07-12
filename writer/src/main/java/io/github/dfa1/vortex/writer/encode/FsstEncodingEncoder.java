@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 /// Write-only encoder for `vortex.fsst`.
 ///
@@ -49,6 +50,15 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// pass still runs over every string. 25k strings is a large-enough sample to learn a stable
     /// table while keeping training cost bounded.
     private static final int TRAINING_SAMPLE_STRINGS = 25_000;
+
+    /// Number of contiguous strides the training sample is drawn from, mirroring
+    /// [CascadingCompressor]'s stratified sampling. One random contiguous chunk of rows is
+    /// taken from each stride so the sample covers the whole input rather than only its prefix.
+    private static final int TRAINING_STRIDE_COUNT = 32;
+
+    /// Fixed seed for the training-sample PRNG. Encoding must be reproducible: the same input
+    /// always trains the same symbol table and produces byte-identical output.
+    private static final long TRAINING_SAMPLE_SEED = 0x5EEDL;
 
     @Override
     public EncodingId encodingId() {
@@ -138,11 +148,12 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// @return the final symbol table (0-255 symbols, each 1-8 bytes)
     private static SymbolTable trainSymbolTable(byte[][] byteArrays) {
         int sampleSize = Math.min(byteArrays.length, TRAINING_SAMPLE_STRINGS);
+        int[] sampleIndices = sampleRowIndices(byteArrays.length, sampleSize);
         SymbolTable table = SymbolTable.empty();
         for (int iteration = 0; iteration < TRAINING_ITERATIONS; iteration++) {
             Map<SymbolCandidate, Long> counts = new HashMap<>();
-            for (int s = 0; s < sampleSize; s++) {
-                table.countCandidates(byteArrays[s], counts);
+            for (int idx : sampleIndices) {
+                table.countCandidates(byteArrays[idx], counts);
             }
             if (counts.isEmpty()) {
                 break;
@@ -150,6 +161,45 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             table = SymbolTable.fromRankedCandidates(counts);
         }
         return table;
+    }
+
+    /// Stratified sample of row indices: partitions `[0, n)` into `TRAINING_STRIDE_COUNT`
+    /// contiguous strides and draws one contiguous sub-range from each, the same scheme as
+    /// `CascadingCompressor`'s stratified sampling. Sampling only the first `sampleSize` rows
+    /// would silently bias the learned table on inputs sorted or clustered by value; this covers
+    /// the whole input while keeping each drawn chunk contiguous.
+    ///
+    /// @param n total row count
+    /// @param sampleSize number of rows to draw, `<= n`
+    /// @return `sampleSize` row indices into `[0, n)`
+    @SuppressWarnings("java:S2245") // Deterministic PRNG is the contract: training samples must
+                                    // be reproducible across builds. No security boundary.
+    private static int[] sampleRowIndices(int n, int sampleSize) {
+        int[] indices = new int[sampleSize];
+        if (sampleSize == 0) {
+            return indices;
+        }
+        int strideCount = Math.min(TRAINING_STRIDE_COUNT, sampleSize);
+        Random rng = new Random(TRAINING_SAMPLE_SEED);
+        int dstOff = 0;
+        int partRemainder = n % strideCount;
+        int partShortStep = n / strideCount;
+        int partLongStep = partShortStep + 1;
+        int sampleRemainder = sampleSize % strideCount;
+        int sampleShortStep = sampleSize / strideCount;
+        int sampleLongStep = sampleShortStep + 1;
+        for (int s = 0; s < strideCount; s++) {
+            int partStart = s * partShortStep + Math.min(s, partRemainder);
+            int partLen = s < partRemainder ? partLongStep : partShortStep;
+            int sampleLen = s < sampleRemainder ? sampleLongStep : sampleShortStep;
+            int maxStart = Math.max(0, partLen - sampleLen);
+            int offsetInPart = maxStart == 0 ? 0 : rng.nextInt(maxStart + 1);
+            int srcOff = partStart + offsetInPart;
+            for (int k = 0; k < sampleLen; k++) {
+                indices[dstOff++] = srcOff + k;
+            }
+        }
+        return indices;
     }
 
     /// A candidate symbol: up to 8 bytes packed LSB-first into a `long` (first byte in the low
@@ -164,22 +214,66 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// extension candidates during training.
     private static final class SymbolTable {
 
+        /// Smallest match-index capacity; also the capacity used for the empty table.
+        private static final int MIN_INDEX_CAPACITY = 4;
+
         private final long[] packed;
         private final int[] lengths;
         private final int count;
 
-        /// Index for O(1) exact-match lookup during greedy parsing and compression, keyed by
-        /// `(packedBytes, length)`, mapping to the symbol code.
-        private final Map<SymbolCandidate, Integer> codeByCandidate;
+        /// Open-addressing index for exact-match lookup during greedy parsing and compression,
+        /// keyed by `(packedBytes, length)`, mapping to the symbol code. Plain primitive arrays
+        /// rather than `Map<SymbolCandidate, Integer>`: `longestMatch` below runs up to
+        /// `MAX_SYMBOL_LENGTH` probes per byte position, for every position of every row in the
+        /// whole dataset, so a boxed record key per probe is real allocation pressure in the
+        /// hottest loop this encoder has.
+        private final long[] indexKey;
+        private final byte[] indexLen; // 0 = empty slot; valid symbol lengths are 1..8
+        private final int[] indexCode;
+        private final int indexMask;
 
         private SymbolTable(long[] packed, int[] lengths, int count) {
             this.packed = packed;
             this.lengths = lengths;
             this.count = count;
-            this.codeByCandidate = new HashMap<>(count * 2);
-            for (int code = 0; code < count; code++) {
-                codeByCandidate.put(new SymbolCandidate(packed[code], lengths[code]), code);
+
+            int capacity = MIN_INDEX_CAPACITY;
+            while (capacity < count * 4) {
+                capacity <<= 1;
             }
+            this.indexMask = capacity - 1;
+            this.indexKey = new long[capacity];
+            this.indexLen = new byte[capacity];
+            this.indexCode = new int[capacity];
+            for (int code = 0; code < count; code++) {
+                indexInsert(packed[code], lengths[code], code);
+            }
+        }
+
+        private void indexInsert(long key, int len, int code) {
+            int idx = indexHash(key, len) & indexMask;
+            while (indexLen[idx] != 0) {
+                idx = (idx + 1) & indexMask;
+            }
+            indexKey[idx] = key;
+            indexLen[idx] = (byte) len;
+            indexCode[idx] = code;
+        }
+
+        private int indexLookup(long key, int len) {
+            int idx = indexHash(key, len) & indexMask;
+            while (indexLen[idx] != 0) {
+                if (indexLen[idx] == len && indexKey[idx] == key) {
+                    return indexCode[idx];
+                }
+                idx = (idx + 1) & indexMask;
+            }
+            return -1;
+        }
+
+        private static int indexHash(long key, int len) {
+            long h = (key ^ ((long) len * 0x9E3779B97F4A7C15L)) * 0xC2B2AE3D27D4EB4FL;
+            return (int) (h ^ (h >>> 32));
         }
 
         static SymbolTable empty() {
@@ -257,8 +351,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         private int longestMatch(byte[] input, int pos) {
             int maxLen = Math.min(MAX_SYMBOL_LENGTH, input.length - pos);
             for (int len = maxLen; len >= 1; len--) {
-                Integer code = codeByCandidate.get(new SymbolCandidate(pack(input, pos, len), len));
-                if (code != null) {
+                int code = indexLookup(pack(input, pos, len), len);
+                if (code >= 0) {
                     return code;
                 }
             }
