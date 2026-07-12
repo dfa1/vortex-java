@@ -7,30 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-07-12
+
+**Registry cleanup, schema fidelity, and list-column support** are the three themes of this
+release. `ReadRegistry` and `WriteRegistry` are now builder-only (matching `LayoutRegistry`),
+replacing `ServiceLoader` discovery with explicit `registerDefaults()` calls — registration is now
+visible at the call site instead of hidden in `META-INF/services` files. The `fbs-gen` code
+generator now strips trailing underscores from schema type names before prefixing with `Fbs`,
+keeping generated Java identifiers clean (`FbsStruct_` → `FbsStruct`) while staying wire-identical
+to the upstream FlatBuffers schema. `List`/`FixedSizeList` columns gain full round-trip support:
+`VortexWriter` now encodes `vortex.list` by default, `CsvExporter` renders both as JSON array cells
+at any offset width, and `ScanIterator` can slice a shared list array whose covering flat chunk
+spans several scan windows. Nullable `Utf8`/`Binary` columns now compress through the full cascade
+instead of falling back to raw `vortex.varbin`, cutting file size 10–47× on the string-heavy
+Raincloud corpus. Several correctness fixes land too: blank column names (produced by real
+Raincloud corpus files) are now accepted on both paths; `EncodingId`/`LayoutId` reject control
+characters; unsigned Parquet columns compare correctly; and six decoders receive tighter validation
+against malformed input (`ConstantEncodingDecoder`, `AlpRdEncodingDecoder`, `SparseEncodingDecoder`,
+`DateTimePartsArrays`, `VarBinArray.DictMode`, `ScanIterator`).
+
 ### Added
 
-- `CsvExporter` now renders `FixedSizeList` and `List` columns as JSON array cells (`[v0,v1,...]`), matching the same element-rendering rules used for nested struct fields. Fixes export of Raincloud slugs with vector or list columns (e.g. `glove-*`, `osm-germany-relations`).
-- `VortexWriter` now encodes `vortex.list` columns by default (both flat and cascade paths). Previously only `vortex.fixed_size_list` was registered; `DType.List` columns threw at write time unless a custom registry was supplied.
-
-### Fixed
-
-- Nullable Utf8/Binary columns are now compressed through the full cascade instead of stored as raw `vortex.varbin`. `MaskedEncodingEncoder` previously encoded its non-null values with a fixed first-match encoder (primitive/varbin), so a nullable low-cardinality string column never reached Dict or FSST — producing files 10–47× larger than the Rust reference on the string-heavy Raincloud corpus (e.g. `uci-mushroom` 22×, `uci-online-retail-ii` 25×). The masked values now run through the same `CascadingCompressor` as dense columns, dropping those ratios to ~2–3×. ([#258](https://github.com/dfa1/vortex-java/issues/258))
-- `ScanIterator` can now slice a shared `ListArray`/`FixedSizeListArray` whose covering flat chunk spans several scan windows (misaligned per-column chunk grids). Previously any scan over such a column threw `VortexException("scan: cannot slice shared array of type ...")` — a real reading gap, not only an export-side one. ([#265](https://github.com/dfa1/vortex-java/issues/265))
-- `CsvExporter` now reads `vortex.list` offsets of any integer width (`I8`/`U8`/`I16`/`U16`, matching `VarBinArray`'s offsets), not only `I32`/`I64`. A narrower-offset list column (e.g. Raincloud's `osm-germany-relations`, whose offsets are `I16`) previously threw `VortexException("unexpected list offsets type: ...")` on export. ([#263](https://github.com/dfa1/vortex-java/issues/263))
-
-## [0.12.2] — 2026-07-10
-
-**Registry cleanup and schema fidelity** are the two themes of this release. `ReadRegistry` and
-`WriteRegistry` are now builder-only (matching `LayoutRegistry`), replacing `ServiceLoader`
-discovery with explicit `registerDefaults()` calls — registration is now visible at the call site
-instead of hidden in `META-INF/services` files. The `fbs-gen` code generator now strips trailing
-underscores from schema type names before prefixing with `Fbs`, keeping generated Java identifiers
-clean (`FbsStruct_` → `FbsStruct`) while staying wire-identical to the upstream FlatBuffers schema.
-Several correctness fixes land too: blank column names (produced by real Raincloud corpus files)
-are now accepted on both paths; `EncodingId`/`LayoutId` reject control characters; unsigned
-Parquet columns compare correctly; and six decoders receive tighter validation against malformed
-input (`ConstantEncodingDecoder`, `AlpRdEncodingDecoder`, `SparseEncodingDecoder`,
-`DateTimePartsArrays`, `VarBinArray.DictMode`, `ScanIterator`).
+- `CsvExporter` now renders `FixedSizeList` and `List` columns as JSON array cells (`[v0,v1,...]`), matching the same element-rendering rules used for nested struct fields. Fixes export of Raincloud slugs with vector or list columns (e.g. `glove-*`, `osm-germany-relations`). ([#257](https://github.com/dfa1/vortex-java/issues/257))
+- `VortexWriter` now encodes `vortex.list` columns by default (both flat and cascade paths). Previously only `vortex.fixed_size_list` was registered; `DType.List` columns threw at write time unless a custom registry was supplied. ([#257](https://github.com/dfa1/vortex-java/issues/257))
 
 ### Changed
 
@@ -52,8 +51,9 @@ input (`ConstantEncodingDecoder`, `AlpRdEncodingDecoder`, `SparseEncodingDecoder
 - `RaincloudConformanceIntegrationTest` oracle now formats `INT32`/`INT64` Parquet columns with a `UINT_32`/`UINT_64` logical-type annotation using `Integer.toUnsignedString`/`Long.toUnsignedString`, matching the unsigned representation that Vortex stores as `U32`/`U64`; previously the Parquet signed interpretation diverged for values above `Integer.MAX_VALUE` (e.g. `total_boosters` in the covid-world-vaccination-progress corpus). ([#253](https://github.com/dfa1/vortex-java/issues/253))
 - `RaincloudConformanceIntegrationTest` now runs the Parquet oracle and vortex-java export in parallel via virtual threads connected by `PipedWriter`/`PipedReader`, comparing line-by-line without temp files; previously both CSV streams were written to disk and then compared, causing OOM for large corpus slugs (e.g. bi-bimbo with 74 M rows) and doubling wall time. (internal)
 - `BoolEncodingDecoder` now handles nullable `vortex.bool` columns: when the encoding node has one child, it is decoded as a validity bitmask and the values array is wrapped in a `MaskedArray`; previously the validity child was silently ignored and null rows were decoded as `false`, causing silent corruption in any corpus file with a nullable boolean column (e.g. bi-eixo `st_extemporaneo_matricula`). (internal)
-
-## [Unreleased]
+- Nullable Utf8/Binary columns are now compressed through the full cascade instead of stored as raw `vortex.varbin`. `MaskedEncodingEncoder` previously encoded its non-null values with a fixed first-match encoder (primitive/varbin), so a nullable low-cardinality string column never reached Dict or FSST — producing files 10–47× larger than the Rust reference on the string-heavy Raincloud corpus (e.g. `uci-mushroom` 22×, `uci-online-retail-ii` 25×). The masked values now run through the same `CascadingCompressor` as dense columns, dropping those ratios to ~2–3×. ([#258](https://github.com/dfa1/vortex-java/issues/258))
+- `ScanIterator` can now slice a shared `ListArray`/`FixedSizeListArray` whose covering flat chunk spans several scan windows (misaligned per-column chunk grids). Previously any scan over such a column threw `VortexException("scan: cannot slice shared array of type ...")` — a real reading gap, not only an export-side one. ([#265](https://github.com/dfa1/vortex-java/issues/265))
+- `CsvExporter` now reads `vortex.list` offsets of any integer width (`I8`/`U8`/`I16`/`U16`, matching `VarBinArray`'s offsets), not only `I32`/`I64`. A narrower-offset list column (e.g. Raincloud's `osm-germany-relations`, whose offsets are `I16`) previously threw `VortexException("unexpected list offsets type: ...")` on export. ([#263](https://github.com/dfa1/vortex-java/issues/263))
 
 ## [0.12.1] — 2026-07-08
 
