@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.proto.ProtoNullValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -9,6 +10,7 @@ import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -31,6 +33,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Property: encode then decode is lossless for constant (all-equal) arrays.
 /// Property: decode emits a metadata-only `LazyConstantXxxArray` — no buffer at any rowCount.
@@ -242,6 +245,50 @@ class ConstantEncodingEncoderTest {
             assertThat(result.length()).isEqualTo(rowCount);
             assertThat(result.getByte(0)).isEqualTo(constant);
             assertThat(result.getByte(rowCount - 1)).isEqualTo(constant);
+        }
+    }
+
+    @Nested
+    class Bool {
+
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void encodeDecode_isLossless(boolean value) {
+            // Given / When
+            boolean[] data = {value, value, value};
+            EncodeResult resultEncoded = ENCODER.encode(DType.BOOL, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DType.BOOL, REGISTRY);
+            Array result = DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(data.length);
+            assertThat(result).isInstanceOf(LazyConstantBoolArray.class);
+            assertThat(((LazyConstantBoolArray) result).value()).isEqualTo(value);
+        }
+
+        @Test
+        void encode_mixedValues_throws() {
+            // Given
+            boolean[] data = {true, false};
+
+            // When
+            // Then
+            assertThatThrownBy(() -> ENCODER.encode(DType.BOOL, data, EncodeTestHelper.testCtx()))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("not a constant array");
+        }
+
+        @Test
+        void encodeCascade_mixedValues_notApplicable() {
+            // Given — the cascade contract needs a non-applicable step, not an exception, so a
+            // sample-selected winner that isn't constant on the full data can be excluded and retried
+            boolean[] data = {true, false};
+
+            // When
+            CascadeStep step = ENCODER.encodeCascade(DType.BOOL, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(step.applicable()).isFalse();
         }
     }
 

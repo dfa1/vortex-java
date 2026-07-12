@@ -300,4 +300,34 @@ class MaskedEncodingEncoderTest {
             assertThat(masked.isValid(i)).as("row %d", i).isEqualTo(validity[i]);
         }
     }
+
+    @Test
+    void withCascade_clusteredNulls_prefersRunEndOverSparseAndRawBitmap() {
+        // Given — 2000 rows, one contiguous invalid stretch (rows 500-999): a handful of runs,
+        // where sparse would pay a patch per invalid row but run-end pays only for the two
+        // boundaries — the shape run-end targets that sparse does not.
+        int n = 2_000;
+        int[] values = new int[n];
+        boolean[] validity = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            values[i] = i;
+            validity[i] = i < 500 || i >= 1_000;
+        }
+        DType i32Nullable = new DType.Primitive(PType.I32, true);
+        NullableData data = new NullableData(values, validity);
+        EncodeContext cascadeCtx = EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.loadAll());
+
+        // When
+        EncodeResult result = SUT.encode(i32Nullable, data, cascadeCtx);
+
+        // Then — the validity child picked vortex.runend over sparse and a raw bitmap
+        assertThat(result.rootNode().children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_RUNEND);
+
+        // And every value and null position round-trips exactly
+        Array decoded = DECODER.decode(DecodeTestHelper.toDecodeContext(result, (long) n, i32Nullable, ReadRegistry.loadAll()));
+        MaskedArray masked = (MaskedArray) decoded;
+        for (int i = 0; i < n; i++) {
+            assertThat(masked.isValid(i)).as("row %d", i).isEqualTo(validity[i]);
+        }
+    }
 }

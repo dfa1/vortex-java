@@ -49,6 +49,59 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         return Estimate.COMPLETE;
     }
 
+    /// Encodes a boolean array as `vortex.runend`: consecutive equal values collapse into one run.
+    /// Unlike [SparseEncodingEncoder#encodeBool] (good for a dominant value with scattered rare
+    /// flips, at the cost of a patch per flip) this wins on CLUSTERED validity — long consecutive
+    /// stretches of valid or invalid rows — where every flip costs a run regardless of which value
+    /// is more frequent. Always builds the result; callers compare against alternatives (raw
+    /// bitmap, sparse) and keep whichever is smallest.
+    ///
+    /// @param validity per-row boolean array; must contain at least one `true` and one `false`
+    ///                 (an all-same array is cheaper as `vortex.constant`)
+    /// @param ctx      encode context
+    /// @return the encoded `vortex.runend` result
+    static EncodeResult encodeBool(boolean[] validity, EncodeContext ctx) {
+        int n = validity.length;
+        List<Integer> ends = new ArrayList<>();
+        List<Boolean> values = new ArrayList<>();
+        boolean runVal = validity[0];
+        for (int i = 1; i < n; i++) {
+            if (validity[i] != runVal) {
+                ends.add(i);
+                values.add(runVal);
+                runVal = validity[i];
+            }
+        }
+        ends.add(n);
+        values.add(runVal);
+
+        int numRuns = ends.size();
+        MemorySegment endsBuf = ctx.arena().allocate((long) numRuns * 4, 4);
+        for (int i = 0; i < numRuns; i++) {
+            endsBuf.setAtIndex(VortexFormat.LE_INT, i, ends.get(i));
+        }
+        boolean[] valuesArr = new boolean[numRuns];
+        for (int i = 0; i < numRuns; i++) {
+            valuesArr[i] = values.get(i);
+        }
+        EncodeResult valuesResult = new BoolEncodingEncoder().encode(DType.BOOL, valuesArr, ctx);
+
+        byte[] metaBytes = new ProtoRunEndMetadata(
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U32.ordinal()),
+                numRuns, 0L).encode();
+
+        EncodeNode endsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+        EncodeNode valuesNode = EncodeNode.remapBufferIndices(valuesResult.rootNode(), 1);
+
+        List<MemorySegment> buffers = new ArrayList<>();
+        buffers.add(endsBuf);
+        buffers.addAll(valuesResult.buffers());
+
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_RUNEND, MemorySegment.ofArray(metaBytes),
+                new EncodeNode[]{endsNode, valuesNode}, new int[0]);
+        return new EncodeResult(root, List.copyOf(buffers), null, null);
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Primitive p)) {

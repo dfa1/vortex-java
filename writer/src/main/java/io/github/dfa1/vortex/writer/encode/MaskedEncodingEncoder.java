@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -86,27 +85,34 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// Encodes a masked column's validity bitmap.
     ///
     /// Every row sharing the same validity (the whole chunk all-valid or all-invalid) is
-    /// `vortex.constant` — a common case that otherwise costs a full `n/8`-byte bitmap for no
-    /// information. Otherwise, with cascade depth available, also tries `vortex.sparse`
-    /// ([SparseEncodingEncoder#encodeBool]) — a clustered or regular null pattern can compress its
-    /// patch-index array well below a raw bitmap — and keeps whichever candidate is smaller.
-    /// Without cascade depth, or when sparse doesn't win, falls back to a raw `vortex.bool` bitmap.
+    /// `vortex.constant` ([ConstantEncodingEncoder]) — a common case that otherwise costs a full
+    /// `n/8`-byte bitmap for no information. Otherwise, with cascade depth available, also tries
+    /// `vortex.sparse` ([SparseEncodingEncoder#encodeBool] — wins on a dominant value with
+    /// scattered rare flips, its patch-index array compressed further) and `vortex.runend`
+    /// ([RunEndEncodingEncoder#encodeBool] — wins on long clustered runs of valid/invalid rows,
+    /// regardless of which value dominates), keeping whichever candidate is smallest. Without
+    /// cascade depth, or when neither wins, falls back to a raw `vortex.bool` bitmap.
     ///
     /// @param validity per-row validity bitmap
     /// @param ctx      the encode context
     /// @return the encoded validity child
     private static EncodeResult encodeValidity(boolean[] validity, EncodeContext ctx) {
         if (isConstantValidity(validity)) {
-            boolean value = validity.length == 0 || validity[0];
-            ProtoScalarValue scalar = ProtoScalarValue.ofBoolValue(value);
-            return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.encode()));
+            return new ConstantEncodingEncoder().encode(DType.BOOL, validity, ctx);
         }
-        EncodeResult raw = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeResult best = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
         if (ctx.allowedCascading() <= 0) {
-            return raw;
+            return best;
         }
         EncodeResult sparse = SparseEncodingEncoder.encodeBool(validity, ctx);
-        return totalBytes(sparse) < totalBytes(raw) ? sparse : raw;
+        if (totalBytes(sparse) < totalBytes(best)) {
+            best = sparse;
+        }
+        EncodeResult runEnd = RunEndEncodingEncoder.encodeBool(validity, ctx);
+        if (totalBytes(runEnd) < totalBytes(best)) {
+            best = runEnd;
+        }
+        return best;
     }
 
     private static long totalBytes(EncodeResult result) {

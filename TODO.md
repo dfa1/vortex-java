@@ -12,19 +12,15 @@
 - [ ] Performance tests must be peer-reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
 - [ ] **Vector API adoption** — see [ADR-0005](adr/0005-vector-api-adoption.md).
-- [ ] **`DType.Bool` still has no RLE/Constant-at-the-`accepts()`-level encoding** —
-  `RunEndEncodingEncoder`/`RleEncodingEncoder`/`ConstantEncodingEncoder` all `accepts()` only
-  `DType.Primitive`. `MaskedEncodingEncoder` now covers the all-valid/all-invalid case directly
-  (`vortex.constant`, bypassing `accepts()`) and the mixed-validity case via a dedicated
-  `SparseEncodingEncoder.encodeBool` path (fill = majority value, patches = minority positions,
-  index array cascaded through `vortex.sequence`/`fastlanes.delta`/FoR/bitpack) — closing most of
-  the remaining vortex-jni gap on a clustered/regular null pattern (200k-row/10-chunk nullable
-  low-cardinality Utf8 benchmark: 1.45× → 1.17×, commits 5fe8b544/ecd47ead + Sparse-for-Bool).
-  What's left: a **scattered, non-clustered** null pattern (no exploitable index structure) still
-  costs close to the raw 1-bit/row bitmap — `vortex.runend`/`fastlanes.rle` genuinely support Bool
-  would help there, but that needs the same `accepts()`/fill-value generalization done for
-  `SparseEncodingEncoder`, applied to two more encoders (plus their decoders, if not already
-  Bool-capable like `SparseEncodingDecoder` turned out to be).
+- [ ] **`fastlanes.rle` still has no `DType.Bool` support** — `ConstantEncodingEncoder`,
+  `SparseEncodingEncoder`, and `RunEndEncodingEncoder` all now handle Bool (constant / scattered
+  minority / clustered runs respectively — `MaskedEncodingEncoder` tries all three plus a raw
+  bitmap and keeps the smallest), closing most of the vortex-jni gap on the 200k-row/10-chunk
+  nullable low-cardinality Utf8 benchmark (4× → 1.17×, commits 5fe8b544/ecd47ead/506d036f + this
+  session's RunEnd/Constant additions). `RleEncodingEncoder` (`fastlanes.rle`) is the one
+  remaining Primitive-only holdout; likely low marginal value now that Sparse and RunEnd cover
+  the scattered/clustered cases, but untested. A truly random (high-entropy) validity pattern has
+  no exploitable structure for any of these — that's an information-theoretic floor, not a gap.
 
 ## Security
 

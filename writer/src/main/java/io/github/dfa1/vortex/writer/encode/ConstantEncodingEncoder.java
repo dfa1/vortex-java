@@ -18,7 +18,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive;
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Bool;
     }
 
     @Override
@@ -42,8 +42,11 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (dtype instanceof DType.Bool) {
+            return encodeBool((boolean[]) data);
+        }
         if (!(dtype instanceof DType.Primitive p)) {
-            throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive dtype, got " + dtype);
+            throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive or Bool dtype, got " + dtype);
         }
         PType ptype = p.ptype();
         if (!isConstant(data, ptype)) {
@@ -56,10 +59,38 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
+        if (dtype instanceof DType.Bool bool) {
+            if (!isConstantBool((boolean[]) data)) {
+                return CascadeStep.notApplicable();
+            }
+            return CascadeStep.terminal(encode(bool, data, encodeCtx));
+        }
         if (!isConstant(data, ((DType.Primitive) dtype).ptype())) {
             return CascadeStep.notApplicable();
         }
         return CascadeStep.terminal(encode(dtype, data, encodeCtx));
+    }
+
+    private static EncodeResult encodeBool(boolean[] data) {
+        if (!isConstantBool(data)) {
+            throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
+        }
+        boolean value = data.length == 0 || data[0];
+        ProtoScalarValue scalar = ProtoScalarValue.ofBoolValue(value);
+        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.encode()));
+    }
+
+    private static boolean isConstantBool(boolean[] data) {
+        if (data.length == 0) {
+            return true;
+        }
+        boolean first = data[0];
+        for (boolean b : data) {
+            if (b != first) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static long readFirstRaw(Object data, PType ptype) {
