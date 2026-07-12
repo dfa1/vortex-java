@@ -34,3 +34,4 @@ the decision shipped in (blank = not yet shipped).
 | 0017 | In-house FlatBuffers codegen + MemorySegment runtime | Accepted  |          |
 | 0018 | Apache Calcite SQL adapter — push-down source | Accepted  |          |
 | 0019 | Columnar transducer façade for compute        | Proposed  |          |
+| 0020 | Jazzer fuzz testing infrastructure            | Proposed  |          |

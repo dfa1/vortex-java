@@ -48,21 +48,7 @@ Per-encoding gotchas:
 
 ### Fuzz infrastructure
 
-- [ ] **Jazzer + JUnit 5** — add `com.code-intelligence:jazzer-junit` test dep. Two modes:
-  regression (`./mvnw test`, replays saved corpus + crashes) and fuzz
-  (`JAZZER_FUZZ=1`, nightly profile). See research notes in branch
-  `worktree-security-fuzz` commit history.
-- [ ] **Seed corpus from integration fixtures** — drop existing `.vortex` test files into
-  `reader/src/test/resources/fuzz-corpus/full-file/`. Per-encoding sub-corpora extracted via
-  a small tool that walks fixtures and dumps each segment to
-  `core/src/test/resources/fuzz-corpus/<encoding>/`.
-- [ ] **Fuzz targets**: `VortexReader.open(byte[])`, `PostscriptParser.parseBlobs`, and one
-  `@FuzzTest` per encoding `Encoding.decode`. Crash oracle: `ignore = {VortexException.class}`.
-- [ ] **Differential fuzz (Java vs Rust)** — round-trip random bytes through Java decode
-  and `vortex-jni`; assert both throw or both return identical row count + values. Reuse
-  `RustWritesJavaReadsIntegrationTest` harness.
-- [ ] **OSS-Fuzz submission** — Jazzer is a first-class OSS-Fuzz engine; submit the project
-  once the corpus + targets stabilize. Free continuous fuzzing.
+- [ ] **Jazzer fuzz testing** — see [ADR-0020](adr/0020-jazzer-fuzz-infrastructure.md).
 
 ## Build
 
