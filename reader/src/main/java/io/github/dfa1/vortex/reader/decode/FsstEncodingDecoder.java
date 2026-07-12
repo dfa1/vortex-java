@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPType;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -25,13 +26,25 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        MemorySegment rawMeta = ctx.metadata();
-        if (rawMeta == null) {
-            throw new VortexException(EncodingId.VORTEX_FSST, "missing metadata");
+        int numBufs = ctx.node().bufferIndices().length;
+        if (numBufs != 3) {
+            throw new VortexException(EncodingId.VORTEX_FSST, "expected 3 buffers, got " + numBufs);
         }
+        int numChildren = ctx.node().children().length;
+        if (numChildren < 2) {
+            throw new VortexException(EncodingId.VORTEX_FSST, "expected at least 2 children, got " + numChildren);
+        }
+
+        // Proto3 omits fields at their default (zero) value on the wire, so an all-U8 metadata
+        // message (both ptypes ordinal 0) encodes to zero bytes and the writer skips the
+        // metadata segment entirely — absent metadata is a valid encoding of that default, not
+        // a malformed file.
+        MemorySegment rawMeta = ctx.metadata();
         ProtoFSSTMetadata meta;
         try {
-            meta = ProtoFSSTMetadata.decode(rawMeta, 0, rawMeta.byteSize());
+            meta = rawMeta == null
+                    ? new ProtoFSSTMetadata(ProtoPType.U8, ProtoPType.U8)
+                    : ProtoFSSTMetadata.decode(rawMeta, 0, rawMeta.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_FSST, "invalid metadata", e);
         }

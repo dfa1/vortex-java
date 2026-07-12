@@ -620,11 +620,11 @@ class FileSizeComparisonIntegrationTest {
                 (double) javaSize / jniSize,
                 (double) javaSize / rawBytes);
 
-        // Then — Java within 2.4x of JNI. On truly random 6-byte strings there is no
-        // repeated substructure for either symbol-table builder to exploit (observed ≈2.26x
-        // with Java's iterative training), so this is close to the escape-scheme floor for
-        // both implementations rather than a training-quality gap.
-        assertThat((double) javaSize / jniSize).isLessThan(2.4);
+        // Then — Java within 1.5x of JNI (observed ≈1.36x). CascadingCompressor now runs Utf8
+        // through the same sample-and-measure competition as Primitive dtypes instead of
+        // first-match dispatch, so FSST — not Dict — wins on this high-cardinality column
+        // (Dict's table for ~50k distinct 6-byte values used to dominate the file size).
+        assertThat((double) javaSize / jniSize).isLessThan(1.5);
 
         // Then — Java file is readable and row count matches
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
