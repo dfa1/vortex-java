@@ -87,7 +87,11 @@ class RaincloudConformanceIntegrationTest {
                     String status = expected.getOrDefault(slug, "untriaged");
                     switch (status) {
                         case "ok" -> assertMatchesParquetOracle(vortex, parquet);
-                        case "untriaged" -> reportUntriaged(vortex, parquet);
+                        // missing_auth slugs never reach here in practice — hydration fails
+                        // before a manifest entry exists — but report the same as untriaged
+                        // rather than falling through to assertStillFails (wrong: that path
+                        // means "known reader gap", not "couldn't even attempt this").
+                        case "untriaged", "missing_auth" -> reportUntriaged(vortex, parquet);
                         default -> assertStillFails(vortex, parquet, status);
                     }
                 }));

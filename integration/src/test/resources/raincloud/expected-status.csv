@@ -1,21 +1,23 @@
 # Raincloud conformance matrix — one line per vortex-enabled corpus slug: <slug>,<status>
-# status: ok         — vortex-java must read the file and match the parquet oracle exactly
-#         gap:<n>    — known reader gap tracked by issue #<n>; the test asserts the failure
-#                      still occurs, so a fix forces flipping the entry to ok in the same change
-#         untriaged  — not yet run; the test executes it and reports the outcome as an
-#                      aborted (skipped) test instead of failing the build — flip to ok/gap
-#                      as hydration coverage grows
-# A `#`-comment directly above an `untriaged` line notes WHY it hasn't been hydrated yet
-# (e.g. missing credentials for a gated source) — status stays literal "untriaged" (the
-# harness string-matches it exactly), the comment is for triagers only.
+# status: ok           — vortex-java must read the file and match the parquet oracle exactly
+#         gap:<n>      — known reader gap tracked by issue #<n>; the test asserts the failure
+#                        still occurs, so a fix forces flipping the entry to ok in the same change
+#         untriaged    — not yet run; the test executes it and reports the outcome as an
+#                        aborted (skipped) test instead of failing the build — flip to ok/gap
+#                        as hydration coverage grows
+#         missing_auth — can't even hydrate: the source (Kaggle, gated HuggingFace, …) needs
+#                        credentials this environment doesn't have. Distinguishes "blocked on
+#                        a credential" from plain untriaged ("just hasn't been attempted yet")
+#                        so a future triager doesn't waste time rediscovering the same blocker.
+#                        An optional `#`-comment above the line can name the credential.
 # Corpus: all slugs with a Vortex artifact in the Raincloud catalog (spiraldb/raincloud),
 # written by vortex-data 0.69.0. Hydrate any subset with scripts/hydrate-raincloud-corpus.sh.
 120-years-of-olympic-history-athletes-and-results,ok
 ai2-arc,ok
-# needs Kaggle credentials to hydrate (kaggle auth login / KAGGLE_API_TOKEN) — not attempted
-airbnb-prices-in-european-cities,untriaged
-# needs Kaggle credentials to hydrate (kaggle auth login / KAGGLE_API_TOKEN) — not attempted
-airbnbopendata,untriaged
+# kaggle auth login / KAGGLE_API_TOKEN
+airbnb-prices-in-european-cities,missing_auth
+# kaggle auth login / KAGGLE_API_TOKEN
+airbnbopendata,missing_auth
 amazon-reviews-2023-subscription-boxes,ok
 ampds-whe,ok
 anthropic-economic-index,ok
@@ -23,8 +25,8 @@ anthropic-hh-rlhf-helpful-base,ok
 anthropic-interviewer,ok
 aya-collection-templated,ok
 aya-dataset,ok
-# needs Kaggle credentials to hydrate (kaggle auth login / KAGGLE_API_TOKEN) — not attempted
-bank-account-fraud-dataset-neurips-2022,untriaged
+# kaggle auth login / KAGGLE_API_TOKEN
+bank-account-fraud-dataset-neurips-2022,missing_auth
 basketball,untriaged
 behavioral-risk-factor-surveillance-system,ok
 beir-msmarco,untriaged
