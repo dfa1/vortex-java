@@ -5,11 +5,16 @@
 #         untriaged  — not yet run; the test executes it and reports the outcome as an
 #                      aborted (skipped) test instead of failing the build — flip to ok/gap
 #                      as hydration coverage grows
+# A `#`-comment directly above an `untriaged` line notes WHY it hasn't been hydrated yet
+# (e.g. missing credentials for a gated source) — status stays literal "untriaged" (the
+# harness string-matches it exactly), the comment is for triagers only.
 # Corpus: all slugs with a Vortex artifact in the Raincloud catalog (spiraldb/raincloud),
 # written by vortex-data 0.69.0. Hydrate any subset with scripts/hydrate-raincloud-corpus.sh.
 120-years-of-olympic-history-athletes-and-results,ok
 ai2-arc,ok
+# needs Kaggle credentials to hydrate (kaggle auth login / KAGGLE_API_TOKEN) — not attempted
 airbnb-prices-in-european-cities,untriaged
+# needs Kaggle credentials to hydrate (kaggle auth login / KAGGLE_API_TOKEN) — not attempted
 airbnbopendata,untriaged
 amazon-reviews-2023-subscription-boxes,ok
 ampds-whe,ok
@@ -18,6 +23,7 @@ anthropic-hh-rlhf-helpful-base,ok
 anthropic-interviewer,ok
 aya-collection-templated,ok
 aya-dataset,ok
+# needs Kaggle credentials to hydrate (kaggle auth login / KAGGLE_API_TOKEN) — not attempted
 bank-account-fraud-dataset-neurips-2022,untriaged
 basketball,untriaged
 behavioral-risk-factor-surveillance-system,ok
