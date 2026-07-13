@@ -8,16 +8,16 @@
 # Corpus: all slugs with a Vortex artifact in the Raincloud catalog (spiraldb/raincloud),
 # written by vortex-data 0.69.0. Hydrate any subset with scripts/hydrate-raincloud-corpus.sh.
 120-years-of-olympic-history-athletes-and-results,ok
-ai2-arc,untriaged
+ai2-arc,ok
 airbnb-prices-in-european-cities,untriaged
 airbnbopendata,untriaged
-amazon-reviews-2023-subscription-boxes,untriaged
+amazon-reviews-2023-subscription-boxes,ok
 ampds-whe,ok
-anthropic-economic-index,untriaged
-anthropic-hh-rlhf-helpful-base,untriaged
-anthropic-interviewer,untriaged
-aya-collection-templated,untriaged
-aya-dataset,untriaged
+anthropic-economic-index,ok
+anthropic-hh-rlhf-helpful-base,ok
+anthropic-interviewer,ok
+aya-collection-templated,ok
+aya-dataset,ok
 bank-account-fraud-dataset-neurips-2022,untriaged
 basketball,untriaged
 behavioral-risk-factor-surveillance-system,ok
