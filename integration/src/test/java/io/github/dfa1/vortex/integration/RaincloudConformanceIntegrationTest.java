@@ -366,6 +366,12 @@ class RaincloudConformanceIntegrationTest {
             if (group.isMap()) {
                 throw new TestAbortedException("oracle cannot format MAP column: " + group.name());
             }
+            // hardwood's own NestedRowReader.getStruct() mis-casts a VARIANT-shredded group
+            // (metadata/value/typed_value) to its plain-Struct FieldDesc and throws
+            // ClassCastException — an oracle bug, not a vortex-java gap. Abort before hitting it.
+            if (group.isVariant()) {
+                throw new TestAbortedException("oracle cannot format VARIANT column: " + group.name());
+            }
             return oracleJsonObject(group, rows.getStruct(fieldIndex));
         }
         SchemaNode.PrimitiveNode prim = (SchemaNode.PrimitiveNode) node;
