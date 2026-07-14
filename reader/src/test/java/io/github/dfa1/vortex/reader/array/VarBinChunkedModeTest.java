@@ -56,6 +56,47 @@ class VarBinChunkedModeTest {
         }
 
         @Test
+        void nullChunkMaterializesAsAllNullRun() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — a chunked Utf8 column where the middle chunk is entirely null and
+                // decoded to NullArray (via vortex.null or a null-scalar vortex.constant, #269)
+                // rather than a VarBinArray. Before the fix ChunkedMode.of threw on it.
+                VarBinArray c0 = stringChunk(arena, "a", "b");
+                NullArray nullChunk = new NullArray(UTF8, 3);
+                VarBinArray c2 = stringChunk(arena, "z");
+
+                // When
+                VarBinArray.ChunkedMode result =
+                        VarBinArray.ChunkedMode.of(UTF8, 6, List.of(c0, nullChunk, c2), arena);
+
+                // Then — the null chunk contributes 3 zero-length rows, keeping row alignment
+                assertThat(result.length()).isEqualTo(6);
+                assertThat(result.children()).hasSize(3);
+                assertThat(result.getString(0)).isEqualTo("a");
+                assertThat(result.getString(1)).isEqualTo("b");
+                assertThat(result.getByteLength(2)).isZero();
+                assertThat(result.getByteLength(3)).isZero();
+                assertThat(result.getByteLength(4)).isZero();
+                // Accessing a null row must not crash even though the bytes segment is NULL:
+                // a zero-length copy from MemorySegment.NULL is well-defined.
+                assertThat(result.getBytes(3)).isEmpty();
+                assertThat(result.getString(3)).isEmpty();
+                assertThat(result.getString(5)).isEqualTo("z");
+            }
+        }
+
+        @Test
+        void nullChunkWithoutAllocatorRejected() {
+            // Given — a NullArray chunk but no allocator to materialize it
+            NullArray nullChunk = new NullArray(UTF8, 2);
+
+            // When / Then
+            assertThatThrownBy(
+                    () -> VarBinArray.ChunkedMode.of(UTF8, 2, List.of(nullChunk), null))
+                    .isInstanceOf(VortexException.class);
+        }
+
+        @Test
         void nestedChunkedFlattens() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given

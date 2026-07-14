@@ -442,7 +442,9 @@ public sealed interface VarBinArray extends Array
     record ChunkedMode(DType dtype, long length, VarBinArray[] children, long[] offsets)
             implements VarBinArray {
 
-        /// Builds a `ChunkedMode` from a list of chunk arrays.
+        /// Builds a `ChunkedMode` from a list of chunk arrays that are already all typed
+        /// [VarBinArray]s (no all-null [NullArray] chunks). Used by [#limited(long)],
+        /// whose children are always concrete `VarBinArray`s.
         ///
         /// @param dtype     logical element type
         /// @param totalRows expected total row count
@@ -451,6 +453,28 @@ public sealed interface VarBinArray extends Array
         /// @throws VortexException on empty input, non-[VarBinArray] chunks, or row-count mismatch
         public static ChunkedMode of(DType dtype, long totalRows,
                 java.util.List<? extends Array> chunks) {
+            return of(dtype, totalRows, chunks, null);
+        }
+
+        /// Builds a `ChunkedMode` from a list of chunk arrays.
+        ///
+        /// An entirely-null chunk decodes to a [NullArray] rather than a [VarBinArray]
+        /// (e.g. a `vortex.null` flat, or `vortex.constant` with a null scalar, #269).
+        /// Such a chunk is materialized into an all-null [OffsetMode] of the same row
+        /// count — every row zero-length, all offsets zero — so the chunked column keeps
+        /// a uniform `VarBinArray` shape. Row-level nullability is preserved separately by
+        /// the caller's validity bitmap.
+        ///
+        /// @param dtype     logical element type
+        /// @param totalRows expected total row count
+        /// @param chunks    non-empty list of chunk arrays; each a [VarBinArray] or [NullArray]
+        /// @param arena     allocator for the offsets segment of a materialized null chunk;
+        ///                  may be `null` only when no chunk is a [NullArray]
+        /// @return a new `ChunkedMode`
+        /// @throws VortexException on empty input, non-`VarBinArray`/`NullArray` chunks,
+        ///                         or row-count mismatch
+        public static ChunkedMode of(DType dtype, long totalRows,
+                java.util.List<? extends Array> chunks, SegmentAllocator arena) {
             if (chunks.isEmpty()) {
                 throw new VortexException("VarBinArray.ChunkedMode: empty chunk list");
             }
@@ -461,6 +485,12 @@ public sealed interface VarBinArray extends Array
                     java.util.Collections.addAll(typed, nested.children);
                 } else if (data instanceof VarBinArray vb) {
                     typed.add(vb);
+                } else if (data instanceof NullArray na) {
+                    if (arena == null) {
+                        throw new VortexException(
+                                "VarBinArray.ChunkedMode: null chunk requires an allocator");
+                    }
+                    typed.add(allNull(dtype, na.length(), arena));
                 } else {
                     throw new VortexException("VarBinArray.ChunkedMode: chunk is not a VarBinArray: "
                             + data.getClass().getSimpleName());
@@ -475,6 +505,19 @@ public sealed interface VarBinArray extends Array
                         + off[off.length - 1] + ", expected " + totalRows);
             }
             return new ChunkedMode(dtype, totalRows, typed.toArray(VarBinArray[]::new), off);
+        }
+
+        /// Builds an all-null [OffsetMode] of `n` rows: an empty bytes segment and an
+        /// offsets segment of `n + 1` zeros, so every row is zero-length. Row nullability
+        /// is carried by the caller's validity bitmap, not the byte data.
+        ///
+        /// @param dtype logical element type (Utf8 or Binary)
+        /// @param n     number of all-null rows
+        /// @param arena allocator for the offsets segment
+        /// @return an [OffsetMode] with `n` zero-length rows
+        private static OffsetMode allNull(DType dtype, long n, SegmentAllocator arena) {
+            MemorySegment offsets = arena.allocate((n + 1) * Long.BYTES, Long.BYTES);
+            return new OffsetMode(dtype, n, MemorySegment.NULL, offsets, PType.I64);
         }
 
         private int findChunk(long i) {
