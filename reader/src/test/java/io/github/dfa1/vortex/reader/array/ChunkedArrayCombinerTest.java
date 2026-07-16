@@ -75,6 +75,48 @@ class ChunkedArrayCombinerTest {
     }
 
     @Test
+    void allNullNullArrayChunkCombinesAsZeroLengthLists() {
+        // Given — a chunked list<int> column whose middle chunk decoded to a bare NullArray, not a
+        // ListArray (a vortex.null flat or vortex.constant null-scalar chunk, #269). Before the fix
+        // combineLists hit its else branch and threw "chunk is not a ListArray: NullArray"; the
+        // #269-parity fix must treat those rows as zero-length lists carrying out-of-band nulls.
+        ListArray chunk0 = new ListArray(LIST_OF_INT, 2, ints(10, 11, 12), longs(0L, 2L, 3L));
+        NullArray chunk1 = new NullArray(LIST_OF_INT, 2);
+        ListArray chunk2 = new ListArray(LIST_OF_INT, 1, ints(20, 21), longs(0L, 2L));
+
+        // When
+        try (Arena arena = Arena.ofConfined()) {
+            Array result = ChunkedArrayCombiner.combine(LIST_OF_INT, 5,
+                    List.of(chunk0, chunk1, chunk2), arena);
+
+            // Then — a NullArray chunk makes the whole column nullable, so the combiner wraps the
+            // stitched ListArray in a MaskedArray marking the null chunk's rows invalid while the
+            // real chunks' rows stay valid and their elements/offsets stay intact.
+            assertThat(result).isInstanceOf(MaskedArray.class);
+            MaskedArray masked = (MaskedArray) result;
+            assertThat(masked.inner()).isInstanceOf(ListArray.class);
+            assertThat(masked.isValid(0)).isTrue();
+            assertThat(masked.isValid(1)).isTrue();
+            assertThat(masked.isValid(2)).isFalse();
+            assertThat(masked.isValid(3)).isFalse();
+            assertThat(masked.isValid(4)).isTrue();
+
+            ListArray list = (ListArray) masked.inner();
+            assertThat(list.length()).isEqualTo(5);
+            LongArray offsets = (LongArray) list.offsets();
+            // Rows 0-1 span [0,2) and [2,3); the null rows 2-3 are zero-length (offset stays at 3);
+            // row 4 (chunk2) contributes 2 elements, shifted past chunk0's 3 to span [3,5).
+            assertThat(readAll(offsets, 6)).containsExactly(0L, 2L, 3L, 3L, 3L, 5L);
+
+            IntArray elements = (IntArray) list.elements();
+            assertThat(elements.length()).isEqualTo(5);
+            assertThat(elements.getInt(0)).isEqualTo(10);
+            assertThat(elements.getInt(3)).isEqualTo(20);
+            assertThat(elements.getInt(4)).isEqualTo(21);
+        }
+    }
+
+    @Test
     void emptyChunkListThrowsVortexException() {
         // Given / When / Then
         try (Arena arena = Arena.ofConfined()) {

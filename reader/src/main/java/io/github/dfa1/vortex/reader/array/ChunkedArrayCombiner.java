@@ -75,26 +75,36 @@ public final class ChunkedArrayCombiner {
     /// number of elements contributed by earlier chunks, since per-chunk offsets each restart at
     /// zero.
     ///
+    /// An entirely-null chunk decodes to a [NullArray] rather than a [ListArray] (e.g. a
+    /// `vortex.null` flat, or `vortex.constant` with a null scalar, #269). Mirroring the sibling
+    /// [VarBinArray.ChunkedMode] fix, such a chunk contributes `n` zero-length list rows: it adds no
+    /// elements, so it is skipped by the recursive element combine, and its `n` outer offsets simply
+    /// repeat the running element count. Row-level nullability is preserved separately by the
+    /// caller's validity bitmap.
+    ///
     /// @param dtype     the list's logical type
     /// @param totalRows the total outer-list row count across all chunks
-    /// @param chunks    the per-chunk list arrays (each a [ListArray], possibly wrapped [MaskedArray])
+    /// @param chunks    the per-chunk arrays (each a [ListArray] or [NullArray], possibly wrapped
+    ///                  [MaskedArray])
     /// @param arena     allocator for the rebuilt offsets segment
     /// @return a single [ListArray] over the combined chunks
+    /// @throws VortexException on a chunk that is neither a [ListArray] nor a [NullArray], or a
+    ///                         row-count mismatch
     private static ListArray combineLists(DType.List dtype, long totalRows, List<Array> chunks,
             SegmentAllocator arena) {
-        var listChunks = new ArrayList<ListArray>(chunks.size());
+        // A ListArray keeps its offsets/elements; a NullArray keeps only its row count (its outer
+        // rows are all zero-length lists, contributing no elements).
+        var listChunks = new ArrayList<Array>(chunks.size());
+        long outerRows = 0;
         for (Array chunk : chunks) {
             Array unwrapped = chunk instanceof MaskedArray m ? m.inner() : chunk;
-            if (unwrapped instanceof ListArray la) {
-                listChunks.add(la);
+            if (unwrapped instanceof ListArray || unwrapped instanceof NullArray) {
+                listChunks.add(unwrapped);
+                outerRows += unwrapped.length();
             } else {
                 throw new VortexException("chunked list: chunk is not a ListArray: "
                         + unwrapped.getClass().getSimpleName());
             }
-        }
-        long outerRows = 0;
-        for (ListArray la : listChunks) {
-            outerRows += la.length();
         }
         if (outerRows != totalRows) {
             throw new VortexException("chunked list: chunk rows sum to " + outerRows
@@ -102,25 +112,39 @@ public final class ChunkedArrayCombiner {
         }
 
         var elementChunks = new ArrayList<Array>(listChunks.size());
-        for (ListArray la : listChunks) {
-            elementChunks.add(la.elements());
+        for (Array chunk : listChunks) {
+            if (chunk instanceof ListArray la) {
+                elementChunks.add(la.elements());
+            }
         }
-        Array combinedElements = combine(dtype.elementType(), sumLengths(elementChunks),
-                elementChunks, arena);
+        // Every chunk all-null: no chunk contributes elements. All offsets are zero, so the
+        // elements array is never indexed; a zero-length placeholder of the element dtype suffices
+        // (combine() rejects an empty chunk list, so it cannot be called here).
+        Array combinedElements = elementChunks.isEmpty()
+                ? new NullArray(dtype.elementType(), 0)
+                : combine(dtype.elementType(), sumLengths(elementChunks), elementChunks, arena);
 
         MemorySegment offsets = arena.allocate((totalRows + 1) * Long.BYTES, Long.BYTES);
         offsets.setAtIndex(VortexFormat.LE_LONG, 0, 0L);
         long outRow = 0;
         long elementBase = 0;
-        for (ListArray la : listChunks) {
-            long localRows = la.length();
-            Array localOffsets = la.offsets();
-            for (long i = 0; i < localRows; i++) {
-                long localEnd = readOffset(localOffsets, i + 1);
-                offsets.setAtIndex(VortexFormat.LE_LONG, outRow + i + 1, elementBase + localEnd);
+        for (Array chunk : listChunks) {
+            long localRows = chunk.length();
+            if (chunk instanceof ListArray la) {
+                Array localOffsets = la.offsets();
+                for (long i = 0; i < localRows; i++) {
+                    long localEnd = readOffset(localOffsets, i + 1);
+                    offsets.setAtIndex(VortexFormat.LE_LONG, outRow + i + 1, elementBase + localEnd);
+                }
+                elementBase += readOffset(localOffsets, localRows);
+            } else {
+                // All-null chunk: every one of its rows is a zero-length list, so the offset never
+                // advances past the running element base.
+                for (long i = 0; i < localRows; i++) {
+                    offsets.setAtIndex(VortexFormat.LE_LONG, outRow + i + 1, elementBase);
+                }
             }
             outRow += localRows;
-            elementBase += readOffset(localOffsets, localRows);
         }
         Array offsetsArray = new MaterializedLongArray(DType.I64, totalRows + 1, offsets.asReadOnly());
         return new ListArray(dtype, totalRows, combinedElements, offsetsArray);
