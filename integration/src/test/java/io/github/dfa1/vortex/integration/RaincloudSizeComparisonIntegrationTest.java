@@ -12,7 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// File-size comparison across the Raincloud corpus for three representations:
 /// Parquet (corpus oracle), vortex-jni (corpus file, written by Rust Vortex), and
@@ -33,7 +33,7 @@ class RaincloudSizeComparisonIntegrationTest {
     @Test
     void corpusIsHydrated() {
         // Given / When / Then — visible skip marker when the corpus is absent
-        assertTrue(Files.exists(manifestPath()),
+        assumeTrue(Files.exists(manifestPath()),
                 "raincloud corpus not hydrated — run scripts/hydrate-raincloud-corpus.sh");
     }
 
