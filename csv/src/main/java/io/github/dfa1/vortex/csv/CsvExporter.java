@@ -148,12 +148,13 @@ public final class CsvExporter {
     /// `Double.toString`, `Boolean.toString`, the raw utf8 string); a null row (a [MaskedArray]
     /// invalid row or a [NullArray]) renders as an empty CSV field.
     ///
-    /// A nested struct column ([StructArray], possibly wrapped in a [MaskedArray] when nullable)
-    /// renders as a single JSON object cell `{"field":value,...}` with fields in the struct dtype's
-    /// declared order. Field values reuse the same leaf rendering rules — numbers and booleans
-    /// unquoted, strings JSON-escaped and double-quoted, nested structs recursed — and a null field
-    /// (or null nested row) becomes a JSON `null`. Only the JSON layer is escaped here; the CSV
-    /// writer independently quotes any cell containing the delimiter or a quote character.
+    /// A nested struct column ([StructArray]) renders as a single JSON object cell
+    /// `{"field":value,...}` with fields in the struct dtype's declared order, except a null struct
+    /// row — decoded as every field masked invalid — which exports as an empty field like any other
+    /// null. Field values reuse the same leaf rendering rules — numbers and booleans unquoted,
+    /// strings JSON-escaped and double-quoted, nested structs recursed — and a null field (or null
+    /// nested struct row) becomes a JSON `null`. Only the JSON layer is escaped here; the CSV writer
+    /// independently quotes any cell containing the delimiter or a quote character.
     ///
     /// A fixed-size list column ([FixedSizeListArray]) or variable-length list column ([ListArray]),
     /// either possibly wrapped in a [MaskedArray] when nullable, renders as a JSON array cell
@@ -192,8 +193,10 @@ public final class CsvExporter {
             // All-null columns (DType.Null) hold only a row count: every cell is an empty
             // field, same rule as a MaskedArray null row.
             case NullArray ignored -> "";
-            // Nested struct column: render the whole row as a JSON object cell.
-            case StructArray sa -> jsonObject(sa, rowIdx);
+            // Nested struct column: render the whole row as a JSON object cell, unless the row is
+            // itself null (a null struct row is decoded as every field masked invalid, never as the
+            // StructArray being wrapped once), which exports as an empty field like any other null.
+            case StructArray sa -> isNullStructRow(sa, rowIdx) ? "" : jsonObject(sa, rowIdx);
             default -> throw new VortexException(
                     "unsupported array type for CSV export: " + arr.getClass().getSimpleName());
         };
@@ -218,6 +221,32 @@ public final class CsvExporter {
         return sb.toString();
     }
 
+    /// Whether the struct row `rowIdx` should be treated as a null struct row. This detects "every
+    /// field is a [MaskedArray] invalid at this row" and treats that as a null struct; a struct with
+    /// no fields, or any field that is not maskable/valid, is never a null row.
+    ///
+    /// The check is **exact** for struct-level-validity sources: `StructEncodingDecoder` represents a
+    /// null struct row by wrapping every field (including non-nullable ones) in a [MaskedArray] that
+    /// shares one struct-level validity bitmap, so all-fields-invalid means exactly "the row is null".
+    /// For sources that only carry per-field validity it is an accepted **approximation** — a row
+    /// where every field independently happens to be null is indistinguishable, on the wire, from a
+    /// genuinely null row, and we pick the empty-cell interpretation. The distinction is moot in
+    /// practice: `StructEncodingEncoder` cannot currently emit struct-level validity, so every null
+    /// struct row this codebase produces already has the all-fields-invalid shape. This choice matches
+    /// the parquet oracle's empty-cell rendering for the known conformance case (Raincloud `oasst1`).
+    private static boolean isNullStructRow(StructArray struct, long rowIdx) {
+        int fieldCount = struct.fieldCount();
+        if (fieldCount == 0) {
+            return false;
+        }
+        for (int i = 0; i < fieldCount; i++) {
+            if (!(struct.field(i) instanceof MaskedArray ma) || ma.isValid(rowIdx)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /// Renders one struct field value as JSON text: a nested object for structs, a quoted escaped
     /// string for utf8, JSON `null` for a null row/field, and the bare leaf rendering (unquoted
     /// number/boolean) for everything else. Unlike [#cellValue(Array, long)], a null here is the
@@ -225,7 +254,7 @@ public final class CsvExporter {
     /// convention of bare CSV would be ambiguous.
     private static String jsonValue(Array arr, long rowIdx) {
         return switch (arr) {
-            case StructArray sa -> jsonObject(sa, rowIdx);
+            case StructArray sa -> isNullStructRow(sa, rowIdx) ? "null" : jsonObject(sa, rowIdx);
             case MaskedArray ma -> ma.isValid(rowIdx) ? jsonValue(ma.inner(), rowIdx) : "null";
             case FixedSizeListArray fla -> jsonArray(fla.elements(), rowIdx * fla.fixedSize(), (rowIdx + 1L) * fla.fixedSize());
             case ListArray la -> {

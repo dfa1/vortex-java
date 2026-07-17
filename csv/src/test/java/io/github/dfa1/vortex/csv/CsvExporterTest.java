@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
 import io.github.dfa1.vortex.writer.encode.ListData;
+import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -349,6 +350,49 @@ class CsvExporterTest {
     }
 
     @Test
+    void rendersNullStructRowAsEmptyCell(@TempDir Path tmp) throws Exception {
+        // Given a nested struct column whose whole row is null (issue #270): the struct decoder
+        // represents a null struct row by masking every field invalid, never by wrapping the whole
+        // StructArray once. The first row has both fields null (a null struct row); the second has
+        // both valid. Regression: cellValue used to route straight to jsonObject, rendering the null
+        // row as {"id":null,"label":null} instead of an empty cell like every other nullable column.
+        // Two struct fields keep `data` from being unwrapped to its bare field on decode; the
+        // `region` sibling keeps it off the single-column expand path.
+        Path vortex = tmp.resolve("nullrow.vortex");
+        DType.Struct inner = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("label")),
+                List.of(new DType.Primitive(PType.I64, true), new DType.Primitive(PType.I64, true)),
+                false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("region"), ColumnName.of("data")),
+                List.of(DType.UTF8, inner),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults(),
+                     List.of(new StructEncodingEncoder(), new PrimitiveEncodingEncoder(),
+                             new VarBinEncodingEncoder(), new MaskedEncodingEncoder(),
+                             new BoolEncodingEncoder()))) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("region"), new String[]{"north", "south"},
+                    ColumnName.of("data"), new StructData(List.of(
+                            new NullableData(new long[]{0L, 1L}, new boolean[]{false, true}),
+                            new NullableData(new long[]{0L, 42L}, new boolean[]{false, true})))));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then the all-fields-null row is an empty cell (not {"id":null,"label":null}); the valid
+        // row is the JSON object.
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly(
+                "region,data",
+                "north,",
+                "south,\"{\"\"id\"\":1,\"\"label\"\":42}\"");
+    }
+
+    @Test
     void escapesQuotesAndCommasInsideStructStringField(@TempDir Path tmp) throws Exception {
         // Given a struct string field value containing a JSON-significant quote and a comma: the
         // quote must be JSON-escaped (\") inside the object, and the CSV layer independently doubles
@@ -520,5 +564,52 @@ class CsvExporterTest {
         assertThat(result).containsExactly(
                 "id,members",
                 "1,\"[{\"\"ref\"\":10,\"\"role\"\":\"\"\"\"},{\"\"ref\"\":20,\"\"role\"\":\"\"outer\"\"}]\"");
+    }
+
+    @Test
+    void rendersNullStructElementInListAsJsonNull(@TempDir Path tmp) throws Exception {
+        // Given a List[Struct] whose first element is a null struct row (issue #270, nested case):
+        // the struct decoder masks every field invalid, so cellValue never reaches this element —
+        // jsonValue's StructArray arm does, and must emit the JSON token null (not
+        // {"ref":null,"role":null}) inside the array. This is the only test exercising jsonValue's
+        // isNullStructRow branch; the sibling rendersNullStructRowAsEmptyCell only covers the
+        // top-level cellValue path. Each field is an independent NullableData both invalid at row 0
+        // (the all-fields-invalid shape a genuinely-null struct row decodes to), matching the
+        // construction rendersNullStructRowAsEmptyCell uses. The struct needs two fields so it is
+        // not unwrapped on decode; the `id` sibling keeps the list column off the single-column path.
+        Path vortex = tmp.resolve("nullstructinlist.vortex");
+        DType.Struct memberDtype = new DType.Struct(
+                List.of(ColumnName.of("ref"), ColumnName.of("role")),
+                List.of(new DType.Primitive(PType.I64, true), new DType.Primitive(PType.I64, true)),
+                false);
+        DType.List listDtype = new DType.List(memberDtype, false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("members")),
+                List.of(DType.I64, listDtype),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults(),
+                     List.of(new ListEncodingEncoder(), new StructEncodingEncoder(),
+                             new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(),
+                             new MaskedEncodingEncoder(), new BoolEncodingEncoder()))) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("id"), new long[]{1L},
+                    ColumnName.of("members"), new ListData(
+                            new StructData(List.of(
+                                    new NullableData(new long[]{0L, 20L}, new boolean[]{false, true}),
+                                    new NullableData(new long[]{0L, 42L}, new boolean[]{false, true}))),
+                            new long[]{0, 2},
+                            1)));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+        List<String> result = Files.readAllLines(csv);
+
+        // Then the null struct element is the JSON token null; the valid one is a JSON object.
+        assertThat(result).containsExactly(
+                "id,members",
+                "1,\"[null,{\"\"ref\"\":20,\"\"role\"\":42}]\"");
     }
 }
