@@ -85,7 +85,7 @@ california-housing-prices,ok
 cardiovascular-diseases-risk-prediction-dataset,ok
 chess,ok
 clickbench-hits,untriaged
-cnn-dailymail,untriaged
+cnn-dailymail,ok
 codeparrot-clean-valid,ok
 cohere-wikipedia-simple-embed,untriaged
 coig,ok
@@ -212,7 +212,7 @@ stackoverflow-badges,ok
 stackoverflow-postlinks,ok
 stackoverflow-posts,untriaged
 stackoverflow-tags,ok
-stackoverflow-users,untriaged
+stackoverflow-users,ok
 synthetic-text-to-sql,ok
 temperature-change,ok
 tinystories,ok
@@ -277,7 +277,7 @@ uk-price-paid,untriaged
 uk-road-safety-accidents-and-vehicles,ok
 ultrachat-200k,untriaged
 ultrafeedback-binarized,ok
-us-accidents,untriaged
+us-accidents,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 us-airbnb-open-data,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
@@ -289,6 +289,6 @@ wdi,ok
 websight-v01,untriaged
 wikipedia-en,untriaged
 world-energy-consumption,ok
-yellow_tripdata_2025,untriaged
+yellow_tripdata_2025,ok
 youtube-commons-sample,ok
 zoo-animal-classification,ok
