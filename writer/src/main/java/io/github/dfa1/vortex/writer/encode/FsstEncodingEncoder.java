@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
 
@@ -121,17 +121,19 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         PType uncompLenPType = PType.narrowestUnsigned(maxUncompLen);
         PType codesOffPType = PType.narrowestUnsigned(totalCompressed);
 
-        MemorySegment uncompLenBuf = arena.allocate(Math.max((long) n * uncompLenPType.byteSize(), 1));
+        long uncompLenBytes = uncompLenPType.byteSize();
+        MemorySegment uncompLenBuf = arena.allocate(Math.max((long) n * uncompLenBytes, 1));
         for (int i = 0; i < n; i++) {
-            writeUnsigned(uncompLenBuf, uncompLenPType, i, byteArrays[i].length);
+            PTypeIO.set(uncompLenBuf, i * uncompLenBytes, uncompLenPType, byteArrays[i].length);
         }
 
-        MemorySegment codesOffBuf = arena.allocate((long) (n + 1) * codesOffPType.byteSize());
+        long codesOffBytes = codesOffPType.byteSize();
+        MemorySegment codesOffBuf = arena.allocate((long) (n + 1) * codesOffBytes);
         long off = 0;
-        writeUnsigned(codesOffBuf, codesOffPType, 0, 0);
+        PTypeIO.set(codesOffBuf, 0, codesOffPType, 0);
         for (int i = 0; i < n; i++) {
             off += compressed[i].length;
-            writeUnsigned(codesOffBuf, codesOffPType, i + 1, off);
+            PTypeIO.set(codesOffBuf, (i + 1) * codesOffBytes, codesOffPType, off);
         }
 
         byte[] metaBytes = new ProtoFSSTMetadata(
@@ -150,21 +152,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root,
                 List.of(symBuf, symLenBuf, compBuf, uncompLenBuf, codesOffBuf),
                 null, null);
-    }
-
-    /// Writes `value` into `seg` at row `idx`, using `ptype`'s byte width.
-    ///
-    /// @param seg   destination segment
-    /// @param ptype `U8`, `U16`, or `U32` (whatever [PType#narrowestUnsigned(long)] returned)
-    /// @param idx   row index (not a byte offset)
-    /// @param value the value to write
-    private static void writeUnsigned(MemorySegment seg, PType ptype, long idx, long value) {
-        switch (ptype) {
-            case U8 -> seg.set(ValueLayout.JAVA_BYTE, idx, (byte) value);
-            case U16 -> seg.set(VortexFormat.LE_SHORT, idx * 2, (short) value);
-            case U32 -> seg.set(VortexFormat.LE_INT, idx * 4, (int) value);
-            default -> throw new VortexException(EncodingId.VORTEX_FSST, "unexpected ptype: " + ptype);
-        }
     }
 
     /// Trains a symbol table by iteratively refining candidate symbols against a bounded sample.

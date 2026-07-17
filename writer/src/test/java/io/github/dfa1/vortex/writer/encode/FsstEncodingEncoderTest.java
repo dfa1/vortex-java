@@ -73,8 +73,32 @@ class FsstEncodingEncoderTest {
                     // Non-ASCII multi-byte UTF-8, repeated so symbols can span codepoint boundaries.
                     Arguments.of("utf8-repeated", repeat("café ☕ münchen 日本語テスト", 30)),
                     // Exactly-8-byte symbol repeated: confirms the length-8 boundary encodes/decodes.
-                    Arguments.of("exact-8-byte", repeat("ABCDEFGH", 50))
+                    Arguments.of("exact-8-byte", repeat("ABCDEFGH", 50)),
+                    // U16-tier round-trip: forces both uncompLenPType and codesOffPType off the U8
+                    // fast path so the actual U16 buffer bytes are read back and verified end to end,
+                    // not just the metadata ptype. Row 0 is 300 raw bytes (> 255 -> U16 row lengths);
+                    // the six distinct incompressible rows together compress to > 255 bytes
+                    // (> 255 cumulative codes offset -> U16 offsets). Multiple rows mean a wrong
+                    // U16 stride in the length/offset write path shifts more than one value, so the
+                    // per-index round-trip assertion catches an off-by-stride byte-arithmetic bug.
+                    Arguments.of("u16-tier-multi-row", u16TierRows())
             );
+        }
+
+        /// One 300-byte row followed by 300 single-character rows. The long first row pushes the
+        /// maximum raw row length past the U8 range (forcing `U16` uncompressed lengths). Each
+        /// single-character row compresses to exactly one code byte regardless of how training
+        /// ranks symbols, so the cumulative codes-offset total is deterministically at least 300 —
+        /// past the U8 range too (forcing `U16` codes offsets). 301 rows mean a wrong U16 stride in
+        /// either buffer write shifts many values, so the per-index round-trip assertion catches an
+        /// off-by-stride byte-arithmetic bug rather than a lone corrupted row that might slip by.
+        private static String[] u16TierRows() {
+            String[] rows = new String[301];
+            rows[0] = "a".repeat(300);
+            for (int i = 1; i < rows.length; i++) {
+                rows[i] = "x";
+            }
+            return rows;
         }
 
         private static String[] repeatCycle(String[] cycle, int times) {
@@ -379,6 +403,37 @@ class FsstEncodingEncoderTest {
             // Then
             assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(PType.U8.ordinal());
             assertThat(meta.codes_offsets_ptype().value()).isEqualTo(PType.U16.ordinal());
+        }
+
+        @Test
+        void encode_metadata_bothPTypes_escalate_forU16RoundtripCase() throws Exception {
+            // Given — the same multi-row data the U16-tier round-trip case uses (Encode
+            // .stringArrays "u16-tier-multi-row"). This pins the precondition that the round-trip
+            // actually exercises the U16 write path for both buffers: if a future change made
+            // either buffer stay in the U8 tier, this fails and the round-trip coverage would
+            // silently no longer cover U16.
+            String[] data = u16TierRowsCopy();
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            var metaSeg = result.rootNode().metadata();
+            ProtoFSSTMetadata meta = ProtoFSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+
+            // Then
+            assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(PType.U16.ordinal());
+            assertThat(meta.codes_offsets_ptype().value()).isEqualTo(PType.U16.ordinal());
+        }
+
+        // Mirror of Encode.u16TierRows() — the nested classes cannot share a private static helper
+        // without exposing it, and the intent (deterministic U16-on-both data) is small enough to
+        // restate here next to the assertion that depends on it.
+        private static String[] u16TierRowsCopy() {
+            String[] rows = new String[301];
+            rows[0] = "a".repeat(300);
+            for (int i = 1; i < rows.length; i++) {
+                rows[i] = "x";
+            }
+            return rows;
         }
     }
 }
