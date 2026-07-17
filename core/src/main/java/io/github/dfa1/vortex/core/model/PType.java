@@ -94,4 +94,23 @@ public enum PType {
         }
         return all[ordinal];
     }
+
+    /// Returns the narrowest unsigned integer ptype that can hold every value in
+    /// `0..maxValue` — `U8` up to `0xFF`, `U16` up to `0xFFFF`, else `U32`.
+    ///
+    /// Used writer-side to size index/length/offset buffers (patch indices, FSST row
+    /// lengths and code offsets) to the smallest width that still fits, instead of
+    /// always paying for a 4-byte `U32`.
+    ///
+    /// @param maxValue the largest value the buffer must represent, `>= 0`
+    /// @return `U8`, `U16`, or `U32`, whichever is smallest and still fits
+    public static PType narrowestUnsigned(long maxValue) {
+        if (maxValue <= 0xFFL) {
+            return U8;
+        }
+        if (maxValue <= 0xFFFFL) {
+            return U16;
+        }
+        return U32;
+    }
 }

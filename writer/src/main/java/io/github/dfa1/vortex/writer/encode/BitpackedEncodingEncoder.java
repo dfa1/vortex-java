@@ -118,7 +118,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         }
 
         int numPatches = patchIdx.size();
-        PType idxPtype = chooseIdxPtype(n);
+        PType idxPtype = PType.narrowestUnsigned(n);
         MemorySegment idxBuf = buildPatchIdxBuf(patchIdx, idxPtype, ctx.arena());
         MemorySegment valBuf = buildPatchValBuf(patchVal, ptype, ctx.arena());
 
@@ -155,16 +155,6 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
             }
         }
         return bestWidth;
-    }
-
-    private static PType chooseIdxPtype(int n) {
-        if (n <= 0xFF) {
-            return PType.U8;
-        }
-        if (n <= 0xFFFF) {
-            return PType.U16;
-        }
-        return PType.U32;
     }
 
     private static MemorySegment buildPatchIdxBuf(List<Integer> idx, PType idxPtype, Arena arena) {
