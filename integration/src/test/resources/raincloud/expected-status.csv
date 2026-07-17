@@ -80,7 +80,7 @@ bi-yalelanguages,ok
 bigscience-p3-eval-subset,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 building-permit-applications-data,missing_auth
-c4-en-validation,untriaged
+c4-en-validation,ok
 california-housing-prices,ok
 cardiovascular-diseases-risk-prediction-dataset,ok
 chess,ok
@@ -170,7 +170,7 @@ news-headlines-dataset-for-sarcasm-detection,ok
 nips-papers,ok
 no-robots,ok
 nyc-311,untriaged
-nyc-parking-tickets,untriaged
+nyc-parking-tickets,ok
 nyc-property-sales,ok
 nypd-complaints,ok
 oasst1,ok
@@ -208,14 +208,14 @@ sf-salaries,ok
 slimpajama-6b,untriaged
 squad-v2,ok
 stack-overflow-2018-developer-survey,ok
-stackoverflow-badges,untriaged
+stackoverflow-badges,ok
 stackoverflow-postlinks,ok
 stackoverflow-posts,untriaged
 stackoverflow-tags,ok
 stackoverflow-users,untriaged
 synthetic-text-to-sql,ok
 temperature-change,ok
-tinystories,untriaged
+tinystories,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 titanic-dataset,missing_auth
 truthfulqa-mc,ok
@@ -276,7 +276,7 @@ ufcdata,missing_auth
 uk-price-paid,untriaged
 uk-road-safety-accidents-and-vehicles,ok
 ultrachat-200k,untriaged
-ultrafeedback-binarized,untriaged
+ultrafeedback-binarized,ok
 us-accidents,untriaged
 # kaggle auth login / KAGGLE_API_TOKEN
 us-airbnb-open-data,missing_auth
