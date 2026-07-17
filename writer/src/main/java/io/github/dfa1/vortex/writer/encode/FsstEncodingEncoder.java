@@ -118,8 +118,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         // typically far below the 4-byte ceiling this always used to pay (e.g. a 6-byte string
         // column needs only U8 lengths, not I32), and the wire format carries the chosen ptype
         // per FSSTMetadata specifically so a reader never has to guess.
-        PType uncompLenPType = narrowestUnsignedPType(maxUncompLen);
-        PType codesOffPType = narrowestUnsignedPType(totalCompressed);
+        PType uncompLenPType = PType.narrowestUnsigned(maxUncompLen);
+        PType codesOffPType = PType.narrowestUnsigned(totalCompressed);
 
         MemorySegment uncompLenBuf = arena.allocate(Math.max((long) n * uncompLenPType.byteSize(), 1));
         for (int i = 0; i < n; i++) {
@@ -152,24 +152,10 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 null, null);
     }
 
-    /// Narrowest unsigned `PType` that can hold every value up to `maxValue`.
-    ///
-    /// @param maxValue the largest value the buffer must represent, `>= 0`
-    /// @return `U8`, `U16`, or `U32`, whichever is smallest and still fits
-    private static PType narrowestUnsignedPType(int maxValue) {
-        if (maxValue <= 0xFF) {
-            return PType.U8;
-        }
-        if (maxValue <= 0xFFFF) {
-            return PType.U16;
-        }
-        return PType.U32;
-    }
-
     /// Writes `value` into `seg` at row `idx`, using `ptype`'s byte width.
     ///
     /// @param seg   destination segment
-    /// @param ptype `U8`, `U16`, or `U32` (whatever [#narrowestUnsignedPType(int)] returned)
+    /// @param ptype `U8`, `U16`, or `U32` (whatever [PType#narrowestUnsigned(long)] returned)
     /// @param idx   row index (not a byte offset)
     /// @param value the value to write
     private static void writeUnsigned(MemorySegment seg, PType ptype, long idx, long value) {

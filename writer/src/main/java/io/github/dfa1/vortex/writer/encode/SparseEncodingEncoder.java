@@ -75,7 +75,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             return CascadeStep.notApplicable();
         }
         int elemBytes = ptype.byteSize();
-        PType idxPtype = chooseIdxPtype(n);
+        PType idxPtype = PType.narrowestUnsigned(n);
         int idxBytes = idxPtype.byteSize();
         int patchCost = idxBytes + elemBytes;
         int maxPatches = (int) Math.min(Integer.MAX_VALUE, ((long) n * elemBytes / 2L) / patchCost);
@@ -227,7 +227,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         boolean[] patchVals = new boolean[numPatches];
         java.util.Arrays.fill(patchVals, !fillValue);
 
-        PType idxPtype = chooseIdxPtype(n);
+        PType idxPtype = PType.narrowestUnsigned(n);
         Object idxArr = idxArr(patchIdx, idxPtype);
 
         ProtoScalarValue fillScalar = ProtoScalarValue.ofBoolValue(fillValue);
@@ -299,7 +299,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         }
 
         int numPatches = patchIdx.size();
-        PType idxPtype = chooseIdxPtype(n);
+        PType idxPtype = PType.narrowestUnsigned(n);
 
         ProtoScalarValue fillScalar = zeroScalar(ptype);
         byte[] fillBytes = fillScalar.encode();
@@ -351,16 +351,6 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             case F64 -> Double.doubleToRawLongBits(((double[]) data)[i]);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
         };
-    }
-
-    private static PType chooseIdxPtype(int n) {
-        if (n <= 0xFF) {
-            return PType.U8;
-        } else if (n <= 0xFFFF) {
-            return PType.U16;
-        } else {
-            return PType.U32;
-        }
     }
 
     private static ProtoScalarValue zeroScalar(PType ptype) {

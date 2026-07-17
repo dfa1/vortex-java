@@ -95,4 +95,21 @@ class PTypeTest {
         // Given / When / Then — wire-format anchor: U8 must remain ordinal 0
         assertThat(PType.fromOrdinal(0)).isSameAs(PType.U8);
     }
+
+    @ParameterizedTest
+    @CsvSource({
+            // boundary values: each tier's inclusive ceiling and the first value that spills to the next
+            "0,          U8",
+            "255,        U8",     // 0xFF — last U8
+            "256,        U16",    // 0x100 — first U16
+            "65535,      U16",    // 0xFFFF — last U16
+            "65536,      U32",    // 0x10000 — first U32
+            "4294967295, U32",    // 0xFFFFFFFF — beyond U16, still U32
+    })
+    void narrowestUnsigned_picksSmallestFittingTier(long maxValue, PType expected) {
+        // Given / When
+        PType result = PType.narrowestUnsigned(maxValue);
+        // Then
+        assertThat(result).isSameAs(expected);
+    }
 }
