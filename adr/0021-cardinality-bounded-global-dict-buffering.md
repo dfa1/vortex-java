@@ -20,10 +20,13 @@ are buffered from its first chunk until `close()`.
 
 This raw buffering has no bound proportional to what actually matters. A
 column is admitted as a dict candidate based on its first chunk's cardinality
-(`GLOBAL_DICT_MAX_CARDINALITY = 2048`), but nothing re-checks that gate as
-more chunks arrive — a column whose distinct set only grows past the cap
-after millions of later rows keeps accumulating raw duplicate values in the
-meantime. On a wide, high-row-count file (18.5M rows × 38 string columns,
+(`GLOBAL_DICT_MAX_CARDINALITY = 2048`). The gate *is* re-checked — but only
+at `close()`, in `flushDictColumns()`: a column whose full-file distinct set
+turns out to exceed the cap falls back to per-chunk encoding there. By that
+point the damage is done: a column whose distinct set only grows past the
+cap after millions of later rows has already accumulated raw duplicate
+values for the whole file. On a wide, high-row-count file (18.5M rows × 38
+string columns,
 the NYC 311 slug from the Raincloud conformance corpus) the aggregate raw
 buffering reached several GB and threw `OutOfMemoryError`, independent of
 available heap — memory scaled with file size × column count, not with a
@@ -63,18 +66,28 @@ constraint.
 Replace raw-value buffering with **cardinality-bounded** buffering:
 
 1. Per dict-candidate column, maintain a deduplicated `value → code` map
-   incrementally as chunks stream in, capped at `GLOBAL_DICT_MAX_CARDINALITY`
-   entries. The moment inserting a new distinct value would exceed the cap,
-   demote immediately — this is the same, already-correct disqualifying
-   condition the admission gate uses, just checked continuously instead of
-   once.
-2. Buffer per-chunk **code arrays** (`U16`, or `U32` past 65 536 distinct
-   values) instead of raw value arrays. Codes are cheap regardless of file
-   size — 18.5M rows × 2 bytes ≈ 36 MB, versus potentially many GB of raw
-   duplicated strings today.
-3. At `close()`, build the dictionary payload directly from the
-   already-deduplicated map (no re-scan of raw data needed) and write the
-   buffered code arrays as the column's chunked codes segment.
+   (codes in first-seen order) and a per-value occurrence count incrementally
+   as chunks stream in, capped at `GLOBAL_DICT_MAX_CARDINALITY` entries. The
+   moment inserting a new distinct value would exceed the cap, demote
+   immediately — this is the same disqualifying condition the existing
+   `close()`-time fallback uses, just checked continuously instead of after
+   full buffering.
+2. Buffer per-chunk **code arrays** (in-memory `short[]` — the 2 048 cap
+   fits) instead of raw value arrays. Codes are cheap regardless of file
+   size — 18.5M rows × 2 bytes ≈ 37 MB, versus potentially many GB of raw
+   duplicated strings today. The *wire* code width is still chosen at
+   `close()` via the existing `codePTypeForSize` (`U8` when ≤ 256 distinct
+   values), exactly as today — buffering width and wire width are
+   independent, so no upfront width decision is needed.
+3. At `close()`, rank the map's values by occurrence count descending —
+   preserving the existing invariant that the dominant value gets code 0,
+   which is what lets `SparseEncodingEncoder` (fill = 0) compress the codes
+   child (deliberately matching Rust's `FloatDictScheme`) — then remap the
+   buffered code arrays through a first-seen → frequency-ranked code table
+   (one O(rows) table-lookup pass) and write them as the column's chunked
+   codes segment. No re-scan of raw values is needed, but this remap pass
+   is mandatory: skipping it would silently lose the dict+sparse win on
+   dominant-value columns.
 
 Memory for a surviving candidate is then bounded by
 `cardinality × avg_value_size + row_count × code_width` — proportional to
@@ -96,35 +109,44 @@ primary demotion signal.
 - Demotion order now matches dict-worthiness: a column is only evicted when
   its cardinality actually disqualifies it, never for being byte-heavy while
   genuinely low-cardinality.
-- Removes the NYC-311-shaped regression (1.67× file size vs. Rust) without
-  needing a larger configured budget — every column that is genuinely
-  low-cardinality keeps its shared dictionary regardless of row count.
-- `close()`-time dictionary construction gets simpler (dedup map is already
-  the dictionary; no re-scan of buffered raw chunks to compute codes).
+- Shrinks per-candidate retention ~35–45× on string columns (raw strings are
+  charged ~80 B/row by `estimateRetainedBytes`; codes cost 2 B/row), making
+  demotion-by-budget rare at any setting. Honest caveat: it does not make
+  the safety net obsolete on NYC-311-shaped files — ~10–15 surviving
+  candidates × 37 MB of codes ≈ 370–550 MB still exceeds the 256 MB default,
+  so this ADR recommends raising the default budget in the same change
+  (code arrays are cheap enough that a 1 GB default bounds the same risk the
+  256 MB default was set for, while letting a file like NYC 311 keep all its
+  dictionaries).
+- `close()`-time dictionary construction no longer re-scans buffered raw
+  chunks — the dedup map plus incremental counts already hold everything;
+  only the O(rows) code-remap pass over the (much smaller) code arrays
+  remains.
 
 ### Negative
 
 - Real rework of the buffering path: admission, per-chunk ingest, and the
   `close()`-time build all change. Bigger than the byte-budget PRs it
   supersedes.
-- Chunks buffered before a column's cardinality was known to be growing
-  toward the cap need their already-computed codes kept consistent if a
-  later demotion discards the shared dictionary — codes computed against a
-  dictionary that turns out incomplete must be convertible back to raw
-  per-chunk encoding, or the column must re-derive per-chunk encoding from
-  scratch for its already-buffered chunks. The exact mechanics need to be
-  worked out during implementation, not assumed here.
-- `U16` vs `U32` code width must be decided per column before any chunk is
-  written (or upgraded in place if cardinality crosses 65 536 while staying
-  under `GLOBAL_DICT_MAX_CARDINALITY`, if that constant is ever raised past
-  a `U16` code's range) — matches the existing narrowest-ptype-selection
-  precedent (`PType.narrowestUnsigned`) but the growing-cardinality writer
-  path is a different call site.
+- Demotion after a mid-file cap breach needs a conversion path for the
+  already-buffered chunks, but it is lossless by construction — the inverse
+  map (`code → value`) plus the buffered code arrays reconstruct each raw
+  chunk exactly, or the buffered chunks can be written directly as
+  *per-chunk* dictionaries from the codes and the relevant map subset. An
+  extra code path to write and test, not an open design question.
+- Per-row work moves from `close()` into `writeChunk`: today ingest is an
+  append and all dedup/hashing happens once at flush; incrementally, every
+  row pays a dedup-map lookup (string hashing on the write hot path) as it
+  arrives. Total CPU is roughly neutral — the `close()`-time counting pass
+  over all raw rows disappears — but per-call ingest latency grows, which
+  callers sensitive to `writeChunk` latency will notice.
 
 ### Risks to manage
 
-- `GLOBAL_DICT_MAX_CARDINALITY` currently caps at 2048 (fits `U16` easily);
-  if it is ever raised, code-width selection needs to stay correct.
+- `GLOBAL_DICT_MAX_CARDINALITY` currently caps at 2 048, which fits both the
+  in-memory `short[]` buffering (signed max 32 767) and a `U16` wire code;
+  if the constant is ever raised past either bound, both the buffer element
+  type and `codePTypeForSize` selection need revisiting together.
 - Must not regress the existing demotion test coverage
   (`GlobalDictUtf8Test#retainedBytesBudgetExceeded_utf8_demotesToPerChunkChunkedLayout`)
   — cardinality-based demotion needs its own equivalent test, and the
@@ -153,10 +175,12 @@ primary demotion signal.
 
 ## References
 
-- OOM fix: `fix: bound VortexWriter's global-dict retained memory to avoid
-  OOM on huge files`
+- OOM fix: [`fb4b6be0`](https://github.com/dfa1/vortex-java/commit/fb4b6be0)
+  — bound VortexWriter's global-dict retained memory to avoid OOM on huge
+  files
 - Configurability follow-up:
-  `feat: make writer's global-dict retained-memory budget configurable`
+  [`4cbc12dd`](https://github.com/dfa1/vortex-java/commit/4cbc12dd) — make
+  writer's global-dict retained-memory budget configurable
 - Rust reference sample-based estimation:
   [`vortex-compressor/src/scheme/estimate.rs`](https://github.com/spiraldb/vortex/blob/main/vortex-compressor/src/scheme/estimate.rs)
 - Original global-dict-across-chunks fix: commit `5fe8b544`
