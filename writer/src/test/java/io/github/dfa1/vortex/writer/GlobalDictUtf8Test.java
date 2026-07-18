@@ -224,7 +224,7 @@ class GlobalDictUtf8Test {
         // string column whose distinct set is small early but whose raw bytes accumulate across
         // millions of rows because a global dict must hold every chunk until close(). Rather than
         // pin the heap, the writer demotes the column once the aggregate retained bytes cross the
-        // budget. We lower the budget via the test seam so this triggers on a handful of small
+        // budget. We lower the budget via WriteOptions so this triggers on a handful of small
         // chunks instead of allocating the full budget. Cardinality never grows, so the OLD
         // cardinality-fallback would never fire — only the new memory-budget demotion catches this,
         // which is the bug under test.
@@ -234,11 +234,12 @@ class GlobalDictUtf8Test {
         int chunkCount = 6;
         String[] expected = new String[rowsPerChunk * chunkCount];
 
+        // Budget of ~120 KB is crossed after ~2 chunks of 2000 rows (each row ~48 B object
+        // overhead + a short string), forcing demotion partway through the file. Configured via the
+        // real public WriteOptions surface rather than a test-only seam.
+        WriteOptions opts = WriteOptions.cascading(3).withGlobalDictMaxRetainedBytes(120_000L);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
-            // Budget of ~120 KB is crossed after ~2 chunks of 2000 rows (each row ~48 B object
-            // overhead + a short string), forcing demotion partway through the file.
-            sut.setDictRetainedBudgetForTest(120_000L);
+             var sut = VortexWriter.create(ch, SCHEMA, opts)) {
             // When
             for (int c = 0; c < chunkCount; c++) {
                 String[] data = new String[rowsPerChunk];

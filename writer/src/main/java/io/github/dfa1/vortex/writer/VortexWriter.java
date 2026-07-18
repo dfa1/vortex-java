@@ -80,6 +80,12 @@ import java.util.Set;
 ///     writer.writeChunk(Map.of(ColumnName.of("id"), idArray, ColumnName.of("value"), valueArray));
 /// }
 /// ```
+///
+/// With global dictionary encoding enabled (the default), candidate columns are buffered in the heap
+/// until `close()` so a shared dictionary can span every chunk. The aggregate memory this buffering may
+/// retain is bounded by [WriteOptions#globalDictMaxRetainedBytes()] (default 256 MB); once the budget is
+/// crossed the largest columns are demoted to per-chunk encoding, keeping writer memory bounded
+/// regardless of file size or column count.
 public final class VortexWriter implements Closeable {
 
     // Indices into layout_specs list in the FbsFooter
@@ -98,18 +104,6 @@ public final class VortexWriter implements Closeable {
     // Columns with global cardinality below this threshold are dict-encoded across all chunks.
     // Kept low: global dict hurts high-cardinality F64 columns (ALP codes beat U16 dict codes).
     static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
-
-    // Aggregate memory budget (bytes) for the raw data all columns may retain while buffering for a
-    // shared global dictionary. A global dict must see every chunk before it can be built, so a
-    // dict-candidate column's raw arrays are held from the first chunk until close(). On a huge,
-    // wide file (e.g. the 18.5M-row / 38-string-column NYC-311 Parquet import) any column
-    // mis-detected as low-cardinality on its first chunk — one whose distinct count grows only after
-    // millions of later rows — would otherwise pin its entire column in the heap; with dozens of such
-    // columns the total is several GB and the import OOMs. This budget bounds the SUM across all
-    // buffering columns: once the total is exceeded, the largest-retained columns are demoted (their
-    // buffered chunks flushed per-chunk, per-chunk encoding thereafter) until back under budget,
-    // keeping writer memory bounded by the budget rather than by total file size × column count.
-    static final long GLOBAL_DICT_MAX_RETAINED_BYTES = 256L * 1024 * 1024;
 
     private static final List<EncodingEncoder> DEFAULT_CODECS = List.of(
             new AlpEncodingEncoder(), new PrimitiveEncodingEncoder(), new BoolEncodingEncoder(),
@@ -141,9 +135,9 @@ public final class VortexWriter implements Closeable {
     // pin the heap. When the sum crosses the budget, the largest columns are demoted until under it.
     private final Map<ColumnName, Long> dictRetainedBytes = new LinkedHashMap<>();
     private long dictRetainedTotal = 0;
-    // Effective aggregate global-dict retention budget; the constant by default, lowered by tests
-    // to exercise the demotion path without allocating the full budget.
-    private long dictRetainedBudget = GLOBAL_DICT_MAX_RETAINED_BYTES;
+    // Effective aggregate global-dict retention budget, configured via
+    // WriteOptions.globalDictMaxRetainedBytes(); see that field's javadoc for the rationale.
+    private final long dictRetainedBudget;
     private boolean firstChunkSeen = false;
 
     // Per-column zone-maps, populated by flushZoneMaps() in close() when enableZoneMaps is set.
@@ -173,6 +167,7 @@ public final class VortexWriter implements Closeable {
         this.channel = channel;
         this.schema = schema;
         this.options = options;
+        this.dictRetainedBudget = options.globalDictMaxRetainedBytes();
         this.encodings = encodings;
         this.defaultRegistry = buildRegistry(encodings);
         this.cascadeCodecs = buildCascadeCodecs(options);
@@ -180,12 +175,6 @@ public final class VortexWriter implements Closeable {
         for (ColumnName name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
-    }
-
-    // Test seam: lower the aggregate global-dict retention budget so the demotion path (see
-    // writeChunk) can be exercised without allocating GLOBAL_DICT_MAX_RETAINED_BYTES of column data.
-    void setDictRetainedBudgetForTest(long budgetBytes) {
-        this.dictRetainedBudget = budgetBytes;
     }
 
     /// Builds a [WriteRegistry] from the given encoder list plus all built-in extension encoders.

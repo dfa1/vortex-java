@@ -56,7 +56,7 @@ class AggregateWhereCleanPartitionTest {
                 .field("val", DType.I64)
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the fold reads.
-        WriteOptions opts = new WriteOptions(CHUNK, true, 0.90, 0, true, false);
+        WriteOptions opts = new WriteOptions(CHUNK, true, 0.90, 0, true, false, 256L * 1024 * 1024);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             for (int c = 0; c < CHUNKS; c++) {
@@ -429,7 +429,7 @@ class AggregateWhereCleanPartitionTest {
     private static void writeChunks(Path file, DType.Struct schema, Map<ColumnName, Object> chunk0,
                                     Map<ColumnName, Object> chunk1) throws Exception {
         // chunkSize large so each writeChunk is exactly one chunk (one zone).
-        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false);
+        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, 256L * 1024 * 1024);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             writer.writeChunk(chunk0);
