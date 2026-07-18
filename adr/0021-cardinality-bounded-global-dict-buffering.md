@@ -79,15 +79,22 @@ Replace raw-value buffering with **cardinality-bounded** buffering:
    `close()` via the existing `codePTypeForSize` (`U8` when ≤ 256 distinct
    values), exactly as today — buffering width and wire width are
    independent, so no upfront width decision is needed.
-3. At `close()`, rank the map's values by occurrence count descending —
-   preserving the existing invariant that the dominant value gets code 0,
-   which is what lets `SparseEncodingEncoder` (fill = 0) compress the codes
-   child (deliberately matching Rust's `FloatDictScheme`) — then remap the
-   buffered code arrays through a first-seen → frequency-ranked code table
-   (one O(rows) table-lookup pass) and write them as the column's chunked
-   codes segment. No re-scan of raw values is needed, but this remap pass
-   is mandatory: skipping it would silently lose the dict+sparse win on
-   dominant-value columns.
+3. This step is **path-specific**, since the two existing close()-time
+   builders already disagree on code order:
+   - **Primitive columns** (`writeGlobalDictColumn`): today ranks distinct
+     values by occurrence count descending so the dominant value gets code 0
+     — the invariant that lets `SparseEncodingEncoder` (fill = 0) compress
+     the codes child, deliberately matching Rust's `FloatDictScheme`. The
+     incremental map is first-seen-ordered, so this path needs a `close()`-
+     time remap: rank by the incrementally-tracked occurrence count, build a
+     first-seen → frequency-rank code table, and pass every buffered code
+     array through it (one O(rows) table-lookup pass, no re-scan of raw
+     values). Skipping this remap would silently lose the dict+sparse win on
+     dominant-value columns.
+   - **Utf8 columns** (`writeGlobalDictUtf8Column`): today assigns codes in
+     first-seen order with no frequency sort at all. The incremental map's
+     order already matches this exactly — no remap pass needed, no
+     behavior change to port.
 
 Memory for a surviving candidate is then bounded by
 `cardinality × avg_value_size + row_count × code_width` — proportional to
