@@ -216,6 +216,66 @@ class GlobalDictUtf8Test {
         }
     }
 
+    @Test
+    void retainedBytesBudgetExceeded_utf8_demotesToPerChunkChunkedLayout(@TempDir Path tmp) throws IOException {
+        // Given — a column that looks low-cardinality on its FIRST chunk (3 distinct values, well
+        // under the 50% ratio + 2048 cardinality gates) so it is admitted to the global dict and its
+        // raw data starts being buffered. This is exactly the nyc-311 OOM shape: a "category-ish"
+        // string column whose distinct set is small early but whose raw bytes accumulate across
+        // millions of rows because a global dict must hold every chunk until close(). Rather than
+        // pin the heap, the writer demotes the column once the aggregate retained bytes cross the
+        // budget. We lower the budget via the test seam so this triggers on a handful of small
+        // chunks instead of allocating the full budget. Cardinality never grows, so the OLD
+        // cardinality-fallback would never fire — only the new memory-budget demotion catches this,
+        // which is the bug under test.
+        Path file = tmp.resolve("retained_budget_utf8.vortex");
+        String[] dict = {"open", "closed", "delivered"};
+        int rowsPerChunk = 2_000;
+        int chunkCount = 6;
+        String[] expected = new String[rowsPerChunk * chunkCount];
+
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
+            // Budget of ~120 KB is crossed after ~2 chunks of 2000 rows (each row ~48 B object
+            // overhead + a short string), forcing demotion partway through the file.
+            sut.setDictRetainedBudgetForTest(120_000L);
+            // When
+            for (int c = 0; c < chunkCount; c++) {
+                String[] data = new String[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    String value = dict[(c + i) % dict.length];
+                    data[i] = value;
+                    expected[c * rowsPerChunk + i] = value;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("status"), data));
+            }
+        }
+
+        // Then — the demoted column is a plain Chunked-of-Flats layout with one Flat per chunk (the
+        // buffered-then-flushed chunks plus the per-chunk-encoded remainder), NOT a single Dict
+        // layout. A Dict here would mean the whole column was still buffered in memory — the OOM.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            var columnLayout = unwrapZoned(vf.layout().children().getFirst());
+            assertThat(columnLayout.isDict()).as("demoted column must not be a global dict").isFalse();
+            assertThat(columnLayout.isChunked()).as("demoted column is a chunked layout").isTrue();
+            assertThat(columnLayout.children())
+                    .as("one Flat per written chunk after demotion")
+                    .hasSize(chunkCount)
+                    .allSatisfy(child -> assertThat(child.isFlat()).isTrue());
+
+            // And every value round-trips exactly across all chunks despite the mid-file demotion.
+            List<String> got = readAllStrings(vf, "status");
+            assertThat(got).containsExactly(expected);
+        }
+    }
+
+    /// Unwraps a column's [io.github.dfa1.vortex.reader.layout.Layout] Zoned/Stats wrapper (the
+    /// writer wraps every column in one for zone-map pruning) to reach the encoding layout beneath.
+    private static io.github.dfa1.vortex.reader.layout.Layout unwrapZoned(
+            io.github.dfa1.vortex.reader.layout.Layout layout) {
+        return layout.isZoned() ? layout.children().getFirst() : layout;
+    }
+
     /// Reads a nullable Utf8 column, mapping invalid rows to `null` so null positions are asserted
     /// alongside values. A nullable dict column decodes to a [MaskedArray] over the Utf8 payload.
     private static List<String> readNullableStrings(VortexReader vf, String col) {
