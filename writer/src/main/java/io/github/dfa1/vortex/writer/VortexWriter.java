@@ -82,10 +82,12 @@ import java.util.Set;
 /// ```
 ///
 /// With global dictionary encoding enabled (the default), candidate columns are buffered in the heap
-/// until `close()` so a shared dictionary can span every chunk. The aggregate memory this buffering may
-/// retain is bounded by [WriteOptions#globalDictMaxRetainedBytes()] (default 256 MB); once the budget is
-/// crossed the largest columns are demoted to per-chunk encoding, keeping writer memory bounded
-/// regardless of file size or column count.
+/// until `close()` so a shared dictionary can span every chunk. Buffering is cardinality-bounded
+/// (ADR 0021): each candidate retains a deduplicated value-to-code map capped at
+/// `GLOBAL_DICT_MAX_CARDINALITY` plus cheap per-chunk code arrays, so retained memory scales with a
+/// column's distinct-value count and row count — not its raw byte size. A column whose distinct set
+/// would exceed the cap demotes to per-chunk encoding immediately. [WriteOptions#globalDictMaxRetainedBytes()]
+/// (default 1 GB) remains a secondary safety net over the aggregate code-array bytes.
 public final class VortexWriter implements Closeable {
 
     // Indices into layout_specs list in the FbsFooter
@@ -125,14 +127,18 @@ public final class VortexWriter implements Closeable {
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
     private long bytesWritten = 0;
 
-    // Global dict state: columns detected as low-cardinality on first chunk are buffered
-    // here instead of encoded per-chunk. Flushed in close() as a single Dict layout.
+    // Global dict state: columns detected as low-cardinality on their first chunk are buffered here
+    // instead of encoded per-chunk. Buffering is cardinality-bounded (ADR 0021): rather than retain
+    // raw values, each candidate holds a deduplicated value->code map (capped at
+    // GLOBAL_DICT_MAX_CARDINALITY) plus cheap per-chunk code arrays. Flushed in close() as one Dict
+    // layout. When a column's distinct set would exceed the cap mid-file, it demotes immediately.
     private final Set<ColumnName> dictCandidates = new LinkedHashSet<>();
-    private final Map<ColumnName, List<Object>> dictBuffers = new LinkedHashMap<>();
+    private final Map<ColumnName, DictColumnState> dictStates = new LinkedHashMap<>();
     private final Map<ColumnName, DictColRef> dictColRefs = new LinkedHashMap<>();
-    // Raw bytes retained per global-dict-candidate column, and their running sum; together they
-    // guard the aggregate memory budget (dictRetainedBudget) so no set of mis-detected columns can
-    // pin the heap. When the sum crosses the budget, the largest columns are demoted until under it.
+    // Code-array bytes retained per global-dict-candidate column, and their running sum; together
+    // they guard the aggregate memory budget (dictRetainedBudget) as a secondary safety net (ADR
+    // 0021) so no set of mis-detected columns can pin the heap. Now that codes cost ~2 B/row instead
+    // of raw values, this budget rarely fires; when the sum crosses it, the largest columns demote.
     private final Map<ColumnName, Long> dictRetainedBytes = new LinkedHashMap<>();
     private long dictRetainedTotal = 0;
     // Effective aggregate global-dict retention budget, configured via
@@ -507,21 +513,36 @@ public final class VortexWriter implements Closeable {
                 }
                 if (candidate) {
                     dictCandidates.add(colName);
+                    dictStates.put(colName, new DictColumnState(colDtype));
                 }
             }
 
             if (dictCandidates.contains(colName)) {
-                List<Object> buffered = dictBuffers.computeIfAbsent(colName, _ -> new ArrayList<>());
-                buffered.add(data);
-                long delta = estimateRetainedBytes(data);
-                dictRetainedBytes.merge(colName, delta, Long::sum);
-                dictRetainedTotal += delta;
-                if (dictRetainedTotal > dictRetainedBudget) {
-                    // Aggregate budget exceeded — the buffered columns together no longer fit the
-                    // memory budget. Demote the largest-retained columns (flush their buffered chunks
-                    // per-chunk, encode per-chunk thereafter) until back under budget, so writer
-                    // memory stays bounded regardless of file size or column count.
-                    evictLargestDictColumnsUntilUnderBudget();
+                // Ingest this chunk into the column's cardinality-bounded dict state: dedup values
+                // into the shared value->code map, buffer a cheap per-chunk code array, and capture
+                // the per-chunk stats now (before the raw array is discarded). If a new distinct
+                // value would push the map past GLOBAL_DICT_MAX_CARDINALITY, ingestDictChunk returns
+                // false and we demote the column immediately (mid-file cap breach, ADR 0021).
+                DictColumnState state = dictStates.get(colName);
+                boolean admitted = ingestDictChunk(state, data);
+                if (!admitted) {
+                    // Cap breached by this chunk: demote (replaying the already-buffered chunks per
+                    // -chunk) then write this chunk — which ingest rejected without buffering — too.
+                    demoteDictColumn(colName);
+                    long rowCount = arrayLength(data);
+                    int segIdx = writeSegment(colDtype, data);
+                    colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
+                } else {
+                    long before = dictRetainedBytes.getOrDefault(colName, 0L);
+                    long after = state.retainedBytes();
+                    dictRetainedTotal += after - before;
+                    dictRetainedBytes.put(colName, after);
+                    if (dictRetainedTotal > dictRetainedBudget) {
+                        // Aggregate code-array budget exceeded (secondary safety net). Demote the
+                        // largest-retained columns until back under budget, so writer memory stays
+                        // bounded even across many wide candidate columns.
+                        evictLargestDictColumnsUntilUnderBudget();
+                    }
                 }
             } else {
                 long rowCount = arrayLength(data);
@@ -1190,34 +1211,133 @@ public final class VortexWriter implements Closeable {
 
     // ── Global dict helpers ───────────────────────────────────────────────────
 
-    /// Estimates the heap footprint of one chunk's worth of a column's raw data, used to bound the
-    /// per-column global-dict retention budget. Primitive arrays cost their element bytes; string
-    /// arrays cost each present string's UTF-16 char bytes plus a fixed per-element object-header
-    /// allowance (reference + `String`/`char[]` overhead), which dominates on wide, sparse columns.
+    /// Cardinality-bounded buffering state for one global-dict candidate column (ADR 0021). Instead of
+    /// retaining raw values from a column's first chunk until `close()`, this holds a deduplicated
+    /// value-to-code map (first-seen order, capped at [#GLOBAL_DICT_MAX_CARDINALITY]), a parallel
+    /// per-code occurrence count (used by the primitive path's frequency remap), and one cheap
+    /// `short[]` code array per ingested chunk. Per-chunk stats are captured at ingest time from the
+    /// raw chunk, before it is discarded.
     ///
-    /// @param data the chunk data (primitive array, `String[]`, or a [NullableData] wrapper)
-    /// @return an approximate retained-byte count; never negative
-    private static long estimateRetainedBytes(Object data) {
-        Object values = data instanceof NullableData nd ? nd.values() : data;
-        long overhead = data instanceof NullableData nd ? (long) nd.validity().length : 0L;
-        return overhead + switch (values) {
-            case byte[] a -> (long) a.length;
-            case short[] a -> 2L * a.length;
-            case int[] a -> 4L * a.length;
-            case long[] a -> 8L * a.length;
-            case float[] a -> 4L * a.length;
-            case double[] a -> 8L * a.length;
-            case boolean[] a -> (long) a.length;
-            case String[] a -> {
-                long total = 0L;
-                for (String s : a) {
-                    // 48 bytes ~ String + char[] object headers plus the array reference slot.
-                    total += 48L + (s == null ? 0L : 2L * s.length());
-                }
-                yield total;
+    /// A null (invalid) slot buffers code `0` unconditionally: the raw placeholder value is never
+    /// looked up in the map, matching the pre-ADR builders. The reader ignores those slots because the
+    /// codes child is masked by the same per-chunk validity.
+    private static final class DictColumnState {
+        private final DType dtype;
+        private final boolean utf8;
+        private final PType ptype;
+        private final boolean nullable;
+        // First-seen value -> code map (keys are boxed primitives or String, matching readPrimitiveElement).
+        private final Map<Object, Integer> valueToCode = new LinkedHashMap<>();
+        // Occurrence count per code, indexed by code; grows in lockstep with valueToCode.
+        private final List<Long> codeCounts = new ArrayList<>();
+        // One code array per ingested chunk (null slots hold code 0).
+        private final List<short[]> chunkCodes = new ArrayList<>();
+        private final List<boolean[]> chunkValidity = new ArrayList<>();
+        private final List<Long> chunkRowCounts = new ArrayList<>();
+        private final List<Long> chunkNullCounts = new ArrayList<>();
+        private final List<byte[]> chunkStatsMin = new ArrayList<>();
+        private final List<byte[]> chunkStatsMax = new ArrayList<>();
+        private final List<byte[]> chunkStatsSum = new ArrayList<>();
+        private long codeArrayBytes;
+
+        DictColumnState(DType dtype) {
+            this.dtype = dtype;
+            this.utf8 = dtype instanceof DType.Utf8;
+            this.ptype = dtype instanceof DType.Primitive p ? p.ptype() : null;
+            this.nullable = dtype.nullable();
+        }
+
+        int cardinality() {
+            return valueToCode.size();
+        }
+
+        /// Approximate retained heap footprint: the buffered code arrays (2 B/row) plus the small
+        /// cardinality-capped dedup map. The map footprint is bounded by the cap, so the code arrays
+        /// dominate — this is the quantity the aggregate byte-budget safety net now tracks.
+        long retainedBytes() {
+            // ~40 B per map entry (boxed key + Integer code + LinkedHashMap.Entry) plus the codes.
+            return codeArrayBytes + 40L * valueToCode.size();
+        }
+    }
+
+    /// Ingests one chunk into a candidate column's cardinality-bounded dict state (ADR 0021): dedups
+    /// each valid value into the shared value-to-code map, appends a per-chunk `short[]` code array,
+    /// and captures the chunk's row/null counts and min/max/sum stats before the raw array is
+    /// discarded. Null slots buffer code `0` and are excluded from the distinct set.
+    ///
+    /// Returns `false` — without mutating `state` — the moment a new distinct value would push the
+    /// map past [#GLOBAL_DICT_MAX_CARDINALITY]; the caller then demotes the column to per-chunk
+    /// encoding. This moves the cap check from `close()` to a continuous, mid-file guard so a column
+    /// whose distinct set grows past the cap never accumulates unbounded memory first.
+    ///
+    /// @param state the column's buffering state (mutated in place on success)
+    /// @param data  the chunk data (primitive array, `String[]`, or a [NullableData] wrapper)
+    /// @return `true` if the chunk was ingested within the cardinality cap; `false` if the column
+    ///         must be demoted
+    private boolean ingestDictChunk(DictColumnState state, Object data) {
+        boolean nullable = data instanceof NullableData;
+        Object values = nullable ? ((NullableData) data).values() : data;
+        boolean[] validity = nullable ? ((NullableData) data).validity() : null;
+        int len = state.utf8 ? ((String[]) values).length : primitiveArrayLen(values, state.ptype);
+
+        // First pass: would this chunk's fresh distinct values push the map past the cap? Count them
+        // without mutating so the whole chunk is either ingested or rejected atomically — a partial
+        // ingest would corrupt the dictionary when the caller demotes on rejection.
+        var pendingNew = new HashSet<>(GLOBAL_DICT_MAX_CARDINALITY + 1);
+        for (int i = 0; i < len; i++) {
+            if (validity != null && !validity[i]) {
+                continue;
             }
-            default -> 0L;
-        };
+            Object v = state.utf8 ? ((String[]) values)[i] : readPrimitiveElement(values, state.ptype, i);
+            if (v == null) {
+                // Nullable Utf8 keeps a real null at invalid positions (ChunkImpl.adaptUtf8); treat it
+                // as a null slot (code 0), never as a dictionary entry. Primitive placeholders never
+                // reach here because their slots are guarded by validity above.
+                continue;
+            }
+            if (!state.valueToCode.containsKey(v) && pendingNew.add(v)
+                    && state.valueToCode.size() + pendingNew.size() > GLOBAL_DICT_MAX_CARDINALITY) {
+                return false;
+            }
+        }
+
+        // Second pass: commit — insert new values and build the per-chunk code array.
+        short[] codes = new short[len];
+        for (int i = 0; i < len; i++) {
+            if (validity != null && !validity[i]) {
+                continue;
+            }
+            Object v = state.utf8 ? ((String[]) values)[i] : readPrimitiveElement(values, state.ptype, i);
+            if (v == null) {
+                continue;
+            }
+            Integer code = state.valueToCode.get(v);
+            if (code == null) {
+                code = state.valueToCode.size();
+                state.valueToCode.put(v, code);
+                state.codeCounts.add(0L);
+            }
+            codes[i] = code.shortValue();
+            state.codeCounts.set(code, state.codeCounts.get(code) + 1L);
+        }
+
+        state.chunkCodes.add(codes);
+        state.chunkValidity.add(validity);
+        state.chunkRowCounts.add((long) len);
+        state.chunkNullCounts.add(validity != null ? countNulls(validity) : 0L);
+        if (state.utf8) {
+            byte[][] mm = VarBinEncodingEncoder.minMaxStats((String[]) values);
+            state.chunkStatsMin.add(mm != null ? mm[0] : null);
+            state.chunkStatsMax.add(mm != null ? mm[1] : null);
+            state.chunkStatsSum.add(null);
+        } else {
+            byte[][] mm = PrimitiveEncodingEncoder.minMaxStats(state.ptype, values);
+            state.chunkStatsMin.add(mm != null ? mm[0] : null);
+            state.chunkStatsMax.add(mm != null ? mm[1] : null);
+            state.chunkStatsSum.add(PrimitiveEncodingEncoder.sumStat(state.ptype, values));
+        }
+        state.codeArrayBytes += 2L * len;
+        return true;
     }
 
     /// Demotes the largest-retained global-dict candidate columns to per-chunk encoding, one at a
@@ -1240,220 +1360,268 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    /// Abandons the shared global dictionary for one column whose retention pushed the aggregate over
-    /// the memory budget: flushes its already-buffered chunks as ordinary per-chunk segments (so no
-    /// data is lost) and removes it from the candidate set, so subsequent chunks encode per-chunk
-    /// too. The buffered chunks are released for GC and the running retained total is decremented.
+    /// Abandons the shared global dictionary for one column — either because a mid-file chunk would
+    /// push its distinct set past the cardinality cap, or because the aggregate code-array budget was
+    /// crossed — and replays its already-buffered chunks as ordinary per-chunk segments so no data is
+    /// lost (ADR 0021). Each buffered chunk is reconstructed exactly from its `short[]` codes plus the
+    /// inverse code-to-value map, then written through the normal cascade path, yielding a
+    /// Chunked-of-Flats layout. The buffered state is released for GC and the running retained total
+    /// is decremented.
     ///
     /// @param colName the column being demoted from global-dict to per-chunk encoding
     /// @throws IOException if writing a flushed segment fails
     private void demoteDictColumn(ColumnName colName) throws IOException {
-        List<Object> buffered = dictBuffers.remove(colName);
+        DictColumnState state = dictStates.remove(colName);
         dictCandidates.remove(colName);
         Long freed = dictRetainedBytes.remove(colName);
         if (freed != null) {
             dictRetainedTotal -= freed;
         }
-        if (buffered == null) {
+        if (state == null) {
             return;
         }
         DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
-        for (Object chunk : buffered) {
-            long rowCount = arrayLength(chunk);
-            int segIdx = writeSegment(colDtype, chunk);
+        Object[] inverse = buildInverseMap(state);
+        for (int c = 0; c < state.chunkCodes.size(); c++) {
+            Object rawChunk = reconstructChunk(state, inverse, c);
+            long rowCount = arrayLength(rawChunk);
+            int segIdx = writeSegment(colDtype, rawChunk);
             colChunks.get(colName).add(
                     new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
         }
     }
 
+    /// Inverse of a column's first-seen value-to-code map: `inverse[code]` is the value with that
+    /// code. Used by demotion to reconstruct raw chunks from their buffered code arrays.
+    private static Object[] buildInverseMap(DictColumnState state) {
+        Object[] inverse = new Object[state.valueToCode.size()];
+        for (Map.Entry<Object, Integer> e : state.valueToCode.entrySet()) {
+            inverse[e.getValue()] = e.getKey();
+        }
+        return inverse;
+    }
+
+    /// Reconstructs demoted chunk `c`'s raw array (a typed primitive array or `String[]`, wrapped in
+    /// [NullableData] when the chunk carried validity) from its buffered `short[]` codes and the
+    /// inverse code-to-value map. Null slots restore a zero/`null` placeholder — exactly what the
+    /// per-chunk encoders expect from [NullableData].
+    private static Object reconstructChunk(DictColumnState state, Object[] inverse, int c) {
+        short[] codes = state.chunkCodes.get(c);
+        boolean[] validity = state.chunkValidity.get(c);
+        int len = codes.length;
+        Object values;
+        if (state.utf8) {
+            String[] arr = new String[len];
+            for (int i = 0; i < len; i++) {
+                if (validity == null || validity[i]) {
+                    arr[i] = (String) inverse[codes[i] & 0xFFFF];
+                }
+            }
+            values = arr;
+        } else {
+            values = reconstructPrimitiveValues(state.ptype, codes, validity, inverse);
+        }
+        return validity != null ? new NullableData(values, validity) : values;
+    }
+
+    private static Object reconstructPrimitiveValues(PType ptype, short[] codes, boolean[] validity, Object[] inverse) {
+        int len = codes.length;
+        return switch (ptype) {
+            case I32, U32 -> {
+                int[] arr = new int[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        arr[i] = (Integer) inverse[codes[i] & 0xFFFF];
+                    }
+                }
+                yield arr;
+            }
+            case I64, U64 -> {
+                long[] arr = new long[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        arr[i] = (Long) inverse[codes[i] & 0xFFFF];
+                    }
+                }
+                yield arr;
+            }
+            case F64 -> {
+                double[] arr = new double[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        arr[i] = (Double) inverse[codes[i] & 0xFFFF];
+                    }
+                }
+                yield arr;
+            }
+            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
+        };
+    }
+
     private void flushDictColumns() throws IOException {
         for (ColumnName colName : dictCandidates) {
-            List<Object> chunks = dictBuffers.getOrDefault(colName, List.of());
-            if (chunks.isEmpty()) {
+            DictColumnState state = dictStates.get(colName);
+            if (state == null || state.chunkCodes.isEmpty() || state.cardinality() == 0) {
                 continue;
             }
-            int colIdx = schema.fieldNames().indexOf(colName);
-            DType colDtype = schema.fieldTypes().get(colIdx);
-            if (colDtype instanceof DType.Primitive p) {
-                writeGlobalDictColumn(colName, p, chunks);
-            } else if (colDtype instanceof DType.Utf8 u) {
-                writeGlobalDictUtf8Column(colName, u, chunks);
+            if (state.utf8) {
+                writeGlobalDictUtf8Column(colName, state);
+            } else {
+                writeGlobalDictColumn(colName, state);
             }
         }
     }
 
-    private void writeGlobalDictColumn(ColumnName colName, DType.Primitive dtype, List<Object> chunks)
-            throws IOException {
-        PType ptype = dtype.ptype();
-
-        // Count occurrences per distinct value across all chunks, then assign codes in
-        // frequency-descending order so the dominant value gets code 0. This lets
-        // SparseEncodingEncoder (fill=0) compress the codes child when one value dominates —
-        // matches Rust's FloatDictScheme path that powers the dict+sparse layout on taxi
-        // mta_tax/Airport_fee/extra columns.
-        var counts = new LinkedHashMap<Object, Long>();
-        for (Object chunk : chunks) {
-            Object values = chunk instanceof NullableData nd ? nd.values() : chunk;
-            boolean[] validity = chunk instanceof NullableData nd ? nd.validity() : null;
-            int len = primitiveArrayLen(values, ptype);
-            for (int i = 0; i < len; i++) {
-                if (validity != null && !validity[i]) {
-                    continue;
-                }
-                Object v = readPrimitiveElement(values, ptype, i);
-                counts.merge(v, 1L, Long::sum);
-            }
-        }
-        List<Map.Entry<Object, Long>> sorted = new ArrayList<>(counts.entrySet());
-        sorted.sort(Map.Entry.<Object, Long>comparingByValue().reversed());
-        var valueMap = new LinkedHashMap<Object, Integer>();
-        for (Map.Entry<Object, Long> entry : sorted) {
-            valueMap.put(entry.getKey(), valueMap.size());
-        }
-
-        int dictSize = valueMap.size();
-        if (dictSize > GLOBAL_DICT_MAX_CARDINALITY) {
-            // Cardinality exceeded threshold after seeing all data — fall back to per-chunk
-            for (Object chunk : chunks) {
-                long rowCount = arrayLength(chunk);
-                int segIdx = writeSegment(dtype, chunk);
-                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
-            }
-            return;
-        }
-
+    private void writeGlobalDictColumn(ColumnName colName, DictColumnState state) throws IOException {
+        PType ptype = state.ptype;
+        int dictSize = state.cardinality();
         PType codePType = codePTypeForSize(dictSize);
 
-        // Write values segment using the same codec path as regular segments so
-        // codes benefit from bitpacking/FOR when cascading is enabled.
-        // Safe: global dict is disabled for custom-encoding writers (withGlobalDict(false)),
-        // so this.encodings == DEFAULT_CODECS here and the two-arg form is always valid.
-        Object uniqueArr = buildTypedUniqueArray(ptype, valueMap.keySet(), dictSize);
-        int valuesSegIdx = writeSegment(dtype, uniqueArr);
+        // The incremental map assigns codes in first-seen order; the primitive path instead ranks
+        // distinct values by occurrence count descending so the dominant value gets code 0. This lets
+        // SparseEncodingEncoder (fill=0) compress the codes child when one value dominates — matching
+        // Rust's FloatDictScheme (taxi mta_tax/Airport_fee/extra). Build the first-seen -> frequency
+        // -rank remap once, then translate every buffered code array through it (one O(rows) pass, no
+        // re-scan of raw values).
+        int[] remap = buildFrequencyRemap(state);
+        Object uniqueArr = buildFrequencyRankedUniqueArray(state, ptype, remap, dictSize);
 
-        // Write one codes segment per original chunk. When a chunk is nullable, wrap the codes in a
-        // NullableData carrying the same validity so writeSegment emits a vortex.masked wrapper around
-        // the codes — exactly the shape DictLayoutDecoder already decodes (masked codes + pool).
-        DType codesDtype = new DType.Primitive(codePType, dtype.nullable());
+        // Write values segment using the same codec path as regular segments so codes benefit from
+        // bitpacking/FOR when cascading is enabled. Safe: global dict is disabled for custom-encoding
+        // writers (withGlobalDict(false)), so this.encodings == DEFAULT_CODECS here.
+        int valuesSegIdx = writeSegment(state.dtype, uniqueArr);
+
+        DType codesDtype = new DType.Primitive(codePType, state.nullable);
         List<Integer> codesSegIdxes = new ArrayList<>();
-        List<Long> chunkRowCounts = new ArrayList<>();
-        List<Long> chunkNullCounts = new ArrayList<>();
-        List<byte[]> chunkStatsMin = new ArrayList<>();
-        List<byte[]> chunkStatsMax = new ArrayList<>();
-        List<byte[]> chunkStatsSum = new ArrayList<>();
-        for (Object chunk : chunks) {
-            Object chunkValues = chunk instanceof NullableData nd ? nd.values() : chunk;
-            boolean[] chunkValidity = chunk instanceof NullableData nd ? nd.validity() : null;
-            int len = primitiveArrayLen(chunkValues, ptype);
-            Object codesArr = buildCodesArray(chunkValues, ptype, valueMap, codePType, len, chunkValidity);
-            Object codesData = chunkValidity != null ? new NullableData(codesArr, chunkValidity) : codesArr;
+        for (int c = 0; c < state.chunkCodes.size(); c++) {
+            boolean[] validity = state.chunkValidity.get(c);
+            Object codesArr = emitCodes(state.chunkCodes.get(c), remap, validity, codePType);
+            Object codesData = validity != null ? new NullableData(codesArr, validity) : codesArr;
             codesSegIdxes.add(writeSegment(codesDtype, codesData));
-            chunkRowCounts.add((long) len);
-            chunkNullCounts.add(chunkValidity != null ? countNulls(chunkValidity) : 0L);
-            // Per-zone min/max + sum over the chunk's logical values (matches the flat primitive
-            // path: computed on nd.values(), placeholders included). Lets the dict zone-map prune
-            // and aggregate like a plain primitive column.
-            byte[][] mm = PrimitiveEncodingEncoder.minMaxStats(ptype, chunkValues);
-            chunkStatsMin.add(mm != null ? mm[0] : null);
-            chunkStatsMax.add(mm != null ? mm[1] : null);
-            chunkStatsSum.add(PrimitiveEncodingEncoder.sumStat(ptype, chunkValues));
         }
 
         dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes,
-                chunkRowCounts, chunkNullCounts, chunkStatsMin, chunkStatsMax, chunkStatsSum));
+                state.chunkRowCounts, state.chunkNullCounts,
+                state.chunkStatsMin, state.chunkStatsMax, state.chunkStatsSum));
     }
 
-    private void writeGlobalDictUtf8Column(ColumnName colName, DType.Utf8 dtype, List<Object> chunks)
-            throws IOException {
-        // Build global string -> code map across all chunks (insertion order = code value). Skip
-        // null (invalid) elements so the dictionary holds only real strings; nullable Utf8 keeps
-        // real null array elements at invalid positions (per ChunkImpl.adaptUtf8).
-        var valueMap = new LinkedHashMap<String, Integer>();
-        for (Object chunk : chunks) {
-            String[] strs = chunk instanceof NullableData nd ? (String[]) nd.values() : (String[]) chunk;
-            for (String s : strs) {
-                if (s != null) {
-                    valueMap.computeIfAbsent(s, _ -> valueMap.size());
-                }
-            }
-        }
-
-        int dictSize = valueMap.size();
-        if (dictSize > GLOBAL_DICT_MAX_CARDINALITY) {
-            // Cardinality exceeded threshold after seeing all data — fall back to per-chunk.
-            for (Object chunk : chunks) {
-                long rowCount = arrayLength(chunk);
-                int segIdx = writeSegment(dtype, chunk);
-                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
-            }
-            return;
-        }
-
+    private void writeGlobalDictUtf8Column(ColumnName colName, DictColumnState state) throws IOException {
+        int dictSize = state.cardinality();
         PType codePType = codePTypeForSize(dictSize);
 
-        // Write unique strings as a flat VarBin segment — bypass cascade so DictEncoding
-        // doesn't wrap the (all-unique-by-construction) dictionary in another dict that
-        // the reader's decodeDictLayout cannot unwrap.
-        String[] uniques = valueMap.keySet().toArray(new String[0]);
-        int valuesSegIdx = writeSegment(dtype, uniques, new VarBinEncodingEncoder());
+        // Utf8 assigns codes in first-seen order with no frequency sort, so the incremental map's
+        // order already matches — no remap pass (ADR 0021). Write unique strings as a flat VarBin
+        // segment, bypassing cascade so DictEncoding doesn't wrap the (all-unique-by-construction)
+        // dictionary in another dict the reader cannot unwrap.
+        String[] uniques = state.valueToCode.keySet().toArray(new String[0]);
+        int valuesSegIdx = writeSegment(state.dtype, uniques, new VarBinEncodingEncoder());
 
-        // Write one codes segment per original chunk. When a chunk is nullable, wrap the codes in a
-        // NullableData so writeSegment emits a vortex.masked wrapper — the shape DictLayoutDecoder
-        // already decodes (masked codes + pool).
-        DType codesDtype = new DType.Primitive(codePType, dtype.nullable());
+        DType codesDtype = new DType.Primitive(codePType, state.nullable);
         List<Integer> codesSegIdxes = new ArrayList<>();
-        List<Long> chunkRowCounts = new ArrayList<>();
-        List<Long> chunkNullCounts = new ArrayList<>();
-        List<byte[]> chunkStatsMin = new ArrayList<>();
-        List<byte[]> chunkStatsMax = new ArrayList<>();
-        for (Object chunk : chunks) {
-            String[] strs = chunk instanceof NullableData nd ? (String[]) nd.values() : (String[]) chunk;
-            boolean[] chunkValidity = chunk instanceof NullableData nd ? nd.validity() : null;
-            Object codesArr = buildUtf8CodesArray(strs, valueMap, codePType);
-            Object codesData = chunkValidity != null ? new NullableData(codesArr, chunkValidity) : codesArr;
+        for (int c = 0; c < state.chunkCodes.size(); c++) {
+            boolean[] validity = state.chunkValidity.get(c);
+            Object codesArr = emitCodes(state.chunkCodes.get(c), null, validity, codePType);
+            Object codesData = validity != null ? new NullableData(codesArr, validity) : codesArr;
             codesSegIdxes.add(writeSegment(codesDtype, codesData));
-            chunkRowCounts.add((long) strs.length);
-            chunkNullCounts.add(chunkValidity != null ? countNulls(chunkValidity) : 0L);
-            // Per-zone string min/max over the chunk's values (matches the flat varbin path), so the
-            // dict zone-map prunes like a plain Utf8 column. minMaxStats already skips null elements.
-            byte[][] mm = VarBinEncodingEncoder.minMaxStats(strs);
-            chunkStatsMin.add(mm != null ? mm[0] : null);
-            chunkStatsMax.add(mm != null ? mm[1] : null);
         }
-        // Utf8 columns are not summed (zoneSumDtype is null), so the sum bytes are never read.
-        List<byte[]> noSum = java.util.Collections.nCopies(codesSegIdxes.size(), null);
+
         dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes,
-                chunkRowCounts, chunkNullCounts, chunkStatsMin, chunkStatsMax, noSum));
+                state.chunkRowCounts, state.chunkNullCounts,
+                state.chunkStatsMin, state.chunkStatsMax, state.chunkStatsSum));
     }
 
-    /// Builds the per-chunk codes array for a global-dict Utf8 column. A null slot emits code `0`
-    /// unconditionally (the null is not looked up in the map); the reader ignores those slots because
-    /// the codes child is masked by the same validity.
-    private static Object buildUtf8CodesArray(String[] strs, Map<String, Integer> valueMap, PType codePType) {
+    /// Builds the first-seen -> frequency-rank code remap for the primitive dict path. Distinct values
+    /// are ranked by their (incrementally tracked) occurrence count descending, so the dominant value
+    /// gets rank 0. `remap[firstSeenCode]` is the frequency-rank code. Ties keep first-seen order,
+    /// matching the pre-ADR stable sort on a first-seen-ordered `LinkedHashMap`.
+    private static int[] buildFrequencyRemap(DictColumnState state) {
+        int n = state.cardinality();
+        Integer[] order = new Integer[n];
+        for (int i = 0; i < n; i++) {
+            order[i] = i;
+        }
+        // Stable sort by count descending; equal counts preserve first-seen (ascending index) order.
+        java.util.Arrays.sort(order, (a, b) -> Long.compare(state.codeCounts.get(b), state.codeCounts.get(a)));
+        int[] remap = new int[n];
+        for (int rank = 0; rank < n; rank++) {
+            remap[order[rank]] = rank;
+        }
+        return remap;
+    }
+
+    /// Builds the primitive dictionary's unique-values array in frequency-rank order: slot `rank`
+    /// holds the value whose first-seen code remaps to `rank`. Only the carriers [#isDictCandidate]
+    /// admits — I32/U32, I64/U64, F64 — reach here.
+    private static Object buildFrequencyRankedUniqueArray(DictColumnState state, PType ptype, int[] remap, int dictSize) {
+        Object[] byRank = new Object[dictSize];
+        for (Map.Entry<Object, Integer> e : state.valueToCode.entrySet()) {
+            byRank[remap[e.getValue()]] = e.getKey();
+        }
+        return switch (ptype) {
+            case I32, U32 -> {
+                int[] a = new int[dictSize];
+                for (int i = 0; i < dictSize; i++) {
+                    a[i] = (Integer) byRank[i];
+                }
+                yield a;
+            }
+            case I64, U64 -> {
+                long[] a = new long[dictSize];
+                for (int i = 0; i < dictSize; i++) {
+                    a[i] = (Long) byRank[i];
+                }
+                yield a;
+            }
+            case F64 -> {
+                double[] a = new double[dictSize];
+                for (int i = 0; i < dictSize; i++) {
+                    a[i] = (Double) byRank[i];
+                }
+                yield a;
+            }
+            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
+        };
+    }
+
+    /// Emits one chunk's wire codes array (U8/U16/U32) from its buffered `short[]` first-seen codes,
+    /// optionally translated through a frequency remap (primitive path) and masking null slots to
+    /// code `0`. A null slot (validity[i] false) emits code `0` unconditionally, never remapped: the
+    /// reader ignores those slots because the codes child is masked by the same validity.
+    ///
+    /// @param buffered the buffered first-seen codes for one chunk
+    /// @param remap    the first-seen -> frequency-rank remap, or `null` to emit codes unchanged
+    /// @param validity per-row validity, or `null` when every row is valid
+    /// @param codePType the wire code ptype chosen from the dictionary size
+    /// @return a `byte[]`, `short[]`, or `int[]` codes array matching `codePType`
+    private static Object emitCodes(short[] buffered, int[] remap, boolean[] validity, PType codePType) {
+        int len = buffered.length;
         return switch (codePType) {
             case U8 -> {
-                byte[] codes = new byte[strs.length];
-                for (int i = 0; i < strs.length; i++) {
-                    if (strs[i] != null) {
-                        codes[i] = (byte) (int) valueMap.get(strs[i]);
+                byte[] codes = new byte[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        int fs = buffered[i] & 0xFFFF;
+                        codes[i] = (byte) (remap == null ? fs : remap[fs]);
                     }
                 }
                 yield codes;
             }
             case U16 -> {
-                short[] codes = new short[strs.length];
-                for (int i = 0; i < strs.length; i++) {
-                    if (strs[i] != null) {
-                        codes[i] = (short) (int) valueMap.get(strs[i]);
+                short[] codes = new short[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        int fs = buffered[i] & 0xFFFF;
+                        codes[i] = (short) (remap == null ? fs : remap[fs]);
                     }
                 }
                 yield codes;
             }
             default -> {
-                int[] codes = new int[strs.length];
-                for (int i = 0; i < strs.length; i++) {
-                    if (strs[i] != null) {
-                        codes[i] = valueMap.get(strs[i]);
+                int[] codes = new int[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        int fs = buffered[i] & 0xFFFF;
+                        codes[i] = remap == null ? fs : remap[fs];
                     }
                 }
                 yield codes;
@@ -1580,84 +1748,6 @@ public final class VortexWriter implements Closeable {
             return PType.U16;
         }
         return PType.U32;
-    }
-
-    /// Builds the dictionary's unique-values array for a global-dict column. Only the carriers
-    /// [#isDictCandidate] admits — I32/U32, I64/U64, F64 — reach here; the narrow-int and F16/F32
-    /// ptypes are rejected as dict candidates upstream, so they are not handled.
-    private static Object buildTypedUniqueArray(PType ptype, java.util.Set<Object> keys, int size) {
-        return switch (ptype) {
-            case I32, U32 -> {
-                int[] a = new int[size];
-                int i = 0;
-                for (Object v : keys) {
-                    a[i++] = (Integer) v;
-                }
-                yield a;
-            }
-            case I64, U64 -> {
-                long[] a = new long[size];
-                int i = 0;
-                for (Object v : keys) {
-                    a[i++] = (Long) v;
-                }
-                yield a;
-            }
-            case F64 -> {
-                double[] a = new double[size];
-                int i = 0;
-                for (Object v : keys) {
-                    a[i++] = (Double) v;
-                }
-                yield a;
-            }
-            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
-        };
-    }
-
-    private static Object buildCodesArray(Object data, PType ptype, Map<Object, Integer> valueMap,
-            PType codePType, int len) {
-        return buildCodesArray(data, ptype, valueMap, codePType, len, null);
-    }
-
-    /// Builds the per-chunk codes array for a global-dict primitive column. A null slot (validity[i]
-    /// false) emits code `0` unconditionally: the placeholder value there is not looked up in the map
-    /// (it may collide with a real entry, or be absent when that placeholder never appears validly).
-    /// The reader ignores those code-0 slots because the codes child is masked by the same validity.
-    private static Object buildCodesArray(Object data, PType ptype, Map<Object, Integer> valueMap,
-            PType codePType, int len, boolean[] validity) {
-        return switch (codePType) {
-            case U8 -> {
-                byte[] codes = new byte[len];
-                for (int i = 0; i < len; i++) {
-                    if (validity != null && !validity[i]) {
-                        continue;
-                    }
-                    codes[i] = (byte) (int) valueMap.get(readPrimitiveElement(data, ptype, i));
-                }
-                yield codes;
-            }
-            case U16 -> {
-                short[] codes = new short[len];
-                for (int i = 0; i < len; i++) {
-                    if (validity != null && !validity[i]) {
-                        continue;
-                    }
-                    codes[i] = (short) (int) valueMap.get(readPrimitiveElement(data, ptype, i));
-                }
-                yield codes;
-            }
-            default -> {
-                int[] codes = new int[len];
-                for (int i = 0; i < len; i++) {
-                    if (validity != null && !validity[i]) {
-                        continue;
-                    }
-                    codes[i] = valueMap.get(readPrimitiveElement(data, ptype, i));
-                }
-                yield codes;
-            }
-        };
     }
 
     private record SegRef(long offset, long len) {

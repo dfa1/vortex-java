@@ -140,7 +140,7 @@ class GlobalDictUtf8Test {
     @Test
     void mediumCardinality_utf8_usesU16Codes(@TempDir Path tmp) throws IOException {
         // Given — 300 distinct strings over 1000 rows: a global-dict candidate whose dict size (300)
-        // is above the 256 U8-code boundary, so codes are U16. Exercises buildUtf8CodesArray's U16
+        // is above the 256 U8-code boundary, so codes are U16. Exercises emitCodes's U16
         // arm (the existing low-card test has 3 values → U8).
         Path file = tmp.resolve("u16_utf8.vortex");
         int rows = 1_000;
@@ -220,24 +220,22 @@ class GlobalDictUtf8Test {
     void retainedBytesBudgetExceeded_utf8_demotesToPerChunkChunkedLayout(@TempDir Path tmp) throws IOException {
         // Given — a column that looks low-cardinality on its FIRST chunk (3 distinct values, well
         // under the 50% ratio + 2048 cardinality gates) so it is admitted to the global dict and its
-        // raw data starts being buffered. This is exactly the nyc-311 OOM shape: a "category-ish"
-        // string column whose distinct set is small early but whose raw bytes accumulate across
-        // millions of rows because a global dict must hold every chunk until close(). Rather than
-        // pin the heap, the writer demotes the column once the aggregate retained bytes cross the
-        // budget. We lower the budget via WriteOptions so this triggers on a handful of small
-        // chunks instead of allocating the full budget. Cardinality never grows, so the OLD
-        // cardinality-fallback would never fire — only the new memory-budget demotion catches this,
-        // which is the bug under test.
+        // per-chunk codes start being buffered. Cardinality never grows past 3, so the cardinality cap
+        // never fires — only the secondary aggregate code-array byte budget (ADR 0021) catches this.
+        // We lower the budget via WriteOptions so it is crossed partway through the file, exercising
+        // the byte-budget demotion path independently of the cardinality path. Buffering is now
+        // cardinality-bounded, so the budget guards ~2 B/row of codes (not raw strings) — a far
+        // smaller quantity, hence a far smaller budget here than the old raw-byte version.
         Path file = tmp.resolve("retained_budget_utf8.vortex");
         String[] dict = {"open", "closed", "delivered"};
         int rowsPerChunk = 2_000;
         int chunkCount = 6;
         String[] expected = new String[rowsPerChunk * chunkCount];
 
-        // Budget of ~120 KB is crossed after ~2 chunks of 2000 rows (each row ~48 B object
-        // overhead + a short string), forcing demotion partway through the file. Configured via the
-        // real public WriteOptions surface rather than a test-only seam.
-        WriteOptions opts = WriteOptions.cascading(3).withGlobalDictMaxRetainedBytes(120_000L);
+        // Each chunk buffers 2000 rows × 2 B/row = 4000 B of codes plus a ~120 B dedup map. A budget
+        // of 8000 B is crossed after the 3rd chunk (~12 KB retained), forcing demotion partway through
+        // the file. Configured via the real public WriteOptions surface rather than a test-only seam.
+        WriteOptions opts = WriteOptions.cascading(3).withGlobalDictMaxRetainedBytes(8_000L);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {
             // When
@@ -266,6 +264,58 @@ class GlobalDictUtf8Test {
 
             // And every value round-trips exactly across all chunks despite the mid-file demotion.
             List<String> got = readAllStrings(vf, "status");
+            assertThat(got).containsExactly(expected);
+        }
+    }
+
+    @Test
+    void retainedBytesBudgetExceeded_nullableUtf8_demotesAndRestoresNulls(@TempDir Path tmp) throws IOException {
+        // Given — the nullable twin of retainedBytesBudgetExceeded_utf8_..., exercising the
+        // reconstructChunk NULLABLE branch (Utf8 arm) that ADR 0021's "Risks to manage" flags. The
+        // column looks low-cardinality on its first chunk (3 distinct values) WITH ~10% nulls
+        // scattered per chunk, so it is admitted and its per-chunk codes+validity are buffered.
+        // Cardinality stays at 3, so only the aggregate code-array byte budget catches it: a lowered
+        // budget is crossed partway through the file, forcing demotion. Reconstruction must restore
+        // null placeholders at invalid positions and re-wrap each buffered chunk in NullableData —
+        // asserted end-to-end via the OUTPUT SHAPE (Chunked-of-Flats, not a shared Dict) plus an
+        // exact value-and-null round-trip.
+        var schema = new DType.Struct(List.of(ColumnName.of("status")),
+                List.of(DType.UTF8.withNullable(true)), false);
+        Path file = tmp.resolve("retained_budget_nullable_utf8.vortex");
+        String[] dict = {"open", "closed", "delivered"};
+        int rowsPerChunk = 2_000;
+        int chunkCount = 6;
+        String[] expected = new String[rowsPerChunk * chunkCount];
+
+        WriteOptions opts = WriteOptions.cascading(3).withGlobalDictMaxRetainedBytes(8_000L);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, opts)) {
+            // When — every 10th row is null so the buffered chunks carry a validity bitmap; the budget
+            // is crossed partway through, demoting the buffered-then-flushed chunks to per-chunk Flats.
+            for (int c = 0; c < chunkCount; c++) {
+                String[] data = new String[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    String value = (c + i) % 10 == 0 ? null : dict[(c + i) % dict.length];
+                    data[i] = value;
+                    expected[c * rowsPerChunk + i] = value;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("status"), data));
+            }
+        }
+
+        // Then — the demoted column is Chunked-of-Flats (one Flat per chunk), never a shared Dict.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            var columnLayout = unwrapZoned(vf.layout().children().getFirst());
+            assertThat(columnLayout.isDict()).as("demoted column must not be a global dict").isFalse();
+            assertThat(columnLayout.isChunked()).as("demoted column is a chunked layout").isTrue();
+            assertThat(columnLayout.children())
+                    .as("one Flat per written chunk after demotion")
+                    .hasSize(chunkCount)
+                    .allSatisfy(child -> assertThat(child.isFlat()).isTrue());
+
+            // And every value AND every null round-trips exactly, confirming the nullable
+            // reconstruction path (validity restore + NullableData re-wrap) end-to-end.
+            List<String> got = readNullableStrings(vf, "status");
             assertThat(got).containsExactly(expected);
         }
     }
