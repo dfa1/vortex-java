@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `WriteOptions.withGlobalDictMaxRetainedBytes(long)` makes the writer's global-dictionary retained-memory budget (default 256 MB) configurable. ([58ba2986](https://github.com/dfa1/vortex-java/commit/58ba2986))
+- `WriteOptions.withGlobalDictMaxRetainedBytes(long)` makes the writer's global-dictionary retained-memory budget (default 1 GB) configurable. ([58ba2986](https://github.com/dfa1/vortex-java/commit/58ba2986))
 
 ### Fixed
 
@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `FsstEncodingEncoder`: iterative symbol-table training (variable-length 1–8 byte symbols, was a fixed 2-byte bigram scheme) and narrower metadata buffer ptypes. ([95e0dfb4](https://github.com/dfa1/vortex-java/commit/95e0dfb4), [1bbc3549](https://github.com/dfa1/vortex-java/commit/1bbc3549))
 - `FsstEncodingEncoder`: non-boxing symbol-match lookup and stratified training-sample selection. ([4a3fa0a9](https://github.com/dfa1/vortex-java/commit/4a3fa0a9))
+- `VortexWriter` buffers global-dictionary candidates by capped cardinality (dedup map + ~2 B/row codes) instead of raw values, so a column whose distinct set grows past the cap mid-file demotes immediately instead of accumulating unbounded memory. ([47b10f7a](https://github.com/dfa1/vortex-java/commit/47b10f7a))
 
 ## [0.12.2] — 2026-07-12
 

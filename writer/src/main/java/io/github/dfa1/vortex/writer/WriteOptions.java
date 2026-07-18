@@ -13,17 +13,21 @@ package io.github.dfa1.vortex.writer;
 ///                                  file size by 10–15% on real-world datasets compared to ALP+bitpack alone.
 ///                                  Trade-off: Zstd decompression is ~6× slower than ALP decode;
 ///                                  prefer the default (`false`) for read-heavy workloads.
-/// @param globalDictMaxRetainedBytes aggregate byte budget for the raw data all global-dictionary
-///                                  candidate columns may buffer in the heap while waiting for
-///                                  `close()` (default 256 MB). A shared dictionary must see every
-///                                  chunk before it can be built, so a candidate column's raw arrays
-///                                  are held from its first chunk until the file is finished; when the
-///                                  running total across all such columns crosses this budget the
-///                                  largest-retained columns are demoted to per-chunk encoding until
-///                                  back under it, bounding writer memory regardless of file size or
-///                                  column count. Trade-off: demoted columns lose the shared-dictionary
-///                                  size benefit; raise the budget on memory-rich hosts to keep more
-///                                  wide, mis-detected columns dictionary-encoded.
+/// @param globalDictMaxRetainedBytes aggregate byte budget for the buffered per-chunk code arrays all
+///                                  global-dictionary candidate columns may retain in the heap while
+///                                  waiting for `close()` (default 1 GB). A shared dictionary must see
+///                                  every chunk before it can be built; buffering is cardinality
+///                                  -bounded (ADR 0021), so each candidate holds a capped value-to-code
+///                                  map plus cheap ~2 B/row code arrays rather than raw values. This
+///                                  budget is a secondary safety net over the aggregate code-array
+///                                  bytes: when the running total across all candidate columns crosses
+///                                  it, the largest-retained columns are demoted to per-chunk encoding
+///                                  until back under it. Because codes are ~35–45× smaller than raw
+///                                  strings, this rarely fires at the 1 GB default; the primary
+///                                  demotion signal is now a column's actual cardinality exceeding the
+///                                  cap. Trade-off: demoted columns lose the shared-dictionary size
+///                                  benefit; raise the budget on memory-rich hosts to keep more wide,
+///                                  low-cardinality columns dictionary-encoded.
 public record WriteOptions(
         int chunkSize,
         boolean enableZoneMaps,
@@ -33,8 +37,12 @@ public record WriteOptions(
         boolean enableZstd,
         long globalDictMaxRetainedBytes
 ) {
-    /// Default aggregate retention budget (256 MB) for buffered global-dictionary candidate columns.
-    private static final long DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = 256L * 1024 * 1024;
+    /// Default aggregate retention budget (1 GB) for the buffered per-chunk code arrays of global
+    /// -dictionary candidate columns. Raised from 256 MB when buffering became cardinality-bounded
+    /// (ADR 0021): codes are ~35–45× smaller than the raw values the old budget guarded, so a 1 GB
+    /// default bounds the same pathological many-wide-columns risk while letting normal wide,
+    /// low-cardinality files (e.g. NYC 311, ~38 string columns) keep all their shared dictionaries.
+    private static final long DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = 1024L * 1024 * 1024;
 
     /// Default options: global dictionary encoding enabled, no cascading compression, Zstd disabled.
     ///
@@ -88,10 +96,11 @@ public record WriteOptions(
 
     /// Returns a copy of these options with the global-dictionary retention budget set to `budgetBytes`.
     ///
-    /// This is the aggregate byte budget across all global-dictionary candidate columns buffered in the
-    /// heap while the writer waits to build shared dictionaries at `close()`. Lower it to demote
-    /// mis-detected wide columns to per-chunk encoding sooner (bounding memory on huge files); raise it
-    /// on memory-rich hosts to keep more columns dictionary-encoded.
+    /// This is the aggregate byte budget across all global-dictionary candidate columns' buffered
+    /// per-chunk code arrays, retained in the heap while the writer waits to build shared dictionaries
+    /// at `close()`. It is a secondary safety net behind the per-column cardinality cap (ADR 0021).
+    /// Lower it to demote columns to per-chunk encoding sooner (bounding memory on huge files); raise
+    /// it on memory-rich hosts to keep more columns dictionary-encoded.
     ///
     /// @param budgetBytes aggregate retention budget in bytes for buffered global-dict candidate columns
     /// @return a new `WriteOptions` with the global-dict retention budget updated

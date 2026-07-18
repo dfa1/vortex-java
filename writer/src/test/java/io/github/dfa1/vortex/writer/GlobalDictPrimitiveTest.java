@@ -152,6 +152,158 @@ class GlobalDictPrimitiveTest {
     }
 
     @Test
+    void cardinalityGrowsPastCapMidFile_i64_demotesImmediatelyToChunkedLayout(@TempDir Path tmp) throws IOException {
+        // Given — the core ADR 0021 case. The first chunk is a genuine low-cardinality dict candidate
+        // (200 distinct / 1000 rows), so the column is admitted and buffered as codes. Later chunks
+        // introduce fresh uniques until the distinct set crosses GLOBAL_DICT_MAX_CARDINALITY (2048)
+        // partway through the file. The OLD raw-buffering path would have accumulated every raw value
+        // for the whole file before catching this at close(); the new path detects the breach at
+        // ingest and demotes IMMEDIATELY. We can't assert on memory in a unit test, but the OUTPUT
+        // SHAPE proves the demotion happened: a Chunked-of-Flats layout (one Flat per chunk), NOT a
+        // single shared Dict layout. A Dict here would mean the whole column was still buffered.
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
+        Path file = tmp.resolve("card_grows_i64.vortex");
+        int chunkCount = 6;
+        int rowsPerChunk = 1_000;
+        long[] expected = new long[chunkCount * rowsPerChunk];
+        long next = 0;
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            // When — chunk 0 is low-card (200 distinct), later chunks are all-unique so the running
+            // distinct count climbs ~1000/chunk and passes 2048 during chunk 2 or 3.
+            for (int c = 0; c < chunkCount; c++) {
+                long[] data = new long[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    long value = (c == 0) ? (i % 200) : (1_000_000L + next++);
+                    data[i] = value;
+                    expected[c * rowsPerChunk + i] = value;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("v"), data));
+            }
+        }
+
+        // Then — the demoted column is Chunked-of-Flats (one Flat per chunk), never a shared Dict.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            var columnLayout = unwrapZoned(vf.layout().children().getFirst());
+            assertThat(columnLayout.isDict()).as("cardinality-demoted column must not be a global dict").isFalse();
+            assertThat(columnLayout.isChunked()).as("demoted column is a chunked layout").isTrue();
+            assertThat(columnLayout.children())
+                    .as("one Flat per written chunk after cardinality demotion")
+                    .hasSize(chunkCount)
+                    .allSatisfy(child -> assertThat(child.isFlat()).isTrue());
+
+            // And every value round-trips exactly across all chunks despite the mid-file demotion.
+            assertThat(readAllLongs(vf, "v")).containsExactly(expected);
+        }
+    }
+
+    @Test
+    void cardinalityGrowsPastCapMidFile_nullableI64_demotesAndRestoresNulls(@TempDir Path tmp) throws IOException {
+        // Given — the nullable twin of cardinalityGrowsPastCapMidFile_i64_..., exercising the
+        // reconstructChunk / reconstructPrimitiveValues NULLABLE branch that ADR 0021's "Risks to
+        // manage" flags. The first chunk is a genuine low-cardinality dict candidate (200 distinct
+        // valid values / 1000 rows) WITH ~10% nulls scattered through it, so the column is admitted and
+        // buffered as codes+validity. Later all-unique chunks push the distinct set past
+        // GLOBAL_DICT_MAX_CARDINALITY (2048) partway through the file, forcing an IMMEDIATE demotion.
+        // Demotion must reconstruct each buffered chunk from its short[] codes AND validity bitmap,
+        // restoring null placeholders at invalid positions and re-wrapping in NullableData — the exact
+        // path with zero coverage until this test. As with the non-nullable case the OUTPUT SHAPE
+        // proves demotion (Chunked-of-Flats, not a shared Dict), and every value plus every null must
+        // round-trip end-to-end.
+        var schema = new DType.Struct(List.of(ColumnName.of("v")),
+                List.of(new DType.Primitive(PType.I64, true)), false);
+        Path file = tmp.resolve("card_grows_nullable_i64.vortex");
+        int chunkCount = 6;
+        int rowsPerChunk = 1_000;
+        Long[] expected = new Long[chunkCount * rowsPerChunk];
+        long next = 0;
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            // When — chunk 0 is low-card (200 distinct valid values) with every 10th row null so the
+            // buffered chunks carry a validity bitmap; later chunks are all-unique so the running
+            // distinct count climbs ~1000/chunk and passes 2048 during chunk 2 or 3.
+            for (int c = 0; c < chunkCount; c++) {
+                Long[] data = new Long[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    Long value;
+                    if ((c + i) % 10 == 0) {
+                        value = null;
+                    } else if (c == 0) {
+                        value = (long) (i % 200);
+                    } else {
+                        value = 1_000_000L + next++;
+                    }
+                    data[i] = value;
+                    expected[c * rowsPerChunk + i] = value;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("v"), data));
+            }
+        }
+
+        // Then — the demoted column is Chunked-of-Flats (one Flat per chunk), never a shared Dict.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            var columnLayout = unwrapZoned(vf.layout().children().getFirst());
+            assertThat(columnLayout.isDict()).as("cardinality-demoted column must not be a global dict").isFalse();
+            assertThat(columnLayout.isChunked()).as("demoted column is a chunked layout").isTrue();
+            assertThat(columnLayout.children())
+                    .as("one Flat per written chunk after cardinality demotion")
+                    .hasSize(chunkCount)
+                    .allSatisfy(child -> assertThat(child.isFlat()).isTrue());
+
+            // And every value AND every null round-trips exactly, confirming the nullable
+            // reconstruction path (validity restore + NullableData re-wrap) end-to-end.
+            assertThat(readNullableLongs(vf, "v")).containsExactly(expected);
+        }
+    }
+
+    @Test
+    void frequencyRemap_dominantValueGetsCode0_regardlessOfFirstSeenOrder(@TempDir Path tmp) throws IOException {
+        // Given — a strongly skewed F64 column whose DOMINANT value (0.5, ~98% of rows) is NOT the
+        // first value seen: the first row is a rare value (7.0) so first-seen ordering would give the
+        // rare value code 0. The primitive path's frequency remap (ADR 0021) must still rank the
+        // dominant value to code 0 so SparseEncodingEncoder (fill=0) compresses the mostly-zero codes
+        // child. If the remap were dropped (silently reusing the incremental first-seen codes), the
+        // dominant value would get a nonzero code, sparse would NOT fire, and the file would be far
+        // larger. Asserting a small file therefore pins "dominant → code 0" behaviorally.
+        var schema = new DType.Struct(List.of(ColumnName.of("rate")), List.of(DType.F64), false);
+        Path file = tmp.resolve("freq_remap_f64.vortex");
+        double[] rare = {7.0, 8.0, 9.0, 10.0, 11.0};
+        int rowsPerChunk = 5_000;
+        int chunkCount = 4;
+        double[] expected = new double[rowsPerChunk * chunkCount];
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            for (int c = 0; c < chunkCount; c++) {
+                double[] data = new double[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    // Row 0 of chunk 0 is a rare value so 0.5 is not first-seen; ~2% rare elsewhere.
+                    double value = (c == 0 && i == 0) ? rare[0]
+                            : (i % 50 == 0) ? rare[1 + ((c + i) % (rare.length - 1))] : 0.5;
+                    data[i] = value;
+                    expected[c * rowsPerChunk + i] = value;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("rate"), data));
+            }
+        }
+
+        // Then — the dominant value at code 0 lets the codes child compress to sparse: the whole file
+        // (dict of ~6 doubles + mostly-zero U8 codes) stays tiny. A broken remap would balloon it.
+        assertThat(Files.size(file)).as("dominant value at code 0 enables sparse codes").isLessThan(8_000L);
+
+        // And values round-trip exactly.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(readAllDoubles(vf, "rate")).containsExactly(expected);
+        }
+    }
+
+    /// Unwraps a column's Zoned/Stats wrapper (the writer wraps every column in one for zone-map
+    /// pruning) to reach the encoding layout beneath.
+    private static io.github.dfa1.vortex.reader.layout.Layout unwrapZoned(
+            io.github.dfa1.vortex.reader.layout.Layout layout) {
+        return layout.isZoned() ? layout.children().getFirst() : layout;
+    }
+
+    @Test
     void lowCardinality_i32_usesGlobalDict(@TempDir Path tmp) throws IOException {
         // Given — a low-cardinality I32 column drives the global dict build through the int[]
         // unique-array and codes paths (the narrower I8/I16 carriers are NOT round-tripped here:
