@@ -99,6 +99,18 @@ public final class VortexWriter implements Closeable {
     // Kept low: global dict hurts high-cardinality F64 columns (ALP codes beat U16 dict codes).
     static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
 
+    // Aggregate memory budget (bytes) for the raw data all columns may retain while buffering for a
+    // shared global dictionary. A global dict must see every chunk before it can be built, so a
+    // dict-candidate column's raw arrays are held from the first chunk until close(). On a huge,
+    // wide file (e.g. the 18.5M-row / 38-string-column NYC-311 Parquet import) any column
+    // mis-detected as low-cardinality on its first chunk — one whose distinct count grows only after
+    // millions of later rows — would otherwise pin its entire column in the heap; with dozens of such
+    // columns the total is several GB and the import OOMs. This budget bounds the SUM across all
+    // buffering columns: once the total is exceeded, the largest-retained columns are demoted (their
+    // buffered chunks flushed per-chunk, per-chunk encoding thereafter) until back under budget,
+    // keeping writer memory bounded by the budget rather than by total file size × column count.
+    static final long GLOBAL_DICT_MAX_RETAINED_BYTES = 256L * 1024 * 1024;
+
     private static final List<EncodingEncoder> DEFAULT_CODECS = List.of(
             new AlpEncodingEncoder(), new PrimitiveEncodingEncoder(), new BoolEncodingEncoder(),
             new DictEncodingEncoder(), new VarBinEncodingEncoder(), new ExtEncodingEncoder(),
@@ -124,6 +136,14 @@ public final class VortexWriter implements Closeable {
     private final Set<ColumnName> dictCandidates = new LinkedHashSet<>();
     private final Map<ColumnName, List<Object>> dictBuffers = new LinkedHashMap<>();
     private final Map<ColumnName, DictColRef> dictColRefs = new LinkedHashMap<>();
+    // Raw bytes retained per global-dict-candidate column, and their running sum; together they
+    // guard the aggregate memory budget (dictRetainedBudget) so no set of mis-detected columns can
+    // pin the heap. When the sum crosses the budget, the largest columns are demoted until under it.
+    private final Map<ColumnName, Long> dictRetainedBytes = new LinkedHashMap<>();
+    private long dictRetainedTotal = 0;
+    // Effective aggregate global-dict retention budget; the constant by default, lowered by tests
+    // to exercise the demotion path without allocating the full budget.
+    private long dictRetainedBudget = GLOBAL_DICT_MAX_RETAINED_BYTES;
     private boolean firstChunkSeen = false;
 
     // Per-column zone-maps, populated by flushZoneMaps() in close() when enableZoneMaps is set.
@@ -160,6 +180,12 @@ public final class VortexWriter implements Closeable {
         for (ColumnName name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
+    }
+
+    // Test seam: lower the aggregate global-dict retention budget so the demotion path (see
+    // writeChunk) can be exercised without allocating GLOBAL_DICT_MAX_RETAINED_BYTES of column data.
+    void setDictRetainedBudgetForTest(long budgetBytes) {
+        this.dictRetainedBudget = budgetBytes;
     }
 
     /// Builds a [WriteRegistry] from the given encoder list plus all built-in extension encoders.
@@ -496,7 +522,18 @@ public final class VortexWriter implements Closeable {
             }
 
             if (dictCandidates.contains(colName)) {
-                dictBuffers.computeIfAbsent(colName, _ -> new ArrayList<>()).add(data);
+                List<Object> buffered = dictBuffers.computeIfAbsent(colName, _ -> new ArrayList<>());
+                buffered.add(data);
+                long delta = estimateRetainedBytes(data);
+                dictRetainedBytes.merge(colName, delta, Long::sum);
+                dictRetainedTotal += delta;
+                if (dictRetainedTotal > dictRetainedBudget) {
+                    // Aggregate budget exceeded — the buffered columns together no longer fit the
+                    // memory budget. Demote the largest-retained columns (flush their buffered chunks
+                    // per-chunk, encode per-chunk thereafter) until back under budget, so writer
+                    // memory stays bounded regardless of file size or column count.
+                    evictLargestDictColumnsUntilUnderBudget();
+                }
             } else {
                 long rowCount = arrayLength(data);
                 int segIdx = writeSegment(colDtype, data);
@@ -1163,6 +1200,82 @@ public final class VortexWriter implements Closeable {
     }
 
     // ── Global dict helpers ───────────────────────────────────────────────────
+
+    /// Estimates the heap footprint of one chunk's worth of a column's raw data, used to bound the
+    /// per-column global-dict retention budget. Primitive arrays cost their element bytes; string
+    /// arrays cost each present string's UTF-16 char bytes plus a fixed per-element object-header
+    /// allowance (reference + `String`/`char[]` overhead), which dominates on wide, sparse columns.
+    ///
+    /// @param data the chunk data (primitive array, `String[]`, or a [NullableData] wrapper)
+    /// @return an approximate retained-byte count; never negative
+    private static long estimateRetainedBytes(Object data) {
+        Object values = data instanceof NullableData nd ? nd.values() : data;
+        long overhead = data instanceof NullableData nd ? (long) nd.validity().length : 0L;
+        return overhead + switch (values) {
+            case byte[] a -> (long) a.length;
+            case short[] a -> 2L * a.length;
+            case int[] a -> 4L * a.length;
+            case long[] a -> 8L * a.length;
+            case float[] a -> 4L * a.length;
+            case double[] a -> 8L * a.length;
+            case boolean[] a -> (long) a.length;
+            case String[] a -> {
+                long total = 0L;
+                for (String s : a) {
+                    // 48 bytes ~ String + char[] object headers plus the array reference slot.
+                    total += 48L + (s == null ? 0L : 2L * s.length());
+                }
+                yield total;
+            }
+            default -> 0L;
+        };
+    }
+
+    /// Demotes the largest-retained global-dict candidate columns to per-chunk encoding, one at a
+    /// time (largest first), until the aggregate retained bytes fall back under the budget. Demoting
+    /// the largest column frees the most memory per eviction, so the fewest columns lose their shared
+    /// dictionary. Called when a chunk pushes the running total over `dictRetainedBudget`.
+    ///
+    /// @throws IOException if writing a flushed segment fails
+    private void evictLargestDictColumnsUntilUnderBudget() throws IOException {
+        while (dictRetainedTotal > dictRetainedBudget && !dictRetainedBytes.isEmpty()) {
+            ColumnName largest = null;
+            long largestBytes = -1L;
+            for (Map.Entry<ColumnName, Long> e : dictRetainedBytes.entrySet()) {
+                if (e.getValue() > largestBytes) {
+                    largestBytes = e.getValue();
+                    largest = e.getKey();
+                }
+            }
+            demoteDictColumn(largest);
+        }
+    }
+
+    /// Abandons the shared global dictionary for one column whose retention pushed the aggregate over
+    /// the memory budget: flushes its already-buffered chunks as ordinary per-chunk segments (so no
+    /// data is lost) and removes it from the candidate set, so subsequent chunks encode per-chunk
+    /// too. The buffered chunks are released for GC and the running retained total is decremented.
+    ///
+    /// @param colName the column being demoted from global-dict to per-chunk encoding
+    /// @throws IOException if writing a flushed segment fails
+    private void demoteDictColumn(ColumnName colName) throws IOException {
+        List<Object> buffered = dictBuffers.remove(colName);
+        dictCandidates.remove(colName);
+        Long freed = dictRetainedBytes.remove(colName);
+        if (freed != null) {
+            dictRetainedTotal -= freed;
+        }
+        if (buffered == null) {
+            return;
+        }
+        DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
+        for (Object chunk : buffered) {
+            long rowCount = arrayLength(chunk);
+            int segIdx = writeSegment(colDtype, chunk);
+            colChunks.get(colName).add(
+                    new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
+        }
+    }
 
     private void flushDictColumns() throws IOException {
         for (ColumnName colName : dictCandidates) {

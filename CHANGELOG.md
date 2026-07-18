@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `VortexWriter` no longer buffers a global-dictionary candidate column's raw data for the whole file, so importing a huge Parquet file (e.g. an 18.5M-row dataset) no longer exhausts the heap; a column whose retained bytes exceed a fixed budget is demoted to per-chunk encoding. ([a3b921b5](https://github.com/dfa1/vortex-java/commit/a3b921b5))
 - A chunked `List` column spanning several flat chunks now decodes into a single stitched array instead of throwing a raw `ClassCastException`; any other unhandled dtype now fails with `VortexException`. ([#268](https://github.com/dfa1/vortex-java/issues/268))
 - A chunked `Utf8`/`Binary` column with an entirely-null chunk (`NullArray`) no longer throws `chunk is not a VarBinArray`; the chunk materializes as an all-null run. ([#269](https://github.com/dfa1/vortex-java/issues/269))
 - A chunked `List` column with an entirely-null chunk (`NullArray`) no longer throws `chunk is not a ListArray`; the chunk's rows become zero-length lists with out-of-band nulls. ([#269](https://github.com/dfa1/vortex-java/issues/269))
