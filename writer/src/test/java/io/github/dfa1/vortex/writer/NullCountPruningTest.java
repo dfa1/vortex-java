@@ -33,7 +33,7 @@ class NullCountPruningTest {
     // sizes and null patterns: 3 rows / 0 nulls, 2 rows / 1 null, 4 rows / all null.
     private Path write() throws IOException {
         Path file = tmp.resolve("nulls.vtx");
-        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false);
+        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, 256L * 1024 * 1024);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {
             sut.writeChunk(Map.of(ColumnName.of("v"), new NullableData(

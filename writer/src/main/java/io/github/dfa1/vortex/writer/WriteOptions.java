@@ -13,19 +13,34 @@ package io.github.dfa1.vortex.writer;
 ///                                  file size by 10–15% on real-world datasets compared to ALP+bitpack alone.
 ///                                  Trade-off: Zstd decompression is ~6× slower than ALP decode;
 ///                                  prefer the default (`false`) for read-heavy workloads.
+/// @param globalDictMaxRetainedBytes aggregate byte budget for the raw data all global-dictionary
+///                                  candidate columns may buffer in the heap while waiting for
+///                                  `close()` (default 256 MB). A shared dictionary must see every
+///                                  chunk before it can be built, so a candidate column's raw arrays
+///                                  are held from its first chunk until the file is finished; when the
+///                                  running total across all such columns crosses this budget the
+///                                  largest-retained columns are demoted to per-chunk encoding until
+///                                  back under it, bounding writer memory regardless of file size or
+///                                  column count. Trade-off: demoted columns lose the shared-dictionary
+///                                  size benefit; raise the budget on memory-rich hosts to keep more
+///                                  wide, mis-detected columns dictionary-encoded.
 public record WriteOptions(
         int chunkSize,
         boolean enableZoneMaps,
         double compressionRatioThreshold,
         int allowedCascading,
         boolean globalDict,
-        boolean enableZstd
+        boolean enableZstd,
+        long globalDictMaxRetainedBytes
 ) {
+    /// Default aggregate retention budget (256 MB) for buffered global-dictionary candidate columns.
+    private static final long DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = 256L * 1024 * 1024;
+
     /// Default options: global dictionary encoding enabled, no cascading compression, Zstd disabled.
     ///
     /// @return default `WriteOptions`
     public static WriteOptions defaults() {
-        return new WriteOptions(65_536, true, 0.90, 0, true, false);
+        return new WriteOptions(65_536, true, 0.90, 0, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES);
     }
 
     /// Enable cascading compression with up to `depth` recursive levels.
@@ -34,7 +49,7 @@ public record WriteOptions(
     /// @param depth maximum cascade depth
     /// @return `WriteOptions` with cascading enabled at the given depth
     public static WriteOptions cascading(int depth) {
-        return new WriteOptions(65_536, true, 0.90, depth, true, false);
+        return new WriteOptions(65_536, true, 0.90, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES);
     }
 
     /// Returns a copy of these options with zone-map statistics set to `enabled`.
@@ -42,7 +57,8 @@ public record WriteOptions(
     /// @param enabled `true` to write per-chunk min/max/sum statistics for zone-map pruning
     /// @return a new `WriteOptions` with the zone-map flag updated
     public WriteOptions withZoneMaps(boolean enabled) {
-        return new WriteOptions(chunkSize, enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd);
+        return new WriteOptions(chunkSize, enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
+                globalDictMaxRetainedBytes);
     }
 
     /// Returns a copy of these options with global dictionary encoding set to `enabled`.
@@ -50,7 +66,8 @@ public record WriteOptions(
     /// @param enabled `true` to enable global dictionary encoding across chunks
     /// @return a new `WriteOptions` with the global dict flag updated
     public WriteOptions withGlobalDict(boolean enabled) {
-        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, enableZstd);
+        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, enableZstd,
+                globalDictMaxRetainedBytes);
     }
 
     /// Returns a copy of these options with Zstandard compression set to `enabled`.
@@ -65,6 +82,21 @@ public record WriteOptions(
     /// @param enabled `true` to enable Zstd in the compression cascade
     /// @return a new `WriteOptions` with the Zstd flag updated
     public WriteOptions withZstd(boolean enabled) {
-        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled);
+        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled,
+                globalDictMaxRetainedBytes);
+    }
+
+    /// Returns a copy of these options with the global-dictionary retention budget set to `budgetBytes`.
+    ///
+    /// This is the aggregate byte budget across all global-dictionary candidate columns buffered in the
+    /// heap while the writer waits to build shared dictionaries at `close()`. Lower it to demote
+    /// mis-detected wide columns to per-chunk encoding sooner (bounding memory on huge files); raise it
+    /// on memory-rich hosts to keep more columns dictionary-encoded.
+    ///
+    /// @param budgetBytes aggregate retention budget in bytes for buffered global-dict candidate columns
+    /// @return a new `WriteOptions` with the global-dict retention budget updated
+    public WriteOptions withGlobalDictMaxRetainedBytes(long budgetBytes) {
+        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+                enableZstd, budgetBytes);
     }
 }

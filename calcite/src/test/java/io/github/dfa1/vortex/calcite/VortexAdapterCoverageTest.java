@@ -278,7 +278,7 @@ class VortexAdapterCoverageTest {
         void noZoneMap_sumFallsBackToFullScan(@TempDir Path noStats) throws Exception {
             // Given — a file written with zone maps off, so no per-zone SUM exists to fold
             Path bare = noStats.resolve("nostats.vortex");
-            WriteOptions noZoneMaps = new WriteOptions(65_536, false, 0.90, 0, true, false);
+            WriteOptions noZoneMaps = new WriteOptions(65_536, false, 0.90, 0, true, false, 256L * 1024 * 1024);
             try (var ch = FileChannel.open(bare, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var w = VortexWriter.create(ch, SCHEMA, noZoneMaps)) {
                 w.writeChunk(Map.ofEntries(

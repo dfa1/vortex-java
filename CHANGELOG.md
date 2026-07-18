@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `WriteOptions.withGlobalDictMaxRetainedBytes(long)` makes the writer's global-dictionary retained-memory budget (default 256 MB) configurable. ([58ba2986](https://github.com/dfa1/vortex-java/commit/58ba2986))
+
 ### Fixed
 
 - `VortexWriter` no longer buffers a global-dictionary candidate column's raw data for the whole file, so importing a huge Parquet file (e.g. an 18.5M-row dataset) no longer exhausts the heap; a column whose retained bytes exceed a fixed budget is demoted to per-chunk encoding. ([a3b921b5](https://github.com/dfa1/vortex-java/commit/a3b921b5))
