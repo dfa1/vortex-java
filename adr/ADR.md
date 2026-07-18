@@ -35,4 +35,4 @@ the decision shipped in (blank = not yet shipped).
 | 0018 | Apache Calcite SQL adapter — push-down source | Accepted  |          |
 | 0019 | Columnar transducer façade for compute        | Proposed  |          |
 | 0020 | Jazzer fuzz testing infrastructure            | Proposed  |          |
-| 0021 | Cardinality-bounded global dict buffering     | Proposed  |          |
+| 0021 | Cardinality-bounded global dict buffering     | Accepted  |          |

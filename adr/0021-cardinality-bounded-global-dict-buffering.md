@@ -1,6 +1,6 @@
 # ADR 0021: Cardinality-bounded buffering for global dictionary candidates
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-18
 - **Deciders:** project maintainer
 - **Supersedes:** —
