@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ParquetImporterTest {
@@ -178,6 +179,35 @@ class ParquetImporterTest {
             assertThatThrownBy(() -> ParquetImporter.filterColumns(all, List.of("missing")))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("missing");
+        }
+    }
+
+    @Nested
+    class DuplicateNames {
+
+        @Test
+        void noDuplicates_doesNotThrow() {
+            // Given — a, b, c are all distinct
+            List<ColumnName> names = List.of(ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("c"));
+
+            // When / Then
+            assertThatCode(() -> ParquetImporter.checkNoDuplicateNames(names, Path.of("source.parquet")))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        void duplicateName_throwsWithNameAndSourcePath() {
+            // Given — two columns both named "A", as seen on the Raincloud uk-price-paid slug (#280): a
+            // headerless source CSV made a Parquet conversion tool use the first data row as column
+            // names, and two property-type flag columns happened to share the value "A".
+            List<ColumnName> names = List.of(ColumnName.of("A"), ColumnName.of("B"), ColumnName.of("A"));
+            Path source = Path.of("uk-price-paid.parquet");
+
+            // When / Then
+            assertThatThrownBy(() -> ParquetImporter.checkNoDuplicateNames(names, source))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("A")
+                    .hasMessageContaining("uk-price-paid.parquet");
         }
     }
 

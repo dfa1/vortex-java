@@ -22,9 +22,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /// Reads a Parquet file and writes a Vortex file.
 ///
@@ -71,6 +74,7 @@ public final class ParquetImporter {
                 names.add(ColumnName.of(col.name()));
                 types.add(mapDType(col));
             }
+            checkNoDuplicateNames(names, parquetPath);
             DType.Struct schema = new DType.Struct(names, types, false);
             long totalRows = parquet.getFileMetaData().numRows();
 
@@ -112,6 +116,20 @@ public final class ParquetImporter {
                     }
                 }
             }
+        }
+    }
+
+    static void checkNoDuplicateNames(List<ColumnName> names, Path parquetPath) {
+        Set<ColumnName> seen = new HashSet<>();
+        Set<ColumnName> duplicates = new LinkedHashSet<>();
+        for (ColumnName name : names) {
+            if (!seen.add(name)) {
+                duplicates.add(name);
+            }
+        }
+        if (!duplicates.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Parquet schema has duplicate column name(s): " + duplicates + "; source file: " + parquetPath);
         }
     }
 
