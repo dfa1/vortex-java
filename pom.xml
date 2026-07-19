@@ -40,6 +40,7 @@
 	<modules>
 		<module>proto-gen</module>
 		<module>fbs-gen</module>
+		<module>fsst</module>
 		<module>core</module>
 		<module>reader</module>
 		<module>writer</module>
@@ -158,6 +159,11 @@
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
 				<artifactId>vortex-writer</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.github.dfa1.vortex</groupId>
+				<artifactId>vortex-fsst</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
