@@ -5,15 +5,15 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.3] — 2026-07-19
 
 ### Added
 
-- `WriteOptions.withGlobalDictMaxRetainedBytes(long)` makes the writer's global-dictionary retained-memory budget (default 1 GB) configurable. ([58ba2986](https://github.com/dfa1/vortex-java/commit/58ba2986))
+- `WriteOptions.withGlobalDictMaxRetainedBytes(long)` makes the writer's global-dictionary retained-memory budget (default 1 GB) configurable. ([4cbc12dd](https://github.com/dfa1/vortex-java/commit/4cbc12dd))
 
 ### Fixed
 
-- `VortexWriter` no longer buffers a global-dictionary candidate column's raw data for the whole file, so importing a huge Parquet file (e.g. an 18.5M-row dataset) no longer exhausts the heap; a column whose retained bytes exceed a fixed budget is demoted to per-chunk encoding. ([a3b921b5](https://github.com/dfa1/vortex-java/commit/a3b921b5))
+- `VortexWriter` no longer buffers a global-dictionary candidate column's raw data for the whole file, so importing a huge Parquet file (e.g. an 18.5M-row dataset) no longer exhausts the heap; a column whose retained bytes exceed a fixed budget is demoted to per-chunk encoding. ([fb4b6be0](https://github.com/dfa1/vortex-java/commit/fb4b6be0))
 - A chunked `List` column spanning several flat chunks now decodes into a single stitched array instead of throwing a raw `ClassCastException`; any other unhandled dtype now fails with `VortexException`. ([#268](https://github.com/dfa1/vortex-java/issues/268))
 - A chunked `Utf8`/`Binary` column with an entirely-null chunk (`NullArray`) no longer throws `chunk is not a VarBinArray`; the chunk materializes as an all-null run. ([#269](https://github.com/dfa1/vortex-java/issues/269))
 - A chunked `List` column with an entirely-null chunk (`NullArray`) no longer throws `chunk is not a ListArray`; the chunk's rows become zero-length lists with out-of-band nulls. ([#269](https://github.com/dfa1/vortex-java/issues/269))
@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `FsstEncodingEncoder`: iterative symbol-table training (variable-length 1–8 byte symbols, was a fixed 2-byte bigram scheme) and narrower metadata buffer ptypes. ([95e0dfb4](https://github.com/dfa1/vortex-java/commit/95e0dfb4), [1bbc3549](https://github.com/dfa1/vortex-java/commit/1bbc3549))
 - `FsstEncodingEncoder`: non-boxing symbol-match lookup and stratified training-sample selection. ([4a3fa0a9](https://github.com/dfa1/vortex-java/commit/4a3fa0a9))
-- `VortexWriter` buffers global-dictionary candidates by capped cardinality (dedup map + ~2 B/row codes) instead of raw values, so a column whose distinct set grows past the cap mid-file demotes immediately instead of accumulating unbounded memory. ([47b10f7a](https://github.com/dfa1/vortex-java/commit/47b10f7a))
+- `VortexWriter` buffers global-dictionary candidates by capped cardinality (dedup map + ~2 B/row codes) instead of raw values, so a column whose distinct set grows past the cap mid-file demotes immediately instead of accumulating unbounded memory. ([62bb851e](https://github.com/dfa1/vortex-java/commit/62bb851e))
 
 ## [0.12.2] — 2026-07-12
 
@@ -359,6 +359,7 @@ Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. 
 
 - Test coverage raised from ~74% to 80% — the lazy/chunked/dict/run-end/sparse array families, `ChunkImpl`, and several decoders (`DecimalEncodingDecoder`, `DictEncodingDecoder`, `ParquetImporter`) reached full line + branch coverage. SonarCloud quality gate green: reliability, security, and maintainability all at **A**, zero bugs and vulnerabilities.
 
+[0.12.3]: https://github.com/dfa1/vortex-java/compare/v0.12.2...v0.12.3
 [0.8.3]: https://github.com/dfa1/vortex-java/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/dfa1/vortex-java/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/dfa1/vortex-java/compare/v0.8.0...v0.8.1
