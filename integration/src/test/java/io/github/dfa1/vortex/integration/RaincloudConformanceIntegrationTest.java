@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.parallel.Execution;
@@ -55,6 +56,14 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// Expected per-slug status lives in `src/test/resources/raincloud/expected-status.csv`.
 /// Known gaps assert that the failure still occurs, so fixing the reader forces the
 /// matrix entry to flip to `ok` in the same change.
+///
+/// Tagged `raincloud` and excluded from the default `./mvnw verify` (via the failsafe
+/// `excludedGroups` configuration) so a routine build never runs the real corpus even on
+/// a developer machine that has hydrated it locally. The exclusion applies even to an
+/// explicit `-Dit.test=RaincloudConformanceIntegrationTest` selection, so running it
+/// requires clearing the tag filter first: `-Dvortex.it.excludedGroups=
+/// -Dit.test=RaincloudConformanceIntegrationTest`.
+@Tag("raincloud")
 class RaincloudConformanceIntegrationTest {
 
     private static final Path DEFAULT_MANIFEST =

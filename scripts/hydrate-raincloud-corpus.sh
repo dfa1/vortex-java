@@ -10,6 +10,11 @@
 # Usage:
 #   scripts/hydrate-raincloud-corpus.sh [--max-mb N] [slug ...]
 #
+# The conformance test is @Tag("raincloud") and excluded from a routine `./mvnw verify`,
+# so after hydrating run it explicitly with the tag exclusion cleared:
+#   ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= \
+#       -Dit.test=RaincloudConformanceIntegrationTest
+#
 # With no slugs, hydrates every entry of the conformance matrix
 # (integration/src/test/resources/raincloud/expected-status.csv) whose combined
 # artifact size fits --max-mb (default 200; use --max-mb 0 for no size cap — the
@@ -115,4 +120,6 @@ with open(os.environ["MANIFEST"], "w") as manifest:
         hydrated += 1
         print(f"ok   {slug}")
 print(f"\nhydrated={hydrated} skipped={skipped} manifest={os.environ['MANIFEST']}")
+print("run: ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= "
+      "-Dit.test=RaincloudConformanceIntegrationTest")
 PY

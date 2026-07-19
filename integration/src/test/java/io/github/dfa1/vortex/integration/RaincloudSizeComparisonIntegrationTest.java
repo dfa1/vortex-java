@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.parquet.ParquetImporter;
 import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.parallel.Execution;
@@ -25,6 +26,14 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// Skipped (visibly) when the corpus is not hydrated — run
 /// `scripts/hydrate-raincloud-corpus.sh` first, or point `RAINCLOUD_CORPUS_MANIFEST`
 /// at a manifest TSV (`slug<TAB>vortex-path<TAB>parquet-path` per line).
+///
+/// Tagged `raincloud` and excluded from the default `./mvnw verify` (via the failsafe
+/// `excludedGroups` configuration): this purely-informational, CPU-heavy re-encode never
+/// gates a routine build, even on a developer machine that has hydrated the corpus locally.
+/// The exclusion applies even to an explicit `-Dit.test=RaincloudSizeComparisonIntegrationTest`
+/// selection, so running it requires clearing the tag filter first:
+/// `-Dvortex.it.excludedGroups= -Dit.test=RaincloudSizeComparisonIntegrationTest`.
+@Tag("raincloud")
 class RaincloudSizeComparisonIntegrationTest {
 
     private static final Path DEFAULT_MANIFEST =

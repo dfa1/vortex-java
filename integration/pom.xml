@@ -14,6 +14,11 @@
 
 	<properties>
 		<maven.deploy.skip>true</maven.deploy.skip>
+		<!-- JUnit tags excluded from a routine `./mvnw verify`. Defaults to `raincloud` so the
+		     real-world Raincloud corpus tests never run by default — see the failsafe plugin
+		     config below. Override on the CLI to opt in, e.g. `-Dvortex.it.excludedGroups=`
+		     (empty) runs every tag; a literal pom value could not be cleared this way. -->
+		<vortex.it.excludedGroups>raincloud</vortex.it.excludedGroups>
 	</properties>
 
 	<dependencies>
@@ -203,6 +208,16 @@
 					<includes>
 						<include>**/*IntegrationTest.java</include>
 					</includes>
+					<!-- Exclude the real-world Raincloud corpus tests from a routine
+					     `./mvnw verify`: they only do real work when the corpus is hydrated
+					     locally, and the size-comparison test in particular runs a CPU-heavy
+					     Parquet->Vortex re-encode per slug that a developer would not expect
+					     from a default build. Bound to a property (not a literal) so the CLI
+					     can clear it: `-Dvortex.it.excludedGroups=` opts every raincloud test
+					     back in. This exclusion filters even an explicit `-Dit.test=Raincloud...`
+					     class selection, so running a raincloud test always requires clearing
+					     the property as well. -->
+					<excludedGroups>${vortex.it.excludedGroups}</excludedGroups>
 					<argLine>
 						@{argLine}
 						--add-opens java.base/java.nio=ALL-UNNAMED
