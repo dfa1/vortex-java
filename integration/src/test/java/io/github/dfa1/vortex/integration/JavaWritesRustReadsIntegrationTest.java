@@ -46,7 +46,7 @@ import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.TimeMilliVector;
 import org.apache.arrow.vector.TimeStampMilliVector;
-import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
@@ -289,7 +289,7 @@ class JavaWritesRustReadsIntegrationTest {
             try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
                 while (reader.loadNextBatch()) {
                     VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    VarCharVector vec = (VarCharVector) root.getVector(column);
+                    ValueVector vec = root.getVector(column);
                     for (int i = 0; i < root.getRowCount(); i++) {
                         strings.add(vec.getObject(i).toString());
                     }
@@ -1119,7 +1119,7 @@ class JavaWritesRustReadsIntegrationTest {
             try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
                 while (reader.loadNextBatch()) {
                     VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    VarCharVector vec = (VarCharVector) root.getVector("s");
+                    ValueVector vec = root.getVector("s");
                     for (int i = 0; i < root.getRowCount(); i++) {
                         values.add(vec.isNull(i) ? null : vec.getObject(i).toString());
                     }
@@ -1297,7 +1297,7 @@ class JavaWritesRustReadsIntegrationTest {
             try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
                 while (reader.loadNextBatch()) {
                     VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    VarCharVector vec = (VarCharVector) root.getVector("s");
+                    ValueVector vec = root.getVector("s");
                     for (int i = 0; i < root.getRowCount(); i++) {
                         values.add(vec.isNull(i) ? null : vec.getObject(i).toString());
                     }
