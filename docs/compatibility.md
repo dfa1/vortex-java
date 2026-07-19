@@ -55,7 +55,7 @@ oracle) — a zero-diff proves every value survived the Python-write / Java-read
 
 ```bash
 scripts/hydrate-raincloud-corpus.sh --max-mb 200      # cache → mirror → local build
-./mvnw verify -pl integration -am -Dit.test=RaincloudConformanceIntegrationTest
+./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test=RaincloudConformanceIntegrationTest
 ```
 
 Per-slug status lives in `integration/src/test/resources/raincloud/expected-status.csv`

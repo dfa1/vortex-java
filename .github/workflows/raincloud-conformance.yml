@@ -51,7 +51,7 @@ jobs:
         run: scripts/hydrate-raincloud-corpus.sh --max-mb "${{ github.event.inputs.max-mb || '200' }}"
 
       - name: Run conformance suite
-        run: ./mvnw verify -pl integration -am -Dit.test=RaincloudConformanceIntegrationTest
+        run: ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test=RaincloudConformanceIntegrationTest
 
       - name: Publish per-slug results to job summary
         if: always()

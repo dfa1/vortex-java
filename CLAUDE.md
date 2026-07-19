@@ -63,9 +63,16 @@ Trunk-based. PRs fine but always squash or rebase — no merge commits. Keep com
 ./mvnw verify -pl integration -am          # integration (failsafe, NOT surefire)
 ./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#method"
 ./bench JavaVsJniReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
-scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conformance corpus (#205),
-                                                   # then verify -Dit.test=RaincloudConformanceIntegrationTest
+scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conformance corpus (#205), then:
+./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test="RaincloudConformanceIntegrationTest"
 ```
+
+The Raincloud corpus tests (`RaincloudConformanceIntegrationTest`,
+`RaincloudSizeComparisonIntegrationTest`) are `@Tag("raincloud")` and excluded from a routine
+`./mvnw verify` (failsafe `excludedGroups`, default `raincloud`) so a plain build never runs the
+real corpus — even on a machine that has hydrated it locally. Opt in with
+`-Dvortex.it.excludedGroups=` (clears the exclusion); this is required *in addition to* `-Dit.test`,
+since the tag filter applies even to an explicitly named class.
 
 Regenerate after editing `.fbs`/`.proto` (both generators are in-house, no external tools):
 
