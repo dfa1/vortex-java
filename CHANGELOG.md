@@ -5,6 +5,12 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `ParquetImporter` detects duplicate column names in the source Parquet schema and throws a clear message naming the duplicate(s) and the source file, instead of a confusing `VortexWriter` internal-invariant error several frames removed from the actual cause. ([f2c05e57](https://github.com/dfa1/vortex-java/commit/f2c05e57))
+
 ## [0.12.3] — 2026-07-19
 
 ### Added
