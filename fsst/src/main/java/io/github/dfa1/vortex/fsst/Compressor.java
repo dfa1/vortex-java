@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.fsst;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,6 +18,12 @@ public final class Compressor {
 
     /// Escape code: emitted as `0xFF` followed by one literal byte. Real symbol codes are `0..254`.
     static final int ESCAPE = Decompressor.ESCAPE;
+
+    /// Little-endian `long` layout for `MemorySegment` access. Defined locally rather than reusing
+    /// `core`'s `VortexFormat.LE_LONG` so this module keeps its zero dependency on `core`; the FSST
+    /// wire format packs symbol bytes LSB-first, so all `MemorySegment` reads/writes are little-endian.
+    static final ValueLayout.OfLong LE_LONG =
+            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
 
     private final List<Symbol> symbolsByGainDescending;
     private final Matcher matcher;
@@ -155,6 +163,47 @@ public final class Compressor {
         return outIndex;
     }
 
+    /// Compresses the byte range `[start, end)` of the `MemorySegment` `input` into `out` using
+    /// longest-match-first greedy parsing, writing the code stream starting at `outPos`.
+    ///
+    /// This is the `MemorySegment`-native hot path, matching the FFM-everywhere convention at this
+    /// module's boundary; it mirrors [#compress(byte[], int, int, byte[], long)] exactly, including
+    /// the `pos + length <= end` guard that rejects an over-long spurious match against zero-padded
+    /// bytes past the input end. Dropping that guard would let a trained symbol whose trailing bytes
+    /// are zero satisfy the branch-free [Matcher]'s masked compare against the padding and decode to
+    /// more bytes than were compressed, corrupting the tail of any NUL-containing or binary row.
+    ///
+    /// The caller must size `out` so every code fits: a range of `end - start` input bytes expands to
+    /// at most `2 * (end - start)` output bytes (a full run of escapes). This is an internal
+    /// algorithm boundary, not an untrusted-input boundary, so no defensive bounds checks are
+    /// performed here.
+    ///
+    /// @param input the raw bytes to compress
+    /// @param start the index of the first byte to compress, inclusive
+    /// @param end the index one past the last byte to compress, exclusive
+    /// @param out the destination segment for the code stream
+    /// @param outPos the index in `out` at which to start writing
+    /// @return the index in `out` one past the last byte written
+    public long compress(MemorySegment input, long start, long end, MemorySegment out, long outPos) {
+        long pos = start;
+        long outIndex = outPos;
+        while (pos < end) {
+            int packedMatch = matcher.longestMatch(loadWord(input, pos, end));
+            int length = Matcher.lengthOf(packedMatch);
+            // Same boundary guard as the byte[] overload: reject a match that reaches past the real
+            // input end, since loadWord zero-pads and the branch-free Matcher has no notion of end.
+            if (length > 0 && pos + length <= end) {
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) Matcher.codeOf(packedMatch));
+                pos += length;
+            } else {
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) ESCAPE);
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, input.get(ValueLayout.JAVA_BYTE, pos));
+                pos++;
+            }
+        }
+        return outIndex;
+    }
+
     /// Loads an 8-byte little-endian word from `input` starting at `pos`, zero-padding any bytes at
     /// or past `end` so the [Matcher]'s masked compare never reads across the range boundary.
     ///
@@ -167,6 +216,29 @@ public final class Compressor {
         int available = Math.min(8, end - pos);
         for (int k = 0; k < available; k++) {
             word |= Byte.toUnsignedLong(input[pos + k]) << (k * 8);
+        }
+        return word;
+    }
+
+    /// Loads an 8-byte little-endian word from the `MemorySegment` `input` starting at `pos`,
+    /// zero-padding any bytes at or past `end` so the [Matcher]'s masked compare never reads across
+    /// the range boundary.
+    ///
+    /// Unlike the `byte[]` overload — which may safely over-read within a same-array bounds check — a
+    /// wide unconditional 8-byte read is not safe here: `input` may represent exactly one row's range
+    /// with no guaranteed trailing slack past `end`, so reading past the segment's own allocated
+    /// bounds would fault. The word is therefore assembled byte by byte, bounded by whichever of `end`
+    /// and the segment's own size comes first.
+    ///
+    /// @param input the source segment
+    /// @param pos the first byte to load
+    /// @param end the exclusive range end; bytes at or after it read as zero
+    /// @return the 8-byte little-endian word at `pos`
+    static long loadWord(MemorySegment input, long pos, long end) {
+        long word = 0;
+        long limit = Math.min(pos + 8, Math.min(end, input.byteSize()));
+        for (long k = pos; k < limit; k++) {
+            word |= Byte.toUnsignedLong(input.get(ValueLayout.JAVA_BYTE, k)) << ((k - pos) * 8);
         }
         return word;
     }
