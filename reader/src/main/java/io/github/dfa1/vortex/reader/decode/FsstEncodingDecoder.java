@@ -9,15 +9,19 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
+import io.github.dfa1.vortex.fsst.Decompressor;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.fsst`.
+///
+/// This class is a thin wire adapter over the standalone `vortex-fsst` module (issue #287): after
+/// parsing the `vortex.fsst` wire buffers (symbol table, per-row uncompressed lengths, code offsets,
+/// [ProtoFSSTMetadata]), it hands the symbol table and each row's code range to a [Decompressor],
+/// which runs the FSST paper's Algorithm 1 decode.
 public final class FsstEncodingDecoder implements EncodingDecoder {
-
-    private static final int ESCAPE = 0xFF;
 
     @Override
     public EncodingId encodingId() {
@@ -63,12 +67,30 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
         long uncompLensCap = SegmentBroadcast.capacity(uncompLensSeg, uncompLenPType.byteSize());
         long codesOffCap = SegmentBroadcast.capacity(codesOffsetsSeg, codesOffPType.byteSize());
 
+        // Read the wire symbol table into parallel code-indexed arrays once per chunk (there are at
+        // most 255 symbols), then hand them to the decompressor. symbolsBuf carries one LSB-first
+        // long per symbol, so its size divided by 8 is the symbol count: an empty table is written
+        // as a 1-byte placeholder buffer (allocations are floored at 1 byte), which floors to 0
+        // symbols here — an all-escape column decodes without touching the symbol table.
+        int numSymbols = (int) (symbolsBuf.byteSize() / 8);
+        long[] packedSymbols = new long[numSymbols];
+        int[] symbolLengths = new int[numSymbols];
+        for (int code = 0; code < numSymbols; code++) {
+            packedSymbols[code] = symbolsBuf.getAtIndex(VortexFormat.LE_LONG, code);
+            symbolLengths[code] = Byte.toUnsignedInt(symbolLensBuf.get(ValueLayout.JAVA_BYTE, code));
+        }
+        Decompressor decompressor = Decompressor.of(packedSymbols, symbolLengths);
+
         long totalUncompressed = 0L;
         for (long i = 0; i < n; i++) {
             totalUncompressed += readUnsigned(uncompLensSeg, i % uncompLensCap, uncompLenPType);
         }
 
-        MemorySegment outBytes = ctx.arena().allocate(totalUncompressed);
+        // Allocate 7 bytes of slack past the true logical length: the decompressor's unconditional
+        // 8-byte-store trick writes a full 8 bytes for the final symbol even when it contributes as
+        // few as 1 real byte. The slack is sliced off before the buffer is exposed, so callers still
+        // see an exactly-sized buffer.
+        MemorySegment outBytes = ctx.arena().allocate(totalUncompressed + 7);
         MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
         outOffsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
 
@@ -76,31 +98,12 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
         for (long i = 0; i < n; i++) {
             long cStart = readUnsigned(codesOffsetsSeg, i % codesOffCap, codesOffPType);
             long cEnd = readUnsigned(codesOffsetsSeg, (i + 1) % codesOffCap, codesOffPType);
-            outPos = decompressString(compressedBytes, symbolsBuf, symbolLensBuf,
-                    cStart, cEnd, outBytes, outPos);
+            outPos = decompressor.decompress(compressedBytes, cStart, cEnd, outBytes, outPos);
             outOffsets.setAtIndex(VortexFormat.LE_INT, i + 1, (int) outPos);
         }
 
-        return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
-    }
-
-    private static long decompressString(
-            MemorySegment compressed, MemorySegment symbols, MemorySegment symLens,
-            long start, long end, MemorySegment out, long outPos
-    ) {
-        for (long j = start; j < end; j++) {
-            int b = Byte.toUnsignedInt(compressed.get(ValueLayout.JAVA_BYTE, j));
-            if (b == ESCAPE) {
-                out.set(ValueLayout.JAVA_BYTE, outPos++, compressed.get(ValueLayout.JAVA_BYTE, ++j));
-            } else {
-                int symLen = Byte.toUnsignedInt(symLens.get(ValueLayout.JAVA_BYTE, b));
-                long sym = symbols.getAtIndex(VortexFormat.LE_LONG, b);
-                for (int k = 0; k < symLen; k++) {
-                    out.set(ValueLayout.JAVA_BYTE, outPos++, (byte) (sym >>> (k * 8)));
-                }
-            }
-        }
-        return outPos;
+        return new VarBinArray.OffsetMode(ctx.dtype(), n,
+                outBytes.asSlice(0, totalUncompressed).asReadOnly(), outOffsets.asReadOnly(), PType.I32);
     }
 
     private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {

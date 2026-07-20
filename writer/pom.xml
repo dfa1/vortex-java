@@ -21,6 +21,10 @@
 			<artifactId>vortex-core</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-fsst</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>io.github.dfa1.zstd</groupId>
 			<artifactId>zstd</artifactId>
 			<optional>true</optional>
