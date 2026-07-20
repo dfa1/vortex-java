@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- `vortex.fsst` rewritten against the original paper (Boncz/Neumann/Leis, VLDB 2020) as a standalone `vortex-fsst` module: branch-free O(1) matching (was up to 8 sequential hash probes per byte), adaptive-sample training with min-count pruning and a single-byte gain boost, and unconditional-8-byte-store decode. ([1b9714c7](https://github.com/dfa1/vortex-java/commit/1b9714c7))
+
+  | Benchmark | Before | After | Speedup | Gap to `vortex-jni` |
+  |---|---|---|---|---|
+  | `javaFsstEncode` | 0.085 ops/s | 1.848 ops/s | ~21.7x | 36x slower → 1.6x slower |
+  | `javaFsstDecode` | 5.243 ops/s | 27.137 ops/s | ~5.2x | 6.5x slower → 1.3x slower |
+
+  Measured with `JavaVsJniFsstBenchmark` ([1003a673](https://github.com/dfa1/vortex-java/commit/1003a673)), unmodified before and after.
+
 ### Fixed
 
 - `ParquetImporter` detects duplicate column names in the source Parquet schema and throws a clear message naming the duplicate(s) and the source file, instead of a confusing `VortexWriter` internal-invariant error several frames removed from the actual cause. ([f2c05e57](https://github.com/dfa1/vortex-java/commit/f2c05e57))
