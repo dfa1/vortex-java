@@ -1,0 +1,143 @@
+package io.github.dfa1.vortex.fsst;
+
+import java.util.List;
+
+/// Lossy perfect hash table resolving 3-8 byte FSST matches from the first three bytes of an input
+/// word (the FSST paper's Algorithm 4, §5.1 "Predicated Scalar Compression").
+///
+/// Each slot holds at most one candidate symbol. A lookup hashes the input word's first three bytes
+/// to exactly one slot, reads it (no probing, no chaining), and confirms the match with a single
+/// masked 8-byte compare: the input word's high bits beyond the candidate's length are masked off,
+/// then compared against the candidate's packed bytes. A slot miss or a failed compare is a "no
+/// match" — this is what "lossy" means: a genuine 3-8 byte match can occasionally miss because a
+/// higher-gain symbol won its slot on a hash collision. That is harmless, because greedy parsing
+/// then falls back to a shorter match ([ShortCodeTable]) or an escape — never to wrong output.
+final class LossyPerfectHashTable {
+
+    /// Number of slots. The paper specifies 4096; the well-regarded Rust reference
+    /// `spiraldb/fsst` uses 2048, citing avoidance of L1D cache-line splits (each slot is small, so
+    /// 2048 slots keep the whole table within a handful of cache lines that a scan touches
+    /// repeatedly), and 2048 is this project's benchmark target (`vortex-jni`) — so we deliberately
+    /// match the reference here rather than the paper's literal 4096. A power of two lets the hash
+    /// mask instead of taking a modulo, which the hot-loop rule (no per-element modulo/division)
+    /// requires.
+    private static final int SLOTS = 2048;
+
+    /// Mask selecting a slot index from a hash; valid because [#SLOTS] is a power of two.
+    private static final int SLOT_MASK = SLOTS - 1;
+
+    /// Multiply-xor mixing constant, the same shape as the old encoder's `SymbolTable.indexHash`
+    /// (the golden-ratio 64-bit odd constant `2^64 / phi`). Multiplying by a large odd constant and
+    /// folding the high bits down spreads the low three input bytes across the whole word so the
+    /// slot mask sees well-mixed bits, avoiding clustering when many symbols share a low byte.
+    private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
+
+    /// Low three bytes of the input word — the only bytes the hash keys on.
+    private static final long PREFIX_MASK = 0x00FF_FFFFL;
+
+    /// Per-slot packed symbol bytes, LSB-first ([Symbol] convention). Meaningful only where the
+    /// corresponding [#occupied] entry is set.
+    private final long[] packedBytes;
+
+    /// Per-slot mask `~0L >>> ignoredBits` (`ignoredBits = 64 - 8 * length`) applied to an input
+    /// word before comparing, clearing the high bytes past the candidate's length.
+    private final long[] keepMask;
+
+    /// Per-slot symbol length in bytes, 3-8.
+    private final int[] lengths;
+
+    /// Per-slot code (the symbol's list index), meaningful only where [#occupied] is set.
+    private final int[] codes;
+
+    /// Whether each slot holds a candidate.
+    private final boolean[] occupied;
+
+    private LossyPerfectHashTable(long[] packedBytes, long[] keepMask, int[] lengths, int[] codes,
+                                  boolean[] occupied) {
+        this.packedBytes = packedBytes;
+        this.keepMask = keepMask;
+        this.lengths = lengths;
+        this.codes = codes;
+        this.occupied = occupied;
+    }
+
+    /// Builds the table from the trained symbols in descending-gain order, keeping only those of
+    /// length 3-8 (shorter symbols are the [ShortCodeTable]'s job and are skipped here). The list
+    /// index is each symbol's code, matching the parallel-array convention
+    /// [Decompressor#of(long[], int[])] uses.
+    ///
+    /// Insertion is a single forward pass with first-writer-wins on collision. WHY this is
+    /// load-bearing: the caller passes symbols in descending gain order, so when two symbols' first
+    /// three bytes hash to the same slot, the one seen first (the higher-gain one) keeps the slot
+    /// and the later (lower-gain) one is skipped, never overwritten. This is exactly the paper's
+    /// rule that the more valuable symbol wins a lossy collision. This class must NOT re-sort its
+    /// input — it consumes whatever order the caller gives and inserts once.
+    ///
+    /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
+    /// @return a hash table resolving 3-8 byte matches with first-writer-wins on collision
+    static LossyPerfectHashTable of(List<Symbol> symbolsByGainDescending) {
+        long[] packedBytes = new long[SLOTS];
+        long[] keepMask = new long[SLOTS];
+        int[] lengths = new int[SLOTS];
+        int[] codes = new int[SLOTS];
+        boolean[] occupied = new boolean[SLOTS];
+        for (int code = 0; code < symbolsByGainDescending.size(); code++) {
+            Symbol symbol = symbolsByGainDescending.get(code);
+            if (symbol.length() < 3) {
+                continue; // Length 1-2 belongs to ShortCodeTable.
+            }
+            int slot = slotFor(symbol.packedBytes());
+            if (occupied[slot]) {
+                continue; // First writer (higher gain) wins; skip the collision.
+            }
+            occupied[slot] = true;
+            packedBytes[slot] = symbol.packedBytes();
+            keepMask[slot] = keepMaskFor(symbol.length());
+            lengths[slot] = symbol.length();
+            codes[slot] = code;
+        }
+        return new LossyPerfectHashTable(packedBytes, keepMask, lengths, codes, occupied);
+    }
+
+    /// Looks up `word` and reports whether a stored 3-8 byte symbol really matches it.
+    ///
+    /// The input word's first three bytes select one slot; the candidate there matches only if the
+    /// masked compare passes (`(word & keepMask) == candidate.packedBytes`), which rules out both
+    /// hash collisions with unrelated bytes and empty slots. On a miss the returned [HashMatch] has
+    /// `hit == false` and the caller falls back to [ShortCodeTable].
+    ///
+    /// @param word an 8-byte little-endian input word starting at the current match position, with
+    ///             any bytes past the remaining input already zero-padded by the caller
+    /// @return the match result: `hit`, and when hit the matched `code` and `length`
+    HashMatch lookup(long word) {
+        int slot = slotFor(word);
+        boolean hit = occupied[slot] && (word & keepMask[slot]) == packedBytes[slot];
+        return new HashMatch(hit, codes[slot], lengths[slot]);
+    }
+
+    /// Computes the slot index a word hashes to, keyed on its first three bytes. Package-visible so
+    /// tests can construct deliberate hash collisions against a stable, inspectable hash rather than
+    /// blindly brute-forcing one — a stable hash is easier to reason about and to test.
+    ///
+    /// @param word an input word; only its low three bytes are hashed
+    /// @return the slot index in `0 .. SLOTS - 1`
+    static int slotFor(long word) {
+        long mixed = (word & PREFIX_MASK) * HASH_MULTIPLIER;
+        return (int) (mixed >>> 32) & SLOT_MASK;
+    }
+
+    private static long keepMaskFor(int length) {
+        int ignoredBits = 64 - 8 * length;
+        return ~0L >>> ignoredBits;
+    }
+
+    /// Result of a [LossyPerfectHashTable#lookup(long)]: whether a 3-8 byte symbol matched and, if
+    /// so, its code and length. When `hit` is false, `code` and `length` are unspecified and the
+    /// caller must ignore them.
+    ///
+    /// @param hit whether a stored symbol really matched the input word
+    /// @param code the matched symbol code, valid only when `hit`
+    /// @param length the matched symbol length in bytes (3-8), valid only when `hit`
+    record HashMatch(boolean hit, int code, int length) {
+    }
+}
