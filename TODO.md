@@ -13,6 +13,24 @@
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
 - [ ] **Vector API adoption** — see [ADR-0005](adr/0005-vector-api-adoption.md).
 
+### FSST follow-ups
+
+Out of scope for the #287 rewrite (which closed most of the `vortex-jni` gap with a scalar,
+branch-free algorithm — see [ADR-0022](adr/0022-fsst-module-extraction.md)):
+
+- [ ] **AVX512/SIMD compression kernel** — the paper measures a SIMD kernel as the fastest known
+  string compressor at that tier, but this project's scalar rewrite already narrowed the encode gap
+  to `vortex-jni` from 36x to 1.6x. Needs a Vector-API/JDK-incubator decision and its own ADR (cf.
+  [ADR-0005](adr/0005-vector-api-adoption.md)).
+- [ ] **True per-row lazy/random-access decompression** exploiting FSST's headline random-access
+  property — today `FsstEncodingDecoder.decode()` eagerly materializes the whole column up front
+  regardless of what is queried. Connects to [ADR-0010](adr/0010-lazy-decode.md) (Lazy decode) but
+  is a separate initiative.
+- [ ] **OptFSST** (2026 arXiv follow-up: DP-based training instead of greedy, ~4x slower training
+  for 7–17% better compression) — a documented future option, not adopted, since it moves off the
+  classic greedy-FSST speed/compression tradeoff this rewrite targets (matching what `vortex-jni`
+  itself uses).
+
 ## Security
 
 See [CLAUDE.md §Security contract](CLAUDE.md) for the invariant. Each entry below is either a

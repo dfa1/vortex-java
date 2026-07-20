@@ -22,6 +22,10 @@ Benchmark classes follow this: `JavaVsJni{Read,Write,Filter}Benchmark`,
 ## Module structure
 
 ```
+fsst    — io.github.dfa1.vortex.fsst: standalone FSST (Fast Static Symbol Table) string
+          compression algorithm — Symbol, Compressor/CompressorBuilder, Decompressor/Matcher.
+          Zero dependency on core/reader/writer/FFM-wire-concerns beyond the JDK's own
+          java.lang.foreign; writer/reader depend on it, not the other way around.
 core    — everything lives under `io.github.dfa1.vortex.core.*`:
           core.model    DType, PType, TimeUnit, EncodingId, LayoutId, ColumnName, ExtensionId, TimeDtype, TimestampDtype
           core.io       IoBounds, PTypeIO, VortexFormat
