@@ -196,9 +196,13 @@ class FsstEncodingEncoderTest {
             byte maxSymLen = maxSymbolLength(result);
 
             // Then — real compression (< half raw) proves multi-byte symbols are in play, and the
-            // table contains symbols longer than the old fixed 2-byte limit.
+            // table learns symbols well past a bigram. The paper-faithful trainer grows symbols to
+            // the 8-byte cap on this highly repetitive input (ten of eleven learned symbols are
+            // length 8, one is length 3, with the fixed 0x5EED encoder seed), so a `> 4` floor is a
+            // stronger regression guard than the old `> 2` with ample headroom — a training change
+            // that quietly stopped growing symbols past a trigram would now be caught.
             assertThat(compressedBytes).isLessThan(rawBytes / 2);
-            assertThat(maxSymLen).isGreaterThan((byte) 2);
+            assertThat(maxSymLen).isGreaterThan((byte) 4);
         }
 
         @Test
