@@ -8,6 +8,7 @@ For task-oriented usage see [how-to.md](how-to.md); for design rationale see [ex
 - [Writer API](#writer-api)
 - [Scan API](#scan-api)
 - [Encoding registry](#encoding-registry)
+- [FSST (`io.github.dfa1.vortex.fsst`)](#fsst-iogithubdfa1vortexfsst)
 - [Parquet / CSV import](#parquet--csv-import)
 - [CLI](#cli)
 - [Encoding compatibility](compatibility.md)
@@ -227,6 +228,65 @@ Register custom encoding decoders programmatically via `register(EncodingDecoder
 `ServiceLoader` discovery. Extension decoders
 (`io.github.dfa1.vortex.reader.extension.ExtensionDecoder`) are not registry-managed: the built-in
 implementations are singletons invoked directly by their `ExtensionId`.
+
+---
+
+## FSST (`io.github.dfa1.vortex.fsst`)
+
+The `vortex-fsst` module is the standalone FSST (Fast Static Symbol Table) string-compression
+algorithm, usable independently of Vortex. It depends only on the JDK (`java.lang.foreign`), never
+on `core`/`reader`/`writer`; `writer`/`reader` depend on it. The `vortex.fsst` encoding adapter is
+one caller — the module itself knows nothing of the Vortex wire format. See
+[ADR 0022](../adr/0022-fsst-module-extraction.md).
+
+Compress: train a `Compressor` over a corpus, then compress rows against its table. Decompress:
+build a `Decompressor` (from the trained `Compressor`, or from raw table arrays). Hot-path methods
+accept `MemorySegment` (FFM-native, matching the rest of the codebase); `byte[]` overloads exist for
+zero-ceremony standalone use, and both paths produce identical output for the same input.
+
+### `CompressorBuilder`
+
+| Method                  | Notes                                                                       |
+|-------------------------|-----------------------------------------------------------------------------|
+| `new CompressorBuilder()` | Fresh builder using a fixed reproducible default seed                     |
+| `seed(long)`            | Override the training-sample seed; returns `this` for chaining               |
+| `train(byte[][] rows)`  | Runs the bottom-up generation loop, returns a trained `Compressor` (deterministic in rows + seed) |
+
+### `Compressor`
+
+Immutable trained symbol table (up to 255 codes; `0xFF` is the escape). Produced by
+`CompressorBuilder.train(byte[][])`.
+
+| Method                                                    | Notes                                                                 |
+|-----------------------------------------------------------|-----------------------------------------------------------------------|
+| `symbolCount()`                                           | Number of symbols in the table (0–255)                                |
+| `packedSymbol(int code)`                                  | The symbol's bytes packed LSB-first into a `long`                     |
+| `symbolLength(int code)`                                  | The symbol's length in bytes (1–8)                                    |
+| `codesSortedByLength()`                                   | Code permutation, multi-byte length-ascending then all length-1 last  |
+| `toDecompressor()`                                        | A `Decompressor` bound to this table                                  |
+| `compress(byte[] in, int start, int end, byte[] out, long outPos)`             | Greedy longest-match compress; size `out` ≥ `2 * (end - start)`  |
+| `compress(MemorySegment in, long start, long end, MemorySegment out, long outPos)` | FFM-native hot path; same sizing rule                       |
+
+### `Decompressor`
+
+Decodes an FSST code stream against a trained table (parallel arrays indexed by code).
+
+| Method                                                    | Notes                                                                 |
+|-----------------------------------------------------------|-----------------------------------------------------------------------|
+| `static of(long[] packedSymbols, int[] lengths)`          | Bind to a table; arrays are referenced, not copied, and must match in length |
+| `static final int ESCAPE`                                 | The escape code (`0xFF`)                                              |
+| `decompress(byte[] in, int start, int end, byte[] out, long outPos)`           | Decode; size `out` ≥ `8 * (end - start)`                         |
+| `decompress(MemorySegment in, long start, long end, MemorySegment out, long outPos)` | Unconditional-8-byte-store decode; caller MUST allocate `out` with ≥ 7 bytes of trailing slack |
+
+### `Symbol`
+
+`record Symbol(long packedBytes, int length)` — up to 8 bytes packed LSB-first (byte `k` at bit
+`k * 8`), length in 1–8.
+
+| Method                              | Notes                                                       |
+|-------------------------------------|-------------------------------------------------------------|
+| `static of(byte[] data, int offset, int length)` | Pack `length` bytes at `data[offset..]` LSB-first |
+| `byteAt(int i)`                     | The `i`-th byte (0-indexed; byte 0 is the LSB)              |
 
 ---
 

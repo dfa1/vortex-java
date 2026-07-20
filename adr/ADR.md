@@ -36,3 +36,4 @@ the decision shipped in (blank = not yet shipped).
 | 0019 | Columnar transducer façade for compute        | Proposed  |          |
 | 0020 | Jazzer fuzz testing infrastructure            | Proposed  |          |
 | 0021 | Cardinality-bounded global dict buffering     | Accepted  |          |
+| 0022 | Extract FSST into a standalone module, ported faithfully from the paper | Accepted |          |
