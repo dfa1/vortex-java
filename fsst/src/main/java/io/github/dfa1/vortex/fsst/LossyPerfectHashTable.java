@@ -35,30 +35,21 @@ final class LossyPerfectHashTable {
     /// Low three bytes of the input word — the only bytes the hash keys on.
     private static final long PREFIX_MASK = 0x00FF_FFFFL;
 
-    /// Per-slot packed symbol bytes, LSB-first ([Symbol] convention). Meaningful only where the
-    /// corresponding [#occupied] entry is set.
-    private final long[] packedBytes;
+    /// Slot table with two adjacent longs per slot (the FSST paper's C layout): `slots[2 * s]` is
+    /// the candidate's packed symbol bytes (LSB-first, [Symbol] convention) and `slots[2 * s + 1]`
+    /// is its metadata `ignoredBits << 16 | code << 8 | length` (`ignoredBits = 64 - 8 * length`).
+    /// A lookup derives the keep-mask from the ignored-bits with one shift instead of loading a
+    /// separate mask array, so the whole 16-byte slot lands in a single cache line — one memory
+    /// touch per lookup instead of three parallel-array reads across three lines.
+    ///
+    /// Empty slots are all-zero: metadata 0 makes the keep-mask `~0L` and the symbol 0, so an
+    /// input word of exactly 0 can "hit" an empty slot — harmlessly, because the returned low 16
+    /// bits (`code << 8 | length`) are then 0, which is precisely the "no match" answer. No
+    /// occupancy flag or sentinel is needed.
+    private final long[] slots;
 
-    /// Per-slot mask `~0L >>> ignoredBits` (`ignoredBits = 64 - 8 * length`) applied to an input
-    /// word before comparing, clearing the high bytes past the candidate's length.
-    private final long[] keepMask;
-
-    /// Per-slot symbol length in bytes, 3-8.
-    private final int[] lengths;
-
-    /// Per-slot code (the symbol's list index), meaningful only where [#occupied] is set.
-    private final int[] codes;
-
-    /// Whether each slot holds a candidate.
-    private final boolean[] occupied;
-
-    private LossyPerfectHashTable(long[] packedBytes, long[] keepMask, int[] lengths, int[] codes,
-                                  boolean[] occupied) {
-        this.packedBytes = packedBytes;
-        this.keepMask = keepMask;
-        this.lengths = lengths;
-        this.codes = codes;
-        this.occupied = occupied;
+    private LossyPerfectHashTable(long[] slots) {
+        this.slots = slots;
     }
 
     /// Builds the table from the trained symbols in descending-gain order, keeping only those of
@@ -76,43 +67,41 @@ final class LossyPerfectHashTable {
     /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
     /// @return a hash table resolving 3-8 byte matches with first-writer-wins on collision
     static LossyPerfectHashTable of(List<Symbol> symbolsByGainDescending) {
-        long[] packedBytes = new long[SLOTS];
-        long[] keepMask = new long[SLOTS];
-        int[] lengths = new int[SLOTS];
-        int[] codes = new int[SLOTS];
-        boolean[] occupied = new boolean[SLOTS];
+        long[] slots = new long[2 * SLOTS];
         for (int code = 0; code < symbolsByGainDescending.size(); code++) {
             Symbol symbol = symbolsByGainDescending.get(code);
             if (symbol.length() < 3) {
                 continue; // Length 1-2 belongs to ShortCodeTable.
             }
             int slot = slotFor(symbol.packedBytes());
-            if (occupied[slot]) {
+            if (slots[2 * slot + 1] != 0) {
                 continue; // First writer (higher gain) wins; skip the collision.
             }
-            occupied[slot] = true;
-            packedBytes[slot] = symbol.packedBytes();
-            keepMask[slot] = keepMaskFor(symbol.length());
-            lengths[slot] = symbol.length();
-            codes[slot] = code;
+            long ignoredBits = 64L - 8 * symbol.length();
+            slots[2 * slot] = symbol.packedBytes();
+            slots[2 * slot + 1] = ignoredBits << 16 | (long) code << 8 | symbol.length();
         }
-        return new LossyPerfectHashTable(packedBytes, keepMask, lengths, codes, occupied);
+        return new LossyPerfectHashTable(slots);
     }
 
-    /// Looks up `word` and reports whether a stored 3-8 byte symbol really matches it.
+    /// Looks up `word` and returns the matched symbol as `code << 8 | length`, or 0 when no stored
+    /// 3-8 byte symbol matches.
     ///
     /// The input word's first three bytes select one slot; the candidate there matches only if the
-    /// masked compare passes (`(word & keepMask) == candidate.packedBytes`), which rules out both
-    /// hash collisions with unrelated bytes and empty slots. On a miss the returned [HashMatch] has
-    /// `hit == false` and the caller falls back to [ShortCodeTable].
+    /// masked compare passes (`(word & (~0L >>> ignoredBits)) == candidate.packedBytes`), which
+    /// rules out hash collisions with unrelated bytes. An empty slot can only "hit" an all-zero
+    /// input word, and then still answers 0 (its metadata is 0), which is the no-match result. A
+    /// stored symbol's length is 3-8, so a real hit is never 0 and the caller can test the result
+    /// directly. On a miss the caller falls back to [ShortCodeTable].
     ///
     /// @param word an 8-byte little-endian input word starting at the current match position, with
     ///             any bytes past the remaining input already zero-padded by the caller
-    /// @return the match result: `hit`, and when hit the matched `code` and `length`
-    HashMatch lookup(long word) {
-        int slot = slotFor(word);
-        boolean hit = occupied[slot] && (word & keepMask[slot]) == packedBytes[slot];
-        return new HashMatch(hit, codes[slot], lengths[slot]);
+    /// @return the match as `code << 8 | length`, or 0 when there is no match
+    int lookup(long word) {
+        int slot = slotFor(word) << 1;
+        long symbol = slots[slot];
+        long meta = slots[slot + 1];
+        return (word & (~0L >>> (int) (meta >>> 16))) == symbol ? (int) (meta & 0xFFFF) : 0;
     }
 
     /// Computes the slot index a word hashes to, keyed on its first three bytes. Package-visible so
@@ -126,18 +115,4 @@ final class LossyPerfectHashTable {
         return (int) (mixed >>> 32) & SLOT_MASK;
     }
 
-    private static long keepMaskFor(int length) {
-        int ignoredBits = 64 - 8 * length;
-        return ~0L >>> ignoredBits;
-    }
-
-    /// Result of a [LossyPerfectHashTable#lookup(long)]: whether a 3-8 byte symbol matched and, if
-    /// so, its code and length. When `hit` is false, `code` and `length` are unspecified and the
-    /// caller must ignore them.
-    ///
-    /// @param hit whether a stored symbol really matched the input word
-    /// @param code the matched symbol code, valid only when `hit`
-    /// @param length the matched symbol length in bytes (3-8), valid only when `hit`
-    record HashMatch(boolean hit, int code, int length) {
-    }
 }

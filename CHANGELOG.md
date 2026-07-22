@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Measured with `JavaVsJniFsstBenchmark` ([1003a673](https://github.com/dfa1/vortex-java/commit/1003a673)), unmodified before and after.
 
+- `vortex.fsst` hot paths close the remaining `vortex-jni` gap on both sides: single 8-byte word loads and a one-cache-line packed hash-slot layout in the compressor, one shared scratch buffer in the encoder (was two heap allocations per row), and prefix-sum output offsets plus 256-row batched decompression in the decoder (was a per-row offset `switch` and two broadcast modulos per row). ([#300](https://github.com/dfa1/vortex-java/pull/300))
+
+  | Benchmark | Before | After | `vortex-java` vs `vortex-jni` |
+  |---|---|---|---|
+  | `javaFsstEncode` | 1.848 ops/s | 3.059 ± 0.430 ops/s | 1.6x slower → parity (1.07x, overlapping error) |
+  | `javaFsstDecode` | 27.137 ops/s | 32.924 ± 0.824 ops/s | 1.3x slower → 1.16x faster |
+
+  Measured with `JavaVsJniFsstBenchmark` `-f 3` (jni: encode 2.854 ± 0.289, decode 28.353 ± 5.283 ops/s on the same machine and run).
+
 ### Fixed
 
 - `ParquetImporter` detects duplicate column names in the source Parquet schema and throws a clear message naming the duplicate(s) and the source file, instead of a confusing `VortexWriter` internal-invariant error several frames removed from the actual cause. ([f2c05e57](https://github.com/dfa1/vortex-java/commit/f2c05e57))

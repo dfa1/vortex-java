@@ -15,13 +15,10 @@
 
 ### FSST follow-ups
 
-Out of scope for the #287 rewrite (which closed most of the `vortex-jni` gap with a scalar,
-branch-free algorithm — see [ADR-0022](adr/0022-fsst-module-extraction.md)):
+Out of scope for the #287 rewrite (which, together with the follow-up hot-path pass, closed the
+`vortex-jni` gap with a scalar, branch-free algorithm — encode at parity, decode ~1.16x faster on
+`JavaVsJniFsstBenchmark` — see [ADR-0022](adr/0022-fsst-module-extraction.md)):
 
-- [ ] **AVX512/SIMD compression kernel** — the paper measures a SIMD kernel as the fastest known
-  string compressor at that tier, but this project's scalar rewrite already narrowed the encode gap
-  to `vortex-jni` from 36x to 1.6x. Needs a Vector-API/JDK-incubator decision and its own ADR (cf.
-  [ADR-0005](adr/0005-vector-api-adoption.md)).
 - [ ] **True per-row lazy/random-access decompression** exploiting FSST's headline random-access
   property — today `FsstEncodingDecoder.decode()` eagerly materializes the whole column up front
   regardless of what is queried. Connects to [ADR-0010](adr/0010-lazy-decode.md) (Lazy decode) but

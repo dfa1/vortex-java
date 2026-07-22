@@ -17,12 +17,12 @@ class LossyPerfectHashTableTest {
 
         // When — the input word starts with "abc" and carries an unrelated trailing byte that the
         // masked compare must ignore (the symbol is only 3 bytes).
-        LossyPerfectHashTable.HashMatch result = sut.lookup(wordOf("abcZZZZZ"));
+        int result = sut.lookup(wordOf("abcZZZZZ"));
 
-        // Then
-        assertThat(result.hit()).isTrue();
-        assertThat(result.code()).isEqualTo(0);
-        assertThat(result.length()).isEqualTo(3);
+        // Then — packed as code << 8 | length; a hit is never 0.
+        assertThat(result).isNotZero();
+        assertThat(result >>> 8).isEqualTo(0);
+        assertThat(result & 0xFF).isEqualTo(3);
     }
 
     @Test
@@ -32,11 +32,11 @@ class LossyPerfectHashTableTest {
         LossyPerfectHashTable sut = LossyPerfectHashTable.of(List.of(full));
 
         // When
-        LossyPerfectHashTable.HashMatch result = sut.lookup(wordOf("ABCDEFGH"));
+        int result = sut.lookup(wordOf("ABCDEFGH"));
 
         // Then
-        assertThat(result.hit()).isTrue();
-        assertThat(result.length()).isEqualTo(8);
+        assertThat(result).isNotZero();
+        assertThat(result & 0xFF).isEqualTo(8);
     }
 
     @Test
@@ -48,10 +48,10 @@ class LossyPerfectHashTableTest {
         LossyPerfectHashTable sut = LossyPerfectHashTable.of(List.of(a, ab));
 
         // When
-        LossyPerfectHashTable.HashMatch result = sut.lookup(wordOf("ab"));
+        int result = sut.lookup(wordOf("ab"));
 
-        // Then
-        assertThat(result.hit()).isFalse();
+        // Then — 0 is the packed "no match".
+        assertThat(result).isZero();
     }
 
     @Test
@@ -65,14 +65,14 @@ class LossyPerfectHashTableTest {
         LossyPerfectHashTable sut = LossyPerfectHashTable.of(List.of(higherGain, lowerGain));
 
         // When — look up each symbol's own bytes.
-        LossyPerfectHashTable.HashMatch higher = sut.lookup(higherGain.packedBytes());
-        LossyPerfectHashTable.HashMatch lower = sut.lookup(lowerGain.packedBytes());
+        int higher = sut.lookup(higherGain.packedBytes());
+        int lower = sut.lookup(lowerGain.packedBytes());
 
         // Then — the higher-gain (first-inserted) symbol wins; the lower-gain one correctly misses
         // and does not corrupt or masquerade as the winner.
-        assertThat(higher.hit()).isTrue();
-        assertThat(higher.code()).isEqualTo(0);
-        assertThat(lower.hit()).isFalse();
+        assertThat(higher).isNotZero();
+        assertThat(higher >>> 8).isEqualTo(0);
+        assertThat(lower).isZero();
     }
 
     @Test
@@ -85,10 +85,10 @@ class LossyPerfectHashTableTest {
         long adversarial = findWordCollidingWithButNotEqualTo(stored.packedBytes());
 
         // When
-        LossyPerfectHashTable.HashMatch result = sut.lookup(adversarial);
+        int result = sut.lookup(adversarial);
 
         // Then
-        assertThat(result.hit()).isFalse();
+        assertThat(result).isZero();
     }
 
     /// Finds two distinct 3-byte symbols whose first three bytes hash to the same slot, so the test

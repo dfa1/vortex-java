@@ -58,8 +58,12 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         int n = strings.length;
 
         byte[][] byteArrays = new byte[n][];
+        long totalInput = 0;
+        int maxUncompLen = 0;
         for (int i = 0; i < n; i++) {
             byteArrays[i] = strings[i].getBytes(StandardCharsets.UTF_8);
+            totalInput += byteArrays[i].length;
+            maxUncompLen = Math.max(maxUncompLen, byteArrays[i].length);
         }
 
         Compressor compressor = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED).train(byteArrays);
@@ -87,28 +91,23 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             symLenBuf.set(ValueLayout.JAVA_BYTE, i, (byte) compressor.symbolLength(internalCode));
         }
 
-        // Compress each row into a scratch buffer holding the compressor's internal codes, then
-        // remap only the code bytes (never the literal byte following an escape) to wire codes.
-        byte[][] compressed = new byte[n][];
+        // Compress every row back-to-back into one shared scratch buffer (a per-row scratch plus a
+        // per-row exact-size copy costs two heap allocations and an extra copy per row — millions
+        // per chunk), then remap the code bytes (never the literal byte following an escape) to
+        // wire codes in a single pass over the whole stream. Worst case each input byte escapes to
+        // 2 output bytes, so 2 * totalInput bounds the entire stream.
+        byte[] scratch = new byte[Math.toIntExact(2 * totalInput)];
+        int[] rowEnds = new int[n];
         int totalCompressed = 0;
-        int maxUncompLen = 0;
         for (int i = 0; i < n; i++) {
             byte[] row = byteArrays[i];
-            byte[] scratch = new byte[row.length * 2];
-            int len = (int) compressor.compress(row, 0, row.length, scratch, 0);
-            remapCodesToWire(scratch, len, internalToWire);
-            compressed[i] = new byte[len];
-            System.arraycopy(scratch, 0, compressed[i], 0, len);
-            totalCompressed += len;
-            maxUncompLen = Math.max(maxUncompLen, row.length);
+            totalCompressed = (int) compressor.compress(row, 0, row.length, scratch, totalCompressed);
+            rowEnds[i] = totalCompressed;
         }
+        remapCodesToWire(scratch, totalCompressed, internalToWire);
 
         MemorySegment compBuf = arena.allocate(Math.max(totalCompressed, 1));
-        long pos = 0;
-        for (byte[] c : compressed) {
-            MemorySegment.copy(MemorySegment.ofArray(c), 0, compBuf, pos, c.length);
-            pos += c.length;
-        }
+        MemorySegment.copy(scratch, 0, compBuf, ValueLayout.JAVA_BYTE, 0, totalCompressed);
 
         // Narrowest ptype that fits every value: row lengths and cumulative offsets are
         // typically far below the 4-byte ceiling this always used to pay (e.g. a 6-byte string
@@ -125,11 +124,9 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
         long codesOffBytes = codesOffPType.byteSize();
         MemorySegment codesOffBuf = arena.allocate((long) (n + 1) * codesOffBytes);
-        long off = 0;
         PTypeIO.set(codesOffBuf, 0, codesOffPType, 0);
         for (int i = 0; i < n; i++) {
-            off += compressed[i].length;
-            PTypeIO.set(codesOffBuf, (i + 1) * codesOffBytes, codesOffPType, off);
+            PTypeIO.set(codesOffBuf, (i + 1) * codesOffBytes, codesOffPType, rowEnds[i]);
         }
 
         byte[] metaBytes = new ProtoFSSTMetadata(
