@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.fsst;
 
+import java.util.Arrays;
 import java.util.List;
 
 /// Direct-indexed table resolving the shortest FSST matches — length 0 (no match), 1, or 2 —
@@ -25,7 +26,12 @@ final class ShortCodeTable {
     /// codes are `0..254` (`0xFF` is the escape), so `-1` can never collide with a real code.
     static final int NO_CODE = -1;
 
-    /// Packed `code << 8 | length` per 16-bit key. A zero length marks "no match".
+    /// Packed no-match value stored in unpopulated slots: `NO_CODE << 8 | 0`. Storing the sentinel
+    /// pre-packed lets [#packedFor(long)] return the slot verbatim — one array read, no branch —
+    /// and an arithmetic `>> 8` recovers [#NO_CODE] while `& 0xFF` recovers length 0.
+    private static final int NO_MATCH = NO_CODE << 8;
+
+    /// Packed `code << 8 | length` per 16-bit key. A zero length marks "no match" ([#NO_MATCH]).
     private final int[] slots;
 
     private ShortCodeTable(int[] slots) {
@@ -46,6 +52,7 @@ final class ShortCodeTable {
     /// @return a table resolving 0/1/2-byte matches for any two-byte input prefix
     static ShortCodeTable of(List<Symbol> symbolsByGainDescending) {
         int[] slots = new int[SLOTS];
+        Arrays.fill(slots, NO_MATCH);
         for (int code = 0; code < symbolsByGainDescending.size(); code++) {
             Symbol symbol = symbolsByGainDescending.get(code);
             if (symbol.length() == 1) {
@@ -69,23 +76,32 @@ final class ShortCodeTable {
         return new ShortCodeTable(slots);
     }
 
-    /// Returns the code matched by the low two bytes of `word`, or [#NO_CODE] if none. One array
-    /// read, no branching.
+    /// Returns the match for the low two bytes of `word` as `code << 8 | length`, or
+    /// `NO_CODE << 8` (length 0) when there is no length-1 or length-2 match. One array read, no
+    /// branching — the slot value is returned verbatim, which is what makes this the hot path's
+    /// fallback of choice.
+    ///
+    /// @param word an input word; only its low 16 bits (first two input bytes) are consulted
+    /// @return the match as `code << 8 | length`; length 0 (and code [#NO_CODE]) means no match
+    int packedFor(long word) {
+        return slots[(int) (word & 0xFFFF)];
+    }
+
+    /// Returns the code matched by the low two bytes of `word`, or [#NO_CODE] if none.
     ///
     /// @param word an input word; only its low 16 bits (first two input bytes) are consulted
     /// @return the matched symbol code, or [#NO_CODE] when there is no length-1 or length-2 match
     int codeFor(long word) {
-        int packed = slots[(int) (word & 0xFFFF)];
-        return packed == 0 ? NO_CODE : packed >>> 8;
+        return packedFor(word) >> 8;
     }
 
     /// Returns the length of the symbol matched by the low two bytes of `word`: 2, 1, or 0 for no
-    /// match. One array read, no branching.
+    /// match.
     ///
     /// @param word an input word; only its low 16 bits (first two input bytes) are consulted
     /// @return the matched symbol length in bytes, or 0 when there is no match
     int lengthFor(long word) {
-        return length(slots[(int) (word & 0xFFFF)]);
+        return length(packedFor(word));
     }
 
     private static int length(int packed) {

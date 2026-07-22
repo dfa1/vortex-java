@@ -55,11 +55,13 @@ public final class Matcher {
     ///             any bytes past the remaining input already zero-padded by the caller
     /// @return the longest match as `code << 8 | length`; length 0 signals "no match, escape"
     public int longestMatch(long word) {
-        LossyPerfectHashTable.HashMatch hashMatch = hashTable.lookup(word);
-        if (hashMatch.hit()) {
-            return hashMatch.code() << 8 | hashMatch.length();
-        }
-        return shortCodes.codeFor(word) << 8 | shortCodes.lengthFor(word);
+        // Both tables are read unconditionally so the select below has no side to skip — the JIT
+        // can lower it to a conditional move instead of a data-dependent branch, which matters
+        // because hash hit/miss alternates unpredictably across input positions. The extra
+        // short-code read on a hash hit is one L1 load into a 256 KB table.
+        int hashMatch = hashTable.lookup(word);
+        int shortMatch = shortCodes.packedFor(word);
+        return hashMatch != 0 ? hashMatch : shortMatch;
     }
 
     /// Extracts the code from a packed [#longestMatch(long)] result.

@@ -2,6 +2,9 @@ package io.github.dfa1.vortex.fsst;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +26,13 @@ public final class Compressor {
     /// `core`'s `VortexFormat.LE_LONG` so this module keeps its zero dependency on `core`; the FSST
     /// wire format packs symbol bytes LSB-first, so all `MemorySegment` reads/writes are little-endian.
     static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
+            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+    /// Little-endian unaligned `long` view over a `byte[]`, the JIT-intrinsified way to load an
+    /// 8-byte input word in one instruction on the `byte[]` compress fast path (the byte-by-byte
+    /// [#loadWord(byte[], int, int)] assembly is 8 loads + shifts and is kept for the tail only).
+    private static final VarHandle LONG_LE_BYTES =
+            MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
 
     private final List<Symbol> symbolsByGainDescending;
     private final Matcher matcher;
@@ -142,8 +151,27 @@ public final class Compressor {
     public long compress(byte[] input, int start, int end, byte[] out, long outPos) {
         int pos = start;
         int outIndex = (int) outPos;
+        // Fast path: while 8 real input bytes remain, load the word in one intrinsified read. No
+        // over-long-match guard is needed here — a match is at most 8 bytes, so it can never reach
+        // past end while pos <= end - 8.
+        int fastEnd = end - 8;
+        while (pos <= fastEnd) {
+            long word = (long) LONG_LE_BYTES.get(input, pos);
+            int packedMatch = matcher.longestMatch(word);
+            int length = Matcher.lengthOf(packedMatch);
+            if (length > 0) {
+                out[outIndex++] = (byte) Matcher.codeOf(packedMatch);
+                pos += length;
+            } else {
+                // The escaped literal is the word's low byte — already loaded, no re-read.
+                out[outIndex++] = (byte) ESCAPE;
+                out[outIndex++] = (byte) word;
+                pos++;
+            }
+        }
         while (pos < end) {
-            int packedMatch = matcher.longestMatch(loadWord(input, pos, end));
+            long word = loadWord(input, pos, end);
+            int packedMatch = matcher.longestMatch(word);
             int length = Matcher.lengthOf(packedMatch);
             // Reject an over-long match: loadWord zero-pads bytes past end, and the branch-free
             // Matcher has no notion of end, so a symbol whose trailing bytes are zero can spuriously
@@ -156,7 +184,7 @@ public final class Compressor {
                 pos += length;
             } else {
                 out[outIndex++] = (byte) ESCAPE;
-                out[outIndex++] = input[pos];
+                out[outIndex++] = (byte) word;
                 pos++;
             }
         }
@@ -187,8 +215,27 @@ public final class Compressor {
     public long compress(MemorySegment input, long start, long end, MemorySegment out, long outPos) {
         long pos = start;
         long outIndex = outPos;
+        // Fast path: while 8 readable bytes remain (bounded by both end and the segment's own
+        // size — the segment may end exactly at end with no trailing slack), load the word in one
+        // unaligned read. No over-long-match guard is needed here — a match is at most 8 bytes.
+        long fastEnd = Math.min(end, input.byteSize()) - 8;
+        while (pos <= fastEnd) {
+            long word = input.get(LE_LONG, pos);
+            int packedMatch = matcher.longestMatch(word);
+            int length = Matcher.lengthOf(packedMatch);
+            if (length > 0) {
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) Matcher.codeOf(packedMatch));
+                pos += length;
+            } else {
+                // The escaped literal is the word's low byte — already loaded, no re-read.
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) ESCAPE);
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) word);
+                pos++;
+            }
+        }
         while (pos < end) {
-            int packedMatch = matcher.longestMatch(loadWord(input, pos, end));
+            long word = loadWord(input, pos, end);
+            int packedMatch = matcher.longestMatch(word);
             int length = Matcher.lengthOf(packedMatch);
             // Same boundary guard as the byte[] overload: reject a match that reaches past the real
             // input end, since loadWord zero-pads and the branch-free Matcher has no notion of end.
@@ -197,7 +244,7 @@ public final class Compressor {
                 pos += length;
             } else {
                 out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) ESCAPE);
-                out.set(ValueLayout.JAVA_BYTE, outIndex++, input.get(ValueLayout.JAVA_BYTE, pos));
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) word);
                 pos++;
             }
         }
