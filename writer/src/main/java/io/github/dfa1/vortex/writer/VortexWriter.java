@@ -588,12 +588,27 @@ public final class VortexWriter implements Closeable {
         return writeSegment(dtype, data, null);
     }
 
-    /// Writes a segment, optionally forcing a specific `encodingOverride` instead of
-    /// the configured cascade. Used by the global Utf8 dictionary path where the values
-    /// segment must be flat varbin — the cascade would otherwise re-pick
-    /// [DictEncodingEncoder] and wrap the dictionary in another dict (which the reader
-    /// cannot unwrap).
     private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride) throws IOException {
+        return writeSegment(dtype, data, encodingOverride, Set.of());
+    }
+
+    /// Writes a segment, optionally forcing a specific `encodingOverride` instead of the
+    /// configured cascade, and optionally excluding encodings from the cascade competition.
+    ///
+    /// `excludedFromCascade` lets the global Utf8 dictionary path compress its values pool
+    /// through the normal Utf8 competition (FSST/VarBin/Zstd) while excluding
+    /// [DictEncodingEncoder] — the cascade would otherwise re-pick it and wrap the dictionary
+    /// in another dict the reader cannot unwrap. Only consulted on the cascade branch
+    /// (`encodingOverride == null && allowedCascading > 0`).
+    ///
+    /// @param dtype               logical type of the segment
+    /// @param data                the values to encode
+    /// @param encodingOverride    a specific encoder to force, or `null` to use the cascade
+    /// @param excludedFromCascade encoding ids to exclude from the cascade competition
+    /// @return the index of the written segment
+    /// @throws IOException if writing to the channel fails
+    private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride,
+            Set<EncodingId> excludedFromCascade) throws IOException {
         // Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncodingEncoder here.
         // FbsExtension columns route through ExtEncodingEncoder.encode which itself delegates to
         // MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
@@ -624,6 +639,9 @@ public final class VortexWriter implements Closeable {
                 result = encodingOverride.encode(dtype, data, encodeCtx);
             } else if (options.allowedCascading() > 0) {
                 EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry);
+                for (EncodingId excluded : excludedFromCascade) {
+                    encodeCtx = encodeCtx.withExcluded(excluded);
+                }
                 CascadingCompressor compressor = new CascadingCompressor(cascadeCodecs);
                 result = compressor.encode(dtype, data, encodeCtx);
             } else {
@@ -1510,11 +1528,15 @@ public final class VortexWriter implements Closeable {
         PType codePType = codePTypeForSize(dictSize);
 
         // Utf8 assigns codes in first-seen order with no frequency sort, so the incremental map's
-        // order already matches — no remap pass (ADR 0021). Write unique strings as a flat VarBin
-        // segment, bypassing cascade so DictEncoding doesn't wrap the (all-unique-by-construction)
-        // dictionary in another dict the reader cannot unwrap.
+        // order already matches — no remap pass (ADR 0021). Compress the distinct-values pool
+        // through the normal Utf8 competition (FSST/VarBin/Zstd) so it captures substring
+        // redundancy across dictionary entries (#299), but exclude Dict so the cascade never wraps
+        // the (all-unique-by-construction) dictionary in another dict the reader cannot unwrap. At
+        // cascade depth 0 there is no competition to run, so force flat VarBin as before.
         String[] uniques = state.valueToCode.keySet().toArray(new String[0]);
-        int valuesSegIdx = writeSegment(state.dtype, uniques, new VarBinEncodingEncoder());
+        int valuesSegIdx = options.allowedCascading() > 0
+                ? writeSegment(state.dtype, uniques, null, Set.of(EncodingId.VORTEX_DICT))
+                : writeSegment(state.dtype, uniques, new VarBinEncodingEncoder());
 
         DType codesDtype = new DType.Primitive(codePType, state.nullable);
         List<Integer> codesSegIdxes = new ArrayList<>();
