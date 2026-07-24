@@ -16,9 +16,9 @@ reference implementation's JNI bindings).
 
 | Column | Type | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup |
 |--------|------|--------------------|-------------------|---------|
-| volume | I64 / bitpacked | 13.7 | 6.4 | **2.1×** |
-| close  | F64 / ALP       | 8.3  | 6.1 | **1.4×** |
-| symbol | Utf8 / varbin   | 13.6 | 1.2 | **11.8×** |
+| volume | I64 / bitpacked | 14.0 | 6.3 | **2.2×** |
+| close  | F64 / ALP       | 8.4  | 6.0 | **1.4×** |
+| symbol | Utf8 / varbin   | 15.0 | 2.1 | **7.0×** |
 
 ops/s = complete file scans per second; higher is better.
 
@@ -31,18 +31,21 @@ ops/s = complete file scans per second; higher is better.
 
 | N rows | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup |
 |--------|--------------------|-------------------|---------|
-| 10     | 2,588       | 882             | **2.9×** |
-| 100    | 2,538       | 887             | **2.9×** |
+| 10     | 2,601       | 632             | **4.1×** |
+| 100    | 2,624       | 590             | **4.4×** |
 
-Measured 2026-06-25, commit `b78989fa`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
+Measured 2026-07-24, commit `4a170f1b`, vortex-jni 0.79.0. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
 
 **Compression** — NYC Yellow Taxi 2024-01, 2,964,624 rows × 19 columns, imported from the
 same Parquet file (47.6 MB), cascading depth 3, Apple M5:
 
 | Implementation | Output size | vs Parquet |
 |----------------|-------------|------------|
-| vortex-jni     | 47.0 MB     | −1.3%      |
-| **vortex-java** | **40.7 MB** | **−14.5%** |
+| vortex-jni¹    | 47.0 MB     | −1.3%      |
+| **vortex-java** | **40.8 MB** | **−14.2%** |
+
+¹ vortex-jni figure measured against 0.78.0 and not re-run (the JNI API has no
+Parquet-import path); the vortex-java and Parquet figures were re-measured 2026-07-24.
 
 vortex-java produces a 13% smaller file than the Rust reference from identical input.
 The gap comes from the global dictionary encoder that catches low-cardinality `F64`

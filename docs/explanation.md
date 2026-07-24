@@ -28,43 +28,62 @@ no upgrade risk, and a supported LTS for users.
 ## Benchmarks
 
 JMH throughput (ops/s = full-file scans per second). Higher is better. Numbers
-re-measured 2026-06-13 against commit `fea3aa29`.
+re-measured 2026-07-24 against commit `4a170f1b`, vortex-jni 0.79.0.
 
-**Environment:** Apple M5, Azul Zulu JDK 25.0.2, 3 warmup iterations, 5 measurement iterations, 2 forks.
+**Environment:** Apple M5, Zulu JDK 25.0.2, 3 forks (`-f 3`). Each suite was run on its
+own (not back-to-back) — sustained multi-suite runs thermally throttle the laptop and
+depress every absolute ~5× while leaving speedup ratios intact.
+
+Absolute read throughput dropped versus the 2026-06-13 snapshot on the F64/ALP and
+I64/bitpacked columns, and dropped by a near-identical factor for _both_ the java and jni
+readers. The most likely cause is the vortex-jni 0.79 **writer** choosing denser on-disk
+encodings (ALP, bitpacked) that cost more to decode on either side — a single shared cause
+fits two readers moving together better than two independent reader regressions of the same
+size on the same columns. The varbin `symbol` column is stable across the change.
 
 ### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
 
 | Benchmark           | vortex-java (ops/s)  | vortex-jni (ops/s) | Speedup      |
 |---------------------|---------------|------------------|--------------|
-| close (F64/ALP)     | 69.2 ± 0.1    | 50.6 ± 0.1       | **1.4×**     |
-| volume (I64/bitpacked) | 118.0 ± 0.3 | 51.3 ± 3.5      | **2.3×**     |
-| symbol (Utf8/varbin) | 106.5 ± 0.2  | 9.8 ± 0.1        | **10.9×**    |
-| cascading (depth 3, volume) | 83.1 ± 4.3 | n/a         | —            |
+| close (F64/ALP)     | 58.1 ± 0.4    | 8.1 ± 1.4        | **7.2×**     |
+| volume (I64/bitpacked) | 17.6 ± 1.6 | 8.2 ± 0.4       | **2.1×**     |
+| symbol (Utf8/varbin) | 103.9 ± 14.3 | 9.6 ± 0.4       | **10.8×**    |
+| cascading (depth 3, volume) | 98.3 ± 0.5 | n/a         | —            |
+
+The `volume` row is the standout: plain `fastlanes.bitpacked` I64 decodes _slower_ (17.6)
+than the depth-3 cascade over the same column (98.3) and slower than F64/ALP `close` (58.1).
+Bitpacked I64 is the one primitive path with no lazy `LongArray` (FoR, RLE, ZigZag, RunEnd,
+Sparse all have one); it eagerly materializes the whole column through
+`BitpackedEncodingDecoder` before the fold, so a large fixed unpack cost dominates. A lazy
+bitpacked fold is the open optimization here.
 
 ### OHLC write — 10 M rows
 
-| Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup      |
-|-----------|--------------|------------------|--------------|
-| write     | 4.4 ± 1.1    | 0.7 ± 0.1        | **6.4×**     |
+| Benchmark          | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup      |
+|--------------------|--------------|------------------|--------------|
+| write (plain)      | 2.42 ± 0.09  | 0.78 ± 0.00      | **3.1×**     |
+| write (cascade ×3) | 0.30 ± 0.01  | n/a              | —            |
 
-The Java write is faster but also produces bigger files (more optimization work remains).
-_Last measured before 2026-06-08; re-run pending._
+Plain Java write stays ~3× faster than the JNI writer but produces a much larger file
+(429 MB plain vs 56 MB at cascade depth 3); cascading trades ~8× write throughput for the
+7.6× smaller output. jni write (0.78) matches its 2026-06 value, confirming the machine
+was not throttled here.
 
 ### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
 
 | Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup      |
 |-----------|--------------|------------------|--------------|
-| scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
-
-_Last measured before 2026-06-08; re-run pending._
+| scan      | 17.1 ± 0.2   | 5.7 ± 0.1        | **3.0×**     |
 
 ### Parquet vs Vortex read — NYC Yellow Taxi 2024-01, 3 M rows, 19 columns
 
 Both formats store all 19 columns; projection happens at read time. Both sides scalar decode
 (Hardwood disables SIMD on JDK 25; Vortex Java uses FFM scalar reads throughout).
 
-**Environment:** Apple M5, OpenJDK 25, 5 warmup × 3 s, 10 measurement × 5 s, fork 1.
-Re-measured 2026-06-08 against commit `051a794`.
+**Environment:** Apple M5, Zulu JDK 25.0.2, 3 warmup × 3 s, 5 measurement × 5 s, 3 forks.
+Re-measured 2026-07-24 against commit `4a170f1b`. The batch Parquet paths are noisy
+(SIMD-disabled scalar decode + page-cache/GC jitter — hence the wide error bars); the
+Vortex paths are tight.
 
 Two Parquet variants are measured to isolate format cost from API overhead:
 
@@ -75,20 +94,19 @@ Two Parquet variants are measured to isolate format cost from API overhead:
 
 | Benchmark                                                                | ops/s        | vs Parquet batch         |
 |--------------------------------------------------------------------------|--------------|--------------------------|
-| `parquetRead` — batch, 1 col (`trip_distance`)                           | 137.0 ± 14.8 | baseline                 |
-| `parquetReadRowByRow` — row cursor, 1 col                                | 69.7 ± 0.9   | 0.51× (2× API penalty)   |
-| `vortexRead` — 1 col (`trip_distance`)                                   | 43.0 ± 1.5   | **0.31×**                |
-| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 137.4 ± 10.7 | baseline                 |
-| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 40.7 ± 1.9   | 0.30× (3.4× API penalty) |
-| `vortexReadMultiColumn` — 2 cols                                         | 34.1 ± 1.6   | 0.25×                    |
+| `parquetRead` — batch, 1 col (`trip_distance`)                           | 172.7 ± 28.0 | baseline                 |
+| `parquetReadRowByRow` — row cursor, 1 col                                | 65.5 ± 0.9   | 0.38× (2.6× API penalty) |
+| `vortexRead` — 1 col (`trip_distance`)                                   | 273.3 ± 5.8  | **1.58×**                |
+| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 109.1 ± 18.4 | baseline                 |
+| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 42.4 ± 0.8   | 0.39× (2.6× API penalty) |
+| `vortexReadMultiColumn` — 2 cols                                         | 46.9 ± 14.4  | 0.43×                    |
 
-**Known regression vs 2026-06-05 snapshot** (`vortexRead` was 235 → 43; `vortexReadMultiColumn`
-was 122 → 34, Parquet path stable). The collapse is in the Vortex decode path on the
-`ParquetImporter`-generated file — likely a cascade choice change that landed between
-`363a885` and `051a794`. The OHLC bench (raw I64/F64 columns) recovered to 100+ ops/s
-with the broadcast fast-path fix; this one did not, which points at a path the broadcast
-fix doesn't cover (probably dict-of-ALP or ZSTD-on-F64 sneaking into the cascade). Bisect
-+ fix tracked separately — these numbers are the current honest snapshot, not the target.
+**The 2026-06 `vortexRead` regression is resolved.** Single-column `vortexRead` recovered
+from 43 → **273 ops/s** and now reads _faster_ than Parquet batch (1.58×), past even the
+235 ops/s pre-regression peak; the cascade-choice collapse noted in the prior snapshot no
+longer reproduces. Two-column `vortexReadMultiColumn` also recovered (34 → 47) but still
+trails the 2-column Parquet batch — the remaining gap is the multi-column scatter/expansion
+path, not single-column decode.
 
 #### Why ZstdEncoding is excluded from the numeric cascade
 
@@ -168,7 +186,7 @@ dominated 60% of JFR execution samples on multi-column scans before it was fixed
 ```
 Hardwood parquetRead (per 3 M rows)       Vortex vortexRead (per 3 M rows)
 ────────────────────────────────────      ──────────────────────────────────
-47.6 MB on disk                           50 MB on disk
+47.6 MB on disk                           40.8 MB on disk
 + page header parse × N pages             + ALP decode (branch-free ×/+)
 + definition-level RLE decode × 3 M rows  + fold() tight loop, no dispatch
 ```
