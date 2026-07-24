@@ -42,7 +42,7 @@ same Parquet file (47.6 MB), cascading depth 3, Apple M5:
 | Implementation | Output size | vs Parquet |
 |----------------|-------------|------------|
 | vortex-jni¹    | 47.0 MB     | −1.3%      |
-| **vortex-java** | **40.8 MB** | **−14.2%** |
+| **vortex-java** | **40.6 MB** | **−14.6%** |
 
 ¹ vortex-jni figure measured against 0.78.0 and not re-run (the JNI API has no
 Parquet-import path); the vortex-java and Parquet figures were re-measured 2026-07-24.

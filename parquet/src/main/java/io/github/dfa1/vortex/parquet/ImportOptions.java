@@ -12,7 +12,13 @@ public record ImportOptions(
         WriteOptions writeOptions
 ) {
     public static ImportOptions defaults() {
-        return new ImportOptions(131_072, List.of(), null, WriteOptions.cascading(3));
+        // 65536 physical rows per chunk, matching WriteOptions' default and the Rust reference's
+        // 32k-64k granularity. This was briefly raised to 131072 for a size win (962520ac), but the
+        // FSST + global-dict work (#299) reversed that: finer chunks now compress better on
+        // real-world data (nyc-311 -66 MB, taxi -0.14 MB) as their per-chunk cost competition and
+        // FSST training adapt more locally. 32768 is worse than 65536 — per-chunk overhead outweighs
+        // the finer adaptation below 64k.
+        return new ImportOptions(65_536, List.of(), null, WriteOptions.cascading(3));
     }
 
     /// Restrict import to specific columns. Empty list = all columns.
