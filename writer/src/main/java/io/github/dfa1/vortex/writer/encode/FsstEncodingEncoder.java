@@ -54,7 +54,78 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        String[] strings = (String[]) data;
+        Arena arena = ctx.arena();
+        Fsst c = compress((String[]) data, arena);
+
+        // Terminal layout: the per-row length and cumulative-offset children are raw primitive
+        // segments (buffers 3 and 4). The cascading path (encodeCascade) instead exposes them as
+        // open child slots so they can be bitpacked/constant-folded.
+        long uncompLenBytes = c.uncompLenPType().byteSize();
+        MemorySegment uncompLenBuf = arena.allocate(Math.max((long) c.n() * uncompLenBytes, 1));
+        for (int i = 0; i < c.n(); i++) {
+            PTypeIO.set(uncompLenBuf, i * uncompLenBytes, c.uncompLenPType(), c.uncompLens()[i]);
+        }
+        long codesOffBytes = c.codesOffPType().byteSize();
+        MemorySegment codesOffBuf = arena.allocate((long) (c.n() + 1) * codesOffBytes);
+        for (int i = 0; i <= c.n(); i++) {
+            PTypeIO.set(codesOffBuf, i * codesOffBytes, c.codesOffPType(), c.codesOffsets()[i]);
+        }
+
+        EncodeNode uncompLensNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
+        EncodeNode codesOffNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 4);
+        EncodeNode root = new EncodeNode(
+                EncodingId.VORTEX_FSST,
+                MemorySegment.ofArray(c.metaBytes()),
+                new EncodeNode[]{uncompLensNode, codesOffNode},
+                new int[]{0, 1, 2});
+
+        return new EncodeResult(root,
+                List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf),
+                null, null);
+    }
+
+    /// Cascading FSST: expose the per-row uncompressed-length and code-offset children as open
+    /// primitive slots so the cascade can compress them — bitpacking the monotonic offsets and
+    /// constant-folding the lengths of fixed-width columns (dates, coordinates). Matches the Rust
+    /// reference, which stores these children as `fastlanes.bitpacked` / `vortex.constant` rather
+    /// than raw primitives; leaving them raw cost ~2-4 bytes/row and was the largest remaining gap
+    /// on the nyc-311 date columns (#299). At cascade depth 0 there is no competition, so fall back
+    /// to the terminal raw-primitive layout.
+    ///
+    /// @param dtype the Utf8/Binary type being encoded
+    /// @param data  the string values
+    /// @param ctx   encoding context supplying the arena and cascade depth
+    /// @return a cascade step with the two offset children left open, or a terminal step at depth 0
+    @Override
+    public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        if (ctx.allowedCascading() == 0) {
+            return CascadeStep.terminal(encode(dtype, data, ctx));
+        }
+        Fsst c = compress((String[]) data, ctx.arena());
+        Object uncompLens = typedUnsigned(c.uncompLenPType(), c.uncompLens());
+        Object codesOffsets = typedUnsigned(c.codesOffPType(), c.codesOffsets());
+        EncodeNode partialRoot = new EncodeNode(
+                EncodingId.VORTEX_FSST,
+                MemorySegment.ofArray(c.metaBytes()),
+                new EncodeNode[]{null, null},
+                new int[]{0, 1, 2});
+        return new CascadeStep(partialRoot,
+                List.of(c.symBuf(), c.symLenBuf(), c.compBuf()),
+                List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0),
+                        new ChildSlot(new DType.Primitive(c.codesOffPType(), false), codesOffsets, 1)),
+                null, null, true);
+    }
+
+    /// The FSST-specific product of compression: the symbol-table buffers, the wire code stream, the
+    /// [ProtoFSSTMetadata] bytes, and the per-row uncompressed lengths / cumulative code offsets as
+    /// plain `int[]` (the two offset children, in narrowest-unsigned ptypes).
+    private record Fsst(
+            MemorySegment symBuf, MemorySegment symLenBuf, MemorySegment compBuf,
+            byte[] metaBytes, int[] uncompLens, int[] codesOffsets,
+            PType uncompLenPType, PType codesOffPType, int n) {
+    }
+
+    private static Fsst compress(String[] strings, Arena arena) {
         int n = strings.length;
 
         byte[][] byteArrays = new byte[n][];
@@ -80,8 +151,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < numSymbols; i++) {
             internalToWire[wireOrder[i]] = i;
         }
-
-        Arena arena = ctx.arena();
 
         MemorySegment symBuf = arena.allocate(Math.max(numSymbols * 8L, 1), 8);
         MemorySegment symLenBuf = arena.allocate(Math.max(numSymbols, 1));
@@ -116,17 +185,13 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         PType uncompLenPType = PType.narrowestUnsigned(maxUncompLen);
         PType codesOffPType = PType.narrowestUnsigned(totalCompressed);
 
-        long uncompLenBytes = uncompLenPType.byteSize();
-        MemorySegment uncompLenBuf = arena.allocate(Math.max((long) n * uncompLenBytes, 1));
+        int[] uncompLens = new int[n];
         for (int i = 0; i < n; i++) {
-            PTypeIO.set(uncompLenBuf, i * uncompLenBytes, uncompLenPType, byteArrays[i].length);
+            uncompLens[i] = byteArrays[i].length;
         }
-
-        long codesOffBytes = codesOffPType.byteSize();
-        MemorySegment codesOffBuf = arena.allocate((long) (n + 1) * codesOffBytes);
-        PTypeIO.set(codesOffBuf, 0, codesOffPType, 0);
+        int[] codesOffsets = new int[n + 1];
         for (int i = 0; i < n; i++) {
-            PTypeIO.set(codesOffBuf, (i + 1) * codesOffBytes, codesOffPType, rowEnds[i]);
+            codesOffsets[i + 1] = rowEnds[i];
         }
 
         byte[] metaBytes = new ProtoFSSTMetadata(
@@ -134,17 +199,34 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(codesOffPType.ordinal())
         ).encode();
 
-        EncodeNode uncompLensNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
-        EncodeNode codesOffNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 4);
-        EncodeNode root = new EncodeNode(
-                EncodingId.VORTEX_FSST,
-                MemorySegment.ofArray(metaBytes),
-                new EncodeNode[]{uncompLensNode, codesOffNode},
-                new int[]{0, 1, 2});
+        return new Fsst(symBuf, symLenBuf, compBuf, metaBytes, uncompLens, codesOffsets,
+                uncompLenPType, codesOffPType, n);
+    }
 
-        return new EncodeResult(root,
-                List.of(symBuf, symLenBuf, compBuf, uncompLenBuf, codesOffBuf),
-                null, null);
+    /// Copies unsigned values into the narrowest Java array matching `ptype` (U8→`byte[]`,
+    /// U16→`short[]`, else `int[]`) so a [ChildSlot] can hand them to the cascade's primitive codecs.
+    ///
+    /// @param ptype the child's primitive type
+    /// @param vals  the values (already within `ptype`'s unsigned range)
+    /// @return a `byte[]`, `short[]`, or `int[]` holding `vals`
+    private static Object typedUnsigned(PType ptype, int[] vals) {
+        return switch (ptype) {
+            case U8, I8 -> {
+                byte[] a = new byte[vals.length];
+                for (int i = 0; i < vals.length; i++) {
+                    a[i] = (byte) vals[i];
+                }
+                yield a;
+            }
+            case U16, I16 -> {
+                short[] a = new short[vals.length];
+                for (int i = 0; i < vals.length; i++) {
+                    a[i] = (short) vals[i];
+                }
+                yield a;
+            }
+            default -> vals;
+        };
     }
 
     /// Remaps every code byte in `stream[0..length)` from the compressor's internal (gain-descending)

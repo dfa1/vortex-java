@@ -1,7 +1,9 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.writer.WriteRegistry;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.core.testing.DTypes;
@@ -426,6 +428,34 @@ class FsstEncodingEncoderTest {
             // Then
             assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(PType.U16.ordinal());
             assertThat(meta.codes_offsets_ptype().value()).isEqualTo(PType.U16.ordinal());
+        }
+
+        @Test
+        void encodeCascade_exposesOffsetChildrenAsOpenSlots() {
+            // Given — a cascading context (depth 3).
+            var ctx = EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.loadAll());
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(
+                    DTypes.UTF8, java.util.Collections.nCopies(100, "2020").toArray(new String[0]), ctx);
+
+            // Then — the per-row length (child 0) and code-offset (child 1) children are left open
+            // for the cascade to bitpack/constant-fold, not emitted as raw primitive leaves (#299).
+            assertThat(result.isTerminal()).isFalse();
+            assertThat(result.openChildren()).extracting(ChildSlot::parentChildIdx).containsExactly(0, 1);
+            assertThat(result.openChildren())
+                    .allSatisfy(slot -> assertThat(slot.childDtype()).isInstanceOf(DType.Primitive.class));
+        }
+
+        @Test
+        void encodeCascade_atDepthZero_isTerminal() {
+            // Given / When — no cascade depth, so there is no competition to run.
+            CascadeStep result = ENCODER.encodeCascade(
+                    DTypes.UTF8, java.util.Collections.nCopies(20, "ab").toArray(new String[0]),
+                    EncodeTestHelper.testCtx());
+
+            // Then — falls back to the terminal raw-primitive layout.
+            assertThat(result.isTerminal()).isTrue();
         }
 
         // Mirror of Encode.u16TierRows() — the nested classes cannot share a private static helper
