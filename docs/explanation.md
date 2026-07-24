@@ -52,10 +52,18 @@ size on the same columns. The varbin `symbol` column is stable across the change
 
 The `volume` row is the standout: plain `fastlanes.bitpacked` I64 decodes _slower_ (17.6)
 than the depth-3 cascade over the same column (98.3) and slower than F64/ALP `close` (58.1).
-Bitpacked I64 is the one primitive path with no lazy `LongArray` (FoR, RLE, ZigZag, RunEnd,
-Sparse all have one); it eagerly materializes the whole column through
-`BitpackedEncodingDecoder` before the fold, so a large fixed unpack cost dominates. A lazy
-bitpacked fold is the open optimization here.
+JFR (`-prof stack`) puts ~70% of the read in the FastLanes bit-unpack compute
+(`BitpackedEncodingDecoder.unpackLoop64`), ~15% in the fold, and only ~6% in the 80 MB
+`Arena.allocate` for the materialized output. The cost is the unpacking itself, not the
+buffer-backed `MaterializedLongArray` it lands in.
+
+That rules out the tempting micro-optimization: a lazy/fused fold (unpack-and-accumulate in
+one pass, skipping the intermediate segment) removes only the allocation and the intermediate
+write/read — a few ms of memory traffic on this hardware, ~1.2× at best — while the unpack
+loop, the actual wall, is untouched. The only lever that moves it is a vectorized (Vector API)
+FastLanes unpack, a larger change than the gain on this one writer-chosen encoding justifies
+today. The cascade is faster on the same column because it stores `volume` with less to
+unpack (a FoR reference leaves smaller bitpacked residuals), not because its fold is lazy.
 
 ### OHLC write — 10 M rows
 
