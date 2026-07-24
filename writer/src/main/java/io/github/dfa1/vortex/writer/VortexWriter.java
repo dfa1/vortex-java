@@ -104,8 +104,18 @@ public final class VortexWriter implements Closeable {
     private static final int STAT_NULL_COUNT = 6;
 
     // Columns with global cardinality below this threshold are dict-encoded across all chunks.
-    // Kept low: global dict hurts high-cardinality F64 columns (ALP codes beat U16 dict codes).
+    // The cap is type-aware. Numeric stays low: a global dict hurts high-cardinality F64/I64
+    // columns (ALP/bitpacked codes beat U16 dict codes). Utf8 is raised far higher — text columns
+    // with thousands of repeated distinct values (street/place names) dictionary-compress well
+    // (#299), and the per-chunk short[] code buffer holds codes 0..32767 (up to 32768 distinct)
+    // with no wider buffer; codePTypeForSize already emits U16 codes above 256.
     static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
+    static final int GLOBAL_DICT_MAX_CARDINALITY_UTF8 = 32_768;
+
+    // The global-dict cardinality cap for a column, by whether it is Utf8 (see the constants above).
+    private static int dictMaxCardinality(boolean utf8) {
+        return utf8 ? GLOBAL_DICT_MAX_CARDINALITY_UTF8 : GLOBAL_DICT_MAX_CARDINALITY;
+    }
 
     private static final List<EncodingEncoder> DEFAULT_CODECS = List.of(
             new AlpEncodingEncoder(), new PrimitiveEncodingEncoder(), new BoolEncodingEncoder(),
@@ -1297,11 +1307,12 @@ public final class VortexWriter implements Closeable {
         Object values = nullable ? ((NullableData) data).values() : data;
         boolean[] validity = nullable ? ((NullableData) data).validity() : null;
         int len = state.utf8 ? ((String[]) values).length : primitiveArrayLen(values, state.ptype);
+        int cap = dictMaxCardinality(state.utf8);
 
         // First pass: would this chunk's fresh distinct values push the map past the cap? Count them
         // without mutating so the whole chunk is either ingested or rejected atomically — a partial
         // ingest would corrupt the dictionary when the caller demotes on rejection.
-        var pendingNew = new HashSet<>(GLOBAL_DICT_MAX_CARDINALITY + 1);
+        var pendingNew = new HashSet<>(Math.min(cap, len) + 1);
         for (int i = 0; i < len; i++) {
             if (validity != null && !validity[i]) {
                 continue;
@@ -1314,7 +1325,7 @@ public final class VortexWriter implements Closeable {
                 continue;
             }
             if (!state.valueToCode.containsKey(v) && pendingNew.add(v)
-                    && state.valueToCode.size() + pendingNew.size() > GLOBAL_DICT_MAX_CARDINALITY) {
+                    && state.valueToCode.size() + pendingNew.size() > cap) {
                 return false;
             }
         }
@@ -1667,13 +1678,13 @@ public final class VortexWriter implements Closeable {
         if (data.length == 0) {
             return false;
         }
-        var seen = new java.util.HashSet<String>(GLOBAL_DICT_MAX_CARDINALITY + 1);
+        var seen = new java.util.HashSet<String>(Math.min(GLOBAL_DICT_MAX_CARDINALITY_UTF8, data.length) + 1);
         for (int i = 0; i < data.length; i++) {
             if ((validity != null && !validity[i]) || data[i] == null) {
                 continue;
             }
             seen.add(data[i]);
-            if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY) {
+            if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY_UTF8) {
                 return false;
             }
         }

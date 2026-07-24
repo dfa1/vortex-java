@@ -8,6 +8,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.stream.Stream;
 
 import static io.github.dfa1.vortex.writer.VortexWriter.GLOBAL_DICT_MAX_CARDINALITY;
+import static io.github.dfa1.vortex.writer.VortexWriter.GLOBAL_DICT_MAX_CARDINALITY_UTF8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -96,8 +97,12 @@ class VortexWriterDictDecisionTest {
                 arguments("empty", new String[0], false),
                 arguments("ratio exactly 50%", new String[]{"a", "b", "a", "b"}, false),
                 arguments("ratio under 50%", new String[]{"a", "b", "a", "b", "a"}, true),
-                arguments("cardinality at MAX", distinctStrings(GLOBAL_DICT_MAX_CARDINALITY), true),
-                arguments("cardinality over MAX", distinctStrings(GLOBAL_DICT_MAX_CARDINALITY + 1), false));
+                // Utf8 uses the raised type-aware cap (#299), not the numeric 2048.
+                arguments("Utf8 admitted above numeric cap",
+                        distinctStrings(GLOBAL_DICT_MAX_CARDINALITY + 1), true),
+                arguments("cardinality at Utf8 MAX", distinctStrings(GLOBAL_DICT_MAX_CARDINALITY_UTF8), true),
+                arguments("cardinality over Utf8 MAX",
+                        distinctStrings(GLOBAL_DICT_MAX_CARDINALITY_UTF8 + 1), false));
     }
 
     @ParameterizedTest(name = "{0}")

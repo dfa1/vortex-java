@@ -89,6 +89,52 @@ class DictValuesPoolCompressionIntegrationTest {
         }
     }
 
+    @Test
+    void utf8_cardinalityAbovePriorCap_admittedToGlobalDict(@TempDir Path tmp) throws IOException {
+        // Given — 8 000 distinct values: above the old 2048 numeric-era cap (so previously demoted
+        // to per-chunk), below the 32768 Utf8 cap, with >50% dedup so the ratio gate admits it.
+        Path file = tmp.resolve("high_card.vortex");
+        int rowsPerChunk = 20_000;
+        int chunkCount = 4;
+        int distinct = 8_000;
+
+        List<String> expected = new ArrayList<>();
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
+            // When
+            for (int c = 0; c < chunkCount; c++) {
+                String[] data = redundantChunk(rowsPerChunk, distinct, c * 101);
+                expected.addAll(List.of(data));
+                sut.writeChunk(Map.of(COL, data));
+            }
+        }
+
+        // Then — the column is stored as one global dictionary (a DICT layout node), not a per-chunk
+        // fallback. Before the type-aware cap a 8 000-distinct column produced no DICT layout.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(hasDictLayout(InspectorTree.build(vf).root()))
+                    .as("8 000-distinct Utf8 column admitted to the global dictionary")
+                    .isTrue();
+        }
+
+        // And every value round-trips exactly.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(readAllStrings(vf)).isEqualTo(expected);
+        }
+    }
+
+    private static boolean hasDictLayout(InspectorTree.Node node) {
+        if (node.layout().isDict()) {
+            return true;
+        }
+        for (InspectorTree.Node child : node.children()) {
+            if (hasDictLayout(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static List<String> readAllStrings(VortexReader vf) {
         List<String> out = new ArrayList<>();
         try (var iter = vf.scan(ScanOptions.columns("desc"))) {
