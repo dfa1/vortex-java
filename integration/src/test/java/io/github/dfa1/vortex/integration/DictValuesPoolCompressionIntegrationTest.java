@@ -123,6 +123,43 @@ class DictValuesPoolCompressionIntegrationTest {
         }
     }
 
+    @Test
+    void perChunkDictUtf8_valuesPool_isFsstCompressed(@TempDir Path tmp) throws IOException {
+        // Given — global dict disabled, so a redundant low-cardinality Utf8 column is dict-encoded
+        // per chunk (a vortex.dict *encoding*, not a layout). High row duplication makes per-chunk
+        // dict win the cascade; the shared-prefix distinct values make FSST win the values child.
+        Path file = tmp.resolve("perchunk_dict.vortex");
+        int rowsPerChunk = 10_000;
+        int chunkCount = 3;
+        int distinct = 500;
+
+        List<String> expected = new ArrayList<>();
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3).withGlobalDict(false))) {
+            // When
+            for (int c = 0; c < chunkCount; c++) {
+                String[] data = redundantChunk(rowsPerChunk, distinct, c * 53);
+                expected.addAll(List.of(data));
+                sut.writeChunk(Map.of(COL, data));
+            }
+        }
+
+        // Then — per-chunk dict still wins (the values pool is now a cascaded child rather than a
+        // terminal varbin node; its encoding is nested inside the dict segment, so it is not visible
+        // in usedEncodings — the mechanism is covered by DictEncodingEncoderTest, the round-trip
+        // below guards correctness through the new cascade path).
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(InspectorTree.build(vf).usedEncodings())
+                    .as("per-chunk dict encoding")
+                    .contains("vortex.dict");
+        }
+
+        // And every value round-trips exactly.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(readAllStrings(vf)).isEqualTo(expected);
+        }
+    }
+
     private static boolean hasDictLayout(InspectorTree.Node node) {
         if (node.layout().isDict()) {
             return true;

@@ -84,7 +84,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         if (dtype instanceof DType.Utf8) {
-            return CascadeStep.terminal(encodeUtf8((String[]) data, ctx));
+            return encodeUtf8Cascade((String[]) data, ctx);
         }
         DictData d = buildDictData(dtype, data, ctx);
         PType codePType = d.codePType();
@@ -99,6 +99,56 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         DType codesDtype = new DType.Primitive(codePType, false);
         ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 1);
         return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot), null, null, true);
+    }
+
+    /// Cascading Utf8 dict: emit the codes leaf but expose the distinct-values pool as an open Utf8
+    /// child slot so the cascade competes FSST/VarBin/Zstd on it (#299) instead of hardcoding raw
+    /// varbin. [CascadingCompressor] excludes the winning `vortex.dict` from that child's
+    /// competition, so the pool is never wrapped in a second dict the reader cannot unwrap.
+    ///
+    /// @param strings the column's string values
+    /// @param ctx     encoding context supplying the arena
+    /// @return a cascade step whose values child (index 1) is left open for compression
+    private static CascadeStep encodeUtf8Cascade(String[] strings, EncodeContext ctx) {
+        int n = strings.length;
+
+        var valueMap = new LinkedHashMap<String, Integer>();
+        for (String s : strings) {
+            valueMap.computeIfAbsent(s, _ -> valueMap.size());
+        }
+        int dictSize = valueMap.size();
+        PType codePType = codePType(dictSize);
+        int codeBytes = codePType.byteSize();
+
+        MemorySegment codesBuf = ctx.arena().allocate((long) n * codeBytes);
+        for (int i = 0; i < n; i++) {
+            writeCodeToSeg(codesBuf, codePType, i, valueMap.get(strings[i]));
+        }
+
+        byte[] metaBytes = new ProtoDictMetadata(
+                dictSize,
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(codePType.ordinal()),
+                null,
+                null
+        ).encode();
+
+        // Child order matches the terminal encodeUtf8: [codes, values]. Codes is a raw primitive
+        // leaf at buffer 0; values (index 1) is left null for the cascade to fill.
+        EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+        EncodeNode partialRoot = new EncodeNode(
+                EncodingId.VORTEX_DICT, MemorySegment.ofArray(metaBytes),
+                new EncodeNode[]{codesNode, null},
+                new int[0]);
+
+        String[] distinct = valueMap.keySet().toArray(new String[0]);
+        ChildSlot valuesSlot = new ChildSlot(DType.UTF8, distinct, 1);
+
+        String minStr = valueMap.keySet().stream().min(String::compareTo).orElse(null);
+        String maxStr = valueMap.keySet().stream().max(String::compareTo).orElse(null);
+        byte[] statsMin = minStr != null ? ProtoScalarValue.ofStringValue(minStr).encode() : null;
+        byte[] statsMax = maxStr != null ? ProtoScalarValue.ofStringValue(maxStr).encode() : null;
+
+        return new CascadeStep(partialRoot, List.of(codesBuf), List.of(valuesSlot), statsMin, statsMax, true);
     }
 
     private static EncodeResult encodeUtf8(String[] strings, EncodeContext ctx) {

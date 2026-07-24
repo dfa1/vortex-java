@@ -178,4 +178,22 @@ class DictEncodingEncoderTest {
         // Then
         assertThat(meta.values_len()).isEqualTo(2);
     }
+
+    @Test
+    void encodeCascade_utf8_exposesValuesPoolAsOpenChild() {
+        // Given — a low-cardinality Utf8 column.
+        String[] data = repeat(new String[]{"apple", "banana", "cherry"}, 100);
+
+        // When
+        CascadeStep result = ENCODER.encodeCascade(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+
+        // Then — the distinct-values pool (child index 1) is left open for the cascade to compress
+        // (FSST/VarBin compete on it, #299), not hardcoded to a terminal raw-varbin node.
+        assertThat(result.isTerminal()).isFalse();
+        assertThat(result.openChildren()).singleElement().satisfies(slot -> {
+            assertThat(slot.parentChildIdx()).isEqualTo(1);
+            assertThat(slot.childDtype()).isEqualTo(DTypes.UTF8);
+            assertThat((String[]) slot.childData()).containsExactly("apple", "banana", "cherry");
+        });
+    }
 }
