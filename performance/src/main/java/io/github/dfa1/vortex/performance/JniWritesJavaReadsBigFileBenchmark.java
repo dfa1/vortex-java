@@ -108,6 +108,13 @@ public class JniWritesJavaReadsBigFileBenchmark {
         if (externalFile != null && !externalFile.isEmpty()) {
             benchFile = Path.of(externalFile);
             ownFile = false;
+            // Write once at the external path if absent, so every fork reuses one ~3 GB file
+            // instead of rewriting it per trial (mirrors the OHLC read benchmark).
+            if (!Files.exists(benchFile) || Files.size(benchFile) == 0L) {
+                System.out.printf("[BigFileBenchmark] external file missing — writing %d rows × %d I64 cols (~%.2f GB) to %s...%n",
+                        TOTAL_ROWS, COLUMNS, TARGET_BYTES / (double) (1L << 30), benchFile);
+                writeJni(benchFile);
+            }
             System.out.printf("[BigFileBenchmark] using external file: %s (%.2f GB)%n",
                     benchFile, Files.size(benchFile) / (double) (1L << 30));
         } else {

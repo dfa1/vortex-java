@@ -26,6 +26,7 @@ import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.DateDayVector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.ViewVarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.DateUnit;
@@ -273,9 +274,18 @@ public class JavaVsJniReadBenchmark {
             try (ArrowReader reader = partition.scanArrow(allocator)) {
                 while (reader.loadNextBatch()) {
                     VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        sum += symbolVec.getObject(i).getBytes().length;
+                    int rows = root.getRowCount();
+                    // vortex-jni 0.79 returns Utf8 as Arrow StringView (ViewVarCharVector);
+                    // older versions used VarCharVector. Branch-split once so the hot loop stays uniform.
+                    if (root.getVector("symbol") instanceof ViewVarCharVector symbolVec) {
+                        for (int i = 0; i < rows; i++) {
+                            sum += symbolVec.getObject(i).getBytes().length;
+                        }
+                    } else {
+                        VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
+                        for (int i = 0; i < rows; i++) {
+                            sum += symbolVec.getObject(i).getBytes().length;
+                        }
                     }
                 }
             }
