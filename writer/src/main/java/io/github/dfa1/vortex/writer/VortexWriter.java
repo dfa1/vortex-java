@@ -20,6 +20,7 @@ import io.github.dfa1.vortex.writer.encode.StructData;
 import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.AlpRdEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.CascadingCompressor;
@@ -222,6 +223,11 @@ public final class VortexWriter implements Closeable {
         codecs.add(new ListEncodingEncoder());
         codecs.add(new ConstantEncodingEncoder());
         codecs.add(new AlpEncodingEncoder());
+        // ALP-RD competes for high-precision F64/F32 that plain ALP can't fit without too many
+        // exceptions (e.g. nyc-311 Latitude): without it in the competition such columns fall back
+        // to raw vortex.primitive or dict, matching neither the Rust reference (which uses alprd) nor
+        // its size (#304). Registered on WriteRegistry already; this adds it as a top-level candidate.
+        codecs.add(new AlpRdEncodingEncoder());
         codecs.add(new FrameOfReferenceEncodingEncoder());
         codecs.add(new RunEndEncodingEncoder());
         codecs.add(new RleEncodingEncoder());
