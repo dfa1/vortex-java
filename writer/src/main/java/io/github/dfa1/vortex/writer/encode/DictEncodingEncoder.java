@@ -118,12 +118,11 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         }
         int dictSize = valueMap.size();
         PType codePType = codePType(dictSize);
-        int codeBytes = codePType.byteSize();
 
-        MemorySegment codesBuf = ctx.arena().allocate((long) n * codeBytes);
-        for (int i = 0; i < n; i++) {
-            writeCodeToSeg(codesBuf, codePType, i, valueMap.get(strings[i]));
-        }
+        // Codes as a typed array (U8->byte[], U16->short[], U32->int[]) so the cascade can bitpack
+        // them, rather than emitting a raw vortex.primitive leaf that pays the full U8/U16/U32 width
+        // per row (#303). The primitive dict path already exposes its codes this way.
+        Object codesArr = buildCodesArray(strings, valueMap, codePType);
 
         byte[] metaBytes = new ProtoDictMetadata(
                 dictSize,
@@ -132,23 +131,51 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 null
         ).encode();
 
-        // Child order matches the terminal encodeUtf8: [codes, values]. Codes is a raw primitive
-        // leaf at buffer 0; values (index 1) is left null for the cascade to fill.
-        EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+        // Child order matches the terminal encodeUtf8: [codes, values]. Both children are left open
+        // so the cascade bitpacks the codes and FSST/VarBin-competes the values pool.
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_DICT, MemorySegment.ofArray(metaBytes),
-                new EncodeNode[]{codesNode, null},
+                new EncodeNode[]{null, null},
                 new int[0]);
 
         String[] distinct = valueMap.keySet().toArray(new String[0]);
-        ChildSlot valuesSlot = new ChildSlot(DType.UTF8, distinct, 1);
 
         String minStr = valueMap.keySet().stream().min(String::compareTo).orElse(null);
         String maxStr = valueMap.keySet().stream().max(String::compareTo).orElse(null);
         byte[] statsMin = minStr != null ? ProtoScalarValue.ofStringValue(minStr).encode() : null;
         byte[] statsMax = maxStr != null ? ProtoScalarValue.ofStringValue(maxStr).encode() : null;
 
-        return new CascadeStep(partialRoot, List.of(codesBuf), List.of(valuesSlot), statsMin, statsMax, true);
+        return new CascadeStep(partialRoot, List.of(),
+                List.of(new ChildSlot(new DType.Primitive(codePType, false), codesArr, 0),
+                        new ChildSlot(DType.UTF8, distinct, 1)),
+                statsMin, statsMax, true);
+    }
+
+    private static Object buildCodesArray(String[] strings, java.util.Map<String, Integer> valueMap, PType codePType) {
+        int n = strings.length;
+        return switch (codePType) {
+            case U8 -> {
+                byte[] a = new byte[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = (byte) (int) valueMap.get(strings[i]);
+                }
+                yield a;
+            }
+            case U16 -> {
+                short[] a = new short[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = (short) (int) valueMap.get(strings[i]);
+                }
+                yield a;
+            }
+            default -> {
+                int[] a = new int[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = valueMap.get(strings[i]);
+                }
+                yield a;
+            }
+        };
     }
 
     private static EncodeResult encodeUtf8(String[] strings, EncodeContext ctx) {
