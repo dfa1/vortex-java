@@ -37,12 +37,15 @@ public record WriteOptions(
         boolean enableZstd,
         long globalDictMaxRetainedBytes
 ) {
-    /// Default aggregate retention budget (1 GB) for the buffered per-chunk code arrays of global
+    /// Default aggregate retention budget (2 GB) for the buffered per-chunk code arrays of global
     /// -dictionary candidate columns. Raised from 256 MB when buffering became cardinality-bounded
-    /// (ADR 0021): codes are ~35–45× smaller than the raw values the old budget guarded, so a 1 GB
-    /// default bounds the same pathological many-wide-columns risk while letting normal wide,
-    /// low-cardinality files (e.g. NYC 311, ~38 string columns) keep all their shared dictionaries.
-    private static final long DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = 1024L * 1024 * 1024;
+    /// (ADR 0021), then from 1 GB (#303): a wide, high-cardinality file (NYC 311, ~30 admitted string
+    /// columns × ~37 MB of buffered codes ≈ 1.15 GB) crossed the 1 GB budget and evicted its
+    /// highest-cardinality columns to per-chunk dictionaries, repeating their values pool each chunk
+    /// (~35 MB larger). 2 GB fits that file with headroom while still bounding the pathological
+    /// many-wide-columns risk. Constrained-heap writers can lower it via
+    /// [#withGlobalDictMaxRetainedBytes(long)].
+    private static final long DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = 2L * 1024 * 1024 * 1024;
 
     /// Default options: global dictionary encoding enabled, no cascading compression, Zstd disabled.
     ///

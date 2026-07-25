@@ -7,14 +7,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Unit tests for [WriteOptions] factories and copy-methods.
 class WriteOptionsTest {
 
-    // The hardcoded default; both factories must keep supplying it so the budget stays 1 GB unless a
+    // The hardcoded default; both factories must keep supplying it so the budget stays 2 GB unless a
     // caller overrides it via withGlobalDictMaxRetainedBytes(...). Raised from 256 MB when buffering
-    // became cardinality-bounded (ADR 0021): the budget now guards ~2 B/row code arrays, not raw
-    // values, so a larger budget bounds the same risk while keeping wide low-cardinality files dicted.
-    private static final long DEFAULT_BUDGET = 1024L * 1024 * 1024;
+    // became cardinality-bounded (ADR 0021), then from 1 GB (#303) so wide high-cardinality files
+    // keep their high-cardinality columns globally dictionaried instead of evicting them to per-chunk.
+    private static final long DEFAULT_BUDGET = 2L * 1024 * 1024 * 1024;
 
     @Test
-    void defaults_globalDictMaxRetainedBytes_is1Gb() {
+    void defaults_globalDictMaxRetainedBytes_is2Gb() {
         // Given / When
         WriteOptions result = WriteOptions.defaults();
 
@@ -23,7 +23,7 @@ class WriteOptionsTest {
     }
 
     @Test
-    void cascading_globalDictMaxRetainedBytes_is1Gb() {
+    void cascading_globalDictMaxRetainedBytes_is2Gb() {
         // Given / When
         WriteOptions result = WriteOptions.cascading(3);
 
