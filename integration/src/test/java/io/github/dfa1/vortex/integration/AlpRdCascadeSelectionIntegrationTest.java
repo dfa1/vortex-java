@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
@@ -57,6 +58,13 @@ class AlpRdCascadeSelectionIntegrationTest {
                     .as("high-precision F64 selects ALP-RD via the cascade")
                     .contains("vortex.alprd");
         }
+
+        // And it delivers real compression — the file is well below raw F64 (the pre-#304 fallback
+        // stored these columns as raw vortex.primitive). This guards a degenerate "selected but did
+        // not actually beat raw" win, independent of which encoding categorically won the sample.
+        assertThat(Files.size(file))
+                .as("ALP-RD compresses the high-precision column below raw F64")
+                .isLessThan(rows * (long) Double.BYTES);
 
         // And every value round-trips exactly.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {

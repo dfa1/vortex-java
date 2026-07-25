@@ -49,7 +49,17 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         }
 
         int sampleLen = Math.min(SAMPLE_SIZE, n);
-        Dictionary64 best = findBestDictionaryF64(values, sampleLen);
+        // Train the dictionary on a stratified sample spanning the whole array, not the first
+        // `sampleLen` rows. The cascade measures ALP-RD's cost on its own stratified sample, so a
+        // head-only dictionary here can look cheap in the competition yet flood the tail with
+        // exceptions on the full re-encode when the leading rows are unrepresentative (sorted or
+        // clustered floats). Mirrors AlpEncodingEncoder.findExponentsF64 (#304 review).
+        double[] sample = new double[sampleLen];
+        long stride = Math.max(1L, (long) n / sampleLen);
+        for (int i = 0; i < sampleLen; i++) {
+            sample[i] = values[(int) Math.min(i * stride, (long) n - 1)];
+        }
+        Dictionary64 best = findBestDictionaryF64(sample, sampleLen);
 
         Map<Short, Short> lookup = buildLookup(best.dict);
         long rightMask = -1L >>> (64 - best.rightBitWidth);
@@ -128,7 +138,14 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         }
 
         int sampleLen = Math.min(SAMPLE_SIZE, n);
-        Dictionary32 best = findBestDictionaryF32(values, sampleLen);
+        // Stratified sample across the whole array (see encodeF64): a head-only dictionary can be
+        // measured cheap by the cascade yet explode on the tail during the full re-encode.
+        float[] sample = new float[sampleLen];
+        long stride = Math.max(1L, (long) n / sampleLen);
+        for (int i = 0; i < sampleLen; i++) {
+            sample[i] = values[(int) Math.min(i * stride, (long) n - 1)];
+        }
+        Dictionary32 best = findBestDictionaryF32(sample, sampleLen);
 
         Map<Short, Short> lookup = buildLookup(best.dict);
         int rightMask = -1 >>> (32 - best.rightBitWidth);
