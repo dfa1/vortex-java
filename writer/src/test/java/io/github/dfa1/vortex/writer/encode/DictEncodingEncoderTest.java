@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
@@ -180,20 +181,23 @@ class DictEncodingEncoderTest {
     }
 
     @Test
-    void encodeCascade_utf8_exposesValuesPoolAsOpenChild() {
+    void encodeCascade_utf8_exposesCodesAndValuesAsOpenChildren() {
         // Given — a low-cardinality Utf8 column.
         String[] data = repeat(new String[]{"apple", "banana", "cherry"}, 100);
 
         // When
         CascadeStep result = ENCODER.encodeCascade(DTypes.UTF8, data, EncodeTestHelper.testCtx());
 
-        // Then — the distinct-values pool (child index 1) is left open for the cascade to compress
-        // (FSST/VarBin compete on it, #299), not hardcoded to a terminal raw-varbin node.
+        // Then — both children are left open for the cascade: codes (index 0) so they bitpack
+        // (#303), and the distinct-values pool (index 1) so FSST/VarBin compete on it (#299).
         assertThat(result.isTerminal()).isFalse();
-        assertThat(result.openChildren()).singleElement().satisfies(slot -> {
-            assertThat(slot.parentChildIdx()).isEqualTo(1);
-            assertThat(slot.childDtype()).isEqualTo(DTypes.UTF8);
-            assertThat((String[]) slot.childData()).containsExactly("apple", "banana", "cherry");
-        });
+        assertThat(result.openChildren()).extracting(ChildSlot::parentChildIdx).containsExactly(0, 1);
+        // Codes child: one primitive code per row.
+        ChildSlot codes = result.openChildren().get(0);
+        assertThat(codes.childDtype()).isInstanceOf(DType.Primitive.class);
+        // Values child: the distinct pool as Utf8.
+        ChildSlot values = result.openChildren().get(1);
+        assertThat(values.childDtype()).isEqualTo(DTypes.UTF8);
+        assertThat((String[]) values.childData()).containsExactly("apple", "banana", "cherry");
     }
 }
