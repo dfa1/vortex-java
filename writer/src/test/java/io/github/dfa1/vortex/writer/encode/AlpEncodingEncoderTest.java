@@ -245,6 +245,49 @@ class AlpEncodingEncoderTest {
 
             assertThat(meta.exp_e()).isGreaterThan(0);
         }
+
+        @Test
+        void encode_f64_empty_doesNotThrow() {
+            // Given — an all-zero-bit-pattern chunk (e.g. an all-null column) reaching this
+            // encoder via SparseEncodingEncoder's cascade can strip every value, leaving n=0
+            // (regression: division by zero in findExponentsF64's sample stride)
+            double[] values = {};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+        }
+
+        @Test
+        void encode_f32_empty_doesNotThrow() {
+            // Given
+            float[] values = {};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+        }
+
+        @Test
+        void encodeCascade_f64_empty_doesNotThrow() {
+            // Given — the actual crash path: CascadingCompressor calling encodeCascade directly
+            // with a zero-length child array
+            double[] values = {};
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+        }
     }
 
     /// Property-based round-trip. ALP is a **lossless** codec: every value either fits the
