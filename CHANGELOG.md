@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Real-world file-size work surfaced by the [Raincloud conformance corpus](https://github.com/dfa1/vortex-java/issues/205): importing the `nyc-311` slug (18.5M rows × 42 columns) and diffing its layout tree against the `vortex-jni` reference exposed a chain of writer gaps. Closing them took `vortex-java` from 2854 MB (1.62× the size of `vortex-jni`) to 1644 MB — 0.93×, smaller than the Rust reference.
+
+### Added
+
+- ALP-RD (`vortex.alprd`) competes in the cascade for high-precision `F64`/`F32` columns that plain ALP cannot fit without an exception on nearly every row, with dictionary training on a stratified sample. ([#307](https://github.com/dfa1/vortex-java/pull/307), [#308](https://github.com/dfa1/vortex-java/pull/308))
+
+### Changed
+
+- Default Parquet-import chunk size lowered from 131072 to 65536 rows, matching the Rust reference's granularity and compressing real-world data better. ([fbedbf03](https://github.com/dfa1/vortex-java/commit/fbedbf03))
+- Default global-dictionary retained-memory budget raised from 1 GB to 2 GB so wide, high-cardinality files keep every column in one shared dictionary instead of evicting the largest to per-chunk encoding. ([#306](https://github.com/dfa1/vortex-java/pull/306))
+
+### Performance
+
+- `vortex.fsst` columns store their per-row length and code-offset children bitpacked or constant-folded instead of raw `vortex.primitive`. ([#302](https://github.com/dfa1/vortex-java/pull/302))
+- `vortex.dict` Utf8 columns store their codes bitpacked instead of raw `vortex.primitive`. ([#305](https://github.com/dfa1/vortex-java/pull/305))
+- Utf8 columns up to 32768 distinct values (was 2048) share one global dictionary whose distinct-values pool is FSST/VarBin-compressed instead of raw varbin. ([d83d1b93](https://github.com/dfa1/vortex-java/commit/d83d1b93), [3f0efa66](https://github.com/dfa1/vortex-java/commit/3f0efa66), [6b9d1013](https://github.com/dfa1/vortex-java/commit/6b9d1013))
+
 ## [0.12.4] — 2026-07-24
 
 ### Performance
