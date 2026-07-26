@@ -21,6 +21,7 @@ Real-world file-size work surfaced by the [Raincloud conformance corpus](https:/
 ### Fixed
 
 - `InspectorTree`'s `usedEncodings` (surfaced by the CLI `inspect` command) now walks a Flat segment's full `ArrayNode` tree instead of only its root, so encodings nested inside another (e.g. `vortex.fsst` under a `vortex.masked` root) are no longer invisible. ([#298](https://github.com/dfa1/vortex-java/issues/298))
+- `AlpEncodingEncoder` no longer divides by zero on a zero-length `F64`/`F32` array — a real case on the Raincloud corpus, where the cascade's `Sparse` step can strip every value from an all-zero-bit chunk (e.g. a `congestion_surcharge` column that's `0.0` for a whole chunk). ([872b0554](https://github.com/dfa1/vortex-java/commit/872b0554))
 
 ### Performance
 
