@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.inspect;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
 import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -209,8 +210,8 @@ public record InspectorTree(
                 MemorySegment seg = handle.rawSegment(spec);
                 Peek peek = peekFlatRoot(seg, arraySpecs);
                 if (peek.encoding() != null) {
-                    localUsed.add(peek.encoding());
-                    overallUsed.add(peek.encoding());
+                    localUsed.addAll(peek.nestedEncodings());
+                    overallUsed.addAll(peek.nestedEncodings());
                 }
                 stats = peek.stats();
                 counter[0]++;
@@ -264,20 +265,80 @@ public record InspectorTree(
         FbsArray fbArray = FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));
         FbsArrayNode root = fbArray.root();
         if (root == null) {
-            return new Peek(null, ArrayStats.empty());
+            return new Peek(null, ArrayStats.empty(), Set.of());
         }
-        return new Peek(arraySpecs.get(root.encoding()).id(), ArrayStats.fromFbs(root.stats()));
+        Set<String> nested = new LinkedHashSet<>();
+        collectEncodings(root, arraySpecs, nested, 0, new int[]{0});
+        return new Peek(resolveEncodingId(arraySpecs, root.encoding()), ArrayStats.fromFbs(root.stats()),
+                Set.copyOf(nested));
     }
 
-    /// Result of a single Flat segment peek - the resolved encoding id (or
-    /// `null` when the FlatBuffer carried no root) plus the per-array
-    /// statistics decoded from the same FlatBuffer.
+    /// Hard cap on the `ArrayNode`-tree walk depth in [#collectEncodings(FbsArrayNode, List, Set, int, int[])],
+    /// mirroring `SerializedArrayDecoder.MAX_ARRAY_TREE_DEPTH` in the reader module: a crafted segment with
+    /// deeply nested children could otherwise drive unbounded recursion into a `StackOverflowError`,
+    /// an `Error` that would bypass the [VortexException] contract for malformed untrusted input.
+    static final int MAX_ENCODING_TREE_DEPTH = 64;
+
+    /// Hard cap on the total number of `ArrayNode`s visited by one
+    /// [#collectEncodings(FbsArrayNode, List, Set, int, int[])] walk. The depth cap alone is not enough: nothing
+    /// stops two sibling `children` vector slots from resolving to the exact same absolute child position (the
+    /// underlying FlatBuffers `uoffset` mechanism is not validated for aliasing), so a crafted segment with a
+    /// handful of levels, each fanning out to two children that both alias the next level's single node, drives
+    /// the walk to an exponential (up to 2^[#MAX_ENCODING_TREE_DEPTH]) number of visits while depth itself
+    /// never exceeds the limit.
+    static final int MAX_ENCODING_TREE_NODES = 4096;
+
+    /// Resolves a wire-supplied encoding index against the footer's array spec table.
     ///
-    /// @param encoding resolved encoding id from the array spec table, or `null`
-    /// @param stats    per-array stats, or [ArrayStats#empty()] if unknown
-    public record Peek(String encoding, ArrayStats stats) {
+    /// @param arraySpecs footer's array spec table
+    /// @param encIdx     encoding index read off the wire ([FbsArrayNode#encoding()])
+    /// @return the resolved encoding id
+    /// @throws VortexException if `encIdx` is out of bounds for `arraySpecs`
+    private static String resolveEncodingId(List<EncodingId> arraySpecs, int encIdx) {
+        if (encIdx < 0 || encIdx >= arraySpecs.size()) {
+            throw new VortexException("array node encoding index " + encIdx
+                    + " out of bounds (arraySpecs.size=" + arraySpecs.size() + ")");
+        }
+        return arraySpecs.get(encIdx).id();
+    }
+
+    /// Walks a Flat segment's full `ArrayNode` tree, accumulating the encoding
+    /// id of the root and every descendant (e.g. an FSST child nested under a
+    /// Masked root) - not just the root's own encoding.
+    ///
+    /// @param node       array node to visit
+    /// @param arraySpecs footer's array spec table, indexed by [FbsArrayNode#encoding()]
+    /// @param into       accumulator for resolved encoding ids
+    /// @param depth      current recursion depth, starting at `0` for the root
+    /// @param visited    single-element counter of nodes visited so far across the whole walk
+    private static void collectEncodings(FbsArrayNode node, List<EncodingId> arraySpecs, Set<String> into,
+            int depth, int[] visited) {
+        if (depth > MAX_ENCODING_TREE_DEPTH) {
+            throw new VortexException("array tree depth exceeds limit (" + MAX_ENCODING_TREE_DEPTH + ")");
+        }
+        if (++visited[0] > MAX_ENCODING_TREE_NODES) {
+            throw new VortexException("array tree node count exceeds limit (" + MAX_ENCODING_TREE_NODES + ")");
+        }
+        into.add(resolveEncodingId(arraySpecs, node.encoding()));
+        int childCount = node.childrenLength();
+        for (int i = 0; i < childCount; i++) {
+            collectEncodings(node.children(i), arraySpecs, into, depth + 1, visited);
+        }
+    }
+
+    /// Result of a single Flat segment peek - the resolved root encoding id
+    /// (or `null` when the FlatBuffer carried no root), the per-array
+    /// statistics decoded from the same FlatBuffer, and every encoding id
+    /// found anywhere in the segment's `ArrayNode` tree (root plus nested
+    /// children, e.g. an FSST child of a Masked root).
+    ///
+    /// @param encoding        resolved root encoding id from the array spec table, or `null`
+    /// @param stats           per-array stats, or [ArrayStats#empty()] if unknown
+    /// @param nestedEncodings every encoding id in the segment's `ArrayNode` tree, root included;
+    ///                        empty when `encoding` is `null`
+    public record Peek(String encoding, ArrayStats stats, Set<String> nestedEncodings) {
         /// Sentinel returned for non-Flat nodes, compressed segments, or
         /// segments that don't carry an array root.
-        public static final Peek EMPTY = new Peek(null, ArrayStats.empty());
+        public static final Peek EMPTY = new Peek(null, ArrayStats.empty(), Set.of());
     }
 }
