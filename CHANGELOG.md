@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.5] — 2026-07-26
+
 Real-world file-size work surfaced by the [Raincloud conformance corpus](https://github.com/dfa1/vortex-java/issues/205): importing the `nyc-311` slug (18.5M rows × 42 columns) and diffing its layout tree against the `vortex-jni` reference exposed a chain of writer gaps. Closing them took `vortex-java` from 2854 MB (1.62× the size of `vortex-jni`) to 1644 MB — 0.93×, smaller than the Rust reference.
 
 ### Added
