@@ -69,6 +69,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     /// the cascade into Dict+FoR+BitPacked instead of a clean ALP→BitPacked chain.
     private static int[] findExponentsF64(double[] values) {
         int n = values.length;
+        if (n == 0) {
+            return new int[]{0, 0};
+        }
         int sampleLen = Math.min(SAMPLE_SIZE, n);
         double[] sample = new double[sampleLen];
         long stride = Math.max(1, (long) n / sampleLen);
@@ -256,6 +259,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     /// Size-based exponent search for F32. See [#findExponentsF64(double[])] for cost model.
     private static int[] findExponentsF32(float[] values) {
         int n = values.length;
+        if (n == 0) {
+            return new int[]{0, 0};
+        }
         int sampleLen = Math.min(SAMPLE_SIZE, n);
         float[] sample = new float[sampleLen];
         long stride = Math.max(1, (long) n / sampleLen);

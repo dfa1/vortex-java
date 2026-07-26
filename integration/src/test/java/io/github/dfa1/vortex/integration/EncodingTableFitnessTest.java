@@ -41,8 +41,8 @@ class EncodingTableFitnessTest {
     }
 
     private static final Pattern TABLE_ROW = Pattern.compile(
-            "^\\|\\s*`([a-z][a-z0-9._]*)`\\s*\\|\\s*`?([A-Za-z0-9]*)`?\\s*\\|\\s*`?([A-Za-z0-9]*)`?\\s*"
-                    + "\\|\\s*([✅❌])\\s*\\|\\s*([✅❌])\\s*\\|",
+            "^\\|\\s*+`([a-z][a-z0-9._]*)`\\s*+\\|\\s*+`?([A-Za-z0-9]*+)`?\\s*+\\|\\s*+`?([A-Za-z0-9]*+)`?\\s*+"
+                    + "\\|\\s*+([✅❌])\\s*+\\|\\s*+([✅❌])\\s*+\\|",
             Pattern.MULTILINE);
 
     private static Map<String, Row> documented;
