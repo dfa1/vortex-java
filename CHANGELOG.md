@@ -18,6 +18,10 @@ Real-world file-size work surfaced by the [Raincloud conformance corpus](https:/
 - Default Parquet-import chunk size lowered from 131072 to 65536 rows, matching the Rust reference's granularity and compressing real-world data better. ([fbedbf03](https://github.com/dfa1/vortex-java/commit/fbedbf03))
 - Default global-dictionary retained-memory budget raised from 1 GB to 2 GB so wide, high-cardinality files keep every column in one shared dictionary instead of evicting the largest to per-chunk encoding. ([#306](https://github.com/dfa1/vortex-java/pull/306))
 
+### Fixed
+
+- `InspectorTree`'s `usedEncodings` (surfaced by the CLI `inspect` command) now walks a Flat segment's full `ArrayNode` tree instead of only its root, so encodings nested inside another (e.g. `vortex.fsst` under a `vortex.masked` root) are no longer invisible. ([#298](https://github.com/dfa1/vortex-java/issues/298))
+
 ### Performance
 
 - `vortex.fsst` columns store their per-row length and code-offset children bitpacked or constant-folded instead of raw `vortex.primitive`. ([#302](https://github.com/dfa1/vortex-java/pull/302))

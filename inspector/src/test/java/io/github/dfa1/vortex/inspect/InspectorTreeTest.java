@@ -1,5 +1,10 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.fbs.FbsArray;
+import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.model.DType;
@@ -14,10 +19,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
@@ -262,6 +270,179 @@ class InspectorTreeTest {
         // Then
         assertThat(sut.usedEncodings()).isEmpty();
         assertThat(sut.root().usedEncodings()).isEmpty();
+    }
+
+    @Test
+    void build_flatSegmentWithNestedEncoding_reportsRootAndNestedEncodings() {
+        // Given — a Flat segment whose root ArrayNode is vortex.masked wrapping a
+        // vortex.fsst child, as CascadingCompressor genuinely produces for high-cardinality
+        // Utf8 columns (issue #298: the old peek only ever looked at the root node, so
+        // "vortex.fsst" never showed up in usedEncodings despite being the encoding actually
+        // selected and used on disk).
+        try (Arena arena = Arena.ofConfined()) {
+            Layout root = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
+            DType dtype = DType.UTF8;
+            List<String> arraySpecs = List.of("vortex.masked", "vortex.fsst");
+            SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
+            givenHandle(dtype, root, arraySpecs, List.of(spec));
+            byte[] fb = nestedArrayFlatBuffer(0, 1);
+            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+
+            // When
+            InspectorTree sut = InspectorTree.build(handle);
+
+            // Then
+            assertThat(sut.usedEncodings()).containsExactlyInAnyOrder("vortex.masked", "vortex.fsst");
+            assertThat(sut.root().usedEncodings()).containsExactlyInAnyOrder("vortex.masked", "vortex.fsst");
+        }
+    }
+
+    @Test
+    void build_flatSegmentEncodingTreeAtDepthLimit_clearsGuard() {
+        // Given — deepest node at exactly MAX_ENCODING_TREE_DEPTH clears the guard
+        // (`depth > limit` is false there); brackets the boundary with the next test.
+        try (Arena arena = Arena.ofConfined()) {
+            Layout root = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
+            DType dtype = DType.I32;
+            SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
+            givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
+            byte[] fb = deeplyNestedArrayFlatBuffer(InspectorTree.MAX_ENCODING_TREE_DEPTH);
+            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+
+            // When
+            InspectorTree sut = InspectorTree.build(handle);
+
+            // Then
+            assertThat(sut.usedEncodings()).containsExactly("vortex.flat");
+        }
+    }
+
+    @Test
+    void build_flatSegmentEncodingTreeOneOverDepthLimit_throwsVortexException() {
+        // Given — one level deeper than MAX_ENCODING_TREE_DEPTH: a crafted file with a very
+        // deep ArrayNode nesting must surface as VortexException, never StackOverflowError
+        // (the untrusted-input contract every reader/inspector parse path must uphold).
+        try (Arena arena = Arena.ofConfined()) {
+            Layout root = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
+            DType dtype = DType.I32;
+            SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
+            givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
+            byte[] fb = deeplyNestedArrayFlatBuffer(InspectorTree.MAX_ENCODING_TREE_DEPTH + 1);
+            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+
+            // When / Then
+            assertThatThrownBy(() -> InspectorTree.build(handle))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("depth");
+        }
+    }
+
+    @Test
+    void build_flatSegmentEncodingIndexOutOfBounds_throwsVortexException() {
+        // Given — a nested child references encoding index 999, but the footer's array spec
+        // table only declares one entry. FbsArrayNode#encoding() is a raw wire-supplied
+        // unsigned short with no upstream validation, so collectEncodings must bounds-check it
+        // itself rather than let List.get surface a raw IndexOutOfBoundsException.
+        try (Arena arena = Arena.ofConfined()) {
+            Layout root = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
+            DType dtype = DType.I32;
+            SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
+            givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
+            byte[] fb = nestedArrayFlatBuffer(0, 999);
+            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+
+            // When / Then
+            assertThatThrownBy(() -> InspectorTree.build(handle))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("encoding index");
+        }
+    }
+
+    @Test
+    void build_flatSegmentEncodingTreeOverNodeCountLimit_throwsVortexException() {
+        // Given — a wide (not deep) tree: root fans out to MAX_ENCODING_TREE_NODES + 1 leaf
+        // children, so depth never exceeds 1 but total node count does. Without a separate
+        // node-count cap, two aliased children per level (both children vector slots resolving
+        // to the same table position) could drive collectEncodings to an exponential number of
+        // visits while depth stays within MAX_ENCODING_TREE_DEPTH; this is the simpler,
+        // non-aliased way to exercise the same cap.
+        try (Arena arena = Arena.ofConfined()) {
+            Layout root = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
+            DType dtype = DType.I32;
+            SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
+            givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
+            byte[] fb = wideArrayFlatBuffer(InspectorTree.MAX_ENCODING_TREE_NODES + 1);
+            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+
+            // When / Then
+            assertThatThrownBy(() -> InspectorTree.build(handle))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("node count");
+        }
+    }
+
+    /// Builds a minimal `FbsArray` whose root node references `rootEncodingIdx` and has a
+    /// single child referencing `childEncodingIdx`, both buffer-less.
+    private static byte[] nestedArrayFlatBuffer(int rootEncodingIdx, int childEncodingIdx) {
+        FbsBuilder b = new FbsBuilder(256);
+        int childEmptyChildren = FbsArrayNode.createChildrenVector(b, new int[0]);
+        int childEmptyBuffers = FbsArrayNode.createBuffersVector(b, new int[0]);
+        int child = FbsArrayNode.createFbsArrayNode(b, childEncodingIdx, 0, childEmptyChildren, childEmptyBuffers, 0);
+        int rootChildren = FbsArrayNode.createChildrenVector(b, new int[]{child});
+        int rootBuffers = FbsArrayNode.createBuffersVector(b, new int[0]);
+        int root = FbsArrayNode.createFbsArrayNode(b, rootEncodingIdx, 0, rootChildren, rootBuffers, 0);
+        FbsArray.startBuffersVector(b, 0);
+        int buffers = b.endVector();
+        int array = FbsArray.createFbsArray(b, root, buffers);
+        FbsArray.finishFbsArrayBuffer(b, array);
+        return b.sizedByteArray();
+    }
+
+    /// Builds a minimal `FbsArray` whose root node has `depth` levels of single-child nesting,
+    /// each level a buffer-less node referencing encoding index 0. Mirrors the reader module's
+    /// `ArrayNodeDepthBombSecurityTest` builder.
+    private static byte[] deeplyNestedArrayFlatBuffer(int depth) {
+        FbsBuilder b = new FbsBuilder(depth * 32);
+        int emptyChildren = FbsArrayNode.createChildrenVector(b, new int[0]);
+        int emptyBuffers = FbsArrayNode.createBuffersVector(b, new int[0]);
+        int current = FbsArrayNode.createFbsArrayNode(b, 0, 0, emptyChildren, emptyBuffers, 0);
+        for (int i = 0; i < depth; i++) {
+            int childV = FbsArrayNode.createChildrenVector(b, new int[]{current});
+            int bufV = FbsArrayNode.createBuffersVector(b, new int[0]);
+            current = FbsArrayNode.createFbsArrayNode(b, 0, 0, childV, bufV, 0);
+        }
+        FbsArray.startBuffersVector(b, 0);
+        int buffers = b.endVector();
+        int array = FbsArray.createFbsArray(b, current, buffers);
+        FbsArray.finishFbsArrayBuffer(b, array);
+        return b.sizedByteArray();
+    }
+
+    /// Builds a minimal `FbsArray` whose root node has `childCount` buffer-less leaf children,
+    /// each referencing encoding index 0.
+    private static byte[] wideArrayFlatBuffer(int childCount) {
+        FbsBuilder b = new FbsBuilder(Math.max(1024, childCount * 32));
+        int emptyChildren = FbsArrayNode.createChildrenVector(b, new int[0]);
+        int emptyBuffers = FbsArrayNode.createBuffersVector(b, new int[0]);
+        int[] children = new int[childCount];
+        for (int i = 0; i < childCount; i++) {
+            children[i] = FbsArrayNode.createFbsArrayNode(b, 0, 0, emptyChildren, emptyBuffers, 0);
+        }
+        int rootChildren = FbsArrayNode.createChildrenVector(b, children);
+        int rootBuffers = FbsArrayNode.createBuffersVector(b, new int[0]);
+        int root = FbsArrayNode.createFbsArrayNode(b, 0, 0, rootChildren, rootBuffers, 0);
+        FbsArray.startBuffersVector(b, 0);
+        int buffers = b.endVector();
+        int array = FbsArray.createFbsArray(b, root, buffers);
+        FbsArray.finishFbsArrayBuffer(b, array);
+        return b.sizedByteArray();
+    }
+
+    private static MemorySegment wrapAsSegment(byte[] fb, Arena arena) {
+        MemorySegment seg = arena.allocate(fb.length + 4L);
+        MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
+        seg.set(VortexFormat.LE_INT, fb.length, fb.length);
+        return seg;
     }
 
     private void givenHandle(DType dtype, Layout layout, List<String> arraySpecs, List<SegmentSpec> segs) {

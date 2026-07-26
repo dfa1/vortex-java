@@ -144,14 +144,14 @@ class DictValuesPoolCompressionIntegrationTest {
             }
         }
 
-        // Then — per-chunk dict still wins (the values pool is now a cascaded child rather than a
-        // terminal varbin node; its encoding is nested inside the dict segment, so it is not visible
-        // in usedEncodings — the mechanism is covered by DictEncodingEncoderTest, the round-trip
-        // below guards correctness through the new cascade path).
+        // Then — per-chunk dict still wins, and its values pool (a cascaded child nested inside
+        // the dict segment, not a terminal varbin node) is FSST-compressed. InspectorTree walks
+        // the full ArrayNode tree of a Flat segment (issue #298), so the nested vortex.fsst child
+        // is visible in usedEncodings alongside the vortex.dict wrapper.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             assertThat(InspectorTree.build(vf).usedEncodings())
-                    .as("per-chunk dict encoding")
-                    .contains("vortex.dict");
+                    .as("per-chunk dict encoding with an FSST-compressed values pool")
+                    .contains("vortex.dict", "vortex.fsst");
         }
 
         // And every value round-trips exactly.
