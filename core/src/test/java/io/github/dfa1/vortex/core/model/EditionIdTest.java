@@ -2,11 +2,10 @@ package io.github.dfa1.vortex.core.model;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+
+import java.time.YearMonth;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EditionIdTest {
 
@@ -16,7 +15,7 @@ class EditionIdTest {
         @Test
         void toString_zeroPadsMonthButNotVersion() {
             // Given — month 5 must render as "05", version 0 must render as "0" (not "00")
-            EditionId sut = new EditionId(EditionFamily.CORE, 2025, 5, 0);
+            EditionId sut = new EditionId(EditionFamily.CORE, YearMonth.of(2025, 5), 0);
 
             // When
             String result = sut.toString();
@@ -28,7 +27,7 @@ class EditionIdTest {
         @Test
         void toString_doubleDigitMonthAndNonZeroVersion() {
             // Given
-            EditionId sut = new EditionId(EditionFamily.UNSTABLE, 2026, 11, 2);
+            EditionId sut = new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 11), 2);
 
             // When
             String result = sut.toString();
@@ -44,8 +43,8 @@ class EditionIdTest {
         @Test
         void isAtOrBefore_earlierYear_isTrue() {
             // Given
-            EditionId earlier = new EditionId(EditionFamily.CORE, 2025, 5, 0);
-            EditionId later = new EditionId(EditionFamily.CORE, 2026, 7, 0);
+            EditionId earlier = new EditionId(EditionFamily.CORE, YearMonth.of(2025, 5), 0);
+            EditionId later = new EditionId(EditionFamily.CORE, YearMonth.of(2026, 7), 0);
 
             // When
             boolean result = earlier.isAtOrBefore(later);
@@ -57,7 +56,7 @@ class EditionIdTest {
         @Test
         void isAtOrBefore_sameEdition_isTrue() {
             // Given
-            EditionId sut = new EditionId(EditionFamily.CORE, 2025, 5, 0);
+            EditionId sut = new EditionId(EditionFamily.CORE, YearMonth.of(2025, 5), 0);
 
             // When
             boolean result = sut.isAtOrBefore(sut);
@@ -69,8 +68,8 @@ class EditionIdTest {
         @Test
         void isAtOrBefore_laterEdition_isFalse() {
             // Given
-            EditionId later = new EditionId(EditionFamily.CORE, 2026, 7, 0);
-            EditionId earlier = new EditionId(EditionFamily.CORE, 2025, 5, 0);
+            EditionId later = new EditionId(EditionFamily.CORE, YearMonth.of(2026, 7), 0);
+            EditionId earlier = new EditionId(EditionFamily.CORE, YearMonth.of(2025, 5), 0);
 
             // When
             boolean result = later.isAtOrBefore(earlier);
@@ -82,8 +81,8 @@ class EditionIdTest {
         @Test
         void isAtOrBefore_sameYearEarlierMonth_isTrue() {
             // Given
-            EditionId sut = new EditionId(EditionFamily.CORE, 2025, 5, 0);
-            EditionId other = new EditionId(EditionFamily.CORE, 2025, 6, 0);
+            EditionId sut = new EditionId(EditionFamily.CORE, YearMonth.of(2025, 5), 0);
+            EditionId other = new EditionId(EditionFamily.CORE, YearMonth.of(2025, 6), 0);
 
             // When / Then
             assertThat(sut.isAtOrBefore(other)).isTrue();
@@ -92,8 +91,8 @@ class EditionIdTest {
         @Test
         void isAtOrBefore_sameYearMonthEarlierVersion_isTrue() {
             // Given
-            EditionId sut = new EditionId(EditionFamily.CORE, 2025, 5, 0);
-            EditionId other = new EditionId(EditionFamily.CORE, 2025, 5, 1);
+            EditionId sut = new EditionId(EditionFamily.CORE, YearMonth.of(2025, 5), 0);
+            EditionId other = new EditionId(EditionFamily.CORE, YearMonth.of(2025, 5), 1);
 
             // When / Then
             assertThat(sut.isAtOrBefore(other)).isTrue();
@@ -103,41 +102,12 @@ class EditionIdTest {
         void isAtOrBefore_differentFamily_isAlwaysFalse() {
             // Given — unstable2025.05.0 is chronologically "earlier" than core2026.07.0, but
             // families are never ordered against each other
-            EditionId unstable = new EditionId(EditionFamily.UNSTABLE, 2025, 5, 0);
-            EditionId core = new EditionId(EditionFamily.CORE, 2026, 7, 0);
+            EditionId unstable = new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2025, 5), 0);
+            EditionId core = new EditionId(EditionFamily.CORE, YearMonth.of(2026, 7), 0);
 
             // When / Then
             assertThat(unstable.isAtOrBefore(core)).isFalse();
             assertThat(core.isAtOrBefore(unstable)).isFalse();
-        }
-    }
-
-    @Nested
-    class Validation {
-
-        @ParameterizedTest
-        @ValueSource(ints = {0, 99, 999, 10000})
-        void constructor_nonFourDigitYear_throwsIllegalArgumentException(int year) {
-            // Given / When / Then
-            assertThatThrownBy(() -> new EditionId(EditionFamily.CORE, year, 5, 0))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("year");
-        }
-
-        @ParameterizedTest
-        @ValueSource(ints = {0, 13, -1})
-        void constructor_monthOutOfRange_throwsIllegalArgumentException(int month) {
-            // Given / When / Then
-            assertThatThrownBy(() -> new EditionId(EditionFamily.CORE, 2025, month, 0))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("month");
-        }
-
-        @Test
-        void constructor_validValues_doesNotThrow() {
-            // Given / When / Then
-            assertThat(new EditionId(EditionFamily.CORE, 2025, 1, 0)).isNotNull();
-            assertThat(new EditionId(EditionFamily.UNSTABLE, 9999, 12, 99)).isNotNull();
         }
     }
 }

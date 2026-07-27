@@ -3,10 +3,10 @@ package io.github.dfa1.vortex.core.model;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.time.YearMonth;
+import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,6 +15,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [Editions]'s declarations that changes a cumulative member set fails here, mirroring upstream's
 /// own `validate_edition` test harness.
 class EditionsTest {
+
+    // core2025.05.0's 23-member baseline, referenced by the typed EncodingId.WellKnown constants
+    // (not the wire strings) so a typo here fails to compile instead of silently becoming an
+    // unintended EncodingId.Custom.
+    private static final Set<EncodingId> CORE_2025_05_0_BASELINE = Set.of(
+            EncodingId.FASTLANES_BITPACKED, EncodingId.FASTLANES_FOR,
+            EncodingId.VORTEX_ALP, EncodingId.VORTEX_ALPRD, EncodingId.VORTEX_BOOL,
+            EncodingId.VORTEX_BYTEBOOL, EncodingId.VORTEX_CHUNKED, EncodingId.VORTEX_CONSTANT,
+            EncodingId.VORTEX_DATETIMEPARTS, EncodingId.VORTEX_DECIMAL,
+            EncodingId.VORTEX_DECIMAL_BYTE_PARTS, EncodingId.VORTEX_DICT, EncodingId.VORTEX_EXT,
+            EncodingId.VORTEX_FSST, EncodingId.VORTEX_LIST, EncodingId.VORTEX_NULL,
+            EncodingId.VORTEX_PRIMITIVE, EncodingId.VORTEX_RUNEND, EncodingId.VORTEX_SPARSE,
+            EncodingId.VORTEX_STRUCT, EncodingId.VORTEX_VARBIN, EncodingId.VORTEX_VARBINVIEW,
+            EncodingId.VORTEX_ZIGZAG);
+
+    private static Set<EncodingId> union(Set<EncodingId> a, EncodingId... more) {
+        Set<EncodingId> result = new LinkedHashSet<>(a);
+        result.addAll(Set.of(more));
+        return Set.copyOf(result);
+    }
 
     @Nested
     class CumulativeMembers {
@@ -26,13 +46,7 @@ class EditionsTest {
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.CORE_2025_05_0);
 
             // Then
-            assertThat(result).isEqualTo(ids(
-                    "fastlanes.bitpacked", "fastlanes.for",
-                    "vortex.alp", "vortex.alprd", "vortex.bool", "vortex.bytebool", "vortex.chunked",
-                    "vortex.constant", "vortex.datetimeparts", "vortex.decimal", "vortex.decimal_byte_parts",
-                    "vortex.dict", "vortex.ext", "vortex.fsst", "vortex.list", "vortex.null",
-                    "vortex.primitive", "vortex.runend", "vortex.sparse", "vortex.struct", "vortex.varbin",
-                    "vortex.varbinview", "vortex.zigzag"));
+            assertThat(result).isEqualTo(CORE_2025_05_0_BASELINE);
         }
 
         @Test
@@ -42,14 +56,8 @@ class EditionsTest {
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.CORE_2025_06_0);
 
             // Then — baseline 23 plus pco/sequence/zstd
-            assertThat(result).isEqualTo(ids(
-                    "fastlanes.bitpacked", "fastlanes.for",
-                    "vortex.alp", "vortex.alprd", "vortex.bool", "vortex.bytebool", "vortex.chunked",
-                    "vortex.constant", "vortex.datetimeparts", "vortex.decimal", "vortex.decimal_byte_parts",
-                    "vortex.dict", "vortex.ext", "vortex.fsst", "vortex.list", "vortex.null",
-                    "vortex.primitive", "vortex.runend", "vortex.sparse", "vortex.struct", "vortex.varbin",
-                    "vortex.varbinview", "vortex.zigzag",
-                    "vortex.pco", "vortex.sequence", "vortex.zstd"));
+            assertThat(result).isEqualTo(union(CORE_2025_05_0_BASELINE,
+                    EncodingId.VORTEX_PCO, EncodingId.VORTEX_SEQUENCE, EncodingId.VORTEX_ZSTD));
         }
 
         @Test
@@ -59,15 +67,10 @@ class EditionsTest {
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.CORE_2025_10_0);
 
             // Then — the 26 above plus rle/fixed_size_list/listview/masked
-            assertThat(result).isEqualTo(ids(
-                    "fastlanes.bitpacked", "fastlanes.for", "fastlanes.rle",
-                    "vortex.alp", "vortex.alprd", "vortex.bool", "vortex.bytebool", "vortex.chunked",
-                    "vortex.constant", "vortex.datetimeparts", "vortex.decimal", "vortex.decimal_byte_parts",
-                    "vortex.dict", "vortex.ext", "vortex.fixed_size_list", "vortex.fsst", "vortex.list",
-                    "vortex.listview", "vortex.masked", "vortex.null",
-                    "vortex.primitive", "vortex.runend", "vortex.sparse", "vortex.struct", "vortex.varbin",
-                    "vortex.varbinview", "vortex.zigzag",
-                    "vortex.pco", "vortex.sequence", "vortex.zstd"));
+            assertThat(result).isEqualTo(union(CORE_2025_05_0_BASELINE,
+                    EncodingId.VORTEX_PCO, EncodingId.VORTEX_SEQUENCE, EncodingId.VORTEX_ZSTD,
+                    EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
+                    EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED));
         }
 
         @Test
@@ -77,17 +80,11 @@ class EditionsTest {
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.CORE_2026_07_0);
 
             // Then — every core encoding through vortex.variant; 31 total
-            assertThat(result).hasSize(31)
-                    .isEqualTo(ids(
-                            "fastlanes.bitpacked", "fastlanes.for", "fastlanes.rle",
-                            "vortex.alp", "vortex.alprd", "vortex.bool", "vortex.bytebool", "vortex.chunked",
-                            "vortex.constant", "vortex.datetimeparts", "vortex.decimal", "vortex.decimal_byte_parts",
-                            "vortex.dict", "vortex.ext", "vortex.fixed_size_list", "vortex.fsst", "vortex.list",
-                            "vortex.listview", "vortex.masked", "vortex.null",
-                            "vortex.primitive", "vortex.runend", "vortex.sparse", "vortex.struct", "vortex.varbin",
-                            "vortex.varbinview", "vortex.zigzag",
-                            "vortex.pco", "vortex.sequence", "vortex.zstd",
-                            "vortex.variant"));
+            assertThat(result).hasSize(31).isEqualTo(union(CORE_2025_05_0_BASELINE,
+                    EncodingId.VORTEX_PCO, EncodingId.VORTEX_SEQUENCE, EncodingId.VORTEX_ZSTD,
+                    EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
+                    EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED,
+                    EncodingId.VORTEX_VARIANT));
         }
 
         @Test
@@ -97,7 +94,7 @@ class EditionsTest {
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.UNSTABLE_2025_05_0);
 
             // Then
-            assertThat(result).isEqualTo(ids("fastlanes.delta"));
+            assertThat(result).containsExactly(EncodingId.FASTLANES_DELTA);
         }
 
         @Test
@@ -107,7 +104,8 @@ class EditionsTest {
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.UNSTABLE_2026_02_0);
 
             // Then
-            assertThat(result).isEqualTo(ids("fastlanes.delta", "vortex.zstd_buffers"));
+            assertThat(result).containsExactlyInAnyOrder(
+                    EncodingId.FASTLANES_DELTA, new EncodingId.Custom("vortex.zstd_buffers"));
         }
 
         @Test
@@ -117,11 +115,13 @@ class EditionsTest {
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.UNSTABLE_2026_04_0);
 
             // Then
-            assertThat(result).isEqualTo(ids(
-                    "fastlanes.delta", "vortex.zstd_buffers",
-                    "vortex.parquet.variant", "vortex.patched",
-                    "vortex.tensor.cosine_similarity", "vortex.tensor.inner_product",
-                    "vortex.tensor.l2_denorm", "vortex.tensor.l2_norm"));
+            assertThat(result).containsExactlyInAnyOrder(
+                    EncodingId.FASTLANES_DELTA, new EncodingId.Custom("vortex.zstd_buffers"),
+                    new EncodingId.Custom("vortex.parquet.variant"), EncodingId.VORTEX_PATCHED,
+                    new EncodingId.Custom("vortex.tensor.cosine_similarity"),
+                    new EncodingId.Custom("vortex.tensor.inner_product"),
+                    new EncodingId.Custom("vortex.tensor.l2_denorm"),
+                    new EncodingId.Custom("vortex.tensor.l2_norm"));
         }
 
         @Test
@@ -131,13 +131,14 @@ class EditionsTest {
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.UNSTABLE_2026_06_0);
 
             // Then
-            assertThat(result).hasSize(9)
-                    .isEqualTo(ids(
-                            "fastlanes.delta", "vortex.zstd_buffers",
-                            "vortex.parquet.variant", "vortex.patched",
-                            "vortex.tensor.cosine_similarity", "vortex.tensor.inner_product",
-                            "vortex.tensor.l2_denorm", "vortex.tensor.l2_norm",
-                            "vortex.onpair"));
+            assertThat(result).hasSize(9).containsExactlyInAnyOrder(
+                    EncodingId.FASTLANES_DELTA, new EncodingId.Custom("vortex.zstd_buffers"),
+                    new EncodingId.Custom("vortex.parquet.variant"), EncodingId.VORTEX_PATCHED,
+                    new EncodingId.Custom("vortex.tensor.cosine_similarity"),
+                    new EncodingId.Custom("vortex.tensor.inner_product"),
+                    new EncodingId.Custom("vortex.tensor.l2_denorm"),
+                    new EncodingId.Custom("vortex.tensor.l2_norm"),
+                    new EncodingId.Custom("vortex.onpair"));
         }
 
         @Test
@@ -147,23 +148,19 @@ class EditionsTest {
             // in production), so this exercises cumulativeMembers' seeding logic directly rather
             // than a reachable real-world scenario.
             Edition hypothetical = new Edition(
-                    new EditionId(EditionFamily.CORE, 2099, 1, 0), Optional.of("9.0.0"),
-                    Set.of(EncodingId.parse("vortex.future")));
+                    new EditionId(EditionFamily.CORE, YearMonth.of(2099, 1), 0), Optional.of("9.0.0"),
+                    Set.of(new EncodingId.Custom("vortex.future")));
 
             // When
             Set<EncodingId> result = Editions.cumulativeMembers(hypothetical);
 
             // Then — its own addition, plus one member from every earlier core edition
             assertThat(result).contains(
-                    EncodingId.parse("vortex.future"),      // its own addition
+                    new EncodingId.Custom("vortex.future"), // its own addition
                     EncodingId.VORTEX_PRIMITIVE,             // core2025.05.0
                     EncodingId.VORTEX_ZSTD,                  // core2025.06.0
                     EncodingId.VORTEX_MASKED,                // core2025.10.0
-                    EncodingId.VORTEX_VARIANT);               // core2026.07.0
-        }
-
-        private Set<EncodingId> ids(String... rawIds) {
-            return Stream.of(rawIds).map(EncodingId::parse).collect(Collectors.toUnmodifiableSet());
+                    EncodingId.VORTEX_VARIANT);              // core2026.07.0
         }
     }
 
