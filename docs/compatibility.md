@@ -173,8 +173,10 @@ Bitpacked produces `LazyAlp(MaterializedXxx)`).
 
 ### Unknown encodings
 
-Files containing unrecognized encoding IDs throw `VortexException` by default. Opt in to
-passthrough mode to read such files without failing:
+Files containing unrecognized encoding IDs throw `VortexException` by default. The message names
+which [edition](#editions) the id belongs to and the minimum Vortex version needed (or that it's
+an `unstable` draft with no compatibility guarantee), or says the id is unknown to every edition
+if it belongs to none. Opt in to passthrough mode to read such files without failing:
 
 ```java
 ReadRegistry registry = ReadRegistry.builder()
@@ -185,6 +187,24 @@ try (VortexReader vf = VortexReader.open(path, registry)) {
     // columns with unknown encodings are returned as UnknownArray
 }
 ```
+
+## Editions
+
+Frozen, named, additive sets of encoding IDs, each carrying a forever read-compatibility
+guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of the wire format.
+`WriteOptions.defaults()` targets the latest frozen `core` edition; see
+[the reference doc](reference.md#editions) for the writer/reader integration.
+
+| Edition | Family | Min Vortex | Adds |
+|---|---|---|---|
+| `core2025.05.0` | `core` | 0.36.0 | 23 baseline: `fastlanes.bitpacked`/`for`, `vortex.alp`/`alprd`/`bool`/`bytebool`/`chunked`/`constant`/`datetimeparts`/`decimal`/`decimal_byte_parts`/`dict`/`ext`/`fsst`/`list`/`null`/`primitive`/`runend`/`sparse`/`struct`/`varbin`/`varbinview`/`zigzag` |
+| `core2025.06.0` | `core` | 0.40.0 | `vortex.pco`, `vortex.sequence`, `vortex.zstd` |
+| `core2025.10.0` | `core` | 0.54.0 | `fastlanes.rle`, `vortex.fixed_size_list`, `vortex.listview`, `vortex.masked` |
+| `core2026.07.0` | `core` | 0.65.0 | `vortex.variant` |
+| `unstable2025.05.0` | `unstable` | draft | `fastlanes.delta` ✅ implemented |
+| `unstable2026.02.0` | `unstable` | draft | `vortex.zstd_buffers` ❌ not implemented |
+| `unstable2026.04.0` | `unstable` | draft | `vortex.parquet.variant` ❌, `vortex.patched` ✅, `vortex.tensor.*` (4 ids) ❌ |
+| `unstable2026.06.0` | `unstable` | draft | `vortex.onpair` ❌ not implemented |
 
 ## Extension types
 

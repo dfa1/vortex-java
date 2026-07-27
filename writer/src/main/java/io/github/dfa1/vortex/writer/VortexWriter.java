@@ -9,6 +9,10 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.Edition;
+import io.github.dfa1.vortex.core.model.EditionFamily;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
@@ -66,7 +70,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /// Writes a Vortex file.
 ///
@@ -136,6 +142,20 @@ public final class VortexWriter implements Closeable {
     private final List<SegRef> segs = new ArrayList<>();
     private final Map<ColumnName, List<ChunkRef>> colChunks = new LinkedHashMap<>();
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
+    // Edition guard (issue #301): the cumulative member set of every WriteOptions#editions()
+    // family enabled for this writer, or empty when no edition is configured (guard off).
+    // editionExcluded is its complement over the concrete encoders this writer actually holds
+    // (encodings + cascadeCodecs) - seeded into every EncodeContext's initial `excluded` set so
+    // CascadingCompressor's existing per-candidate exclusion check (already consulted at every
+    // selection site, including nested competitions like a masked column's validity-bitmap
+    // cascade) skips ineligible candidates and gracefully falls back, rather than the guard only
+    // discovering a violation after the fact. registerEncodingIds still checks editionAllowed
+    // directly as a backstop for paths that select an encoding without consulting excluded at all
+    // (e.g. a forced encodingOverride, or MaskedEncodingEncoder#encodeValidity's own top-level
+    // Sparse/RunEnd/Rle/Bool choice, which are all core-family and so never actually trip this in
+    // practice - see adr/0023-vortex-editions-adoption.md).
+    private final Set<EncodingId> editionAllowed;
+    private final Set<EncodingId> editionExcluded;
     private long bytesWritten = 0;
 
     // Global dict state: columns detected as low-cardinality on their first chunk are buffered here
@@ -189,9 +209,47 @@ public final class VortexWriter implements Closeable {
         this.defaultRegistry = buildRegistry(encodings);
         this.cascadeCodecs = buildCascadeCodecs(options);
         this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
+        this.editionAllowed = editionAllowed(options.editions());
+        this.editionExcluded = editionExcluded(this.editionAllowed, encodings, this.cascadeCodecs);
         for (ColumnName name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
+    }
+
+    /// The union of every enabled edition's cumulative member set, or empty if no edition is
+    /// configured — an empty result means the guard is off entirely.
+    private static Set<EncodingId> editionAllowed(Map<EditionFamily, Edition> editions) {
+        if (editions.isEmpty()) {
+            return Set.of();
+        }
+        Set<EncodingId> allowed = new LinkedHashSet<>();
+        for (Edition edition : editions.values()) {
+            allowed.addAll(Editions.cumulativeMembers(edition));
+        }
+        return Set.copyOf(allowed);
+    }
+
+    /// The concrete encoder ids this writer actually holds that fall outside `allowed`. Seeding
+    /// this into every [EncodeContext]'s initial exclusion set lets [CascadingCompressor]'s
+    /// existing per-candidate check skip them and fall back to the best remaining candidate,
+    /// instead of the edition guard only surfacing as a hard failure after encoding completes.
+    private static Set<EncodingId> editionExcluded(
+            Set<EncodingId> allowed, List<EncodingEncoder> encodings, List<EncodingEncoder> cascadeCodecs) {
+        if (allowed.isEmpty()) {
+            return Set.of();
+        }
+        Set<EncodingId> excluded = new LinkedHashSet<>();
+        for (EncodingEncoder enc : encodings) {
+            if (!allowed.contains(enc.encodingId())) {
+                excluded.add(enc.encodingId());
+            }
+        }
+        for (EncodingEncoder enc : cascadeCodecs) {
+            if (!allowed.contains(enc.encodingId())) {
+                excluded.add(enc.encodingId());
+            }
+        }
+        return Set.copyOf(excluded);
     }
 
     /// Builds a [WriteRegistry] from the given encoder list plus all built-in extension encoders.
@@ -650,11 +708,11 @@ public final class VortexWriter implements Closeable {
                 // fixed first-match encoder. Without cascading, a depth-0 context is passed and the
                 // override behaves as before.
                 EncodeContext encodeCtx = options.allowedCascading() > 0
-                        ? EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry)
-                        : EncodeContext.of(arena, defaultRegistry);
+                        ? EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded)
+                        : EncodeContext.of(arena, defaultRegistry, editionExcluded);
                 result = encodingOverride.encode(dtype, data, encodeCtx);
             } else if (options.allowedCascading() > 0) {
-                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry);
+                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded);
                 for (EncodingId excluded : excludedFromCascade) {
                     encodeCtx = encodeCtx.withExcluded(excluded);
                 }
@@ -662,7 +720,7 @@ public final class VortexWriter implements Closeable {
                 result = compressor.encode(dtype, data, encodeCtx);
             } else {
                 EncodingEncoder encoder = findEncoder(dtype);
-                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry);
+                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry, editionExcluded);
                 result = encoder.encode(dtype, data, encodeCtx);
             }
             // Register all encoding IDs found in the node tree
@@ -701,10 +759,37 @@ public final class VortexWriter implements Closeable {
     }
 
     private void registerEncodingIds(EncodeNode node) {
-        encodingIdx.computeIfAbsent(node.encodingId(), _ -> encodingIdx.size());
+        EncodingId id = node.encodingId();
+        // Edition guard backstop (issue #301): editionExcluded, seeded into every EncodeContext,
+        // already steers CascadingCompressor away from out-of-edition candidates during selection
+        // (see the editionExcluded/editionAllowed fields' javadoc) - this direct check catches
+        // whatever still reaches here anyway: a forced encodingOverride, or a selection path that
+        // does not consult EncodeContext#excluded() at all. Never silently write a file outside
+        // the declared edition.
+        if (!editionAllowed.isEmpty() && !editionAllowed.contains(id)) {
+            throw editionViolation(id);
+        }
+        encodingIdx.computeIfAbsent(id, _ -> encodingIdx.size());
         for (EncodeNode child : node.children()) {
             registerEncodingIds(child);
         }
+    }
+
+    private VortexException editionViolation(EncodingId id) {
+        String configured = options.editions().values().stream()
+                .map(e -> e.id().toString())
+                .sorted()
+                .collect(Collectors.joining(", "));
+        Optional<Edition> owning = Editions.owningEdition(id);
+        String hint = owning.isPresent()
+                ? "; it joins " + owning.get().id()
+                        + (owning.get().isDraft()
+                                ? " (draft, no compatibility guarantee)"
+                                : " (requires reader >= " + owning.get().minVortexVersion().get() + ")")
+                        + " — enable it via WriteOptions.withEdition(...)"
+                : "; it is not part of any known edition";
+        return new VortexException(id, "outside the configured edition(s) [" + configured + "]" + hint
+                + ", or call WriteOptions.withoutEditionGuard() to opt out");
     }
 
     private EncodingEncoder findEncoder(DType dtype) {

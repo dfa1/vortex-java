@@ -37,3 +37,4 @@ the decision shipped in (blank = not yet shipped).
 | 0020 | Jazzer fuzz testing infrastructure            | Proposed  |          |
 | 0021 | Cardinality-bounded global dict buffering     | Accepted  |          |
 | 0022 | Extract FSST into a standalone module, ported faithfully from the paper | Accepted |          |
+| 0023 | Adopt the Vortex editions model as a client-side write/read policy | Accepted |          |

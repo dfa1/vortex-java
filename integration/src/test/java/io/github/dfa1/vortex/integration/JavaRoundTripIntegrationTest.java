@@ -50,7 +50,7 @@ class JavaRoundTripIntegrationTest {
         data[61] = 7_000_000;
         data[88] = 8_000_000;
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
                      List.of(new PatchedEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("v"), data));

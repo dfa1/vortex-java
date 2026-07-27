@@ -20,7 +20,7 @@ final class OhlcGenerator {
     }
 
     static void write(Path file, int totalRows, int chunkSize) throws IOException {
-        WriteOptions opts = new WriteOptions(chunkSize, true, 0.90, 0, true, false, 256L * 1024 * 1024);
+        WriteOptions opts = new WriteOptions(chunkSize, true, 0.90, 0, true, false, 256L * 1024 * 1024, java.util.Map.of());
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, OhlcData.SCHEMA, opts)) {
             for (OhlcData.Batch batch : OhlcData.generate(totalRows, chunkSize)) {

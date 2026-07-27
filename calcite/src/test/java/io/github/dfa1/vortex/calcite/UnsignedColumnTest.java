@@ -110,7 +110,7 @@ class UnsignedColumnTest {
     private static WriteOptions noZoneMaps() {
         // Same shape as the adapter coverage test's zone-maps-off options: the second flag disables
         // zone maps so no per-zone SUM exists and VortexAggregates falls back to scanSum.
-        return new WriteOptions(65_536, false, 0.90, 0, true, false, 256L * 1024 * 1024);
+        return new WriteOptions(65_536, false, 0.90, 0, true, false, 256L * 1024 * 1024, java.util.Map.of());
     }
 
     private static ReadRegistry registry() {
