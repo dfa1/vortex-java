@@ -41,7 +41,7 @@ class DeltaEncodingTest {
         long[] data = {100L, 105L, 110L, 115L, 120L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -60,7 +60,7 @@ class DeltaEncodingTest {
         long[] data = {1000L, 990L, 975L, 950L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -79,7 +79,7 @@ class DeltaEncodingTest {
         long[] data = {42L, 42L, 42L, 42L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -98,7 +98,7 @@ class DeltaEncodingTest {
         long[] data = {99L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -117,7 +117,7 @@ class DeltaEncodingTest {
         long[] data = {0L, 5L, 7L, 12L, 11L, 15L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -139,7 +139,7 @@ class DeltaEncodingTest {
         long[] chunk2 = {2000L, 2005L, 2010L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), chunk1));
@@ -164,7 +164,7 @@ class DeltaEncodingTest {
         }
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));

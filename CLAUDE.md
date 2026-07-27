@@ -27,7 +27,8 @@ fsst    — io.github.dfa1.vortex.fsst: standalone FSST (Fast Static Symbol Tabl
           Zero dependency on core/reader/writer/FFM-wire-concerns beyond the JDK's own
           java.lang.foreign; writer/reader depend on it, not the other way around.
 core    — everything lives under `io.github.dfa1.vortex.core.*`:
-          core.model    DType, PType, TimeUnit, EncodingId, LayoutId, ColumnName, ExtensionId, TimeDtype, TimestampDtype
+          core.model    DType, PType, TimeUnit, EncodingId, LayoutId, ColumnName, ExtensionId, TimeDtype, TimestampDtype,
+                        EditionId, Edition, EditionFamily, Editions
           core.io       IoBounds, PTypeIO, VortexFormat
           core.error    VortexException
           core.compute  FastLanes, PrimitiveArrays
@@ -244,6 +245,13 @@ When stuck on encode/decode behavior, consult **in this order**:
 - **Small public APIs.** Don't expose internals — when in doubt, leave it out or make it private.
 - **POM deps** grouped with comments: `<!-- production -->` then `<!-- testing -->`, each with
   project-internal (`io.github.dfa1.vortex:*`) deps first, then external. Omit empty sections.
+- **Editions are a client-side write/read policy, not part of the wire format** (ADR 0023).
+  `WriteOptions#editions()` gates which encodings a write may emit and is checked/enforced entirely
+  at write time; nothing about a targeted edition is ever persisted into a `.vortex` file — the
+  compatibility guarantee is always re-derivable from the encoding ids already in the footer plus
+  the shared `Editions` catalog. `EditionFamily` is a closed enum (`CORE`/`UNSTABLE`), unlike
+  `EncodingId`/`LayoutId`'s sealed-interface-plus-`Custom` shape: a private edition family would
+  carry no real cross-implementation guarantee, so there is no legitimate use case for one.
 
 ## Documentation is part of every change
 

@@ -1,5 +1,12 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.Edition;
+import io.github.dfa1.vortex.core.model.EditionFamily;
+import io.github.dfa1.vortex.core.model.Editions;
+
+import java.util.HashMap;
+import java.util.Map;
+
 /// Tuning knobs for the Vortex writer.
 ///
 /// @param chunkSize                 target row count per chunk (default 65 536)
@@ -28,6 +35,13 @@ package io.github.dfa1.vortex.writer;
 ///                                  cap. Trade-off: demoted columns lose the shared-dictionary size
 ///                                  benefit; raise the budget on memory-rich hosts to keep more wide,
 ///                                  low-cardinality columns dictionary-encoded.
+/// @param editions                  the [Edition] enabled per family, gating which
+///                                  encodings this writer may emit — see [#withEdition(Edition)]. Defaults to
+///                                  the latest frozen `core` edition ([Editions#CORE_2026_07_0]): vortex-java
+///                                  implements every `core`-family encoding, and the default cascade never
+///                                  selects an `unstable`-family one, so this is a zero-cost guardrail against
+///                                  ever silently widening a file's minimum required reader. Cleared entirely by
+///                                  [#withoutEditionGuard()].
 public record WriteOptions(
         int chunkSize,
         boolean enableZoneMaps,
@@ -35,8 +49,14 @@ public record WriteOptions(
         int allowedCascading,
         boolean globalDict,
         boolean enableZstd,
-        long globalDictMaxRetainedBytes
+        long globalDictMaxRetainedBytes,
+        Map<EditionFamily, Edition> editions
 ) {
+    /// Defensively copies `editions` into an immutable map.
+    public WriteOptions {
+        editions = Map.copyOf(editions);
+    }
+
     /// Default aggregate retention budget (2 GB) for the buffered per-chunk code arrays of global
     /// -dictionary candidate columns. Raised from 256 MB when buffering became cardinality-bounded
     /// (ADR 0021), then from 1 GB (#303): a wide, high-cardinality file (NYC 311, ~30 admitted string
@@ -47,11 +67,17 @@ public record WriteOptions(
     /// [#withGlobalDictMaxRetainedBytes(long)].
     private static final long DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = 2L * 1024 * 1024 * 1024;
 
-    /// Default options: global dictionary encoding enabled, no cascading compression, Zstd disabled.
+    /// The default edition guard: only the latest frozen `core` edition enabled. See the `editions`
+    /// parameter's javadoc above for the safety rationale.
+    private static final Map<EditionFamily, Edition> DEFAULT_EDITIONS = Map.of(EditionFamily.CORE, Editions.CORE_2026_07_0);
+
+    /// Default options: global dictionary encoding enabled, no cascading compression, Zstd disabled,
+    /// edition guard targeting the latest frozen `core` edition.
     ///
     /// @return default `WriteOptions`
     public static WriteOptions defaults() {
-        return new WriteOptions(65_536, true, 0.90, 0, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES);
+        return new WriteOptions(65_536, true, 0.90, 0, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
+                DEFAULT_EDITIONS);
     }
 
     /// Enable cascading compression with up to `depth` recursive levels.
@@ -60,7 +86,8 @@ public record WriteOptions(
     /// @param depth maximum cascade depth
     /// @return `WriteOptions` with cascading enabled at the given depth
     public static WriteOptions cascading(int depth) {
-        return new WriteOptions(65_536, true, 0.90, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES);
+        return new WriteOptions(65_536, true, 0.90, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
+                DEFAULT_EDITIONS);
     }
 
     /// Returns a copy of these options with zone-map statistics set to `enabled`.
@@ -69,7 +96,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the zone-map flag updated
     public WriteOptions withZoneMaps(boolean enabled) {
         return new WriteOptions(chunkSize, enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
-                globalDictMaxRetainedBytes);
+                globalDictMaxRetainedBytes, editions);
     }
 
     /// Returns a copy of these options with global dictionary encoding set to `enabled`.
@@ -78,7 +105,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the global dict flag updated
     public WriteOptions withGlobalDict(boolean enabled) {
         return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, enableZstd,
-                globalDictMaxRetainedBytes);
+                globalDictMaxRetainedBytes, editions);
     }
 
     /// Returns a copy of these options with Zstandard compression set to `enabled`.
@@ -94,7 +121,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the Zstd flag updated
     public WriteOptions withZstd(boolean enabled) {
         return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled,
-                globalDictMaxRetainedBytes);
+                globalDictMaxRetainedBytes, editions);
     }
 
     /// Returns a copy of these options with the global-dictionary retention budget set to `budgetBytes`.
@@ -109,6 +136,35 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the global-dict retention budget updated
     public WriteOptions withGlobalDictMaxRetainedBytes(long budgetBytes) {
         return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, budgetBytes);
+                enableZstd, budgetBytes, editions);
+    }
+
+    /// Returns a copy of these options with `edition` enabled, replacing any edition already
+    /// enabled for `edition.id().family()`. Enabling an edition from a different family than any
+    /// currently configured adds to, rather than replaces, the enabled set — a writer may target at
+    /// most one edition per family, but multiple families at once (e.g. `core` and `unstable`
+    /// simultaneously).
+    ///
+    /// Encoding an id outside the union of every currently-enabled edition's cumulative members
+    /// fails the write immediately (see [io.github.dfa1.vortex.writer.VortexWriter]) — the edition
+    /// guarantee is checked at write time, never persisted into the file itself.
+    ///
+    /// @param edition the edition to enable
+    /// @return a new `WriteOptions` with `edition` enabled for its family
+    public WriteOptions withEdition(Edition edition) {
+        Map<EditionFamily, Edition> updated = new HashMap<>(editions);
+        updated.put(edition.id().family(), edition);
+        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+                enableZstd, globalDictMaxRetainedBytes, updated);
+    }
+
+    /// Returns a copy of these options with every enabled edition cleared — the explicit escape
+    /// hatch. With no edition enabled, the writer may emit any registered encoding, including
+    /// third-party or experimental ones, at the cost of the edition read-compatibility guarantee.
+    ///
+    /// @return a new `WriteOptions` with no edition guard at all
+    public WriteOptions withoutEditionGuard() {
+        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+                enableZstd, globalDictMaxRetainedBytes, Map.of());
     }
 }

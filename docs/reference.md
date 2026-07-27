@@ -63,6 +63,9 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | `EncodingId` | `sealed interface` — `WellKnown` enum + `Custom` record | Array-encoding identity; total `parse(String)` over non-blank ids; constants re-exported (`EncodingId.VORTEX_PRIMITIVE`, …) |
 | `LayoutId` | `sealed interface` — `WellKnown` enum + `Custom` record | Layout identity (separate namespace from encodings; `vortex.flat` is layout-only); both zoned aliases `vortex.zoned`/`vortex.stats` |
 | `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
+| `EditionFamily` | `enum` — `CORE`, `UNSTABLE` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
+| `EditionId` | `record EditionId(EditionFamily family, int year, int month, int version)` | e.g. `core2025.05.0`; `isAtOrBefore` orders editions within a family only |
+| `Edition` | `record Edition(EditionId id, Optional<String> minVortexVersion, Set<EncodingId> added)` | Only `Editions`'s 8 catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |
 
 ## Reader API
 
@@ -126,12 +129,21 @@ Accepted array types per column `DType`:
 
 ### `WriteOptions` (`io.github.dfa1.vortex.writer.WriteOptions`)
 
-Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading)`.
+Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading, boolean globalDict, boolean enableZstd, long globalDictMaxRetainedBytes, Map<EditionFamily, Edition> editions)`.
 
 | Factory                         | Defaults                                                                                          |
 |---------------------------------|---------------------------------------------------------------------------------------------------|
-| `WriteOptions.defaults()`       | `chunkSize=65_536`, `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0` |
+| `WriteOptions.defaults()`       | `chunkSize=65_536`, `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0`, `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=2 GB`, `editions={CORE: Editions.CORE_2026_07_0}` |
 | `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`                                                           |
+
+| Method | Notes |
+|--------|-------|
+| `withZoneMaps(boolean)` | Toggle per-chunk min/max/sum statistics |
+| `withGlobalDict(boolean)` | Toggle the shared cross-chunk dictionary |
+| `withZstd(boolean)` | Add Zstandard to the cascade codec competition |
+| `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |
+| `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family |
+| `withoutEditionGuard()` | Clear every enabled edition — the writer may then emit any registered encoding, at the cost of the edition compatibility guarantee |
 
 ---
 
@@ -228,6 +240,57 @@ Register custom encoding decoders programmatically via `register(EncodingDecoder
 `ServiceLoader` discovery. Extension decoders
 (`io.github.dfa1.vortex.reader.extension.ExtensionDecoder`) are not registry-managed: the built-in
 implementations are singletons invoked directly by their `ExtensionId`.
+
+---
+
+## Editions
+
+Frozen, named, additive sets of encoding IDs, each carrying a forever read-compatibility
+guarantee once frozen (see ADR 0023). vortex-java mirrors the ground-truth catalog from
+[vortex-data/vortex#8871](https://github.com/vortex-data/vortex/pull/8871) — the published
+[editions spec](https://github.com/vortex-data/vortex/blob/develop/docs/specs/editions.md)'s own
+registry section is not populated upstream yet. Editions are a **write/read policy, not part of
+the wire format** — nothing about a targeted edition is ever persisted into a `.vortex` file.
+
+### `Editions` (`io.github.dfa1.vortex.core.model.Editions`)
+
+| Member                              | Notes                                                                 |
+|--------------------------------------|------------------------------------------------------------------------------|
+| `CORE_2025_05_0` … `CORE_2026_07_0` | The 4 frozen `core` editions (min Vortex 0.36.0 → 0.65.0)                     |
+| `UNSTABLE_2025_05_0` … `UNSTABLE_2026_06_0` | The 4 draft `unstable` editions (no compatibility guarantee)          |
+| `ALL`                                | Every declared edition, in declaration order                                 |
+| `cumulativeMembers(Edition)`         | The edition's own additions plus every earlier same-family edition's         |
+| `owningEdition(EncodingId)`          | The edition an id first joined, or empty if it belongs to none               |
+
+vortex-java implements every `core`-family encoding through `core2026.07.0`. Of `unstable`, only
+`fastlanes.delta` and `vortex.patched` have an `EncodingId.WellKnown` constant; the rest
+(`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family, `vortex.onpair`)
+resolve to `EncodingId.Custom` and are stored in the catalog anyway, mirroring upstream faithfully.
+
+### Writer integration (`WriteOptions#editions()`)
+
+`WriteOptions.defaults()`/`cascading(depth)` enable the latest frozen `core` edition
+(`Editions.CORE_2026_07_0`) by default — verified safe: the default cascade candidate list never
+includes `DeltaEncodingEncoder`/`PatchedEncodingEncoder` (the only two `unstable`-family encoders
+implemented), so no default write can emit an `unstable` encoding. If a write would emit an
+encoding outside the union of every enabled edition's cumulative members, `VortexWriter` fails
+the write immediately with a `VortexException` naming the encoding and the configured edition(s).
+Where possible (any selection routed through `CascadingCompressor`, including nested competitions
+like a masked column's validity-bitmap cascade) the guard instead steers selection away from the
+ineligible candidate ahead of time, falling back to the best remaining one — see ADR 0023.
+
+- `WriteOptions.withEdition(Edition)` enables an edition, replacing any edition already enabled
+  for that edition's family. Multiple families can be enabled at once (e.g. `core` and `unstable`
+  simultaneously); at most one edition per family.
+- `WriteOptions.withoutEditionGuard()` clears every enabled edition — the escape hatch for custom
+  or experimental encodings, at the cost of the compatibility guarantee.
+
+### Reader integration
+
+When `ReadRegistry` hits an unregistered encoding id (and `allowUnknown()` is off), the thrown
+`VortexException` names the edition the id belongs to and its minimum required Vortex version
+(or that it is a draft with no guarantee), or says the id is unknown to every edition and points
+at `allowUnknown()`.
 
 ---
 
