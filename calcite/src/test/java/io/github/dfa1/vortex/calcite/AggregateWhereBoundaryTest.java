@@ -57,7 +57,7 @@ class AggregateWhereBoundaryTest {
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the tier-1 fold reads and the
         // classify() step uses to find the boundary zones.
-        WriteOptions opts = new WriteOptions(CHUNK, true, 0.90, 0, true, false, 256L * 1024 * 1024, java.util.Map.of());
+        WriteOptions opts = new WriteOptions(CHUNK, true, 0.90, 0, true, false, 256L * 1024 * 1024, Map.of());
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             for (int c = 0; c < CHUNKS; c++) {
@@ -456,7 +456,7 @@ class AggregateWhereBoundaryTest {
     private static void writeChunks(Path file, DType.Struct schema, Map<ColumnName, Object> chunk0,
                                     Map<ColumnName, Object> chunk1) throws Exception {
         // chunkSize large so each writeChunk is exactly one chunk (one zone).
-        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, 256L * 1024 * 1024, java.util.Map.of());
+        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, 256L * 1024 * 1024, Map.of());
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             writer.writeChunk(chunk0);

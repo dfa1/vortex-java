@@ -782,14 +782,9 @@ public final class VortexWriter implements Closeable {
                 .collect(Collectors.joining(", "));
         Optional<Edition> owning = Editions.owningEdition(id);
         String hint = owning.isPresent()
-                ? "; it joins " + owning.get().id()
-                        + (owning.get().isDraft()
-                                ? " (draft, no compatibility guarantee)"
-                                : " (requires reader >= " + owning.get().minVortexVersion().get() + ")")
-                        + " — enable it via WriteOptions.withEdition(...)"
+                ? "; it joins " + owning.get().id() + " — enable that edition via WriteOptions.withEdition(...)"
                 : "; it is not part of any known edition";
-        return new VortexException(id, "outside the configured edition(s) [" + configured + "]" + hint
-                + ", or call WriteOptions.withoutEditionGuard() to opt out");
+        return new VortexException(id, "outside the configured edition(s) [" + configured + "]" + hint);
     }
 
     private EncodingEncoder findEncoder(DType dtype) {

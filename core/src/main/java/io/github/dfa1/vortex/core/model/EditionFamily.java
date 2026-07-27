@@ -6,8 +6,8 @@ package io.github.dfa1.vortex.core.model;
 /// interface with a `Custom` fallback: an edition family is a cross-implementation
 /// compatibility promise ("any reader supporting `core2026.07.0` can read this file"), so a
 /// private, single-writer "family" would carry no real guarantee — nothing else in the Vortex
-/// ecosystem would recognize it. A caller who wants to write encodings outside any known family
-/// uses the writer module's `WriteOptions#withoutEditionGuard()`, not a fabricated family.
+/// ecosystem would recognize it. There is no legitimate use case for a fabricated family, so
+/// none is offered.
 ///
 /// Deliberately does not override `toString()`: an enum's `toString()` returning anything other
 /// than its declared constant name is surprising (it breaks the usual assumption that

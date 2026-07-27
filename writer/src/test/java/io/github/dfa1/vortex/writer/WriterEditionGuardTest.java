@@ -27,6 +27,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// single-candidate explicit encoder list, as used here. The graceful-fallback filtering behavior
 /// for cost-based competitions is covered separately by
 /// `io.github.dfa1.vortex.writer.encode.MaskedValidityCascadeEditionExclusionTest`.
+///
+/// There is deliberately no "disable the guard" escape hatch — an `unstable`-family encoding
+/// must be reached by enabling its edition explicitly (see
+/// [#withEdition_enablingUnstable_allowsTheForcedEncoder]).
 class WriterEditionGuardTest {
 
     private static final DType.Struct I64_SCHEMA = new DType.Struct(
@@ -57,33 +61,14 @@ class WriterEditionGuardTest {
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("fastlanes.delta")
                     .hasMessageContaining("core2026.07.0")
-                    .hasMessageContaining("withoutEditionGuard");
-        }
-    }
-
-    @Test
-    void withoutEditionGuard_allowsTheSameForcedEncoder(@TempDir Path tmp) throws IOException {
-        // Given — the identical setup, but with the guard explicitly cleared
-        Path file = tmp.resolve("delta_unguarded.vtx");
-        long[] data = {100L, 105L, 110L, 115L, 120L};
-
-        // When
-        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
-                     List.of(new DeltaEncodingEncoder()))) {
-            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
-        }
-
-        // Then
-        try (var vf = VortexReader.open(file, deltaRegistry())) {
-            assertThat(readAllLongs(vf, "ts")).containsExactly(data);
+                    .hasMessageContaining("unstable2025.05.0")
+                    .hasMessageContaining("withEdition");
         }
     }
 
     @Test
     void withEdition_enablingUnstable_allowsTheForcedEncoder(@TempDir Path tmp) throws IOException {
-        // Given — instead of clearing the guard entirely, explicitly opt into the unstable
-        // edition that covers fastlanes.delta
+        // Given — explicitly opt into the unstable edition that covers fastlanes.delta
         Path file = tmp.resolve("delta_unstable.vtx");
         long[] data = {100L, 105L, 110L, 115L, 120L};
         WriteOptions options = WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0);
