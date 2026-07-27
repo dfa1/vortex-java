@@ -64,7 +64,7 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | `LayoutId` | `sealed interface` — `WellKnown` enum + `Custom` record | Layout identity (separate namespace from encodings; `vortex.flat` is layout-only); both zoned aliases `vortex.zoned`/`vortex.stats` |
 | `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
 | `EditionFamily` | `enum` — `CORE`, `UNSTABLE` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
-| `EditionId` | `record EditionId(EditionFamily family, int year, int month, int version)` | e.g. `core2025.05.0`; `isAtOrBefore` orders editions within a family only |
+| `EditionId` | `record EditionId(EditionFamily family, YearMonth cutMonth, int version)` | e.g. `core2025.05.0`; `isAtOrBefore` orders editions within a family only |
 | `Edition` | `record Edition(EditionId id, Optional<String> minVortexVersion, Set<EncodingId> added)` | Only `Editions`'s 8 catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |
 
 ## Reader API

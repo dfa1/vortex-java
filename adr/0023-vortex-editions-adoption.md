@@ -40,12 +40,18 @@ faithfully rather than being truncated to what is implemented today.
    because any Rust crate can register a declaration into the session. vortex-java's registries
    are explicit and closed (no `ServiceLoader` — the same design decision already made for
    `ReadRegistry`/`WriteRegistry`), so this collapses to three `core.model` types:
-   - `EditionId(EditionFamily family, int year, int month, int version)` — `toString()` matches
-     Rust's `Display` exactly (`"core2025.05.0"`, month zero-padded, version not);
-     `isAtOrBefore(EditionId)` orders editions within a family (cross-family is always `false`).
+   - `EditionId(EditionFamily family, YearMonth cutMonth, int version)` — reuses
+     `java.time.YearMonth` instead of two raw ints (validates the month range for free, and is
+     `Comparable`, simplifying `isAtOrBefore`); `toString()` matches Rust's `Display` exactly
+     (`"core2025.05.0"`, month zero-padded, version not); `isAtOrBefore(EditionId)` orders
+     editions within a family (cross-family is always `false`).
    - `Edition(EditionId id, Optional<String> minVortexVersion, Set<EncodingId> added)` — folds
      Rust's separate `Edition`/`EditionDeclaration` into one type; `added` is only what joins *at
-     this exact edition*, matching Rust's field exactly (not cumulative).
+     this exact edition*, matching Rust's field exactly (not cumulative). Populated with the real
+     `EncodingId.WellKnown` constants wherever one exists ("strings at the boundary, types
+     inside" — these come from a hardcoded catalog, not wire input, so there is no boundary to
+     parse a string at), falling back to `EncodingId.Custom(rawId)` only for the handful of
+     `unstable` ids with no `WellKnown` constant yet.
    - `Editions` — a final utility class holding the 8 catalog constants, `ALL` (declaration
      order), `cumulativeMembers(Edition)` (union of `added()` for every same-family edition at or
      before the given one, seeded with the argument's own `added()` first), and
