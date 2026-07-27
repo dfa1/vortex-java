@@ -65,7 +65,7 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
 | `EditionFamily` | `enum` — `CORE`, `UNSTABLE` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
 | `EditionId` | `record EditionId(EditionFamily family, YearMonth cutMonth, int version)` | e.g. `core2025.05.0`; `isAtOrBefore` orders editions within a family only |
-| `Edition` | `record Edition(EditionId id, Optional<String> minVortexVersion, Set<EncodingId> added)` | Only `Editions`'s 8 catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |
+| `Edition` | `record Edition(EditionId id, Set<EncodingId> added)` | Only `Editions`'s 8 catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |
 
 ## Reader API
 
@@ -142,8 +142,7 @@ Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshol
 | `withGlobalDict(boolean)` | Toggle the shared cross-chunk dictionary |
 | `withZstd(boolean)` | Add Zstandard to the cascade codec competition |
 | `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |
-| `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family |
-| `withoutEditionGuard()` | Clear every enabled edition — the writer may then emit any registered encoding, at the cost of the edition compatibility guarantee |
+| `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family. No method disables the guard entirely — an `unstable`-family encoding is reached by enabling its edition explicitly, e.g. `withEdition(Editions.UNSTABLE_2025_05_0)` |
 
 ---
 
@@ -256,7 +255,7 @@ the wire format** — nothing about a targeted edition is ever persisted into a 
 
 | Member                              | Notes                                                                 |
 |--------------------------------------|------------------------------------------------------------------------------|
-| `CORE_2025_05_0` … `CORE_2026_07_0` | The 4 frozen `core` editions (min Vortex 0.36.0 → 0.65.0)                     |
+| `CORE_2025_05_0` … `CORE_2026_07_0` | The 4 frozen `core` editions (forever read-compatibility guarantee)           |
 | `UNSTABLE_2025_05_0` … `UNSTABLE_2026_06_0` | The 4 draft `unstable` editions (no compatibility guarantee)          |
 | `ALL`                                | Every declared edition, in declaration order                                 |
 | `cumulativeMembers(Edition)`         | The edition's own additions plus every earlier same-family edition's         |
@@ -279,18 +278,18 @@ Where possible (any selection routed through `CascadingCompressor`, including ne
 like a masked column's validity-bitmap cascade) the guard instead steers selection away from the
 ineligible candidate ahead of time, falling back to the best remaining one — see ADR 0023.
 
-- `WriteOptions.withEdition(Edition)` enables an edition, replacing any edition already enabled
-  for that edition's family. Multiple families can be enabled at once (e.g. `core` and `unstable`
-  simultaneously); at most one edition per family.
-- `WriteOptions.withoutEditionGuard()` clears every enabled edition — the escape hatch for custom
-  or experimental encodings, at the cost of the compatibility guarantee.
+`WriteOptions.withEdition(Edition)` enables an edition, replacing any edition already enabled for
+that edition's family. Multiple families can be enabled at once (e.g. `core` and `unstable`
+simultaneously); at most one edition per family. There is deliberately no "disable the guard"
+method — an `unstable`-family encoding is reached by enabling its edition explicitly, not by
+opting out of the guard altogether.
 
 ### Reader integration
 
 When `ReadRegistry` hits an unregistered encoding id (and `allowUnknown()` is off), the thrown
-`VortexException` names the edition the id belongs to and its minimum required Vortex version
-(or that it is a draft with no guarantee), or says the id is unknown to every edition and points
-at `allowUnknown()`.
+`VortexException` names the edition the id belongs to (and whether it's an `unstable` draft with
+no compatibility guarantee), or says the id is unknown to every edition and points at
+`allowUnknown()`.
 
 ---
 

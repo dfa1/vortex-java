@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -50,7 +51,7 @@ class JavaRoundTripIntegrationTest {
         data[61] = 7_000_000;
         data[88] = 8_000_000;
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults().withoutEditionGuard(),
+             var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2026_04_0),
                      List.of(new PatchedEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("v"), data));

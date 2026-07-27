@@ -51,6 +51,70 @@ class ReadRegistryTest {
     }
 
     @Test
+    void decodeCoreEditionEncodingWithoutDecoder_namesTheEditionInTheMessage() {
+        // Given — vortex.zstd first joins core2025.06.0, no decoder registered for it (issue #301)
+        ReadRegistry sut = ReadRegistry.empty();
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD,
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
+        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
+                new MemorySegment[0], sut, Arena.ofAuto());
+
+        // When / Then
+        assertThatThrownBy(() -> sut.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("joined edition core2025.06.0")
+                .hasMessageContaining("allowUnknown")
+                .hasMessageNotContaining("unstable");
+    }
+
+    @Test
+    void decodeUnstableEditionEncodingWithoutDecoder_notesNoCompatibilityGuarantee() {
+        // Given — fastlanes.delta belongs to the draft unstable2025.05.0 edition
+        ReadRegistry sut = ReadRegistry.empty();
+        ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA,
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
+        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
+                new MemorySegment[0], sut, Arena.ofAuto());
+
+        // When / Then
+        assertThatThrownBy(() -> sut.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("joined edition unstable2025.05.0")
+                .hasMessageContaining("unstable — no compatibility guarantee");
+    }
+
+    @Test
+    void decodeUnknownEncoding_saysUnknownToAllEditions() {
+        // Given — not a WellKnown id, and no edition declares it either
+        ReadRegistry sut = ReadRegistry.empty();
+        ArrayNode node = new ArrayNode(EncodingId.parse("some.unknown"),
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
+        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
+                new MemorySegment[0], sut, Arena.ofAuto());
+
+        // When / Then
+        assertThatThrownBy(() -> sut.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("unknown to all editions");
+    }
+
+    @Test
+    void decodeAsSegmentKnownEditionEncodingWithoutDecoder_alsoNamesTheEdition() {
+        // Given — decodeAsSegment shares the same enriched message as decode
+        ReadRegistry sut = ReadRegistry.empty();
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD,
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
+        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
+                new MemorySegment[0], sut, Arena.ofAuto());
+
+        // When / Then
+        assertThatThrownBy(() -> sut.decodeAsSegment(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("joined edition core2025.06.0")
+                .hasMessageContaining("no primary segment");
+    }
+
+    @Test
     void decodeKnownEncodingWithoutDecoderReturnsUnknownArrayWhenAllowed() {
         // Given
         ReadRegistry sut = ReadRegistry.builder().allowUnknown().build();

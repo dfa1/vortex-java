@@ -148,7 +148,7 @@ class EditionsTest {
             // in production), so this exercises cumulativeMembers' seeding logic directly rather
             // than a reachable real-world scenario.
             Edition hypothetical = new Edition(
-                    new EditionId(EditionFamily.CORE, YearMonth.of(2099, 1), 0), Optional.of("9.0.0"),
+                    new EditionId(EditionFamily.CORE, YearMonth.of(2099, 1), 0),
                     Set.of(new EncodingId.Custom("vortex.future")));
 
             // When
@@ -178,14 +178,14 @@ class EditionsTest {
         }
 
         @Test
-        void owningEdition_unstableFamilyId_returnsTheDraftEdition() {
+        void owningEdition_unstableFamilyId_returnsTheUnstableEdition() {
             // Given
             // When
             Optional<Edition> result = Editions.owningEdition(EncodingId.VORTEX_PATCHED);
 
             // Then
             assertThat(result).contains(Editions.UNSTABLE_2026_04_0);
-            assertThat(result.get().isDraft()).isTrue();
+            assertThat(result.get().id().family()).isEqualTo(EditionFamily.UNSTABLE);
         }
 
         @Test

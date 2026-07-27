@@ -40,8 +40,10 @@ import java.util.Map;
 ///                                  the latest frozen `core` edition ([Editions#CORE_2026_07_0]): vortex-java
 ///                                  implements every `core`-family encoding, and the default cascade never
 ///                                  selects an `unstable`-family one, so this is a zero-cost guardrail against
-///                                  ever silently widening a file's minimum required reader. Cleared entirely by
-///                                  [#withoutEditionGuard()].
+///                                  ever silently widening a file's minimum required reader. Deliberately has
+///                                  no "disable the guard" method: an `unstable`-family encoding is reached by
+///                                  enabling its edition explicitly via [#withEdition(Edition)], not by opting
+///                                  out of the guard altogether.
 public record WriteOptions(
         int chunkSize,
         boolean enableZoneMaps,
@@ -156,15 +158,5 @@ public record WriteOptions(
         updated.put(edition.id().family(), edition);
         return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
                 enableZstd, globalDictMaxRetainedBytes, updated);
-    }
-
-    /// Returns a copy of these options with every enabled edition cleared — the explicit escape
-    /// hatch. With no edition enabled, the writer may emit any registered encoding, including
-    /// third-party or experimental ones, at the cost of the edition read-compatibility guarantee.
-    ///
-    /// @return a new `WriteOptions` with no edition guard at all
-    public WriteOptions withoutEditionGuard() {
-        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, Map.of());
     }
 }

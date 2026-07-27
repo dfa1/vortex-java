@@ -12,8 +12,8 @@ Upstream Vortex (`vortex-data/vortex` [PR #8871](https://github.com/vortex-data/
 formalized **editions**: frozen, named, additive sets of encoding IDs, each carrying a forever
 read-compatibility guarantee. Editions come in independently-versioned **families** (`core`,
 `unstable` today); a writer targets at most one edition per family and may emit any encoding in
-the union of its enabled editions' cumulative members. An edition with no recorded
-`min_vortex_version` is a **draft** — every `unstable` edition is a draft.
+the union of its enabled editions' cumulative members. Every `unstable`-family edition is a draft,
+with no compatibility guarantee.
 
 vortex-java already implements every encoding in every frozen `core` edition through
 `core2026.07.0` (issue #301). This ADR is not about chasing new encodings — it is about adopting
@@ -45,13 +45,16 @@ faithfully rather than being truncated to what is implemented today.
      `Comparable`, simplifying `isAtOrBefore`); `toString()` matches Rust's `Display` exactly
      (`"core2025.05.0"`, month zero-padded, version not); `isAtOrBefore(EditionId)` orders
      editions within a family (cross-family is always `false`).
-   - `Edition(EditionId id, Optional<String> minVortexVersion, Set<EncodingId> added)` — folds
-     Rust's separate `Edition`/`EditionDeclaration` into one type; `added` is only what joins *at
-     this exact edition*, matching Rust's field exactly (not cumulative). Populated with the real
-     `EncodingId.WellKnown` constants wherever one exists ("strings at the boundary, types
-     inside" — these come from a hardcoded catalog, not wire input, so there is no boundary to
-     parse a string at), falling back to `EncodingId.Custom(rawId)` only for the handful of
-     `unstable` ids with no `WellKnown` constant yet.
+   - `Edition(EditionId id, Set<EncodingId> added)` — folds Rust's separate
+     `Edition`/`EditionDeclaration` into one type; `added` is only what joins *at this exact
+     edition*, matching Rust's field exactly (not cumulative). Deliberately drops Rust's
+     `min_vortex_version`: that field records the minimum *Rust* Vortex reader release a frozen
+     `core` edition requires — it refers to a different implementation's own release train, has no
+     relationship to vortex-java's versioning, and isn't meaningful in any vortex-java API.
+     Populated with the real `EncodingId.WellKnown` constants wherever one exists ("strings at the
+     boundary, types inside" — these come from a hardcoded catalog, not wire input, so there is no
+     boundary to parse a string at), falling back to `EncodingId.Custom(rawId)` only for the
+     handful of `unstable` ids with no `WellKnown` constant yet.
    - `Editions` — a final utility class holding the 8 catalog constants, `ALL` (declaration
      order), `cumulativeMembers(Edition)` (union of `added()` for every same-family edition at or
      before the given one, seeded with the argument's own `added()` first), and
@@ -68,8 +71,9 @@ faithfully rather than being truncated to what is implemented today.
    ("any reader supporting `core2026.07.0` can read this file"); a private, single-writer family
    would carry none of that benefit, since no other reader in the ecosystem would recognize it.
    There is no legitimate use case for a custom family, so the type is closed. A caller who wants
-   to write encodings outside any known family uses `WriteOptions#withoutEditionGuard()`, not a
-   fabricated family.
+   to write an out-of-edition encoding reaches it by explicitly enabling that encoding's own
+   family via `WriteOptions#withEdition(Edition)` (e.g. `withEdition(Editions.UNSTABLE_2025_05_0)`)
+   — not a fabricated family, and (per Decision #7) not a guard-wide opt-out either.
    - `Edition` itself still cannot be made construction-restricted the same way: Java forbids a
      record's canonical constructor from being *more* restrictive than the record type's own
      visibility, and `Edition` must stay `public` for `WriteOptions`'s public API
@@ -86,8 +90,8 @@ faithfully rather than being truncated to what is implemented today.
    against readers not having caught up to encodings *it* just shipped) — so "latest frozen
    `core`" carries no analogous risk here and avoids an arbitrary "how many versions to lag"
    choice. `withEdition(Edition)` replaces any edition already enabled for that edition's family
-   (a writer may target at most one edition per family, but multiple families at once);
-   `withoutEditionGuard()` clears every enabled edition — the explicit escape hatch.
+   (a writer may target at most one edition per family, but multiple families at once); see
+   Decision #7 for why there is deliberately no guard-wide opt-out.
 
 4. **The guard filters candidates during selection, not just checks after encoding
    completes — a mid-implementation course correction.** The original design only checked the
@@ -134,9 +138,9 @@ faithfully rather than being truncated to what is implemented today.
 
 5. **Reader UX**: `ReadRegistry`'s two "no decoder registered" throw sites (`decode`,
    `decodeAsSegment`) now consult `Editions.owningEdition(id)` before throwing — naming the
-   edition and its `minVortexVersion` (or "draft, no compatibility guarantee" if none) when the
-   id is known to some edition, or saying it is unknown to all editions and pointing at
-   `allowUnknown()` otherwise. Both sites also switch to `VortexException`'s attributed
+   edition it joined (adding ", unstable — no compatibility guarantee" when that edition's family
+   is `UNSTABLE`) when the id is known to some edition, or saying it is unknown to all editions and
+   pointing at `allowUnknown()` otherwise. Both sites also switch to `VortexException`'s attributed
    `(EncodingId, String)` constructor (which prefixes the id), dropping the now-redundant id from
    the message body — a small, unrelated bug the same lines already had.
 
@@ -144,6 +148,20 @@ faithfully rather than being truncated to what is implemented today.
    matches upstream's own model exactly ("stored on the writer's session," not a file field).
    Resolves the issue's own open question ("persist edition into file metadata, or write-time
    only?"): don't. No `.fbs`/`.proto` schema touched anywhere in this feature.
+
+7. **Follow-up correction (post-merge PR review): drop `WriteOptions#withoutEditionGuard()`,
+   no guard-wide escape hatch.** The version described in Decisions #2–#3 above shipped with a
+   `withoutEditionGuard()` method that cleared every enabled edition, disabling the guard
+   entirely — modeled loosely on upstream's "opt out entirely" case. Review on the merged PR
+   flagged this as too broad: it lets a caller silently emit encodings from *any* family,
+   including ones with no relationship to the edition the caller actually meant to enable, with no
+   record of which one they intended. The fix removes the method outright; a caller who needs an
+   `unstable`-family encoding now has exactly one path — `withEdition(Editions.UNSTABLE_2025_05_0)`
+   (or whichever `unstable` edition covers the encoding) — which both enables the guard-compatible
+   path and self-documents which unstable surface the caller opted into. All call sites that used
+   `withoutEditionGuard()` to reach `fastlanes.delta`/`vortex.patched` in tests were updated to the
+   corresponding `withEdition(Editions.UNSTABLE_...)` call. There is now no way to disable the
+   guard globally, only to widen it deliberately, one family at a time.
 
 ## Consequences
 
@@ -154,7 +172,7 @@ faithfully rather than being truncated to what is implemented today.
   of surfacing as a confusing read error in someone else's environment later.
 - The default (`core2026.07.0`) is a zero-cost guardrail today: it changes no default write's
   output, verified by full reactor build + unit + integration test runs before and after.
-- The reader's unknown-encoding error becomes actionable ("this needs vortex >= 0.70.0") instead
+- The reader's unknown-encoding error becomes actionable ("joined edition core2025.06.0") instead
   of a bare, unhelpful id string.
 - `EncodeContext.excluded()`'s reuse for edition filtering required zero changes to
   `CascadingCompressor`, `SparseEncodingEncoder`, or `MaskedEncodingEncoder` — the mechanism
@@ -165,7 +183,7 @@ faithfully rather than being truncated to what is implemented today.
 - `WriteOptions` gaining an 8th record component required mechanical (behavior-preserving)
   updates at 29 direct-constructor call sites across 12 files, plus 9 existing test call sites
   that deliberately exercise `unstable`-family encoders through the explicit-encoder-list
-  overload and needed `.withoutEditionGuard()` added.
+  overload and needed `.withEdition(Editions.UNSTABLE_...)` added (Decision #7).
 - Two guard mechanisms (graceful filtering + after-the-fact backstop) is more moving parts than a
   single check, and the split is only obvious from having traced the actual reachability gap —
   a future contributor extending the guard needs to understand both halves.

@@ -3,6 +3,9 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
+import io.github.dfa1.vortex.core.model.Edition;
+import io.github.dfa1.vortex.core.model.EditionFamily;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
@@ -45,6 +48,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 /// Read-side registry: maps [EncodingId] to [EncodingDecoder] implementations.
@@ -124,7 +128,7 @@ public final class ReadRegistry {
         if (allowUnknown) {
             return decodeUnknown(ctx, node);
         }
-        throw new VortexException("no decoder registered for " + node.encodingId().id());
+        throw new VortexException(node.encodingId(), noDecoderMessage(node.encodingId()));
     }
 
     /// Decodes the array described by `ctx` and returns its primary backing segment.
@@ -137,8 +141,27 @@ public final class ReadRegistry {
         if (decoder != null) {
             return decoder.decode(ctx).materialize(ctx.arena());
         }
-        throw new VortexException("no decoder registered for " + node.encodingId().id()
-                + " (or encoding has no primary segment)");
+        throw new VortexException(node.encodingId(),
+                noDecoderMessage(node.encodingId()) + " (or encoding has no primary segment)");
+    }
+
+    /// Builds the "no decoder registered" message, enriched with which [Edition] `id` belongs to
+    /// when known — an actionable pointer ("this file is newer than your build, or the encoding is
+    /// unstable/experimental") instead of a bare id string. Issue #301.
+    ///
+    /// @param id the unrecognized encoding id
+    /// @return the message body (the caller's [VortexException] constructor prefixes the id itself)
+    private static String noDecoderMessage(EncodingId id) {
+        Optional<Edition> owning = Editions.owningEdition(id);
+        if (owning.isEmpty()) {
+            return "no decoder registered; unknown to all editions (custom/experimental encoding)"
+                    + " — register a decoder or enable ReadRegistry.Builder#allowUnknown()";
+        }
+        Edition edition = owning.get();
+        String draftNote = edition.id().family() == EditionFamily.UNSTABLE
+                ? ", unstable — no compatibility guarantee" : "";
+        return "no decoder registered (joined edition " + edition.id() + draftNote
+                + "); register a decoder or enable ReadRegistry.Builder#allowUnknown()";
     }
 
     private static UnknownArray decodeUnknown(DecodeContext ctx, ArrayNode node) {

@@ -26,10 +26,9 @@ import java.util.Set;
 /// faithfully rather than being truncated to what is implemented today.
 public final class Editions {
 
-    /// The baseline `core` edition: stable encodings writable by Vortex 0.36.0.
+    /// The baseline `core` edition: stable encodings writable by Vortex (Rust reference) 0.36.0.
     public static final Edition CORE_2025_05_0 = new Edition(
             new EditionId(EditionFamily.CORE, YearMonth.of(2025, 5), 0),
-            Optional.of("0.36.0"),
             Set.of(
                     EncodingId.FASTLANES_BITPACKED, EncodingId.FASTLANES_FOR,
                     EncodingId.VORTEX_ALP, EncodingId.VORTEX_ALPRD, EncodingId.VORTEX_BOOL,
@@ -44,38 +43,32 @@ public final class Editions {
     /// The `core` edition adding stable encodings released through June 2025.
     public static final Edition CORE_2025_06_0 = new Edition(
             new EditionId(EditionFamily.CORE, YearMonth.of(2025, 6), 0),
-            Optional.of("0.40.0"),
             Set.of(EncodingId.VORTEX_PCO, EncodingId.VORTEX_SEQUENCE, EncodingId.VORTEX_ZSTD));
 
     /// The `core` edition adding stable encodings released through October 2025.
     public static final Edition CORE_2025_10_0 = new Edition(
             new EditionId(EditionFamily.CORE, YearMonth.of(2025, 10), 0),
-            Optional.of("0.54.0"),
             Set.of(EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
                     EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED));
 
     /// The `core` edition adding stable encodings released through July 2026.
     public static final Edition CORE_2026_07_0 = new Edition(
             new EditionId(EditionFamily.CORE, YearMonth.of(2026, 7), 0),
-            Optional.of("0.65.0"),
             Set.of(EncodingId.VORTEX_VARIANT));
 
     /// The May 2025 draft edition of the `unstable` family.
     public static final Edition UNSTABLE_2025_05_0 = new Edition(
             new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2025, 5), 0),
-            Optional.empty(),
             Set.of(EncodingId.FASTLANES_DELTA));
 
     /// The February 2026 draft edition of the `unstable` family.
     public static final Edition UNSTABLE_2026_02_0 = new Edition(
             new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 2), 0),
-            Optional.empty(),
             Set.of(new EncodingId.Custom("vortex.zstd_buffers")));
 
     /// The April 2026 draft edition of the `unstable` family.
     public static final Edition UNSTABLE_2026_04_0 = new Edition(
             new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 4), 0),
-            Optional.empty(),
             Set.of(
                     new EncodingId.Custom("vortex.parquet.variant"), EncodingId.VORTEX_PATCHED,
                     new EncodingId.Custom("vortex.tensor.cosine_similarity"),
@@ -86,7 +79,6 @@ public final class Editions {
     /// The June 2026 draft edition of the `unstable` family.
     public static final Edition UNSTABLE_2026_06_0 = new Edition(
             new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 6), 0),
-            Optional.empty(),
             Set.of(new EncodingId.Custom("vortex.onpair")));
 
     /// Every declared edition, in the order above. Order matters: [#owningEdition(EncodingId)]
