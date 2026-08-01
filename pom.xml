@@ -66,7 +66,7 @@
 		<hardwood.version>1.0.0.Final</hardwood.version>
 		<jmh.version>1.37</jmh.version>
 		<!-- testing -->
-		<zstd-jni.version>1.5.7-11</zstd-jni.version>
+		<zstd-jni.version>1.5.7-12</zstd-jni.version>
 		<h2.version>2.4.240</h2.version>
 		<junit.version>6.1.2</junit.version>
 		<assertj.version>3.27.7</assertj.version>
