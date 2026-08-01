@@ -62,7 +62,7 @@
 		<zstd.version>0.12</zstd.version>
 
 
-		<fastcsv.version>4.3.1</fastcsv.version>
+		<fastcsv.version>4.4.0</fastcsv.version>
 		<hardwood.version>1.0.0.Final</hardwood.version>
 		<jmh.version>1.37</jmh.version>
 		<!-- testing -->
