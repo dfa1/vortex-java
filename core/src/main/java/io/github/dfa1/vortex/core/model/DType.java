@@ -325,14 +325,14 @@ public sealed interface DType
         /// (e.g. timestamp = TimeUnit tag + tz length + tz UTF-8); 64 KiB is generous
         /// for custom extensions while blocking attacker-supplied multi-megabyte blobs
         /// that would inflate parser allocations.
-        public static final int MAX_METADATA_SIZE = 64 * 1024;
+        public static final MemorySize MAX_METADATA_SIZE = MemorySize.ofKiB(64);
 
         /// @throws VortexException if `metadata` carries more than
         ///         [#MAX_METADATA_SIZE] readable bytes
         public Extension {
-            if (metadata != null && metadata.byteSize() > MAX_METADATA_SIZE) {
+            if (metadata != null && metadata.byteSize() > MAX_METADATA_SIZE.bytes()) {
                 throw new VortexException("extension metadata too large: "
-                        + metadata.byteSize() + " > " + MAX_METADATA_SIZE);
+                        + metadata.byteSize() + " > " + MAX_METADATA_SIZE.bytes());
             }
         }
 

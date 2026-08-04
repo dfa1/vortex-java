@@ -17,18 +17,18 @@ class DTypeExtensionTest {
     void metadataAtCap_accepted() {
         // Given — exact boundary must pass so legitimate large-but-bounded metadata
         // is not falsely rejected
-        MemorySegment meta = MemorySegment.ofArray(new byte[DType.Extension.MAX_METADATA_SIZE]);
+        MemorySegment meta = MemorySegment.ofArray(new byte[(int) DType.Extension.MAX_METADATA_SIZE.bytes()]);
 
         // When / Then
         assertThat(new DType.Extension("acme.big", I32, meta, false).metadata().byteSize())
-                .isEqualTo(DType.Extension.MAX_METADATA_SIZE);
+                .isEqualTo(DType.Extension.MAX_METADATA_SIZE.bytes());
     }
 
     @Test
     void metadataOverCap_rejected() {
         // Given — one byte past the cap; defends parser against attacker-supplied
         // multi-megabyte metadata blobs that would inflate parse-time allocations
-        MemorySegment meta = MemorySegment.ofArray(new byte[DType.Extension.MAX_METADATA_SIZE + 1]);
+        MemorySegment meta = MemorySegment.ofArray(new byte[(int) DType.Extension.MAX_METADATA_SIZE.bytes() + 1]);
 
         // When / Then
         assertThatThrownBy(() -> new DType.Extension("acme.big", I32, meta, false))

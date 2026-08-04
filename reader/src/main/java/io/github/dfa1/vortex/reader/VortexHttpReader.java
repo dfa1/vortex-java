@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
@@ -28,7 +29,7 @@ public final class VortexHttpReader implements VortexHandle {
 
     /// Tail window fetched on open. 65 KB covers the trailer, postscript, and
     /// all metadata blobs for typical Vortex files.
-    static final int TAIL_SIZE = 65 * 1024;
+    static final MemorySize TAIL_SIZE = MemorySize.ofKiB(65);
 
     /// Shared across all instances. JDK HttpClient is heavyweight and designed for reuse;
     /// per-reader instantiation would create redundant connection pools and selector threads.
@@ -118,7 +119,7 @@ public final class VortexHttpReader implements VortexHandle {
         if (psOffInTail < 0) {
             throw new VortexException(
                 "postscript (%d bytes) extends beyond %d-byte tail; fetch larger tail"
-                    .formatted(trailer.postscriptLen(), TAIL_SIZE));
+                    .formatted(trailer.postscriptLen(), TAIL_SIZE.bytes()));
         }
 
         MemorySegment postscriptSeg = IoBounds.slice(tailSeg, psOffInTail, trailer.postscriptLen());
@@ -159,7 +160,7 @@ public final class VortexHttpReader implements VortexHandle {
     /// avoiding a separate HEAD round trip.
     private static TailFetch fetchTail(URI uri, HttpClient client) throws IOException {
         HttpRequest req = HttpRequest.newBuilder(uri)
-                              .header("Range", "bytes=-" + TAIL_SIZE)
+                              .header("Range", "bytes=-" + TAIL_SIZE.bytes())
                               .GET()
                               .build();
         HttpResponse<byte[]> resp;

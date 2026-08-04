@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `MemorySize` domain primitive in `core.model` replaces raw byte-count `long`/`int` arithmetic: validated non-negative at construction, with `ofKiB`/`ofMiB`/`ofGiB` factories and a `toGiB()` display accessor. Migrated `WriteOptions#globalDictMaxRetainedBytes()` and `PostscriptParser`'s layout-metadata size cap. ([#321](https://github.com/dfa1/vortex-java/issues/321))
+- `MemorySize` domain primitive in `core.model` replaces raw byte-count `long`/`int` arithmetic: validated non-negative at construction, with `ofKiB`/`ofMiB`/`ofGiB` factories and a `toGiB()` display accessor. Migrated `WriteOptions#globalDictMaxRetainedBytes()`, `PostscriptParser`'s layout-metadata size cap, `DType.Extension#MAX_METADATA_SIZE`, and `VortexHttpReader`'s HTTP tail-fetch window. ([#321](https://github.com/dfa1/vortex-java/issues/321))
 
 ## [0.13.0] — 2026-08-04
 
