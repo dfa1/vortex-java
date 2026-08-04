@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-08-04
+
 ### Added
 
 - Adopted the Vortex [editions](https://github.com/vortex-data/vortex/blob/develop/docs/specs/editions.md) model: `WriteOptions` gates which encodings a write may emit (defaulting to the latest frozen `core` edition) and fails immediately if it would emit one outside it; `ReadRegistry`'s unknown-encoding error now names the edition an id belongs to. ([#301](https://github.com/dfa1/vortex-java/issues/301))
