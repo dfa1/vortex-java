@@ -13,9 +13,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 /// Write-only encoder for `vortex.fsst`.
 ///
@@ -121,51 +119,11 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// The FSST-specific product of compression: the symbol-table buffers, the wire code stream, the
     /// [ProtoFSSTMetadata] bytes, and the per-row uncompressed lengths / cumulative code offsets as
     /// plain `int[]` (the two offset children, in narrowest-unsigned ptypes).
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Fsst(
             MemorySegment symBuf, MemorySegment symLenBuf, MemorySegment compBuf,
             byte[] metaBytes, int[] uncompLens, int[] codesOffsets,
             PType uncompLenPType, PType codesOffPType, int n) {
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (!(obj instanceof Fsst other)) {
-                return false;
-            }
-            return n == other.n
-                    && Objects.equals(symBuf, other.symBuf)
-                    && Objects.equals(symLenBuf, other.symLenBuf)
-                    && Objects.equals(compBuf, other.compBuf)
-                    && Arrays.equals(metaBytes, other.metaBytes)
-                    && Arrays.equals(uncompLens, other.uncompLens)
-                    && Arrays.equals(codesOffsets, other.codesOffsets)
-                    && uncompLenPType == other.uncompLenPType
-                    && codesOffPType == other.codesOffPType;
-        }
-
-        @Override
-        public int hashCode() {
-            int result = Objects.hash(symBuf, symLenBuf, compBuf, uncompLenPType, codesOffPType, n);
-            result = 31 * result + Arrays.hashCode(metaBytes);
-            result = 31 * result + Arrays.hashCode(uncompLens);
-            result = 31 * result + Arrays.hashCode(codesOffsets);
-            return result;
-        }
-
-        @Override
-        public String toString() {
-            return "Fsst[symBuf=" + symBuf
-                    + ", symLenBuf=" + symLenBuf
-                    + ", compBuf=" + compBuf
-                    + ", metaBytes=" + Arrays.toString(metaBytes)
-                    + ", uncompLens=" + Arrays.toString(uncompLens)
-                    + ", codesOffsets=" + Arrays.toString(codesOffsets)
-                    + ", uncompLenPType=" + uncompLenPType
-                    + ", codesOffPType=" + codesOffPType
-                    + ", n=" + n + "]";
-        }
     }
 
     private static Fsst compress(String[] strings, Arena arena) {
