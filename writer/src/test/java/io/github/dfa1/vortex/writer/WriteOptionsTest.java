@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.MemorySize;
+
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,7 +13,7 @@ class WriteOptionsTest {
     // caller overrides it via withGlobalDictMaxRetainedBytes(...). Raised from 256 MB when buffering
     // became cardinality-bounded (ADR 0021), then from 1 GB (#303) so wide high-cardinality files
     // keep their high-cardinality columns globally dictionaried instead of evicting them to per-chunk.
-    private static final long DEFAULT_BUDGET = 2L * 1024 * 1024 * 1024;
+    private static final MemorySize DEFAULT_BUDGET = MemorySize.ofGiB(2);
 
     @Test
     void defaults_globalDictMaxRetainedBytes_is2Gb() {
@@ -37,10 +39,10 @@ class WriteOptionsTest {
         WriteOptions base = WriteOptions.defaults();
 
         // When
-        WriteOptions result = base.withGlobalDictMaxRetainedBytes(120_000L);
+        WriteOptions result = base.withGlobalDictMaxRetainedBytes(new MemorySize(120_000));
 
         // Then — only the budget changes; every other component is copied unchanged.
-        assertThat(result.globalDictMaxRetainedBytes()).isEqualTo(120_000L);
+        assertThat(result.globalDictMaxRetainedBytes()).isEqualTo(new MemorySize(120_000));
         assertThat(result.chunkSize()).isEqualTo(base.chunkSize());
         assertThat(result.enableZoneMaps()).isEqualTo(base.enableZoneMaps());
         assertThat(result.compressionRatioThreshold()).isEqualTo(base.compressionRatioThreshold());
@@ -55,7 +57,7 @@ class WriteOptionsTest {
         WriteOptions base = WriteOptions.defaults();
 
         // When
-        WriteOptions result = base.withGlobalDictMaxRetainedBytes(1L);
+        WriteOptions result = base.withGlobalDictMaxRetainedBytes(new MemorySize(1));
 
         // Then — records are immutable; the copy-method must not mutate the original.
         assertThat(result).isNotSameAs(base);

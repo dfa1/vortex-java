@@ -63,6 +63,7 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | `EncodingId` | `sealed interface` — `WellKnown` enum + `Custom` record | Array-encoding identity; total `parse(String)` over non-blank ids; constants re-exported (`EncodingId.VORTEX_PRIMITIVE`, …) |
 | `LayoutId` | `sealed interface` — `WellKnown` enum + `Custom` record | Layout identity (separate namespace from encodings; `vortex.flat` is layout-only); both zoned aliases `vortex.zoned`/`vortex.stats` |
 | `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
+| `MemorySize` | `record MemorySize(long bytes)` | Validated non-negative byte count; `ofKiB`/`ofMiB`/`ofGiB` factories, `toGiB()` for display. Rejects negative values (`IllegalArgumentException`) — a programmer-error guard, not a `VortexException`-worthy untrusted-input check |
 | `EditionFamily` | `enum` — `CORE`, `UNSTABLE` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
 | `EditionId` | `record EditionId(EditionFamily family, YearMonth cutMonth, int version)` | e.g. `core2025.05.0`; `isAtOrBefore` orders editions within a family only |
 | `Edition` | `record Edition(EditionId id, Set<EncodingId> added)` | Only `Editions`'s 8 catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |

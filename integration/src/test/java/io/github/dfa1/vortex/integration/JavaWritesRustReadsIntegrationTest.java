@@ -11,6 +11,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.Editions;
+import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.OhlcData;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
@@ -510,7 +511,7 @@ class JavaWritesRustReadsIntegrationTest {
         // zone-map with one zone per chunk. The Rust reader must parse that layout and still
         // return every value (zones are a transparent pruning aux).
         Path file = tmp.resolve("java_zoned.vtx");
-        WriteOptions zoneMapped = new WriteOptions(4, true, 0.90, 0, true, false, 256L * 1024 * 1024, Map.of());
+        WriteOptions zoneMapped = new WriteOptions(4, true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
         long[] ids = new long[20];
         double[] vals = new double[20];
         for (int i = 0; i < 20; i++) {

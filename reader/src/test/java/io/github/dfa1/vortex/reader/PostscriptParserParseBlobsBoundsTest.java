@@ -141,7 +141,7 @@ class PostscriptParserParseBlobsBoundsTest {
         // Given — metadata of exactly MAX_LAYOUT_METADATA_BYTES (the largest allowed). `> MAX` is
         // false at the limit, so it must parse; kills `>` relaxed to `>=`, which would reject it.
         MemorySegment footer = footerWithLayoutSpecs("vortex.flat");
-        MemorySegment layout = flatLayoutWithMetadata(PostscriptParser.MAX_LAYOUT_METADATA_BYTES);
+        MemorySegment layout = flatLayoutWithMetadata((int) PostscriptParser.MAX_LAYOUT_METADATA_BYTES.bytes());
 
         // When / Then
         assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, null))
@@ -152,7 +152,7 @@ class PostscriptParserParseBlobsBoundsTest {
     void parseBlobs_layoutMetadata_oneOverLimit_throws() {
         // Given — one byte past the cap
         MemorySegment footer = footerWithLayoutSpecs("vortex.flat");
-        MemorySegment layout = flatLayoutWithMetadata(PostscriptParser.MAX_LAYOUT_METADATA_BYTES + 1);
+        MemorySegment layout = flatLayoutWithMetadata((int) PostscriptParser.MAX_LAYOUT_METADATA_BYTES.bytes() + 1);
 
         // When / Then
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, null))

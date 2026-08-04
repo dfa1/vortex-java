@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -49,7 +50,7 @@ class AggregateSumNullTest {
                 List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.I64, true)), false);
         Path file = tmp.resolve("sum-nulls.vortex");
         // Large chunk so the whole column is one chunk; zone maps on so the SUM stat is emitted.
-        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, 256L * 1024 * 1024, Map.of());
+        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, schema, opts)) {
             writer.writeChunk(Map.of(ColumnName.of("v"), new NullableData(values, valid)));

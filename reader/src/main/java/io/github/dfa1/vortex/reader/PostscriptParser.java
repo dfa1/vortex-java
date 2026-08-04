@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
+import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.fbs.FbsBinary;
@@ -36,7 +37,7 @@ final class PostscriptParser {
     /// from `metadataAsSegment()`; a crafted file can claim a multi-gigabyte metadata
     /// blob and force later allocators into pathological behavior. 4 MiB is well above any
     /// real encoding's metadata footprint (the largest is FSST's symbol table at ~32 KiB).
-    static final int MAX_LAYOUT_METADATA_BYTES = 4 * 1024 * 1024;
+    static final MemorySize MAX_LAYOUT_METADATA_BYTES = MemorySize.ofMiB(4);
 
     /// Hard cap on DType-tree recursion depth. A `DType` nests through Struct fields, List/
     /// FixedSizeList element types, and Extension storage types; like the layout tree, a crafted
@@ -210,10 +211,10 @@ final class PostscriptParser {
         LayoutId layoutId = layoutSpecs.get(encIdx);
 
         MemorySegment metadata = l.metadataAsSegment();
-        if (metadata != null && metadata.byteSize() > MAX_LAYOUT_METADATA_BYTES) {
+        if (metadata != null && metadata.byteSize() > MAX_LAYOUT_METADATA_BYTES.bytes()) {
             throw new VortexException(
                     "layout metadata size " + metadata.byteSize()
-                            + " exceeds limit (" + MAX_LAYOUT_METADATA_BYTES + ")");
+                            + " exceeds limit (" + MAX_LAYOUT_METADATA_BYTES.bytes() + ")");
         }
 
         var children = new ArrayList<Layout>(l.childrenLength());

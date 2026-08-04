@@ -204,7 +204,7 @@ public final class VortexWriter implements Closeable {
         this.channel = channel;
         this.schema = schema;
         this.options = options;
-        this.dictRetainedBudget = options.globalDictMaxRetainedBytes();
+        this.dictRetainedBudget = options.globalDictMaxRetainedBytes().bytes();
         this.encodings = encodings;
         this.defaultRegistry = buildRegistry(encodings);
         this.cascadeCodecs = buildCascadeCodecs(options);

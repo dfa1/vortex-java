@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.model.Edition;
 import io.github.dfa1.vortex.core.model.EditionFamily;
 import io.github.dfa1.vortex.core.model.Editions;
+import io.github.dfa1.vortex.core.model.MemorySize;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -51,7 +52,7 @@ public record WriteOptions(
         int allowedCascading,
         boolean globalDict,
         boolean enableZstd,
-        long globalDictMaxRetainedBytes,
+        MemorySize globalDictMaxRetainedBytes,
         Map<EditionFamily, Edition> editions
 ) {
     /// Defensively copies `editions` into an immutable map.
@@ -66,8 +67,8 @@ public record WriteOptions(
     /// highest-cardinality columns to per-chunk dictionaries, repeating their values pool each chunk
     /// (~35 MB larger). 2 GB fits that file with headroom while still bounding the pathological
     /// many-wide-columns risk. Constrained-heap writers can lower it via
-    /// [#withGlobalDictMaxRetainedBytes(long)].
-    private static final long DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = 2L * 1024 * 1024 * 1024;
+    /// [#withGlobalDictMaxRetainedBytes(MemorySize)].
+    private static final MemorySize DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = MemorySize.ofGiB(2);
 
     /// The default edition guard: only the latest frozen `core` edition enabled. See the `editions`
     /// parameter's javadoc above for the safety rationale.
@@ -126,7 +127,7 @@ public record WriteOptions(
                 globalDictMaxRetainedBytes, editions);
     }
 
-    /// Returns a copy of these options with the global-dictionary retention budget set to `budgetBytes`.
+    /// Returns a copy of these options with the global-dictionary retention budget set to `budget`.
     ///
     /// This is the aggregate byte budget across all global-dictionary candidate columns' buffered
     /// per-chunk code arrays, retained in the heap while the writer waits to build shared dictionaries
@@ -134,11 +135,11 @@ public record WriteOptions(
     /// Lower it to demote columns to per-chunk encoding sooner (bounding memory on huge files); raise
     /// it on memory-rich hosts to keep more columns dictionary-encoded.
     ///
-    /// @param budgetBytes aggregate retention budget in bytes for buffered global-dict candidate columns
+    /// @param budget aggregate retention budget for buffered global-dict candidate columns
     /// @return a new `WriteOptions` with the global-dict retention budget updated
-    public WriteOptions withGlobalDictMaxRetainedBytes(long budgetBytes) {
+    public WriteOptions withGlobalDictMaxRetainedBytes(MemorySize budget) {
         return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, budgetBytes, editions);
+                enableZstd, budget, editions);
     }
 
     /// Returns a copy of these options with `edition` enabled, replacing any edition already

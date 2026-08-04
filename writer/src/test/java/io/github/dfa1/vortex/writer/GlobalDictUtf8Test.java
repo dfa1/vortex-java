@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -235,7 +236,7 @@ class GlobalDictUtf8Test {
         // Each chunk buffers 2000 rows × 2 B/row = 4000 B of codes plus a ~120 B dedup map. A budget
         // of 8000 B is crossed after the 3rd chunk (~12 KB retained), forcing demotion partway through
         // the file. Configured via the real public WriteOptions surface rather than a test-only seam.
-        WriteOptions opts = WriteOptions.cascading(3).withGlobalDictMaxRetainedBytes(8_000L);
+        WriteOptions opts = WriteOptions.cascading(3).withGlobalDictMaxRetainedBytes(new MemorySize(8_000));
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {
             // When
@@ -287,7 +288,7 @@ class GlobalDictUtf8Test {
         int chunkCount = 6;
         String[] expected = new String[rowsPerChunk * chunkCount];
 
-        WriteOptions opts = WriteOptions.cascading(3).withGlobalDictMaxRetainedBytes(8_000L);
+        WriteOptions opts = WriteOptions.cascading(3).withGlobalDictMaxRetainedBytes(new MemorySize(8_000));
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
             // When — every 10th row is null so the buffered chunks carry a validity bitmap; the budget

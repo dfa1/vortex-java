@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -56,7 +57,7 @@ class AggregateWhereCleanPartitionTest {
                 .field("val", DType.I64)
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the fold reads.
-        WriteOptions opts = new WriteOptions(CHUNK, true, 0.90, 0, true, false, 256L * 1024 * 1024, Map.of());
+        WriteOptions opts = new WriteOptions(CHUNK, true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             for (int c = 0; c < CHUNKS; c++) {
@@ -429,7 +430,7 @@ class AggregateWhereCleanPartitionTest {
     private static void writeChunks(Path file, DType.Struct schema, Map<ColumnName, Object> chunk0,
                                     Map<ColumnName, Object> chunk1) throws Exception {
         // chunkSize large so each writeChunk is exactly one chunk (one zone).
-        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, 256L * 1024 * 1024, Map.of());
+        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             writer.writeChunk(chunk0);

@@ -8,6 +8,7 @@ import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -75,11 +76,11 @@ public class JniWritesJavaReadsBigFileBenchmark {
     private static final ValueLayout.OfLong LE_LONG =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-    private static final long TARGET_BYTES = 3L * 1024 * 1024 * 1024; // ~3 GB
+    private static final MemorySize TARGET_BYTES = MemorySize.ofGiB(3);
     private static final int BATCH_SIZE = 1_000_000; // 1 M rows/batch → ~32 MB raw per col per batch
     private static final int COLUMNS = 4;
     private static final long BYTES_PER_ROW = (long) COLUMNS * Long.BYTES;
-    private static final long TOTAL_ROWS = TARGET_BYTES / BYTES_PER_ROW;
+    private static final long TOTAL_ROWS = TARGET_BYTES.bytes() / BYTES_PER_ROW;
 
     private static final ArrowType I64_TYPE = new ArrowType.Int(64, true);
     private static final Schema JNI_SCHEMA = new Schema(List.of(
@@ -112,19 +113,19 @@ public class JniWritesJavaReadsBigFileBenchmark {
             // instead of rewriting it per trial (mirrors the OHLC read benchmark).
             if (!Files.exists(benchFile) || Files.size(benchFile) == 0L) {
                 System.out.printf("[BigFileBenchmark] external file missing — writing %d rows × %d I64 cols (~%.2f GB) to %s...%n",
-                        TOTAL_ROWS, COLUMNS, TARGET_BYTES / (double) (1L << 30), benchFile);
+                        TOTAL_ROWS, COLUMNS, TARGET_BYTES.toGiB(), benchFile);
                 writeJni(benchFile);
             }
             System.out.printf("[BigFileBenchmark] using external file: %s (%.2f GB)%n",
-                    benchFile, Files.size(benchFile) / (double) (1L << 30));
+                    benchFile, new MemorySize(Files.size(benchFile)).toGiB());
         } else {
             benchFile = Files.createTempFile("vortex-bigfile-bench", ".vtx");
             ownFile = true;
             System.out.printf("[BigFileBenchmark] writing %d rows × %d I64 cols (~%.2f GB)...%n",
-                    TOTAL_ROWS, COLUMNS, TARGET_BYTES / (double) (1L << 30));
+                    TOTAL_ROWS, COLUMNS, TARGET_BYTES.toGiB());
             writeJni(benchFile);
             System.out.printf("[BigFileBenchmark] file size: %.2f GB%n",
-                    Files.size(benchFile) / (double) (1L << 30));
+                    new MemorySize(Files.size(benchFile)).toGiB());
         }
 
         long jniSum = scanJni();
