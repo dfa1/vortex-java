@@ -1,8 +1,10 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -125,7 +127,7 @@ class AlpEncodingDecoderTest {
     void decode_f64_patches_withU8Indices() {
         // Given patches whose index child uses U8 storage — exercises the U8 arm of
         // readUnsigned (the encoder always emits U32 indices)
-        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.core.proto.ProtoPType.U8, null, null, null);
+        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, ProtoPType.U8, null, null, null);
         byte[] meta = new ProtoALPMetadata(2, 0, pm).encode(); // *0.01
 
         ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
@@ -150,7 +152,7 @@ class AlpEncodingDecoderTest {
     @Test
     void decode_patches_nonUnsignedIndexPtype_throws() {
         // Given a signed (I32) patch-index ptype — readUnsigned rejects it
-        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.core.proto.ProtoPType.I32, null, null, null);
+        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, ProtoPType.I32, null, null, null);
         byte[] meta = new ProtoALPMetadata(2, 0, pm).encode();
 
         ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
@@ -164,6 +166,134 @@ class AlpEncodingDecoderTest {
 
         // When / Then
         assertThatThrownBy(() -> SUT.decode(ctx)).hasMessageContaining("non-unsigned patch index ptype");
+    }
+
+    /// Adversarial metadata from an untrusted file (TODO.md §Security, per-encoding
+    /// adversarial tests). `exp_e`/`exp_f` were read verbatim and used to index the
+    /// power-of-ten tables, so an out-of-range exponent escaped as an
+    /// `ArrayIndexOutOfBoundsException`; patch indices were scatter-written with no range
+    /// check at all (unlike [BitpackedEncodingDecoder]), so a patch pointing outside the
+    /// row range escaped as a raw `IndexOutOfBoundsException` from the copy, and an empty
+    /// patch child divided by zero in the broadcast branch.
+    ///
+    /// The float-vs-double discriminator is not part of ALP metadata here — it is derived
+    /// from the column's dtype — and an unsupported ptype already fails as a
+    /// [VortexException] ("unsupported dtype"), so there is
+    /// no out-of-enum-range byte to fuzz.
+    @Nested
+    class AdversarialMetadata {
+
+        @Test
+        void negativeExponent_f64_throws() {
+            // Given exp_e = -1, which would index the inverse power-of-ten table below zero
+            DecodeContext ctx = ctx(F64, new ProtoALPMetadata(-1, 0, null), leLongs(1L, 2L), 2);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("exponents (e=-1, f=0) out of range [0,24)");
+        }
+
+        @Test
+        void exponentPastTable_f64_throws() {
+            // Given exp_e = 24, one past the last entry of the 24-wide f64 table
+            DecodeContext ctx = ctx(F64, new ProtoALPMetadata(24, 0, null), leLongs(1L, 2L), 2);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range [0,24)");
+        }
+
+        @Test
+        void exponentPastTable_f32_throws() {
+            // Given exp_f = 11 on an f32 column: valid for f64 but one past the narrower
+            // 11-wide f32 table, so the width-specific bound is what matters
+            DecodeContext ctx = ctx(F32, new ProtoALPMetadata(0, 11, null), leInts(1, 2), 2);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range [0,11)");
+        }
+
+        @Test
+        void patchIndexPastRowCount_throws() {
+            // Given a single patch pointing at row 9 of a 2-row array
+            ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L,
+                    ProtoPType.U8, null, null, null);
+            DecodeContext ctx = patchedCtx(pm, leLongs(100L, 200L),
+                    MemorySegment.ofArray(new byte[]{9}), leDoubles(9.0), 2);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch index 9 out of range [0,2)");
+        }
+
+        @Test
+        void patchOffsetPushesIndexNegative_throws() {
+            // Given patches.offset = 5 against a patch index of 1, so the absolute row index
+            // is -4 and the copy would write before the start of the output buffer
+            ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 5L,
+                    ProtoPType.U8, null, null, null);
+            DecodeContext ctx = patchedCtx(pm, leLongs(100L, 200L),
+                    MemorySegment.ofArray(new byte[]{1}), leDoubles(9.0), 2);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch index -4 out of range [0,2)");
+        }
+
+        @Test
+        void patchCountGreaterThanRowCount_throws() {
+            // Given 3 declared patches over a 2-row array: the third index necessarily falls
+            // outside the rows, which is exactly what the range guard is for
+            ProtoPatchesMetadata pm = new ProtoPatchesMetadata(3L, 0L,
+                    ProtoPType.U8, null, null, null);
+            DecodeContext ctx = patchedCtx(pm, leLongs(100L, 200L),
+                    MemorySegment.ofArray(new byte[]{0, 1, 2}), leDoubles(9.0, 9.0, 9.0), 2);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch index 2 out of range [0,2)");
+        }
+
+        @Test
+        void emptyPatchIndexChild_throws() {
+            // Given patches declared but a zero-length index child: the broadcast branch used
+            // to compute `i % 0` and die with an ArithmeticException
+            ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L,
+                    ProtoPType.U8, null, null, null);
+            DecodeContext ctx = patchedCtx(pm, leLongs(100L, 200L),
+                    MemorySegment.ofArray(new byte[0]), leDoubles(9.0), 2);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("empty patch child");
+        }
+
+        private DecodeContext ctx(DType dtype, ProtoALPMetadata meta, MemorySegment encoded, long rowCount) {
+            ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta.encode()),
+                    new ArrayNode[]{enc}, new int[0]);
+            return new DecodeContext(node, dtype, rowCount, new MemorySegment[]{encoded}, REGISTRY, Arena.ofAuto());
+        }
+
+        private DecodeContext patchedCtx(ProtoPatchesMetadata pm, MemorySegment encoded,
+                MemorySegment indices, MemorySegment values, long rowCount) {
+            byte[] meta = new ProtoALPMetadata(2, 0, pm).encode();
+            ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+            ArrayNode idx = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+            ArrayNode val = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta),
+                    new ArrayNode[]{enc, idx, val}, new int[0]);
+            return new DecodeContext(node, F64, rowCount,
+                    new MemorySegment[]{encoded, indices, values}, REGISTRY, Arena.ofAuto());
+        }
     }
 
     /// An ALP array's validity IS its encoded child's (`ValidityChild<ALP>`, #210): a nullable

@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
@@ -181,7 +183,7 @@ class DictEncodingDecoderTest {
     class PrimitiveLegacy {
 
         @ParameterizedTest(name = "codes={0}")
-        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+        @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
         void singleByteMetadata_decodesViaLegacyPath(PType codePType) {
             // Given — legacy layout: 1-byte metadata (code ptype), child[0]=values, child[1]=codes
             long[] dict = {100, 200, 300};
@@ -216,7 +218,7 @@ class DictEncodingDecoderTest {
     class ExpandGenericElemSize {
 
         @ParameterizedTest(name = "codes={0}")
-        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+        @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
         void fastPath_copiesPerElement(PType codePType) {
             // Given — two 3-byte elements, codes [0, 1] (codesCap == rowCount, valuesCap > 1)
             MemorySegment values = bytes(1, 2, 3, 4, 5, 6);
@@ -231,7 +233,7 @@ class DictEncodingDecoderTest {
         }
 
         @ParameterizedTest(name = "codes={0}")
-        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+        @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
         void slowPath_broadcastsSingleElement(PType codePType) {
             // Given — one 3-byte element (valuesCap == 1) forces the broadcast branch
             MemorySegment values = bytes(7, 8, 9);
@@ -246,7 +248,7 @@ class DictEncodingDecoderTest {
         }
 
         @ParameterizedTest(name = "codes={0}")
-        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+        @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
         void broadcastCodes_whenCodesShorterThanRowCount(PType codePType) {
             // Given — a single code element (codesCap < rowCount) takes the codes-broadcast branch
             MemorySegment values = bytes(10, 11, 12, 20, 21, 22);
@@ -532,7 +534,7 @@ class DictEncodingDecoderTest {
         }
 
         @ParameterizedTest(name = "codes={0}")
-        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U16", "U32"})
+        @EnumSource(value = PType.class, names = {"U16", "U32"})
         void poolNull_readsWiderCodeWidths(PType codePType) {
             // Given — codes at the wider widths (U16/U32) with a pool-null slot. rowValidity must
             // read each code at the correct stride via readCode's U16/U32 arms (only exercised when
@@ -603,6 +605,237 @@ class DictEncodingDecoderTest {
         }
     }
 
+    /// Adversarial codes and dictionary offsets from an untrusted file (TODO.md §Security,
+    /// per-encoding adversarial tests). `poolValid` already guarded codes against the
+    /// row-validity pool, but the value **expansion** loops indexed the values pool with no
+    /// bounds check at all: a code pointing past the pool escaped as a raw
+    /// `IndexOutOfBoundsException` from the segment access instead of a [VortexException].
+    ///
+    /// A codes ptype that cannot address the whole pool (u8 codes, pool longer than 256) is
+    /// deliberately NOT an error: the writer picks the codes width from the codes actually
+    /// emitted, so a pool whose tail is unreachable is well-formed, and neither the format
+    /// spec nor the Rust reference rejects it.
+    @Nested
+    class AdversarialCodes {
+
+        @ParameterizedTest(name = "codes={0}")
+        @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+        void codePastValuesPool_protoFastPath_throws(PType codePType) {
+            // Given a 2-entry I32 pool and a code of 7; codesCap == rowCount and valuesCap > 1,
+            // so the un-clamped fast expansion branch runs and indexes past the pool
+            MemorySegment codes = codeSegment(codePType, new long[]{0, 7});
+            MemorySegment values = TestSegments.leInts(10, 20);
+
+            // When / Then
+            assertThatThrownBy(() -> decodeProtoSegments(DType.I32, codePType, codes, values, 2, 2))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range for a values pool");
+        }
+
+        @Test
+        void codePastValuesPool_legacyPath_throws() {
+            // Given the legacy 1-byte-metadata layout with the same overrunning code
+            MemorySegment values = TestSegments.leLongs(1, 2);
+            MemorySegment codes = u8Codes(0, 9);
+
+            // When / Then
+            assertThatThrownBy(() -> decodeLegacy(DType.I64, PType.U8, values, codes, 2))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range for a values pool");
+        }
+
+        @Test
+        void codePastDictionaryOffsets_utf8_throws() {
+            // Given a 2-entry string dictionary and a code of 5, which walks off the
+            // dictionary offsets segment when the row is read
+            VarBinArray array = decodeLegacyUtf8("abcde", TestSegments.leLongs(0, 2, 5), u8Codes(5));
+
+            // When / Then
+            assertThatThrownBy(() -> array.getString(0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("dict value offset index");
+        }
+
+        @Test
+        void nonMonotonicDictionaryOffsets_utf8_throws() {
+            // Given dictionary offsets [0, 5, 2]: entry 1 spans [5, 2), a negative length that
+            // used to reach `new byte[end - start]` as a NegativeArraySizeException
+            VarBinArray array = decodeLegacyUtf8("abcde", TestSegments.leLongs(0, 5, 2), u8Codes(1));
+
+            // When / Then
+            assertThatThrownBy(() -> array.getString(0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range for a data buffer");
+        }
+
+        @Test
+        void dictionaryOffsetPastBytes_utf8_throws() {
+            // Given an entry ending at 100 over a 5-byte dictionary bytes buffer
+            VarBinArray array = decodeLegacyUtf8("abcde", TestSegments.leLongs(0, 100), u8Codes(0));
+
+            // When / Then
+            assertThatThrownBy(() -> array.getString(0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range for a data buffer");
+        }
+
+        @Test
+        void truncatedCodesSegment_utf8_throws() {
+            // Given 3 declared rows but only 2 codes on the wire: the third row reads past
+            // the codes segment, which must fail loudly rather than as a raw IOOBE
+            MemorySegment bytes = MemorySegment.ofArray("abcde".getBytes(StandardCharsets.UTF_8));
+            MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) PType.U8.ordinal()});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, meta, new ArrayNode[0], new int[]{0, 1, 2});
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 3,
+                    new MemorySegment[]{bytes, TestSegments.leLongs(0, 2, 5), u8Codes(0, 1)},
+                    REGISTRY, Arena.ofAuto());
+            VarBinArray array = (VarBinArray) SUT.decode(ctx);
+
+            // When / Then
+            assertThatThrownBy(() -> array.getString(2))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range for a codes segment");
+        }
+
+        @Test
+        void emptyValuesPool_throws() {
+            // Given a zero-length values child: the broadcast branch wraps codes with
+            // `% valuesCap`, so an empty pool used to die with ArithmeticException
+            // (values_len stays 1 so the metadata is not elided to an empty proto payload)
+            MemorySegment values = MemorySegment.ofArray(new byte[0]);
+
+            // When / Then
+            assertThatThrownBy(() -> decodeProtoSegments(DType.I32, PType.U8, u8Codes(0, 0), values, 1, 2))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("empty dict child");
+        }
+
+        @Test
+        void emptyCodesChild_throws() {
+            // Given a zero-length codes child, which makes the `% codesCap` wrap divide by zero
+            MemorySegment codes = MemorySegment.ofArray(new byte[0]);
+
+            // When / Then
+            assertThatThrownBy(() -> decodeProtoSegments(DType.I32, PType.U8, codes, TestSegments.leInts(1, 2), 2, 2))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("empty dict child");
+        }
+
+        @Test
+        void legacyPathWithoutValuesChild_throws() {
+            // Given the legacy layout with an empty children vector: the values buffer used
+            // to be reached by three raw array indexes on untrusted data
+            MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) PType.U8.ordinal()});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, meta, new ArrayNode[0], new int[]{});
+            DecodeContext ctx = new DecodeContext(node, DType.I64, 2,
+                    new MemorySegment[]{TestSegments.leLongs(1, 2)}, REGISTRY, Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("child index 0 out of bounds");
+        }
+
+        @Test
+        void truncatedCodesSegment_limited_throws() {
+            // Given 5 declared rows but 2 codes on the wire, cut to 3 rows by a scan limit:
+            // slicing the codes segment used to escape as a raw IOOBE
+            MemorySegment bytes = MemorySegment.ofArray("abcde".getBytes(StandardCharsets.UTF_8));
+            MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) PType.U8.ordinal()});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, meta, new ArrayNode[0], new int[]{0, 1, 2});
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 5,
+                    new MemorySegment[]{bytes, TestSegments.leLongs(0, 2, 5), u8Codes(0, 1)},
+                    REGISTRY, Arena.ofAuto());
+            VarBinArray array = (VarBinArray) SUT.decode(ctx);
+
+            // When / Then
+            assertThatThrownBy(() -> array.limited(3))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("holds fewer than 3 U8 codes");
+        }
+
+        @Test
+        void codePastDictionaryOffsets_forEachByteLength_blamesTheCode() {
+            // Given a code past a dictionary with I32 value offsets — the shape FSST
+            // decompression produces, and the only one that takes the branch-free bulk
+            // length path. That path catches the overrun at the loop boundary, and the cold
+            // re-validation must name the offending code rather than blaming the offsets
+            // segment it happened to read.
+            VarBinArray array = decodeProtoUtf8("fizzbuzz", TestSegments.leInts(0, 4, 8), u8Codes(5), 2);
+
+            // When / Then
+            assertThatThrownBy(() -> array.forEachByteLength(len -> {
+            }))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("dict code 5 at row 0 out of range for 3 value offsets");
+        }
+
+        @Test
+        void consumerFailure_forEachByteLength_propagatesUnchanged() {
+            // Given well-formed dictionary data and a consumer that throws its own
+            // IndexOutOfBoundsException: the boundary catch must not relabel a caller bug as
+            // malformed input
+            VarBinArray array = decodeLegacyUtf8("abcde", TestSegments.leLongs(0, 2, 5), u8Codes(1));
+
+            // When / Then
+            assertThatThrownBy(() -> array.forEachByteLength(len -> {
+                throw new IndexOutOfBoundsException("sink says no");
+            }))
+                    .isInstanceOf(IndexOutOfBoundsException.class)
+                    .isNotInstanceOf(VortexException.class)
+                    .hasMessage("sink says no");
+        }
+
+        @Test
+        void poolWiderThanCodePType_decodesTheAddressableEntries() {
+            // Given a 300-entry pool with u8 codes: entries 256+ are unreachable, which is
+            // well-formed rather than an error (the writer sizes codes from what it emits),
+            // so decode must succeed for the entries the codes can address.
+            int[] pool = new int[300];
+            for (int i = 0; i < pool.length; i++) {
+                pool[i] = i * 10;
+            }
+            MemorySegment values = TestSegments.leInts(pool);
+
+            // When
+            Array result = decodeProtoSegments(DType.I32, PType.U8, u8Codes(0, 255), values, 300, 2);
+
+            // Then
+            assertThat(((IntArray) result).getInt(0)).isZero();
+            assertThat(((IntArray) result).getInt(1)).isEqualTo(2550);
+        }
+
+        /// Builds the proto utf8 dict layout with a VarBin values child carrying I32 value
+        /// offsets — the shape FSST decompression yields, and the one whose bulk length walk
+        /// takes the branch-free I32 fast path.
+        private VarBinArray decodeProtoUtf8(String dictBytes, MemorySegment offsets,
+                MemorySegment codes, int valuesLen) {
+            MemorySegment bytes = MemorySegment.ofArray(dictBytes.getBytes(StandardCharsets.UTF_8));
+            MemorySegment dictMeta = MemorySegment.ofArray(
+                    new ProtoDictMetadata(valuesLen, protoPType(PType.U8), null, null).encode());
+            MemorySegment varBinMeta = MemorySegment.ofArray(
+                    new ProtoVarBinMetadata(protoPType(PType.I32)).encode());
+            ArrayNode valuesNode = new ArrayNode(EncodingId.VORTEX_VARBIN, varBinMeta,
+                    new ArrayNode[]{primitiveNode(2)}, new int[]{1});
+            ArrayNode dictNode = new ArrayNode(EncodingId.VORTEX_DICT, dictMeta,
+                    new ArrayNode[]{primitiveNode(0), valuesNode}, new int[]{});
+            DecodeContext ctx = new DecodeContext(dictNode, DType.UTF8, 1,
+                    new MemorySegment[]{codes, bytes, offsets}, REGISTRY, Arena.ofAuto());
+            return (VarBinArray) SUT.decode(ctx);
+        }
+
+        /// Builds the legacy (buffer-only) utf8 dict layout: dictionary bytes, I64 value
+        /// offsets and u8 codes, with the 1-byte code-ptype metadata.
+        private VarBinArray decodeLegacyUtf8(String dictBytes, MemorySegment offsets, MemorySegment codes) {
+            MemorySegment bytes = MemorySegment.ofArray(dictBytes.getBytes(StandardCharsets.UTF_8));
+            MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) PType.U8.ordinal()});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, meta, new ArrayNode[0], new int[]{0, 1, 2});
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
+                    new MemorySegment[]{bytes, offsets, codes}, REGISTRY, Arena.ofAuto());
+            return (VarBinArray) SUT.decode(ctx);
+        }
+    }
+
     // ── parameter sources ──────────────────────────────────────────────────────
 
     static Stream<Arguments> codeAndValueTypes() {
@@ -649,8 +882,8 @@ class DictEncodingDecoderTest {
         return new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{bufferIndex});
     }
 
-    private static io.github.dfa1.vortex.core.proto.ProtoPType protoPType(PType core) {
-        return io.github.dfa1.vortex.core.proto.ProtoPType.valueOf(core.name());
+    private static ProtoPType protoPType(PType core) {
+        return ProtoPType.valueOf(core.name());
     }
 
     // ── segment builders (little-endian) ───────────────────────────────────────

@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -207,6 +208,176 @@ class SparseEncodingDecoderTest {
         assertThatThrownBy(() -> SUT.decode(ctx))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("2");
+    }
+
+    /// Malformed-input cases for `vortex.sparse` (TODO.md §Security, ADR 0003): the patch count,
+    /// the patch children's buffers and the patch-value offsets all come from untrusted file
+    /// bytes and none of them are cross-validated at decode time. Every case here crashed with a
+    /// raw JDK exception before the guards landed — the class named in each comment is what the
+    /// reader used to leak.
+    ///
+    /// Unsorted patch indices are covered separately in `LazySparseArrayTest.AdversarialInput`:
+    /// the crash surfaces in the lazy array's `forEach`/`fold` walker, not in this decoder's
+    /// `decode()`, since the primitive/bool paths stay lazy by design.
+    @Nested
+    class AdversarialInput {
+
+        @Test
+        void missingPatchesMetadata_throws() {
+            // Given — non-empty metadata that never sets field 1 (patches): an unrelated
+            // unknown field (tag = field 2, varint wire type 0, value 0) that the proto reader
+            // silently skips. This is different from *absent* metadata (already rejected by the
+            // "missing metadata" check above): the bytes are present and parse cleanly, but
+            // `patches` stays null, which used to NPE on `patches.len()`.
+            MemorySegment meta = MemorySegment.ofArray(new byte[]{0x10, 0x00});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_SPARSE, meta,
+                    new ArrayNode[]{primitiveNode(1), primitiveNode(2)}, new int[]{0});
+            MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(0), TestSegments.leDoubles(1.0)};
+            DecodeContext ctx = new DecodeContext(node, DType.F64, 1, segs, REGISTRY, Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("missing patches metadata");
+        }
+
+        /// `ClassCastException` — `decodeChild` dispatches on the *child node's own* encoding
+        /// id, not on the ptype this decoder expects. A crafted values child of the wrong
+        /// concrete array type (here `vortex.bool` under an `i64` sparse array) decodes without
+        /// error and used to blow up at the unchecked `(LongArray)` cast.
+        @Test
+        void patchValuesChildWrongType_throws() {
+            // Given — an i64 sparse array whose values child is `vortex.bool`, not primitive i64
+            ArrayNode boolValuesNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{2});
+            MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(1), boolBitmap(true)};
+
+            // When / Then
+            assertThatThrownBy(() -> decode(DType.I64, 1, 0, PType.U32, 5, segs,
+                    primitiveNode(1), boolValuesNode))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch values child decoded to unexpected type");
+        }
+
+        /// `ArithmeticException: / by zero` — the `Materialized*` accessors broadcast an
+        /// undersized buffer with `i % elementCount`, and a zero-byte patch-indices buffer makes
+        /// `elementCount` zero.
+        @Test
+        void emptyPatchIndicesChild_throws() {
+            // Given — metadata claims 2 patches but the patch-indices segment carries no bytes
+            MemorySegment[] segs = {f64Fill(0.0), empty(), TestSegments.leDoubles(5.0, 7.0)};
+
+            // When / Then
+            assertThatThrownBy(() -> decode(DType.F64, 2, 0, PType.U32, 5, segs,
+                    primitiveNode(1), primitiveNode(2)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("empty patch indices child");
+        }
+
+        /// Same divide-by-zero, reached through the values child instead of the indices child.
+        @Test
+        void emptyPatchValuesChild_throws() {
+            // Given — metadata claims 2 patches but the patch-values segment carries no bytes
+            MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(1, 3), empty()};
+
+            // When / Then
+            assertThatThrownBy(() -> decode(DType.F64, 2, 0, PType.U32, 5, segs,
+                    primitiveNode(1), primitiveNode(2)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("empty patch values child");
+        }
+
+        /// `OutOfMemoryError` — a null fill makes the decoder build a per-patch validity bitmap
+        /// sized from the declared patch count, so an absurd count reserved exabytes of direct
+        /// memory before any buffer was even read. Patches sit at distinct row positions, so the
+        /// count can never exceed the row count (Rust `Patches::new`: `indices.len() <= array_len`).
+        @Test
+        void patchCountAboveRowCount_throws() {
+            // Given — 5 rows but a patch count of 2^61, with a null fill to reach the bitmap alloc
+            MemorySegment[] segs = {nullFill(), TestSegments.leInts(1, 3), TestSegments.leDoubles(5.0, 7.0)};
+
+            // When / Then
+            assertThatThrownBy(() -> decode(nullableF64(), 1L << 61, 0, PType.U32, 5, segs,
+                    primitiveNode(1), primitiveNode(2)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch count");
+        }
+
+        /// The other end of the same range check: proto `len` is a signed int64, so a crafted
+        /// file can declare a negative patch count.
+        @Test
+        void negativePatchCount_throws() {
+            // Given — a negative declared patch count
+            MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(1, 3), TestSegments.leDoubles(5.0, 7.0)};
+
+            // When / Then
+            assertThatThrownBy(() -> decode(DType.F64, -1, 0, PType.U32, 5, segs,
+                    primitiveNode(1), primitiveNode(2)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch count");
+        }
+
+        /// `IndexOutOfBoundsException` — the utf8/binary path merges patches eagerly and reads
+        /// `numPatches + 1` entries from the patch-value offsets buffer. Declaring 4 patches over
+        /// a values child that only carries 2 walked past the end of that buffer.
+        @Test
+        void varBinPatchCountBeyondValueOffsets_throws() {
+            // Given — 4 declared patches but only 2 value offsets pairs ("b", "d")
+            MemorySegment[] segs = {
+                    nullFill(),
+                    TestSegments.leInts(0, 1, 2, 3),     // 4 patch indices, so the count is plausible
+                    utf8Bytes("bd"),
+                    TestSegments.leInts(0, 1, 2)         // only 3 offsets = 2 values
+            };
+
+            // When / Then
+            assertThatThrownBy(() -> decode(nullableUtf8(), 4, 0, PType.U32, 5, segs,
+                    primitiveNode(1), varBinNode(2, 3)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch value offsets out of range");
+        }
+
+        /// `IndexOutOfBoundsException` from `MemorySegment.copy` — non-monotonic patch-value
+        /// offsets make the per-patch lengths cancel out, so the output buffer is sized far
+        /// smaller than the first patch that actually gets copied into it.
+        @Test
+        void varBinNonMonotonicValueOffsets_throws() {
+            // Given — offsets 0, 2, 0: patch 0 is 2 bytes long, patch 1 is -2, total 0 bytes
+            MemorySegment[] segs = {
+                    nullFill(),
+                    TestSegments.leInts(0, 1),
+                    utf8Bytes("bd"),
+                    TestSegments.leInts(0, 2, 0)
+            };
+
+            // When / Then
+            assertThatThrownBy(() -> decode(nullableUtf8(), 2, 0, PType.U32, 5, segs,
+                    primitiveNode(1), varBinNode(2, 3)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch value offsets out of range");
+        }
+
+        /// The offsets-vs-payload cross-check: a patch-value offsets buffer claiming more bytes
+        /// than the value buffer holds must be rejected before the output buffer is sized from it.
+        @Test
+        void varBinValueOffsetsBeyondValueBuffer_throws() {
+            // Given — 2 bytes of value data but offsets claiming a 1 GiB final patch
+            MemorySegment[] segs = {
+                    nullFill(),
+                    TestSegments.leInts(0, 1),
+                    utf8Bytes("bd"),
+                    TestSegments.leInts(0, 1, 1 << 30)
+            };
+
+            // When / Then
+            assertThatThrownBy(() -> decode(nullableUtf8(), 2, 0, PType.U32, 5, segs,
+                    primitiveNode(1), varBinNode(2, 3)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch bytes");
+        }
+    }
+
+    private static MemorySegment empty() {
+        return MemorySegment.ofArray(new byte[0]);
     }
 
     private static Array decode(DType dtype, long numPatches, long offset, PType indicesPtype, long n,

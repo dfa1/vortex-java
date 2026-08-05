@@ -23,6 +23,10 @@ import java.lang.foreign.ValueLayout;
 public final class BitpackedEncodingDecoder implements EncodingDecoder {
     private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
+    /// Elements per FastLanes block; also the exclusive upper bound of the in-block
+    /// `offset` carried in the metadata.
+    private static final int FL_BLOCK_SIZE = 1024;
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_BITPACKED;
@@ -52,9 +56,34 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         int typeBits = ptype.bits();
         long rowCount = ctx.rowCount();
 
+        // bit_width and offset come straight off the wire and drive every byte offset the
+        // unpack loops compute, so both are range-checked up front (O(1), outside any
+        // loop). The width bound is the column's own element width, not a flat 64: a
+        // 40-bit width on an I8 column is just as malformed as a 65-bit one. The offset is
+        // a position inside the first 1024-element FastLanes block, and an oversized one
+        // would spin through billions of skipped lanes before failing.
+        if (bitWidth < 0 || bitWidth > typeBits) {
+            throw new VortexException(EncodingId.FASTLANES_BITPACKED,
+                    "bit width " + bitWidth + " out of range [0," + typeBits + "] for " + ptype);
+        }
+        if (offset < 0 || offset >= FL_BLOCK_SIZE) {
+            throw new VortexException(EncodingId.FASTLANES_BITPACKED,
+                    "offset " + offset + " out of range [0," + FL_BLOCK_SIZE + ")");
+        }
+
         MemorySegment packed = ctx.buffer(0);
         MemorySegment output = ctx.arena().allocate(rowCount * ptype.byteSize());
-        fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
+        // A packed buffer shorter than the block/lane math requires overruns `packed`.
+        // Computing the exact required length here would duplicate that math for every
+        // width, so the overrun is caught at the call boundary and reported as a
+        // VortexException instead of a raw IndexOutOfBoundsException (ADR 0003).
+        try {
+            fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
+        } catch (IndexOutOfBoundsException e) {
+            throw new VortexException(EncodingId.FASTLANES_BITPACKED,
+                    "packed buffer of " + packed.byteSize() + " bytes is too small for "
+                            + rowCount + " rows at bit width " + bitWidth, e);
+        }
 
         if (meta.patches() != null) {
             applyPatches(ctx, meta.patches(), output, ptype.byteSize());

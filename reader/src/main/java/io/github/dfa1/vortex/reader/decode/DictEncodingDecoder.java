@@ -74,18 +74,13 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         int elemSize = valPType.byteSize();
         long rowCount = ctx.rowCount();
 
-        MemorySegment valuesBuf = ctx.segmentBuffers()[ctx.node().children()[0].bufferIndices()[0]];
+        MemorySegment valuesBuf = ctx.childBuffer(0, 0);
 
         DType codesDtype = new DType.Primitive(codePType, false);
         MemorySegment codesBuf = ctx.decodeChildSegment(1, codesDtype, rowCount);
 
         MemorySegment out = ctx.arena().allocate(rowCount * elemSize);
-        switch (codePType) {
-            case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
-            case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
-            case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
-            default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
-        }
+        expand(codePType, codesBuf, valuesBuf, out, rowCount, elemSize);
         return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
     }
 
@@ -127,15 +122,47 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         MemorySegment valuesBuf = ctx.materialize(rawValues);
 
         MemorySegment out = ctx.arena().allocate(rowCount * elemSize);
-        switch (codePType) {
-            case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
-            case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
-            case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
-            default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
-        }
+        expand(codePType, codesBuf, valuesBuf, out, rowCount, elemSize);
         Array values = typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
         BoolArray rowValidity = rowValidity(ctx, codesBuf, codePType, codesValidity, poolValidity, rowCount);
         return rowValidity == null ? values : new MaskedArray(values, rowValidity);
+    }
+
+    /// Expands `codes` against the values pool at the width of `codePType`.
+    ///
+    /// The codes buffer is untrusted: an entry pointing past the end of the pool indexes
+    /// `values` out of bounds. The expand loops must stay uniform to vectorize (CLAUDE.md
+    /// hot-loop rule), so the guard is a boundary catch-and-wrap around the whole call
+    /// instead of a per-element range test — the malformed file still fails as a
+    /// [VortexException] rather than a raw `IndexOutOfBoundsException` (ADR 0003).
+    /// The broadcast (slow) branches wrap codes with `% valuesCap`, so they cannot overrun
+    /// — but an empty codes or values child would make that wrap divide by zero, which is
+    /// rejected up front (O(1), outside the loops).
+    ///
+    /// @param codePType unsigned code ptype (U8/U16/U32)
+    /// @param codes     raw codes buffer
+    /// @param values    raw values pool
+    /// @param out       expanded output buffer of `rowCount * elemSize` bytes
+    /// @param rowCount  logical row count
+    /// @param elemSize  value element width in bytes
+    private static void expand(PType codePType, MemorySegment codes, MemorySegment values,
+            MemorySegment out, long rowCount, int elemSize) {
+        if (rowCount > 0 && (codes.byteSize() < codePType.byteSize() || values.byteSize() < elemSize)) {
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "empty dict child for " + rowCount + " rows (codes=" + codes.byteSize()
+                            + " bytes, values=" + values.byteSize() + " bytes)");
+        }
+        try {
+            switch (codePType) {
+                case U8 -> expandU8(codes, values, out, rowCount, elemSize);
+                case U16 -> expandU16(codes, values, out, rowCount, elemSize);
+                case U32 -> expandU32(codes, values, out, rowCount, elemSize);
+                default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
+            }
+        } catch (IndexOutOfBoundsException e) {
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "code out of range for a values pool of " + values.byteSize() + " bytes", e);
+        }
     }
 
     /// Combines codes-side and pool-side validity into per-row validity: row `i` is

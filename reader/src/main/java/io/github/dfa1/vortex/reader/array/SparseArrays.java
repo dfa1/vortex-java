@@ -89,6 +89,18 @@ final class SparseArrays {
             if (patchAbs >= absEnd) {
                 break;
             }
+            // patchIndices is a wire-supplied, untrusted array that the format requires to be
+            // sorted ascending: findFirstAtOrAfter's binary search assumes it, and this walk
+            // advances `pos` to `patchAbs + 1` on each patch. A patch that goes backwards moves
+            // `pos` backwards too, so a later fill/patch run re-covers already-emitted
+            // positions — the walk then emits more callbacks than `absEnd - absStart`, which
+            // overflows a caller's fixed-size output buffer as a raw IndexOutOfBoundsException
+            // rather than a VortexException (ADR 0003). Checked once per patch, not per row.
+            if (patchAbs < pos) {
+                throw new VortexException(
+                        "Sparse patch indices not sorted: index " + patchAbs + " at patch " + p
+                                + " precedes position " + pos);
+            }
             for (long r = pos; r < patchAbs; r++) {
                 fillSlot.run();
             }

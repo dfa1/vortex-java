@@ -180,6 +180,96 @@ class BitpackedEncodingDecoderTest {
         }
     }
 
+    /// Adversarial metadata and buffers from an untrusted file (TODO.md §Security,
+    /// per-encoding adversarial tests). `bit_width` was read straight off the wire and fed
+    /// into the shift and byte-offset math of the unpack loops, so a negative or oversized
+    /// width — or a `packed` buffer too short for the declared row count — escaped as a raw
+    /// `IndexOutOfBoundsException` from the segment reads instead of a [VortexException].
+    @Nested
+    class AdversarialMetadata {
+
+        @Test
+        void negativeBitWidth_throws() {
+            // Given bit_width = -1, which makes every shift and mask nonsensical
+            DecodeContext ctx = ctxWithMeta(new ProtoBitPackedMetadata(-1, 0, null), packedBytes(64), 8);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("bit width -1 out of range [0,32] for I32");
+        }
+
+        @Test
+        void bitWidthAboveElementWidth_throws() {
+            // Given bit_width = 40 on an I32 column: below the 64-bit ceiling but wider than
+            // the column's own elements, so the bound has to be the element width
+            DecodeContext ctx = ctxWithMeta(new ProtoBitPackedMetadata(40, 0, null), packedBytes(64), 8);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("bit width 40 out of range [0,32] for I32");
+        }
+
+        @Test
+        void bitWidthAboveSixtyFour_throws() {
+            // Given bit_width = 65, past even the widest supported element
+            DecodeContext ctx = ctxWithMeta(new ProtoBitPackedMetadata(65, 0, null), packedBytes(64), 8);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("bit width 65 out of range");
+        }
+
+        @Test
+        void negativeOffset_throws() {
+            // Given a negative in-block offset (a u32 large enough to wrap when read as int)
+            DecodeContext ctx = ctxWithMeta(new ProtoBitPackedMetadata(8, -1, null), packedBytes(64), 8);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("offset -1 out of range [0,1024)");
+        }
+
+        @Test
+        void offsetPastBlockSize_throws() {
+            // Given an in-block offset far past the 1024-element FastLanes block: it is not
+            // just wrong, it inflates the block count so the decoder would grind through
+            // billions of skipped lanes from a single metadata varint before failing
+            DecodeContext ctx = ctxWithMeta(new ProtoBitPackedMetadata(8, Integer.MAX_VALUE, null),
+                    packedBytes(64), 4);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range [0,1024)");
+        }
+
+        @Test
+        void packedBufferTooSmallForRowCount_throws() {
+            // Given 1024 rows at bit_width 8 (one full 1024-element block = 1024 packed
+            // bytes for I32) but only 4 bytes of packed data on the wire
+            DecodeContext ctx = ctxWithMeta(new ProtoBitPackedMetadata(8, 0, null), packedBytes(4), 1024);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("too small for 1024 rows at bit width 8");
+        }
+
+        private DecodeContext ctxWithMeta(ProtoBitPackedMetadata meta, MemorySegment packed, long rowCount) {
+            ArrayNode node = new ArrayNode(BITPACKED, MemorySegment.ofArray(meta.encode()),
+                    new ArrayNode[0], new int[]{0});
+            return new DecodeContext(node, I32, rowCount, new MemorySegment[]{packed}, REGISTRY, Arena.ofAuto());
+        }
+
+        private MemorySegment packedBytes(int n) {
+            return MemorySegment.ofArray(new byte[n]);
+        }
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────────────
 
     private static MaskedArray assertMasked(Array result) {
