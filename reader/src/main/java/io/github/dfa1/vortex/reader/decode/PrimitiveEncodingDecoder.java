@@ -30,7 +30,14 @@ public final class PrimitiveEncodingDecoder implements EncodingDecoder {
         MemorySegment buf = ctx.buffer(0);
         long n = ctx.rowCount();
         DType dt = ctx.dtype();
-        PType ptype = ((DType.Primitive) dt).ptype();
+        // decodeChild dispatches on the child node's own encoding id, not on the dtype the
+        // parent expects — a crafted file can put a `vortex.primitive` node where a non-
+        // primitive dtype (e.g. Utf8) is requested, which would otherwise leak a raw
+        // ClassCastException here instead of a VortexException (ADR 0003).
+        if (!(dt instanceof DType.Primitive primitiveDt)) {
+            throw new VortexException(EncodingId.VORTEX_PRIMITIVE, "expected primitive dtype, got " + dt);
+        }
+        PType ptype = primitiveDt.ptype();
         Array values = switch (ptype) {
             case I64, U64 -> new MaterializedLongArray(dt, n, buf);
             case I32, U32 -> new MaterializedIntArray(dt, n, buf);

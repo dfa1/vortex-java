@@ -59,11 +59,27 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         }
 
         ProtoPatchesMetadata patches = sparseMeta.patches();
+        if (patches == null) {
+            // proto3 elides an unset message field entirely; a sparse array with no patches
+            // metadata at all is not a legal encoding (even zero patches must say so
+            // explicitly), and dereferencing null here would leak a raw NullPointerException.
+            throw new VortexException(EncodingId.VORTEX_SPARSE, "missing patches metadata");
+        }
         long numPatches = patches.len();
         long offset = patches.offset();
         PType indicesPtype = PType.fromOrdinal(patches.indices_ptype().value());
 
         long n = ctx.rowCount();
+        // Patches sit at distinct positions inside the array, so there can never be more of
+        // them than rows — the same invariant the Rust reference asserts in `Patches::new`
+        // (`indices.len() <= array_len`). The count comes from untrusted metadata and drives
+        // both child decodes and the row-validity bitmap sizing, so an absurd or negative
+        // value must fail here as a VortexException rather than as an OutOfMemoryError from
+        // the `allValid` allocation further down (ADR 0003).
+        if (numPatches < 0 || numPatches > n) {
+            throw new VortexException(EncodingId.VORTEX_SPARSE,
+                    "patch count " + numPatches + " out of range for " + n + " row(s)");
+        }
 
         // Row validity mirrors the Rust reference `ValidityVTable<Sparse>`: it is a sparse
         // bool array whose fill is `fill_value.is_valid()` and whose per-patch value is the
@@ -93,8 +109,11 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                 valData = m.inner();
                 patchValidity = m.validity();
             }
+            checkPatchChild(idxData, numPatches, "indices");
+            checkPatchChild(valData, numPatches, "values");
             boolean fillValue = Boolean.TRUE.equals(fillScalar.bool_value());
-            Array result = new LazySparseBoolArray(ctx.dtype(), n, fillValue, (BoolArray) valData, idxData, offset);
+            BoolArray boolValues = checkedCast(valData, BoolArray.class, "values");
+            Array result = new LazySparseBoolArray(ctx.dtype(), n, fillValue, boolValues, idxData, offset);
             return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
         }
 
@@ -117,24 +136,26 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             valData = m.inner();
             patchValidity = m.validity();
         }
+        checkPatchChild(idxData, numPatches, "indices");
+        checkPatchChild(valData, numPatches, "values");
 
         Array result = switch (valuePtype) {
             case I64, U64 -> new LazySparseLongArray(ctx.dtype(), n, fillBits,
-                    (LongArray) valData, idxData, offset);
+                    checkedCast(valData, LongArray.class, "values"), idxData, offset);
             case I32, U32 -> new LazySparseIntArray(ctx.dtype(), n, (int) fillBits,
-                    (IntArray) valData, idxData, offset);
+                    checkedCast(valData, IntArray.class, "values"), idxData, offset);
             case F64 -> new LazySparseDoubleArray(ctx.dtype(), n, Double.longBitsToDouble(fillBits),
-                    (DoubleArray) valData, idxData, offset);
+                    checkedCast(valData, DoubleArray.class, "values"), idxData, offset);
             case F32 -> new LazySparseFloatArray(ctx.dtype(), n, Float.intBitsToFloat((int) fillBits),
-                    (FloatArray) valData, idxData, offset);
+                    checkedCast(valData, FloatArray.class, "values"), idxData, offset);
             case I16 -> new LazySparseShortArray(ctx.dtype(), n, (short) fillBits, (short) fillBits,
-                    (ShortArray) valData, idxData, offset);
+                    checkedCast(valData, ShortArray.class, "values"), idxData, offset);
             case U16 -> new LazySparseShortArray(ctx.dtype(), n, (short) fillBits, (int) (fillBits & 0xFFFFL),
-                    (ShortArray) valData, idxData, offset);
+                    checkedCast(valData, ShortArray.class, "values"), idxData, offset);
             case I8 -> new LazySparseByteArray(ctx.dtype(), n, (byte) fillBits, (byte) fillBits,
-                    (ByteArray) valData, idxData, offset);
+                    checkedCast(valData, ByteArray.class, "values"), idxData, offset);
             case U8 -> new LazySparseByteArray(ctx.dtype(), n, (byte) fillBits, (int) (fillBits & 0xFFL),
-                    (ByteArray) valData, idxData, offset);
+                    checkedCast(valData, ByteArray.class, "values"), idxData, offset);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
         };
         return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
@@ -173,6 +194,46 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         return new MaterializedBoolArray(DType.BOOL, len, bits.asReadOnly());
     }
 
+    /// Rejects a patch child whose physical buffer holds no elements at all while the
+    /// metadata claims patches.
+    ///
+    /// The `Materialized*` accessors deliberately broadcast an undersized buffer with
+    /// `i % elementCount` (the `ConstantEncoding` fan-out), so a zero-element buffer would
+    /// divide by zero — an `ArithmeticException`, not a [VortexException] (ADR 0003). The
+    /// probe is O(1) and non-allocating: lazy children report no segment and are skipped,
+    /// exactly like the equivalent guard in [DictEncodingDecoder].
+    ///
+    /// @param child      decoded patch child (indices or values)
+    /// @param numPatches number of patches the metadata declares
+    /// @param role       `"indices"` or `"values"`, for the error message
+    private static void checkPatchChild(Array child, long numPatches, String role) {
+        if (numPatches > 0 && child.segmentIfPresent().filter(s -> s.byteSize() == 0).isPresent()) {
+            throw new VortexException(EncodingId.VORTEX_SPARSE,
+                    "empty patch " + role + " child for " + numPatches + " patch(es)");
+        }
+    }
+
+    /// Casts a decoded patch child to the type its declared ptype/dtype demands, rejecting a
+    /// mismatch as a [VortexException].
+    ///
+    /// `decodeChild` dispatches on the *child node's own* encoding id, not on the dtype this
+    /// decoder asked for — a crafted file can put e.g. a `vortex.bool` node where an `i64`
+    /// sparse array expects its values child, which decodes without error and would otherwise
+    /// blow up as a raw `ClassCastException` at the unchecked cast site (ADR 0003).
+    ///
+    /// @param child decoded patch child (indices or values)
+    /// @param type  the concrete [Array] subtype required at this call site
+    /// @param role  `"indices"` or `"values"`, for the error message
+    /// @param <T>   the required array type
+    /// @return `child`, cast to `type`
+    private static <T extends Array> T checkedCast(Array child, Class<T> type, String role) {
+        if (!type.isInstance(child)) {
+            throw new VortexException(EncodingId.VORTEX_SPARSE,
+                    "patch " + role + " child decoded to unexpected type: " + child.getClass().getSimpleName());
+        }
+        return type.cast(child);
+    }
+
     private static ProtoScalarValue decodeFill(MemorySegment fillBuf) {
         try {
             return ProtoScalarValue.decode(fillBuf, 0, fillBuf.byteSize());
@@ -203,6 +264,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         DType indicesDtype = new DType.Primitive(indicesPtype, false);
         Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
         Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
+        checkPatchChild(idxData, numPatches, "indices");
 
         MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
         if (numPatches == 0) {
@@ -220,37 +282,59 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             valData = m.inner();
             patchValidity = m.validity();
         }
-        VarBinArray.OffsetMode varBin = VarBinArray.toOffsetMode((VarBinArray) valData, ctx.arena());
+        VarBinArray.OffsetMode varBin = VarBinArray.toOffsetMode(
+                checkedCast(valData, VarBinArray.class, "values"), ctx.arena());
         MemorySegment valBytes = varBin.bytesSegment();
         MemorySegment valOffsets = varBin.offsetsSegment();
         PType valOffPtype = varBin.offsetsPtype();
         MemorySegment idxSeg = ctx.materialize(idxData);
 
         int idxBytes = indicesPtype.byteSize();
-        long totalBytes = 0;
-        for (long i = 0; i < numPatches; i++) {
-            totalBytes += readVarBinOffset(valOffsets, i + 1, valOffPtype)
-                                  - readVarBinOffset(valOffsets, i, valOffPtype);
-        }
-
-        MemorySegment outBytes = ctx.arena().allocate(Math.max(1, totalBytes));
-        long patchCursor = 0;
-        long bytePos = 0;
-        for (long pos = 0; pos < n; pos++) {
-            if (patchCursor < numPatches) {
-                long patchPos = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, patchCursor, idxBytes), indicesPtype) - offset;
-                if (patchPos == pos) {
-                    long strStart = readVarBinOffset(valOffsets, patchCursor, valOffPtype);
-                    long strEnd = readVarBinOffset(valOffsets, patchCursor + 1, valOffPtype);
-                    long strLen = strEnd - strStart;
-                    if (strLen > 0) {
-                        MemorySegment.copy(valBytes, strStart, outBytes, bytePos, strLen);
-                        bytePos += strLen;
-                    }
-                    patchCursor++;
-                }
+        MemorySegment outBytes;
+        // The patch-value offsets and the declared patch count come from untrusted metadata and
+        // are deliberately not cross-validated up front (VarBin decode stays lazy). Both loops
+        // below index `valOffsets` at `numPatches + 1` and copy `valBytes` sub-ranges, so an
+        // over-long patch count or a non-monotonic offsets pair walks off a segment. The guard
+        // is a boundary catch-and-wrap around the whole merge rather than a per-element range
+        // test, so the copy loop stays uniform (CLAUDE.md hot-loop rule) — the malformed file
+        // still fails as a VortexException, never a raw IndexOutOfBoundsException (ADR 0003).
+        try {
+            long totalBytes = 0;
+            for (long i = 0; i < numPatches; i++) {
+                totalBytes += readVarBinOffset(valOffsets, i + 1, valOffPtype)
+                                      - readVarBinOffset(valOffsets, i, valOffPtype);
             }
-            outOffsets.setAtIndex(VortexFormat.LE_INT, pos + 1, (int) bytePos);
+            // Patched bytes are a subset of the value buffer, so a total outside it means the
+            // offsets disagree with the payload; catching it here also keeps the allocation
+            // below bounded by data that actually exists (no OutOfMemoryError zip bomb).
+            if (totalBytes < 0 || totalBytes > valBytes.byteSize()) {
+                throw new VortexException(EncodingId.VORTEX_SPARSE,
+                        "patch bytes " + totalBytes + " out of range for a value buffer of "
+                                + valBytes.byteSize() + " byte(s)");
+            }
+            outBytes = ctx.arena().allocate(Math.max(1, totalBytes));
+            long patchCursor = 0;
+            long bytePos = 0;
+            for (long pos = 0; pos < n; pos++) {
+                if (patchCursor < numPatches) {
+                    long patchPos = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, patchCursor, idxBytes), indicesPtype) - offset;
+                    if (patchPos == pos) {
+                        long strStart = readVarBinOffset(valOffsets, patchCursor, valOffPtype);
+                        long strEnd = readVarBinOffset(valOffsets, patchCursor + 1, valOffPtype);
+                        long strLen = strEnd - strStart;
+                        if (strLen > 0) {
+                            MemorySegment.copy(valBytes, strStart, outBytes, bytePos, strLen);
+                            bytePos += strLen;
+                        }
+                        patchCursor++;
+                    }
+                }
+                outOffsets.setAtIndex(VortexFormat.LE_INT, pos + 1, (int) bytePos);
+            }
+        } catch (IndexOutOfBoundsException e) {
+            throw new VortexException(EncodingId.VORTEX_SPARSE,
+                    "patch value offsets out of range for " + numPatches + " patch(es) over a "
+                            + valOffsets.byteSize() + "-byte offsets buffer", e);
         }
 
         Array result = new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);

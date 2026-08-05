@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +26,7 @@ import static io.github.dfa1.vortex.reader.array.TestArrays.ints;
 import static io.github.dfa1.vortex.reader.array.TestArrays.longs;
 import static io.github.dfa1.vortex.reader.array.TestArrays.shorts;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Unit tests for the lazy Sparse records. Covers fill vs patch dispatch, ordered
 /// forEach iteration, fold reduction, and offset slicing semantics.
@@ -316,6 +318,43 @@ class LazySparseArrayTest {
             // When / Then — every position returns the fill
             assertThat(sut.getFloat(0)).isEqualTo(42.0f);
             assertThat(sut.fold(0.0, java.lang.Double::sum)).isEqualTo(126.0);
+        }
+    }
+
+    /// Malformed-input cases (TODO.md §Security, ADR 0003): `patchIndices` is untrusted file
+    /// data the format requires to be sorted ascending. `walkPatches` (the shared `forEach`
+    /// engine) advances its cursor to `patchAbs + 1` per patch and assumes it never sees a
+    /// smaller value again — before the guard landed, an out-of-order index moved the cursor
+    /// backwards and the walk re-covered already-emitted positions, emitting more callbacks
+    /// than the array's own `length()`. A caller sizing a buffer from `length()` (as every real
+    /// `forEach*` caller does) then overran it with a raw `IndexOutOfBoundsException`.
+    @Nested
+    class AdversarialInput {
+
+        @Test
+        void forEachLong_unsortedPatchIndices_throws() {
+            // Given — length=10, patch indices out of order (5 before 1)
+            LongArray values = longs(50L, 10L);
+            Array indices = ints(5, 1);
+            var sut = new LazySparseLongArray(I64, 10, 0L, values, indices, 0L);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.forEachLong(v -> { }))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("not sorted");
+        }
+
+        @Test
+        void fold_unsortedPatchIndices_throws() {
+            // Given — same out-of-order indices, reached through the fold walker instead
+            LongArray values = longs(50L, 10L);
+            Array indices = ints(5, 1);
+            var sut = new LazySparseLongArray(I64, 10, 0L, values, indices, 0L);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.fold(0L, java.lang.Long::sum))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("not sorted");
         }
     }
 }

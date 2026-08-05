@@ -169,6 +169,29 @@ public sealed interface VarBinArray extends Array
         return new OffsetMode(src.dtype(), n, outBytes.asReadOnly(), outOffsets, PType.I64);
     }
 
+    /// Validates that element bytes `[start, end)` lie inside `bytes` and returns the
+    /// element length.
+    ///
+    /// Offsets arrive from an untrusted file and are deliberately not scanned at decode
+    /// time (VarBin decode stays zero-copy and lazy), so a non-monotonic, negative or
+    /// past-the-end pair has to be rejected here — as a [VortexException], never as a raw
+    /// `NegativeArraySizeException` from `new byte[end - start]` or an
+    /// `IndexOutOfBoundsException` from [MemorySegment#copy(MemorySegment, long, MemorySegment, long, long)]
+    /// (ADR 0003).
+    ///
+    /// @param bytes data buffer the offsets index into
+    /// @param start start offset of the element
+    /// @param end   end offset of the element, exclusive
+    /// @return the element length in bytes
+    private static int checkedLength(MemorySegment bytes, long start, long end) {
+        long len = end - start;
+        if (start < 0 || len < 0 || end > bytes.byteSize() || len > Integer.MAX_VALUE) {
+            throw new VortexException("varbin element bytes [" + start + ", " + end
+                    + ") out of range for a data buffer of " + bytes.byteSize() + " bytes");
+        }
+        return (int) len;
+    }
+
     /// Creates a dict-mode `VarBinArray`. Lengths and bytes are resolved via the
     /// dictionary on each access; no string materialization occurs at construction time.
     ///
@@ -206,8 +229,9 @@ public sealed interface VarBinArray extends Array
         public byte[] getBytes(long i) {
             long start = readOffset(i);
             long end = readOffset(i + 1);
-            byte[] out = new byte[(int) (end - start)];
-            MemorySegment.copy(bytesSegment, start, MemorySegment.ofArray(out), 0, end - start);
+            int len = checkedLength(bytesSegment, start, end);
+            byte[] out = new byte[len];
+            MemorySegment.copy(bytesSegment, start, MemorySegment.ofArray(out), 0, len);
             return out;
         }
 
@@ -218,12 +242,18 @@ public sealed interface VarBinArray extends Array
 
         @Override
         public int getByteLength(long i) {
-            return (int) (readOffset(i + 1) - readOffset(i));
+            return checkedLength(bytesSegment, readOffset(i), readOffset(i + 1));
         }
 
         @Override
         public void forEachByteLength(IntConsumer c) {
             long n = length;
+            // The loop reads offsets[0..n] at a fixed stride and must stay uniform to
+            // vectorize (CLAUDE.md hot-loop rule), so the untrusted offsets segment is
+            // sized once here rather than bounds-checked per row. A non-monotonic pair
+            // still yields a negative length to the consumer; the typed accessors
+            // ([#getBytes(long)], [#getByteLength(long)]) reject it when the row is read.
+            checkOffsetsExtent(n);
             if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
                 for (long i = 0; i < n; i++) {
                     c.accept(offsetsSegment.getAtIndex(VortexFormat.LE_INT, i + 1)
@@ -242,19 +272,52 @@ public sealed interface VarBinArray extends Array
             if (rows >= length) {
                 return this;
             }
+            checkOffsetsExtent(rows);
             long byteEnd = readOffset(rows);
-            int offBytes = (offsetsPtype == PType.I32 || offsetsPtype == PType.U32)
-                    ? Integer.BYTES : Long.BYTES;
+            if (byteEnd < 0 || byteEnd > bytesSegment.byteSize()) {
+                throw new VortexException("varbin offset " + byteEnd + " at row " + rows
+                        + " out of range for a data buffer of " + bytesSegment.byteSize() + " bytes");
+            }
+            int offBytes = offsetWidth();
             MemorySegment newOffsetsSeg = offsetsSegment.asSlice(0, (rows + 1) * offBytes);
             return new OffsetMode(dtype, rows,
-                    bytesSegment.asSlice(0, byteEnd > 0 ? byteEnd : 0), newOffsetsSeg, offsetsPtype);
+                    bytesSegment.asSlice(0, byteEnd), newOffsetsSeg, offsetsPtype);
         }
 
-        private long readOffset(long i) {
-            if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
-                return offsetsSegment.getAtIndex(VortexFormat.LE_INT, i);
+        /// Verifies the offsets segment holds the `rows + 1` offsets the array claims.
+        ///
+        /// @param rows number of rows whose offsets are about to be read
+        private void checkOffsetsExtent(long rows) {
+            int width = offsetWidth();
+            if (rows + 1 > offsetsSegment.byteSize() / width) {
+                throw new VortexException("varbin offsets segment of " + offsetsSegment.byteSize()
+                        + " bytes holds fewer than " + (rows + 1) + " " + offsetsPtype + " offsets");
             }
-            return offsetsSegment.getAtIndex(VortexFormat.LE_LONG, i);
+        }
+
+        private int offsetWidth() {
+            return (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) ? Integer.BYTES : Long.BYTES;
+        }
+
+        /// Reads offset `i` at the width of [#offsetsPtype].
+        ///
+        /// The offsets segment comes straight from an untrusted file, so an index past its
+        /// end must surface as a [VortexException] rather than a raw
+        /// `IndexOutOfBoundsException` (ADR 0003).
+        ///
+        /// @param i zero-based offset index, in `[0, length]`
+        /// @return the offset value widened to a signed long
+        private long readOffset(long i) {
+            try {
+                if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
+                    return offsetsSegment.getAtIndex(VortexFormat.LE_INT, i);
+                }
+                return offsetsSegment.getAtIndex(VortexFormat.LE_LONG, i);
+            } catch (IndexOutOfBoundsException e) {
+                throw new VortexException("varbin offset index " + i + " (" + offsetsPtype
+                        + ") out of range for an offsets segment of "
+                        + offsetsSegment.byteSize() + " bytes", e);
+            }
         }
     }
 
@@ -281,8 +344,9 @@ public sealed interface VarBinArray extends Array
             long code = dictReadCode(i);
             long start = dictReadOff(code);
             long end = dictReadOff(code + 1);
-            byte[] out = new byte[(int) (end - start)];
-            MemorySegment.copy(bytesSegment, start, MemorySegment.ofArray(out), 0, end - start);
+            int len = checkedLength(bytesSegment, start, end);
+            byte[] out = new byte[len];
+            MemorySegment.copy(bytesSegment, start, MemorySegment.ofArray(out), 0, len);
             return out;
         }
 
@@ -294,7 +358,7 @@ public sealed interface VarBinArray extends Array
         @Override
         public int getByteLength(long i) {
             long code = dictReadCode(i);
-            return (int) (dictReadOff(code + 1) - dictReadOff(code));
+            return checkedLength(bytesSegment, dictReadOff(code), dictReadOff(code + 1));
         }
 
         @Override
@@ -307,14 +371,52 @@ public sealed interface VarBinArray extends Array
             // most common (FSST + most dict encodings emit 32-bit offsets), so the fast
             // path reads offsets at a constant 4-byte stride and branch-splits the code
             // read once; wider offset ptypes take the general per-row path.
-            if (dictValOffPType == PType.I32) {
-                forEachI32OffsetByteLength(c);
-            } else {
-                for (long i = 0; i < length; i++) {
-                    long code = dictReadCode(i);
-                    c.accept((int) (dictReadOff(code + 1) - dictReadOff(code)));
+            //
+            // The per-row body must stay branch-free, so the untrusted-code bounds check is
+            // a boundary catch-and-wrap around the whole loop rather than a test per row:
+            // an out-of-pool code (or a truncated codes buffer) trips the segment access and
+            // must surface as a VortexException, never a raw IndexOutOfBoundsException. The
+            // handler re-validates on the cold path so the blame — and the exception type —
+            // land on whichever input actually failed, including the caller's own consumer.
+            try {
+                if (dictValOffPType == PType.I32) {
+                    forEachI32OffsetByteLength(c);
+                } else {
+                    for (long i = 0; i < length; i++) {
+                        long code = dictReadCode(i);
+                        c.accept((int) (dictReadOff(code + 1) - dictReadOff(code)));
+                    }
+                }
+            } catch (IndexOutOfBoundsException e) {
+                throw attribute(e);
+            }
+        }
+
+        /// Cold path: works out which untrusted input made a bulk length walk run off the
+        /// end, so the message names the segment that actually failed.
+        ///
+        /// Re-checks the codes extent, then every code against the value-offsets extent —
+        /// affordable here because it only runs after something has already thrown. When
+        /// both check out the failure came from the caller's [IntConsumer], and that
+        /// exception is returned unchanged rather than relabeled as malformed input.
+        ///
+        /// @param e the out-of-bounds failure raised by the walk
+        /// @return a [VortexException] describing the malformed input, or `e` itself
+        private RuntimeException attribute(IndexOutOfBoundsException e) {
+            int codeWidth = dictCodesPType.byteSize();
+            if (length > dictCodesSegs.byteSize() / codeWidth) {
+                return new VortexException("dict codes segment of " + dictCodesSegs.byteSize()
+                        + " bytes holds fewer than " + length + " " + dictCodesPType + " codes");
+            }
+            long offsetCount = dictValOffsets.byteSize() / dictValOffPType.byteSize();
+            for (long i = 0; i < length; i++) {
+                long code = readCodeAt(i);
+                if (code < 0 || code + 1 >= offsetCount) {
+                    return new VortexException("dict code " + code + " at row " + i
+                            + " out of range for " + offsetCount + " value offsets");
                 }
             }
+            return e;
         }
 
         /// Fast path of [#forEachByteLength(IntConsumer)] for I32 dict-value offsets: the
@@ -376,11 +478,33 @@ public sealed interface VarBinArray extends Array
                 return this;
             }
             int codeBytes = dictCodesPType.byteSize();
+            if (rows > dictCodesSegs.byteSize() / codeBytes) {
+                throw new VortexException("dict codes segment of " + dictCodesSegs.byteSize()
+                        + " bytes holds fewer than " + rows + " " + dictCodesPType + " codes");
+            }
             return VarBinArray.ofDict(dtype, rows, bytesSegment, dictValOffsets, dictValOffPType,
                     dictCodesSegs.asSlice(0, rows * codeBytes), dictCodesPType);
         }
 
+        /// Reads the dictionary code for row `i` at the width of [#dictCodesPType].
+        ///
+        /// The codes buffer is untrusted and may be shorter than [#length()], so an
+        /// overrun is reported as a [VortexException] instead of a raw
+        /// `IndexOutOfBoundsException` (ADR 0003).
+        ///
+        /// @param i zero-based row index
+        /// @return the dictionary code, widened to a signed long
         private long dictReadCode(long i) {
+            try {
+                return readCodeAt(i);
+            } catch (IndexOutOfBoundsException e) {
+                throw new VortexException("dict code index " + i + " (" + dictCodesPType
+                        + ") out of range for a codes segment of "
+                        + dictCodesSegs.byteSize() + " bytes", e);
+            }
+        }
+
+        private long readCodeAt(long i) {
             return switch (dictCodesPType) {
                 case U8 -> Byte.toUnsignedLong(dictCodesSegs.get(ValueLayout.JAVA_BYTE, i));
                 case U16 -> Short.toUnsignedLong(dictCodesSegs.getAtIndex(VortexFormat.LE_SHORT, i));
@@ -629,20 +753,31 @@ public sealed interface VarBinArray extends Array
 
         @Override
         public int getByteLength(long i) {
-            return views.get(VortexFormat.LE_INT, i * VIEW_SIZE);
+            return checkedSize(views.get(VortexFormat.LE_INT, viewOffset(i)));
         }
 
         @Override
         public byte[] getBytes(long i) {
-            long viewOff = i * VIEW_SIZE;
-            int size = views.get(VortexFormat.LE_INT, viewOff);
+            long viewOff = viewOffset(i);
+            int size = checkedSize(views.get(VortexFormat.LE_INT, viewOff));
             byte[] out = new byte[size];
             if (size <= MAX_INLINED_SIZE) {
+                // Inlined data always fits the remaining 12 bytes of the view itself.
                 MemorySegment.copy(views, viewOff + 4, MemorySegment.ofArray(out), 0, size);
             } else {
                 int bufferIndex = views.get(VortexFormat.LE_INT, viewOff + 8);
                 long srcOffset = Integer.toUnsignedLong(views.get(VortexFormat.LE_INT, viewOff + 12));
-                MemorySegment.copy(dataBufs[bufferIndex], srcOffset, MemorySegment.ofArray(out), 0, size);
+                if (bufferIndex < 0 || bufferIndex >= dataBufs.length) {
+                    throw new VortexException("varbin view at row " + i + " references data buffer "
+                            + bufferIndex + " of " + dataBufs.length);
+                }
+                MemorySegment buf = dataBufs[bufferIndex];
+                if (srcOffset + size > buf.byteSize()) {
+                    throw new VortexException("varbin view bytes [" + srcOffset + ", "
+                            + (srcOffset + size) + ") out of range for data buffer " + bufferIndex
+                            + " of " + buf.byteSize() + " bytes");
+                }
+                MemorySegment.copy(buf, srcOffset, MemorySegment.ofArray(out), 0, size);
             }
             return out;
         }
@@ -655,6 +790,10 @@ public sealed interface VarBinArray extends Array
         @Override
         public void forEachByteLength(IntConsumer c) {
             long n = length;
+            // Sized once, outside the loop, so the per-row body stays uniform — same
+            // trade-off as OffsetMode: a negative size on the wire still reaches the
+            // consumer, and [#getBytes(long)] rejects it when the row is read.
+            checkViewsExtent(n);
             for (long i = 0; i < n; i++) {
                 c.accept(views.get(VortexFormat.LE_INT, i * VIEW_SIZE));
             }
@@ -665,7 +804,43 @@ public sealed interface VarBinArray extends Array
             if (rows >= length) {
                 return this;
             }
+            checkViewsExtent(rows);
             return new ViewMode(dtype, rows, views.asSlice(0, rows * VIEW_SIZE), dataBufs);
+        }
+
+        /// Byte offset of view `i`, rejecting a row the views segment does not cover.
+        ///
+        /// @param i zero-based row index
+        /// @return the byte offset of the 16-byte view for row `i`
+        private long viewOffset(long i) {
+            long off = i * VIEW_SIZE;
+            if (i < 0 || off + VIEW_SIZE > views.byteSize()) {
+                throw new VortexException("varbin view index " + i
+                        + " out of range for a views segment of " + views.byteSize() + " bytes");
+            }
+            return off;
+        }
+
+        /// Verifies the views segment holds `rows` complete 16-byte views.
+        ///
+        /// @param rows number of rows whose views are about to be read
+        private void checkViewsExtent(long rows) {
+            if (rows > views.byteSize() / VIEW_SIZE) {
+                throw new VortexException("varbin views segment of " + views.byteSize()
+                        + " bytes holds fewer than " + rows + " views");
+            }
+        }
+
+        /// Rejects a negative element size read from a view header, which would otherwise
+        /// reach `new byte[size]` as a `NegativeArraySizeException` (ADR 0003).
+        ///
+        /// @param size element size read from the view
+        /// @return `size` when it is non-negative
+        private static int checkedSize(int size) {
+            if (size < 0) {
+                throw new VortexException("negative varbin view size " + size);
+            }
+            return size;
         }
     }
 }

@@ -82,6 +82,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
 
     private static Array decodeF64(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n,
             MemorySegment src) {
+        checkExponents(expE, expF, F10_F64.length);
         // Decode formula mirrors the Rust reference (`ALPFloat::decode_single`): two-step
         // `encoded * F10[f] * IF10[e]`. A pre-multiplied `scale = F10[f] * IF10[e]`
         // gives different IEEE rounding for non-trivial `expF`, breaking round-trip with
@@ -89,6 +90,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         double df = F10_F64[expF];
         double de = IF10_F64[expE];
         long srcCap = SegmentBroadcast.capacity(src, 8);
+        checkSource(srcCap, n);
 
         if (meta.patches() == null) {
             if (srcCap >= n) {
@@ -116,9 +118,11 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
 
     private static Array decodeF32(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n,
             MemorySegment src) {
+        checkExponents(expE, expF, F10_F32.length);
         float df = F10_F32[expF];
         float de = IF10_F32[expE];
         long srcCap = SegmentBroadcast.capacity(src, 4);
+        checkSource(srcCap, n);
 
         if (meta.patches() == null) {
             if (srcCap >= n) {
@@ -144,27 +148,85 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         return new MaterializedFloatArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
+    /// Rejects out-of-range ALP exponents before they index the power-of-ten tables.
+    ///
+    /// `exp_e` and `exp_f` are untrusted metadata read verbatim from the file; a negative or
+    /// oversized exponent used to escape as an `ArrayIndexOutOfBoundsException` from the
+    /// table lookup rather than a [VortexException] (ADR 0003). The check is O(1) and runs
+    /// once per decode, outside every loop.
+    ///
+    /// @param expE   the `e` exponent, an index into the inverse power-of-ten table
+    /// @param expF   the `f` exponent, an index into the power-of-ten table
+    /// @param maxExp exclusive upper bound — the table length for this float width
+    private static void checkExponents(int expE, int expF, int maxExp) {
+        if (expE < 0 || expE >= maxExp || expF < 0 || expF >= maxExp) {
+            throw new VortexException(EncodingId.VORTEX_ALP,
+                    "exponents (e=" + expE + ", f=" + expF + ") out of range [0," + maxExp + ")");
+        }
+    }
+
+    /// Rejects an encoded child that carries no element at all.
+    ///
+    /// Every path below reads at least element 0 — the broadcast path reads exactly it, and
+    /// the row-wise paths wrap with `% srcCap` — so a zero-length child would either read
+    /// off the segment or divide by zero. Checked once, outside the row loops.
+    ///
+    /// @param srcCap number of elements physically present in the encoded child
+    /// @param n      logical row count
+    private static void checkSource(long srcCap, long n) {
+        if (srcCap == 0 && n > 0) {
+            throw new VortexException(EncodingId.VORTEX_ALP,
+                    "empty encoded child for " + n + " rows");
+        }
+    }
+
     private static void applyPatches(DecodeContext ctx, ProtoPatchesMetadata pm, MemorySegment out, int elemBytes) {
         long numPatches = pm.len();
+        if (numPatches == 0) {
+            return;
+        }
         long offset = pm.offset();
         PType idxPtype = PType.fromOrdinal(pm.indices_ptype().value());
         int idxBytes = idxPtype.byteSize();
+        long n = out.byteSize() / elemBytes;
 
         MemorySegment idxSeg = ctx.decodeChildSegment(1, new DType.Primitive(idxPtype, false), numPatches);
         MemorySegment valSeg = ctx.decodeChildSegment(2, ctx.dtype(), numPatches);
 
         long idxCap = SegmentBroadcast.capacity(idxSeg, idxBytes);
         long valCap = SegmentBroadcast.capacity(valSeg, elemBytes);
+        if (idxCap == 0 || valCap == 0) {
+            throw new VortexException(EncodingId.VORTEX_ALP,
+                    "empty patch child for " + numPatches + " declared patches (indices="
+                            + idxSeg.byteSize() + " bytes, values=" + valSeg.byteSize() + " bytes)");
+        }
         if (idxCap >= numPatches && valCap >= numPatches) {
             for (long i = 0; i < numPatches; i++) {
                 long absIdx = readUnsigned(idxSeg, i * idxBytes, idxPtype) - offset;
+                checkPatchIndex(absIdx, n);
                 MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
             }
         } else {
             for (long i = 0; i < numPatches; i++) {
                 long absIdx = readUnsigned(idxSeg, (i % idxCap) * idxBytes, idxPtype) - offset;
+                checkPatchIndex(absIdx, n);
                 MemorySegment.copy(valSeg, (i % valCap) * elemBytes, out, absIdx * elemBytes, elemBytes);
             }
+        }
+    }
+
+    /// Guards a patch scatter-write against an untrusted index, mirroring the identical
+    /// check in [BitpackedEncodingDecoder]: a patch index outside the row range (or one
+    /// pushed negative by `patches.offset`) must fail as a [VortexException] rather than as
+    /// a raw `IndexOutOfBoundsException` from the copy. Patches are sparse, so the per-patch
+    /// test costs nothing on the row-wise decode loops.
+    ///
+    /// @param absIdx absolute row index of the patch, after subtracting `patches.offset`
+    /// @param n      logical row count
+    private static void checkPatchIndex(long absIdx, long n) {
+        if (absIdx < 0 || absIdx >= n) {
+            throw new VortexException(EncodingId.VORTEX_ALP,
+                    "patch index " + absIdx + " out of range [0," + n + ")");
         }
     }
 

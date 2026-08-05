@@ -35,20 +35,11 @@ known gap, a contract audit, or supporting infra.
 
 ### Per-encoding adversarial tests
 
-Each encoding's `decode(DecodeContext)` should be exercised against:
-- `bufferIndices[i] >= ctx.bufferCount()` → centralize check in `DecodeContext.buffer(i)`.
-- Crafted metadata that decodes but disagrees with the buffer payload.
+Each encoding's `decode(DecodeContext)` should be exercised against crafted metadata that
+decodes but disagrees with the buffer payload. `bufferIndices[i] >= ctx.bufferCount()` (and the
+equivalent child-index check) is centralized in `DecodeContext.buffer(i)`/`decodeChild(i)`.
+VarBin, Dict, Bitpacked, ALP, Sparse, Chunked, and Struct are done — remaining gotchas:
 
-Per-encoding gotchas:
-- [ ] **VarBin**: offsets non-monotonic, negative, past data-buffer length.
-- [ ] **Dict**: `codes[i] >= values.length`; `codes` ptype declared u8 but values count > 256.
-- [ ] **Bitpacked**: `bit_width < 0 || > 64`; `packed_len < n * bit_width / 8`.
-- [ ] **ALP**: `dim < 0`, `f_or_d` byte out of enum range; `exceptions_count > n`.
-- [ ] **Sparse**: indices non-sorted or `indices[i] >= length`; values count
-  mismatches indices count.
-- [ ] **Chunked**: zero children with non-zero `row_count`; child layout self-referencing
-  (already protected by depth limit, but add explicit test).
-- [ ] **Struct**: `fieldNames.size() != children.size()`; field name UTF-8 invalid.
 - [ ] **RLE / RunEnd**: `run_ends` non-monotonic; last `run_end` ≠ `row_count`.
 - [ ] **Constant**: protobuf scalar value missing or type-mismatched against declared `DType`.
 - [ ] **Zoned**: zone-map min > max; zone count ≠ child chunk count.
