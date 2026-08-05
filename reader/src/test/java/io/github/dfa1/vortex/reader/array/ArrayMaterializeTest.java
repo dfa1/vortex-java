@@ -125,7 +125,7 @@ class ArrayMaterializeTest {
             MemorySegment result = sut.materialize(arena);
 
             // Then
-            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(0L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isZero();
             assertThat(result.getAtIndex(VortexFormat.LE_LONG, 1)).isEqualTo(-1L);
             assertThat(result.getAtIndex(VortexFormat.LE_LONG, 2)).isEqualTo(1L);
             assertThat(result.getAtIndex(VortexFormat.LE_LONG, 3)).isEqualTo(-2L);
@@ -159,7 +159,7 @@ class ArrayMaterializeTest {
 
             // Then one contiguous segment spanning both chunks
             assertThat(result.byteSize()).isEqualTo(5 * 8L);
-            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(0L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isZero();
             assertThat(result.getAtIndex(VortexFormat.LE_LONG, 3)).isEqualTo(3L);
             assertThat(result.getAtIndex(VortexFormat.LE_LONG, 4)).isEqualTo(4L);
         }

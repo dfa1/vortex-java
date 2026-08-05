@@ -49,12 +49,13 @@ class CodeGenTest {
         String src = Files.readString(tmp.resolve("ProtoBitPackedMetadata.java"));
 
         // Then
-        assertThat(src).contains("public record ProtoBitPackedMetadata(");
-        assertThat(src).contains("int bit_width");
-        assertThat(src).contains("int offset");
-        assertThat(src).contains("ProtoPatchesMetadata patches");
-        assertThat(src).contains("public static ProtoBitPackedMetadata decode(MemorySegment __seg, long __off, long __len)");
-        assertThat(src).contains("public byte[] encode()");
+        assertThat(src)
+                .contains("public record ProtoBitPackedMetadata(")
+                .contains("int bit_width")
+                .contains("int offset")
+                .contains("ProtoPatchesMetadata patches")
+                .contains("public static ProtoBitPackedMetadata decode(MemorySegment __seg, long __off, long __len)")
+                .contains("public byte[] encode()");
     }
 
     private static Ast.ProtoFile parse(Path p) throws IOException {

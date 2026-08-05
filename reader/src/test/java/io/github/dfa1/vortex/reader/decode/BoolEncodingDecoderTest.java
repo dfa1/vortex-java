@@ -72,8 +72,7 @@ class BoolEncodingDecoderTest {
         var result = sut.decode(ctx);
 
         // Then — non-nullable path returns a plain BoolArray, not a MaskedArray
-        assertThat(result).isInstanceOf(BoolArray.class);
-        assertThat(result).isNotInstanceOf(MaskedArray.class);
+        assertThat(result).isInstanceOf(BoolArray.class).isNotInstanceOf(MaskedArray.class);
         assertThat(result.length()).isEqualTo(values.length);
         BoolArray boolArr = (BoolArray) result;
         for (int i = 0; i < values.length; i++) {

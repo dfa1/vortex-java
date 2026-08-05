@@ -27,7 +27,7 @@ class MatcherTest {
         int result = sut.longestMatch(wordOf("ABCDEFGH"));
 
         // Then — the longest (8-byte) symbol wins.
-        assertThat(Matcher.codeOf(result)).isEqualTo(0);
+        assertThat(Matcher.codeOf(result)).isZero();
         assertThat(Matcher.lengthOf(result)).isEqualTo(8);
     }
 
@@ -81,7 +81,7 @@ class MatcherTest {
         int result = sut.longestMatch(wordOf("zzzzzzzz"));
 
         // Then
-        assertThat(Matcher.lengthOf(result)).isEqualTo(0);
+        assertThat(Matcher.lengthOf(result)).isZero();
         assertThat(Matcher.codeOf(result)).isEqualTo(ShortCodeTable.NO_CODE);
     }
 

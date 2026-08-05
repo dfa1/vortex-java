@@ -132,8 +132,7 @@ class OhlcEncodingInspectionIntegrationTest {
 
         // Then
         System.out.println(result);
-        assertThat(result).contains("volume");
-        assertThat(result).contains("Used encodings:");
+        assertThat(result).contains("volume").contains("Used encodings:");
     }
 
     @Test

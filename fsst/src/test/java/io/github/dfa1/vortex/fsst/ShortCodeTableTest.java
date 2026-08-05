@@ -21,7 +21,7 @@ class ShortCodeTableTest {
         int length = sut.lengthFor(word);
 
         // Then
-        assertThat(code).isEqualTo(0);
+        assertThat(code).isZero();
         assertThat(length).isEqualTo(1);
     }
 
@@ -57,7 +57,7 @@ class ShortCodeTableTest {
         int length = sut.lengthFor(word);
 
         // Then
-        assertThat(code).isEqualTo(0);
+        assertThat(code).isZero();
         assertThat(length).isEqualTo(1);
     }
 
@@ -74,7 +74,7 @@ class ShortCodeTableTest {
 
         // Then — the caller must escape this byte.
         assertThat(code).isEqualTo(ShortCodeTable.NO_CODE);
-        assertThat(length).isEqualTo(0);
+        assertThat(length).isZero();
     }
 
     @Test
@@ -88,7 +88,7 @@ class ShortCodeTableTest {
         int length = sut.lengthFor(word);
 
         // Then
-        assertThat(length).isEqualTo(0);
+        assertThat(length).isZero();
     }
 
     /// Packs the low bytes of `s` LSB-first into a word, matching the reader's little-endian

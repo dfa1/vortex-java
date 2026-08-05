@@ -291,8 +291,7 @@ class PredicateTest {
             Predicate result = new Predicate.And(new Predicate.Gt(0), new Predicate.Lt(10));
 
             // Then the record contract gives value equality and matching hash codes
-            assertThat(sut).isEqualTo(result);
-            assertThat(sut).hasSameHashCodeAs(result);
+            assertThat(sut).isEqualTo(result).hasSameHashCodeAs(result);
         }
 
         @Test
@@ -316,8 +315,7 @@ class PredicateTest {
             Predicate result = new Predicate.IsNull();
 
             // Then they are equal, while a different no-arg variant is not
-            assertThat(sut).isEqualTo(result);
-            assertThat(sut).isNotEqualTo(new Predicate.IsNotNull());
+            assertThat(sut).isEqualTo(result).isNotEqualTo(new Predicate.IsNotNull());
         }
     }
 

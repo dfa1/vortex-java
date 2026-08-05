@@ -239,8 +239,9 @@ class CliIT {
                 () -> ImportCommand.run(new String[]{"import", "--delimiter", "::", csvIn.toString()}));
 
         // Then
-        assertThat(stderr).contains("--delimiter must be exactly one character");
-        assertThat(stderr).contains("usage: import [--delimiter <char>]");
+        assertThat(stderr)
+                .contains("--delimiter must be exactly one character")
+                .contains("usage: import [--delimiter <char>]");
         assertThat(tmp.resolve("data.vortex")).doesNotExist();
     }
 }
