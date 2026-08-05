@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Malformed files no longer crash the reader with a raw JDK exception when decoding VarBin, Dict, Bitpacked, ALP, Sparse, Chunked, or Struct columns — every case now fails as `VortexException`. ([ef982992](https://github.com/dfa1/vortex-java/commit/ef982992))
+
 ### Added
 
 - `MemorySize` domain primitive in `core.model` replaces raw byte-count `long`/`int` arithmetic: validated non-negative at construction, with `ofKiB`/`ofMiB`/`ofGiB` factories and a `toGiB()` display accessor. Migrated `WriteOptions#globalDictMaxRetainedBytes()`, `PostscriptParser`'s layout-metadata size cap, `DType.Extension#MAX_METADATA_SIZE`, and `VortexHttpReader`'s HTTP tail-fetch window. ([#321](https://github.com/dfa1/vortex-java/issues/321))
