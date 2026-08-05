@@ -81,11 +81,12 @@ class VortexInspectorIntegrationTest {
 
         // Then
         System.out.println(result);
-        assertThat(result).contains("Vortex v");
-        assertThat(result).contains("id");
-        assertThat(result).contains("value");
-        assertThat(result).contains("Registered encodings:");
-        assertThat(result).contains("Used encodings:");
-        assertThat(result).contains("Layout:");
+        assertThat(result)
+                .contains("Vortex v")
+                .contains("id")
+                .contains("value")
+                .contains("Registered encodings:")
+                .contains("Used encodings:")
+                .contains("Layout:");
     }
 }

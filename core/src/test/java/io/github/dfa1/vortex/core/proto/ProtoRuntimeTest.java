@@ -315,8 +315,7 @@ class ProtoRuntimeTest {
             ProtoScalarValue b = ProtoScalarValue.ofBytesValue(new byte[]{1, 2, 3});
 
             // When + Then
-            assertThat(a).isEqualTo(b);
-            assertThat(a).hasSameHashCodeAs(b);
+            assertThat(a).isEqualTo(b).hasSameHashCodeAs(b);
         }
 
         @Test

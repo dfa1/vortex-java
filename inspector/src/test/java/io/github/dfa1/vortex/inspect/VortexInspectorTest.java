@@ -82,8 +82,7 @@ class VortexInspectorTest {
         String result = VortexInspector.render(sut);
 
         // Then
-        assertThat(result).contains("vortex.flat(100 rows)");
-        assertThat(result).doesNotContain("struct (");
+        assertThat(result).contains("vortex.flat(100 rows)").doesNotContain("struct (");
     }
 
     @Test
@@ -163,8 +162,7 @@ class VortexInspectorTest {
         String result = VortexInspector.render(sut);
 
         // Then
-        assertThat(result).doesNotContain("min=");
-        assertThat(result).doesNotContain("max=");
+        assertThat(result).doesNotContain("min=").doesNotContain("max=");
     }
 
     @Test

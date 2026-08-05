@@ -79,7 +79,7 @@ class ColumnZoneStatsTest {
         assertThat(result.get(0).min()).isEqualTo(1L);
         assertThat(result.get(0).max()).isEqualTo(50L);
         assertThat(result.get(0).sum()).isEqualTo(1275L);   // 1+..+50
-        assertThat(result.get(0).nullCount()).isEqualTo(0L);
+        assertThat(result.get(0).nullCount()).isZero();
         assertThat(result.get(1).min()).isEqualTo(51L);
         assertThat(result.get(1).max()).isEqualTo(100L);
         assertThat(result.get(1).sum()).isEqualTo(3775L);   // 51+..+100

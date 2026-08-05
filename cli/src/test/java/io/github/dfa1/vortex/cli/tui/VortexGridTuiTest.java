@@ -50,10 +50,11 @@ class VortexGridTuiTest {
 
         // Then — title, column header, and at least one decoded cell rendered
         String out = term.output();
-        assertThat(out).contains("Vortex View");
-        assertThat(out).contains("grid.vortex");
-        assertThat(out).contains("q quit");
-        assertThat(out).contains("a").contains("b").contains("c");
+        assertThat(out)
+                .contains("Vortex View")
+                .contains("grid.vortex")
+                .contains("q quit")
+                .contains("a").contains("b").contains("c");
     }
 
     @Test

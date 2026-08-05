@@ -201,11 +201,10 @@ class FileSizeComparisonIntegrationTest {
                 (double) javaSize / jniSize,
                 (double) csvSize / javaSize);
 
-        // Then — Java beats CSV
-        assertThat(javaSize).isLessThan(csvSize);
-
-        // Then — Java within 2x of JNI (both use cascading(3))
-        assertThat(javaSize).isLessThan(jniSize * 2);
+        // Then — Java beats CSV, and stays within 2x of JNI (both use cascading(3))
+        assertThat(javaSize)
+                .isLessThan(csvSize)
+                .isLessThan(jniSize * 2);
 
         // Then — Java file is readable with correct row count
         var totalRows = new java.util.concurrent.atomic.AtomicLong();

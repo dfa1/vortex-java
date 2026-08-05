@@ -248,9 +248,10 @@ class InspectorRenderTest {
             String row = InspectorRender.formatHexRow(data, 0);
 
             // Then — offset, hex columns, ASCII gutter
-            assertThat(row).startsWith("00000000  ");
-            assertThat(row).contains("41 42 43"); // A B C
-            assertThat(row).contains("|ABCDEFGHIJKLMNOP|");
+            assertThat(row)
+                    .startsWith("00000000  ")
+                    .contains("41 42 43") // A B C
+                    .contains("|ABCDEFGHIJKLMNOP|");
         }
 
         @Test
@@ -262,9 +263,10 @@ class InspectorRenderTest {
             String row = InspectorRender.formatHexRow(data, 0);
 
             // Then — non-printable shows as '.', missing columns are padded
-            assertThat(row).startsWith("00000000  ");
-            assertThat(row).contains("78 00 79");
-            assertThat(row).contains("|x.y");
+            assertThat(row)
+                    .startsWith("00000000  ")
+                    .contains("78 00 79")
+                    .contains("|x.y");
         }
     }
 

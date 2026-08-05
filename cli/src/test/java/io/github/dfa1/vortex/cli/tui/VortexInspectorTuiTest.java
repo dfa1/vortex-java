@@ -50,9 +50,10 @@ class VortexInspectorTuiTest {
 
         // Then — header chrome and tree content rendered
         String out = term.output();
-        assertThat(out).contains("vortex-inspect");
-        assertThat(out).contains("struct");
-        assertThat(out).contains("quit");
+        assertThat(out)
+                .contains("vortex-inspect")
+                .contains("struct")
+                .contains("quit");
     }
 
     @Test
@@ -88,9 +89,10 @@ class VortexInspectorTuiTest {
 
         // Then — the dictionary, per-chunk stats, and data preview panes all rendered
         String out = term.output();
-        assertThat(out).contains("Dictionary");
-        assertThat(out).contains("Per-chunk stats");
-        assertThat(out).contains("Data (column");
+        assertThat(out)
+                .contains("Dictionary")
+                .contains("Per-chunk stats")
+                .contains("Data (column");
     }
 
     @Test

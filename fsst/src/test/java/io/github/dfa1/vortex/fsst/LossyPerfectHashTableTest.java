@@ -21,7 +21,7 @@ class LossyPerfectHashTableTest {
 
         // Then — packed as code << 8 | length; a hit is never 0.
         assertThat(result).isNotZero();
-        assertThat(result >>> 8).isEqualTo(0);
+        assertThat(result >>> 8).isZero();
         assertThat(result & 0xFF).isEqualTo(3);
     }
 
@@ -71,7 +71,7 @@ class LossyPerfectHashTableTest {
         // Then — the higher-gain (first-inserted) symbol wins; the lower-gain one correctly misses
         // and does not corrupt or masquerade as the winner.
         assertThat(higher).isNotZero();
-        assertThat(higher >>> 8).isEqualTo(0);
+        assertThat(higher >>> 8).isZero();
         assertThat(lower).isZero();
     }
 

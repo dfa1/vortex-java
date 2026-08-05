@@ -53,15 +53,16 @@ class CodeGenTest {
         String src = generateOne("FbsLayout.java");
 
         // Then — accessors match the flatc read shapes (widened unsigned types).
-        assertThat(src).contains("extends FbsTable");
-        assertThat(src).contains("public int encoding() {");
-        assertThat(src).contains("public long rowCount() {");
-        assertThat(src).contains("public MemorySegment metadataAsSegment() {");
-        assertThat(src).contains("public int childrenLength() {");
-        assertThat(src).contains("public FbsLayout children(int j) {");
-        assertThat(src).contains("indirect(vectorElements(o) + (long) j * 4)");
-        assertThat(src).contains("public long segments(int j) {");
-        assertThat(src).contains("readInt(vectorElements(o) + (long) j * 4) & 0xFFFFFFFFL");
+        assertThat(src)
+                .contains("extends FbsTable")
+                .contains("public int encoding() {")
+                .contains("public long rowCount() {")
+                .contains("public MemorySegment metadataAsSegment() {")
+                .contains("public int childrenLength() {")
+                .contains("public FbsLayout children(int j) {")
+                .contains("indirect(vectorElements(o) + (long) j * 4)")
+                .contains("public long segments(int j) {")
+                .contains("readInt(vectorElements(o) + (long) j * 4) & 0xFFFFFFFFL");
     }
 
     @Test
@@ -71,12 +72,13 @@ class CodeGenTest {
         String src = generateOne("FbsBuffer.java");
 
         // Then
-        assertThat(src).contains("extends FbsMemorySegment");
-        assertThat(src).contains("8 bytes");
-        assertThat(src).contains("public int padding() {\n        return readShort(0) & 0xFFFF;");
-        assertThat(src).contains("public int alignmentExponent() {\n        return readByte(2) & 0xFF;");
-        assertThat(src).contains("public int compression() {\n        return readByte(3) & 0xFF;");
-        assertThat(src).contains("public long length() {\n        return readInt(4) & 0xFFFFFFFFL;");
+        assertThat(src)
+                .contains("extends FbsMemorySegment")
+                .contains("8 bytes")
+                .contains("public int padding() {\n        return readShort(0) & 0xFFFF;")
+                .contains("public int alignmentExponent() {\n        return readByte(2) & 0xFF;")
+                .contains("public int compression() {\n        return readByte(3) & 0xFF;")
+                .contains("public long length() {\n        return readInt(4) & 0xFFFFFFFFL;");
     }
 
     @Test
@@ -85,11 +87,12 @@ class CodeGenTest {
         String src = generateOne("FbsDType.java");
 
         // Then — discriminator at vtable slot 4, value (member) projected from slot 6.
-        assertThat(src).contains("public int typeType() {");
-        assertThat(src).contains("fieldOffset(4)");
-        assertThat(src).contains("public <T extends FbsTable> T type(T obj) {");
-        assertThat(src).contains("locate(obj, unionMemberPosition(o))");
-        assertThat(src).contains("fieldOffset(6)");
+        assertThat(src)
+                .contains("public int typeType() {")
+                .contains("fieldOffset(4)")
+                .contains("public <T extends FbsTable> T type(T obj) {")
+                .contains("locate(obj, unionMemberPosition(o))")
+                .contains("fieldOffset(6)");
     }
 
     @Test
@@ -98,9 +101,10 @@ class CodeGenTest {
         String src = generateOne("FbsType.java");
 
         // Then — NONE plus members with explicit discriminators (byte, like flatc).
-        assertThat(src).contains("public static final byte NONE = 0;");
-        assertThat(src).contains("public static final byte FbsNull = (byte) 1;");
-        assertThat(src).contains("public static final byte FbsUnion = (byte) 12;");
+        assertThat(src)
+                .contains("public static final byte NONE = 0;")
+                .contains("public static final byte FbsNull = (byte) 1;")
+                .contains("public static final byte FbsUnion = (byte) 12;");
     }
 
     @Test
@@ -109,8 +113,9 @@ class CodeGenTest {
         String src = generateOne("FbsPType.java");
 
         // Then — byte constants, auto-numbered from 0.
-        assertThat(src).contains("public static final byte U8 = (byte) 0;");
-        assertThat(src).contains("public static final byte F64 = (byte) 10;");
+        assertThat(src)
+                .contains("public static final byte U8 = (byte) 0;")
+                .contains("public static final byte F64 = (byte) 10;");
     }
 
     private static void generate(Path out) throws IOException {
