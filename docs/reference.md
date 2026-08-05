@@ -130,11 +130,11 @@ Accepted array types per column `DType`:
 
 ### `WriteOptions` (`io.github.dfa1.vortex.writer.WriteOptions`)
 
-Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading, boolean globalDict, boolean enableZstd, long globalDictMaxRetainedBytes, Map<EditionFamily, Edition> editions)`.
+Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading, boolean globalDict, boolean enableZstd, MemorySize globalDictMaxRetainedBytes, Map<EditionFamily, Edition> editions)`.
 
 | Factory                         | Defaults                                                                                          |
 |---------------------------------|---------------------------------------------------------------------------------------------------|
-| `WriteOptions.defaults()`       | `chunkSize=65_536`, `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0`, `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=2 GB`, `editions={CORE: Editions.CORE_2026_07_0}` |
+| `WriteOptions.defaults()`       | `chunkSize=65_536`, `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0`, `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_07_0}` |
 | `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`                                                           |
 
 | Method | Notes |
