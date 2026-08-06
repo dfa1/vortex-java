@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 ///
 /// Validates each `put` against the writer's schema:
 /// - Column name must exist in the schema.
-/// - Array type must match the column [DType].
+/// - Array type must match the column [io.github.dfa1.vortex.core.model.DType].
 /// - Non-nullable columns reject boxed arrays containing `null`.
 ///
 /// All schema columns must be supplied before the consumer returns; all column

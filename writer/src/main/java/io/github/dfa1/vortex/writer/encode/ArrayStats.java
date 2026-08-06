@@ -11,7 +11,7 @@ import java.util.HashMap;
 /// sample-encoding probe that biases on leading rows.
 ///
 /// All values are stored as raw 64-bit patterns (`doubleToRawLongBits` for floats,
-/// zero-extended unsigned ints for U8/U16/U32). Use [#mostFrequentValueBits()] etc. and
+/// zero-extended unsigned ints for U8/U16/U32). Use [#mostFrequentBits()] etc. and
 /// reinterpret per ptype as needed.
 ///
 /// @param valueCount        number of non-null elements scanned

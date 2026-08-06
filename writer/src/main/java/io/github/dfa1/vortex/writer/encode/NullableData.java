@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 /// Writer-side carrier for nullable column data: a packed values array paired with a
 /// per-row validity bitmap.
 ///
-/// `values` carries the raw storage in the shape an [Encoding] expects
+/// `values` carries the raw storage in the shape an [EncodingEncoder] expects
 /// (`int[]`, `long[]`, `byte[]`, `double[]`, ...). Null
 /// positions hold zero-valued placeholders so primitive encoders can compress them
 /// alongside real data. `validity` has the same logical length: `true`
@@ -11,7 +11,8 @@ package io.github.dfa1.vortex.writer.encode;
 ///
 /// The writer recognizes this shape and emits the `vortex.masked`
 /// wire layout: a non-nullable child (the storage) plus an optional Bool
-/// validity child. Readers reconstruct a [io.github.dfa1.vortex.reader.array.MaskedArray].
+/// validity child. Readers reconstruct a `MaskedArray` — named as text, not linked, because
+/// the writer module does not depend on the reader.
 ///
 /// Invariant: `values` length (or storage row count) matches
 /// `validity.length`; placeholders at null positions must be zero so the

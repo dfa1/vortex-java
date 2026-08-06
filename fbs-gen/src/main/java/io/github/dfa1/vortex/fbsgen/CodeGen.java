@@ -16,7 +16,10 @@ import java.util.List;
 /// - each `enum` becomes a constants holder over its underlying integer type;
 /// - each `union` becomes a discriminator-constants holder (NONE = 0, members from 1).
 ///
-/// The wire layout is the standard FlatBuffers binary format — see [FbsTable]/[FbsBuilder].
+/// The wire layout is the standard FlatBuffers binary format. The runtime base classes the
+/// emitted code extends (`FbsTable`, `FbsMemorySegment`, `FbsBuilder`) live in the generated
+/// package `io.github.dfa1.vortex.core.fbs`, which this module does not depend on — it emits
+/// their source, so they are named here as text rather than linked.
 public final class CodeGen {
 
     /// Prefix applied to every emitted Java class name so the generated wire-format
