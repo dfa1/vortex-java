@@ -66,13 +66,8 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
                 DType.U16, nPatches);
         MemorySegment patchValuesSeg = ctx.decodeChildSegment(3, ctx.dtype(), nPatches);
 
-        MemorySegment out = ctx.arena().allocate(n * elemBytes);
-        SegmentBroadcast.broadcastCopy(innerSeg, out, n, elemBytes);
-
-        if (nPatches > 0) {
-            applyPatches(out, n, nChunks, nLanes, offset, elemBytes,
-                    laneOffsetsSeg, patchIndicesSeg, patchValuesSeg);
-        }
+        MemorySegment out = patchedOutput(ctx, innerSeg, n, elemBytes, nPatches,
+                nChunks, nLanes, offset, laneOffsetsSeg, patchIndicesSeg, patchValuesSeg);
 
         return switch (ptype) {
             case I8, U8 -> new MaterializedByteArray(ctx.dtype(), n, out);
@@ -84,6 +79,47 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
             default -> throw new VortexException(EncodingId.VORTEX_PATCHED,
                     "unsupported ptype: " + ptype);
         };
+    }
+
+    /// Produces the patched values buffer.
+    ///
+    /// With no patches to apply, the result is byte-for-byte the inner child, so allocating
+    /// `n * elemBytes` and copying into it produces a duplicate and nothing else — the inner
+    /// segment is already arena-lifetime, having just come from `decodeChildSegment`. A
+    /// zero-patch `vortex.patched` node is not exotic: a bitpacked column whose exception list
+    /// happens to be empty for a chunk still round-trips through this encoding.
+    ///
+    /// The copy is still required when the inner child holds fewer than `n` elements — the
+    /// `ConstantEncoding` fan-out that [SegmentBroadcast#broadcastCopy] exists for — so the
+    /// alias is taken only when the child covers every row. It is sliced to exactly `n`
+    /// elements so the `Materialized*` accessors keep their `length == elementCount` fast path
+    /// even when the child buffer runs long.
+    ///
+    /// @param ctx             decode context (allocation arena)
+    /// @param innerSeg        decoded inner child
+    /// @param n               logical row count
+    /// @param elemBytes       value element width
+    /// @param nPatches        number of patches declared by the metadata
+    /// @param nChunks         number of 1024-row chunks spanned
+    /// @param nLanes          lanes per chunk
+    /// @param offset          starting absolute position
+    /// @param laneOffsetsSeg  per-chunk lane offsets
+    /// @param patchIndicesSeg per-patch in-chunk indices
+    /// @param patchValuesSeg  per-patch replacement values
+    /// @return the values buffer, aliased to `innerSeg` when there is nothing to patch
+    private static MemorySegment patchedOutput(DecodeContext ctx, MemorySegment innerSeg, long n, int elemBytes,
+            long nPatches, long nChunks, long nLanes, long offset,
+            MemorySegment laneOffsetsSeg, MemorySegment patchIndicesSeg, MemorySegment patchValuesSeg) {
+        if (nPatches == 0 && SegmentBroadcast.capacity(innerSeg, elemBytes) >= n) {
+            return innerSeg.asSlice(0, n * elemBytes).asReadOnly();
+        }
+        MemorySegment out = ctx.arena().allocate(n * elemBytes);
+        SegmentBroadcast.broadcastCopy(innerSeg, out, n, elemBytes);
+        if (nPatches > 0) {
+            applyPatches(out, n, nChunks, nLanes, offset, elemBytes,
+                    laneOffsetsSeg, patchIndicesSeg, patchValuesSeg);
+        }
+        return out;
     }
 
     private static void applyPatches(

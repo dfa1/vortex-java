@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -75,6 +76,66 @@ class PatchedEncodingDecoderTest {
         for (int i = 0; i < n; i++) {
             assertThat(ints.getInt(i)).as("index %d", i).isEqualTo(inner[i]);
         }
+    }
+
+    /// With nothing to patch, the output is byte-for-byte the inner child, so the decoder must
+    /// alias it rather than allocate `n * elemBytes` and copy into a duplicate (#337). Proven by
+    /// mutating the source after decode: a copy would not see the change.
+    @Test
+    void decode_noPatches_aliasesTheInnerChildInsteadOfCopying() {
+        // Given — a mutable inner buffer, so a later write reveals whether it was copied
+        byte[] backing = new byte[4 * Integer.BYTES];
+        MemorySegment inner = MemorySegment.ofArray(backing);
+        for (int i = 0; i < 4; i++) {
+            inner.setAtIndex(VortexFormat.LE_INT, i, (i + 1) * 10);
+        }
+
+        // When
+        Array result = decodeNoPatches(inner, 4);
+        inner.setAtIndex(VortexFormat.LE_INT, 2, 999);
+
+        // Then
+        assertThat(((IntArray) result).getInt(2)).isEqualTo(999);
+    }
+
+    /// An inner child longer than the row count is sliced to exactly `n` elements, so the
+    /// `Materialized*` accessors keep their `length == elementCount` fast path instead of
+    /// falling into the broadcast-modulo branch.
+    @Test
+    void decode_noPatches_innerLongerThanRowCount_isSlicedToRowCount() {
+        // Given — 6 elements on the wire, 4 rows declared
+        MemorySegment inner = TestSegments.leInts(10, 20, 30, 40, 50, 60);
+
+        // When
+        Array result = decodeNoPatches(inner, 4);
+
+        // Then
+        assertThat(result.length()).isEqualTo(4L);
+        assertThat(result.segmentIfPresent()).hasValueSatisfying(
+                seg -> assertThat(seg.byteSize()).isEqualTo(4L * Integer.BYTES));
+        assertThat(((IntArray) result).getInt(3)).isEqualTo(40);
+    }
+
+    /// The alias is only safe when the child covers every row. A `ConstantEncoding` child holds
+    /// one element for any row count, so that case must still fan out through the copy.
+    @Test
+    void decode_noPatches_undersizedInner_stillBroadcasts() {
+        // Given — a single inner element for 4 rows
+        MemorySegment inner = TestSegments.leInts(7);
+
+        // When
+        Array result = decodeNoPatches(inner, 4);
+
+        // Then
+        IntArray ints = (IntArray) result;
+        for (int i = 0; i < 4; i++) {
+            assertThat(ints.getInt(i)).as("index %d", i).isEqualTo(7);
+        }
+    }
+
+    private static Array decodeNoPatches(MemorySegment inner, int n) {
+        return decode(DType.I32, n, inner, TestSegments.leInts(0, 0),
+                TestSegments.leShorts(), TestSegments.leInts(), 1);
     }
 
     @Test
