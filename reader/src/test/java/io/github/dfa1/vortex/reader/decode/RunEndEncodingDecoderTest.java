@@ -16,6 +16,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RunEndEncodingDecoderTest {
 
@@ -73,6 +74,59 @@ class RunEndEncodingDecoderTest {
         IntArray ints = (IntArray) result;
         assertThat(ints.getInt(0)).isEqualTo(10);
         assertThat(ints.getInt(3)).isEqualTo(20);
+    }
+
+    /// A crafted zero num_runs previously decoded "successfully" into a lazy array backed by
+    /// an empty ends/values child, then threw a raw exception (AIOOBE, or ArithmeticException
+    /// via `% elementCount`) on the first row read instead of failing here as a
+    /// [VortexException] (ADR 0003).
+    @Test
+    void zeroRuns_withNonEmptyRowCount_throwsVortexException() {
+        // Given — no run-ends/values segments needed: the check short-circuits before either
+        // child is decoded
+        ArrayNode endsNode = primitiveNode(0);
+        ArrayNode valuesNode = primitiveNode(0);
+
+        // When / Then
+        assertThatThrownBy(() -> decode(DType.I32, PType.U8, 0, 0, 5, new MemorySegment[0], endsNode, valuesNode))
+                .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                .hasMessageContaining("zero runs");
+    }
+
+    @Test
+    void negativeNumRuns_throwsVortexException() {
+        // Given — num_runs decodes to -1 (a valid varint on the wire)
+        ArrayNode endsNode = primitiveNode(0);
+        ArrayNode valuesNode = primitiveNode(0);
+
+        // When / Then
+        assertThatThrownBy(() -> decode(DType.I32, PType.U8, -1, 0, 5, new MemorySegment[0], endsNode, valuesNode))
+                .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                .hasMessageContaining("negative num_runs");
+    }
+
+    /// Non-monotonic run-ends don't crash: [RunEndArrays#findRun] narrows a binary-search
+    /// range purely from `lo`/`hi`, never from the comparison outcome's validity, so every
+    /// probed index stays within `[0, numRuns)` regardless of ordering. Locks in behavior
+    /// the binary search already guarantees rather than adding a redundant guard.
+    @Test
+    void nonMonotonicRunEnds_decodesWithoutCrashing() {
+        // Given — ends [5, 2, 8] are not non-decreasing
+        MemorySegment[] segs = {
+                u8Bytes(5, 2, 8),
+                TestSegments.leInts(10, 20, 30)
+        };
+        ArrayNode endsNode = primitiveNode(0);
+        ArrayNode valuesNode = primitiveNode(1);
+
+        // When
+        Array result = decode(DType.I32, PType.U8, 3, 0, 8, segs, endsNode, valuesNode);
+
+        // Then — every row resolves to some in-bounds run value, no raw exception escapes
+        IntArray ints = (IntArray) result;
+        for (int i = 0; i < 8; i++) {
+            assertThat(ints.getInt(i)).isIn(10, 20, 30);
+        }
     }
 
     private static Array decode(DType dtype, PType endsPtype, long numRuns, long offset, long n,

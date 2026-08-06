@@ -164,6 +164,34 @@ class PcoTansDecoderTest {
         }
 
         @Test
+        void degenerateBins_ansSizeLogNonzero_stateIndexWithinBounds() {
+            // Given — 0 bins but ansSizeLog=2 (tableSize=4). A crafted page's initial state
+            // indices are read with ansSizeLog bits regardless of bin count, so any value in
+            // [0, tableSize) is possible on the wire — not just 0. Before this decoder sized
+            // its degenerate table to tableSize, state index 3 indexed a stale 1-entry array
+            // (raw ArrayIndexOutOfBoundsException instead of a VortexException, ADR 0003).
+            PcoTansDecoder sut = PcoTansDecoder.build(2, new PcoBin[0]);
+
+            MemorySegment pageBuf = Arena.ofAuto().allocate(8);
+            LeBitReader reader = new LeBitReader(pageBuf);
+            int[] stateIdxs = {3, 1, 2, 3};
+
+            int n = 4;
+            MemorySegment out = Arena.ofAuto().allocate((long) n * Long.BYTES);
+
+            // When
+            sut.decodePage(reader, stateIdxs, n, out, 0L,
+                    new long[PcoTansDecoder.BATCH_N], new int[PcoTansDecoder.BATCH_N]);
+
+            // Then — degenerate table still resolves every state to offset zero
+            for (int i = 0; i < n; i++) {
+                assertThat(out.get(VortexFormat.LE_LONG, (long) i * Long.BYTES))
+                        .as("latent[%d]", i)
+                        .isZero();
+            }
+        }
+
+        @Test
         void moreThanOneBatch_decodesCorrectly() {
             // Given — 1 bin, lower=7, n=300 (> BATCH_N=256 → two batches)
             PcoBin[] bins = {new PcoBin(1, 7L, 0)};

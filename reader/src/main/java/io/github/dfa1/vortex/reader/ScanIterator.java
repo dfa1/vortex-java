@@ -475,6 +475,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return null;
         }
         long nZones = statsFlat.rowCount();
+        // statsFlat.rowCount() is an unvalidated field straight from the layout FlatBuffer
+        // (PostscriptParser never bounds it — zone count is deliberately decoupled from the
+        // data layout's chunk count, see this method's Javadoc). Below it sizes an ArrayList
+        // and drives a per-zone loop via an `(int) nZones` cast: a negative value throws a raw
+        // IllegalArgumentException from the ArrayList constructor instead of degrading to "no
+        // zone map" like every other unusable shape this method already falls back on.
+        if (nZones < 0 || nZones > Integer.MAX_VALUE) {
+            return null;
+        }
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
         try (Arena tableArena = Arena.ofConfined()) {
             Array decoded = file.decodeSegment(spec, statsDtype, nZones, tableArena);

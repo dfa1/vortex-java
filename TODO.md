@@ -38,13 +38,7 @@ known gap, a contract audit, or supporting infra.
 Each encoding's `decode(DecodeContext)` should be exercised against crafted metadata that
 decodes but disagrees with the buffer payload. `bufferIndices[i] >= ctx.bufferCount()` (and the
 equivalent child-index check) is centralized in `DecodeContext.buffer(i)`/`decodeChild(i)`.
-VarBin, Dict, Bitpacked, ALP, Sparse, Chunked, and Struct are done — remaining gotchas:
-
-- [ ] **RLE / RunEnd**: `run_ends` non-monotonic; last `run_end` ≠ `row_count`.
-- [ ] **Constant**: protobuf scalar value missing or type-mismatched against declared `DType`.
-- [ ] **Zoned**: zone-map min > max; zone count ≠ child chunk count.
-- [ ] **Pco**: `bits_per_offset > 64`; `bin_count == 0` with non-empty page; per-page
-  `n` greater than `DEFAULT_MAX_PAGE_N`; ANS state values inconsistent with weight table.
+VarBin, Dict, Bitpacked, ALP, Sparse, Chunked, Struct, RunEnd, Constant, Zoned, and Pco are done.
 
 ### Resource caps
 
