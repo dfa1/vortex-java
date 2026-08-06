@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -68,6 +69,42 @@ class ConstantEncodingDecoderTest {
 
         // Then
         assertThat(result.length()).isEqualTo(2);
+    }
+
+    @Test
+    void stringScalar_decodesToLazyConstantVarBin() {
+        // Given
+        ProtoScalarValue scalar = new ProtoScalarValue(
+                null, null, null, null, null, null, "hi", null, null, null, null);
+
+        // When
+        Array result = decode(scalar, DType.UTF8, 3);
+
+        // Then — VarBinArray.ConstantMode, not an eagerly materialized OffsetMode
+        assertThat(result).isInstanceOf(VarBinArray.ConstantMode.class);
+        VarBinArray strings = (VarBinArray) result;
+        assertThat(strings.getString(0)).isEqualTo("hi");
+        assertThat(strings.getString(2)).isEqualTo("hi");
+    }
+
+    /// Row count no longer bounds the work `decodeString` does: it used to eagerly allocate
+    /// and copy `n` string repetitions into a real buffer (`n * strLen`), which for a large
+    /// `n` was both wasted work and an integer-overflow/OOM risk (#329). `ConstantMode` is
+    /// O(1) regardless of `n`, so a row count too large to ever materialize still decodes
+    /// instantly.
+    @Test
+    void stringScalar_hugeRowCount_decodesWithoutAllocating() {
+        // Given — a row count that would demand petabytes if eagerly materialized
+        ProtoScalarValue scalar = new ProtoScalarValue(
+                null, null, null, null, null, null, "x", null, null, null, null);
+        long hugeRowCount = Long.MAX_VALUE / 2;
+
+        // When
+        Array result = decode(scalar, DType.UTF8, hugeRowCount);
+
+        // Then
+        assertThat(result.length()).isEqualTo(hugeRowCount);
+        assertThat(((VarBinArray) result).getString(0)).isEqualTo("x");
     }
 
     private static Array decode(ProtoScalarValue scalar, DType dtype, long n) {
