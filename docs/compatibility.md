@@ -12,14 +12,14 @@ A consumer that only needs to read Vortex files can depend on a strict subset:
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.13.0</version>
+  <version>0.13.1</version>
 </dependency>
 
 <!-- optional: inspector for layout-tree introspection -->
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-inspector</artifactId>
-  <version>0.13.0</version>
+  <version>0.13.1</version>
 </dependency>
 ```
 

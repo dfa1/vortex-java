@@ -26,7 +26,7 @@ Add the dependency to `pom.xml` (inside `<dependencies>`):
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.13.0</version>
+  <version>0.13.1</version>
 </dependency>
 ```
 
