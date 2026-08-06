@@ -92,7 +92,7 @@ integer width is wire-legal, mirroring `VarBinArray`), and `ScanIterator` could 
 | `vortex.alp`                | `AlpEncodingDecoder`             | `AlpEncodingEncoder`             | ✅      | ✅      | F64, F32                                                              |
 | `vortex.alprd`              | `AlpRdEncodingDecoder`           | `AlpRdEncodingEncoder`           | ✅      | ✅      | F64, F32                                                              |
 | `vortex.dict`               | `DictEncodingDecoder`            | `DictEncodingEncoder`            | ✅      | ✅      | Primitive, Utf8/Binary                                                |
-| `vortex.sparse`             | `SparseEncodingDecoder`          | `SparseEncodingEncoder`          | ✅      | ✅      | Primitive                                                             |
+| `vortex.sparse`             | `SparseEncodingDecoder`          | `SparseEncodingEncoder`          | ✅      | ✅      | Primitive, Bool, Utf8/Binary (decode); Primitive (encode)             |
 | `vortex.sequence`           | `SequenceEncodingDecoder`        | `SequenceEncodingEncoder`        | ✅      | ✅      | Primitive                                                             |
 | `vortex.struct`             | `StructEncodingDecoder`          | `StructEncodingEncoder`          | ✅      | ✅      | Struct                                                                |
 | `vortex.chunked`            | `ChunkedEncodingDecoder`         | `ChunkedEncodingEncoder`         | ✅      | ✅      | Primitive + Struct concat                                             |

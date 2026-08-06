@@ -81,8 +81,8 @@ class VarBinSparseArrayTest {
             VarBinSparseArray sut = sut(6, 0);
 
             // When
-            byte[] first = sut.getBytes(0);
-            first[0] = (byte) 'Q';
+            byte[] result = sut.getBytes(0);
+            result[0] = (byte) 'Q';
 
             // Then
             assertThat(sut.getBytes(2)).isEqualTo("zz".getBytes(StandardCharsets.UTF_8));
@@ -149,11 +149,16 @@ class VarBinSparseArrayTest {
         }
 
         /// The walk and the per-row binary search are two independent resolutions of the same
-        /// data; a disagreement between them is the bug this guards.
-        @Test
-        void forEachByteLength_agreesWithGetByteLength() {
+        /// data; a disagreement between them is the bug this guards. Swept across offsets
+        /// because rebasing is where the two can diverge — the walk iterates the absolute range
+        /// `[offset, offset + length)` while the search rebases each row on its own, so an
+        /// offset that puts a patch before, at, or after the window exercises different code in
+        /// each. Offset 2 puts the first patch (absolute 1) behind the window entirely.
+        @ParameterizedTest
+        @CsvSource({"0", "1", "2", "3"})
+        void forEachByteLength_agreesWithGetByteLength(long offset) {
             // Given
-            VarBinSparseArray sut = sut(6, 0);
+            VarBinSparseArray sut = sut(6 - offset, offset);
             List<Integer> walked = new ArrayList<>();
             List<Integer> searched = new ArrayList<>();
 

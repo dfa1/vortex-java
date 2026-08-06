@@ -14,6 +14,8 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinSparseArray;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -21,6 +23,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.SmallIntVector;
+import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
@@ -30,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,10 +52,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// The bundled `vortex-jni` compressor is version-pinned, so its encoding choice for a crafted
 /// input is deterministic — verified by probing: a mostly-null column with a small fraction of
-/// scattered non-`ALP`-able values compresses to `vortex.sparse` with a null fill scalar, and a
-/// column of distinct value runs interleaved with null runs compresses to `vortex.runend` with
-/// null run-values. Both assertions below therefore hard-check the chosen encoding; a future JNI
-/// bump that changes the choice is a deliberate change that should refresh this fixture.
+/// scattered non-`ALP`-able values compresses to `vortex.sparse` with a null fill scalar (for
+/// utf8 too, not only for primitives), and a column of distinct value runs interleaved with null
+/// runs compresses to `vortex.runend` with null run-values. Every assertion below therefore
+/// hard-checks the chosen encoding; a future JNI bump that changes the choice is a deliberate
+/// change that should refresh this fixture.
 class NullSparseRunEndInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -116,6 +121,41 @@ class NullSparseRunEndInteropIntegrationTest {
 
         // Then
         assertThat(usedEncodings(file)).contains("vortex.sparse");
+        assertThat(result).containsExactly(expected);
+    }
+
+    /// The utf8 sibling of the two null-fill sparse cases above, and the ground-truth cover for
+    /// the lazy `VarBinSparseArray` carrier (#340) — before it, this shape merged every patch
+    /// into a full `length`-row bytes buffer, and the fill was dropped on the way in.
+    ///
+    /// Only the null-fill half is reachable from here: probing the pinned JNI compressor with a
+    /// utf8 column that is mostly one NON-null value gets `vortex.dict` (or `vortex.fsst` over
+    /// `vortex.runend` for a mostly-empty-string column), never sparse with a non-null string
+    /// fill. So the non-null-fill fix stays unit-covered only until a corpus file or a JNI bump
+    /// produces that shape.
+    @Test
+    void jniNullFillSparse_utf8_nullRowsDecodeNull(@TempDir Path tmp) throws IOException {
+        // Given — a nullable utf8 column, ~99% null with a few scattered distinct strings.
+        Schema schema = new Schema(List.of(Field.nullable("v", new ArrowType.Utf8())));
+        String[] expected = new String[ROWS];
+        Path file = tmp.resolve("null_fill_sparse_utf8.vtx");
+        writeJni(file, schema, (root, i) -> {
+            VarCharVector vec = (VarCharVector) root.getVector("v");
+            if (i % 97 == 0) {
+                String value = "x" + i;
+                expected[i] = value;
+                vec.setSafe(i, value.getBytes(StandardCharsets.UTF_8));
+            } else {
+                vec.setNull(i);
+            }
+        });
+
+        // When
+        List<String> result = readUtf8(file);
+
+        // Then — the column decodes through the lazy sparse carrier, and every row round-trips.
+        assertThat(usedEncodings(file)).contains("vortex.sparse");
+        assertThat(carrier(file)).isEqualTo(VarBinSparseArray.class);
         assertThat(result).containsExactly(expected);
     }
 
@@ -252,6 +292,27 @@ class NullSparseRunEndInteropIntegrationTest {
         var out = new ArrayList<Long>();
         forEachValue(file, (masked, inner, i) -> out.add(masked.isValid(i) ? ((LongArray) inner).getLong(i) : null));
         return out;
+    }
+
+    private static List<String> readUtf8(Path file) throws IOException {
+        var out = new ArrayList<String>();
+        forEachValue(file, (masked, inner, i) -> out.add(masked.isValid(i) ? ((VarBinArray) inner).getString(i) : null));
+        return out;
+    }
+
+    /// Returns the concrete [Array] class the single column's payload decodes to, so a test can
+    /// assert the decode path taken and not only the values it produced — the eager and lazy
+    /// paths agree on every value here, so values alone would pass on both.
+    ///
+    /// @param file the Vortex file to scan
+    /// @return the runtime class of the first chunk's unwrapped payload array
+    /// @throws IOException if the file cannot be opened or scanned
+    private static Class<?> carrier(Path file) throws IOException {
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = reader.scan(ScanOptions.all())) {
+            MaskedArray masked = iter.next().column("v");
+            return masked.inner().getClass();
+        }
     }
 
     private static List<Short> readI16(Path file) throws IOException {
