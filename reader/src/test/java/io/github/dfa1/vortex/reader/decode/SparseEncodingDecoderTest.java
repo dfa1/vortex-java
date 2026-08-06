@@ -17,12 +17,15 @@ import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
+import io.github.dfa1.vortex.reader.array.VarBinSparseArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -191,6 +194,82 @@ class SparseEncodingDecoderTest {
         assertThat(inner.getBytes(1)).containsExactly('b');
     }
 
+    /// The utf8/binary path resolved every UNPATCHED row to the empty string instead of the
+    /// fill: the eager merge was handed only `fill.is_valid()` and described unpatched rows as
+    /// zero-length ranges, so a non-null string fill was silently dropped. The Rust
+    /// `SparseArray` resolves an unpatched row to the fill value whatever the values encoding
+    /// is, exactly as the primitive path here already did.
+    @Test
+    void utf8NonNullFill_unpatchedRowsRenderTheFill() {
+        // Given — fill "zz"; patches "b" at pos 1 and "d" at pos 3 over 5 rows.
+        MemorySegment[] segs = {
+                utf8Fill("zz"),
+                TestSegments.leInts(1, 3),
+                utf8Bytes("bd"),
+                TestSegments.leInts(0, 1, 2)
+        };
+        ArrayNode idxNode = primitiveNode(1);
+        ArrayNode valNode = varBinNode(2, 3);
+
+        // When
+        Array result = decode(DType.UTF8, 2, 0, PType.U32, 5, segs, idxNode, valNode);
+
+        // Then — rows 0, 2, 4 are the fill; the patched rows keep their own values.
+        assertThat(result).isInstanceOf(VarBinSparseArray.class);
+        VarBinArray inner = (VarBinArray) result;
+        assertThat(inner.getString(0)).isEqualTo("zz");
+        assertThat(inner.getString(1)).isEqualTo("b");
+        assertThat(inner.getString(2)).isEqualTo("zz");
+        assertThat(inner.getString(3)).isEqualTo("d");
+        assertThat(inner.getString(4)).isEqualTo("zz");
+        assertThat(inner.getByteLength(0)).isEqualTo(2);
+    }
+
+    /// The same fill resolution over `forEachByteLength`, which walks patches rather than
+    /// binary-searching per row — the two paths must agree.
+    @Test
+    void utf8NonNullFill_forEachByteLengthEmitsFillLengths() {
+        // Given — 2-byte fill, 1-byte patches at positions 1 and 3 over 5 rows.
+        MemorySegment[] segs = {
+                utf8Fill("zz"),
+                TestSegments.leInts(1, 3),
+                utf8Bytes("bd"),
+                TestSegments.leInts(0, 1, 2)
+        };
+        List<Integer> lengths = new ArrayList<>();
+
+        // When
+        Array result = decode(DType.UTF8, 2, 0, PType.U32, 5, segs, primitiveNode(1), varBinNode(2, 3));
+        ((VarBinArray) result).forEachByteLength(lengths::add);
+
+        // Then
+        assertThat(lengths).containsExactly(2, 1, 2, 1, 2);
+    }
+
+    /// A binary (not utf8) fill arrives as the scalar's `bytes_value` rather than
+    /// `string_value`; both must reach the carrier, or binary columns keep the dropped-fill bug
+    /// after utf8 stops having it.
+    @Test
+    void binaryNonNullFill_unpatchedRowsRenderTheFill() {
+        // Given — a binary fill of 0x01 0x02, one patch "b" at position 1 over 3 rows.
+        MemorySegment[] segs = {
+                MemorySegment.ofArray(ProtoScalarValue.ofBytesValue(new byte[]{1, 2}).encode()),
+                TestSegments.leInts(1),
+                utf8Bytes("b"),
+                TestSegments.leInts(0, 1)
+        };
+
+        // When
+        Array result = decode(new DType.Binary(false), 1, 0, PType.U32, 3, segs,
+                primitiveNode(1), varBinNode(2, 3));
+
+        // Then
+        VarBinArray inner = (VarBinArray) result;
+        assertThat(inner.getBytes(0)).containsExactly(1, 2);
+        assertThat(inner.getBytes(1)).containsExactly('b');
+        assertThat(inner.getBytes(2)).containsExactly(1, 2);
+    }
+
     /// A sparse utf8 column whose scanned range holds no patch at all — the common case for a
     /// genuinely sparse column — must not pay an `(n + 1)` offsets table of all zeros to say
     /// "every row is the fill" (#340). The constant carrier represents it in O(1).
@@ -204,13 +283,13 @@ class SparseEncodingDecoderTest {
         // When
         Array result = decode(DType.UTF8, 0, 0, PType.U32, 5, segs, idxNode, valNode);
 
-        // Then — every row renders as before (the empty string), with no buffer behind it.
+        // Then — every row is the fill, with no buffer behind it.
         assertThat(result).isInstanceOf(VarBinConstantArray.class).isNotInstanceOf(MaskedArray.class);
         VarBinArray inner = (VarBinArray) result;
         assertThat(inner.length()).isEqualTo(5);
-        assertThat(inner.getString(0)).isEmpty();
-        assertThat(inner.getString(4)).isEmpty();
-        assertThat(inner.getByteLength(2)).isZero();
+        assertThat(inner.getString(0)).isEqualTo("x");
+        assertThat(inner.getString(4)).isEqualTo("x");
+        assertThat(inner.getByteLength(2)).isEqualTo(1);
     }
 
     /// The null-fill half of #340: with no patches and a null fill, every row is null. The
@@ -358,12 +437,15 @@ class SparseEncodingDecoderTest {
                     .hasMessageContaining("patch count");
         }
 
-        /// `IndexOutOfBoundsException` — the utf8/binary path merges patches eagerly and reads
-        /// `numPatches + 1` entries from the patch-value offsets buffer. Declaring 4 patches over
-        /// a values child that only carries 2 walked past the end of that buffer.
+        /// Declaring 4 patches over a values child carrying only 3 offsets is absorbed by the
+        /// `SegmentBroadcast` convention: [VarBinEncodingDecoder] broadcast-fills a short
+        /// offsets child, so patch 3 resolves through offset index `3 % 3 = 0` and reads inside
+        /// the payload. The eager merge used to raise here, but only incidentally — it overran a
+        /// merge buffer it had itself sized from the same broken offsets. What ADR 0003 requires
+        /// is what this asserts: no raw JDK exception, and no read outside the value buffer.
         @Test
-        void varBinPatchCountBeyondValueOffsets_throws() {
-            // Given — 4 declared patches but only 2 value offsets pairs ("b", "d")
+        void varBinPatchCountBeyondValueOffsets_broadcastsWithoutRawException() {
+            // Given — 4 declared patches but only 3 offsets, covering 2 values ("b", "d")
             MemorySegment[] segs = {
                     nullFill(),
                     TestSegments.leInts(0, 1, 2, 3),     // 4 patch indices, so the count is plausible
@@ -371,19 +453,20 @@ class SparseEncodingDecoderTest {
                     TestSegments.leInts(0, 1, 2)         // only 3 offsets = 2 values
             };
 
-            // When / Then
-            assertThatThrownBy(() -> decode(nullableUtf8(), 4, 0, PType.U32, 5, segs,
-                    primitiveNode(1), varBinNode(2, 3)))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("patch value offsets out of range");
+            // When — row 3 resolves to patch 3, past what the offsets child covers
+            VarBinArray result = assertVarBin(decode(nullableUtf8(), 4, 0, PType.U32, 5, segs,
+                    primitiveNode(1), varBinNode(2, 3)));
+
+            // Then — the broadcast wraps to offsets [0, 1), still inside the 2-byte payload
+            assertThat(result.getString(3)).isEqualTo("b");
         }
 
-        /// `IndexOutOfBoundsException` from `MemorySegment.copy` — non-monotonic patch-value
-        /// offsets make the per-patch lengths cancel out, so the output buffer is sized far
-        /// smaller than the first patch that actually gets copied into it.
+        /// `IndexOutOfBoundsException` from `MemorySegment.copy` under the eager merge —
+        /// non-monotonic patch-value offsets give a patch a negative length. Read lazily, the
+        /// same pair reaches the shared varbin length check on the row that uses it.
         @Test
-        void varBinNonMonotonicValueOffsets_throws() {
-            // Given — offsets 0, 2, 0: patch 0 is 2 bytes long, patch 1 is -2, total 0 bytes
+        void varBinNonMonotonicValueOffsets_throwsOnRead() {
+            // Given — offsets 0, 2, 0: patch 0 is 2 bytes long, patch 1 is -2
             MemorySegment[] segs = {
                     nullFill(),
                     TestSegments.leInts(0, 1),
@@ -391,17 +474,22 @@ class SparseEncodingDecoderTest {
                     TestSegments.leInts(0, 2, 0)
             };
 
-            // When / Then
-            assertThatThrownBy(() -> decode(nullableUtf8(), 2, 0, PType.U32, 5, segs,
-                    primitiveNode(1), varBinNode(2, 3)))
+            // When — row 1 resolves to patch 1, whose [2, 0) range runs backwards
+            VarBinArray result = assertVarBin(decode(nullableUtf8(), 2, 0, PType.U32, 5, segs,
+                    primitiveNode(1), varBinNode(2, 3)));
+
+            // Then
+            assertThatThrownBy(() -> result.getString(1))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("patch value offsets out of range");
+                    .hasMessageContaining("out of range for a data buffer");
         }
 
         /// The offsets-vs-payload cross-check: a patch-value offsets buffer claiming more bytes
-        /// than the value buffer holds must be rejected before the output buffer is sized from it.
+        /// than the value buffer holds must not read past the payload. Nothing is sized from the
+        /// offsets any more — no buffer is allocated at all — so the guard that matters is the
+        /// per-row one on the read.
         @Test
-        void varBinValueOffsetsBeyondValueBuffer_throws() {
+        void varBinValueOffsetsBeyondValueBuffer_throwsOnRead() {
             // Given — 2 bytes of value data but offsets claiming a 1 GiB final patch
             MemorySegment[] segs = {
                     nullFill(),
@@ -410,11 +498,22 @@ class SparseEncodingDecoderTest {
                     TestSegments.leInts(0, 1, 1 << 30)
             };
 
-            // When / Then
-            assertThatThrownBy(() -> decode(nullableUtf8(), 2, 0, PType.U32, 5, segs,
-                    primitiveNode(1), varBinNode(2, 3)))
+            // When — row 1 resolves to patch 1, whose end offset is past the 2-byte payload
+            VarBinArray result = assertVarBin(decode(nullableUtf8(), 2, 0, PType.U32, 5, segs,
+                    primitiveNode(1), varBinNode(2, 3)));
+
+            // Then
+            assertThatThrownBy(() -> result.getString(1))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("patch bytes");
+                    .hasMessageContaining("out of range for a data buffer");
+        }
+
+        /// A null fill wraps the values in a [MaskedArray]; the adversarial reads above target
+        /// the values array underneath it.
+        private static VarBinArray assertVarBin(Array result) {
+            Array inner = result instanceof MaskedArray m ? m.inner() : result;
+            assertThat(inner).isInstanceOf(VarBinArray.class);
+            return (VarBinArray) inner;
         }
     }
 
