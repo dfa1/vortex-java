@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A run-end-encoded Utf8/Binary column (`vortex.runend`) no longer expands every run into a fully materialized buffer on decode; rows now resolve through the runs lazily, removing an unbounded `sum(runLength * valueLength)` allocation that a crafted file could drive to `OutOfMemoryError`. ([#334](https://github.com/dfa1/vortex-java/issues/334))
 - A `vortex.sequence` column no longer materializes `base + i * multiplier` into a full buffer on decode; rows are computed on access, so the encoding allocates nothing regardless of row count — closing an `OutOfMemoryError` risk from a metadata-only encoding whose row count no buffer bounds. ([#335](https://github.com/dfa1/vortex-java/issues/335))
+- A primitive `vortex.dict` column decoded through the encoding path no longer expands its codes into an `n * elemSize` buffer; it now returns the same lazy `DictXxxArray` carriers the layout path already used, so a dict column keeps the dictionary's memory benefit however it is reached. ([#336](https://github.com/dfa1/vortex-java/issues/336))
 
 ## [0.13.1] — 2026-08-06
 

@@ -10,6 +10,10 @@ import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.DictByteArray;
+import io.github.dfa1.vortex.reader.array.DictIntArray;
+import io.github.dfa1.vortex.reader.array.DictLongArray;
+import io.github.dfa1.vortex.reader.array.DictShortArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -27,7 +31,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
@@ -48,6 +51,40 @@ class DictEncodingDecoderTest {
 
     @Nested
     class PrimitiveProto {
+
+        /// The encoding path must return the same lazy `DictXxxArray` carriers
+        /// `DictLayoutDecoder` builds for the layout-level form of the same dictionary. Before
+        /// #336 it expanded into a `Materialized*Array` of `n * elemSize` bytes instead, so the
+        /// two disagreed and a dict column decoded through this path lost the dictionary's
+        /// entire memory benefit. Asserting the carrier type is the point: the value assertions
+        /// below pass either way.
+        @ParameterizedTest(name = "values={0}")
+        @MethodSource("io.github.dfa1.vortex.reader.decode.DictEncodingDecoderTest#lazyCarrierTypes")
+        void decodesToTheLazyCarrier_notAnExpandedBuffer(PType valPType, Class<?> carrier) {
+            // Given — 2 codes over a 2-entry pool
+            DType dtype = new DType.Primitive(valPType, false);
+
+            // When
+            Array result = decodeProto(dtype, PType.U8, new long[]{0, 1}, new long[]{10, 20});
+
+            // Then
+            assertThat(result).isInstanceOf(carrier);
+            assertLongValues(result, valPType, new long[]{10, 20});
+        }
+
+        /// A dict exists to make a large column cost the pool plus the codes. Pinning that the
+        /// codes child is reused as-is — rather than gathered into a fresh per-row buffer —
+        /// is what stops the eager expansion creeping back.
+        @Test
+        void keepsThePoolAndCodesRatherThanGathering() {
+            // Given / When
+            Array result = decodeProto(DType.I64, PType.U8, new long[]{0, 1, 0, 1}, new long[]{10, 20});
+
+            // Then
+            DictLongArray dict = (DictLongArray) result;
+            assertThat(dict.values().length()).isEqualTo(2L);
+            assertThat(dict.codes().length()).isEqualTo(4L);
+        }
 
         @ParameterizedTest(name = "codes={0} values={1}")
         @MethodSource("io.github.dfa1.vortex.reader.decode.DictEncodingDecoderTest#codeAndValueTypes")
@@ -211,81 +248,45 @@ class DictEncodingDecoderTest {
         }
     }
 
-    /// Directly exercises the generic copy fallback (element width not 1/2/4/8) in each
-    /// expand* helper — unreachable through decode() since primitive widths are always
-    /// 1/2/4/8, but kept as a defensive bulk-copy path.
+    /// Broadcast fan-out: an undersized codes or values buffer (the `ConstantEncoding`
+    /// shape) is repeated to cover every row. The eager `expandXxx` scatter loops used to
+    /// implement this with an explicit `% cap`; the lazy carriers inherit it from the
+    /// `Materialized*` accessors' own `i % elementCount`, so the contract is pinned here
+    /// through decode() rather than against a helper that no longer exists (#336).
     @Nested
-    class ExpandGenericElemSize {
+    class Broadcast {
 
         @ParameterizedTest(name = "codes={0}")
         @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
-        void fastPath_copiesPerElement(PType codePType) {
-            // Given — two 3-byte elements, codes [0, 1] (codesCap == rowCount, valuesCap > 1)
-            MemorySegment values = bytes(1, 2, 3, 4, 5, 6);
+        void valuesBufferShorterThanPool_repeatsTheSingleEntry(PType codePType) {
+            // Given — metadata declares a 2-entry pool but only one entry is on the wire
+            MemorySegment values = TestSegments.leInts(77);
             MemorySegment codes = codeSegment(codePType, new long[]{0, 1});
-            MemorySegment out = Arena.ofAuto().allocate(6);
 
             // When
-            expand(codePType, codes, values, out, 2, 3);
+            Array result = decodeProtoSegments(DType.I32, codePType, codes, values, 2, 2);
 
-            // Then
-            assertThat(toByteArray(out, 6)).containsExactly(1, 2, 3, 4, 5, 6);
+            // Then — both codes resolve to the only entry present
+            assertThat(((IntArray) result).getInt(0)).isEqualTo(77);
+            assertThat(((IntArray) result).getInt(1)).isEqualTo(77);
         }
 
         @ParameterizedTest(name = "codes={0}")
         @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
-        void slowPath_broadcastsSingleElement(PType codePType) {
-            // Given — one 3-byte element (valuesCap == 1) forces the broadcast branch
-            MemorySegment values = bytes(7, 8, 9);
-            MemorySegment codes = codeSegment(codePType, new long[]{0, 0});
-            MemorySegment out = Arena.ofAuto().allocate(6);
+        void codesBufferShorterThanRowCount_repeatsTheCodes(PType codePType) {
+            // Given — 4 rows declared, 2 codes on the wire
+            MemorySegment values = TestSegments.leInts(10, 20);
+            MemorySegment codes = codeSegment(codePType, new long[]{1, 0});
 
             // When
-            expand(codePType, codes, values, out, 2, 3);
+            Array result = decodeProtoSegments(DType.I32, codePType, codes, values, 2, 4);
 
-            // Then
-            assertThat(toByteArray(out, 6)).containsExactly(7, 8, 9, 7, 8, 9);
-        }
-
-        @ParameterizedTest(name = "codes={0}")
-        @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
-        void broadcastCodes_whenCodesShorterThanRowCount(PType codePType) {
-            // Given — a single code element (codesCap < rowCount) takes the codes-broadcast branch
-            MemorySegment values = bytes(10, 11, 12, 20, 21, 22);
-            MemorySegment codes = codeSegment(codePType, new long[]{1});
-            MemorySegment out = Arena.ofAuto().allocate(6);
-
-            // When
-            expand(codePType, codes, values, out, 2, 3);
-
-            // Then — code 1 resolves to the second element for every row
-            assertThat(toByteArray(out, 6)).containsExactly(20, 21, 22, 20, 21, 22);
-        }
-
-        private void expand(PType codePType, MemorySegment codes, MemorySegment values,
-                MemorySegment out, long rowCount, int elemSize) {
-            switch (codePType) {
-                case U8 -> DictEncodingDecoder.expandU8(codes, values, out, rowCount, elemSize);
-                case U16 -> DictEncodingDecoder.expandU16(codes, values, out, rowCount, elemSize);
-                case U32 -> DictEncodingDecoder.expandU32(codes, values, out, rowCount, elemSize);
-                default -> throw new IllegalArgumentException("unsupported: " + codePType);
-            }
-        }
-
-        private MemorySegment bytes(int... values) {
-            byte[] a = new byte[values.length];
-            for (int i = 0; i < values.length; i++) {
-                a[i] = (byte) values[i];
-            }
-            return MemorySegment.ofArray(a);
-        }
-
-        private byte[] toByteArray(MemorySegment seg, int n) {
-            byte[] a = new byte[n];
-            for (int i = 0; i < n; i++) {
-                a[i] = seg.get(ValueLayout.JAVA_BYTE, i);
-            }
-            return a;
+            // Then — the code pair repeats across the row count
+            IntArray ints = (IntArray) result;
+            assertThat(ints.getInt(0)).isEqualTo(20);
+            assertThat(ints.getInt(1)).isEqualTo(10);
+            assertThat(ints.getInt(2)).isEqualTo(20);
+            assertThat(ints.getInt(3)).isEqualTo(10);
         }
     }
 
@@ -493,9 +494,11 @@ class DictEncodingDecoderTest {
 
         @Test
         void codeOutOfRangeWithPoolValidity_throwsVortexException() {
-            // Given — a single-element pool (so expandU8 broadcasts, never reading out of bounds) with
-            // pool validity present, and an untrusted code 5 that overruns the validity bitmap. The
-            // poolValid guard must convert the overrun into a VortexException, not an IOOBE.
+            // Given — a single-element pool with pool validity present, and an untrusted code 5
+            // that overruns both. Two guards can catch this; since #336 the decode-time
+            // validateCodesInRange runs first and blames the code directly, rather than the
+            // poolValid guard blaming the validity bitmap it happened to overrun second. Either
+            // way it must be a VortexException, never an IOOBE (ADR 0003).
             ArrayNode codesNode = primitiveNode(0);
             ArrayNode valuesNode = maskedPrimitiveNode(1, 2);
             MemorySegment[] segs = {
@@ -507,7 +510,7 @@ class DictEncodingDecoderTest {
             // When / Then
             assertThatThrownBy(() -> decodeDict(DType.I32, PType.U8, 1, 2, segs, codesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("out of range for pool validity");
+                    .hasMessageContaining("code 5 out of range for a values pool");
         }
 
         @Test
@@ -848,6 +851,17 @@ class DictEncodingDecoderTest {
             }
         }
         return b.build();
+    }
+
+    /// Each primitive value ptype paired with the lazy carrier it must decode to — the same
+    /// mapping `DictLayoutDecoder.buildLazyDictPrimitive` uses. F16 is absent because it has
+    /// no `Array` subtype yet, on either path.
+    static Stream<Arguments> lazyCarrierTypes() {
+        return Stream.of(
+                Arguments.of(PType.I8, DictByteArray.class),
+                Arguments.of(PType.I16, DictShortArray.class),
+                Arguments.of(PType.I32, DictIntArray.class),
+                Arguments.of(PType.I64, DictLongArray.class));
     }
 
     // ── decode harnesses ───────────────────────────────────────────────────────

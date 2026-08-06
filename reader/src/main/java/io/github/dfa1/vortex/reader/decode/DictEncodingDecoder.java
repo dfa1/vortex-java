@@ -8,6 +8,17 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DictByteArray;
+import io.github.dfa1.vortex.reader.array.DictDoubleArray;
+import io.github.dfa1.vortex.reader.array.DictFloatArray;
+import io.github.dfa1.vortex.reader.array.DictIntArray;
+import io.github.dfa1.vortex.reader.array.DictLongArray;
+import io.github.dfa1.vortex.reader.array.DictShortArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
@@ -16,6 +27,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
@@ -25,16 +37,17 @@ import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.dict`.
 ///
-/// The primitive-value paths (`decodeRustProto`, `decodeLegacyJava`)
-/// eagerly expand `codes` and `values` into a contiguous output segment
-/// via `expandU8/U16/U32` — these mirror the broadcast-aware scatter loop
-/// with `SegmentBroadcast.capacity` (ConstantEncoding fan-out), so the
-/// output is materialized at decode time. ADR 0012's lazy-dict scope is the
-/// layout-level path in `ScanIterator.decodeDictLayout`, which is now lazy
-/// via `DictXxxArray`; this encoding-level path runs only when a parent
-/// decoder explicitly calls `decodeChild` on a `vortex.dict` segment,
-/// which is rarer and downstream-flat-segment-dependent. The broadcast semantics
-/// make lazy wrapping non-trivial here — kept eager by design.
+/// Every value type decodes lazily: primitives to the `DictXxxArray` carriers, strings to
+/// [VarBinArray#ofDict]. Nothing is expanded into a per-row buffer — an `n`-row column over a
+/// small pool costs the pool plus the codes, not `n * elemSize`. This is the same shape
+/// [io.github.dfa1.vortex.reader.layout.DictLayoutDecoder] produces for the layout-level form
+/// of the same dictionary (ADR 0012); the two used to disagree, with this path expanding
+/// eagerly (#336).
+///
+/// Broadcast is preserved rather than special-cased: an undersized codes or values buffer (a
+/// `ConstantEncoding` fan-out) is fanned out by the `Materialized*` accessors' own
+/// `i % elementCount`, which is where the old `expandXxx` scatter loops got it too. A
+/// zero-element child would make that wrap divide by zero, so it is still rejected up front.
 public final class DictEncodingDecoder implements EncodingDecoder {
 
     @Override
@@ -72,17 +85,22 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     private static Array decodeLegacyJava(DecodeContext ctx, byte codeTypeByte) {
         PType codePType = PType.fromOrdinal(Byte.toUnsignedInt(codeTypeByte));
         PType valPType = ((DType.Primitive) ctx.dtype()).ptype();
-        int elemSize = valPType.byteSize();
         long rowCount = ctx.rowCount();
+        requireUnsignedCodePType(codePType);
 
         MemorySegment valuesBuf = ctx.childBuffer(0, 0);
 
         DType codesDtype = new DType.Primitive(codePType, false);
         MemorySegment codesBuf = ctx.decodeChildSegment(1, codesDtype, rowCount);
 
-        MemorySegment out = ctx.arena().allocate(rowCount * elemSize);
-        expand(codePType, codesBuf, valuesBuf, out, rowCount, elemSize);
-        return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
+        rejectEmptyChildren(rowCount, codesBuf.byteSize(), codePType.byteSize(),
+                valuesBuf.byteSize(), valPType.byteSize());
+
+        long poolLength = valuesBuf.byteSize() / valPType.byteSize();
+        Array values = typedArray(ctx.dtype(), valPType, poolLength, valuesBuf);
+        Array codes = typedArray(codesDtype, codePType, rowCount, codesBuf);
+        validateCodesInRange(codes, poolLength);
+        return buildLazyDict(ctx.dtype(), valPType, rowCount, values, codes);
     }
 
     private static Array decodeRustProto(DecodeContext ctx, MemorySegment metaBuf) {
@@ -97,7 +115,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         long valuesLen = meta.values_len();
         long rowCount = ctx.rowCount();
         PType valPType = ((DType.Primitive) ctx.dtype()).ptype();
-        int elemSize = valPType.byteSize();
+        requireUnsignedCodePType(codePType);
 
         // Row validity mirrors the Rust reference: a DictArray row is null when its CODE
         // is null (codes-side validity child) or when the code points at an invalid pool
@@ -111,8 +129,6 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             rawCodes = masked.inner();
             codesValidity = masked.validity();
         }
-        MemorySegment codesBuf = ctx.materialize(rawCodes);
-
         Array valuesArr = ctx.decodeChild(1, ctx.dtype(), valuesLen);
         BoolArray poolValidity = null;
         Array rawValues = valuesArr;
@@ -120,51 +136,145 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             rawValues = masked.inner();
             poolValidity = masked.validity();
         }
-        MemorySegment valuesBuf = ctx.materialize(rawValues);
 
-        MemorySegment out = ctx.arena().allocate(rowCount * elemSize);
-        expand(codePType, codesBuf, valuesBuf, out, rowCount, elemSize);
-        Array values = typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
-        BoolArray rowValidity = rowValidity(ctx, codesBuf, codePType, codesValidity, poolValidity, rowCount);
+        rejectEmptyChildren(rowCount, physicalBytes(rawCodes), codePType.byteSize(),
+                physicalBytes(rawValues), valPType.byteSize());
+        validateCodesInRange(rawCodes, rawValues.length());
+
+        Array values = buildLazyDict(ctx.dtype(), valPType, rowCount, rawValues, rawCodes);
+        BoolArray rowValidity = poolValidity == null
+                ? codesValidity
+                : rowValidity(ctx, ctx.materialize(rawCodes), codePType, codesValidity, poolValidity, rowCount);
         return rowValidity == null ? values : new MaskedArray(values, rowValidity);
     }
 
-    /// Expands `codes` against the values pool at the width of `codePType`.
+    /// Builds the matching lazy `DictXxxArray` for a primitive dictionary — the same carriers
+    /// [io.github.dfa1.vortex.reader.layout.DictLayoutDecoder] builds for the layout-level
+    /// form of the same dictionary. Nothing is expanded: `getXxx(i)` resolves
+    /// `values[codes[i]]` on access, so an `n`-row column over a small pool costs the pool
+    /// plus the codes, not `n * elemSize`.
     ///
-    /// The codes buffer is untrusted: an entry pointing past the end of the pool indexes
-    /// `values` out of bounds. The expand loops must stay uniform to vectorize (CLAUDE.md
-    /// hot-loop rule), so the guard is a boundary catch-and-wrap around the whole call
-    /// instead of a per-element range test — the malformed file still fails as a
-    /// [VortexException] rather than a raw `IndexOutOfBoundsException` (ADR 0003).
-    /// The broadcast (slow) branches wrap codes with `% valuesCap`, so they cannot overrun
-    /// — but an empty codes or values child would make that wrap divide by zero, which is
-    /// rejected up front (O(1), outside the loops).
-    ///
-    /// @param codePType unsigned code ptype (U8/U16/U32)
-    /// @param codes     raw codes buffer
-    /// @param values    raw values pool
-    /// @param out       expanded output buffer of `rowCount * elemSize` bytes
-    /// @param rowCount  logical row count
-    /// @param elemSize  value element width in bytes
-    private static void expand(PType codePType, MemorySegment codes, MemorySegment values,
-            MemorySegment out, long rowCount, int elemSize) {
-        if (rowCount > 0 && (codes.byteSize() < codePType.byteSize() || values.byteSize() < elemSize)) {
-            throw new VortexException(EncodingId.VORTEX_DICT,
-                    "empty dict child for " + rowCount + " rows (codes=" + codes.byteSize()
-                            + " bytes, values=" + values.byteSize() + " bytes)");
-        }
+    /// @param dtype    logical element type
+    /// @param valPType value ptype (selects the carrier)
+    /// @param n        logical row count
+    /// @param values   dictionary pool, already mask-unwrapped
+    /// @param codes    per-row codes, already mask-unwrapped
+    /// @return the lazy dict array
+    private static Array buildLazyDict(DType dtype, PType valPType, long n, Array values, Array codes) {
         try {
-            switch (codePType) {
-                case U8 -> expandU8(codes, values, out, rowCount, elemSize);
-                case U16 -> expandU16(codes, values, out, rowCount, elemSize);
-                case U32 -> expandU32(codes, values, out, rowCount, elemSize);
-                default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
-            }
-        } catch (IndexOutOfBoundsException e) {
+            return switch (valPType) {
+                case I64, U64 -> DictLongArray.of(dtype, n, (LongArray) values, codes);
+                case I32, U32 -> DictIntArray.of(dtype, n, (IntArray) values, codes);
+                case I16, U16 -> DictShortArray.of(dtype, n, (ShortArray) values, codes);
+                case I8, U8 -> DictByteArray.of(dtype, n, (ByteArray) values, codes);
+                case F64 -> DictDoubleArray.of(dtype, n, (DoubleArray) values, codes);
+                case F32 -> DictFloatArray.of(dtype, n, (FloatArray) values, codes);
+                // F16 has no Array subtype yet, matching DictLayoutDecoder.
+                default -> throw new VortexException(EncodingId.VORTEX_DICT, "unsupported ptype " + valPType);
+            };
+        } catch (ClassCastException e) {
+            // The values child is untrusted and may decode to any Array family regardless of
+            // the declared dtype; a raw ClassCastException would violate ADR 0003.
             throw new VortexException(EncodingId.VORTEX_DICT,
-                    "code out of range for a values pool of " + values.byteSize() + " bytes", e);
+                    "values child is not a " + valPType + " array: " + values.getClass().getSimpleName(), e);
         }
     }
+
+    /// Rejects a codes ptype the format does not allow. Codes are unsigned indices into the
+    /// pool, so only `U8`/`U16`/`U32` are legal — the eager expansion enforced this through the
+    /// `expandU8`/`expandU16`/`expandU32` switch it dispatched on, and the lazy carriers would
+    /// otherwise accept a signed or `U64` codes child that no writer emits.
+    ///
+    /// @param codePType codes ptype from the metadata
+    private static void requireUnsignedCodePType(PType codePType) {
+        switch (codePType) {
+            case U8, U16, U32 -> {
+                // legal
+            }
+            default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
+        }
+    }
+
+    /// Rejects a code pointing past the values pool.
+    ///
+    /// The eager expansion this replaces got the same guarantee from a boundary catch around
+    /// its scatter loop. A lazy carrier resolves codes at scan time instead, where an
+    /// out-of-range code would surface as a raw `IndexOutOfBoundsException` rather than a
+    /// [VortexException] (ADR 0003) — and from a call site far from the malformed file. So the
+    /// check moves here, to decode.
+    ///
+    /// One pass, no allocation: strictly cheaper than the `n * elemSize` allocate-and-scatter
+    /// it replaces. The maximum is accumulated branchlessly so the loop body stays uniform
+    /// (CLAUDE.md hot-loop rule) and only the single comparison afterwards can fail. Only the
+    /// three legal codes widths appear ([#requireUnsignedCodePType(PType)] runs first), so
+    /// zero-extending each read covers the whole unsigned range.
+    ///
+    /// @param codes      per-row codes
+    /// @param poolLength number of entries in the values pool
+    private static void validateCodesInRange(Array codes, long poolLength) {
+        long n = codes.length();
+        if (n == 0) {
+            return;
+        }
+        long max = 0;
+        switch (codes) {
+            case ByteArray ba -> {
+                for (long i = 0; i < n; i++) {
+                    max = Math.max(max, Byte.toUnsignedLong(ba.getByte(i)));
+                }
+            }
+            case ShortArray sa -> {
+                for (long i = 0; i < n; i++) {
+                    max = Math.max(max, Short.toUnsignedLong(sa.getShort(i)));
+                }
+            }
+            case IntArray ia -> {
+                for (long i = 0; i < n; i++) {
+                    max = Math.max(max, Integer.toUnsignedLong(ia.getInt(i)));
+                }
+            }
+            default -> throw new VortexException(EncodingId.VORTEX_DICT,
+                    "unsupported codes array type: " + codes.getClass().getSimpleName());
+        }
+        if (Long.compareUnsigned(max, poolLength) >= 0) {
+            throw new VortexException(EncodingId.VORTEX_DICT, "code " + Long.toUnsignedString(max)
+                    + " out of range for a values pool of " + poolLength + " element(s)");
+        }
+    }
+
+    /// Rejects a child with no elements at all while the metadata claims rows.
+    ///
+    /// The `Materialized*` accessors deliberately broadcast an undersized buffer with
+    /// `i % elementCount` (the `ConstantEncoding` fan-out), which a zero-element buffer turns
+    /// into a divide-by-zero — an `ArithmeticException`, not a [VortexException] (ADR 0003).
+    /// The eager expansion rejected the same shape up front; the lazy carriers need it just
+    /// as much, since the division moves to scan time rather than disappearing.
+    ///
+    /// @param rowCount       logical row count
+    /// @param codesBytes     physical bytes behind the codes child, or `-1` when unknown
+    /// @param codeWidth      code element width
+    /// @param valuesBytes    physical bytes behind the values child, or `-1` when unknown
+    /// @param valueWidth     value element width
+    private static void rejectEmptyChildren(long rowCount, long codesBytes, int codeWidth,
+            long valuesBytes, int valueWidth) {
+        boolean codesEmpty = codesBytes >= 0 && codesBytes < codeWidth;
+        boolean valuesEmpty = valuesBytes >= 0 && valuesBytes < valueWidth;
+        if (rowCount > 0 && (codesEmpty || valuesEmpty)) {
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "empty dict child for " + rowCount + " rows (codes=" + codesBytes
+                            + " bytes, values=" + valuesBytes + " bytes)");
+        }
+    }
+
+    /// Physical byte size behind `array`, or `-1` when it has no single backing segment
+    /// (a lazy child, whose own decoder already enforced its length).
+    ///
+    /// @param array the child array
+    /// @return backing byte size, or `-1` when not segment-backed
+    private static long physicalBytes(Array array) {
+        return array.segmentIfPresent().map(MemorySegment::byteSize).orElse(-1L);
+    }
+
 
     /// Combines codes-side and pool-side validity into per-row validity: row `i` is
     /// valid iff its code is valid and the pool slot the code references is valid.
@@ -291,224 +401,6 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         return rowValidity == null ? dict : new MaskedArray(dict, rowValidity);
     }
 
-    static void expandU8(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
-        long codesCap = SegmentBroadcast.capacity(codes, 1);
-        long valuesCap = SegmentBroadcast.capacity(values, elemSize);
-        boolean fast = codesCap >= rowCount && valuesCap > 1;
-        switch (elemSize) {
-            case 8 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
-                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code % valuesCap));
-                    }
-                }
-            }
-            case 4 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
-                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code % valuesCap));
-                    }
-                }
-            }
-            case 2 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
-                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code % valuesCap));
-                    }
-                }
-            }
-            case 1 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code % valuesCap));
-                    }
-                }
-            }
-            default -> {
-                if (fast) {
-                    for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
-                    }
-                } else {
-                    for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
-                        MemorySegment.copy(values, (code % valuesCap) * elemSize, out, outOff, elemSize);
-                    }
-                }
-            }
-        }
-    }
-
-    static void expandU16(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
-        long codesCap = SegmentBroadcast.capacity(codes, 2);
-        long valuesCap = SegmentBroadcast.capacity(values, elemSize);
-        boolean fast = codesCap >= rowCount && valuesCap > 1;
-        switch (elemSize) {
-            case 8 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
-                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
-                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code % valuesCap));
-                    }
-                }
-            }
-            case 4 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
-                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
-                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code % valuesCap));
-                    }
-                }
-            }
-            case 2 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
-                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
-                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code % valuesCap));
-                    }
-                }
-            }
-            case 1 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code % valuesCap));
-                    }
-                }
-            }
-            default -> {
-                if (fast) {
-                    for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
-                        MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
-                    }
-                } else {
-                    for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
-                        MemorySegment.copy(values, (code % valuesCap) * elemSize, out, outOff, elemSize);
-                    }
-                }
-            }
-        }
-    }
-
-    static void expandU32(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
-        long codesCap = SegmentBroadcast.capacity(codes, 4);
-        long valuesCap = SegmentBroadcast.capacity(values, elemSize);
-        boolean fast = codesCap >= rowCount && valuesCap > 1;
-        switch (elemSize) {
-            case 8 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
-                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
-                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code % valuesCap));
-                    }
-                }
-            }
-            case 4 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
-                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
-                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code % valuesCap));
-                    }
-                }
-            }
-            case 2 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
-                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
-                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code % valuesCap));
-                    }
-                }
-            }
-            case 1 -> {
-                if (fast) {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
-                    }
-                } else {
-                    for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code % valuesCap));
-                    }
-                }
-            }
-            default -> {
-                if (fast) {
-                    for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
-                        MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
-                    }
-                } else {
-                    for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
-                        MemorySegment.copy(values, (code % valuesCap) * elemSize, out, outOff, elemSize);
-                    }
-                }
-            }
-        }
-    }
 
     private static Array typedArray(DType dtype, PType ptype, long n, MemorySegment seg) {
         return switch (ptype) {
