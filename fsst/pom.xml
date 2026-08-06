@@ -28,4 +28,19 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<build>
+		<plugins>
+			<!-- Ratchet: fsst's javadoc is warning-free today, so keep it that way. The
+			     parent leaves failOnWarnings off because 313 warnings predate the check in
+			     other modules; nothing stops the already-clean ones from holding the line. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<configuration>
+					<failOnWarnings>true</failOnWarnings>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
 </project>

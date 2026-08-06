@@ -289,15 +289,33 @@ single audit found phantom APIs, dead service files, and pre-refactor FQNs acros
   Exception: low-level JDK interop taking `long ns` (`Thread.sleep`, `LockSupport.parkNanos`,
   `System.nanoTime` math) — convert at the call site via `duration.toNanos()`/`toMillis()`.
 
-### Javadoc (build-enforced: `failOnError` + `failOnWarnings`)
+### Javadoc
+
+Run by `javadoc-no-fork` bound to `verify` (~3s across the reactor), so `./mvnw test` skips it
+and `./mvnw verify` enforces it. Two enforcement levels:
+
+- **Everywhere: `failOnError`.** A dangling `[Type#member]` reference fails the build. This is
+  the class of rot that actually accumulates — a refactor renames something and the docs keep
+  pointing at the old name.
+- **`core` and `fsst` only: `failOnWarnings`.** Both are warning-free; their POMs raise the bar
+  to keep them there. The other modules carry 313 pre-existing warnings (missing `@param`,
+  undocumented default constructors) — concentrated in `performance`, `reader`, `writer`,
+  `fbs-gen`, `csv` — so warnings stay non-fatal there until someone clears a module and adds
+  the same override to its POM.
+
+Style rules (aspirational in the un-ratcheted modules, enforced in `core`/`fsst`):
 
 - Every public method: main prose description, `@param` per parameter, `@return` (unless `void`).
   Every public record: `@param` per component on the class doc. `@see`-only counts as no description.
 - All `///` Markdown — **no HTML** (checkstyle `RegexpSingleline` blocks `<p>`,`<ul>`,`<li>`,
   `<strong>`,`<pre>`,`<table>`, …). Use blank `///` for paragraphs, `- ` lists, ` ```java ``` `,
   `**bold**`. Cross-refs `[ClassName#method(ParamType)]` — verify the target exists (wrong refs are
-  **errors**).
-- Check: `./mvnw javadoc:javadoc -pl core` must produce zero output.
+  **errors**). A target the module cannot see is also an error: writer must not link to reader
+  types, and `fbs-gen` must not link to the `core.fbs` classes it generates — name those in
+  backticks instead.
+- Ad-hoc check: `./mvnw package -DskipTests javadoc:javadoc -fae`. The bare
+  `./mvnw javadoc:javadoc` fails on dependency resolution, not javadoc — the goal runs no
+  lifecycle phase, so the reactor jars do not exist and `install` is forbidden.
 
 ### Encoding class structure
 

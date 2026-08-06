@@ -424,7 +424,28 @@
 					<version>${maven-javadoc-plugin.version}</version>
 					<configuration>
 						<excludePackageNames>io.github.dfa1.vortex.core.fbs:io.github.dfa1.vortex.core.proto</excludePackageNames>
+						<!-- A dangling [Type#member] reference is a build failure: it means a
+						     refactor renamed or moved something and left the docs pointing at a
+						     type that no longer exists. Four such phantoms accumulated before
+						     this was enforced. Warnings (missing @param, undocumented default
+						     constructors) stay non-fatal for now — 313 of them predate this,
+						     concentrated in performance/reader/writer/fbs-gen/csv. Modules that
+						     are already warning-free raise failOnWarnings in their own POM to
+						     stop the count creeping back up. -->
+						<failOnError>true</failOnError>
+						<failOnWarnings>false</failOnWarnings>
 					</configuration>
+					<executions>
+						<execution>
+							<!-- verify, not test: contributors running ./mvnw test skip it, CI does not.
+							     Costs ~3s across the whole reactor. -->
+							<id>check-javadoc</id>
+							<phase>verify</phase>
+							<goals>
+								<goal>javadoc-no-fork</goal>
+							</goals>
+						</execution>
+					</executions>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -473,6 +494,10 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-checkstyle-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
