@@ -1,27 +1,28 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.proto.ProtoSequenceMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloat16Array;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.LazySequenceByteArray;
+import io.github.dfa1.vortex.reader.array.LazySequenceDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazySequenceFloat16Array;
+import io.github.dfa1.vortex.reader.array.LazySequenceFloatArray;
+import io.github.dfa1.vortex.reader.array.LazySequenceIntArray;
+import io.github.dfa1.vortex.reader.array.LazySequenceLongArray;
+import io.github.dfa1.vortex.reader.array.LazySequenceShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
-import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.sequence` — `A[i] = base + i * multiplier`.
+///
+/// Metadata-only: the encoding has no buffers and no children, so decode is pure metadata
+/// parsing and the result is a `LazySequenceXxxArray` that computes each row on access.
+/// Nothing is allocated, whatever the row count.
 public final class SequenceEncodingDecoder implements EncodingDecoder {
 
     @Override
@@ -46,72 +47,18 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_SEQUENCE, "expected primitive dtype, got " + ctx.dtype());
         }
 
+        DType dtype = ctx.dtype();
         long n = ctx.rowCount();
         PType pt = p.ptype();
         return switch (pt) {
-            case I8, I16, I32, I64, U8, U16, U32, U64 -> decodeInteger(meta, pt, n, ctx.dtype(), ctx.arena());
-            case F32 -> decodeF32(meta, n, ctx.dtype(), ctx.arena());
-            case F64 -> decodeF64(meta, n, ctx.dtype(), ctx.arena());
-            case F16 -> decodeF16(meta, n, ctx.dtype(), ctx.arena());
+            case I64, U64 -> new LazySequenceLongArray(dtype, n, signedValue(meta.base()), signedValue(meta.multiplier()));
+            case I32, U32 -> new LazySequenceIntArray(dtype, n, signedValue(meta.base()), signedValue(meta.multiplier()));
+            case I16, U16 -> new LazySequenceShortArray(dtype, n, signedValue(meta.base()), signedValue(meta.multiplier()));
+            case I8, U8 -> new LazySequenceByteArray(dtype, n, signedValue(meta.base()), signedValue(meta.multiplier()));
+            case F64 -> new LazySequenceDoubleArray(dtype, n, meta.base().f64_value(), meta.multiplier().f64_value());
+            case F32 -> new LazySequenceFloatArray(dtype, n, meta.base().f32_value(), meta.multiplier().f32_value());
+            case F16 -> new LazySequenceFloat16Array(dtype, n, halfValue(meta.base()), halfValue(meta.multiplier()));
         };
-    }
-
-    private static Array decodeInteger(
-            ProtoSequenceMetadata meta, PType pt, long n, DType dtype, SegmentAllocator arena
-    ) {
-        long base = signedValue(meta.base());
-        long mul = signedValue(meta.multiplier());
-        int elemBytes = pt.byteSize();
-        MemorySegment seg = arena.allocate(n * elemBytes);
-        for (long i = 0; i < n; i++) {
-            long v = base + i * mul;
-            switch (pt) {
-                case I8, U8 -> seg.set(ValueLayout.JAVA_BYTE, i, (byte) v);
-                case I16, U16 -> seg.setAtIndex(VortexFormat.LE_SHORT, i, (short) v);
-                case I32, U32 -> seg.setAtIndex(VortexFormat.LE_INT, i, (int) v);
-                case I64, U64 -> seg.setAtIndex(VortexFormat.LE_LONG, i, v);
-                default -> throw new IllegalStateException("unreachable");
-            }
-        }
-        return switch (pt) {
-            case I64, U64 -> new MaterializedLongArray(dtype, n, seg);
-            case I32, U32 -> new MaterializedIntArray(dtype, n, seg);
-            case I16, U16 -> new MaterializedShortArray(dtype, n, seg);
-            case I8, U8 -> new MaterializedByteArray(dtype, n, seg);
-            default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unsupported ptype " + pt);
-        };
-    }
-
-    private static Array decodeF32(ProtoSequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
-        float base = meta.base().f32_value();
-        float mul = meta.multiplier().f32_value();
-        MemorySegment seg = arena.allocate(n * 4L);
-        for (long i = 0; i < n; i++) {
-            seg.setAtIndex(VortexFormat.LE_FLOAT, i, base + i * mul);
-        }
-        return new MaterializedFloatArray(dtype, n, seg);
-    }
-
-    private static Array decodeF64(ProtoSequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
-        double base = meta.base().f64_value();
-        double mul = meta.multiplier().f64_value();
-        MemorySegment seg = arena.allocate(n * 8L);
-        for (long i = 0; i < n; i++) {
-            seg.setAtIndex(VortexFormat.LE_DOUBLE, i, base + i * mul);
-        }
-        return new MaterializedDoubleArray(dtype, n, seg);
-    }
-
-    private static Array decodeF16(ProtoSequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
-        short baseShort = (short) meta.base().f16_value().longValue();
-        short mulShort = (short) meta.multiplier().f16_value().longValue();
-        float base = Float.float16ToFloat(baseShort);
-        float mul = Float.float16ToFloat(mulShort);
-        MemorySegment seg = arena.allocate(n * 2L);
-        for (long i = 0; i < n; i++) {
-            seg.setAtIndex(VortexFormat.LE_SHORT, i, Float.floatToFloat16(base + i * mul));
-        }
-        return new MaterializedFloat16Array(dtype, n, seg);
     }
 
     private static long signedValue(ProtoScalarValue sv) {
@@ -125,5 +72,13 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
             return sv.uint64_value();
         }
         return 0L;
+    }
+
+    /// Widens a half-precision scalar to the `float` the lazy carrier steps in.
+    ///
+    /// @param sv the metadata scalar holding an f16 bit pattern
+    /// @return the widened value
+    private static float halfValue(ProtoScalarValue sv) {
+        return Float.float16ToFloat((short) sv.f16_value().longValue());
     }
 }
