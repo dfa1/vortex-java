@@ -144,7 +144,7 @@ decoder falls into one of three shapes:
 | `vortex.alp`                | Lazy          | Lazy          | `LazyAlpXxxArray`; broadcast → `LazyConstantXxxArray`; patched stays Materialized, ADR 0010 + 0015 |
 | `vortex.alprd`              | Lazy          | Lazy          | `LazyAlpRdDoubleArray`/`LazyAlpRdFloatArray` — left/right + patches on access |
 | `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinDictArray` (string), ADR 0012          |
-| `vortex.sparse`             | Lazy          | Lazy          | `LazySparseXxxArray` (primitive + bool); Utf8/Binary stays Materialized, ADR 0015 |
+| `vortex.sparse`             | Lazy          | Lazy          | `LazySparseXxxArray` (primitive + bool); patched Utf8/Binary stays Materialized, a patch-free range → `VarBinConstantArray`, ADR 0015 |
 | `vortex.sequence`           | Lazy          | Lazy          | `LazySequenceXxxArray`; `base + i * multiplier` per access, no buffer, ADR 0015 |
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
 | `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinChunkedArray` (Utf8/Binary), ADR 0012 |
