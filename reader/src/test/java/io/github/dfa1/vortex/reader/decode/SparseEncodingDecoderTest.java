@@ -437,12 +437,18 @@ class SparseEncodingDecoderTest {
                     .hasMessageContaining("patch count");
         }
 
+        /// A deliberate weakening: this input used to raise and now returns a wrong-but-safe
+        /// answer, so the malformed file is no longer reported at all.
+        ///
         /// Declaring 4 patches over a values child carrying only 3 offsets is absorbed by the
         /// `SegmentBroadcast` convention: [VarBinEncodingDecoder] broadcast-fills a short
         /// offsets child, so patch 3 resolves through offset index `3 % 3 = 0` and reads inside
         /// the payload. The eager merge used to raise here, but only incidentally — it overran a
-        /// merge buffer it had itself sized from the same broken offsets. What ADR 0003 requires
-        /// is what this asserts: no raw JDK exception, and no read outside the value buffer.
+        /// merge buffer it had itself sized from the same broken offsets, so the throw was a
+        /// side effect of the merge rather than a check of anything. Detecting it properly
+        /// belongs in [VarBinEncodingDecoder], which is what decides that a truncated offsets
+        /// child broadcasts instead of failing; the contract this test can hold the sparse
+        /// decoder to is ADR 0003's: no raw JDK exception, no read outside the value buffer.
         @Test
         void varBinPatchCountBeyondValueOffsets_broadcastsWithoutRawException() {
             // Given — 4 declared patches but only 3 offsets, covering 2 values ("b", "d")
@@ -506,6 +512,56 @@ class SparseEncodingDecoderTest {
             assertThatThrownBy(() -> result.getString(1))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("out of range for a data buffer");
+        }
+
+        /// Logical row `i` maps to absolute `i + offset` in every lazy sparse carrier, and the
+        /// sequential walkers iterate `[offset, offset + n)`. An offset near `Long.MAX_VALUE`
+        /// wraps that end bound negative, which made `forEachByteLength` visit no rows at all
+        /// while `getByteLength` still resolved each one — two accessors disagreeing on the same
+        /// array. `offset` is untrusted proto metadata and was the one field of it never
+        /// range-checked.
+        @Test
+        void offsetNearMaxLong_throws() {
+            // Given — an offset whose sum with the row count overflows
+            MemorySegment[] segs = {utf8Fill("zz"), TestSegments.leInts(1), utf8Bytes("b"),
+                    TestSegments.leInts(0, 1)};
+
+            // When / Then
+            assertThatThrownBy(() -> decode(DType.UTF8, 1, Long.MAX_VALUE - 2, PType.U32, 6, segs,
+                    primitiveNode(1), varBinNode(2, 3)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch offset");
+        }
+
+        @Test
+        void negativeOffset_throws() {
+            // Given — a negative absolute start position
+            MemorySegment[] segs = {utf8Fill("zz"), TestSegments.leInts(1), utf8Bytes("b"),
+                    TestSegments.leInts(0, 1)};
+
+            // When / Then
+            assertThatThrownBy(() -> decode(DType.UTF8, 1, -1, PType.U32, 6, segs,
+                    primitiveNode(1), varBinNode(2, 3)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("patch offset");
+        }
+
+        /// A fill that is non-null but carries the wrong arm of the scalar oneof — an integer
+        /// fill on a utf8 column — has no bytes to broadcast. Falling back to the empty array
+        /// would render every unpatched row as a valid `""`, which is exactly the dropped-fill
+        /// bug this decode path just stopped having, so it must fail loud instead.
+        @Test
+        void utf8FillWithNonStringScalar_throws() {
+            // Given — a non-null i64 fill scalar on a utf8 column
+            MemorySegment[] segs = {
+                    MemorySegment.ofArray(ProtoScalarValue.ofInt64Value(7L).encode()),
+                    TestSegments.leInts(1), utf8Bytes("b"), TestSegments.leInts(0, 1)};
+
+            // When / Then
+            assertThatThrownBy(() -> decode(DType.UTF8, 1, 0, PType.U32, 3, segs,
+                    primitiveNode(1), varBinNode(2, 3)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("no string or bytes value");
         }
 
         /// A null fill wraps the values in a [MaskedArray]; the adversarial reads above target

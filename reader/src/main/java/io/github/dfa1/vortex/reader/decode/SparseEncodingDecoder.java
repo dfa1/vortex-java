@@ -81,6 +81,15 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_SPARSE,
                     "patch count " + numPatches + " out of range for " + n + " row(s)");
         }
+        // Every lazy sparse carrier maps logical row `i` to absolute `i + offset`, and the
+        // sequential walkers iterate `[offset, offset + n)`. An untrusted offset near
+        // Long.MAX_VALUE wraps that end bound negative, which makes the walk visit no rows at
+        // all while the per-row binary search still resolves each one — the two accessors then
+        // disagree on the same array. A negative offset is likewise not a position.
+        if (offset < 0 || offset > Long.MAX_VALUE - n) {
+            throw new VortexException(EncodingId.VORTEX_SPARSE,
+                    "patch offset " + offset + " out of range for " + n + " row(s)");
+        }
 
         // Row validity mirrors the Rust reference `ValidityVTable<Sparse>`: it is a sparse
         // bool array whose fill is `fill_value.is_valid()` and whose per-patch value is the
@@ -267,7 +276,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
         Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
         checkPatchChild(idxData, numPatches, "indices");
-        byte[] fill = fillBytes(fillScalar);
+        byte[] fill = fillBytes(fillScalar, fillValid);
 
         if (numPatches == 0) {
             // No patch lands in this range, so every row is the fill — the common case for a
@@ -291,18 +300,28 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
     }
 
     /// Extracts the raw bytes an unpatched utf8/binary row resolves to. A utf8 fill arrives as
-    /// `string_value`, a binary fill as `bytes_value`; a null fill has neither, and its bytes
-    /// are never read — [#withSparseValidity] marks every unpatched row invalid — so the empty
-    /// array stands in.
+    /// `string_value`, a binary fill as `bytes_value`.
     ///
-    /// @param fill the decoded fill scalar
-    /// @return the fill's raw bytes, empty when the fill carries no utf8/binary payload
-    private static byte[] fillBytes(ProtoScalarValue fill) {
+    /// A null fill has neither, and its bytes are never read — [#withSparseValidity] marks
+    /// every unpatched row invalid — so the empty array stands in. A fill that is non-null but
+    /// carries some other arm of the scalar oneof (an integer fill on a utf8 column, say) is a
+    /// malformed file rather than an empty string: silently rendering every unpatched row as a
+    /// valid `""` would be the same class of bug this decode path just stopped having.
+    ///
+    /// @param fill      the decoded fill scalar
+    /// @param fillValid `true` when the fill scalar is non-null
+    /// @return the fill's raw bytes, empty for a null fill
+    /// @throws VortexException if a non-null fill carries no string or bytes value
+    private static byte[] fillBytes(ProtoScalarValue fill, boolean fillValid) {
         if (fill.string_value() != null) {
             return fill.string_value().getBytes(StandardCharsets.UTF_8);
         }
         if (fill.bytes_value() != null) {
             return fill.bytes_value();
+        }
+        if (fillValid) {
+            throw new VortexException(EncodingId.VORTEX_SPARSE,
+                    "utf8/binary fill scalar carries no string or bytes value");
         }
         return new byte[0];
     }

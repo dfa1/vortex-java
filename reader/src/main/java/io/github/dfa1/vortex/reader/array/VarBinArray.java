@@ -14,8 +14,10 @@ import java.util.function.IntConsumer;
 /// Implementations: [VarBinOffsetArray] for standard offset-based layout, [VarBinDictArray] for
 /// dictionary-encoded strings, [VarBinChunkedArray] for multi-chunk columns, [VarBinViewArray]
 /// for Arrow StringView / BinaryView layout (16-byte view per row + zero or more shared data
-/// buffers), [VarBinSlicedArray] for a zero-copy row-shifted view, and [VarBinConstantArray] for
-/// a `vortex.constant` value broadcast across every row. All accessors resolve transparently
+/// buffers), [VarBinSlicedArray] for a zero-copy row-shifted view, [VarBinConstantArray] for
+/// a `vortex.constant` value broadcast across every row, [VarBinRunEndArray] for a
+/// `vortex.runend` column resolved run-by-run, and [VarBinSparseArray] for a `vortex.sparse`
+/// column resolved patch-by-patch. All accessors resolve transparently
 /// regardless of implementation; only [VarBinOffsetArray] exposes
 /// [VarBinOffsetArray#offsetsSegment()] and [VarBinOffsetArray#offsetsPtype()].
 ///
