@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Malformed files no longer crash the reader with a raw JDK exception when decoding VarBin, Dict, Bitpacked, ALP, Sparse, Chunked, or Struct columns — every case now fails as `VortexException`. ([ef982992](https://github.com/dfa1/vortex-java/commit/ef982992))
+- Same hardening for RunEnd, Constant, zone-map stats, and Pco columns — every case now fails as `VortexException`. ([12d7466c](https://github.com/dfa1/vortex-java/commit/12d7466c))
 
 ### Added
 
