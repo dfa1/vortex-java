@@ -494,7 +494,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             Array maxA = fieldOrNull(table, "max");
             Array sumA = fieldOrNull(table, "sum");
             Array nullCountA = fieldOrNull(table, "null_count");
-            List<ArrayStats> out = new ArrayList<>((int) nZones);
+            // Not pre-sized from nZones: it is bounded above only by Integer.MAX_VALUE (see the
+            // guard above), and a single ArrayList allocation at that scale is itself an
+            // OutOfMemoryError vector the security contract forbids. Growing incrementally keeps
+            // memory proportional to what the loop below actually produces.
+            List<ArrayStats> out = new ArrayList<>();
             for (long i = 0; i < nZones; i++) {
                 Object nullCount = boxedScalar(nullCountA, i);
                 out.add(new ArrayStats(

@@ -105,13 +105,14 @@ class RunEndEncodingDecoderTest {
                 .hasMessageContaining("negative num_runs");
     }
 
-    /// Non-monotonic run-ends don't crash: [RunEndArrays#findRun] narrows a binary-search
-    /// range purely from `lo`/`hi`, never from the comparison outcome's validity, so every
-    /// probed index stays within `[0, numRuns)` regardless of ordering. Locks in behavior
-    /// the binary search already guarantees rather than adding a redundant guard.
+    /// `ends` must be strictly increasing (spec: `encoding-format/dict-runend-sparse.md`
+    /// §RunEnd — a *writer* requirement the reference reader doesn't itself enforce, so "a
+    /// conformant reader SHOULD validate ... itself"). Previously undetected: the binary search
+    /// stays in-bounds regardless of ordering, so this silently resolved rows against the wrong
+    /// run instead of failing.
     @Test
-    void nonMonotonicRunEnds_decodesWithoutCrashing() {
-        // Given — ends [5, 2, 8] are not non-decreasing
+    void nonMonotonicRunEnds_throwsVortexException() {
+        // Given — ends [5, 2, 8] are not strictly increasing
         MemorySegment[] segs = {
                 u8Bytes(5, 2, 8),
                 TestSegments.leInts(10, 20, 30)
@@ -119,14 +120,74 @@ class RunEndEncodingDecoderTest {
         ArrayNode endsNode = primitiveNode(0);
         ArrayNode valuesNode = primitiveNode(1);
 
-        // When
-        Array result = decode(DType.I32, PType.U8, 3, 0, 8, segs, endsNode, valuesNode);
+        // When / Then
+        assertThatThrownBy(() -> decode(DType.I32, PType.U8, 3, 0, 8, segs, endsNode, valuesNode))
+                .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                .hasMessageContaining("strictly increasing");
+    }
 
-        // Then — every row resolves to some in-bounds run value, no raw exception escapes
+    /// The last run-end must cover the full requested window (`ends[numRuns-1] >= offset + n`).
+    /// Previously undetected: the binary search saturates at the last run and silently repeats
+    /// its value for every row past where the ends actually stop covering.
+    @Test
+    void lastRunEndBelowRowCount_throwsVortexException() {
+        // Given — ends [2, 3] cover only 3 rows but n=5 is requested
+        MemorySegment[] segs = {
+                u8Bytes(2, 3),
+                TestSegments.leInts(10, 20)
+        };
+        ArrayNode endsNode = primitiveNode(0);
+        ArrayNode valuesNode = primitiveNode(1);
+
+        // When / Then
+        assertThatThrownBy(() -> decode(DType.I32, PType.U8, 2, 0, 5, segs, endsNode, valuesNode))
+                .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                .hasMessageContaining("does not cover");
+    }
+
+    /// A slice's `ends[0]` must be at least `offset` (spec: "when `offset != 0`, `ends[0] >=
+    /// offset`"). Below that, row 0 of the window would resolve to a run that ends before the
+    /// window even starts.
+    @Test
+    void firstRunEndBelowOffset_throwsVortexException() {
+        // Given — offset=10 but ends[0]=5 < offset
+        MemorySegment[] segs = {
+                u8Bytes(5, 20),
+                TestSegments.leInts(10, 20)
+        };
+        ArrayNode endsNode = primitiveNode(0);
+        ArrayNode valuesNode = primitiveNode(1);
+
+        // When / Then
+        assertThatThrownBy(() -> decode(DType.I32, PType.U8, 2, 10, 5, segs, endsNode, valuesNode))
+                .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                .hasMessageContaining("< offset");
+    }
+
+    /// A sliced window whose trailing run legitimately extends past `offset + n` must decode
+    /// normally — the spec's coverage requirement is `>=`, not `==`; only a run boundary that
+    /// falls short of the window is invalid.
+    @Test
+    void trailingRunPastWindow_decodesNormally() {
+        // Given — ends [2, 5, 10] over values [1, 2, 3]; window offset=2, n=5 (rows 2..7), the
+        // spec's own worked example
+        MemorySegment[] segs = {
+                u8Bytes(2, 5, 10),
+                TestSegments.leInts(1, 2, 3)
+        };
+        ArrayNode endsNode = primitiveNode(0);
+        ArrayNode valuesNode = primitiveNode(1);
+
+        // When
+        Array result = decode(DType.I32, PType.U8, 3, 2, 5, segs, endsNode, valuesNode);
+
+        // Then
         IntArray ints = (IntArray) result;
-        for (int i = 0; i < 8; i++) {
-            assertThat(ints.getInt(i)).isIn(10, 20, 30);
-        }
+        assertThat(ints.getInt(0)).isEqualTo(2);
+        assertThat(ints.getInt(1)).isEqualTo(2);
+        assertThat(ints.getInt(2)).isEqualTo(2);
+        assertThat(ints.getInt(3)).isEqualTo(3);
+        assertThat(ints.getInt(4)).isEqualTo(3);
     }
 
     private static Array decode(DType dtype, PType endsPtype, long numRuns, long offset, long n,
