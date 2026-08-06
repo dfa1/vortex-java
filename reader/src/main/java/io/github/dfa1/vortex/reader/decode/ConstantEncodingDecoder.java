@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
@@ -66,7 +65,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             return arrayFromScalar(ctx, inner.value(), innerDtype, n);
         }
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-            return decodeString(ctx, scalar, dtype, n);
+            return decodeString(scalar, dtype, n);
         }
         if (dtype instanceof DType.Bool) {
             return decodeBool(dtype, scalar, n);
@@ -133,24 +132,19 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         return new LazyConstantBoolArray(dtype, n, value);
     }
 
-    private static Array decodeString(DecodeContext ctx, ProtoScalarValue scalar, DType dtype, long n) {
+    /// Builds a metadata-only constant Utf8/Binary array — [VarBinArray.ConstantMode] returns
+    /// the same shared bytes for every row, so this stays O(1) regardless of `n` like every
+    /// other constant type, instead of eagerly writing `n` copies into a real buffer.
+    ///
+    /// @param scalar the constant scalar value
+    /// @param dtype  logical dtype (Utf8 or Binary)
+    /// @param n      row count
+    /// @return a lazy constant array of length `n`
+    private static Array decodeString(ProtoScalarValue scalar, DType dtype, long n) {
         byte[] strBytes = scalar.string_value() != null
                               ? scalar.string_value().getBytes(StandardCharsets.UTF_8)
                               : (scalar.bytes_value() != null ? scalar.bytes_value() : new byte[0]);
-
-        int strLen = strBytes.length;
-
-        MemorySegment bytesSeg = ctx.arena().allocate(n * strLen);
-        for (long i = 0; i < n; i++) {
-            MemorySegment.copy(MemorySegment.ofArray(strBytes), 0L, bytesSeg, i * strLen, strLen);
-        }
-
-        MemorySegment offsetsSeg = ctx.arena().allocate((n + 1) * 4L, 4);
-        for (long i = 0; i <= n; i++) {
-            offsetsSeg.setAtIndex(VortexFormat.LE_INT, i, (int) (i * strLen));
-        }
-
-        return new VarBinArray.OffsetMode(dtype, n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
+        return new VarBinArray.ConstantMode(dtype, n, strBytes);
     }
 
     private static long scalarToRawBits(ProtoScalarValue scalar) {

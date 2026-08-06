@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -321,5 +322,119 @@ class VarBinArrayTest {
             return MemorySegment.ofArray(bb.array());
         }
 
+    }
+
+    @Nested
+    class Constant {
+
+        @Test
+        void getString_returnsSameValueForEveryRow() {
+            // Given
+            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 5, "hi".getBytes(StandardCharsets.UTF_8));
+
+            // When / Then
+            assertThat(sut.getString(0)).isEqualTo("hi");
+            assertThat(sut.getString(4)).isEqualTo("hi");
+        }
+
+        @Test
+        void getByteLength_returnsConstantLength() {
+            // Given
+            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 3, "abc".getBytes(StandardCharsets.UTF_8));
+
+            // When / Then
+            assertThat(sut.getByteLength(0)).isEqualTo(3);
+            assertThat(sut.getByteLength(2)).isEqualTo(3);
+        }
+
+        @Test
+        void forEachByteLength_visitsLengthOncePerRow() {
+            // Given
+            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 4, "xy".getBytes(StandardCharsets.UTF_8));
+            List<Integer> lengths = new ArrayList<>();
+
+            // When
+            sut.forEachByteLength(lengths::add);
+
+            // Then
+            assertThat(lengths).containsExactly(2, 2, 2, 2);
+        }
+
+        /// [VarBinArray#getBytes(long)]'s contract is a copy per call; a shared backing array
+        /// broadcast across every row must not let one row's mutation leak into another's.
+        @Test
+        void getBytes_returnsIndependentCopyEachCall() {
+            // Given
+            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 2, "z".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            byte[] first = sut.getBytes(0);
+            first[0] = (byte) 'Q';
+
+            // Then — mutating the returned copy must not corrupt subsequent reads
+            assertThat(sut.getBytes(1)).isEqualTo("z".getBytes(StandardCharsets.UTF_8));
+        }
+
+        @Test
+        void getString_outOfBoundsIndex_throws() {
+            // Given
+            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 2, "v".getBytes(StandardCharsets.UTF_8));
+
+            // When / Then
+            assertThatThrownBy(() -> sut.getString(2)).isInstanceOf(IndexOutOfBoundsException.class);
+        }
+
+        @Test
+        void limited_returnsShorterConstant() {
+            // Given
+            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 10, "k".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            VarBinArray result = sut.limited(3);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            assertThat(result.getString(2)).isEqualTo("k");
+        }
+
+        @Test
+        void limited_rowsAtOrAboveLength_returnsSameInstance() {
+            // Given
+            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 5, "m".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            VarBinArray result = sut.limited(5);
+
+            // Then
+            assertThat(result).isSameAs(sut);
+        }
+
+        @Test
+        void bytesSegment_isNull_noContiguousBufferBacksABroadcast() {
+            // Given
+            VarBinArray.ConstantMode sut = new VarBinArray.ConstantMode(UTF8, 2, "n".getBytes(StandardCharsets.UTF_8));
+
+            // When / Then
+            assertThat(sut.bytesSegment()).isSameAs(MemorySegment.NULL);
+            assertThat(sut.segmentIfPresent()).isEmpty();
+        }
+
+        /// The general "any VarBinArray -> OffsetMode" path other decoders (RunEnd's string
+        /// expansion, dict/sparse child normalization) rely on must still work for a broadcast
+        /// constant, walking it via the typed accessors rather than `bytesSegment()`.
+        @Test
+        void toOffsetMode_materializesBroadcastIntoRealOffsets() {
+            // Given
+            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 3, "hey".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            VarBinArray.OffsetMode result = VarBinArray.toOffsetMode(sut, Arena.ofAuto());
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            assertThat(result.getString(0)).isEqualTo("hey");
+            assertThat(result.getString(1)).isEqualTo("hey");
+            assertThat(result.getString(2)).isEqualTo("hey");
+        }
     }
 }
