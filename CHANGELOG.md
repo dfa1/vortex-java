@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `MemorySize` domain primitive in `core.model` replaces raw byte-count `long`/`int` arithmetic: validated non-negative at construction, with `ofKiB`/`ofMiB`/`ofGiB` factories and a `toGiB()` display accessor. Migrated `WriteOptions#globalDictMaxRetainedBytes()`, `PostscriptParser`'s layout-metadata size cap, `DType.Extension#MAX_METADATA_SIZE`, and `VortexHttpReader`'s HTTP tail-fetch window. ([#321](https://github.com/dfa1/vortex-java/issues/321))
-- Dedicated `fuzz` module with an opt-in [Jazzer](https://github.com/CodeIntelligenceTesting/jazzer) coverage-guided fuzz target (`VortexReaderFuzzTest`) for `VortexReader`'s full-file open path, tagged out of routine test runs; see [ADR-0020](adr/0020-jazzer-fuzz-infrastructure.md). ([68647499](https://github.com/dfa1/vortex-java/commit/68647499))
+- Dedicated `fuzz` module with an opt-in [Jazzer](https://github.com/CodeIntelligenceTesting/jazzer) coverage-guided fuzz target (`VortexReaderFuzzTest`) for `VortexReader`'s full-file open path, tagged out of routine test runs; see [ADR-0020](adr/0020-jazzer-fuzz-infrastructure.md). ([e88f1649](https://github.com/dfa1/vortex-java/commit/e88f1649))
 
 ## [0.13.0] — 2026-08-04
 
