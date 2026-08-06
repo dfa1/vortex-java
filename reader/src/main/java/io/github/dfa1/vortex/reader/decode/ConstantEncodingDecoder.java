@@ -114,6 +114,13 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
 
     private static Array decodeDecimal(DType dtype, ProtoScalarValue scalar, long n) {
         byte[] elemBytes = scalar.bytes_value();
+        if (elemBytes == null) {
+            // A scalar whose oneof tag doesn't match the declared Decimal dtype (e.g. only
+            // int64_value set) leaves bytes_value() null; without this guard the length read
+            // below is a raw NullPointerException instead of a VortexException (ADR 0003).
+            throw new VortexException(EncodingId.VORTEX_CONSTANT,
+                    "constant decimal scalar missing bytes_value");
+        }
         int elemLen = elemBytes.length;
         // Decode the single scalar value via LazyDecimalArray (reuses its LE byte-order logic),
         // then wrap in a constant array — O(1) allocation regardless of row count.

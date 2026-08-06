@@ -146,6 +146,28 @@ class PcoEncodingDecoderTest {
         return segmentOf(buf);
     }
 
+    /// Packs `values[i]` into `widths[i]` bits, LSB-first per field then concatenated — the
+    /// same layout [LeBitReader#readBits(int)] consumes.
+    private static byte[] packBitsLsbFirst(int[] widths, long[] values) {
+        java.util.BitSet bits = new java.util.BitSet();
+        int pos = 0;
+        for (int f = 0; f < widths.length; f++) {
+            for (int i = 0; i < widths[f]; i++) {
+                if (((values[f] >>> i) & 1L) != 0L) {
+                    bits.set(pos);
+                }
+                pos++;
+            }
+        }
+        byte[] buf = new byte[Math.max((pos + 7) / 8, 1)];
+        for (int i = 0; i < pos; i++) {
+            if (bits.get(i)) {
+                buf[i / 8] |= (byte) (1 << (i % 8));
+            }
+        }
+        return buf;
+    }
+
     private static MemorySegment chunkMetaLookback() {
         return segmentOf((byte) 0x20, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00);
     }
@@ -508,6 +530,46 @@ class PcoEncodingDecoderTest {
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("Conv1");
+        }
+
+        @Test
+        void binOffsetBitsExceeds64_throwsVortexException() {
+            // Given — mode=Classic(0), delta=NoOp(0), ansSizeLog=0, nBins=1, one bin whose
+            // offsetBits (100) exceeds the 64-bit latent it would be read into.
+            byte[] chunkMeta = packBitsLsbFirst(
+                    new int[]{4, 4, 4, 15, 64, 7},
+                    new long[]{0, 0, 0, 1, 0, 100});
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+                    new MemorySegment[]{segmentOf(chunkMeta), segmentOf((byte) 0x00)});
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("offsetBits");
+        }
+
+        @Test
+        void pageValuesTotalMismatchesRowCount_throwsVortexException() {
+            // Given — one page declares 5 values but the context row count is 3
+            DecodeContext ctx = ctxWith(metaWithOneChunk(5), DType.U64, 3,
+                    new MemorySegment[]{segmentOf((byte) 0x00), segmentOf((byte) 0x00)});
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("total page values");
+        }
+
+        @Test
+        void negativePageNValues_throwsVortexException() {
+            // Given — a page whose n_values decodes to -1 (a valid varint32 on the wire)
+            DecodeContext ctx = ctxWith(metaWithOneChunk(-1), DType.U64, 0,
+                    new MemorySegment[]{segmentOf((byte) 0x00), segmentOf((byte) 0x00)});
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("negative");
         }
     }
 }

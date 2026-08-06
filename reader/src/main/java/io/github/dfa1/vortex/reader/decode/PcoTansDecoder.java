@@ -33,12 +33,17 @@ public final class PcoTansDecoder {
     ///
     /// Port of `Spec::from_weights` + `Decoder::new` from pcodec.
     public static PcoTansDecoder build(int ansSizeLog, PcoBin[] bins) {
+        int tableSize = 1 << ansSizeLog;
         if (bins.length == 0) {
-            // Degenerate: no bins → 1-state table, all offsets zero.
-            return new PcoTansDecoder(new int[]{0}, new int[]{0}, new int[]{0}, new long[]{0L});
+            // Degenerate: no bins → every state decodes to offset zero. Sized to tableSize
+            // (not a fixed 1-state table): the initial ANS state indices a page carries are
+            // read with ansSizeLog bits (so any value in [0, tableSize) is possible) before
+            // this decoder is consulted — a corrupt file pairing zero bins with a nonzero
+            // ansSizeLog previously indexed a real 1-entry table out of bounds, a raw
+            // ArrayIndexOutOfBoundsException instead of a VortexException (ADR 0003).
+            return new PcoTansDecoder(new int[tableSize], new int[tableSize], new int[tableSize], new long[tableSize]);
         }
 
-        int tableSize = 1 << ansSizeLog;
         int[] weights = new int[bins.length];
         for (int i = 0; i < bins.length; i++) {
             weights[i] = bins[i].weight();

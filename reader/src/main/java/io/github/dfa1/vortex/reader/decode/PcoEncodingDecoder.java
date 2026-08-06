@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoPcoChunkInfo;
 import io.github.dfa1.vortex.core.proto.ProtoPcoMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPcoPageInfo;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -65,6 +66,28 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
                     validCount++;
                 }
             }
+        }
+
+        // Pages declare their own value counts (ProtoPcoPageInfo.n_values), independent of
+        // validCount. A crafted file can pair a huge or negative per-page count with a small
+        // rowCount: without this check, a negative count silently no-ops its loop while a
+        // desynced total either writes past rawLatents/compactOut (raw IndexOutOfBounds) or
+        // sizes rawAdjs from an attacker-controlled chunkN unrelated to any real buffer
+        // (OutOfMemoryError). Validating the total up front keeps every per-page/per-chunk
+        // access below implicitly bounded by validCount.
+        long totalPageValues = 0L;
+        for (ProtoPcoChunkInfo chunkInfo : meta.chunks()) {
+            for (ProtoPcoPageInfo page : chunkInfo.pages()) {
+                if (page.n_values() < 0) {
+                    throw new VortexException(EncodingId.VORTEX_PCO,
+                            "pco page n_values " + page.n_values() + " is negative");
+                }
+                totalPageValues += page.n_values();
+            }
+        }
+        if (totalPageValues != validCount) {
+            throw new VortexException(EncodingId.VORTEX_PCO,
+                    "pco total page values " + totalPageValues + " != expected valid row count " + validCount);
         }
 
         MemorySegment rawLatents = ctx.arena().allocate(validCount * Long.BYTES);
@@ -727,6 +750,14 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
             int weight = (int) r.readBits(ansSizeLog) + 1;
             long lower = r.readBits(dtypeSize);
             int offsetBits = (int) r.readBits(offsetBitsWidth);
+            if (offsetBits > 64) {
+                // offsetBitsWidth is 5/6/7 bits wide (max value 31/63/127), wider than the
+                // 64-bit latent an offset can ever legally span; a page later reads this many
+                // bits per value via LeBitReader#readBits(int), whose own <=64 contract this
+                // would otherwise violate.
+                throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco bin offsetBits " + offsetBits + " exceeds max 64");
+            }
             bins[b] = new PcoBin(weight, lower, offsetBits);
         }
         return bins;

@@ -52,6 +52,18 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         long offset = meta.offset();
 
         long n = ctx.rowCount();
+        if (numRuns < 0) {
+            throw new VortexException(EncodingId.VORTEX_RUNEND, "runend: negative num_runs " + numRuns);
+        }
+        if (numRuns == 0 && n > 0) {
+            // Zero runs cover no rows — a crafted file pairing that with a non-empty row
+            // count previously decoded "successfully" into a LazyRunEndXxxArray backed by
+            // an empty ends/values child, then threw a raw IndexOutOfBoundsException (or
+            // ArithmeticException via the % elementCount broadcast path) on first read
+            // instead of failing here as a VortexException.
+            throw new VortexException(EncodingId.VORTEX_RUNEND,
+                    "runend: zero runs cannot cover " + n + " row(s)");
+        }
         DType endsDtype = new DType.Primitive(endsPtype, false);
         Array endsArr = ctx.decodeChild(0, endsDtype, numRuns);
         Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
