@@ -40,11 +40,13 @@ known gap, a contract audit, or supporting infra.
 ### Fuzz infrastructure
 
 - [ ] **Jazzer fuzz testing, remaining scope** — see [ADR-0020](adr/0020-jazzer-fuzz-infrastructure.md).
-  Fuzz-mode targets for `VortexReader` full-file open and `PostscriptParser.parseBlobs` already
-  landed (`reader` module, `@Tag("fuzz")`, opt-in via `JAZZER_FUZZ=1`). Remaining: seed corpus
-  extraction from integration fixtures, one `@FuzzTest` per encoding `decode()`, differential
-  fuzzing vs `vortex-jni`, regression-corpus wiring into routine `./mvnw test`, nightly CI
-  profile, OSS-Fuzz submission.
+  A fuzz-mode target for `VortexReader` full-file open already landed (`fuzz` module,
+  `@Tag("fuzz")`, opt-in via `JAZZER_FUZZ=1`). Remaining: direct fuzzing of
+  `PostscriptParser.parseBlobs` (deferred — it is package-private, so a target in the separate
+  `fuzz` module needs a cross-module access seam such as a reader test-jar wrapper, and neither a
+  split package nor a wider public surface is acceptable), seed corpus extraction from integration
+  fixtures, one `@FuzzTest` per encoding `decode()`, differential fuzzing vs `vortex-jni`,
+  regression-corpus wiring into routine `./mvnw test`, nightly CI profile, OSS-Fuzz submission.
 
 ## Build
 

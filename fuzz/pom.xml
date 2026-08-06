@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>io.github.dfa1.vortex</groupId>
+		<artifactId>vortex-java</artifactId>
+		<version>0.13.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>vortex-fuzz</artifactId>
+
+	<name>vortex-fuzz</name>
+	<description>Coverage-guided fuzz testing (ADR 0020) for the Vortex columnar file format Java implementation.
+		Opt-in only — see CLAUDE.md.
+	</description>
+
+	<properties>
+		<maven.deploy.skip>true</maven.deploy.skip>
+		<!-- JUnit tags excluded from a routine `./mvnw test` / `./mvnw verify`. Defaults to `fuzz`
+		     so the Jazzer @FuzzTest targets never run by default — see the surefire plugin config
+		     below. Override on the CLI to opt in, e.g. `-Dvortex.fuzz.excludedGroups=` (empty)
+		     runs every tag; a literal pom value could not be cleared this way. -->
+		<vortex.fuzz.excludedGroups>fuzz</vortex.fuzz.excludedGroups>
+	</properties>
+
+	<dependencies>
+		<!-- testing -->
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-reader</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.code-intelligence</groupId>
+			<artifactId>jazzer-junit</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Exclude the Jazzer @FuzzTest targets from a routine `./mvnw test` /
+					     `./mvnw verify`: fuzzing is opt-in and, under JAZZER_FUZZ=1, unbounded and
+					     non-deterministic — not something a default build should run. Bound to a
+					     property (not a literal) so the CLI can clear it:
+					     `-Dvortex.fuzz.excludedGroups=` opts every fuzz target back in. This
+					     exclusion filters even an explicit `-Dtest=VortexReaderFuzzTest` class
+					     selection, so running a fuzz target always requires clearing the property
+					     as well. -->
+					<excludedGroups>${vortex.fuzz.excludedGroups}</excludedGroups>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>

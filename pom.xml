@@ -52,6 +52,7 @@
 		<module>inspector</module>
 		<module>calcite</module>
 		<module>integration</module>
+		<module>fuzz</module>
 		<module>performance</module>
 	</modules>
 
