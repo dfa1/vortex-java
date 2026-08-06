@@ -33,13 +33,6 @@ Out of scope for the #287 rewrite (which, together with the follow-up hot-path p
 See [CLAUDE.md §Security contract](CLAUDE.md) for the invariant. Each entry below is either a
 known gap, a contract audit, or supporting infra.
 
-### Per-encoding adversarial tests
-
-Each encoding's `decode(DecodeContext)` should be exercised against crafted metadata that
-decodes but disagrees with the buffer payload. `bufferIndices[i] >= ctx.bufferCount()` (and the
-equivalent child-index check) is centralized in `DecodeContext.buffer(i)`/`decodeChild(i)`.
-VarBin, Dict, Bitpacked, ALP, Sparse, Chunked, Struct, RunEnd, Constant, Zoned, and Pco are done.
-
 ### Resource caps
 
 - [ ] **Implement `ResourceLimits` + `ReadOptions`** — see [ADR-0004](adr/0004-resource-caps-read-options.md).
