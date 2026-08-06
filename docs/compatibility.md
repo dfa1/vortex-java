@@ -138,7 +138,7 @@ decoder falls into one of three shapes:
 | `vortex.zigzag`             | Lazy          | Lazy          | `LazyZigZagXxxArray` (I8/I16/I32/I64); broadcast → `LazyConstantXxxArray`, ADR 0010 + 0015 |
 | `vortex.constant`           | Lazy          | Lazy          | `LazyConstantXxxArray` (primitive + bool + decimal) + `VarBinConstantArray` (Utf8/Binary); per-row broadcast, no buffer, ADR 0015 |
 | `vortex.ext`                | Zero-copy     | Zero-copy     | wraps storage                                                            |
-| `vortex.runend`             | Lazy          | Lazy          | `LazyRunEndXxxArray` (primitive + bool); Utf8/Binary stays Materialized (offset rebasing), ADR 0015 |
+| `vortex.runend`             | Lazy          | Lazy          | `LazyRunEndXxxArray` (primitive + bool) + `VarBinRunEndArray` (Utf8/Binary); run resolved per access, no expansion, ADR 0015 |
 | `vortex.varbin`             | Zero-copy     | Zero-copy     | bytes + offsets slices                                                   |
 | `vortex.varbinview`         | Lazy          | Lazy          | `VarBinViewArray` — keeps views + data buffers as mmap slices            |
 | `vortex.alp`                | Lazy          | Lazy          | `LazyAlpXxxArray`; broadcast → `LazyConstantXxxArray`; patched stays Materialized, ADR 0010 + 0015 |

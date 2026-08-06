@@ -19,11 +19,10 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
-import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
+import io.github.dfa1.vortex.reader.array.VarBinRunEndArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.runend`.
@@ -87,8 +86,15 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         }
 
         if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
-            Array result = expandStrings(endsSeg, VarBinArray.toOffsetMode((VarBinArray) valuesData, ctx.arena()),
-                    endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+            // The values child is untrusted: an all-null run column decodes to NullArray, and a
+            // crafted file can name any encoding here. A raw ClassCastException would violate
+            // ADR 0003, so reject a non-VarBin child explicitly.
+            if (!(valuesData instanceof VarBinArray varBinValues)) {
+                throw new VortexException(EncodingId.VORTEX_RUNEND,
+                        "runend: expected a VarBin values child for " + ctx.dtype() + ", got "
+                                + valuesData.getClass().getSimpleName());
+            }
+            Array result = new VarBinRunEndArray(ctx.dtype(), n, varBinValues, endsData, offset);
             return withRunValidity(result, valuesValidity, endsData, n, offset);
         }
 
@@ -103,8 +109,6 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         PType valuePtype = p.ptype();
 
         // Lazy path: wrap values + ends without expanding into an n-sized buffer.
-        // VarBin keeps the eager path above — offset rebasing doesn't trivially
-        // express as binary-search-on-read.
         Array result = switch (valuePtype) {
             case I64, U64 -> new LazyRunEndLongArray(ctx.dtype(), n, (LongArray) valuesData, endsData, offset);
             case I32, U32 -> new LazyRunEndIntArray(ctx.dtype(), n, (IntArray) valuesData, endsData, offset);
@@ -168,58 +172,6 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         }
     }
 
-    private static Array expandStrings(
-            MemorySegment endsSeg, VarBinOffsetArray valuesArr,
-            PType endsPtype, long numRuns, long offset, long n,
-            DType dtype, SegmentAllocator arena
-    ) {
-        long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
-        MemorySegment valBytes = valuesArr.bytesSegment();
-        MemorySegment valOffsets = valuesArr.offsetsSegment();
-        PType valOffPtype = valuesArr.offsetsPtype();
-
-        long totalBytes = 0;
-        long logicalPos = 0;
-        for (long run = 0; run < numRuns; run++) {
-            long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
-            long lo = Math.max(logicalPos, offset);
-            long hi = Math.min(runEnd, offset + n);
-            long count = Math.max(0, hi - lo);
-            long strLen = readVarBinOffset(valOffsets, run + 1, valOffPtype)
-                                  - readVarBinOffset(valOffsets, run, valOffPtype);
-            totalBytes += count * strLen;
-            logicalPos = runEnd;
-        }
-
-        MemorySegment outBytes = arena.allocate(totalBytes > 0 ? totalBytes : 1);
-        MemorySegment outOffsets = arena.allocate((n + 1) * 4L, 4);
-        outOffsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
-
-        long bytePos = 0;
-        long outIdx = 0;
-        logicalPos = 0;
-        for (long run = 0; run < numRuns && outIdx < n; run++) {
-            long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
-            long lo = Math.max(logicalPos, offset);
-            long hi = Math.min(runEnd, offset + n);
-            if (hi > lo) {
-                long strStart = readVarBinOffset(valOffsets, run, valOffPtype);
-                long strEnd = readVarBinOffset(valOffsets, run + 1, valOffPtype);
-                long strLen = strEnd - strStart;
-                for (long lp = lo; lp < hi; lp++, outIdx++) {
-                    if (strLen > 0) {
-                        MemorySegment.copy(valBytes, strStart, outBytes, bytePos, strLen);
-                        bytePos += strLen;
-                    }
-                    outOffsets.setAtIndex(VortexFormat.LE_INT, outIdx + 1, (int) bytePos);
-                }
-            }
-            logicalPos = runEnd;
-        }
-
-        return new VarBinOffsetArray(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
-    }
-
     private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
         return switch (ptype) {
             case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
@@ -227,14 +179,6 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
             case U32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, i * 4));
             case U64 -> seg.get(VortexFormat.LE_LONG, i * 8);
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "non-unsigned ends ptype " + ptype);
-        };
-    }
-
-    private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {
-        return switch (ptype) {
-            case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(VortexFormat.LE_INT, i));
-            case I64, U64 -> seg.getAtIndex(VortexFormat.LE_LONG, i);
-            default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported offset ptype " + ptype);
         };
     }
 }

@@ -5,15 +5,19 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoRunEndMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinRunEndArray;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,7 +26,8 @@ class RunEndEncodingDecoderTest {
 
     private static final RunEndEncodingDecoder SUT = new RunEndEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(
-            SUT, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
+            SUT, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder(), new VarBinEncodingDecoder(),
+            new NullEncodingDecoder());
 
     @Test
     void encodingId_isVortexRunEnd() {
@@ -190,6 +195,54 @@ class RunEndEncodingDecoderTest {
         assertThat(ints.getInt(4)).isEqualTo(3);
     }
 
+    /// A Utf8 runend column must decode to the lazy [VarBinRunEndArray], not to an expanded
+    /// [io.github.dfa1.vortex.reader.array.VarBinOffsetArray]. The old eager path allocated and
+    /// copied `sum(runLength * strLen)` bytes plus an `(n + 1) * 4` offsets table — for the one
+    /// encoding whose whole purpose is that those rows repeat (#334). Asserting the concrete
+    /// type is the point: correct values alone would also pass on the eager path.
+    @Test
+    void utf8Values_decodeLazilyWithoutExpanding() {
+        // Given — ends [2,3,5] over values ["aa","b","cccc"]; rows 0..1 "aa", 2 "b", 3..4 "cccc"
+        MemorySegment[] segs = {
+                u8Bytes(2, 3, 5),                        // run ends
+                TestSegments.leInts(0, 2, 3, 7),         // value offsets (4 entries for 3 runs)
+                MemorySegment.ofArray("aabcccc".getBytes(StandardCharsets.UTF_8))
+        };
+        ArrayNode endsNode = primitiveNode(0);
+        ArrayNode valuesNode = varBinNode(1, 2);
+
+        // When
+        Array result = decode(DType.UTF8, PType.U8, 3, 0, 5, segs, endsNode, valuesNode);
+
+        // Then
+        assertThat(result).isInstanceOf(VarBinRunEndArray.class);
+        VarBinArray strings = (VarBinArray) result;
+        assertThat(strings.length()).isEqualTo(5L);
+        assertThat(strings.getString(0)).isEqualTo("aa");
+        assertThat(strings.getString(1)).isEqualTo("aa");
+        assertThat(strings.getString(2)).isEqualTo("b");
+        assertThat(strings.getString(3)).isEqualTo("cccc");
+        assertThat(strings.getString(4)).isEqualTo("cccc");
+    }
+
+    /// The values child comes from an untrusted file and need not decode to a `VarBinArray`
+    /// even when the dtype is Utf8: an entirely-null run column arrives as `vortex.null` and
+    /// decodes to [io.github.dfa1.vortex.reader.array.NullArray] (the #269 shape). Casting it
+    /// straight to `VarBinArray` (as the eager path did) made that a raw ClassCastException,
+    /// which ADR 0003 forbids.
+    @Test
+    void utf8WithNonVarBinValuesChild_throwsVortexException() {
+        // Given — dtype says Utf8 but the values child is vortex.null
+        MemorySegment[] segs = {u8Bytes(2, 5)};
+        ArrayNode endsNode = primitiveNode(0);
+        ArrayNode valuesNode = new ArrayNode(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[]{});
+
+        // When / Then
+        assertThatThrownBy(() -> decode(DType.UTF8, PType.U8, 2, 0, 5, segs, endsNode, valuesNode))
+                .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                .hasMessageContaining("expected a VarBin values child");
+    }
+
     private static Array decode(DType dtype, PType endsPtype, long numRuns, long offset, long n,
             MemorySegment[] segs, ArrayNode endsNode, ArrayNode valuesNode) {
         MemorySegment meta = MemorySegment.ofArray(
@@ -224,6 +277,14 @@ class RunEndEncodingDecoderTest {
 
     private static ArrayNode primitiveNode(int bufferIndex) {
         return new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{bufferIndex});
+    }
+
+    /// A `vortex.varbin` node: one primitive child holding the I32 offsets, one data buffer.
+    private static ArrayNode varBinNode(int offsetsBufIndex, int bytesBufIndex) {
+        MemorySegment meta = MemorySegment.ofArray(
+                new ProtoVarBinMetadata(ProtoPType.valueOf(PType.I32.name())).encode());
+        return new ArrayNode(EncodingId.VORTEX_VARBIN, meta,
+                new ArrayNode[]{primitiveNode(offsetsBufIndex)}, new int[]{bytesBufIndex});
     }
 
     /// A primitive node whose single `vortex.bool` validity child makes

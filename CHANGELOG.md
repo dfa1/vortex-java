@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A run-end-encoded Utf8/Binary column (`vortex.runend`) no longer expands every run into a fully materialized buffer on decode; rows now resolve through the runs lazily, removing an unbounded `sum(runLength * valueLength)` allocation that a crafted file could drive to `OutOfMemoryError`. ([#334](https://github.com/dfa1/vortex-java/issues/334))
+
 ## [0.13.1] — 2026-08-06
 
 ### Fixed
