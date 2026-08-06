@@ -14,7 +14,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class VarBinChunkedModeTest {
+class VarBinChunkedArrayTest {
 
     private static final DType UTF8 = DType.UTF8;
 
@@ -24,7 +24,7 @@ class VarBinChunkedModeTest {
         @Test
         void emptyChunkListRejected() {
             // Given / When / Then
-            assertThatThrownBy(() -> VarBinArray.ChunkedMode.of(UTF8, 0, List.of()))
+            assertThatThrownBy(() -> VarBinChunkedArray.of(UTF8, 0, List.of()))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -35,7 +35,7 @@ class VarBinChunkedModeTest {
                 VarBinArray c0 = stringChunk(arena, "a", "b");
 
                 // When / Then
-                assertThatThrownBy(() -> VarBinArray.ChunkedMode.of(UTF8, 99, List.of(c0)))
+                assertThatThrownBy(() -> VarBinChunkedArray.of(UTF8, 99, List.of(c0)))
                         .isInstanceOf(VortexException.class);
             }
         }
@@ -50,7 +50,7 @@ class VarBinChunkedModeTest {
                         DType.I64, 1, seg.asReadOnly());
 
                 // When / Then
-                assertThatThrownBy(() -> VarBinArray.ChunkedMode.of(UTF8, 1, List.of(notVarBin)))
+                assertThatThrownBy(() -> VarBinChunkedArray.of(UTF8, 1, List.of(notVarBin)))
                         .isInstanceOf(VortexException.class);
             }
         }
@@ -60,14 +60,14 @@ class VarBinChunkedModeTest {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — a chunked Utf8 column where the middle chunk is entirely null and
                 // decoded to NullArray (via vortex.null or a null-scalar vortex.constant, #269)
-                // rather than a VarBinArray. Before the fix ChunkedMode.of threw on it.
+                // rather than a VarBinArray. Before the fix VarBinChunkedArray.of threw on it.
                 VarBinArray c0 = stringChunk(arena, "a", "b");
                 NullArray nullChunk = new NullArray(UTF8, 3);
                 VarBinArray c2 = stringChunk(arena, "z");
 
                 // When
-                VarBinArray.ChunkedMode result =
-                        VarBinArray.ChunkedMode.of(UTF8, 6, List.of(c0, nullChunk, c2), arena);
+                VarBinChunkedArray result =
+                        VarBinChunkedArray.of(UTF8, 6, List.of(c0, nullChunk, c2), arena);
 
                 // Then — the null chunk contributes 3 zero-length rows, keeping row alignment
                 assertThat(result.length()).isEqualTo(6);
@@ -92,7 +92,7 @@ class VarBinChunkedModeTest {
 
             // When / Then
             assertThatThrownBy(
-                    () -> VarBinArray.ChunkedMode.of(UTF8, 2, List.of(nullChunk), null))
+                    () -> VarBinChunkedArray.of(UTF8, 2, List.of(nullChunk), null))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -102,11 +102,11 @@ class VarBinChunkedModeTest {
                 // Given
                 VarBinArray leaf0 = stringChunk(arena, "a");
                 VarBinArray leaf1 = stringChunk(arena, "b");
-                VarBinArray.ChunkedMode nested = VarBinArray.ChunkedMode.of(UTF8, 2, List.of(leaf0, leaf1));
+                VarBinChunkedArray nested = VarBinChunkedArray.of(UTF8, 2, List.of(leaf0, leaf1));
                 VarBinArray leaf2 = stringChunk(arena, "c");
 
                 // When
-                VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 3, List.of(nested, leaf2));
+                VarBinChunkedArray sut = VarBinChunkedArray.of(UTF8, 3, List.of(nested, leaf2));
 
                 // Then
                 assertThat(sut.children()).hasSize(3);
@@ -124,7 +124,7 @@ class VarBinChunkedModeTest {
                 // Given
                 VarBinArray c0 = stringChunk(arena, "alpha", "beta");
                 VarBinArray c1 = stringChunk(arena, "gamma");
-                VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 3, List.of(c0, c1));
+                VarBinChunkedArray sut = VarBinChunkedArray.of(UTF8, 3, List.of(c0, c1));
 
                 // When / Then
                 assertThat(sut.getString(0)).isEqualTo("alpha");
@@ -139,7 +139,7 @@ class VarBinChunkedModeTest {
                 // Given
                 VarBinArray c0 = stringChunk(arena, "abc");
                 VarBinArray c1 = stringChunk(arena, "xyz");
-                VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 2, List.of(c0, c1));
+                VarBinChunkedArray sut = VarBinChunkedArray.of(UTF8, 2, List.of(c0, c1));
 
                 // When / Then
                 assertThat(sut.getBytes(1)).containsExactly('x', 'y', 'z');
@@ -152,7 +152,7 @@ class VarBinChunkedModeTest {
                 // Given
                 VarBinArray c0 = stringChunk(arena, "hi");
                 VarBinArray c1 = stringChunk(arena, "hello");
-                VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 2, List.of(c0, c1));
+                VarBinChunkedArray sut = VarBinChunkedArray.of(UTF8, 2, List.of(c0, c1));
 
                 // When / Then
                 assertThat(sut.getByteLength(0)).isEqualTo(2);
@@ -170,7 +170,7 @@ class VarBinChunkedModeTest {
                 // Given
                 VarBinArray c0 = stringChunk(arena, "a", "b", "c");
                 VarBinArray c1 = stringChunk(arena, "d", "e");
-                VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 5, List.of(c0, c1));
+                VarBinChunkedArray sut = VarBinChunkedArray.of(UTF8, 5, List.of(c0, c1));
 
                 // When
                 VarBinArray result = sut.limited(4);
@@ -192,7 +192,7 @@ class VarBinChunkedModeTest {
                 // Given a chunked array — bytes are spread across child segments
                 VarBinArray c0 = stringChunk(arena, "a", "b");
                 VarBinArray c1 = stringChunk(arena, "c");
-                VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 3, List.of(c0, c1));
+                VarBinChunkedArray sut = VarBinChunkedArray.of(UTF8, 3, List.of(c0, c1));
 
                 // When / Then the probe must not surface the NULL bytesSegment() sentinel
                 assertThat(sut.segmentIfPresent()).isEmpty();
@@ -205,8 +205,8 @@ class VarBinChunkedModeTest {
                 // Given a slice over a chunked inner — still no single segment
                 VarBinArray c0 = stringChunk(arena, "a", "b");
                 VarBinArray c1 = stringChunk(arena, "c");
-                VarBinArray.ChunkedMode chunked = VarBinArray.ChunkedMode.of(UTF8, 3, List.of(c0, c1));
-                VarBinArray.SlicedMode sut = new VarBinArray.SlicedMode(UTF8, 2, chunked, 1);
+                VarBinChunkedArray chunked = VarBinChunkedArray.of(UTF8, 3, List.of(c0, c1));
+                VarBinSlicedArray sut = new VarBinSlicedArray(UTF8, 2, chunked, 1);
 
                 // When / Then the probe follows the inner array, not the NULL bytesSegment()
                 assertThat(sut.segmentIfPresent()).isEmpty();
@@ -240,7 +240,7 @@ class VarBinChunkedModeTest {
             pos += b.length;
             offsets.setAtIndex(ValueLayout.JAVA_INT, i + 1, pos);
         }
-        return new VarBinArray.OffsetMode(UTF8, values.length, bytes.asReadOnly(),
+        return new VarBinOffsetArray(UTF8, values.length, bytes.asReadOnly(),
                 offsets.asReadOnly(), PType.I32);
     }
 }

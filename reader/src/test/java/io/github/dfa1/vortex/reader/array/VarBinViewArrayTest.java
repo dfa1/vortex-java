@@ -13,9 +13,9 @@ import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Unit tests for [VarBinArray.ViewMode]. Covers inline (≤ 12 byte) views,
+/// Unit tests for [VarBinViewArray]. Covers inline (≤ 12 byte) views,
 /// referenced views into shared data buffers, length-only reads, and truncate.
-class VarBinViewModeTest {
+class VarBinViewArrayTest {
 
     private static final DType UTF8 = DType.UTF8;
     private static final int VIEW_SIZE = 16;
@@ -28,7 +28,7 @@ class VarBinViewModeTest {
             try (Arena arena = Arena.ofConfined()) {
                 // Given two short strings stored inline in 16-byte views.
                 MemorySegment views = writeViews(arena, new String[]{"hi", "world!"});
-                var sut = new VarBinArray.ViewMode(UTF8, 2, views, new MemorySegment[0]);
+                var sut = new VarBinViewArray(UTF8, 2, views, new MemorySegment[0]);
 
                 // When/Then
                 assertThat(sut.getString(0)).isEqualTo("hi");
@@ -42,7 +42,7 @@ class VarBinViewModeTest {
         void forEachByteLengthEmitsAllRows() {
             try (Arena arena = Arena.ofConfined()) {
                 MemorySegment views = writeViews(arena, new String[]{"a", "bb", "ccc"});
-                var sut = new VarBinArray.ViewMode(UTF8, 3, views, new MemorySegment[0]);
+                var sut = new VarBinViewArray(UTF8, 3, views, new MemorySegment[0]);
 
                 var seen = new ArrayList<Integer>();
                 sut.forEachByteLength(seen::add);
@@ -71,7 +71,7 @@ class VarBinViewModeTest {
                 views.set(VortexFormat.LE_INT, 4, 0);                     // prefix (ignored on read)
                 views.set(VortexFormat.LE_INT, 8, 0);                     // buffer index
                 views.set(VortexFormat.LE_INT, 12, 0);                    // offset within buffer
-                var sut = new VarBinArray.ViewMode(UTF8, 1, views, new MemorySegment[]{dataBuf});
+                var sut = new VarBinViewArray(UTF8, 1, views, new MemorySegment[]{dataBuf});
 
                 // When/Then
                 assertThat(sut.getString(0)).isEqualTo(longStr);
@@ -95,7 +95,7 @@ class VarBinViewModeTest {
                 views.set(VortexFormat.LE_INT, VIEW_SIZE + 8, 0);
                 views.set(VortexFormat.LE_INT, VIEW_SIZE + 12, 0);
 
-                var sut = new VarBinArray.ViewMode(UTF8, 2, views, new MemorySegment[]{dataBuf});
+                var sut = new VarBinViewArray(UTF8, 2, views, new MemorySegment[]{dataBuf});
 
                 assertThat(sut.getString(0)).isEqualTo("short");
                 assertThat(sut.getString(1)).isEqualTo(longStr);
@@ -110,7 +110,7 @@ class VarBinViewModeTest {
         void keepsPrefixSharingDataBuffers() {
             try (Arena arena = Arena.ofConfined()) {
                 MemorySegment views = writeViews(arena, new String[]{"a", "b", "c", "d"});
-                var sut = new VarBinArray.ViewMode(UTF8, 4, views, new MemorySegment[0]);
+                var sut = new VarBinViewArray(UTF8, 4, views, new MemorySegment[0]);
 
                 VarBinArray truncated = sut.limited(2);
 
@@ -124,7 +124,7 @@ class VarBinViewModeTest {
         void truncateBeyondLengthReturnsSelf() {
             try (Arena arena = Arena.ofConfined()) {
                 MemorySegment views = writeViews(arena, new String[]{"a"});
-                var sut = new VarBinArray.ViewMode(UTF8, 1, views, new MemorySegment[0]);
+                var sut = new VarBinViewArray(UTF8, 1, views, new MemorySegment[0]);
 
                 assertThat(sut.limited(10)).isSameAs(sut);
             }

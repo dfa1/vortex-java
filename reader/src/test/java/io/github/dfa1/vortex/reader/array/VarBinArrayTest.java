@@ -23,7 +23,7 @@ class VarBinArrayTest {
 
     private static final DType UTF8 = DType.UTF8;
 
-    private static VarBinArray.OffsetMode of(String... values) {
+    private static VarBinOffsetArray of(String... values) {
         byte[] allBytes = String.join("", values).getBytes(StandardCharsets.UTF_8);
         MemorySegment bytes = MemorySegment.ofArray(allBytes);
 
@@ -36,7 +36,7 @@ class VarBinArrayTest {
             bb.putInt(o);
         }
         MemorySegment offsetsSeg = MemorySegment.ofArray(bb.array());
-        return new VarBinArray.OffsetMode(UTF8, values.length, bytes, offsetsSeg, PType.I32);
+        return new VarBinOffsetArray(UTF8, values.length, bytes, offsetsSeg, PType.I32);
     }
 
     @Nested
@@ -117,7 +117,7 @@ class VarBinArrayTest {
         @Test
         void offsetsPtype_returnsOffsetType() {
             // Given
-            VarBinArray.OffsetMode sut = of("a");
+            VarBinOffsetArray sut = of("a");
 
             // When / Then
             assertThat(sut.offsetsPtype()).isNotNull();
@@ -330,7 +330,7 @@ class VarBinArrayTest {
         @Test
         void getString_returnsSameValueForEveryRow() {
             // Given
-            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 5, "hi".getBytes(StandardCharsets.UTF_8));
+            VarBinArray sut = new VarBinConstantArray(UTF8, 5, "hi".getBytes(StandardCharsets.UTF_8));
 
             // When / Then
             assertThat(sut.getString(0)).isEqualTo("hi");
@@ -340,7 +340,7 @@ class VarBinArrayTest {
         @Test
         void getByteLength_returnsConstantLength() {
             // Given
-            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 3, "abc".getBytes(StandardCharsets.UTF_8));
+            VarBinArray sut = new VarBinConstantArray(UTF8, 3, "abc".getBytes(StandardCharsets.UTF_8));
 
             // When / Then
             assertThat(sut.getByteLength(0)).isEqualTo(3);
@@ -350,7 +350,7 @@ class VarBinArrayTest {
         @Test
         void forEachByteLength_visitsLengthOncePerRow() {
             // Given
-            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 4, "xy".getBytes(StandardCharsets.UTF_8));
+            VarBinArray sut = new VarBinConstantArray(UTF8, 4, "xy".getBytes(StandardCharsets.UTF_8));
             List<Integer> lengths = new ArrayList<>();
 
             // When
@@ -365,7 +365,7 @@ class VarBinArrayTest {
         @Test
         void getBytes_returnsIndependentCopyEachCall() {
             // Given
-            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 2, "z".getBytes(StandardCharsets.UTF_8));
+            VarBinArray sut = new VarBinConstantArray(UTF8, 2, "z".getBytes(StandardCharsets.UTF_8));
 
             // When
             byte[] first = sut.getBytes(0);
@@ -378,7 +378,7 @@ class VarBinArrayTest {
         @Test
         void getString_outOfBoundsIndex_throws() {
             // Given
-            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 2, "v".getBytes(StandardCharsets.UTF_8));
+            VarBinArray sut = new VarBinConstantArray(UTF8, 2, "v".getBytes(StandardCharsets.UTF_8));
 
             // When / Then
             assertThatThrownBy(() -> sut.getString(2)).isInstanceOf(IndexOutOfBoundsException.class);
@@ -387,7 +387,7 @@ class VarBinArrayTest {
         @Test
         void limited_returnsShorterConstant() {
             // Given
-            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 10, "k".getBytes(StandardCharsets.UTF_8));
+            VarBinArray sut = new VarBinConstantArray(UTF8, 10, "k".getBytes(StandardCharsets.UTF_8));
 
             // When
             VarBinArray result = sut.limited(3);
@@ -400,7 +400,7 @@ class VarBinArrayTest {
         @Test
         void limited_rowsAtOrAboveLength_returnsSameInstance() {
             // Given
-            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 5, "m".getBytes(StandardCharsets.UTF_8));
+            VarBinArray sut = new VarBinConstantArray(UTF8, 5, "m".getBytes(StandardCharsets.UTF_8));
 
             // When
             VarBinArray result = sut.limited(5);
@@ -412,23 +412,23 @@ class VarBinArrayTest {
         @Test
         void bytesSegment_isNull_noContiguousBufferBacksABroadcast() {
             // Given
-            VarBinArray.ConstantMode sut = new VarBinArray.ConstantMode(UTF8, 2, "n".getBytes(StandardCharsets.UTF_8));
+            VarBinConstantArray sut = new VarBinConstantArray(UTF8, 2, "n".getBytes(StandardCharsets.UTF_8));
 
             // When / Then
             assertThat(sut.bytesSegment()).isSameAs(MemorySegment.NULL);
             assertThat(sut.segmentIfPresent()).isEmpty();
         }
 
-        /// The general "any VarBinArray -> OffsetMode" path other decoders (RunEnd's string
+        /// The general "any VarBinArray -> VarBinOffsetArray" path other decoders (RunEnd's string
         /// expansion, dict/sparse child normalization) rely on must still work for a broadcast
         /// constant, walking it via the typed accessors rather than `bytesSegment()`.
         @Test
         void toOffsetMode_materializesBroadcastIntoRealOffsets() {
             // Given
-            VarBinArray sut = new VarBinArray.ConstantMode(UTF8, 3, "hey".getBytes(StandardCharsets.UTF_8));
+            VarBinArray sut = new VarBinConstantArray(UTF8, 3, "hey".getBytes(StandardCharsets.UTF_8));
 
             // When
-            VarBinArray.OffsetMode result = VarBinArray.toOffsetMode(sut, Arena.ofAuto());
+            VarBinOffsetArray result = VarBinArray.toOffsetMode(sut, Arena.ofAuto());
 
             // Then
             assertThat(result.length()).isEqualTo(3);

@@ -17,6 +17,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -128,7 +129,7 @@ final class ArrayFixtures {
         return new MaterializedBoolArray(DType.BOOL, vs.length, seg.asReadOnly());
     }
 
-    /// Builds a UTF-8 [VarBinArray] (`OffsetMode`, I64 offsets) from the given strings.
+    /// Builds a UTF-8 [VarBinArray] (`VarBinOffsetArray`, I64 offsets) from the given strings.
     static VarBinArray utf8(Arena arena, String... vs) {
         byte[][] rows = new byte[vs.length][];
         for (int i = 0; i < vs.length; i++) {
@@ -137,7 +138,7 @@ final class ArrayFixtures {
         return varbin(arena, DType.UTF8, rows);
     }
 
-    /// Builds a binary [VarBinArray] (`OffsetMode`, I64 offsets) from the given byte rows.
+    /// Builds a binary [VarBinArray] (`VarBinOffsetArray`, I64 offsets) from the given byte rows.
     static VarBinArray binary(Arena arena, byte[]... rows) {
         return varbin(arena, DType.BINARY, rows);
     }
@@ -156,6 +157,6 @@ final class ArrayFixtures {
             pos += rows[i].length;
             offsets.setAtIndex(ValueLayout.JAVA_LONG, i + 1, pos);
         }
-        return new VarBinArray.OffsetMode(dtype, rows.length, bytes.asReadOnly(), offsets, PType.I64);
+        return new VarBinOffsetArray(dtype, rows.length, bytes.asReadOnly(), offsets, PType.I64);
     }
 }

@@ -18,6 +18,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import io.github.dfa1.zstd.ZstdDecompressContext;
 import io.github.dfa1.zstd.ZstdDecompressDictionary;
@@ -179,7 +180,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
             offsets.setAtIndex(VortexFormat.LE_INT, i + 1, (int) dataPos);
         }
 
-        return new VarBinArray.OffsetMode(dtype.withNullable(false), rowCount, values, offsets, PType.I32);
+        return new VarBinOffsetArray(dtype.withNullable(false), rowCount, values, offsets, PType.I32);
     }
 
     private static MemorySegment decompressFrames(
@@ -324,6 +325,6 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
             offsets.setAtIndex(VortexFormat.LE_INT, i + 1, (int) dataPos);
         }
 
-        return new VarBinArray.OffsetMode(dtype, n, values, offsets, PType.I32);
+        return new VarBinOffsetArray(dtype, n, values, offsets, PType.I32);
     }
 }

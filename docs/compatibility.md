@@ -136,18 +136,18 @@ decoder falls into one of three shapes:
 | `vortex.null`               | n/a           | n/a           | no per-row data                                                          |
 | `vortex.bytebool`           | Zero-copy     | Zero-copy     | mmap slice                                                               |
 | `vortex.zigzag`             | Lazy          | Lazy          | `LazyZigZagXxxArray` (I8/I16/I32/I64); broadcast → `LazyConstantXxxArray`, ADR 0010 + 0015 |
-| `vortex.constant`           | Lazy          | Lazy          | `LazyConstantXxxArray` (primitive + bool + decimal) + `VarBinArray.ConstantMode` (Utf8/Binary); per-row broadcast, no buffer, ADR 0015 |
+| `vortex.constant`           | Lazy          | Lazy          | `LazyConstantXxxArray` (primitive + bool + decimal) + `VarBinConstantArray` (Utf8/Binary); per-row broadcast, no buffer, ADR 0015 |
 | `vortex.ext`                | Zero-copy     | Zero-copy     | wraps storage                                                            |
 | `vortex.runend`             | Lazy          | Lazy          | `LazyRunEndXxxArray` (primitive + bool); Utf8/Binary stays Materialized (offset rebasing), ADR 0015 |
 | `vortex.varbin`             | Zero-copy     | Zero-copy     | bytes + offsets slices                                                   |
-| `vortex.varbinview`         | Lazy          | Lazy          | `VarBinArray.ViewMode` — keeps views + data buffers as mmap slices       |
+| `vortex.varbinview`         | Lazy          | Lazy          | `VarBinViewArray` — keeps views + data buffers as mmap slices            |
 | `vortex.alp`                | Lazy          | Lazy          | `LazyAlpXxxArray`; broadcast → `LazyConstantXxxArray`; patched stays Materialized, ADR 0010 + 0015 |
 | `vortex.alprd`              | Lazy          | Lazy          | `LazyAlpRdDoubleArray`/`LazyAlpRdFloatArray` — left/right + patches on access |
-| `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinArray.DictMode` (string), ADR 0012      |
+| `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinDictArray` (string), ADR 0012          |
 | `vortex.sparse`             | Lazy          | Lazy          | `LazySparseXxxArray` (primitive + bool); Utf8/Binary stays Materialized, ADR 0015 |
 | `vortex.sequence`           | Zero-copy     | Zero-copy     | synthetic (no data)                                                      |
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
-| `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinArray.ChunkedMode` (Utf8/Binary), ADR 0012 |
+| `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinChunkedArray` (Utf8/Binary), ADR 0012 |
 | `vortex.fsst`               | Materialized  | Materialized  | symbol-table decompression                                               |
 | `vortex.list`               | Lazy          | Lazy          | `ListArray` wraps elements + offsets children; shape inherits from child  |
 | `vortex.listview`           | Lazy          | Lazy          | `ListViewArray` wraps elements + offsets + sizes children                 |

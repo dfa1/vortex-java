@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -80,8 +81,8 @@ class ConstantEncodingDecoderTest {
         // When
         Array result = decode(scalar, DType.UTF8, 3);
 
-        // Then — VarBinArray.ConstantMode, not an eagerly materialized OffsetMode
-        assertThat(result).isInstanceOf(VarBinArray.ConstantMode.class);
+        // Then — VarBinConstantArray, not an eagerly materialized VarBinOffsetArray
+        assertThat(result).isInstanceOf(VarBinConstantArray.class);
         VarBinArray strings = (VarBinArray) result;
         assertThat(strings.getString(0)).isEqualTo("hi");
         assertThat(strings.getString(2)).isEqualTo("hi");
@@ -89,7 +90,7 @@ class ConstantEncodingDecoderTest {
 
     /// Row count no longer bounds the work `decodeString` does: it used to eagerly allocate
     /// and copy `n` string repetitions into a real buffer (`n * strLen`), which for a large
-    /// `n` was both wasted work and an integer-overflow/OOM risk (#329). `ConstantMode` is
+    /// `n` was both wasted work and an integer-overflow/OOM risk (#329). `VarBinConstantArray` is
     /// O(1) regardless of `n`, so a row count too large to ever materialize still decodes
     /// instantly.
     @Test

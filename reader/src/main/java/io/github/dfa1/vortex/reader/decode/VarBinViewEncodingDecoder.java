@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinViewArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
 import java.lang.foreign.MemorySegment;
@@ -30,13 +30,13 @@ public final class VarBinViewEncodingDecoder implements EncodingDecoder {
         }
 
         // Lazy path: keep views + data buffers as MemorySegment slices; per-row
-        // accessors resolve on demand via VarBinArray.ViewMode. No copy, no concat,
+        // accessors resolve on demand via VarBinViewArray. No copy, no concat,
         // no flat byte buffer allocation.
         MemorySegment viewsBuf = ctx.buffer(numBufs - 1);
         MemorySegment[] dataBufs = new MemorySegment[numBufs - 1];
         for (int i = 0; i < dataBufs.length; i++) {
             dataBufs[i] = ctx.buffer(i);
         }
-        return new VarBinArray.ViewMode(ctx.dtype(), ctx.rowCount(), viewsBuf, dataBufs);
+        return new VarBinViewArray(ctx.dtype(), ctx.rowCount(), viewsBuf, dataBufs);
     }
 }

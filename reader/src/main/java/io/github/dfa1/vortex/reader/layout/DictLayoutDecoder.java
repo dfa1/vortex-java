@@ -26,6 +26,7 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -64,7 +65,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
         Array codes = ctx.decodeChild(codesLayout, new DType.Primitive(codesPType, false));
 
         // VarBin (string) dict: VarBinArray is a sealed interface; ofDict returns the
-        // lazy DictMode record (no eager expansion into per-row offsets/bytes).
+        // lazy VarBinDictArray record (no eager expansion into per-row offsets/bytes).
         // Unwrap a masked (nullable) codes/values child so the string expansion sees the raw
         // payload; the row-level validity is re-applied by wrapping the result below. This mirrors
         // the primitive path (buildLazyDictPrimitive) and is the shape a nullable global-dict Utf8
@@ -73,7 +74,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
         Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
         BoolArray codesValidity = codes instanceof MaskedArray mc ? mc.validity() : null;
         Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;
-        if (valuesData instanceof VarBinArray.OffsetMode vb) {
+        if (valuesData instanceof VarBinOffsetArray vb) {
             // Zip-bomb guard: read the codes as a segment so we can validate the buffer
             // before allocating the expansion output. For direct-mapped encodings (e.g.
             // vortex.primitive), the codes buffer is mmap-bounded and can be much smaller
@@ -237,7 +238,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
     }
 
     private static Array expandDictStrings(
-            VarBinArray.OffsetMode values, MemorySegment codesSegs,
+            VarBinOffsetArray values, MemorySegment codesSegs,
             PType codesPType, DType dtype,
             long n, SegmentAllocator arena
     ) {
@@ -271,7 +272,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
             outOffsets.setAtIndex(LE_INT, i + 1, (int) bytePos);
         }
 
-        return new VarBinArray.OffsetMode(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
+        return new VarBinOffsetArray(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
     }
 
     private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {

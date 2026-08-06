@@ -29,6 +29,7 @@ import io.github.dfa1.vortex.reader.array.OffsetShortArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.layout.LayoutDecodeContext;
 import io.github.dfa1.vortex.reader.layout.ZonedStatsSchema;
@@ -777,7 +778,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case ByteArray a -> new OffsetByteArray(dtype, length, a, offset);
             case BoolArray a -> new OffsetBoolArray(dtype, length, a, offset);
             case NullArray ignored -> new NullArray(dtype, length);
-            case VarBinArray a -> new VarBinArray.SlicedMode(dtype, length, a, offset);
+            case VarBinArray a -> new VarBinSlicedArray(dtype, length, a, offset);
             case StructArray s -> {
                 // A shared nested struct column is decoded once over the full range, then sliced
                 // per chunk by slicing each field into the same window. Field dtypes come from the

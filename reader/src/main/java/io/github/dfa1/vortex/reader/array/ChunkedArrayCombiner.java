@@ -14,7 +14,7 @@ import java.util.List;
 /// Stitches the per-chunk arrays of one logical column into a single view, dispatching on the
 /// column's [DType]. Each family gets its zero-copy composite shape (ADR 0012): primitive and
 /// boolean chunks fold into the `ChunkedXxxArray` records, variable-length chunks into
-/// [VarBinArray.ChunkedMode], and list chunks into a stitched [ListArray] whose bulk element data
+/// [VarBinChunkedArray], and list chunks into a stitched [ListArray] whose bulk element data
 /// stays zero-copy (the child element arrays are themselves combined recursively) while only the
 /// small outer offsets table is rebuilt so per-chunk offsets — which each reset to zero — become one
 /// cumulative table.
@@ -46,8 +46,8 @@ public final class ChunkedArrayCombiner {
         }
         Array data = switch (dtype) {
             case DType.Bool ignored -> ChunkedBoolArray.of(dtype, totalRows, chunks);
-            case DType.Utf8 ignored -> VarBinArray.ChunkedMode.of(dtype, totalRows, chunks, arena);
-            case DType.Binary ignored -> VarBinArray.ChunkedMode.of(dtype, totalRows, chunks, arena);
+            case DType.Utf8 ignored -> VarBinChunkedArray.of(dtype, totalRows, chunks, arena);
+            case DType.Binary ignored -> VarBinChunkedArray.of(dtype, totalRows, chunks, arena);
             case DType.List list -> combineLists(list, totalRows, chunks, arena);
             case DType.Primitive prim -> combinePrimitive(prim.ptype(), dtype, totalRows, chunks);
             default -> throw new VortexException("unsupported dtype for chunked layout: " + dtype);
@@ -77,7 +77,7 @@ public final class ChunkedArrayCombiner {
     ///
     /// An entirely-null chunk decodes to a [NullArray] rather than a [ListArray] (e.g. a
     /// `vortex.null` flat, or `vortex.constant` with a null scalar, #269). Mirroring the sibling
-    /// [VarBinArray.ChunkedMode] fix, such a chunk contributes `n` zero-length list rows: it adds no
+    /// [VarBinChunkedArray] fix, such a chunk contributes `n` zero-length list rows: it adds no
     /// elements, so it is skipped by the recursive element combine, and its `n` outer offsets simply
     /// repeat the running element count. Row-level nullability is preserved separately by the
     /// caller's validity bitmap.

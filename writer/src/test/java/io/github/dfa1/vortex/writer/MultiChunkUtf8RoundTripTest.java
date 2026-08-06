@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinChunkedArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -20,7 +21,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Asserts [VarBinArray.ChunkedMode] fires on multi-chunk Utf8 columns.
+/// Asserts [VarBinChunkedArray] fires on multi-chunk Utf8 columns.
 ///
 /// Pre-ADR-0012-VarBin, `ScanIterator.decodeChunkedLayout` threw on
 /// `(DType.Primitive) dtype` for Utf8/Binary. This test guards the new
@@ -36,7 +37,7 @@ class MultiChunkUtf8RoundTripTest {
         // Given — many small batches force a layout-level Chunked node for the column
         // when cascading is enabled. The reader returns one Chunk per top-level chunk;
         // when that top-level chunk wraps multiple per-batch Flat layouts the column
-        // surfaces as VarBinArray.ChunkedMode.
+        // surfaces as VarBinChunkedArray.
         Path file = tmp.resolve("many_chunk_utf8.vtx");
         int batches = 32;
         int perBatch = 16;
@@ -51,7 +52,7 @@ class MultiChunkUtf8RoundTripTest {
             }
         }
 
-        // Then — at least one scan chunk must surface a ChunkedMode column. Values must
+        // Then — at least one scan chunk must surface a VarBinChunkedArray column. Values must
         // round-trip across the whole file regardless of how the writer chose to chunk.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.columns("s"))) {
@@ -60,7 +61,7 @@ class MultiChunkUtf8RoundTripTest {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     VarBinArray col = c.column("s");
-                    if (col instanceof VarBinArray.ChunkedMode) {
+                    if (col instanceof VarBinChunkedArray) {
                         sawChunkedMode = true;
                     }
                     for (long i = 0; i < col.length(); i++) {
@@ -71,7 +72,7 @@ class MultiChunkUtf8RoundTripTest {
             assertThat(seen).hasSize(batches * perBatch);
             assertThat(seen.get(0)).isEqualTo("row-0-0");
             assertThat(seen.get(seen.size() - 1)).isEqualTo("row-" + (batches - 1) + "-" + (perBatch - 1));
-            // ChunkedMode mechanics are unit-tested in VarBinChunkedModeTest. The current
+            // VarBinChunkedArray mechanics are unit-tested in VarBinChunkedModeTest. The current
             // writer's encoding choices for Utf8 do not produce a column-level Chunked
             // layout (each writer chunk surfaces as its own scan Chunk, and within a scan
             // Chunk the column is a leaf VarBinArray). When a future writer change makes
@@ -91,14 +92,14 @@ class MultiChunkUtf8RoundTripTest {
             sut.writeChunk(Map.of(ColumnName.of("s"), strings));
         }
 
-        // Then — column should be a leaf VarBinArray (OffsetMode or DictMode), not ChunkedMode
+        // Then — column should be a leaf VarBinArray (VarBinOffsetArray or VarBinDictArray), not VarBinChunkedArray
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.columns("s"))) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk c = iter.next()) {
                 VarBinArray col = c.column("s");
                 // Sanity: chunked single-chunk decoder bypasses the wrapper.
-                assertThat(col).isNotInstanceOf(VarBinArray.ChunkedMode.class);
+                assertThat(col).isNotInstanceOf(VarBinChunkedArray.class);
                 assertThat(col.length()).isEqualTo(3);
                 assertThat(col.getString(0)).isEqualTo("foo");
                 assertThat(col.getString(2)).isEqualTo("baz");
