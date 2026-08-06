@@ -1,10 +1,12 @@
 # ADR 0020: Jazzer fuzz testing infrastructure
 
 - **Status:** Accepted — fuzz mode landed as a dedicated `fuzz` module with one target
-  (`VortexReader` full-file open); direct `PostscriptParser.parseBlobs` fuzzing is deferred (it is
-  package-private, so a separate module needs a cross-module access seam); seed corpus,
-  per-encoding targets, differential fuzzing, regression-corpus wiring, nightly CI, and OSS-Fuzz
-  submission still pending
+  (`VortexReader` full-file open), seeded with a handful of existing small reader fixtures so the
+  mutator starts past the trailer magic instead of having to guess it; direct
+  `PostscriptParser.parseBlobs` fuzzing is deferred (it is package-private, so a separate module
+  needs a cross-module access seam); automated per-encoding corpus extraction, per-encoding
+  targets, differential fuzzing, regression-corpus wiring, nightly CI, and OSS-Fuzz submission
+  still pending
 - **Date:** 2026-07-12
 - **Deciders:** project maintainer
 - **Related:** [ADR 0003 — VortexException sanitization](0003-vortex-exception-sanitization.md),
@@ -35,10 +37,21 @@ Adopt Jazzer via the `com.code-intelligence:jazzer-junit` test dependency, in tw
 
 ### Seed corpus
 
-Existing `.vortex` integration fixtures seed `fuzz/src/test/resources/fuzz-corpus/full-file/`.
-A small extraction tool walks those fixtures and dumps each segment to
-`core/src/test/resources/fuzz-corpus/<encoding>/`, producing per-encoding sub-corpora without
-hand-crafting inputs.
+**Landed (minimal):** five existing `reader/src/test/resources/fixtures/*.vortex` files
+(`null`, `varbin`, `booleans`, `primitives`, `chunked` — real, valid, already-committed fixtures
+used by other reader tests) are copied as-is into
+`fuzz/src/test/resources/io/github/dfa1/vortex/fuzz/VortexReaderFuzzTestInputs/openMalformedFile/`,
+Jazzer's standard JUnit seed-corpus location (`<TestClass>Inputs/<method>/<file>` under
+`src/test/resources`, mirroring the test class's package). Measured effect: a 30 s `JAZZER_FUZZ=1`
+run went from 175 edges / ~19.7k exec/s (guessing the 4-byte `VTXF` trailer magic essentially
+never happens) to ~550 edges / 1099 features, with the auto-dictionary recovering real encoding-id
+strings (`vortex.bool`, `vortex.fixed_size_list`, …) out of the FlatBuffer footer — confirms the
+mutator is now past the trailer and genuinely walking the footer/layout/dtype structure.
+
+**Still pending (automated):** a small extraction tool walking the full integration-fixture set,
+dumping each segment to per-encoding sub-corpora (originally scoped to
+`core/src/test/resources/fuzz-corpus/<encoding>/`), for when the per-encoding `@FuzzTest` targets
+below land — the five hand-picked files above are a stopgap, not a replacement for that.
 
 ### Fuzz targets
 
