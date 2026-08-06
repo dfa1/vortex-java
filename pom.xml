@@ -69,6 +69,7 @@
 		<zstd-jni.version>1.5.7-12</zstd-jni.version>
 		<h2.version>2.4.240</h2.version>
 		<junit.version>6.1.2</junit.version>
+		<jazzer.version>0.30.0</jazzer.version>
 		<assertj.version>3.27.7</assertj.version>
 		<mockito.version>5.23.0</mockito.version>
 		<vortex-jni.version>0.83.0</vortex-jni.version>
@@ -240,6 +241,31 @@
 			<dependency>
 				<groupId>org.junit.jupiter</groupId>
 				<artifactId>junit-jupiter</artifactId>
+				<version>${junit.version}</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<!-- Coverage-guided fuzzing (ADR 0020). JUnit 5 integration: @FuzzTest methods run
+				     as ordinary tests unless JAZZER_FUZZ=1 switches them into fuzzing mode. -->
+				<groupId>com.code-intelligence</groupId>
+				<artifactId>jazzer-junit</artifactId>
+				<version>${jazzer.version}</version>
+				<scope>test</scope>
+			</dependency>
+			<!-- jazzer-junit declares junit-platform-commons / junit-platform-launcher 1.9.0 as
+			     direct dependencies, which Maven's nearest-wins mediation would prefer over the
+			     6.x platform that junit-jupiter pulls in one level deeper — silently downgrading
+			     the platform for any module using Jazzer. Pin both to ${junit.version}, which
+			     JUnit 6 versions in lockstep with junit-jupiter. -->
+			<dependency>
+				<groupId>org.junit.platform</groupId>
+				<artifactId>junit-platform-commons</artifactId>
+				<version>${junit.version}</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.junit.platform</groupId>
+				<artifactId>junit-platform-launcher</artifactId>
 				<version>${junit.version}</version>
 				<scope>test</scope>
 			</dependency>

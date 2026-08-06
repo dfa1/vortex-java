@@ -10,3 +10,7 @@ release.properties
 
 # Claude Code agent worktrees (embedded git repos; never part of the project)
 .claude/worktrees/
+
+# Jazzer's generated working corpus (JAZZER_FUZZ=1 writes here). Curated regression inputs live
+# under src/test/resources/<package>/<TestClass>Inputs/ instead and are committed deliberately.
+.cifuzz-corpus/

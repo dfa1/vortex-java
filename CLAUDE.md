@@ -70,6 +70,8 @@ Trunk-based. PRs fine but always squash or rebase — no merge commits. Keep com
 ./bench JavaVsJniReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
 scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conformance corpus (#205), then:
 ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test="RaincloudConformanceIntegrationTest"
+./mvnw test -pl reader -am -Dtest=VortexReaderFuzzTest -Dvortex.reader.excludedGroups=       # Jazzer regression mode (ADR 0020)
+JAZZER_FUZZ=1 ./mvnw test -pl reader -am -Dtest=PostscriptParserFuzzTest -Dvortex.reader.excludedGroups=   # actually fuzz
 ```
 
 The Raincloud corpus tests (`RaincloudConformanceIntegrationTest`,
@@ -78,6 +80,14 @@ The Raincloud corpus tests (`RaincloudConformanceIntegrationTest`,
 real corpus — even on a machine that has hydrated it locally. Opt in with
 `-Dvortex.it.excludedGroups=` (clears the exclusion); this is required *in addition to* `-Dit.test`,
 since the tag filter applies even to an explicitly named class.
+
+The Jazzer `@FuzzTest` targets (`VortexReaderFuzzTest`, `PostscriptParserFuzzTest`, `reader`
+module) are `@Tag("fuzz")` and excluded from a routine `./mvnw test`/`verify` (surefire
+`excludedGroups`, default `fuzz`) the same way — a plain build never fuzzes. Opt in with
+`-Dvortex.reader.excludedGroups=`, required alongside `-Dtest=` for the same reason as above.
+Without `JAZZER_FUZZ=1` a fuzz target just replays its saved corpus once (regression mode); with
+it, Jazzer explores new inputs continuously until stopped — never run that mode as part of an
+unattended/CI build. See [ADR 0020](adr/0020-jazzer-fuzz-infrastructure.md).
 
 Regenerate after editing `.fbs`/`.proto` (both generators are in-house, no external tools):
 
