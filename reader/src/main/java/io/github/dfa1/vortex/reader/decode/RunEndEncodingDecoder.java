@@ -67,6 +67,8 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         DType endsDtype = new DType.Primitive(endsPtype, false);
         Array endsArr = ctx.decodeChild(0, endsDtype, numRuns);
         Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
+        MemorySegment endsSeg = ctx.materialize(endsData);
+        validateEnds(endsSeg, endsPtype, numRuns, offset, n);
 
         // Values-side validity mirrors the Rust reference `ValidityVTable<RunEnd>`: a
         // RunEnd array's validity IS a RunEnd over the same ends whose per-run value is
@@ -84,7 +86,6 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         }
 
         if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
-            MemorySegment endsSeg = ctx.materialize(endsData);
             Array result = expandStrings(endsSeg, VarBinArray.toOffsetMode((VarBinArray) valuesData, ctx.arena()),
                     endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
             return withRunValidity(result, valuesValidity, endsData, n, offset);
@@ -129,6 +130,41 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         }
         BoolArray rowValidity = new LazyRunEndBoolArray(DType.BOOL, n, valuesValidity, endsData, offset);
         return new MaskedArray(result, rowValidity);
+    }
+
+    /// Validates `ends` against the format's write-side contract that the reference reader does
+    /// not itself enforce — the spec's note on this encoding is explicit: "a conformant reader
+    /// SHOULD validate \[strict-increase and the two-children shape\] itself rather than assume
+    /// them" (`encoding-format/dict-runend-sparse.md` §RunEnd). One O(numRuns) pass checks:
+    /// `ends` strictly increasing; `ends[0] >= offset` when sliced; and `ends[numRuns-1] >=
+    /// offset + n` — the runs must cover the full requested window (trailing runs beyond it are
+    /// legal per the offset-aware slicing model and simply go unused, so this is `>=`, not `==`).
+    /// Every violation here previously decoded without error and either silently repeated the
+    /// last run's value past where the data actually ends, or (for `ends[0] < offset`) resolved a
+    /// negative index.
+    private static void validateEnds(MemorySegment endsSeg, PType endsPtype, long numRuns, long offset, long n) {
+        long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
+        if (endsCap <= 0) {
+            throw new VortexException(EncodingId.VORTEX_RUNEND,
+                    "runend: empty ends buffer for " + numRuns + " run(s)");
+        }
+        long prev = readUnsigned(endsSeg, 0, endsPtype);
+        if (offset != 0 && prev < offset) {
+            throw new VortexException(EncodingId.VORTEX_RUNEND,
+                    "runend: ends[0]=" + prev + " < offset " + offset);
+        }
+        for (long i = 1; i < numRuns; i++) {
+            long end = readUnsigned(endsSeg, i % endsCap, endsPtype);
+            if (end <= prev) {
+                throw new VortexException(EncodingId.VORTEX_RUNEND,
+                        "runend: ends not strictly increasing at run " + i + " (" + end + " <= " + prev + ")");
+            }
+            prev = end;
+        }
+        if (prev < offset + n) {
+            throw new VortexException(EncodingId.VORTEX_RUNEND,
+                    "runend: last end " + prev + " does not cover offset+n=" + (offset + n));
+        }
     }
 
     private static Array expandStrings(
