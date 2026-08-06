@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Malformed files no longer crash the reader with a raw JDK exception when decoding VarBin, Dict, Bitpacked, ALP, Sparse, Chunked, or Struct columns — every case now fails as `VortexException`. ([ef982992](https://github.com/dfa1/vortex-java/commit/ef982992))
 - Same hardening for RunEnd, Constant, zone-map stats, and Pco columns — every case now fails as `VortexException`. ([12d7466c](https://github.com/dfa1/vortex-java/commit/12d7466c))
+- A constant Utf8/Binary column (`vortex.constant`) no longer eagerly allocates and copies `n` repetitions of its scalar on decode; it now broadcasts lazily in O(1) like every other constant type, closing an integer-overflow/OOM risk from a large row count. ([987fe412](https://github.com/dfa1/vortex-java/commit/987fe412))
+
+### Changed
+
+- `VarBinArray`'s representations (`OffsetMode`, `DictMode`, `ChunkedMode`, `ViewMode`, `SlicedMode`, `ConstantMode`) are now top-level classes (`VarBinOffsetArray`, `VarBinDictArray`, `VarBinChunkedArray`, `VarBinViewArray`, `VarBinSlicedArray`, `VarBinConstantArray`) instead of nested types, and `VarBinArray` is `non-sealed`, matching its sibling array-family interfaces. **Breaking** for any code referencing the old nested names directly. ([7e0d6e75](https://github.com/dfa1/vortex-java/commit/7e0d6e75))
 
 ### Added
 
