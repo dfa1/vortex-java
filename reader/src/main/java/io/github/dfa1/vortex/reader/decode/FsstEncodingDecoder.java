@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
@@ -168,7 +168,7 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
             }
         }
 
-        return new VarBinArray.OffsetMode(ctx.dtype(), n,
+        return new VarBinOffsetArray(ctx.dtype(), n,
                 outBytes.asSlice(0, totalUncompressed).asReadOnly(), outOffsets.asReadOnly(), PType.I32);
     }
 

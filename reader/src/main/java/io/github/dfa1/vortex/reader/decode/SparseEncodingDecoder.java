@@ -26,6 +26,7 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -269,7 +270,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
         if (numPatches == 0) {
             MemorySegment outBytes = ctx.arena().allocate(1);
-            Array result = new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+            Array result = new VarBinOffsetArray(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
             return withSparseValidity(ctx, result, fillValid, null, idxData, 0, n, offset);
         }
 
@@ -282,7 +283,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             valData = m.inner();
             patchValidity = m.validity();
         }
-        VarBinArray.OffsetMode varBin = VarBinArray.toOffsetMode(
+        VarBinOffsetArray varBin = VarBinArray.toOffsetMode(
                 checkedCast(valData, VarBinArray.class, "values"), ctx.arena());
         MemorySegment valBytes = varBin.bytesSegment();
         MemorySegment valOffsets = varBin.offsetsSegment();
@@ -337,7 +338,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                             + valOffsets.byteSize() + "-byte offsets buffer", e);
         }
 
-        Array result = new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+        Array result = new VarBinOffsetArray(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
         return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
     }
 

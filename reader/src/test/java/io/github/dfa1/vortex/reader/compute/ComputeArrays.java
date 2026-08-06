@@ -13,6 +13,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -115,7 +116,7 @@ final class ComputeArrays {
     }
 
     /// Builds an offset-based Utf8 [VarBinArray] from the given strings, off-heap so it looks like
-    /// the zero-copy slices the reader hands the kernels. Exercises the [VarBinArray.OffsetMode]
+    /// the zero-copy slices the reader hands the kernels. Exercises the [VarBinOffsetArray]
     /// accessor path the string compute kernels fold over.
     ///
     /// @param arena  the allocator for the off-heap bytes and offsets buffers
@@ -132,7 +133,7 @@ final class ComputeArrays {
             running += values[i].getBytes(StandardCharsets.UTF_8).length;
             offsets.setAtIndex(VortexFormat.LE_INT, i + 1, running);
         }
-        return new VarBinArray.OffsetMode(DType.UTF8, values.length, bytes.asReadOnly(),
+        return new VarBinOffsetArray(DType.UTF8, values.length, bytes.asReadOnly(),
                 offsets, PType.I32);
     }
 

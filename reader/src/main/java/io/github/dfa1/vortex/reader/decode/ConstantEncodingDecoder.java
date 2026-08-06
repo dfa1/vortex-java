@@ -16,7 +16,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -132,7 +132,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         return new LazyConstantBoolArray(dtype, n, value);
     }
 
-    /// Builds a metadata-only constant Utf8/Binary array — [VarBinArray.ConstantMode] returns
+    /// Builds a metadata-only constant Utf8/Binary array — [VarBinConstantArray] returns
     /// the same shared bytes for every row, so this stays O(1) regardless of `n` like every
     /// other constant type, instead of eagerly writing `n` copies into a real buffer.
     ///
@@ -144,7 +144,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         byte[] strBytes = scalar.string_value() != null
                               ? scalar.string_value().getBytes(StandardCharsets.UTF_8)
                               : (scalar.bytes_value() != null ? scalar.bytes_value() : new byte[0]);
-        return new VarBinArray.ConstantMode(dtype, n, strBytes);
+        return new VarBinConstantArray(dtype, n, strBytes);
     }
 
     private static long scalarToRawBits(ProtoScalarValue scalar) {

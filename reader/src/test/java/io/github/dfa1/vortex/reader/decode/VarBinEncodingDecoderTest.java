@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -147,7 +148,7 @@ class VarBinEncodingDecoderTest {
             // only possible on a directly built array — this exercises the readOffset guard
             // directly against a short offsets segment.
             MemorySegment data = MemorySegment.ofArray("abc".getBytes(StandardCharsets.UTF_8));
-            VarBinArray array = new VarBinArray.OffsetMode(DType.UTF8, 4, data,
+            VarBinArray array = new VarBinOffsetArray(DType.UTF8, 4, data,
                     TestSegments.leInts(0, 1, 2), PType.I32);
 
             // When / Then

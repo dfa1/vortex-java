@@ -19,6 +19,7 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -168,7 +169,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array expandStrings(
-            MemorySegment endsSeg, VarBinArray.OffsetMode valuesArr,
+            MemorySegment endsSeg, VarBinOffsetArray valuesArr,
             PType endsPtype, long numRuns, long offset, long n,
             DType dtype, SegmentAllocator arena
     ) {
@@ -216,7 +217,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
             logicalPos = runEnd;
         }
 
-        return new VarBinArray.OffsetMode(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
+        return new VarBinOffsetArray(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
     }
 
     private static long readUnsigned(MemorySegment seg, long i, PType ptype) {

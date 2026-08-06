@@ -17,6 +17,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -276,13 +277,13 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             poolValidity = masked.validity();
         }
         VarBinArray valuesArr = (VarBinArray) valuesDecoded;
-        VarBinArray.OffsetMode dictValues = VarBinArray.toOffsetMode(valuesArr, ctx.arena());
+        VarBinOffsetArray dictValues = VarBinArray.toOffsetMode(valuesArr, ctx.arena());
 
         BoolArray rowValidity = rowValidity(ctx, codesBuf, codePType, codesValidity, poolValidity, n);
         // Carry the offsets ptype that `dictValues` actually materialized. `toOffsetMode`
         // only builds fresh I64 offsets on its slow path; on the fast path it returns the
         // decoded values array unchanged, keeping its own ptype (e.g. FSST decompresses to
-        // I32 offsets). Hardcoding I64 here made the DictMode carrier disagree with its
+        // I32 offsets). Hardcoding I64 here made the VarBinDictArray carrier disagree with its
         // buffer width (4-byte stride read as 8) and threw IOOBE — see #215.
         Array dict = VarBinArray.ofDict(ctx.dtype(), n,
                 dictValues.bytesSegment(), dictValues.offsetsSegment(), dictValues.offsetsPtype(),

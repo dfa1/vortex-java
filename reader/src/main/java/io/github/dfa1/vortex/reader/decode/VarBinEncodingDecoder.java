@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 
@@ -48,6 +48,6 @@ public final class VarBinEncodingDecoder implements EncodingDecoder {
 
         MemorySegment bytes = ctx.buffer(0);
 
-        return new VarBinArray.OffsetMode(ctx.dtype(), n, bytes, offsets, offsetsPtype);
+        return new VarBinOffsetArray(ctx.dtype(), n, bytes, offsets, offsetsPtype);
     }
 }
