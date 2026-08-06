@@ -35,7 +35,7 @@ Adopt Jazzer via the `com.code-intelligence:jazzer-junit` test dependency, in tw
 
 ### Seed corpus
 
-Existing `.vortex` integration fixtures seed `reader/src/test/resources/fuzz-corpus/full-file/`.
+Existing `.vortex` integration fixtures seed `fuzz/src/test/resources/fuzz-corpus/full-file/`.
 A small extraction tool walks those fixtures and dumps each segment to
 `core/src/test/resources/fuzz-corpus/<encoding>/`, producing per-encoding sub-corpora without
 hand-crafting inputs.
