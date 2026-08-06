@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.reader;
+package io.github.dfa1.vortex.fuzz;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -6,6 +6,7 @@ import java.nio.file.Path;
 
 import com.code_intelligence.jazzer.junit.FuzzTest;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
@@ -21,7 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 /// on disk would hit.
 ///
 /// Tagged `fuzz` so a routine build skips it; run with
-/// `./mvnw test -pl reader -am -Dtest=VortexReaderFuzzTest -Dvortex.reader.excludedGroups=`
+/// `./mvnw test -pl fuzz -am -Dvortex.fuzz.excludedGroups=`
 /// (add `JAZZER_FUZZ=1` to actually explore new inputs rather than replay the corpus).
 @Tag("fuzz")
 class VortexReaderFuzzTest {

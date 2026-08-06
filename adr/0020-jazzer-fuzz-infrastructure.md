@@ -1,8 +1,10 @@
 # ADR 0020: Jazzer fuzz testing infrastructure
 
-- **Status:** Accepted — fuzz mode landed for two boundary targets (`VortexReader` full-file
-  open, `PostscriptParser.parseBlobs`); seed corpus, per-encoding targets, differential fuzzing,
-  regression-corpus wiring, nightly CI, and OSS-Fuzz submission still pending
+- **Status:** Accepted — fuzz mode landed as a dedicated `fuzz` module with one target
+  (`VortexReader` full-file open); direct `PostscriptParser.parseBlobs` fuzzing is deferred (it is
+  package-private, so a separate module needs a cross-module access seam); seed corpus,
+  per-encoding targets, differential fuzzing, regression-corpus wiring, nightly CI, and OSS-Fuzz
+  submission still pending
 - **Date:** 2026-07-12
 - **Deciders:** project maintainer
 - **Related:** [ADR 0003 — VortexException sanitization](0003-vortex-exception-sanitization.md),

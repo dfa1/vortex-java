@@ -14,14 +14,6 @@
 		25+), no JNI, no sun.misc.Unsafe.
 	</description>
 
-	<properties>
-		<!-- JUnit tags excluded from a routine `./mvnw test` / `./mvnw verify`. Defaults to `fuzz`
-		     so the Jazzer @FuzzTest targets never run by default — see the surefire plugin config
-		     below. Override on the CLI to opt in, e.g. `-Dvortex.reader.excludedGroups=` (empty)
-		     runs every tag; a literal pom value could not be cleared this way. -->
-		<vortex.reader.excludedGroups>fuzz</vortex.reader.excludedGroups>
-	</properties>
-
 	<dependencies>
 		<!-- production -->
 		<dependency>
@@ -61,30 +53,10 @@
 			<artifactId>mockito-junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>com.code-intelligence</groupId>
-			<artifactId>jazzer-junit</artifactId>
-			<scope>test</scope>
-		</dependency>
 	</dependencies>
 
 	<build>
 		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration>
-					<!-- Exclude the Jazzer @FuzzTest targets from a routine `./mvnw test` /
-					     `./mvnw verify`: fuzzing is opt-in and, under JAZZER_FUZZ=1, unbounded and
-					     non-deterministic — not something a default build should run. Bound to a
-					     property (not a literal) so the CLI can clear it:
-					     `-Dvortex.reader.excludedGroups=` opts every fuzz target back in. This
-					     exclusion filters even an explicit `-Dtest=VortexReaderFuzzTest` class
-					     selection, so running a fuzz target always requires clearing the property
-					     as well. -->
-					<excludedGroups>${vortex.reader.excludedGroups}</excludedGroups>
-				</configuration>
-			</plugin>
 			<!-- Publish a test-jar so writer/ tests can reuse reader test helpers
 			     (TestRegistry, TestDecodeContexts, DecodeTestHelper). -->
 			<plugin>
@@ -96,15 +68,6 @@
 						<goals>
 							<goal>test-jar</goal>
 						</goals>
-						<configuration>
-							<!-- Keep this module's JUnit platform config out of the published
-							     test-jar. JUnit reads whichever junit-platform.properties it finds
-							     first on the classpath, so shipping ours would silently become the
-							     config of every consumer of this test-jar (writer/). -->
-							<excludes>
-								<exclude>junit-platform.properties</exclude>
-							</excludes>
-						</configuration>
 					</execution>
 				</executions>
 			</plugin>
