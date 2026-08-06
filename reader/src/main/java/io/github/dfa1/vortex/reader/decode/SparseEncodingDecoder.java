@@ -26,6 +26,7 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import java.io.IOException;
@@ -267,12 +268,15 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
         checkPatchChild(idxData, numPatches, "indices");
 
-        MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
         if (numPatches == 0) {
-            MemorySegment outBytes = ctx.arena().allocate(1);
-            Array result = new VarBinOffsetArray(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+            // No patch lands in this range, so every row is the fill — the common case for a
+            // genuinely sparse column. An (n + 1) offsets table of all zeros says exactly that
+            // and costs 4n bytes; the constant carrier says it in O(1). `withSparseValidity`
+            // still nulls every row when the fill scalar is null, as before.
+            Array result = new VarBinConstantArray(ctx.dtype(), n, new byte[0]);
             return withSparseValidity(ctx, result, fillValid, null, idxData, 0, n, offset);
         }
+        MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
 
         // A nullable patch child arrives wrapped in `vortex.masked`; unwrap it to reach the
         // raw VarBin values and carry the per-patch validity bits into the row validity (#232).

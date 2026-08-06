@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -188,6 +189,47 @@ class SparseEncodingDecoderTest {
         assertThat(result).isInstanceOf(VarBinArray.class).isNotInstanceOf(MaskedArray.class);
         VarBinArray inner = (VarBinArray) result;
         assertThat(inner.getBytes(1)).containsExactly('b');
+    }
+
+    /// A sparse utf8 column whose scanned range holds no patch at all — the common case for a
+    /// genuinely sparse column — must not pay an `(n + 1)` offsets table of all zeros to say
+    /// "every row is the fill" (#340). The constant carrier represents it in O(1).
+    @Test
+    void utf8ZeroPatches_returnsConstantCarrier() {
+        // Given — a non-null string fill and no patches over 5 rows.
+        MemorySegment[] segs = {utf8Fill("x"), empty(), empty(), empty()};
+        ArrayNode idxNode = primitiveNode(1);
+        ArrayNode valNode = varBinNode(2, 3);
+
+        // When
+        Array result = decode(DType.UTF8, 0, 0, PType.U32, 5, segs, idxNode, valNode);
+
+        // Then — every row renders as before (the empty string), with no buffer behind it.
+        assertThat(result).isInstanceOf(VarBinConstantArray.class).isNotInstanceOf(MaskedArray.class);
+        VarBinArray inner = (VarBinArray) result;
+        assertThat(inner.length()).isEqualTo(5);
+        assertThat(inner.getString(0)).isEmpty();
+        assertThat(inner.getString(4)).isEmpty();
+        assertThat(inner.getByteLength(2)).isZero();
+    }
+
+    /// The null-fill half of #340: with no patches and a null fill, every row is null. The
+    /// carrier changed but the row validity must not — this is what keeps the swap behavior
+    /// preserving rather than merely allocation-free.
+    @Test
+    void utf8ZeroPatchesNullFill_nullsEveryRow() {
+        // Given — a null fill and no patches over 3 rows.
+        MemorySegment[] segs = {nullFill(), empty(), empty(), empty()};
+        ArrayNode idxNode = primitiveNode(1);
+        ArrayNode valNode = varBinNode(2, 3);
+
+        // When
+        Array result = decode(nullableUtf8(), 0, 0, PType.U32, 3, segs, idxNode, valNode);
+
+        // Then
+        MaskedArray masked = assertMasked(result);
+        assertValidity(masked, false, false, false);
+        assertThat(masked.inner()).isInstanceOf(VarBinConstantArray.class);
     }
 
     /// A sparse node with 3 children must be rejected: the spec requires exactly 2

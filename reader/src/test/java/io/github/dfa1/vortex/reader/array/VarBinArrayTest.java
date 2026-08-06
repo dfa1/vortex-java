@@ -384,6 +384,20 @@ class VarBinArrayTest {
             assertThatThrownBy(() -> sut.getString(2)).isInstanceOf(IndexOutOfBoundsException.class);
         }
 
+        /// The zero-length constant is the shape `vortex.sparse` produces for a patch-free range
+        /// (#340) — `n` empty strings. Every accessor must handle an empty backing array rather
+        /// than assume at least one byte.
+        @Test
+        void emptyValue_readsAsEmptyStringOnEveryRow() {
+            // Given
+            VarBinArray sut = new VarBinConstantArray(UTF8, 3, new byte[0]);
+
+            // When / Then
+            assertThat(sut.getString(0)).isEmpty();
+            assertThat(sut.getBytes(2)).isEmpty();
+            assertThat(sut.getByteLength(1)).isZero();
+        }
+
         @Test
         void limited_returnsShorterConstant() {
             // Given
