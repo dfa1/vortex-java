@@ -86,6 +86,11 @@ public final class PTypeIO {
 
     /// Write `bits` at `offset` in `seg`, narrowed or bit-reinterpreted to the ptype's carrier.
     /// Float bits use `Float.intBitsToFloat` / `Double.longBitsToDouble` semantics.
+    ///
+    /// @param seg    destination segment
+    /// @param offset byte offset within `seg` to write at
+    /// @param ptype  physical type deciding the carrier width and interpretation
+    /// @param bits   the value, as raw bits widened to a `long`
     public static void set(MemorySegment seg, long offset, PType ptype, long bits) {
         try {
             SETTERS[ptype.ordinal()].invokeExact(seg, offset, bits);
@@ -96,6 +101,12 @@ public final class PTypeIO {
 
     /// Bulk-copy a primitive Java array into a freshly allocated little-endian segment.
     /// Element layout conversion (host order → LE) is delegated to `MemorySegment.copy`.
+    ///
+    /// @param ptype      physical type deciding the element width
+    /// @param typedArray the source array; its runtime type must match `ptype`
+    ///                   (`byte[]` for I8/U8, `short[]` for I16/U16, and so on)
+    /// @param count      number of leading elements to copy
+    /// @return a freshly allocated little-endian segment holding `count` elements
     public static MemorySegment copyArray(PType ptype, Object typedArray, int count) {
         MemorySegment src;
         ValueLayout srcLayout;
