@@ -129,6 +129,8 @@ public sealed interface DType
     /// Non-nullable [Primitive] of [PType#F64].
     Primitive F64 = new Primitive(PType.F64, false);
 
+    /// Creates a non-nullable [Decimal] of the given precision and scale.
+    ///
     /// @param precision total number of significant decimal digits
     /// @param scale     number of digits to the right of the decimal point
     /// @return non-nullable [Decimal]
@@ -327,6 +329,8 @@ public sealed interface DType
         /// that would inflate parser allocations.
         public static final MemorySize MAX_METADATA_SIZE = MemorySize.ofKiB(64);
 
+        /// Bounds the metadata blob, which arrives from an untrusted file.
+        ///
         /// @throws VortexException if `metadata` carries more than
         ///         [#MAX_METADATA_SIZE] readable bytes
         public Extension {

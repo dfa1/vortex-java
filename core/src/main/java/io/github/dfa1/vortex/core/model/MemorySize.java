@@ -12,6 +12,8 @@ package io.github.dfa1.vortex.core.model;
 /// @param bytes the byte count; never negative
 public record MemorySize(long bytes) {
 
+    /// Rejects a negative size at construction, so no caller downstream has to re-check one.
+    ///
     /// @throws IllegalArgumentException if `bytes` is negative
     public MemorySize {
         if (bytes < 0) {

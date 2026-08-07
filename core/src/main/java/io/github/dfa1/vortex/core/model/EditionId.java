@@ -16,6 +16,8 @@ import java.util.Objects;
 /// @param version  distinguishes editions cut in the same month; normally `0`
 public record EditionId(EditionFamily family, YearMonth cutMonth, int version) {
 
+    /// Rejects a partially specified id: both the family and the cut month identify an edition.
+    ///
     /// @throws NullPointerException if `family` or `cutMonth` is `null`
     public EditionId {
         Objects.requireNonNull(family, "family");
