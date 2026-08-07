@@ -8,6 +8,12 @@ import java.lang.foreign.ValueLayout;
 
 /// Buffer-backed [BoolArray] — the fallback used when an encoding decoder
 /// either materializes the output eagerly or has no lazy variant of its own.
+///
+/// [#getBoolean(long)] indexes `buffer` without a bounds check, so the buffer must hold at
+/// least `(length + 7) / 8` bytes. Every decoder that builds the bitmap itself allocates
+/// exactly that; the one that passes a file buffer through
+/// (`io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder`) checks the size once before
+/// constructing this, rather than paying a bound per row.
 public final class MaterializedBoolArray extends AbstractMaterializedArray implements BoolArray {
 
     /// Constructs a `MaterializedBoolArray` backed by the given bit-packed buffer.

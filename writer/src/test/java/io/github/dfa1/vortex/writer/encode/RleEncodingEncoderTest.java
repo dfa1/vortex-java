@@ -315,8 +315,12 @@ class RleEncodingEncoderTest {
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
 
             List<MemorySegment> originalBufs = new ArrayList<>(encoded.buffers());
-            MemorySegment validityBuf = MemorySegment.ofArray(new byte[]{0x05});
-            originalBufs.add(validityBuf);
+            // The indices child declares `indices_len` rows, which the encoder pads to a 1024
+            // chunk boundary, so its validity bitmap has to cover all 1024 — not just the four
+            // rows this fixture cares about. Bits 0 and 2 set: rows 0 and 2 valid, 1 and 3 null.
+            byte[] validityBits = new byte[(1024 + 7) / 8];
+            validityBits[0] = 0x05;
+            originalBufs.add(MemorySegment.ofArray(validityBits));
             MemorySegment[] segments = originalBufs.toArray(new MemorySegment[0]);
 
             ArrayNode origRoot = toArrayNode(encoded.rootNode());
