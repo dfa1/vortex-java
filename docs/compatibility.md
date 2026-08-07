@@ -134,7 +134,7 @@ decoder falls into one of three shapes:
 | `vortex.primitive`          | Zero-copy     | Zero-copy     | mmap slice                                                               |
 | `vortex.bool`               | Zero-copy     | Zero-copy     | mmap slice (bit-packed)                                                  |
 | `vortex.null`               | n/a           | n/a           | no per-row data                                                          |
-| `vortex.bytebool`           | Zero-copy     | Zero-copy     | mmap slice                                                               |
+| `vortex.bytebool`           | Zero-copy     | Zero-copy     | `LazyByteBoolArray` — mmap slice read byte-per-row; bitmap on `materialize` |
 | `vortex.zigzag`             | Lazy          | Lazy          | `LazyZigZagXxxArray` (I8/I16/I32/I64); broadcast → `LazyConstantXxxArray`, ADR 0010 + 0015 |
 | `vortex.constant`           | Lazy          | Lazy          | `LazyConstantXxxArray` (primitive + bool + decimal) + `VarBinConstantArray` (Utf8/Binary); per-row broadcast, no buffer, ADR 0015 |
 | `vortex.ext`                | Zero-copy     | Zero-copy     | wraps storage                                                            |
