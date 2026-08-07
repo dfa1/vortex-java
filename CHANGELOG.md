@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] — 2026-08-07
+
+A reader-decode pass: one wrong-value bug, four malformed-input paths that escaped as raw JDK
+exceptions or unbounded allocations, and six encodings that materialized a full column where the
+encoding's own premise is that most rows are not stored.
+
 ### Fixed
 
 - A `vortex.bytebool` column is now read in place from its mmapped buffer, as `docs/compatibility.md` already claimed: decode allocated an `n/8`-byte bitmap and ran a read-modify-write over every row to fill it, for the one boolean encoding whose buffer is already indexable per row. Callers that want a bitmap still get one from `materialize`. ([#339](https://github.com/dfa1/vortex-java/issues/339))
