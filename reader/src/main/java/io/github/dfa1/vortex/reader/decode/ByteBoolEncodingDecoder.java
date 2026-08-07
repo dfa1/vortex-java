@@ -1,14 +1,13 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
+import io.github.dfa1.vortex.reader.array.LazyByteBoolArray;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
-/// Read-only decoder for `vortex.bytebool` — packs the input byte buffer into the
-/// bit-packed [MaterializedBoolArray] layout used by `vortex.bool`.
+/// Read-only decoder for `vortex.bytebool` — one byte per boolean, read in place.
 public final class ByteBoolEncodingDecoder implements EncodingDecoder {
 
     @Override
@@ -20,15 +19,16 @@ public final class ByteBoolEncodingDecoder implements EncodingDecoder {
     public Array decode(DecodeContext ctx) {
         long n = ctx.rowCount();
         MemorySegment bytes = ctx.buffer(0);
-        long packedBytes = (n + 7) >>> 3;
-        MemorySegment packed = ctx.arena().allocate(packedBytes > 0 ? packedBytes : 1);
-        for (long i = 0; i < n; i++) {
-            if (bytes.get(ValueLayout.JAVA_BYTE, i) != 0) {
-                long byteIdx = i >>> 3;
-                byte cur = packed.get(ValueLayout.JAVA_BYTE, byteIdx);
-                packed.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (i & 7))));
-            }
+        // The buffer comes straight from the file and holds one byte per row, so a shorter one
+        // is malformed. Checked once here, in O(1), rather than per row: it keeps
+        // LazyByteBoolArray's accessor uniform, and a crafted file fails as a VortexException
+        // instead of a raw IndexOutOfBoundsException on whichever row runs off the end
+        // (ADR 0003) — which is what the eager packing loop this replaces did.
+        if (bytes.byteSize() < n) {
+            throw new VortexException(EncodingId.VORTEX_BYTEBOOL,
+                    "bytebool buffer of " + bytes.byteSize() + " byte(s) is shorter than the "
+                            + n + " declared row(s)");
         }
-        return new MaterializedBoolArray(ctx.dtype(), n, packed);
+        return new LazyByteBoolArray(ctx.dtype(), n, bytes);
     }
 }

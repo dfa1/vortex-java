@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `vortex.bytebool` column is now read in place from its mmapped buffer, as `docs/compatibility.md` already claimed: decode allocated an `n/8`-byte bitmap and ran a read-modify-write over every row to fill it, for the one boolean encoding whose buffer is already indexable per row. Callers that want a bitmap still get one from `materialize`. ([#339](https://github.com/dfa1/vortex-java/issues/339))
+- A `vortex.bytebool` buffer shorter than the declared row count now fails as `VortexException` instead of a raw `IndexOutOfBoundsException` on whichever row ran off the end. ([#339](https://github.com/dfa1/vortex-java/issues/339))
+
 - A malformed `fastlanes.delta` column no longer fails with a raw JDK exception: a row window running past the elements the chunks reconstruct threw `ArrayIndexOutOfBoundsException`, and an absurd or negative declared element count sized a heap array before anything checked it (`NegativeArraySizeException`, or `OutOfMemoryError`). All now fail as `VortexException`. ([#338](https://github.com/dfa1/vortex-java/issues/338))
 - A `fastlanes.delta` column no longer routes its decode through four row-scaled heap `long[]` arrays, every value widened to 8 bytes whatever the column's width; values are reconstructed into a single arena segment at the ptype's real width, and only the chunks overlapping the requested rows are reconstructed at all. ([#338](https://github.com/dfa1/vortex-java/issues/338))
 
