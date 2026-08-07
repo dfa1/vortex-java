@@ -89,7 +89,8 @@ class DeltaEncodingDecoderTest {
             "1024, 0, 2000",     // more rows than the chunks reconstruct
             "1024, 900, 200",    // window starts inside the chunk but runs off its end
             "1024, -1, 4",       // negative start position
-            "-1024, 0, 4"        // negative element count
+            "-1024, 0, 4",       // negative element count
+            "-9223372036854775808, 1, 4"  // negative enough that `deltasLen - offset` wraps positive
     })
     void decode_windowOutsideDeltas_throws(long deltasLen, int offset, long rowCount) {
         // Given — metadata whose row window is not covered by `deltasLen` elements

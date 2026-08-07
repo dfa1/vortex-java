@@ -65,7 +65,11 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         // it — NegativeArraySizeException or OutOfMemoryError, neither a VortexException
         // (ADR 0003). Checked before any child decode, so a bogus length never drives an
         // allocation.
-        if (offset < 0 || rowCount > deltasLen - offset) {
+        // `deltasLen < 0` is checked on its own rather than left to the subtraction: a
+        // sufficiently negative one makes `deltasLen - offset` wrap positive, which passes a
+        // window check it should fail, and the chunk loop then simply does nothing and hands
+        // back a zero-filled array — a malformed file answered instead of rejected.
+        if (offset < 0 || deltasLen < 0 || rowCount > deltasLen - offset) {
             throw new VortexException(EncodingId.FASTLANES_DELTA,
                     "row window [" + offset + ", " + (offset + rowCount) + ") outside the "
                             + deltasLen + " delta element(s)");
