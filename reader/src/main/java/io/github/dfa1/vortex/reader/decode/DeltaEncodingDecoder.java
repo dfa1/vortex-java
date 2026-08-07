@@ -83,11 +83,13 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         long basesCap = SegmentBroadcast.capacity(basesSeg, elemBytes);
         long deltasCap = SegmentBroadcast.capacity(deltasSeg, elemBytes);
 
+        // The only row-scaled allocation: the output itself, off-heap and at the column's own
+        // width. Everything below is fixed-size scratch — one chunk's worth, cache-resident,
+        // reused across chunks.
         MemorySegment out = ctx.arena().allocate(rowCount * elemBytes);
         long[] chunkBases = new long[lanes];
         long[] chunkDeltas = new long[FastLanes.CHUNK];
         long[] chunkUndelta = new long[FastLanes.CHUNK];
-        long[] untransposed = new long[FastLanes.CHUNK];
 
         // Each chunk carries its own lane bases, so chunks are independent and only those
         // overlapping the requested window are reconstructed — reading the tail of a long
@@ -99,16 +101,65 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
             readElements(basesSeg, ptype, basesCap, chunk * lanes, lanes, chunkBases);
             readElements(deltasSeg, ptype, deltasCap, chunk * FastLanes.CHUNK, FastLanes.CHUNK, chunkDeltas);
             undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
-            for (int i = 0; i < FastLanes.CHUNK; i++) {
-                untransposed[FastLanes.transposeIndex(i)] = chunkUndelta[i];
-            }
-            // The window clips only the first and last chunk; the ones between copy whole.
-            long chunkStart = chunk * FastLanes.CHUNK;
-            int from = (int) Math.max(0, offset - chunkStart);
-            int to = (int) Math.min(FastLanes.CHUNK, offset + rowCount - chunkStart);
-            writeElements(out, ptype, chunkStart + from - offset, untransposed, from, to - from);
+            scatterChunk(out, ptype, chunkUndelta, chunk * FastLanes.CHUNK - offset, rowCount);
         }
-        return array(ctx, ptype, rowCount, out);
+        return array(ctx, ptype, rowCount, out.asReadOnly());
+    }
+
+    /// Untransposes one chunk straight into the output window.
+    ///
+    /// The value at in-chunk position `i` belongs at logical index
+    /// `base + FastLanes#transposeIndex(i)`, so untransposing and window-shifting happen in the
+    /// same store — no second chunk-sized buffer, and no separate pass to slice it.
+    ///
+    /// `base` is negative for the leading chunk of an offset-sliced array, and the trailing
+    /// chunk can run past `rowCount`. One unsigned comparison covers both: a negative index
+    /// reads as a huge unsigned value and fails the same test as an overrun. The stores are a
+    /// permutation scatter, so they never vectorize regardless, and the compare costs nothing
+    /// the untranspose was not already paying. The ptype switch is hoisted out of the loop so
+    /// each body stays uniform (CLAUDE.md hot-loop rule).
+    ///
+    /// @param out      output segment of `rowCount` elements
+    /// @param ptype    output element type
+    /// @param values   one chunk of reconstructed values, in transposed order
+    /// @param base     output index the chunk's logical position 0 maps to; may be negative
+    /// @param rowCount number of rows in the output window
+    private static void scatterChunk(MemorySegment out, PType ptype, long[] values, long base, long rowCount) {
+        switch (ptype) {
+            case I8, U8 -> {
+                for (int i = 0; i < FastLanes.CHUNK; i++) {
+                    long at = base + FastLanes.transposeIndex(i);
+                    if (Long.compareUnsigned(at, rowCount) < 0) {
+                        out.set(ValueLayout.JAVA_BYTE, at, (byte) values[i]);
+                    }
+                }
+            }
+            case I16, U16 -> {
+                for (int i = 0; i < FastLanes.CHUNK; i++) {
+                    long at = base + FastLanes.transposeIndex(i);
+                    if (Long.compareUnsigned(at, rowCount) < 0) {
+                        out.setAtIndex(VortexFormat.LE_SHORT, at, (short) values[i]);
+                    }
+                }
+            }
+            case I32, U32 -> {
+                for (int i = 0; i < FastLanes.CHUNK; i++) {
+                    long at = base + FastLanes.transposeIndex(i);
+                    if (Long.compareUnsigned(at, rowCount) < 0) {
+                        out.setAtIndex(VortexFormat.LE_INT, at, (int) values[i]);
+                    }
+                }
+            }
+            case I64, U64 -> {
+                for (int i = 0; i < FastLanes.CHUNK; i++) {
+                    long at = base + FastLanes.transposeIndex(i);
+                    if (Long.compareUnsigned(at, rowCount) < 0) {
+                        out.setAtIndex(VortexFormat.LE_LONG, at, values[i]);
+                    }
+                }
+            }
+            default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
+        }
     }
 
     /// Wraps a decoded segment in the `Materialized*Array` matching `ptype`.
@@ -159,7 +210,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
     private static void readElements(MemorySegment buf, PType ptype, long cap, long firstIdx,
             int count, long[] out) {
         if (firstIdx + count <= cap) {
-            readContiguous(buf, ptype, firstIdx * ptype.byteSize(), count, out);
+            readContiguous(buf, ptype, firstIdx, count, out);
             return;
         }
         if (cap == 0) {
@@ -169,41 +220,41 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         readBroadcast(buf, ptype, cap, firstIdx, count, out);
     }
 
-    private static void readContiguous(MemorySegment buf, PType ptype, long base, int count, long[] out) {
+    private static void readContiguous(MemorySegment buf, PType ptype, long from, int count, long[] out) {
         switch (ptype) {
             case I8 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = buf.get(ValueLayout.JAVA_BYTE, base + i);
+                    out[i] = buf.get(ValueLayout.JAVA_BYTE, from + i);
                 }
             }
             case U8 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, base + i));
+                    out[i] = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, from + i));
                 }
             }
             case I16 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = buf.get(VortexFormat.LE_SHORT, base + i * 2L);
+                    out[i] = buf.getAtIndex(VortexFormat.LE_SHORT, from + i);
                 }
             }
             case U16 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, base + i * 2L));
+                    out[i] = Short.toUnsignedLong(buf.getAtIndex(VortexFormat.LE_SHORT, from + i));
                 }
             }
             case I32 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = buf.get(VortexFormat.LE_INT, base + i * 4L);
+                    out[i] = buf.getAtIndex(VortexFormat.LE_INT, from + i);
                 }
             }
             case U32 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, base + i * 4L));
+                    out[i] = Integer.toUnsignedLong(buf.getAtIndex(VortexFormat.LE_INT, from + i));
                 }
             }
             case I64, U64 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = buf.get(VortexFormat.LE_LONG, base + i * 8L);
+                    out[i] = buf.getAtIndex(VortexFormat.LE_LONG, from + i);
                 }
             }
             default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
@@ -233,41 +284,5 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         };
     }
 
-    /// Writes `src[from, from + count)` into `out` at element index `dstIdx`, narrowed to
-    /// `ptype`'s width. The ptype switch is hoisted out of the loop so each body stays uniform.
-    ///
-    /// @param out    destination segment, at `ptype`'s width
-    /// @param ptype  element type
-    /// @param dstIdx element index in `out` to write the first value at
-    /// @param src    reconstructed values, widened to `long`
-    /// @param from   first index in `src` to write
-    /// @param count  number of elements to write
-    /// @throws VortexException if `ptype` is not an integer ptype
-    private static void writeElements(MemorySegment out, PType ptype, long dstIdx, long[] src,
-            int from, int count) {
-        switch (ptype) {
-            case I8, U8 -> {
-                for (int i = 0; i < count; i++) {
-                    out.set(ValueLayout.JAVA_BYTE, dstIdx + i, (byte) src[from + i]);
-                }
-            }
-            case I16, U16 -> {
-                for (int i = 0; i < count; i++) {
-                    out.setAtIndex(VortexFormat.LE_SHORT, dstIdx + i, (short) src[from + i]);
-                }
-            }
-            case I32, U32 -> {
-                for (int i = 0; i < count; i++) {
-                    out.setAtIndex(VortexFormat.LE_INT, dstIdx + i, (int) src[from + i]);
-                }
-            }
-            case I64, U64 -> {
-                for (int i = 0; i < count; i++) {
-                    out.setAtIndex(VortexFormat.LE_LONG, dstIdx + i, src[from + i]);
-                }
-            }
-            default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
-        }
-    }
 
 }

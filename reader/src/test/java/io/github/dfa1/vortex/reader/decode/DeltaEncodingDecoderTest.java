@@ -3,17 +3,23 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.compute.FastLanes;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -49,6 +55,171 @@ class DeltaEncodingDecoderTest {
 
         // Then
         assertThat(result.length()).isZero();
+    }
+
+    /// Round-trips a known sequence through the wire form, for every integer width. The values
+    /// step by a per-lane amount so the prefix sum is non-trivial and a lane mix-up shows up.
+    ///
+    /// The previous decoder staged this through four row-scaled heap `long[]`s (bases, deltas,
+    /// a full-length `decoded`, and a `result` slice of it), widening every value to 8 bytes
+    /// whatever the column's width; values now go straight into one arena segment at the
+    /// column's own width (#338). The reconstruction is what must not change.
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "I16", "I32", "I64", "U8", "U16", "U32", "U64"})
+    void decode_roundTripsASingleChunk(PType ptype) {
+        // Given — 1024 values, small enough to survive I8's 8-bit width
+        long[] values = new long[FL_CHUNK_SIZE];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = (i * 3) & 0x3F;
+        }
+
+        // When
+        LongArray result = decodeDelta(ptype, values, 0, values.length);
+
+        // Then
+        assertValues(result, values, 0, values.length);
+    }
+
+    /// Multi-chunk: the per-chunk scratch is reused across iterations, so a chunk boundary is
+    /// where a stale-scratch or wrong-base bug would surface. Two chunks plus a partial third.
+    @Test
+    void decode_roundTripsAcrossChunkBoundaries() {
+        // Given
+        long[] values = new long[FL_CHUNK_SIZE * 2 + 100];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i * 7L;
+        }
+
+        // When
+        LongArray result = decodeDelta(PType.I64, values, 0, values.length);
+
+        // Then
+        assertValues(result, values, 0, values.length);
+    }
+
+    /// A non-zero `offset` slices the decoded values, and nothing covered it before. It is the
+    /// sharp edge of writing chunks straight into the output: the leading chunk now maps to a
+    /// negative output index and the trailing chunk runs past the row count, both of which the
+    /// scatter has to drop rather than write out of bounds. The encoder always emits offset 0,
+    /// so this shape only arrives from a sliced array written elsewhere.
+    @ParameterizedTest
+    @ValueSource(ints = {1, 7, 1023, 1024, 1025, 2000})
+    void decode_offsetSlicesTheWindow(int offset) {
+        // Given
+        long[] values = new long[FL_CHUNK_SIZE * 3];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i * 11L;
+        }
+        int rowCount = 500;
+
+        // When
+        LongArray result = decodeDelta(PType.I64, values, offset, rowCount);
+
+        // Then — rows are values[offset .. offset + rowCount)
+        assertValues(result, values, offset, rowCount);
+    }
+
+    /// The window may stop short of the chunk it lands in, so the trailing chunk is only
+    /// partially written. Rows past `rowCount` must not be stored at all.
+    @Test
+    void decode_rowCountShorterThanTheDecodedLength() {
+        // Given
+        long[] values = new long[FL_CHUNK_SIZE * 2];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i * 5L;
+        }
+
+        // When
+        LongArray result = decodeDelta(PType.I64, values, 0, 3);
+
+        // Then
+        assertThat(result.length()).isEqualTo(3L);
+        assertValues(result, values, 0, 3);
+    }
+
+    private static void assertValues(LongArray actual, long[] expected, int offset, int count) {
+        assertThat(actual.length()).isEqualTo((long) count);
+        for (int i = 0; i < count; i++) {
+            assertThat(actual.getLong(i)).as("row %d", i).isEqualTo(expected[offset + i]);
+        }
+    }
+
+    /// Decodes `values` through the `fastlanes.delta` wire form, mirroring
+    /// `DeltaEncodingEncoder`'s transpose-then-per-lane-delta layout. Built here rather than
+    /// called: the writer module is not on the reader's test classpath, and the encoder never
+    /// emits a non-zero `offset`, which is precisely the case worth covering.
+    private static LongArray decodeDelta(PType ptype, long[] values, int offset, int rowCount) {
+        int lanes = FastLanes.lanes(ptype);
+        int typeBits = ptype.bits();
+        long mask = FastLanes.lowMask(typeBits);
+        int numChunks = (values.length + FastLanes.CHUNK - 1) / FastLanes.CHUNK;
+        long paddedLen = (long) numChunks * FastLanes.CHUNK;
+
+        long[] basesAll = new long[numChunks * lanes];
+        long[] deltasAll = new long[(int) paddedLen];
+        long[] transposed = new long[FastLanes.CHUNK];
+
+        for (int chunk = 0; chunk < numChunks; chunk++) {
+            long[] chunkBuf = new long[FastLanes.CHUNK];
+            int start = chunk * FastLanes.CHUNK;
+            int end = Math.min(start + FastLanes.CHUNK, values.length);
+            for (int i = start; i < end; i++) {
+                chunkBuf[i - start] = values[i] & mask;
+            }
+            for (int i = 0; i < FastLanes.CHUNK; i++) {
+                transposed[i] = chunkBuf[FastLanes.transposeIndex(i)];
+            }
+            System.arraycopy(transposed, 0, basesAll, chunk * lanes, lanes);
+            for (int lane = 0; lane < lanes; lane++) {
+                long prev = basesAll[chunk * lanes + lane] & mask;
+                for (int row = 0; row < typeBits; row++) {
+                    int idx = FastLanes.iterateIndex(row, lane);
+                    long next = transposed[idx] & mask;
+                    deltasAll[chunk * FastLanes.CHUNK + idx] = (next - prev) & mask;
+                    prev = next;
+                }
+            }
+        }
+
+        MemorySegment meta = MemorySegment.ofArray(new ProtoDeltaMetadata(paddedLen, offset).encode());
+        ArrayNode bases = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode deltas = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA, meta, new ArrayNode[]{bases, deltas}, new int[0]);
+
+        MemorySegment[] segs = {toSegment(basesAll, ptype), toSegment(deltasAll, ptype)};
+        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), rowCount, segs,
+                REGISTRY, Arena.ofAuto());
+        Array decoded = SUT.decode(ctx);
+        return new WidenedLongView(decoded);
+    }
+
+    private static MemorySegment toSegment(long[] longs, PType ptype) {
+        return PrimitiveArrays.fromLongs(longs, ptype, Arena.ofAuto());
+    }
+
+    /// Reads any narrow decoded array as `long` so one assertion helper covers every width.
+    private record WidenedLongView(Array inner) implements LongArray {
+
+        @Override
+        public DType dtype() {
+            return inner.dtype();
+        }
+
+        @Override
+        public long length() {
+            return inner.length();
+        }
+
+        @Override
+        public long getLong(long i) {
+            return switch (inner) {
+                case ByteArray ba -> ba.getInt(i);
+                case ShortArray sa -> sa.getInt(i);
+                case IntArray ia -> ia.getInt(i);
+                case LongArray la -> la.getLong(i);
+                default -> throw new IllegalStateException("unexpected array type " + inner.getClass());
+            };
+        }
     }
 
     @Test
