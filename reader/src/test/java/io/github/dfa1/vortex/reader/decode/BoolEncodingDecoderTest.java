@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -9,6 +10,7 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
@@ -16,6 +18,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class BoolEncodingDecoderTest {
 
@@ -103,6 +106,73 @@ class BoolEncodingDecoderTest {
         BoolArray inner = (BoolArray) masked.inner();
         assertThat(inner.getBoolean(0)).isTrue();
         assertThat(inner.getBoolean(2)).isFalse();
+    }
+
+    /// The bitmap is untrusted and needs one byte per 8 rows. `MaterializedBoolArray` indexes
+    /// its buffer without a per-row bound — deliberately, since every other decoder that builds
+    /// a bitmap allocates it at exactly the right size — so a short one used to fault as a raw
+    /// `IndexOutOfBoundsException` on whichever row ran off the end, or hand the truncated
+    /// buffer straight out of `materialize`. It must be a [VortexException] (ADR 0003).
+    ///
+    /// The row counts are one past each byte boundary, where a bitmap is at its most
+    /// deceptive: 9 rows need 2 bytes, not the 1 that covers the first 8.
+    @ParameterizedTest
+    @CsvSource({"9, 1", "17, 2", "65, 8", "8, 0"})
+    void decode_bitmapShorterThanRowCount_throws(int rows, int suppliedBytes) {
+        // Given
+        MemorySegment bits = MemorySegment.ofArray(new byte[suppliedBytes]);
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{0});
+        ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
+        DecodeContext ctx = new DecodeContext(node, DTypes.BOOL, rows, new MemorySegment[]{bits},
+                registry, Arena.ofAuto());
+        var sut = new BoolEncodingDecoder();
+
+        // When / Then
+        assertThatThrownBy(() -> sut.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("bool bitmap");
+    }
+
+    /// The same guard reached through the validity child, which decodes as its own
+    /// `vortex.bool` array: a values bitmap long enough for the row count paired with a
+    /// truncated validity bitmap must fail just as loudly.
+    @Test
+    void decode_nullable_validityBitmapTooShort_throws() {
+        // Given — 9 rows of values (2 bytes) but a 1-byte validity bitmap
+        MemorySegment bits = MemorySegment.ofArray(new byte[2]);
+        MemorySegment validBits = MemorySegment.ofArray(new byte[1]);
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[]{validityNode}, new int[]{0});
+        ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
+        DecodeContext ctx = new DecodeContext(node, DTypes.BOOL_N, 9,
+                new MemorySegment[]{bits, validBits}, registry, Arena.ofAuto());
+        var sut = new BoolEncodingDecoder();
+
+        // When / Then
+        assertThatThrownBy(() -> sut.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("bool bitmap");
+    }
+
+    /// A bitmap longer than the row count needs is legal — trailing padding, or a buffer shared
+    /// with a longer array — and must not be rejected by the size guard.
+    @Test
+    void decode_bitmapLongerThanNeeded_isAccepted() {
+        // Given — 3 rows (1 byte needed) over an 8-byte buffer with bit 0 set
+        MemorySegment bits = MemorySegment.ofArray(new byte[]{1, 0, 0, 0, 0, 0, 0, 0});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{0});
+        ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
+        DecodeContext ctx = new DecodeContext(node, DTypes.BOOL, 3, new MemorySegment[]{bits},
+                registry, Arena.ofAuto());
+        var sut = new BoolEncodingDecoder();
+
+        // When
+        var result = sut.decode(ctx);
+
+        // Then
+        assertThat(result.length()).isEqualTo(3);
+        assertThat(((BoolArray) result).getBoolean(0)).isTrue();
+        assertThat(((BoolArray) result).getBoolean(1)).isFalse();
     }
 
     @Test
