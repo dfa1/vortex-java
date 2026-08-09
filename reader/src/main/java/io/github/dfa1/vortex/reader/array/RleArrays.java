@@ -1,5 +1,10 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.core.io.VortexFormat;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+
 /// Package-private constants and helpers shared by the `LazyRleXxxArray` records.
 ///
 /// FastLanes RLE works in fixed 1024-row chunks; per-row decode is
@@ -8,6 +13,10 @@ package io.github.dfa1.vortex.reader.array;
 /// the per-row local index sits in `indices[chunkIdx * 1024 + rowInChunk]` and
 /// must be clamped to `numChunkValues - 1` (the writer encodes the constant-run
 /// case with a single value and may leave the slot's bits as 0).
+///
+/// Both `values` and `indices` are raw little-endian [MemorySegment] views of the
+/// mmapped file, already sized to their element count by the decoder — so the per-row
+/// loops read straight through them with neither a heap copy nor a broadcast modulo.
 final class RleArrays {
 
     /// Fixed FastLanes chunk size in rows.
@@ -38,6 +47,24 @@ final class RleArrays {
                 ? valuesIdxOffsets[chunkIdx + 1] - firstOffset
                 : valuesLen;
         return (int) (end - start);
+    }
+
+    /// Reads the per-row local index at absolute slot `i` out of the packed indices segment.
+    ///
+    /// FastLanes stores the index table as `u8` or `u16` depending on the widest run count
+    /// in the array. This scalar accessor serves the single-row `getXxx` path; the chunk
+    /// loops branch-split on `wideIndices` themselves so the width test stays out of their
+    /// bodies.
+    ///
+    /// @param indices      packed index table, `u8` or `u16` little-endian
+    /// @param wideIndices  `true` when `indices` holds `u16` elements, `false` for `u8`
+    /// @param i            absolute slot, i.e. `chunkIdx * 1024 + rowInChunk`
+    /// @return the unsigned local index at slot `i`
+    static int localIndex(MemorySegment indices, boolean wideIndices, long i) {
+        if (wideIndices) {
+            return Short.toUnsignedInt(indices.getAtIndex(VortexFormat.LE_SHORT, i));
+        }
+        return Byte.toUnsignedInt(indices.get(ValueLayout.JAVA_BYTE, i));
     }
 
     /// Visitor for [#walkChunks]. Invoked once per covered chunk with the

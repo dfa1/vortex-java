@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.performance;
 
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -87,38 +88,41 @@ public class LazyArrayWalkBenchmark {
 
         // RLE constant runs: one distinct value per chunk — constant fast path.
         long[] constOffsets = new long[NUM_CHUNKS];
-        int[] constValuesI = new int[NUM_CHUNKS];
+        MemorySegment constValuesI = arena.allocate(NUM_CHUNKS * 4L, 4);
         for (int c = 0; c < NUM_CHUNKS; c++) {
             constOffsets[c] = c;
-            constValuesI[c] = c;
+            constValuesI.setAtIndex(VortexFormat.LE_INT, c, c);
         }
-        rleIntConst = new LazyRleIntArray(I32, ROWS, constValuesI, new int[NUM_CHUNKS * 1024],
+        MemorySegment constIndices = arena.allocate(NUM_CHUNKS * 1024L);
+        rleIntConst = new LazyRleIntArray(I32, ROWS, constValuesI, constIndices, false,
                 constOffsets, 0L, NUM_CHUNKS, NUM_CHUNKS, 0);
 
         // RLE multi-value: 4 distinct values per chunk — per-row emit path.
         int valsPerChunk = 4;
+        long valuesLen = (long) NUM_CHUNKS * valsPerChunk;
         long[] multiOffsets = new long[NUM_CHUNKS];
-        int[] multiValuesI = new int[NUM_CHUNKS * valsPerChunk];
-        long[] multiValuesL = new long[NUM_CHUNKS * valsPerChunk];
-        byte[] multiValuesB = new byte[NUM_CHUNKS * valsPerChunk];
+        MemorySegment multiValuesI = arena.allocate(valuesLen * 4L, 4);
+        MemorySegment multiValuesL = arena.allocate(valuesLen * 8L, 8);
+        MemorySegment multiValuesB = arena.allocate(valuesLen);
         for (int c = 0; c < NUM_CHUNKS; c++) {
             multiOffsets[c] = (long) c * valsPerChunk;
             for (int j = 0; j < valsPerChunk; j++) {
-                multiValuesI[c * valsPerChunk + j] = c * 10 + j;
-                multiValuesL[c * valsPerChunk + j] = c * 10L + j;
-                multiValuesB[c * valsPerChunk + j] = (byte) (c + j);
+                int slot = c * valsPerChunk + j;
+                multiValuesI.setAtIndex(VortexFormat.LE_INT, slot, c * 10 + j);
+                multiValuesL.setAtIndex(VortexFormat.LE_LONG, slot, c * 10L + j);
+                multiValuesB.set(ValueLayout.JAVA_BYTE, slot, (byte) (c + j));
             }
         }
-        int[] multiIndices = new int[NUM_CHUNKS * 1024];
-        for (int r = 0; r < multiIndices.length; r++) {
-            multiIndices[r] = r & (valsPerChunk - 1);
+        // u8 index table: 4 runs per chunk fit a byte, the width the writer picks here.
+        MemorySegment multiIndices = arena.allocate(NUM_CHUNKS * 1024L);
+        for (long r = 0; r < multiIndices.byteSize(); r++) {
+            multiIndices.set(ValueLayout.JAVA_BYTE, r, (byte) (r & (valsPerChunk - 1)));
         }
-        long valuesLen = (long) NUM_CHUNKS * valsPerChunk;
-        rleIntMulti = new LazyRleIntArray(I32, ROWS, multiValuesI, multiIndices,
+        rleIntMulti = new LazyRleIntArray(I32, ROWS, multiValuesI, multiIndices, false,
                 multiOffsets, 0L, valuesLen, NUM_CHUNKS, 0);
-        rleLongMulti = new LazyRleLongArray(I64, ROWS, multiValuesL, multiIndices,
+        rleLongMulti = new LazyRleLongArray(I64, ROWS, multiValuesL, multiIndices, false,
                 multiOffsets, 0L, valuesLen, NUM_CHUNKS, 0);
-        rleByteMulti = new LazyRleByteArray(I8, ROWS, multiValuesB, multiIndices,
+        rleByteMulti = new LazyRleByteArray(I8, ROWS, multiValuesB, multiIndices, false,
                 multiOffsets, 0L, valuesLen, NUM_CHUNKS, 0, false);
     }
 

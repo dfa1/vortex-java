@@ -161,7 +161,7 @@ decoder falls into one of three shapes:
 | `fastlanes.bitpacked`       | Materialized  | Materialized  | window unpacks bits                                                      |
 | `fastlanes.delta`           | Materialized  | Materialized  | cumulative sum requires sequential decode; output is one arena segment at the ptype's width, and only the chunks the row window touches are reconstructed |
 | `fastlanes.for`             | Lazy          | Lazy          | `LazyForXxxArray` (I8/U8/I16/U16/I32/U32/I64/U64), ADR 0010 + 0015      |
-| `fastlanes.rle`             | Lazy          | Lazy          | `LazyRleXxxArray`; validity → `OffsetBoolArray`; empty → `LazyConstantXxxArray`, ADR 0015 |
+| `fastlanes.rle`             | Lazy          | Lazy          | `LazyRleXxxArray` reads run values and the index table straight from their mmapped segments; validity → `OffsetBoolArray`; empty → `LazyConstantXxxArray`, ADR 0015 |
 | `vortex.patched`            | Materialized  | Materialized  | inner is full base + chunked patches (1024-elem blocks, lane-window-sorted); per-row access requires 2 laneOffsets reads + binary search inside the chunk window, so eager scatter wins for full scans |
 | `vortex.variant`            | Lazy          | Lazy          | container wraps constant/chunked core (inner-typed) + optional shredded child |
 | `vortex.onpair`             | n/a           | n/a           | not ported                                                               |

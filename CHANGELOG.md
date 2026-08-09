@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A `fastlanes.rle` column reads its run values and per-row index table in place instead of copying them onto the heap; `LazyRle{Long,Int,Short,Byte,Double,Float,Bool}Array` now take `MemorySegment` values/indices plus a `wideIndices` flag, **breaking** for code constructing them directly. ([#342](https://github.com/dfa1/vortex-java/issues/342))
+
+### Fixed
+
+- A malformed `fastlanes.rle` column now fails as `VortexException` where an absurd declared length, an empty or undersized child segment, or an out-of-range chunk offset previously escaped as `OutOfMemoryError`, `NegativeArraySizeException`, `ArithmeticException`, or `IndexOutOfBoundsException`. ([#342](https://github.com/dfa1/vortex-java/issues/342))
+
 ## [0.13.2] — 2026-08-07
 
 A reader-decode pass: one wrong-value bug, four malformed-input paths that escaped as raw JDK

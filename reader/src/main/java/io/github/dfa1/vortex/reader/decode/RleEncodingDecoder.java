@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -26,6 +27,7 @@ import io.github.dfa1.vortex.reader.array.OffsetBoolArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `fastlanes.rle`.
@@ -60,6 +62,17 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             return emptyArray(ctx);
         }
 
+        // Both lengths are attacker-controlled and size the segments the lazy carriers read
+        // through, so they pass the ADR 0004 count guard before anything is decoded. A run-value
+        // pool can never legitimately outgrow the per-row index table that selects from it.
+        IoBounds.checkCount(valuesLen);
+        IoBounds.checkCount(indicesLen);
+        if (valuesLen > indicesLen) {
+            throw new VortexException(EncodingId.FASTLANES_RLE,
+                    "values_len " + valuesLen + " exceeds indices_len " + indicesLen);
+        }
+        int numChunks = (int) (indicesLen / FL_CHUNK_SIZE);
+
         DType indicesDtype = new DType.Primitive(indicesPtype, false);
         DType offsetsDtype = new DType.Primitive(offsetsPtype, false);
 
@@ -72,17 +85,30 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             indicesValidity = masked.validity();
         }
 
-        int[] indices = readIndices(ctx.materialize(indicesArr), (int) indicesLen, indicesPtype);
+        boolean wideIndices = switch (indicesPtype) {
+            case U8 -> false;
+            case U16 -> true;
+            default ->
+                    throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported indices ptype: " + indicesPtype);
+        };
+        MemorySegment indices = fitElements(ctx.arena(), ctx.materialize(indicesArr),
+                indicesLen, indicesPtype.byteSize());
+
+        // Only one offset per chunk is ever read, so a bogus values_idx_offsets_len cannot size
+        // the array beyond that — the chunk count is already bounded by the indices length above.
+        int offsetsCount = IoBounds.checkCount(Math.min(offsetsLen, numChunks + 1L));
         long[] valuesIdxOffsets = readUnsignedLongs(
-                ctx.decodeChildSegment(2, offsetsDtype, offsetsLen), (int) offsetsLen, offsetsPtype);
+                fitElements(ctx.arena(), ctx.decodeChildSegment(2, offsetsDtype, offsetsLen),
+                        offsetsCount, offsetsPtype.byteSize()),
+                offsetsCount, offsetsPtype);
         long firstOffset = valuesLen > 0 && valuesIdxOffsets.length > 0 ? valuesIdxOffsets[0] : 0L;
-        int numChunks = (int) (indicesLen / FL_CHUNK_SIZE);
+        checkChunkOffsets(valuesIdxOffsets, firstOffset, valuesLen, numChunks);
 
         if (ctx.dtype() instanceof DType.Bool) {
             Array valuesArr = ctx.decodeChild(0, DType.BOOL, valuesLen);
             Array valuesData = valuesArr instanceof MaskedArray m ? m.inner() : valuesArr;
             Array boolResult = new LazyRleBoolArray(ctx.dtype(), rowCount, (BoolArray) valuesData,
-                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+                    indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
             if (indicesValidity == null) {
                 return boolResult;
             }
@@ -95,28 +121,23 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         PType ptype = p.ptype();
         DType valuesDtype = new DType.Primitive(ptype, false);
 
-        MemorySegment valuesSeg = ctx.decodeChildSegment(0, valuesDtype, valuesLen);
+        MemorySegment values = fitElements(ctx.arena(), ctx.decodeChildSegment(0, valuesDtype, valuesLen),
+                valuesLen, ptype.byteSize());
         Array result = switch (ptype) {
-            case I64, U64 -> new LazyRleLongArray(ctx.dtype(), rowCount,
-                    readLongs(valuesSeg, (int) valuesLen, ptype),
-                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
-            case I32, U32 -> new LazyRleIntArray(ctx.dtype(), rowCount,
-                    readInts(valuesSeg, (int) valuesLen, ptype),
-                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
-            case I16, U16 -> new LazyRleShortArray(ctx.dtype(), rowCount,
-                    readShorts(valuesSeg, (int) valuesLen, ptype),
-                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset,
+            case I64, U64 -> new LazyRleLongArray(ctx.dtype(), rowCount, values,
+                    indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+            case I32, U32 -> new LazyRleIntArray(ctx.dtype(), rowCount, values,
+                    indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+            case I16, U16 -> new LazyRleShortArray(ctx.dtype(), rowCount, values,
+                    indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset,
                     ptype == PType.U16);
-            case I8, U8 -> new LazyRleByteArray(ctx.dtype(), rowCount,
-                    readBytes(valuesSeg, (int) valuesLen),
-                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset,
+            case I8, U8 -> new LazyRleByteArray(ctx.dtype(), rowCount, values,
+                    indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset,
                     ptype == PType.U8);
-            case F64 -> new LazyRleDoubleArray(ctx.dtype(), rowCount,
-                    readDoubles(valuesSeg, (int) valuesLen),
-                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
-            case F32 -> new LazyRleFloatArray(ctx.dtype(), rowCount,
-                    readFloats(valuesSeg, (int) valuesLen),
-                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+            case F64 -> new LazyRleDoubleArray(ctx.dtype(), rowCount, values,
+                    indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+            case F32 -> new LazyRleFloatArray(ctx.dtype(), rowCount, values,
+                    indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
             default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported ptype " + ptype);
         };
 
@@ -141,107 +162,107 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         };
     }
 
-    private static long[] readLongs(MemorySegment buf, int count, PType ptype) {
+    /// Returns a view of `buf` holding exactly `count` elements, for the `LazyRleXxxArray`
+    /// records to read through.
+    ///
+    /// Normally that is a zero-copy slice of the mmapped child segment. A `ConstantEncoding`
+    /// child deliberately stores one element regardless of the length it declares (zip-bomb
+    /// defense), and that lone element is broadcast once into a fresh arena segment here — so the
+    /// per-row loops in the records need no `i % cap` at all (CLAUDE.md hot-loop rule).
+    ///
+    /// Any other short child is a shape mismatch — a malformed file declaring more elements than
+    /// it stores — and is rejected rather than silently wrapped around. `count` is expected to
+    /// have passed [IoBounds#checkCount(long)] already, so the broadcast allocation is bounded.
+    ///
+    /// Package-private (not private) so the broadcast and rejection branches are testable
+    /// directly; both are reachable through `decode()` on malformed input.
+    ///
+    /// @param arena     allocator for the broadcast copy, when one is needed
+    /// @param buf       decoded child segment
+    /// @param count     number of elements the caller needs
+    /// @param elemBytes element width in bytes
+    /// @return a segment of exactly `count * elemBytes` bytes
+    /// @throws VortexException if `count` is out of range, or `buf` holds neither `count`
+    ///         elements nor the single element of a constant child
+    static MemorySegment fitElements(SegmentAllocator arena, MemorySegment buf, long count, int elemBytes) {
+        long bytes = (long) IoBounds.checkCount(count) * elemBytes;
+        if (buf.byteSize() >= bytes) {
+            return IoBounds.slice(buf, 0, bytes);
+        }
+        long capacity = SegmentBroadcast.capacity(buf, elemBytes);
+        if (capacity != 1) {
+            throw new VortexException(EncodingId.FASTLANES_RLE,
+                    "child holds " + capacity + " element(s) for a declared length of " + count);
+        }
+        MemorySegment out = arena.allocate(bytes, elemBytes);
+        SegmentBroadcast.broadcastCopy(buf, out, count, elemBytes);
+        return out;
+    }
+
+    /// Verifies that every chunk's slice of the values pool lies inside it.
+    ///
+    /// The offsets come from file bytes, and the records index the values segment at
+    /// `valuesIdxOffsets[chunk] - firstOffset + localIdx`. Checking here that the offsets are
+    /// non-decreasing and stay within `[0, valuesLen]` makes every one of those reads in-bounds
+    /// by construction, so a malformed offsets table fails as [VortexException] instead of
+    /// escaping later as a raw `IndexOutOfBoundsException` (ADR 0003).
+    ///
+    /// @param valuesIdxOffsets per-chunk values-pool start offsets
+    /// @param firstOffset      absolute origin of the values pool
+    /// @param valuesLen        total values pool length
+    /// @param numChunks        number of FastLanes chunks the indices table covers
+    /// @throws VortexException if an offset is missing, out of order, or past the pool
+    private static void checkChunkOffsets(long[] valuesIdxOffsets, long firstOffset, long valuesLen,
+            int numChunks) {
+        if (valuesIdxOffsets.length < numChunks) {
+            throw new VortexException(EncodingId.FASTLANES_RLE, "values_idx_offsets holds "
+                    + valuesIdxOffsets.length + " entries for " + numChunks + " chunk(s)");
+        }
+        long previous = 0L;
+        for (int chunk = 0; chunk < numChunks; chunk++) {
+            long start = valuesIdxOffsets[chunk] - firstOffset;
+            if (start < previous || start > valuesLen) {
+                throw new VortexException(EncodingId.FASTLANES_RLE, "chunk " + chunk
+                        + " starts at " + start + " in a values pool of " + valuesLen);
+            }
+            previous = start;
+        }
+    }
+
+    /// Widens `count` unsigned offsets out of an exact-length segment.
+    ///
+    /// The ptype test is hoisted out of the loop — one specialized body per width rather than a
+    /// per-element switch (CLAUDE.md hot-loop rule).
+    ///
+    /// @param buf   offsets segment, already sized to `count` elements by [#fitElements]
+    /// @param count number of offsets to read
+    /// @param ptype unsigned physical type of the offsets
+    /// @return the widened offsets
+    /// @throws VortexException if `ptype` is not an unsigned integer type
+    private static long[] readUnsignedLongs(MemorySegment buf, int count, PType ptype) {
         long[] out = new long[count];
-        int elemSize = ptype.byteSize();
-        long cap = SegmentBroadcast.capacity(buf, elemSize);
-        for (int i = 0; i < count; i++) {
-            long off = (i % cap) * elemSize;
-            out[i] = switch (ptype) {
-                case I64, U64 -> buf.get(VortexFormat.LE_LONG, off);
-                default -> throw new VortexException(EncodingId.FASTLANES_RLE, "expected I64/U64, got " + ptype);
-            };
-        }
-        return out;
-    }
-
-    private static int[] readInts(MemorySegment buf, int count, PType ptype) {
-        int[] out = new int[count];
-        int elemSize = ptype.byteSize();
-        long cap = SegmentBroadcast.capacity(buf, elemSize);
-        for (int i = 0; i < count; i++) {
-            long off = (i % cap) * elemSize;
-            out[i] = buf.get(VortexFormat.LE_INT, off);
-        }
-        return out;
-    }
-
-    private static short[] readShorts(MemorySegment buf, int count, PType ptype) {
-        short[] out = new short[count];
-        int elemSize = ptype.byteSize();
-        long cap = SegmentBroadcast.capacity(buf, elemSize);
-        for (int i = 0; i < count; i++) {
-            long off = (i % cap) * elemSize;
-            out[i] = buf.get(VortexFormat.LE_SHORT, off);
-        }
-        return out;
-    }
-
-    // Package-private (not private) so the broadcast branch (cap < count, a
-    // ConstantEncoding values pool) is testable directly: through decode() a
-    // constant child always materializes to `count` full elements, so cap == count.
-    static double[] readDoubles(MemorySegment buf, int count) {
-        double[] out = new double[count];
-        long cap = SegmentBroadcast.capacity(buf, 8);
-        for (int i = 0; i < count; i++) {
-            out[i] = buf.get(VortexFormat.LE_DOUBLE, (i % cap) * 8);
-        }
-        return out;
-    }
-
-    static float[] readFloats(MemorySegment buf, int count) {
-        float[] out = new float[count];
-        long cap = SegmentBroadcast.capacity(buf, 4);
-        for (int i = 0; i < count; i++) {
-            out[i] = buf.get(VortexFormat.LE_FLOAT, (i % cap) * 4);
-        }
-        return out;
-    }
-
-    private static byte[] readBytes(MemorySegment buf, int count) {
-        byte[] out = new byte[count];
-        long cap = SegmentBroadcast.capacity(buf, 1);
-        for (int i = 0; i < count; i++) {
-            out[i] = buf.get(ValueLayout.JAVA_BYTE, i % cap);
-        }
-        return out;
-    }
-
-    private static int[] readIndices(MemorySegment buf, int count, PType indicesPtype) {
-        int[] out = new int[count];
-        int elemSize = indicesPtype.byteSize();
-        long cap = SegmentBroadcast.capacity(buf, elemSize);
-        switch (indicesPtype) {
+        switch (ptype) {
             case U8 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = Byte.toUnsignedInt(buf.get(ValueLayout.JAVA_BYTE, i % cap));
+                    out[i] = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, i));
                 }
             }
             case U16 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = Short.toUnsignedInt(buf.get(VortexFormat.LE_SHORT, (i % cap) * 2));
+                    out[i] = Short.toUnsignedLong(buf.getAtIndex(VortexFormat.LE_SHORT, i));
                 }
             }
-            default ->
-                    throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported indices ptype: " + indicesPtype);
-        }
-        return out;
-    }
-
-    private static long[] readUnsignedLongs(MemorySegment buf, int count, PType ptype) {
-        long[] out = new long[count];
-        int elemSize = ptype.byteSize();
-        long cap = SegmentBroadcast.capacity(buf, elemSize);
-        for (int i = 0; i < count; i++) {
-            long off = (i % cap) * elemSize;
-            out[i] = switch (ptype) {
-                case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
-                case U16 -> Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, off));
-                case U32 -> Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, off));
-                case U64 -> buf.get(VortexFormat.LE_LONG, off);
-                default ->
-                        throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported offsets ptype: " + ptype);
-            };
+            case U32 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = Integer.toUnsignedLong(buf.getAtIndex(VortexFormat.LE_INT, i));
+                }
+            }
+            case U64 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = buf.getAtIndex(VortexFormat.LE_LONG, i);
+                }
+            }
+            default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported offsets ptype: " + ptype);
         }
         return out;
     }
