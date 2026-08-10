@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A malformed `fastlanes.rle` column now fails as `VortexException` where an absurd declared length, an empty or undersized child segment, or an out-of-range chunk offset previously escaped as `OutOfMemoryError`, `NegativeArraySizeException`, `ArithmeticException`, or `IndexOutOfBoundsException`. ([#342](https://github.com/dfa1/vortex-java/issues/342))
+- A `vortex.dict` layout over a StringView or `vortex.constant` values pool no longer expands every row into a fresh buffer, and no longer silently drops that pool's validity. ([#341](https://github.com/dfa1/vortex-java/issues/341))
+- A `vortex.dict` layout whose values pool declares more entries than it stores — a `vortex.constant` pool can claim any length in a few hundred bytes — no longer allocates against that claim; codes are bounded against the pool first, and an out-of-pool code fails as `VortexException`. ([#341](https://github.com/dfa1/vortex-java/issues/341))
+- A `vortex.dict` layout over a values pool that is neither VarBin- nor primitive-shaped (e.g. a dict-encoded `vortex.uuid`) now fails as `VortexException` instead of `ClassCastException`. ([#341](https://github.com/dfa1/vortex-java/issues/341))
 
 ## [0.13.2] — 2026-08-07
 

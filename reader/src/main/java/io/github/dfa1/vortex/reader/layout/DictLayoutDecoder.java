@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.reader.layout;
 
-import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
@@ -26,6 +26,7 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import java.lang.foreign.MemorySegment;
@@ -34,8 +35,9 @@ import java.lang.foreign.ValueLayout;
 import java.util.Optional;
 
 /// Built-in decoder for the `vortex.dict` layout — a low-cardinality column stored as dictionary
-/// values plus per-row codes. Extracted verbatim from `ScanIterator.decodeDictLayout` and its
-/// private helpers.
+/// values plus per-row codes. Both supported pool shapes decode lazily: a VarBin-shaped pool
+/// (Utf8, Binary, or a VarBin-backed extension dtype) resolves through `VarBinDictArray`, a
+/// primitive pool through the matching `DictXxxArray`. Nothing is expanded per row.
 final class DictLayoutDecoder implements LayoutDecoder {
 
     @Override
@@ -64,19 +66,18 @@ final class DictLayoutDecoder implements LayoutDecoder {
         Array values = ctx.decodeChild(valuesLayout, dtype);
         Array codes = ctx.decodeChild(codesLayout, new DType.Primitive(codesPType, false));
 
-        // VarBin (string) dict: VarBinArray is a sealed interface; ofDict returns the
-        // lazy VarBinDictArray record (no eager expansion into per-row offsets/bytes).
-        // Unwrap a masked (nullable) codes/values child so the string expansion sees the raw
-        // payload; the row-level validity is re-applied by wrapping the result below. This mirrors
-        // the primitive path (buildLazyDictPrimitive) and is the shape a nullable global-dict Utf8
-        // column produces (masked codes + non-nullable pool).
+        // VarBin (string) dict: ofDict returns the lazy VarBinDictArray record (no eager
+        // expansion into per-row offsets/bytes). Unwrap a masked (nullable) codes/values child so
+        // the dict carrier sees the raw payload; the row-level validity is re-applied by wrapping
+        // the result below. This mirrors the primitive path (buildLazyDictPrimitive) and is the
+        // shape a nullable global-dict Utf8 column produces (masked codes + non-nullable pool).
         BoolArray poolValidity = values instanceof MaskedArray mv ? mv.validity() : null;
         Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
         BoolArray codesValidity = codes instanceof MaskedArray mc ? mc.validity() : null;
         Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;
-        if (valuesData instanceof VarBinOffsetArray vb) {
+        if (valuesData instanceof VarBinArray vb) {
             // Zip-bomb guard: read the codes as a segment so we can validate the buffer
-            // before allocating the expansion output. For direct-mapped encodings (e.g.
+            // before building the dict carrier. For direct-mapped encodings (e.g.
             // vortex.primitive), the codes buffer is mmap-bounded and can be much smaller
             // than the claimed rowCount. Full-decode encodings (e.g. bitpacked) already
             // wrote n * elemBytes to the arena during decodeChild above, so their buffer
@@ -87,10 +88,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
                 throw new VortexException(EncodingId.VORTEX_DICT,
                         "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
             }
-            MemorySegment valOffsets = vb.offsetsSegment();
-            PType valOffPType = vb.offsetsPtype();
-            Array dict = VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
-                    codesSeg, codesPType);
+            Array dict = buildLazyDictVarBin(dtype, n, vb, codesSeg, codesPType, arena);
             if (poolValidity == null && codesValidity == null) {
                 return dict;
             }
@@ -107,16 +105,121 @@ final class DictLayoutDecoder implements LayoutDecoder {
             validateDictCodesCapacity(codes, codesPType, n);
             return buildLazyDictPrimitive(pDtype, n, values, codes, arena);
         }
-        // Non-Utf8, non-Primitive dict — e.g. extension types backed by VarBin. Fall through
-        // to the existing string expansion for compatibility.
-        MemorySegment codesSegFallback = codes.materialize(arena);
-        long bufferCodesFallback = codesSegFallback.byteSize() / codesPType.byteSize();
-        if (bufferCodesFallback < n) {
-            throw new VortexException(EncodingId.VORTEX_DICT,
-                    "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodesFallback);
+        // Neither VarBin- nor primitive-shaped: no lazy dict carrier exists for this pool — e.g.
+        // a dict-encoded FixedSizeList-backed extension such as vortex.uuid. Untrusted input can
+        // also reach here with an arbitrary child encoding, so reject rather than blindly casting
+        // (a raw ClassCastException would break the security contract).
+        throw new VortexException(EncodingId.VORTEX_DICT, "unsupported dict values shape: "
+                + valuesData.getClass().getSimpleName() + " for dtype "
+                + dtype.getClass().getSimpleName());
+    }
+
+    /// Builds the lazy carrier for a VarBin-shaped dictionary — Utf8, Binary, or any
+    /// VarBin-backed extension dtype (#341). No row is ever expanded: rows resolve through
+    /// their code on access.
+    ///
+    /// Only [VarBinOffsetArray] is directly indexable by code, so any other pool shape has to
+    /// be walked entry by entry to become one. That walk is bounded by the codes, not by the
+    /// pool's own `length()`: shapes that carry no per-entry storage report whatever length
+    /// the file declares (a `vortex.constant` pool a few hundred bytes long can claim 2^40
+    /// entries), and normalizing that claim would allocate until the reader dies. The codes
+    /// buffer is the one bound the file must physically back, and it has already been checked
+    /// to hold `n` entries by the caller.
+    ///
+    /// @param dtype      logical dtype of the column
+    /// @param n          logical row count
+    /// @param values     the decoded values pool, mask already unwrapped
+    /// @param codesSeg   per-row codes into `values`
+    /// @param codesPType physical type of the codes
+    /// @param arena      allocator for a normalized pool, when one is needed
+    /// @return a lazy `VarBinDictArray`, or a `VarBinConstantArray` when the pool holds a
+    ///         single broadcast value
+    private static Array buildLazyDictVarBin(DType dtype, long n, VarBinArray values,
+            MemorySegment codesSeg, PType codesPType, SegmentAllocator arena) {
+        if (values instanceof VarBinOffsetArray flat) {
+            // The common Utf8/Binary dict: already bytes-plus-offsets, so nothing is walked or
+            // copied and an out-of-pool code is caught by the carrier on access.
+            return VarBinArray.ofDict(dtype, n, flat.bytesSegment(), flat.offsetsSegment(),
+                    flat.offsetsPtype(), codesSeg, codesPType);
         }
-        return expandDictStrings(VarBinArray.toOffsetMode((VarBinArray) values, arena),
-                codesSegFallback, codesPType, dtype, n, arena);
+        long poolExtent = checkedPoolExtent(codesSeg, codesPType, n, values.length());
+        if (values instanceof VarBinConstantArray constant) {
+            // A `vortex.constant` pool holds one distinct value broadcast across its entries,
+            // so every in-range code resolves to the same bytes and the dict collapses to that
+            // constant — O(1), no pool walk, no allocation whatever length the pool claims.
+            return new VarBinConstantArray(dtype, n, constant.bytes());
+        }
+        // Remaining shapes (StringView, chunked, run-end, sparse, sliced pools) are walked, but
+        // only up to the highest entry a code actually reaches.
+        VarBinOffsetArray pool = VarBinArray.toOffsetMode(values.limited(poolExtent), arena);
+        return VarBinArray.ofDict(dtype, n, pool.bytesSegment(), pool.offsetsSegment(),
+                pool.offsetsPtype(), codesSeg, codesPType);
+    }
+
+    /// Values-side bounds guard: validates every per-row code against the values pool and
+    /// returns how many pool entries the codes can actually reach.
+    ///
+    /// The codes-side guard in [#decode(LayoutDecodeContext, Layout, DType)] has no values-side
+    /// analogue, because a pool's `length()` is a claim rather than a measurement for the shapes
+    /// with no per-entry storage. Reading the codes bounds the pool by something the file must
+    /// physically contain. Runs only when the pool is not already flat, so the common dict path
+    /// pays nothing; the ptype dispatch is hoisted out of the loop (CLAUDE.md hot-loop rule) and
+    /// the range test is a single check on the reduced min/max rather than one per row.
+    ///
+    /// @param codesSeg   per-row codes, already checked to hold at least `n` entries
+    /// @param codesPType physical type of the codes
+    /// @param n          logical row count
+    /// @param poolLength number of entries the values pool claims to hold
+    /// @return `maxCode + 1`, in `[0, poolLength]`; `0` when there are no rows
+    /// @throws VortexException if any code is negative or outside the pool
+    private static long checkedPoolExtent(MemorySegment codesSeg, PType codesPType, long n,
+            long poolLength) {
+        long max = -1;
+        long min = 0;
+        switch (codesPType) {
+            case U8 -> {
+                for (long i = 0; i < n; i++) {
+                    long code = Byte.toUnsignedLong(codesSeg.get(ValueLayout.JAVA_BYTE, i));
+                    max = Math.max(max, code);
+                }
+            }
+            case U16 -> {
+                for (long i = 0; i < n; i++) {
+                    long code = Short.toUnsignedLong(codesSeg.getAtIndex(LE_SHORT, i));
+                    max = Math.max(max, code);
+                }
+            }
+            case U32 -> {
+                for (long i = 0; i < n; i++) {
+                    long code = Integer.toUnsignedLong(codesSeg.getAtIndex(LE_INT, i));
+                    max = Math.max(max, code);
+                }
+            }
+            case I32 -> {
+                for (long i = 0; i < n; i++) {
+                    long code = codesSeg.getAtIndex(LE_INT, i);
+                    max = Math.max(max, code);
+                    min = Math.min(min, code);
+                }
+            }
+            // A u64 code past Long.MAX_VALUE reads back negative, which the min test rejects —
+            // it is out of range for any pool a file can actually hold anyway.
+            case I64, U64 -> {
+                for (long i = 0; i < n; i++) {
+                    long code = codesSeg.getAtIndex(LE_LONG, i);
+                    max = Math.max(max, code);
+                    min = Math.min(min, code);
+                }
+            }
+            default -> throw new VortexException(EncodingId.VORTEX_DICT,
+                    "layout: unsupported codes ptype: " + codesPType);
+        }
+        if (min < 0 || max >= poolLength) {
+            throw new VortexException(EncodingId.VORTEX_DICT, "layout: dict code "
+                    + (min < 0 ? min : max) + " out of range for a values pool of "
+                    + poolLength + " entries");
+        }
+        return max + 1;
     }
 
     /// Lazy-path zip-bomb guard. Inspects `codes`'s primary segment when available
@@ -235,54 +338,5 @@ final class DictLayoutDecoder implements LayoutDecoder {
             }
         }
         return PType.U8;
-    }
-
-    private static Array expandDictStrings(
-            VarBinOffsetArray values, MemorySegment codesSegs,
-            PType codesPType, DType dtype,
-            long n, SegmentAllocator arena
-    ) {
-        MemorySegment valBytes = values.bytesSegment();
-        MemorySegment valOffsets = values.offsetsSegment();
-        PType valOffPType = values.offsetsPtype();
-
-        // First pass: total output byte length
-        long totalBytes = 0L;
-        for (long i = 0; i < n; i++) {
-            long code = readUnsigned(codesSegs, i, codesPType);
-            long start = readUnsigned(valOffsets, code, valOffPType);
-            long end = readUnsigned(valOffsets, code + 1, valOffPType);
-            totalBytes += end - start;
-        }
-
-        MemorySegment outBytes = arena.allocate(totalBytes > 0 ? totalBytes : 1);
-        MemorySegment outOffsets = arena.allocate((n + 1) * 4L, 4);
-        outOffsets.setAtIndex(LE_INT, 0, 0);
-
-        long bytePos = 0L;
-        for (long i = 0; i < n; i++) {
-            long code = readUnsigned(codesSegs, i, codesPType);
-            long start = readUnsigned(valOffsets, code, valOffPType);
-            long end = readUnsigned(valOffsets, code + 1, valOffPType);
-            long strLen = end - start;
-            if (strLen > 0) {
-                MemorySegment.copy(valBytes, start, outBytes, bytePos, strLen);
-                bytePos += strLen;
-            }
-            outOffsets.setAtIndex(LE_INT, i + 1, (int) bytePos);
-        }
-
-        return new VarBinOffsetArray(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
-    }
-
-    private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
-        return switch (ptype) {
-            case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
-            case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, idx * 2));
-            case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
-            case I32 -> seg.getAtIndex(LE_INT, idx);
-            case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
-            default -> throw new VortexException(EncodingId.VORTEX_DICT, "layout: unsupported ptype " + ptype);
-        };
     }
 }
