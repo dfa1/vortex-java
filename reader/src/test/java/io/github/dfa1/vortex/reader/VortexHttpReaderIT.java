@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("integration")
 class VortexHttpReaderIT {
 
-    private static final URI BASE = URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.75.0/arrays/");
+    private static final URI BASE = URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.84.0/arrays/");
 
     private static final URI TPCH_LINEITEM = BASE.resolve("tpch_lineitem.compact.vortex");
 
@@ -114,11 +114,13 @@ class VortexHttpReaderIT {
     }
 
     // vortex.masked / vortex.patched / vortex.variant: decoders implemented, but no S3 fixture
-    // is published (still absent at v0.75.0) — enable this test once fixtures exist upstream.
+    // is published (still absent at v0.84.0) — enable this test once fixtures exist upstream.
+    // vortex.map: neither a fixture nor a decoder/encoder exist yet (core2026.08.0, issue #351)
+    // — the wire type isn't modeled in vortex-java at all, so this can't even fail cleanly yet.
 
-    @Disabled("no S3 fixture through v0.75.0")
+    @Disabled("no S3 fixture through v0.84.0")
     @ParameterizedTest
-    @ValueSource(strings = {"masked.vortex", "patched.vortex", "variant.vortex"})
+    @ValueSource(strings = {"masked.vortex", "patched.vortex", "variant.vortex", "map.vortex"})
     void scan_unpublishedFixture_decodesAllRows(String fixture) throws Exception {
         // Given
         URI uri = BASE.resolve(fixture);

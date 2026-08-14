@@ -28,7 +28,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 
@@ -68,7 +67,7 @@ class OhlcEncodingInspectionIntegrationTest {
         double px = 100.0;
         int day = (int) LocalDate.of(2020, 1, 2).toEpochDay();
 
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, OHLC_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, OHLC_SCHEMA, ALLOCATOR).build()) {
             int rowsLeft = totalRows;
             while (rowsLeft > 0) {
                 int n = Math.min(rowsLeft, batchSize);
@@ -162,7 +161,7 @@ class OhlcEncodingInspectionIntegrationTest {
         java.util.Arrays.fill(px, 100.0);
         int day = (int) LocalDate.of(2020, 1, 2).toEpochDay();
 
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, OHLC_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, OHLC_SCHEMA, ALLOCATOR).build()) {
             int rowsLeft = totalRows;
             int rowIndex = 0;
             while (rowsLeft > 0) {

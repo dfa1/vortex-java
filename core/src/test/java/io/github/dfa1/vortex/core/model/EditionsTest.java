@@ -88,6 +88,20 @@ class EditionsTest {
         }
 
         @Test
+        void core2026_08_0_addsToPreviousCore() {
+            // Given — the latest frozen core edition, adding the canonical Map encoding
+            // When
+            Set<EncodingId> result = Editions.cumulativeMembers(Editions.CORE_2026_08_0);
+
+            // Then — the 31 above plus vortex.map; 32 total
+            assertThat(result).hasSize(32).isEqualTo(union(CORE_2025_05_0_BASELINE,
+                    EncodingId.VORTEX_PCO, EncodingId.VORTEX_SEQUENCE, EncodingId.VORTEX_ZSTD,
+                    EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
+                    EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED,
+                    EncodingId.VORTEX_VARIANT, new EncodingId.Custom("vortex.map")));
+        }
+
+        @Test
         void unstable2025_05_0_isExactlyItsOwnAddition() {
             // Given the first unstable edition — no earlier unstable edition to accumulate from
             // When
@@ -144,7 +158,7 @@ class EditionsTest {
         @Test
         void editionNotInAll_cumulativeSeedsFromItsOwnAddedRatherThanRequiringIdentityInAll() {
             // Given — a hypothetical future core edition not (yet) declared in Editions.ALL.
-            // Edition's constructor is package-private (only Editions' 8 catalog constants exist
+            // Edition's constructor is package-private (only Editions' catalog constants exist
             // in production), so this exercises cumulativeMembers' seeding logic directly rather
             // than a reachable real-world scenario.
             Edition hypothetical = new Edition(
@@ -175,6 +189,16 @@ class EditionsTest {
 
             // Then
             assertThat(result).contains(Editions.CORE_2025_06_0);
+        }
+
+        @Test
+        void owningEdition_customCoreFamilyId_returnsTheEditionItFirstJoined() {
+            // Given — vortex.map has no EncodingId.WellKnown constant yet, but is still a core id
+            // When
+            Optional<Edition> result = Editions.owningEdition(new EncodingId.Custom("vortex.map"));
+
+            // Then
+            assertThat(result).contains(Editions.CORE_2026_08_0);
         }
 
         @Test

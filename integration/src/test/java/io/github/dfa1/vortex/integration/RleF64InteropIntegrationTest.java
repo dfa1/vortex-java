@@ -29,7 +29,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -158,7 +157,7 @@ class RleF64InteropIntegrationTest {
 
     private static void writeF64(Path file, double[] vals) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, F64_SCHEMA, new HashMap<>(), ALLOCATOR);
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, F64_SCHEMA, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(F64_SCHEMA, ALLOCATOR)) {
             Float8Vector vec = (Float8Vector) root.getVector("v");
             vec.allocateNew(vals.length);
@@ -172,7 +171,7 @@ class RleF64InteropIntegrationTest {
 
     private static void writeF64Nullable(Path file, double[] vals, boolean[] nulls) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, F64_NULLABLE_SCHEMA, new HashMap<>(), ALLOCATOR);
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, F64_NULLABLE_SCHEMA, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(F64_NULLABLE_SCHEMA, ALLOCATOR)) {
             Float8Vector vec = (Float8Vector) root.getVector("v");
             vec.allocateNew(vals.length);
@@ -190,7 +189,7 @@ class RleF64InteropIntegrationTest {
 
     private static void writeF32(Path file, float[] vals) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, F32_SCHEMA, new HashMap<>(), ALLOCATOR);
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, F32_SCHEMA, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(F32_SCHEMA, ALLOCATOR)) {
             Float4Vector vec = (Float4Vector) root.getVector("v");
             vec.allocateNew(vals.length);

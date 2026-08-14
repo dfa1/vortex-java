@@ -47,7 +47,7 @@ class WriterEditionGuardTest {
 
     @Test
     void defaultGuard_forcedOutOfEditionEncoder_throwsNamingIdAndEdition(@TempDir Path tmp) throws IOException {
-        // Given — fastlanes.delta is unstable-family, outside the default core2026.07.0 guard;
+        // Given — fastlanes.delta is unstable-family, outside the default core2026.08.0 guard;
         // the explicit single-encoder list forces findEncoder's first-match dispatch straight to
         // it, bypassing CascadingCompressor's exclusion-aware competition entirely
         Path file = tmp.resolve("delta_guarded.vtx");
@@ -60,7 +60,7 @@ class WriterEditionGuardTest {
             assertThatThrownBy(() -> sut.writeChunk(Map.of(ColumnName.of("ts"), data)))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("fastlanes.delta")
-                    .hasMessageContaining("core2026.07.0")
+                    .hasMessageContaining("core2026.08.0")
                     .hasMessageContaining("unstable2025.05.0")
                     .hasMessageContaining("withEdition");
         }

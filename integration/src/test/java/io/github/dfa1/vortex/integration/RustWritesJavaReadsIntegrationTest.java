@@ -44,7 +44,6 @@ import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +77,7 @@ class RustWritesJavaReadsIntegrationTest {
 
     private static void writeJni(Path file, long[] ids, double[] vals) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, JNI_SCHEMA, ALLOCATOR).build()) {
             flushBatch(writer, ids, vals);
         }
     }
@@ -282,7 +281,7 @@ class RustWritesJavaReadsIntegrationTest {
         // Given
         Path file = tmp.resolve("jni_multi.vtx");
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, JNI_SCHEMA, ALLOCATOR).build()) {
             flushBatch(writer, new long[]{1L, 2L}, new double[]{1.1, 2.2});
             flushBatch(writer, new long[]{3L, 4L, 5L}, new double[]{3.3, 4.4, 5.5});
         }
@@ -420,7 +419,7 @@ class RustWritesJavaReadsIntegrationTest {
 
     private static void writeJniI16(Path file, short[] vals) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, I16_SCHEMA, new HashMap<>(), ALLOCATOR);
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, I16_SCHEMA, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(I16_SCHEMA, ALLOCATOR)) {
             SmallIntVector vec = (SmallIntVector) root.getVector("v");
             vec.allocateNew(vals.length);
@@ -480,7 +479,7 @@ class RustWritesJavaReadsIntegrationTest {
         Path file = tmp.resolve("nullable.vtx");
         String uri = file.toAbsolutePath().toUri().toString();
         int n = 10_000;
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, NULLABLE_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, NULLABLE_SCHEMA, ALLOCATOR).build()) {
             try (VectorSchemaRoot root = VectorSchemaRoot.create(NULLABLE_SCHEMA, ALLOCATOR)) {
                 BigIntVector idVec = (BigIntVector) root.getVector("id");
                 idVec.allocateNew(n);
@@ -556,7 +555,7 @@ class RustWritesJavaReadsIntegrationTest {
             Float.floatToFloat16(3.0f),
         };
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, F16_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, F16_SCHEMA, ALLOCATOR).build()) {
             try (VectorSchemaRoot root = VectorSchemaRoot.create(F16_SCHEMA, ALLOCATOR)) {
                 Float2Vector vec = (Float2Vector) root.getVector("v");
                 vec.allocateNew(f16bits.length);

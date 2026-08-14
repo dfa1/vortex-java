@@ -36,7 +36,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.function.ObjIntConsumer;
@@ -256,7 +255,7 @@ class NullSparseRunEndInteropIntegrationTest {
 
     private static void writeJni(Path file, Schema schema, ObjIntConsumer<VectorSchemaRoot> fill) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, schema, new HashMap<>(), ALLOCATOR);
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, schema, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
             for (var vec : root.getFieldVectors()) {
                 vec.setInitialCapacity(ROWS);

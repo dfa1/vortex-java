@@ -19,11 +19,14 @@ import java.util.Set;
 /// [#cumulativeMembers(Edition)].
 ///
 /// vortex-java implements every `core`-family encoding through `core2026.07.0`, referenced below
-/// by their [EncodingId.WellKnown] constants. Of `unstable`, it implements only `fastlanes.delta`
-/// and `vortex.patched` — the remaining ids (`vortex.zstd_buffers`, `vortex.parquet.variant`, the
-/// `vortex.tensor.*` family, `vortex.onpair`) have no `WellKnown` constant yet, so they are named
-/// as [EncodingId.Custom] instead; the catalog stores both uniformly and mirrors upstream
-/// faithfully rather than being truncated to what is implemented today.
+/// by their [EncodingId.WellKnown] constants. `core2026.08.0` adds `vortex.map`, the canonical
+/// encoding for a `Map` dtype vortex-java does not model yet ([DType] has no `Map` variant), so it
+/// is named as [EncodingId.Custom] like the unimplemented `unstable` ids below. Of `unstable`, it
+/// implements only `fastlanes.delta` and `vortex.patched` — the remaining ids
+/// (`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family, `vortex.onpair`)
+/// have no `WellKnown` constant yet, so they are named as [EncodingId.Custom] instead; the catalog
+/// stores both uniformly and mirrors upstream faithfully rather than being truncated to what is
+/// implemented today.
 public final class Editions {
 
     /// The baseline `core` edition: stable encodings writable by Vortex (Rust reference) 0.36.0.
@@ -56,6 +59,11 @@ public final class Editions {
             new EditionId(EditionFamily.CORE, YearMonth.of(2026, 7), 0),
             Set.of(EncodingId.VORTEX_VARIANT));
 
+    /// The `core` edition adding the canonical Map encoding, released through August 2026.
+    public static final Edition CORE_2026_08_0 = new Edition(
+            new EditionId(EditionFamily.CORE, YearMonth.of(2026, 8), 0),
+            Set.of(new EncodingId.Custom("vortex.map")));
+
     /// The May 2025 draft edition of the `unstable` family.
     public static final Edition UNSTABLE_2025_05_0 = new Edition(
             new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2025, 5), 0),
@@ -84,7 +92,7 @@ public final class Editions {
     /// Every declared edition, in the order above. Order matters: [#owningEdition(EncodingId)]
     /// returns the first entry whose `added` set contains the queried id.
     public static final List<Edition> ALL = List.of(
-            CORE_2025_05_0, CORE_2025_06_0, CORE_2025_10_0, CORE_2026_07_0,
+            CORE_2025_05_0, CORE_2025_06_0, CORE_2025_10_0, CORE_2026_07_0, CORE_2026_08_0,
             UNSTABLE_2025_05_0, UNSTABLE_2026_02_0, UNSTABLE_2026_04_0, UNSTABLE_2026_06_0);
 
     private Editions() {
@@ -93,7 +101,7 @@ public final class Editions {
     /// Computes `edition`'s full, cumulative member set: its own `added` encodings plus every
     /// encoding added by an earlier edition of the same family in [#ALL]. Seeding the result with
     /// `edition.added()` itself (rather than relying solely on a scan of [#ALL]) is what makes this
-    /// correct for a caller-supplied `Edition` outside the catalog too, not just the 8 built-ins —
+    /// correct for a caller-supplied `Edition` outside the catalog too, not just the built-ins —
     /// such a custom edition has no known earlier edition to accumulate from, so its cumulative set
     /// is exactly its own.
     ///

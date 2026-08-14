@@ -37,7 +37,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -132,8 +131,7 @@ class FileSizeComparisonIntegrationTest {
     private static Path writeJni(Path dir, List<OhlcData.Batch> batches) throws IOException {
         Path file = dir.resolve("ohlc-jni.vtx");
         String uri = file.toAbsolutePath().toUri().toString();
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(SESSION, uri, JNI_SCHEMA, ALLOCATOR).build()) {
             for (OhlcData.Batch b : batches) {
                 try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, ALLOCATOR)) {
                     VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
@@ -317,8 +315,7 @@ class FileSizeComparisonIntegrationTest {
 
         Path jniFile = dir.resolve("pco-jni-" + name + ".vtx");
         String jniUri = jniFile.toAbsolutePath().toUri().toString();
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, jniUri, jniSchema, new HashMap<>(), ALLOCATOR);
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(SESSION, jniUri, jniSchema, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
             BigIntVector vec = (BigIntVector) root.getVector("v");
             vec.allocateNew(data.length);
@@ -371,8 +368,7 @@ class FileSizeComparisonIntegrationTest {
 
         Path jniFile = tmp.resolve("nullable-lowcard-jni.vtx");
         String jniUri = jniFile.toAbsolutePath().toUri().toString();
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, jniUri, jniSchema, new HashMap<>(), ALLOCATOR);
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(SESSION, jniUri, jniSchema, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
             VarCharVector vec = (VarCharVector) root.getVector("s");
             vec.allocateNew();
@@ -498,8 +494,7 @@ class FileSizeComparisonIntegrationTest {
 
         Path jniFile = tmp.resolve("nullable-multichunk-jni.vtx");
         String jniUri = jniFile.toAbsolutePath().toUri().toString();
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, jniUri, jniSchema, new HashMap<>(), ALLOCATOR);
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(SESSION, jniUri, jniSchema, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
             for (int off = 0; off < n; off += batch) {
                 VarCharVector vec = (VarCharVector) root.getVector("s");
@@ -591,8 +586,7 @@ class FileSizeComparisonIntegrationTest {
 
         Path jniFile = tmp.resolve("hicard-jni.vtx");
         String jniUri = jniFile.toAbsolutePath().toUri().toString();
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, jniUri, jniSchema, new HashMap<>(), ALLOCATOR);
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(SESSION, jniUri, jniSchema, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
             VarCharVector vec = (VarCharVector) root.getVector("s");
             vec.allocateNew();

@@ -66,7 +66,7 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | `MemorySize` | `record MemorySize(long bytes)` | Validated non-negative byte count; `ofKiB`/`ofMiB`/`ofGiB` factories, `toGiB()` for display. Rejects negative values (`IllegalArgumentException`) — a programmer-error guard, not a `VortexException`-worthy untrusted-input check |
 | `EditionFamily` | `enum` — `CORE`, `UNSTABLE` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
 | `EditionId` | `record EditionId(EditionFamily family, YearMonth cutMonth, int version)` | e.g. `core2025.05.0`; `isAtOrBefore` orders editions within a family only |
-| `Edition` | `record Edition(EditionId id, Set<EncodingId> added)` | Only `Editions`'s 8 catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |
+| `Edition` | `record Edition(EditionId id, Set<EncodingId> added)` | Only `Editions`'s catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |
 
 ## Reader API
 
@@ -134,7 +134,7 @@ Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshol
 
 | Factory                         | Defaults                                                                                          |
 |---------------------------------|---------------------------------------------------------------------------------------------------|
-| `WriteOptions.defaults()`       | `chunkSize=65_536`, `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0`, `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_07_0}` |
+| `WriteOptions.defaults()`       | `chunkSize=65_536`, `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0`, `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_0}` |
 | `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`                                                           |
 
 | Method | Notes |
@@ -256,21 +256,24 @@ the wire format** — nothing about a targeted edition is ever persisted into a 
 
 | Member                              | Notes                                                                 |
 |--------------------------------------|------------------------------------------------------------------------------|
-| `CORE_2025_05_0` … `CORE_2026_07_0` | The 4 frozen `core` editions (forever read-compatibility guarantee)           |
-| `UNSTABLE_2025_05_0` … `UNSTABLE_2026_06_0` | The 4 draft `unstable` editions (no compatibility guarantee)          |
+| `CORE_2025_05_0` … `CORE_2026_08_0` | The frozen `core` editions (forever read-compatibility guarantee)           |
+| `UNSTABLE_2025_05_0` … `UNSTABLE_2026_06_0` | The draft `unstable` editions (no compatibility guarantee)          |
 | `ALL`                                | Every declared edition, in declaration order                                 |
 | `cumulativeMembers(Edition)`         | The edition's own additions plus every earlier same-family edition's         |
 | `owningEdition(EncodingId)`          | The edition an id first joined, or empty if it belongs to none               |
 
-vortex-java implements every `core`-family encoding through `core2026.07.0`. Of `unstable`, only
-`fastlanes.delta` and `vortex.patched` have an `EncodingId.WellKnown` constant; the rest
-(`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family, `vortex.onpair`)
-resolve to `EncodingId.Custom` and are stored in the catalog anyway, mirroring upstream faithfully.
+vortex-java implements every `core`-family encoding through `core2026.07.0`. `core2026.08.0` adds
+`vortex.map`, the canonical encoding for a `Map` dtype vortex-java does not model yet (`DType` has
+no `Map` variant), so it resolves to `EncodingId.Custom` rather than a `WellKnown` constant. Of
+`unstable`, only `fastlanes.delta` and `vortex.patched` have an `EncodingId.WellKnown` constant;
+the rest (`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family,
+`vortex.onpair`) resolve to `EncodingId.Custom` and are stored in the catalog anyway, mirroring
+upstream faithfully.
 
 ### Writer integration (`WriteOptions#editions()`)
 
 `WriteOptions.defaults()`/`cascading(depth)` enable the latest frozen `core` edition
-(`Editions.CORE_2026_07_0`) by default — verified safe: the default cascade candidate list never
+(`Editions.CORE_2026_08_0`) by default — verified safe: the default cascade candidate list never
 includes `DeltaEncodingEncoder`/`PatchedEncodingEncoder` (the only two `unstable`-family encoders
 implemented), so no default write can emit an `unstable` encoding. If a write would emit an
 encoding outside the union of every enabled edition's cumulative members, `VortexWriter` fails

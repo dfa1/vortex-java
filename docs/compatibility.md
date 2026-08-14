@@ -325,6 +325,7 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `pco.vortex`                        | ✅      |
 | `clickbench_hits_5k.compact.vortex` | ✅      |
 | `clickbench_hits_5k.regular.vortex` | ✅      |
-| `masked.vortex`                     | ❓      | No fixture through v0.75.0 |
-| `patched.vortex`                    | ❓      | No fixture through v0.75.0 |
-| `variant.vortex`                    | ❓      | No fixture through v0.75.0 |
+| `masked.vortex`                     | ❓      | No fixture through v0.84.0 |
+| `patched.vortex`                    | ❓      | No fixture through v0.84.0 |
+| `variant.vortex`                    | ❓      | No fixture through v0.84.0 |
+| `map.vortex`                        | ❓      | No fixture through v0.84.0; vortex-java also has no `vortex.map` decoder yet (issue #351) |

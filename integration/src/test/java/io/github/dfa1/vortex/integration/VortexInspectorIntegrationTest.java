@@ -23,7 +23,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 
@@ -47,7 +46,7 @@ class VortexInspectorIntegrationTest {
     private static void writeJni(Path file, int rows) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         var rng = new Random(42L);
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, SCHEMA, new HashMap<>(), ALLOCATOR)) {
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, SCHEMA, ALLOCATOR).build()) {
             try (VectorSchemaRoot root = VectorSchemaRoot.create(SCHEMA, ALLOCATOR)) {
                 BigIntVector idVec = (BigIntVector) root.getVector("id");
                 Float8Vector valVec = (Float8Vector) root.getVector("value");

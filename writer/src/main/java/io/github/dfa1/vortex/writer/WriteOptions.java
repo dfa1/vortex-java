@@ -38,13 +38,14 @@ import java.util.Map;
 ///                                  low-cardinality columns dictionary-encoded.
 /// @param editions                  the [Edition] enabled per family, gating which
 ///                                  encodings this writer may emit — see [#withEdition(Edition)]. Defaults to
-///                                  the latest frozen `core` edition ([Editions#CORE_2026_07_0]): vortex-java
-///                                  implements every `core`-family encoding, and the default cascade never
-///                                  selects an `unstable`-family one, so this is a zero-cost guardrail against
-///                                  ever silently widening a file's minimum required reader. Deliberately has
-///                                  no "disable the guard" method: an `unstable`-family encoding is reached by
-///                                  enabling its edition explicitly via [#withEdition(Edition)], not by opting
-///                                  out of the guard altogether.
+///                                  the latest frozen `core` edition ([Editions#CORE_2026_08_0]): vortex-java
+///                                  implements every `core`-family encoding through `core2026.07.0` (the
+///                                  `core2026.08.0` addition, `vortex.map`, has no encoder yet), and the
+///                                  default cascade never selects an `unstable`-family one, so this is a
+///                                  zero-cost guardrail against ever silently widening a file's minimum
+///                                  required reader. Deliberately has no "disable the guard" method: an
+///                                  `unstable`-family encoding is reached by enabling its edition explicitly
+///                                  via [#withEdition(Edition)], not by opting out of the guard altogether.
 public record WriteOptions(
         int chunkSize,
         boolean enableZoneMaps,
@@ -72,7 +73,7 @@ public record WriteOptions(
 
     /// The default edition guard: only the latest frozen `core` edition enabled. See the `editions`
     /// parameter's javadoc above for the safety rationale.
-    private static final Map<EditionFamily, Edition> DEFAULT_EDITIONS = Map.of(EditionFamily.CORE, Editions.CORE_2026_07_0);
+    private static final Map<EditionFamily, Edition> DEFAULT_EDITIONS = Map.of(EditionFamily.CORE, Editions.CORE_2026_08_0);
 
     /// Default options: global dictionary encoding enabled, no cascading compression, Zstd disabled,
     /// edition guard targeting the latest frozen `core` edition.

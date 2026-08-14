@@ -16,7 +16,7 @@ import java.util.Set;
 /// for vortex-java's own users.
 ///
 /// The only `Edition` instances a caller should ever construct or pass to the writer module's
-/// `WriteOptions#withEdition(Edition)` are [Editions]'s 8 catalog constants, mirroring the real,
+/// `WriteOptions#withEdition(Edition)` are [Editions]'s catalog constants, mirroring the real,
 /// frozen Vortex spec — an `Edition` fabricated with an invented member set would carry no actual
 /// compatibility guarantee (nothing else in the ecosystem would recognize it). The canonical
 /// constructor can't be restricted below `public` (a record's constructor can't be more

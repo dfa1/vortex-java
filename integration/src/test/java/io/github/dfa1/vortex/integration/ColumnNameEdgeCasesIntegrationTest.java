@@ -19,7 +19,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,7 +88,7 @@ class ColumnNameEdgeCasesIntegrationTest {
     /// Writes one batch through the Rust (JNI) writer: one `long[]` per schema field, in order.
     private static void writeJni(Path file, Schema schema, long[][] columns) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, schema, new HashMap<>(), ALLOCATOR);
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, schema, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
             int n = columns[0].length;
             for (int c = 0; c < columns.length; c++) {

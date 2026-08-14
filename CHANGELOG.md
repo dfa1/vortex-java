@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - A `fastlanes.rle` column reads its run values and per-row index table in place instead of copying them onto the heap; `LazyRle{Long,Int,Short,Byte,Double,Float,Bool}Array` now take `MemorySegment` values/indices plus a `wideIndices` flag, **breaking** for code constructing them directly. ([#342](https://github.com/dfa1/vortex-java/issues/342))
+- `WriteOptions` now defaults to the `core2026.08.0` edition, tracking upstream's new frozen edition (adds `vortex.map`, which vortex-java doesn't implement yet, so this changes no default write's output). ([#351](https://github.com/dfa1/vortex-java/issues/351))
 
 ### Fixed
 
