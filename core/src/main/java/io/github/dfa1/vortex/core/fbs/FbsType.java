@@ -49,4 +49,7 @@ public final class FbsType {
 
     /// Member `Union` = 12
     public static final byte FbsUnion = (byte) 12;
+
+    /// Member `Map` = 13
+    public static final byte FbsMap = (byte) 13;
 }

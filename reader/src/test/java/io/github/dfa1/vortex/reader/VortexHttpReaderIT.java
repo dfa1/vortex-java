@@ -115,8 +115,9 @@ class VortexHttpReaderIT {
 
     // vortex.masked / vortex.patched / vortex.variant: decoders implemented, but no S3 fixture
     // is published (still absent at v0.84.0) — enable this test once fixtures exist upstream.
-    // vortex.map: neither a fixture nor a decoder/encoder exist yet (core2026.08.0, issue #351)
-    // — the wire type isn't modeled in vortex-java at all, so this can't even fail cleanly yet.
+    // vortex.map: decoder and encoder both exist (core2026.08.0, issue #351), only the fixture is
+    // missing — cross-language coverage runs through the vortex-jni oracle in the integration
+    // module (MapEncodingInteropIntegrationTest) until a fixture is published.
 
     @Disabled("no S3 fixture through v0.84.0")
     @ParameterizedTest

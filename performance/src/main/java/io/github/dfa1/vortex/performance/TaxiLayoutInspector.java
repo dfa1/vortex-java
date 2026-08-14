@@ -39,7 +39,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.List;
 
 /// Compare JNI (Rust) vs Java Vortex encoding for the NYC Yellow Taxi 2024-01 dataset.
@@ -149,8 +148,8 @@ public final class TaxiLayoutInspector {
         String uri = vortexFile.toAbsolutePath().toUri().toString();
         BufferAllocator allocator = ArrowAllocation.rootAllocator();
 
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, uri, ARROW_SCHEMA, new HashMap<>(), allocator);
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(
+                SESSION, uri, ARROW_SCHEMA, allocator).build();
              ParquetFileReader parquet = ParquetFileReader.open(InputFile.of(parquetFile));
              RowReader rows = parquet.buildRowReader().build()) {
 

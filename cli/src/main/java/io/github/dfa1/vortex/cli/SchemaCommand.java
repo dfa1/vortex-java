@@ -82,6 +82,11 @@ final class SchemaCommand {
             case DType.List(var elem, var nullable) -> "list<" + formatDType(elem) + ">" + (nullable ? "?" : "");
             case DType.FixedSizeList(var elem, var size, var nullable) ->
                     "list<" + formatDType(elem) + ">[" + size + "]" + (nullable ? "?" : "");
+            // keys_sorted is part of a map's identity — two schemas differing only in it are
+            // different types, so it is rendered rather than dropped (Rust prints it the same way).
+            case DType.Map(var key, var value, var keysSorted, var nullable) ->
+                    "map<" + formatDType(key) + ", " + formatDType(value)
+                            + ", keys_sorted=" + keysSorted + ">" + (nullable ? "?" : "");
             case DType.Extension(var id, var _, var _, var nullable) ->
                     "ext<" + id + ">" + (nullable ? "?" : "");
             case DType.Variant(var nullable) -> "variant" + (nullable ? "?" : "");

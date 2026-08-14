@@ -98,7 +98,7 @@ class EditionsTest {
                     EncodingId.VORTEX_PCO, EncodingId.VORTEX_SEQUENCE, EncodingId.VORTEX_ZSTD,
                     EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
                     EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED,
-                    EncodingId.VORTEX_VARIANT, new EncodingId.Custom("vortex.map")));
+                    EncodingId.VORTEX_VARIANT, EncodingId.VORTEX_MAP));
         }
 
         @Test
@@ -192,10 +192,10 @@ class EditionsTest {
         }
 
         @Test
-        void owningEdition_customCoreFamilyId_returnsTheEditionItFirstJoined() {
-            // Given — vortex.map has no EncodingId.WellKnown constant yet, but is still a core id
+        void owningEdition_latestCoreFamilyId_returnsTheEditionItFirstJoined() {
+            // Given — vortex.map joins at the newest core edition, the last entry scanned
             // When
-            Optional<Edition> result = Editions.owningEdition(new EncodingId.Custom("vortex.map"));
+            Optional<Edition> result = Editions.owningEdition(EncodingId.VORTEX_MAP);
 
             // Then
             assertThat(result).contains(Editions.CORE_2026_08_0);

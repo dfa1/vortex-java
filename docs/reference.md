@@ -49,10 +49,13 @@ new code — the record constructors stay available for pattern matching and tes
 | `DType.Struct`        | `DType.structBuilder().field(name, type)…build()`      | `new DType.Struct(fieldNames, fieldTypes, nullable)`        |
 | `DType.List`          | —                                                      | `new DType.List(elementType, nullable)`                     |
 | `DType.FixedSizeList` | —                                                      | `new DType.FixedSizeList(elementType, fixedSize, nullable)` |
+| `DType.Map`           | —                                                      | `new DType.Map(keyType, valueType, keysSorted, nullable)`   |
 | `DType.Extension`     | —                                                      | `new DType.Extension(id, storageDType, metadata, nullable)` |
 
 Helpers: `nullable()` (boolean accessor on every record), `asNullable()` (fluent
-shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.field(name)`.
+shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.field(name)`,
+`DType.Map.entriesDtype()` (the non-nullable `{key, value}` struct backing a map). A map's
+`keyType` must be non-nullable — `new DType.Map(...)` throws `VortexException` otherwise.
 
 ---
 
@@ -262,9 +265,8 @@ the wire format** — nothing about a targeted edition is ever persisted into a 
 | `cumulativeMembers(Edition)`         | The edition's own additions plus every earlier same-family edition's         |
 | `owningEdition(EncodingId)`          | The edition an id first joined, or empty if it belongs to none               |
 
-vortex-java implements every `core`-family encoding through `core2026.07.0`. `core2026.08.0` adds
-`vortex.map`, the canonical encoding for a `Map` dtype vortex-java does not model yet (`DType` has
-no `Map` variant), so it resolves to `EncodingId.Custom` rather than a `WellKnown` constant. Of
+vortex-java implements every `core`-family encoding through `core2026.08.0`, including
+`vortex.map` (`EncodingId.VORTEX_MAP`, the canonical encoding for the `DType.Map` logical type). Of
 `unstable`, only `fastlanes.delta` and `vortex.patched` have an `EncodingId.WellKnown` constant;
 the rest (`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family,
 `vortex.onpair`) resolve to `EncodingId.Custom` and are stored in the catalog anyway, mirroring

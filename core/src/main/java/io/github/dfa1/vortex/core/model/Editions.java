@@ -18,11 +18,10 @@ import java.util.Set;
 /// the union of everything it and every earlier edition of the same family added; see
 /// [#cumulativeMembers(Edition)].
 ///
-/// vortex-java implements every `core`-family encoding through `core2026.07.0`, referenced below
-/// by their [EncodingId.WellKnown] constants. `core2026.08.0` adds `vortex.map`, the canonical
-/// encoding for a `Map` dtype vortex-java does not model yet ([DType] has no `Map` variant), so it
-/// is named as [EncodingId.Custom] like the unimplemented `unstable` ids below. Of `unstable`, it
-/// implements only `fastlanes.delta` and `vortex.patched` — the remaining ids
+/// vortex-java implements every `core`-family encoding through `core2026.08.0`, referenced below
+/// by their [EncodingId.WellKnown] constants — including `vortex.map`, the canonical encoding for
+/// the [DType.Map] logical type. Of `unstable`, it implements only `fastlanes.delta` and
+/// `vortex.patched` — the remaining ids
 /// (`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family, `vortex.onpair`)
 /// have no `WellKnown` constant yet, so they are named as [EncodingId.Custom] instead; the catalog
 /// stores both uniformly and mirrors upstream faithfully rather than being truncated to what is
@@ -62,7 +61,7 @@ public final class Editions {
     /// The `core` edition adding the canonical Map encoding, released through August 2026.
     public static final Edition CORE_2026_08_0 = new Edition(
             new EditionId(EditionFamily.CORE, YearMonth.of(2026, 8), 0),
-            Set.of(new EncodingId.Custom("vortex.map")));
+            Set.of(EncodingId.VORTEX_MAP));
 
     /// The May 2025 draft edition of the `unstable` family.
     public static final Edition UNSTABLE_2025_05_0 = new Edition(

@@ -37,7 +37,7 @@ class ParserTest {
 
         @Test
         void parsesDtypeUnionAndTable() throws IOException {
-            // Given — dtype.fbs is the richest: enum-with-underlying, a 12-member union,
+            // Given — dtype.fbs is the richest: enum-with-underlying, a 13-member union,
             // and tables that reference each other recursively.
             Ast.SchemaFile sut = parse(repoRoot().resolve("core/src/main/fbs/dtype.fbs"));
 
@@ -46,9 +46,9 @@ class ParserTest {
             assertThat(ptype.underlying()).isEqualTo(Ast.Scalar.UINT8);
             assertThat(ptype.values()).hasSize(11);
 
-            // And — the union is captured with its 12 members and explicit discriminators.
+            // And — the union is captured with its 13 members and explicit discriminators.
             Ast.UnionDecl type = (Ast.UnionDecl) declNamed(sut, "Type");
-            assertThat(type.members()).hasSize(12);
+            assertThat(type.members()).hasSize(13);
             assertThat(type.members().getFirst().typeName()).isEqualTo("Null");
             assertThat(type.members().getFirst().number()).hasValue(1);
 

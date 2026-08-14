@@ -43,7 +43,6 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -205,8 +204,8 @@ public class JniWritesJavaReadsBigFileBenchmark {
         long[][] cols = new long[COLUMNS][BATCH_SIZE];
         long rowsLeft = TOTAL_ROWS;
 
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, uri, JNI_SCHEMA, new HashMap<>(), allocator)) {
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(
+                SESSION, uri, JNI_SCHEMA, allocator).build()) {
             while (rowsLeft > 0) {
                 int n = (int) Math.min(rowsLeft, BATCH_SIZE);
                 for (int c = 0; c < COLUMNS; c++) {

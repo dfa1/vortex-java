@@ -82,6 +82,13 @@ class SchemaCommandTest {
                 arguments(new DType.List(i64, true), "list<I64>?"),
                 arguments(new DType.FixedSizeList(i64, 4, false), "list<I64>[4]"),
                 arguments(new DType.FixedSizeList(i64, 4, true), "list<I64>[4]?"),
+                arguments(new DType.Map(DType.UTF8, i64, false, false), "map<utf8, I64, keys_sorted=false>"),
+                arguments(new DType.Map(DType.UTF8, i64, false, true), "map<utf8, I64, keys_sorted=false>?"),
+                // keys_sorted is part of a map's identity, so two maps differing only in it must
+                // not render identically
+                arguments(new DType.Map(DType.UTF8, i64, true, false), "map<utf8, I64, keys_sorted=true>"),
+                arguments(new DType.Map(DType.UTF8, new DType.Primitive(PType.I64, true), false, false),
+                        "map<utf8, I64?, keys_sorted=false>"),
                 arguments(new DType.Extension("vortex.uuid", i64, null, false), "ext<vortex.uuid>"),
                 arguments(new DType.Extension("vortex.uuid", i64, null, true), "ext<vortex.uuid>?"),
                 arguments(DType.VARIANT, "variant"),

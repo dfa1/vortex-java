@@ -47,7 +47,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -254,8 +253,8 @@ public class JavaVsJniFsstBenchmark {
 
     private void writeJni(Path path) throws IOException {
         String uri = path.toAbsolutePath().toUri().toString();
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, uri, JNI_SCHEMA, new HashMap<>(), allocator)) {
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(
+                SESSION, uri, JNI_SCHEMA, allocator).build()) {
             for (int b = 0; b < NUM_BATCHES; b++) {
                 flushJni(writer, b);
             }

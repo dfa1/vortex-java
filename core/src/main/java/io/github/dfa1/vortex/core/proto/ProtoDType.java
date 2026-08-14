@@ -18,6 +18,7 @@ import javax.annotation.processing.Generated;
 /// @param fixed_size_list field tag 10
 /// @param variant field tag 11
 /// @param union field tag 12
+/// @param map field tag 13
 @Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record ProtoDType(
         ProtoNull null_,
@@ -31,7 +32,8 @@ public record ProtoDType(
         ProtoExtension extension,
         ProtoFixedSizeList fixed_size_list,
         ProtoVariant variant,
-        ProtoUnion union
+        ProtoUnion union,
+        ProtoMap map
 ) {
 
     /// Decodes a {@code vortex.dtype.DType} from a slice of a memory segment.
@@ -54,6 +56,7 @@ public record ProtoDType(
         ProtoFixedSizeList fixed_size_list = null;
         ProtoVariant variant = null;
         ProtoUnion union = null;
+        ProtoMap map = null;
         while (r.hasMore()) {
             int tag = r.readVarint32();
             switch (tag >>> 3) {
@@ -105,10 +108,14 @@ public record ProtoDType(
                     MemorySegment __slice = r.readLenDelimSegment();
                     union = ProtoUnion.decode(__slice, 0, __slice.byteSize());
                 }
+                case 13 -> {
+                    MemorySegment __slice = r.readLenDelimSegment();
+                    map = ProtoMap.decode(__slice, 0, __slice.byteSize());
+                }
                 default -> r.skipField(tag & 7);
             }
         }
-        return new ProtoDType(null_, bool, primitive, decimal, utf8, binary, struct, list, extension, fixed_size_list, variant, union);
+        return new ProtoDType(null_, bool, primitive, decimal, utf8, binary, struct, list, extension, fixed_size_list, variant, union, map);
     }
 
     /// Encodes this record to a proto3-wire-format byte array.
@@ -192,89 +199,102 @@ public record ProtoDType(
             union.encodeTo(w);
             w.endLenDelim(__mark);
         }
+        if (map != null) {
+            w.writeTag(13, 2);
+            int __mark = w.beginLenDelim();
+            map.encodeTo(w);
+            w.endLenDelim(__mark);
+        }
     }
 
     /// Factory for oneof case {@code null} (field tag 1).
     /// @param value the value to set
     /// @return a record with only the {@code null} component set
     public static ProtoDType ofNull(ProtoNull value) {
-        return new ProtoDType(value, null, null, null, null, null, null, null, null, null, null, null);
+        return new ProtoDType(value, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /// Factory for oneof case {@code bool} (field tag 2).
     /// @param value the value to set
     /// @return a record with only the {@code bool} component set
     public static ProtoDType ofBool(ProtoBool value) {
-        return new ProtoDType(null, value, null, null, null, null, null, null, null, null, null, null);
+        return new ProtoDType(null, value, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /// Factory for oneof case {@code primitive} (field tag 3).
     /// @param value the value to set
     /// @return a record with only the {@code primitive} component set
     public static ProtoDType ofPrimitive(ProtoPrimitive value) {
-        return new ProtoDType(null, null, value, null, null, null, null, null, null, null, null, null);
+        return new ProtoDType(null, null, value, null, null, null, null, null, null, null, null, null, null);
     }
 
     /// Factory for oneof case {@code decimal} (field tag 4).
     /// @param value the value to set
     /// @return a record with only the {@code decimal} component set
     public static ProtoDType ofDecimal(ProtoDecimal value) {
-        return new ProtoDType(null, null, null, value, null, null, null, null, null, null, null, null);
+        return new ProtoDType(null, null, null, value, null, null, null, null, null, null, null, null, null);
     }
 
     /// Factory for oneof case {@code utf8} (field tag 5).
     /// @param value the value to set
     /// @return a record with only the {@code utf8} component set
     public static ProtoDType ofUtf8(ProtoUtf8 value) {
-        return new ProtoDType(null, null, null, null, value, null, null, null, null, null, null, null);
+        return new ProtoDType(null, null, null, null, value, null, null, null, null, null, null, null, null);
     }
 
     /// Factory for oneof case {@code binary} (field tag 6).
     /// @param value the value to set
     /// @return a record with only the {@code binary} component set
     public static ProtoDType ofBinary(ProtoBinary value) {
-        return new ProtoDType(null, null, null, null, null, value, null, null, null, null, null, null);
+        return new ProtoDType(null, null, null, null, null, value, null, null, null, null, null, null, null);
     }
 
     /// Factory for oneof case {@code struct} (field tag 7).
     /// @param value the value to set
     /// @return a record with only the {@code struct} component set
     public static ProtoDType ofStruct(ProtoStruct value) {
-        return new ProtoDType(null, null, null, null, null, null, value, null, null, null, null, null);
+        return new ProtoDType(null, null, null, null, null, null, value, null, null, null, null, null, null);
     }
 
     /// Factory for oneof case {@code list} (field tag 8).
     /// @param value the value to set
     /// @return a record with only the {@code list} component set
     public static ProtoDType ofList(ProtoList value) {
-        return new ProtoDType(null, null, null, null, null, null, null, value, null, null, null, null);
+        return new ProtoDType(null, null, null, null, null, null, null, value, null, null, null, null, null);
     }
 
     /// Factory for oneof case {@code extension} (field tag 9).
     /// @param value the value to set
     /// @return a record with only the {@code extension} component set
     public static ProtoDType ofExtension(ProtoExtension value) {
-        return new ProtoDType(null, null, null, null, null, null, null, null, value, null, null, null);
+        return new ProtoDType(null, null, null, null, null, null, null, null, value, null, null, null, null);
     }
 
     /// Factory for oneof case {@code fixed_size_list} (field tag 10).
     /// @param value the value to set
     /// @return a record with only the {@code fixed_size_list} component set
     public static ProtoDType ofFixedSizeList(ProtoFixedSizeList value) {
-        return new ProtoDType(null, null, null, null, null, null, null, null, null, value, null, null);
+        return new ProtoDType(null, null, null, null, null, null, null, null, null, value, null, null, null);
     }
 
     /// Factory for oneof case {@code variant} (field tag 11).
     /// @param value the value to set
     /// @return a record with only the {@code variant} component set
     public static ProtoDType ofVariant(ProtoVariant value) {
-        return new ProtoDType(null, null, null, null, null, null, null, null, null, null, value, null);
+        return new ProtoDType(null, null, null, null, null, null, null, null, null, null, value, null, null);
     }
 
     /// Factory for oneof case {@code union} (field tag 12).
     /// @param value the value to set
     /// @return a record with only the {@code union} component set
     public static ProtoDType ofUnion(ProtoUnion value) {
-        return new ProtoDType(null, null, null, null, null, null, null, null, null, null, null, value);
+        return new ProtoDType(null, null, null, null, null, null, null, null, null, null, null, value, null);
+    }
+
+    /// Factory for oneof case {@code map} (field tag 13).
+    /// @param value the value to set
+    /// @return a record with only the {@code map} component set
+    public static ProtoDType ofMap(ProtoMap value) {
+        return new ProtoDType(null, null, null, null, null, null, null, null, null, null, null, null, value);
     }
 }

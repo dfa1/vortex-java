@@ -99,7 +99,8 @@ integer width is wire-legal, mirroring `VarBinArray`), and `ScanIterator` could 
 | `vortex.chunked`            | `ChunkedEncodingDecoder`         | `ChunkedEncodingEncoder`         | ✅      | ✅      | Primitive + Struct concat                                             |
 | `vortex.fsst`               | `FsstEncodingDecoder`            | `FsstEncodingEncoder`            | ✅      | ✅      | Utf8, Binary                                                          |
 | `vortex.list`               | `ListEncodingDecoder`            | `ListEncodingEncoder`            | ✅      | ✅      |                                                                       |
-| `vortex.listview`           | `ListViewEncodingDecoder`        | `ListViewEncodingEncoder`        | ✅      | ✅      |                                                                       |
+| `vortex.listview`           | `ListViewEncodingDecoder`        | `ListViewEncodingEncoder`        | ✅      | ✅      | Validity lives in the encoding's own fourth child slot, not under a `vortex.masked` wrapper. Read: both shapes decode. Write: only `vortex.map`'s entries child takes this path — a plain nullable `DType.List` column still routes through `vortex.masked` + `vortex.list` |
+| `vortex.map`                | `MapEncodingDecoder`             | `MapEncodingEncoder`             | ✅      | ✅      | Single `entries` child, a bare `vortex.listview` of non-nullable `{key, value}` structs (any other entries encoding is rejected, as in Rust); map validity is delegated to that child's validity slot. Single-flat columns only: neither `ChunkedArrayCombiner` nor `ScanIterator`'s row-window slicing has a `MapArray` arm yet, so a chunked map column or a split-window scan fails as `VortexException`. Pre-existing gap shared with `vortex.listview`; tracked separately |
 | `vortex.fixed_size_list`    | `FixedSizeListEncodingDecoder`   | `FixedSizeListEncodingEncoder`   | ✅      | ✅      |                                                                       |
 | `vortex.zstd`               | `ZstdEncodingDecoder`            | `ZstdEncodingEncoder`            | ✅      | ✅      | Primitive, Utf8, Binary                                               |
 | `vortex.masked`             | `MaskedEncodingDecoder`          | `MaskedEncodingEncoder`          | ✅      | ✅      | NullableData carrier; inner values cascade (Dict/FSST/ALP/…) when cascading is enabled; Utf8/Primitive still compete on measured size even at depth 0, else first-match FixedSizeList |
@@ -151,7 +152,8 @@ decoder falls into one of three shapes:
 | `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinChunkedArray` (Utf8/Binary), ADR 0012 |
 | `vortex.fsst`               | Materialized  | Materialized  | symbol-table decompression                                               |
 | `vortex.list`               | Lazy          | Lazy          | `ListArray` wraps elements + offsets children; shape inherits from child  |
-| `vortex.listview`           | Lazy          | Lazy          | `ListViewArray` wraps elements + offsets + sizes children                 |
+| `vortex.listview`           | Lazy          | Lazy          | `ListViewArray` wraps elements + offsets + sizes children; a validity child yields a `MaskedArray` over it |
+| `vortex.map`                | Lazy          | Lazy          | `MapArray` wraps the entries child (a `ListViewArray`, or a `MaskedArray` over one when the map is nullable) |
 | `vortex.fixed_size_list`    | Lazy          | Lazy          | `FixedSizeListArray` wraps flat elements child; no per-row alloc          |
 | `vortex.zstd`               | Materialized  | Materialized  | block decompression                                                      |
 | `vortex.masked`             | Zero-copy     | Zero-copy     | wraps inner + validity                                                   |
@@ -202,6 +204,7 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `core2025.06.0` | `core` | `vortex.pco`, `vortex.sequence`, `vortex.zstd` |
 | `core2025.10.0` | `core` | `fastlanes.rle`, `vortex.fixed_size_list`, `vortex.listview`, `vortex.masked` |
 | `core2026.07.0` | `core` | `vortex.variant` |
+| `core2026.08.0` | `core` | `vortex.map` |
 | `unstable2025.05.0` | `unstable` | `fastlanes.delta` ✅ implemented |
 | `unstable2026.02.0` | `unstable` | `vortex.zstd_buffers` ❌ not implemented |
 | `unstable2026.04.0` | `unstable` | `vortex.parquet.variant` ❌, `vortex.patched` ✅, `vortex.tensor.*` (4 ids) ❌ |
@@ -328,4 +331,4 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `masked.vortex`                     | ❓      | No fixture through v0.84.0 |
 | `patched.vortex`                    | ❓      | No fixture through v0.84.0 |
 | `variant.vortex`                    | ❓      | No fixture through v0.84.0 |
-| `map.vortex`                        | ❓      | No fixture through v0.84.0; vortex-java also has no `vortex.map` decoder yet (issue #351) |
+| `map.vortex`                        | ❓      | No fixture through v0.84.0; `vortex.map` decode/encode is covered by the vortex-jni oracle instead (issue #351) |

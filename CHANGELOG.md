@@ -7,13 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `DType.Map` logical type and the `vortex.map` encoding, read and write: a map column stores one `entries` child, a listview of non-nullable `{key, value}` structs (nullable map rows carry their validity in that listview's own validity slot), decoding to the new `MapArray`. Adding `Map` to the sealed `DType`'s `permits` clause is **breaking** for downstream exhaustive `switch` statements over `DType`. ([#351](https://github.com/dfa1/vortex-java/issues/351))
+
 ### Changed
 
 - A `fastlanes.rle` column reads its run values and per-row index table in place instead of copying them onto the heap; `LazyRle{Long,Int,Short,Byte,Double,Float,Bool}Array` now take `MemorySegment` values/indices plus a `wideIndices` flag, **breaking** for code constructing them directly. ([#342](https://github.com/dfa1/vortex-java/issues/342))
-- `WriteOptions` now defaults to the `core2026.08.0` edition, tracking upstream's new frozen edition (adds `vortex.map`, which vortex-java doesn't implement yet, so this changes no default write's output). ([#351](https://github.com/dfa1/vortex-java/issues/351))
+- `WriteOptions` now defaults to the `core2026.08.0` edition, tracking upstream's new frozen edition. ([#351](https://github.com/dfa1/vortex-java/issues/351))
 
 ### Fixed
 
+- A `vortex.listview` column no longer silently drops its validity bitmap on decode, and a validity child under a dtype the file declares non-nullable now fails as `VortexException` instead of decoding to an array that contradicts its own column dtype. ([#351](https://github.com/dfa1/vortex-java/issues/351))
+- The JMH benchmarks in `performance` compile again against vortex-jni 0.84.0, which replaced `VortexWriter.create(…)` with a builder. ([#351](https://github.com/dfa1/vortex-java/issues/351))
 - A malformed `fastlanes.rle` column now fails as `VortexException` where an absurd declared length, an empty or undersized child segment, or an out-of-range chunk offset previously escaped as `OutOfMemoryError`, `NegativeArraySizeException`, `ArithmeticException`, or `IndexOutOfBoundsException`. ([#342](https://github.com/dfa1/vortex-java/issues/342))
 - A `vortex.dict` layout over a StringView or `vortex.constant` values pool no longer expands every row into a fresh buffer, and no longer silently drops that pool's validity. ([#341](https://github.com/dfa1/vortex-java/issues/341))
 - A `vortex.dict` layout whose values pool declares more entries than it stores — a `vortex.constant` pool can claim any length in a few hundred bytes — no longer allocates against that claim; codes are bounded against the pool first, and an out-of-pool code fails as `VortexException`. ([#341](https://github.com/dfa1/vortex-java/issues/341))

@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.core.fbs.FbsBool;
 import io.github.dfa1.vortex.core.fbs.FbsDecimal;
 import io.github.dfa1.vortex.core.fbs.FbsExtension;
 import io.github.dfa1.vortex.core.fbs.FbsFixedSizeList;
+import io.github.dfa1.vortex.core.fbs.FbsMap;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
 import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
 import io.github.dfa1.vortex.core.fbs.FbsStruct;
@@ -302,6 +303,19 @@ final class PostscriptParser {
             case FbsType.FbsFixedSizeList -> {
                 var fsl = fbs.type(new FbsFixedSizeList());
                 yield new DType.FixedSizeList(convertDType(fsl.elementType(), depth + 1), (int) fsl.size(), fsl.nullable());
+            }
+            case FbsType.FbsMap -> {
+                var m = fbs.type(new FbsMap());
+                // Both child dtypes are mandatory; a crafted table can omit either field, which
+                // the generated reader surfaces as null.
+                if (m.keyType() == null || m.valueType() == null) {
+                    throw new VortexException("map dtype missing key_type or value_type");
+                }
+                DType keyType = convertDType(m.keyType(), depth + 1);
+                DType valueType = convertDType(m.valueType(), depth + 1);
+                // A nullable key type is rejected by DType.Map's own constructor, which raises
+                // VortexException — the security contract holds without a second check here.
+                yield new DType.Map(keyType, valueType, m.keysSorted(), m.nullable());
             }
             case FbsType.FbsExtension -> {
                 var e = fbs.type(new FbsExtension());

@@ -23,6 +23,7 @@ import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ListViewEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.MapEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PatchedEncodingEncoder;
@@ -183,6 +184,7 @@ public final class WriteRegistry {
                     .register(new FsstEncodingEncoder())
                     .register(new ListEncodingEncoder())
                     .register(new ListViewEncodingEncoder())
+                    .register(new MapEncodingEncoder())
                     .register(new MaskedEncodingEncoder())
                     .register(new NullEncodingEncoder())
                     .register(new PatchedEncodingEncoder())

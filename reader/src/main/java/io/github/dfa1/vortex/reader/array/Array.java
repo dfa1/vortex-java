@@ -14,7 +14,7 @@ import java.util.Optional;
 public sealed interface Array
         permits BoolArray, ByteArray, DecimalArray, DoubleArray, FixedSizeListArray,
                         Float16Array, FloatArray, GenericArray, IntArray, ListArray, ListViewArray,
-                        LongArray, MaskedArray, NullArray, ShortArray, StructArray, UnknownArray,
+                        LongArray, MapArray, MaskedArray, NullArray, ShortArray, StructArray, UnknownArray,
                         VarBinArray, VariantArray {
 
     /// Returns the number of elements in this array.

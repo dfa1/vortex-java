@@ -42,7 +42,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -198,8 +197,8 @@ public class JavaVsJniWriteBenchmark {
     /// JNI write: encode and write 10 M rows via Rust VortexWriter.
     @Benchmark
     public long jniWrite() throws IOException {
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
-                SESSION, jniFile.toAbsolutePath().toUri().toString(), JNI_SCHEMA, new HashMap<>(), allocator)) {
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(
+                SESSION, jniFile.toAbsolutePath().toUri().toString(), JNI_SCHEMA, allocator).build()) {
             for (int b = 0; b < NUM_BATCHES; b++) {
                 flushJni(writer, b);
             }

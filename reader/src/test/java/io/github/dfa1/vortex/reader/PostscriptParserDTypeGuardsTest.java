@@ -9,9 +9,13 @@ import io.github.dfa1.vortex.core.fbs.FbsDType;
 import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.core.fbs.FbsMap;
 import io.github.dfa1.vortex.core.fbs.FbsNull;
+import io.github.dfa1.vortex.core.fbs.FbsPType;
+import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
 import io.github.dfa1.vortex.core.fbs.FbsStruct;
 import io.github.dfa1.vortex.core.fbs.FbsType;
+import io.github.dfa1.vortex.core.fbs.FbsUtf8;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
@@ -19,7 +23,7 @@ import java.lang.foreign.MemorySegment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/// Drives the struct-dtype guards in `PostscriptParser.convertDType` with crafted dtype
+/// Drives the struct- and map-dtype guards in `PostscriptParser.convertDType` with crafted dtype
 /// FlatBuffers through the package-private [PostscriptParser#parseBlobs] — no file needed.
 ///
 /// The duplicate-name and arity-desync inputs are files the reference writer refuses to produce
@@ -105,7 +109,88 @@ class PostscriptParserDTypeGuardsTest {
                 .hasMessageContaining("blank encoding id at array spec index 0");
     }
 
+    @Test
+    void convertDType_mapMissingKeyType_throwsVortexException() {
+        // Given — a map dtype table with no key_type field. FlatBuffers makes every field
+        // optional on the wire, so a crafted table can omit one and the generated reader hands
+        // back null; without the guard that null would reach DType.Map as a raw NPE.
+        MemorySegment dtype = mapDType(false, true, false);
+
+        // When / Then — footer/layout fixtures hoisted so only the subject call is in the lambda
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("map dtype missing key_type or value_type");
+    }
+
+    @Test
+    void convertDType_mapMissingValueType_throwsVortexException() {
+        // Given — the same omission on the other child
+        MemorySegment dtype = mapDType(true, false, false);
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("map dtype missing key_type or value_type");
+    }
+
+    @Test
+    void convertDType_mapNullableKeyType_throwsVortexException() {
+        // Given — a nullable key type, which no writer produces (Rust and this implementation
+        // both refuse it): the rejection lives in DType.Map's compact constructor and must
+        // surface as VortexException here, not IllegalArgumentException (ADR 0003)
+        MemorySegment dtype = mapDType(true, true, true);
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("map key dtype must be non-nullable");
+    }
+
+    @Test
+    void convertDType_wellFormedMap_isParsed() {
+        // Given — the same builder producing a legal map, so the negative cases above are
+        // pinned to the omission/nullability and not to a broken fixture
+        MemorySegment dtype = mapDType(true, true, false);
+
+        // When
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        PostscriptParser.ParsedFile result = PostscriptParser.parseBlobs(footer, layout, dtype);
+
+        // Then
+        assertThat(result.dtype()).isEqualTo(new DType.Map(DType.UTF8, DType.I64, true, false));
+    }
+
     // ── FlatBuffer builders ─────────────────────────────────────────────────────
+
+    /// Builds a root `map<utf8, i64>` dtype blob, optionally omitting either child field or
+    /// declaring the key type nullable.
+    private static MemorySegment mapDType(boolean withKeyType, boolean withValueType, boolean nullableKey) {
+        var fbb = new FbsBuilder(256);
+        int keyOff = FbsDType.createFbsDType(fbb, FbsType.FbsUtf8, FbsUtf8.createFbsUtf8(fbb, nullableKey));
+        int valueOff = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive,
+                FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false));
+        FbsMap.startFbsMap(fbb);
+        if (withKeyType) {
+            FbsMap.addKeyType(fbb, keyOff);
+        }
+        if (withValueType) {
+            FbsMap.addValueType(fbb, valueOff);
+        }
+        FbsMap.addKeysSorted(fbb, true);
+        FbsMap.addNullable(fbb, false);
+        int map = FbsMap.endFbsMap(fbb);
+        int root = FbsDType.createFbsDType(fbb, FbsType.FbsMap, map);
+        fbb.finish(root);
+        return fbb.dataSegment();
+    }
+
 
     private static MemorySegment footerWithArraySpec(String arraySpec) {
         var fbb = new FbsBuilder(256);

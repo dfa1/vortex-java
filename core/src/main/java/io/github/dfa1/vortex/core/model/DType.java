@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.Objects;
 
 /// Vortex logical data type. Strictly logical — defines value domain, not physical storage.
 ///
@@ -19,7 +20,7 @@ import java.util.LinkedHashMap;
 public sealed interface DType
         permits DType.Null, DType.Bool, DType.Primitive, DType.Decimal,
                         DType.Utf8, DType.Binary, DType.Struct,
-                        DType.List, DType.FixedSizeList, DType.Extension, DType.Variant {
+                        DType.List, DType.FixedSizeList, DType.Map, DType.Extension, DType.Variant {
 
     /// Returns whether this type allows null values.
     ///
@@ -36,7 +37,7 @@ public sealed interface DType
         return switch (this) {
             case Primitive(var pt, _) -> pt.isUnsigned();
             case Null _, Bool _, Decimal _, Utf8 _, Binary _, Struct _, List _,
-                 FixedSizeList _, Extension _, Variant _ -> false;
+                 FixedSizeList _, Map _, Extension _, Variant _ -> false;
         };
     }
 
@@ -64,6 +65,7 @@ public sealed interface DType
             case Struct(var names, var types, _) -> new Struct(names, types, nullable);
             case List(var elem, _) -> new List(elem, nullable);
             case FixedSizeList(var elem, var size, _) -> new FixedSizeList(elem, size, nullable);
+            case Map(var key, var value, var keysSorted, _) -> new Map(key, value, keysSorted, nullable);
             case Extension(var id, var storage, var meta, _) -> new Extension(id, storage, meta, nullable);
             case Variant _ -> new Variant(nullable);
         };
@@ -308,6 +310,44 @@ public sealed interface DType
     /// @param fixedSize   number of elements in every list
     /// @param nullable    whether null values are permitted
     record FixedSizeList(DType elementType, int fixedSize, boolean nullable) implements DType {
+    }
+
+    /// Map logical type: an unordered collection of key/value entries per row.
+    ///
+    /// Physically a list of non-nullable `{key, value}` structs — see [#entriesDtype()]. The key
+    /// type must be non-nullable; the value type may be nullable.
+    ///
+    /// @param keyType    logical type of each entry key; must be non-nullable
+    /// @param valueType  logical type of each entry value
+    /// @param keysSorted producer assertion that every row's keys are sorted ascending; never
+    ///                   validated against the data, by either this implementation or the Rust
+    ///                   reference
+    /// @param nullable   whether null values are permitted
+    record Map(DType keyType, DType valueType, boolean keysSorted, boolean nullable) implements DType {
+
+        /// Rejects a nullable key type. Runs both on programmatic construction and while parsing
+        /// an untrusted file's DType blob, so it raises [VortexException] rather than
+        /// [IllegalArgumentException] — same reasoning as [Extension]'s metadata bound.
+        ///
+        /// @throws NullPointerException if `keyType` is `null`
+        /// @throws VortexException      if `keyType` is nullable
+        public Map {
+            Objects.requireNonNull(keyType, "keyType");
+            if (keyType.nullable()) {
+                throw new VortexException("map key dtype must be non-nullable: " + keyType);
+            }
+        }
+
+        /// Returns the dtype of a single map entry: a non-nullable [Struct] of `key` and `value`.
+        /// This is the element type of the list that physically backs a map column.
+        ///
+        /// @return the non-nullable `{key, value}` [Struct] dtype
+        public Struct entriesDtype() {
+            return new Struct(
+                    java.util.List.of(ColumnName.of("key"), ColumnName.of("value")),
+                    java.util.List.of(keyType, valueType),
+                    false);
+        }
     }
 
     /// Extension logical type with user-defined semantics layered over a storage type.

@@ -301,7 +301,7 @@ class VariantEncodingDecoderTest {
         void noFieldSet_throws() {
             // Given a proto DType with no oneof arm populated
             var empty = new io.github.dfa1.vortex.core.proto.ProtoDType(
-                    null, null, null, null, null, null, null, null, null, null, null, null);
+                    null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             // When / Then
             assertThatThrownBy(() -> VariantEncodingDecoder.dtypeFromProto(empty))

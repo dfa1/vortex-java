@@ -28,6 +28,7 @@ import io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.FsstEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ListEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ListViewEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.MapEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.MaskedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.NullEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PatchedEncodingDecoder;
@@ -229,6 +230,7 @@ public final class ReadRegistry {
                     .register(new FsstEncodingDecoder())
                     .register(new ListEncodingDecoder())
                     .register(new ListViewEncodingDecoder())
+                    .register(new MapEncodingDecoder())
                     .register(new MaskedEncodingDecoder())
                     .register(new NullEncodingDecoder())
                     .register(new PatchedEncodingDecoder())

@@ -444,6 +444,13 @@ public final class VortexWriter implements Closeable {
                         fbb, elemTypeOff, fixedSize, nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsFixedSizeList, inner);
             }
+            case DType.Map(var keyType, var valueType, var keysSorted, var nullable) -> {
+                int keyTypeOff = serializeDType(fbb, keyType);
+                int valueTypeOff = serializeDType(fbb, valueType);
+                int inner = io.github.dfa1.vortex.core.fbs.FbsMap.createFbsMap(
+                        fbb, keyTypeOff, valueTypeOff, keysSorted, nullable);
+                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsMap, inner);
+            }
             case DType.Extension e -> {
                 int idOff = fbb.createString(e.extensionId());
                 int storageDtypeOff = serializeDType(fbb, e.storageDType());
@@ -688,6 +695,12 @@ public final class VortexWriter implements Closeable {
         // MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
         // Exception: a configured encoder that embeds validity itself (acceptsNullable, e.g.
         // vortex.zstd) takes the NullableData straight, so no masked wrapper is inserted.
+        // Map columns bypass both: the container encoding is structural rather than a
+        // compressible primitive codec (same reason Variant does below), and their validity is
+        // delegated to the entries child's own validity slot, so no masked wrapper belongs here.
+        if (encodingOverride == null && dtype instanceof DType.Map) {
+            encodingOverride = new io.github.dfa1.vortex.writer.encode.MapEncodingEncoder();
+        }
         if (encodingOverride == null
                 && data instanceof io.github.dfa1.vortex.writer.encode.NullableData
                 && !(dtype instanceof DType.Extension)) {
