@@ -292,6 +292,50 @@ Low-cardinality string column with dict layout:
                   └─ codes:   Flat → SegmentSpec → fastlanes.bitpacked  (one code per row)
 ```
 
+### Map column layout
+
+`vortex.map` (`DType.Map`) is a good illustration of how an array encoding's own children
+cascade below a single `Flat` leaf — unlike the plain-primitive and dict examples above, its
+tree has real depth. Logically, a map column stores a variable-length list of `{key, value}`
+entries per row; physically, that's exactly a `ListView<Struct{key, value}>` wearing a
+`vortex.map` label:
+
+```
+ Flat → SegmentSpec → vortex.map            (0 buffers, no metadata — 1 child: entries)
+          └─ entries: vortex.listview       (must be a *bare* listview — see below)
+               ├─ elements: vortex.struct   (non-nullable {key, value} entry structs)
+               │    ├─ "key":   vortex.varbin | vortex.dict | ...  (any encoding accepting keyType)
+               │    └─ "value": vortex.masked(...) when valueType is nullable, else same as key
+               ├─ offsets: vortex.primitive (i32, one per map row — start index into elements)
+               ├─ sizes:   vortex.primitive (i32, one per map row — entry count)
+               └─ [validity: vortex.bool]   (present only when the map itself is nullable)
+```
+
+`vortex.map` itself carries zero buffers and no metadata — every bit of information about a
+map column lives either in its `DType.Map(keyType, valueType, keysSorted, nullable)` schema
+(a schema-only producer assertion for `keysSorted`, never checked against the data) or in the
+single `entries` child.
+
+**Two independent nullability slots, easy to conflate:**
+
+- **A null *map row*** (`DType.Map(..., nullable=true)`) has no representation on the
+  `vortex.map` node at all — it's delegated entirely to the `entries` child's own validity,
+  carried in `vortex.listview`'s optional fourth child slot (a `vortex.bool` bitmap). This is
+  why `entries` must be a *bare* `vortex.listview`, never wrapped in a `vortex.masked` — a
+  masked wrapper would give a nullable map two different on-disk representations for the same
+  logical value, so both the Rust reference and vortex-java reject it. Every other nullable
+  `DType.List` column not underneath a map is unaffected by this and still wraps in
+  `vortex.masked` + `vortex.list` as before.
+- **A null *entry value*** (`DType.Map(key, value.asNullable(), ...)`, e.g. `{a: 1, b: null}`
+  inside an otherwise-present map row) is a completely different bit: it rides the entry
+  struct's own `value` field validity — ordinary `vortex.masked` wrapping, exactly like a
+  nullable field anywhere else inside a `vortex.struct`. It has nothing to do with the map row
+  being present or absent.
+
+See [how-to.md#write-and-read-a-map-column](how-to.md#write-and-read-a-map-column) for the
+write/read Java API this shape maps to, and `docs/reference.md#core-types` for `DType.Map`'s
+field list.
+
 ### Pruning by zone maps
 
 `vortex.stats` is the pruning hook. At scan time, when `ScanOptions` carries a

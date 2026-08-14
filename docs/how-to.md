@@ -293,6 +293,94 @@ java -jar cli/target/vortex-cli-*-all.jar filter data.vortex "price >= 100" > ou
 
 ---
 
+## Write and read a Map column
+
+`DType.Map` has no dedicated write-side value type. Physically, a map column's `vortex.map`
+node has exactly one child — `entries`, a `ListView<Struct{key, value}>` — so you hand
+`writeChunk` the same shape you'd hand a plain `ListView<Struct>` column: a `ListViewData`
+whose `elements` is a `StructData` of a keys array and a values array. See
+[explanation.md#map-column-layout](explanation.md#map-column-layout) for why the wire format
+looks like this and how the two independent nullability slots (map row vs. entry value) work.
+
+**Write:**
+
+```java
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.writer.encode.ListViewData;
+import io.github.dfa1.vortex.writer.encode.NullableData;
+import io.github.dfa1.vortex.writer.encode.StructData;
+
+// map<utf8, i64?> — non-nullable string keys, nullable long values
+DType.Map mapType = new DType.Map(DType.UTF8, DType.I64.asNullable(), false, false);
+DType.Struct schema = new DType.Struct(List.of(ColumnName.of("attrs")), List.of(mapType), false);
+
+// 3 rows: {a:1, b:2}, {} (empty map), {c:null}
+String[] keys = {"a", "b", "c"};
+long[] values = {1L, 2L, 0L};                     // placeholder at the null entry
+boolean[] valueValidity = {true, true, false};    // per-entry value validity
+StructData entryStructs = new StructData(List.of(keys, new NullableData(values, valueValidity)));
+
+int[] offsets = {0, 2, 2};   // row i's entries start at entryStructs[offsets[i]]
+int[] sizes = {2, 0, 1};     // row i has sizes[i] entries
+ListViewData column = new ListViewData(entryStructs, offsets, sizes, 3);
+
+try (var ch = FileChannel.open(Path.of("attrs.vortex"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+     var writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+    writer.writeChunk(Map.of(ColumnName.of("attrs"), column));
+}
+```
+
+A *nullable map row* (as opposed to a nullable value inside a present map) wraps the whole
+`ListViewData` in `NullableData` instead — `mapType.asNullable()` in the schema, and
+`new NullableData(column, new boolean[]{true, false, true})` in place of `column` above.
+
+**Read:**
+
+```java
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.ListViewArray;
+import io.github.dfa1.vortex.reader.array.MapArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.StructArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
+
+try (var reader = VortexReader.open(Path.of("attrs.vortex"));
+     var iter = reader.scan(ScanOptions.all())) {
+    while (iter.hasNext()) {
+        try (var chunk = iter.next()) {
+            MapArray map = chunk.column("attrs");
+
+            // If the map itself is nullable, entries() is a MaskedArray; unwrap it first.
+            var entries = map.entries() instanceof MaskedArray masked
+                    ? (ListViewArray) masked.inner() : (ListViewArray) map.entries();
+            StructArray entryStructs = (StructArray) entries.elements();
+            VarBinArray keys = (VarBinArray) entryStructs.field("key");
+            var values = entryStructs.field("value"); // MaskedArray, since the value type is nullable here
+            // A file written by vortex-java's own writer always emits I32 offsets/sizes; a file
+            // from another producer (e.g. the Rust reference) may pick a narrower or wider integer
+            // width, so switch on the concrete Array subtype there instead of casting to IntArray.
+            IntArray offsets = (IntArray) entries.offsets();
+            IntArray sizes = (IntArray) entries.sizes();
+
+            for (long row = 0; row < map.length(); row++) {
+                long start = offsets.getInt(row);
+                long end = start + sizes.getInt(row);
+                for (long i = start; i < end; i++) {
+                    // keys.getBytes(i) / values at index i are this row's i-th {key, value} pair
+                }
+            }
+        }
+    }
+}
+```
+
+`ScanOptions.all()`/CLI `inspect` show `vortex.map` in a file's layout tree as a `vortex.listview`
+child under the `vortex.map` node — see `docs/reference.md#core-types` for `DType.Map`'s full
+field list (`keyType`, `valueType`, `keysSorted`, `nullable`) and `entriesDtype()`.
+
+---
+
 ## Read files with unknown encodings
 
 By default, a file containing an unrecognized encoding ID throws `VortexException`.
