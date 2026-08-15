@@ -144,13 +144,14 @@ class FsstEncodingEncoderTest {
         }
 
         @Test
-        void accepts_binary_true() {
-            // Given
+        void accepts_binary_false() {
+            // Given — encode()/encodeCascade() cast data straight to String[], not byte-safe
+            // for arbitrary bytes yet (#352)
             // When
             boolean result = ENCODER.accepts(DTypes.BINARY);
 
             // Then
-            assertThat(result).isTrue();
+            assertThat(result).isFalse();
         }
 
         @Test

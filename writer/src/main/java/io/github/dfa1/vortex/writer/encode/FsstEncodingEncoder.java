@@ -49,7 +49,9 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
+        // Binary excluded: encode()/encodeCascade() cast data straight to String[], not byte-safe
+        // for arbitrary bytes yet (#352).
+        return dtype instanceof DType.Utf8;
     }
 
     @Override

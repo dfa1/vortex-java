@@ -578,4 +578,39 @@ class VortexWriterTest {
             assertThat(VortexReads.readAllLongs(vf, "v")).containsExactly(data);
         }
     }
+
+    @Test
+    void create_binaryColumn_serializesSchemaAndRoundTrips(@TempDir Path tmp) throws IOException {
+        // Given — DType.Binary in the schema (e.g. Raincloud waxal-dagbani-asr-test's raw
+        // "audio.bytes" field). serializeDType had no case for it despite the wire format
+        // (FbsBinary) and the reader-side parser already supporting it — buildDType() /
+        // close() threw UnsupportedOperationException("unsupported DType: Binary[...]") for
+        // every file with a Binary column in its schema, regardless of the column's data.
+        var schema = new DType.Struct(
+                List.of(ColumnName.of("bytes")), List.of(new DType.Binary(true)), false);
+        Path file = tmp.resolve("binary.vortex");
+        byte[][] data = {{(byte) 0x80, 0x01}, null, {0x02}};
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(1), WriteRegistry.loadAll())) {
+            sut.writeChunk(Map.of(ColumnName.of("bytes"), data));
+        }
+
+        // Then
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(reader.dtype()).isEqualTo(schema);
+            try (var iter = reader.scan(ScanOptions.all())) {
+                assertThat(iter.hasNext()).isTrue();
+                try (var chunk = iter.next()) {
+                    io.github.dfa1.vortex.reader.array.MaskedArray col = chunk.column("bytes");
+                    io.github.dfa1.vortex.reader.array.VarBinArray values =
+                            (io.github.dfa1.vortex.reader.array.VarBinArray) col.inner();
+                    assertThat(values.getBytes(0)).isEqualTo(data[0]);
+                    assertThat(col.isValid(1)).isFalse();
+                    assertThat(values.getBytes(2)).isEqualTo(data[2]);
+                }
+            }
+        }
+    }
 }

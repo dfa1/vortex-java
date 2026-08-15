@@ -433,6 +433,10 @@ public final class VortexWriter implements Closeable {
                 int inner = io.github.dfa1.vortex.core.fbs.FbsUtf8.createFbsUtf8(fbb, nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsUtf8, inner);
             }
+            case DType.Binary(var nullable) -> {
+                int inner = io.github.dfa1.vortex.core.fbs.FbsBinary.createFbsBinary(fbb, nullable);
+                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsBinary, inner);
+            }
             case DType.List(var elementType, var nullable) -> {
                 int elemTypeOff = serializeDType(fbb, elementType);
                 int inner = io.github.dfa1.vortex.core.fbs.FbsList.createFbsList(fbb, elemTypeOff, nullable);

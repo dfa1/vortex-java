@@ -82,14 +82,17 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
+        // Binary excluded: the Utf8-or-Binary branch of encode() casts data straight to
+        // String[], not byte-safe for arbitrary bytes yet (#352).
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8;
     }
 
     @Override
     public boolean acceptsNullable(DType dtype) {
-        // Nullable primitive, utf8 and binary columns all arrive as a NullableData carrier and are
-        // encoded directly here (validity emitted as Bool child[0]) rather than masked-wrapped.
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
+        // Nullable primitive and utf8 columns arrive as a NullableData carrier and are encoded
+        // directly here (validity emitted as Bool child[0]) rather than masked-wrapped. Binary
+        // excluded along with accepts() above (#352).
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8;
     }
 
     @Override
