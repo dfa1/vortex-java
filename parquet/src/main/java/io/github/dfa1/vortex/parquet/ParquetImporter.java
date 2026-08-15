@@ -97,7 +97,7 @@ public final class ParquetImporter {
 
                 while (rowReader.hasNext()) {
                     rowReader.next();
-                    fillRow(rowReader, names, types, buffers, nestedBuilders, chunkPos);
+                    fillRow(rowReader, names, types, buffers, nestedBuilders, chunkPos, parquetPath, rowsDone);
                     chunkPos++;
                     rowsDone++;
 
@@ -299,37 +299,47 @@ public final class ParquetImporter {
         };
     }
 
-    private static void fillRow(RowReader reader, List<ColumnName> names, List<DType> types,
-            Object[] buffers, ColumnBuilder[] nestedBuilders, int pos) {
+    static void fillRow(RowReader reader, List<ColumnName> names, List<DType> types,
+            Object[] buffers, ColumnBuilder[] nestedBuilders, int pos, Path parquetPath, long rowIndex) {
         for (int c = 0; c < names.size(); c++) {
             String name = names.get(c).value();
-            if (nestedBuilders[c] != null) {
-                nestedBuilders[c].append(reader.isNull(name) ? null : reader.getValue(name));
-                continue;
-            }
-            // isNull is only ever true for a nullable column, which never allocates a primitive
-            // (non-boxed) buffer — see allocateBuffer — so the primitive-array cases below never
-            // need an isNull check themselves.
-            boolean isNull = types.get(c).nullable() && reader.isNull(name);
-            switch (buffers[c]) {
-                case boolean[] arr -> arr[pos] = reader.getBoolean(name);
-                case Boolean[] arr -> arr[pos] = isNull ? null : reader.getBoolean(name);
-                case float[] arr -> arr[pos] = reader.getFloat(name);
-                case Float[] arr -> arr[pos] = isNull ? null : reader.getFloat(name);
-                case double[] arr -> arr[pos] = reader.getDouble(name);
-                case Double[] arr -> arr[pos] = isNull ? null : reader.getDouble(name);
-                case long[] arr -> arr[pos] = reader.getLong(name);
-                case Long[] arr -> arr[pos] = isNull ? null : reader.getLong(name);
-                case int[] arr -> arr[pos] = reader.getInt(name);
-                case Integer[] arr -> arr[pos] = isNull ? null : reader.getInt(name);
-                case short[] arr -> arr[pos] = (short) reader.getInt(name);
-                case Short[] arr -> arr[pos] = isNull ? null : (short) reader.getInt(name);
-                case byte[] arr -> arr[pos] = (byte) reader.getInt(name);
-                case Byte[] arr -> arr[pos] = isNull ? null : (byte) reader.getInt(name);
-                case String[] arr -> arr[pos] = isNull ? null : reader.getString(name);
-                case byte[][] arr -> arr[pos] = isNull ? null : reader.getBinary(name);
-                default -> throw new UnsupportedOperationException(
-                        "unexpected buffer type: " + buffers[c].getClass().getSimpleName());
+            try {
+                if (nestedBuilders[c] != null) {
+                    nestedBuilders[c].append(reader.isNull(name) ? null : reader.getValue(name));
+                    continue;
+                }
+                // isNull is only ever true for a nullable column, which never allocates a
+                // primitive (non-boxed) buffer — see allocateBuffer — so the primitive-array
+                // cases below never need an isNull check themselves, trusting the schema's own
+                // REQUIRED declaration. A file whose data violates that declaration (a genuine
+                // null under a REQUIRED column) throws from the getter below instead, caught and
+                // rethrown with a clear message by the catch below.
+                boolean isNull = types.get(c).nullable() && reader.isNull(name);
+                switch (buffers[c]) {
+                    case boolean[] arr -> arr[pos] = reader.getBoolean(name);
+                    case Boolean[] arr -> arr[pos] = isNull ? null : reader.getBoolean(name);
+                    case float[] arr -> arr[pos] = reader.getFloat(name);
+                    case Float[] arr -> arr[pos] = isNull ? null : reader.getFloat(name);
+                    case double[] arr -> arr[pos] = reader.getDouble(name);
+                    case Double[] arr -> arr[pos] = isNull ? null : reader.getDouble(name);
+                    case long[] arr -> arr[pos] = reader.getLong(name);
+                    case Long[] arr -> arr[pos] = isNull ? null : reader.getLong(name);
+                    case int[] arr -> arr[pos] = reader.getInt(name);
+                    case Integer[] arr -> arr[pos] = isNull ? null : reader.getInt(name);
+                    case short[] arr -> arr[pos] = (short) reader.getInt(name);
+                    case Short[] arr -> arr[pos] = isNull ? null : (short) reader.getInt(name);
+                    case byte[] arr -> arr[pos] = (byte) reader.getInt(name);
+                    case Byte[] arr -> arr[pos] = isNull ? null : (byte) reader.getInt(name);
+                    case String[] arr -> arr[pos] = isNull ? null : reader.getString(name);
+                    case byte[][] arr -> arr[pos] = isNull ? null : reader.getBinary(name);
+                    default -> throw new UnsupportedOperationException(
+                            "unexpected buffer type: " + buffers[c].getClass().getSimpleName());
+                }
+            } catch (NullPointerException e) {
+                throw new IllegalArgumentException(
+                        "Parquet column '" + name + "' is declared REQUIRED (non-nullable) but row "
+                                + rowIndex + " is null; the file's data violates its own schema. Source file: "
+                                + parquetPath, e);
             }
         }
     }

@@ -6,6 +6,7 @@ import dev.hardwood.metadata.FieldPath;
 import dev.hardwood.metadata.LogicalType;
 import dev.hardwood.metadata.PhysicalType;
 import dev.hardwood.metadata.RepetitionType;
+import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.SchemaNode;
 import io.github.dfa1.vortex.core.model.DType;
@@ -19,9 +20,12 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -29,6 +33,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
 
 class ParquetImporterTest {
 
@@ -322,6 +327,42 @@ class ParquetImporterTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("A")
                     .hasMessageContaining("uk-price-paid.parquet");
+        }
+    }
+
+    @Nested
+    @ExtendWith(MockitoExtension.class)
+    class FillRowMalformedData {
+
+        @Mock
+        private RowReader reader;
+
+        @Test
+        void requiredColumnActuallyNull_throwsClearErrorInsteadOfRawNpe() {
+            // Given — the Parquet schema declares this column REQUIRED (non-nullable), so
+            // fillRow calls the plain getter unconditionally (see allocateBuffer/fillRow: a
+            // nullable column always gets a boxed buffer and an isNull check instead). Hardwood's
+            // own contract (RowReader#getLong) throws NullPointerException when a value is
+            // genuinely null, which real-world files can violate their own schema and hit — found
+            // on several Raincloud bi-* slugs (schema says REQUIRED, data has a null anyway).
+            List<ColumnName> names = List.of(ColumnName.of("id"));
+            List<DType> types = List.of(DType.I64);
+            Object[] buffers = {new long[1]};
+            ColumnBuilder[] nestedBuilders = new ColumnBuilder[1];
+            Path source = Path.of("malformed.parquet");
+            given(reader.getLong("id"))
+                    .willThrow(new NullPointerException("[malformed.parquet] Column 'id' is null at row 0"));
+
+            // When / Then — a clear, actionable IllegalArgumentException, not a raw NPE from a
+            // dependency three stack frames down
+            assertThatThrownBy(() -> ParquetImporter.fillRow(reader, names, types, buffers, nestedBuilders,
+                    0, source, 0L))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("id")
+                    .hasMessageContaining("REQUIRED")
+                    .hasMessageContaining("row 0")
+                    .hasMessageContaining("malformed.parquet")
+                    .hasCauseInstanceOf(NullPointerException.class);
         }
     }
 
