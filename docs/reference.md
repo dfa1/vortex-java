@@ -383,6 +383,10 @@ A decoder claims its ids via `LayoutDecoder.layoutIds()` (a set — the zoned de
 
 ### `ParquetImporter` (`io.github.dfa1.vortex.parquet.ParquetImporter`)
 
+Supports flat schemas and nested `LIST`/`STRUCT` columns, recursively composable (e.g.
+`LIST<STRUCT<...>>`); `MAP` and `VARIANT` are not yet supported. Un-annotated `BYTE_ARRAY` maps
+to `DType.Binary`.
+
 | Method                                            | Notes    |
 |---------------------------------------------------|----------|
 | `importParquet(Path in, Path out)`                | Defaults |

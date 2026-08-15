@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ParquetImporter` now imports nested `LIST`/`STRUCT` Parquet schemas, recursively composable (e.g. `LIST<STRUCT<...>>`), with real null tracking at every level; un-annotated `BYTE_ARRAY` maps to `DType.Binary`. ([f0e7d3ba](https://github.com/dfa1/vortex-java/commit/f0e7d3ba))
 - `DType.Map` logical type and the `vortex.map` encoding, read and write: a map column stores one `entries` child, a listview of non-nullable `{key, value}` structs (nullable map rows carry their validity in that listview's own validity slot), decoding to the new `MapArray`. Adding `Map` to the sealed `DType`'s `permits` clause is **breaking** for downstream exhaustive `switch` statements over `DType`. ([#351](https://github.com/dfa1/vortex-java/issues/351))
 
 ### Changed
@@ -18,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `vortex.list` column with a nullable element type (e.g. a list of optional structs) threw `ClassCastException` instead of masking the null elements, both outside and inside a cascading write. ([ddfd2737](https://github.com/dfa1/vortex-java/commit/ddfd2737), [8c8f4ea3](https://github.com/dfa1/vortex-java/commit/8c8f4ea3))
+- `VortexWriter` had no case for `DType.Binary` and threw `UnsupportedOperationException` writing any schema containing one, despite the wire format and reader already supporting it; `FsstEncodingEncoder`/`VarBinViewEncodingEncoder`/`ZstdEncodingEncoder` no longer claim to accept `Binary` either, since they aren't byte-safe for it yet (tracked in [#352](https://github.com/dfa1/vortex-java/issues/352)). ([1cf5499d](https://github.com/dfa1/vortex-java/commit/1cf5499d))
+- Scanning a file whose only projected column is itself `Struct`-typed no longer expands that struct's fields into fake top-level columns, dropping the column's own name. ([d4f71c5a](https://github.com/dfa1/vortex-java/commit/d4f71c5a))
 - A `vortex.listview` column no longer silently drops its validity bitmap on decode, and a validity child under a dtype the file declares non-nullable now fails as `VortexException` instead of decoding to an array that contradicts its own column dtype. ([#351](https://github.com/dfa1/vortex-java/issues/351))
 - The JMH benchmarks in `performance` compile again against vortex-jni 0.84.0, which replaced `VortexWriter.create(…)` with a builder. ([#351](https://github.com/dfa1/vortex-java/issues/351))
 - A malformed `fastlanes.rle` column now fails as `VortexException` where an absurd declared length, an empty or undersized child segment, or an out-of-range chunk offset previously escaped as `OutOfMemoryError`, `NegativeArraySizeException`, `ArithmeticException`, or `IndexOutOfBoundsException`. ([#342](https://github.com/dfa1/vortex-java/issues/342))
