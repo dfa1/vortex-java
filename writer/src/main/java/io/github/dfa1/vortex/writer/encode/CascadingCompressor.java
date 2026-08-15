@@ -337,7 +337,14 @@ public final class CascadingCompressor {
         List<MemorySegment> allBuffers = new ArrayList<>();
         EncodeNode[] children = new EncodeNode[fields.size()];
         for (int i = 0; i < fields.size(); i++) {
-            EncodeResult fieldResult = encodeWithCtx(fieldTypes.get(i), fields.get(i), ctx);
+            DType fieldDtype = fieldTypes.get(i);
+            Object fieldData = fields.get(i);
+            // Mirrors StructEncodingEncoder's own field loop: a nullable field arrives as
+            // NullableData(values, validity), not the dense array encodeWithCtx's per-dtype
+            // dispatch expects (e.g. VarBinEncodingEncoder casts data straight to String[]).
+            EncodeResult fieldResult = (fieldData instanceof NullableData && !(fieldDtype instanceof DType.Extension))
+                    ? new MaskedEncodingEncoder().encode(fieldDtype, fieldData, ctx)
+                    : encodeWithCtx(fieldDtype, fieldData, ctx);
             int bufOffset = allBuffers.size();
             children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
             allBuffers.addAll(fieldResult.buffers());

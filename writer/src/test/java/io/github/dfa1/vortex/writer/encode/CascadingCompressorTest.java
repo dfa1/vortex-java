@@ -1,11 +1,15 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.StructArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -367,6 +371,46 @@ class CascadingCompressorTest {
                 b.add(a);
             }
             return b.build();
+        }
+    }
+
+    @Nested
+    class NullableStructField {
+
+        @Test
+        void nullableUtf8Field_routesThroughMaskedEncoding_notCastException() {
+            // Given — a struct field carrying NullableData (nullable Utf8), matching Raincloud
+            // ultrachat-200k's "messages: LIST<STRUCT{content: string?, role: string?}>" once the
+            // outer nullable-list-element fix (ListEncodingEncoder) reaches this struct's own
+            // field encoding under cascading. Before this fix, encodeStruct called encodeWithCtx
+            // directly on the field's NullableData; for a Utf8 field that lands in
+            // VarBinEncodingEncoder, which casts data straight to String[] — ClassCastException.
+            // Two fields (not one): StructEncodingDecoder unwraps a single-field struct dtype
+            // straight to the field's own array, which would sidestep the StructArray assertion
+            // below without exercising anything different from the Leaf-level tests.
+            DType.Struct dtype = new DType.Struct(
+                    List.of(ColumnName.of("content"), ColumnName.of("role")),
+                    List.of(new DType.Utf8(true), new DType.Utf8(false)),
+                    false);
+            StructData data = new StructData(List.of(
+                    new NullableData(new String[]{"a", null, "c"}, new boolean[]{true, false, true}),
+                    new String[]{"user", "assistant", "user"}));
+            List<EncodingEncoder> codecs = List.of(new VarBinEncodingEncoder());
+            CascadingCompressor sut = new CascadingCompressor(codecs);
+            EncodeContext encodeCtx = EncodeContext.ofDepth(1, Arena.ofAuto(), toRegistry(codecs));
+            ReadRegistry readRegistry = ReadRegistry.loadAll();
+
+            // When
+            EncodeResult result = sut.encode(dtype, data, encodeCtx);
+            DecodeContext decodeCtx = DecodeTestHelper.toDecodeContext(result, 3, dtype, readRegistry);
+            StructArray decoded = (StructArray) readRegistry.decode(decodeCtx);
+
+            // Then
+            MaskedArray field = (MaskedArray) decoded.field(0);
+            VarBinArray values = (VarBinArray) field.inner();
+            assertThat(values.getString(0)).isEqualTo("a");
+            assertThat(field.isValid(1)).isFalse();
+            assertThat(values.getString(2)).isEqualTo("c");
         }
     }
 }
