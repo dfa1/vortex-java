@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] — 2026-08-15
+
+Nested Parquet import, plus a cluster of real correctness bugs (three writer-side, one reader-side)
+surfaced by running the new import path across the full locally-hydrated Raincloud corpus (182
+slugs) rather than just the handful the existing test suite already covered.
+
 ### Added
 
 - `ParquetImporter` now imports nested `LIST`/`STRUCT` Parquet schemas, recursively composable (e.g. `LIST<STRUCT<...>>`), with real null tracking at every level; un-annotated `BYTE_ARRAY` maps to `DType.Binary`. ([f0e7d3ba](https://github.com/dfa1/vortex-java/commit/f0e7d3ba))
@@ -21,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ParquetImporter` now fails with a clear `IllegalArgumentException` (column, row, source file) instead of a raw `NullPointerException` from Hardwood when a Parquet file's data violates its own schema — a column declared `REQUIRED` that still contains a null. Found on several real-world Raincloud `bi-*` slugs. ([071328a2](https://github.com/dfa1/vortex-java/commit/071328a2))
 - A `vortex.alp` column no longer turns `-0.0` into `0.0`: the encoder's lossless round-trip check used `==` (where `0.0 == -0.0` in Java) instead of a bit-exact comparison, so a negative-zero input was wrongly reconstructed with the sign bit dropped. ([ca33e8a8](https://github.com/dfa1/vortex-java/commit/ca33e8a8))
-- `ParquetImporter` no longer silently turns a null row in a nullable numeric or boolean column into that type's zero value: nullable leaves now allocate boxed arrays, which `ChunkImpl`/`VortexWriter` already track into a real validity bitmap. ([ce66670a](https://github.com/dfa1/vortex-java/commit/ce66670a))
+- `ParquetImporter` no longer silently turns a null row in a nullable numeric or boolean column into that type's zero value: nullable leaves now allocate boxed arrays, which `ChunkImpl`/`VortexWriter` already track into a real validity bitmap. ([b4638373](https://github.com/dfa1/vortex-java/commit/b4638373))
 - A `vortex.list` column with a nullable element type (e.g. a list of optional structs) threw `ClassCastException` instead of masking the null elements, both outside and inside a cascading write. ([ddfd2737](https://github.com/dfa1/vortex-java/commit/ddfd2737), [8c8f4ea3](https://github.com/dfa1/vortex-java/commit/8c8f4ea3))
 - `VortexWriter` had no case for `DType.Binary` and threw `UnsupportedOperationException` writing any schema containing one, despite the wire format and reader already supporting it; `FsstEncodingEncoder`/`VarBinViewEncodingEncoder`/`ZstdEncodingEncoder` no longer claim to accept `Binary` either, since they aren't byte-safe for it yet (tracked in [#352](https://github.com/dfa1/vortex-java/issues/352)). ([1cf5499d](https://github.com/dfa1/vortex-java/commit/1cf5499d))
 - Scanning a file whose only projected column is itself `Struct`-typed no longer expands that struct's fields into fake top-level columns, dropping the column's own name. ([d4f71c5a](https://github.com/dfa1/vortex-java/commit/d4f71c5a))
