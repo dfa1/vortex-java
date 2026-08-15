@@ -232,6 +232,48 @@ class AlpEncodingEncoderTest {
         }
 
         @Test
+        void encode_f64_roundTrip_negativeZeroPreservesSignBit() {
+            // Given — the round-trip validity check used to compare candidate * df * de to the
+            // original value with ==, and 0.0 == -0.0 in Java: a -0.0 input was accepted as
+            // losslessly ALP-encodable, then reconstructed as +0.0 on decode, silently losing the
+            // sign bit. Found running ParquetImporter's own output against the Parquet oracle for
+            // two real Raincloud slugs (us-accidents, world-energy-consumption); this is otherwise
+            // invisible in decimal string comparisons and even under isCloseTo(), which is why the
+            // other round-trip tests in this class don't catch it.
+            double[] values = {1.23, -0.0, 4.56, 0.0, 7.89};
+            EncodeResult encoded = ENCODER.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F64, REGISTRY);
+
+            // When
+            DoubleArray result = (DoubleArray) DECODER.decode(ctx);
+
+            // Then — bit-exact, not just numerically close: 0.0 == -0.0 would hide the bug
+            for (int i = 0; i < values.length; i++) {
+                assertThat(Double.doubleToRawLongBits(result.getDouble(i)))
+                        .as("index %d", i)
+                        .isEqualTo(Double.doubleToRawLongBits(values[i]));
+            }
+        }
+
+        @Test
+        void encode_f32_roundTrip_negativeZeroPreservesSignBit() {
+            // Given — see encode_f64_roundTrip_negativeZeroPreservesSignBit; same bug, F32 path.
+            float[] values = {1.23f, -0.0f, 4.56f, 0.0f, 7.89f};
+            EncodeResult encoded = ENCODER.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, REGISTRY);
+
+            // When
+            FloatArray result = (FloatArray) DECODER.decode(ctx);
+
+            // Then
+            for (int i = 0; i < values.length; i++) {
+                assertThat(Float.floatToRawIntBits(result.getFloat(i)))
+                        .as("index %d", i)
+                        .isEqualTo(Float.floatToRawIntBits(values[i]));
+            }
+        }
+
+        @Test
         void encode_f64_metadata_expE_isNonZero() throws Exception {
             // Given
             double[] values = {1.23, 4.56, 7.89};

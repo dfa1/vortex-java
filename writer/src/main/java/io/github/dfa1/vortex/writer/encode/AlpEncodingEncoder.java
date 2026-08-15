@@ -169,7 +169,12 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             double v = values[i];
             double enc = v * ef * iff;
             long encoded;
-            if (Double.isFinite(enc) && (encoded = Math.round(enc)) * df * de == v) {
+            // Bit-exact, not ==: v == -0.0 makes candidate * df * de (always +0.0, since a
+            // rounded-to-long encoding has no sign to reconstruct from) compare equal to v under
+            // ==, but reconstructing it loses the sign bit. Route -0.0 through the patch/exception
+            // path instead, so it round-trips losslessly like any other unencodable value.
+            if (Double.isFinite(enc) && Double.doubleToRawLongBits((encoded = Math.round(enc)) * df * de)
+                    == Double.doubleToRawLongBits(v)) {
                 encodedArr[i] = encoded;
             } else {
                 encodedArr[i] = 0L;
@@ -347,7 +352,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             float v = values[i];
             float enc = v * ef * iff;
             int encoded;
-            if (Float.isFinite(enc) && (encoded = Math.round(enc)) * df * de == v) {
+            // Bit-exact, not ==: see the F64 path above for why (-0.0 vs +0.0).
+            if (Float.isFinite(enc) && Float.floatToRawIntBits((encoded = Math.round(enc)) * df * de)
+                    == Float.floatToRawIntBits(v)) {
                 encodedArr[i] = encoded;
             } else {
                 encodedArr[i] = 0;
