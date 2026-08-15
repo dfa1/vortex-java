@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `vortex.alp` column no longer turns `-0.0` into `0.0`: the encoder's lossless round-trip check used `==` (where `0.0 == -0.0` in Java) instead of a bit-exact comparison, so a negative-zero input was wrongly reconstructed with the sign bit dropped. ([ca33e8a8](https://github.com/dfa1/vortex-java/commit/ca33e8a8))
 - `ParquetImporter` no longer silently turns a null row in a nullable numeric or boolean column into that type's zero value: nullable leaves now allocate boxed arrays, which `ChunkImpl`/`VortexWriter` already track into a real validity bitmap. ([ce66670a](https://github.com/dfa1/vortex-java/commit/ce66670a))
 - A `vortex.list` column with a nullable element type (e.g. a list of optional structs) threw `ClassCastException` instead of masking the null elements, both outside and inside a cascading write. ([ddfd2737](https://github.com/dfa1/vortex-java/commit/ddfd2737), [8c8f4ea3](https://github.com/dfa1/vortex-java/commit/8c8f4ea3))
 - `VortexWriter` had no case for `DType.Binary` and threw `UnsupportedOperationException` writing any schema containing one, despite the wire format and reader already supporting it; `FsstEncodingEncoder`/`VarBinViewEncodingEncoder`/`ZstdEncodingEncoder` no longer claim to accept `Binary` either, since they aren't byte-safe for it yet (tracked in [#352](https://github.com/dfa1/vortex-java/issues/352)). ([1cf5499d](https://github.com/dfa1/vortex-java/commit/1cf5499d))
