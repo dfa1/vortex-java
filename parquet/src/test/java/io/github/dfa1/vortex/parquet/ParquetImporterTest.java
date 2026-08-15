@@ -358,10 +358,14 @@ class ParquetImporterTest {
                  ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk first = iter.next()) {
-                    LongArray sk = first.column("c_customer_sk");
-                    assertThat(sk.getLong(0)).isEqualTo(100L);
-                    assertThat(sk.getLong(1)).isEqualTo(99L);
-                    assertThat(sk.getLong(2)).isEqualTo(98L);
+                    // c_customer_sk is nullable I64, so it round-trips as a MaskedArray (validity
+                    // + Primitive values child): a boxed Long[] buffer during import, so a null
+                    // row is tracked instead of silently becoming 0. First three rows are non-null.
+                    MaskedArray sk = first.column("c_customer_sk");
+                    LongArray skValues = (LongArray) sk.inner();
+                    assertThat(skValues.getLong(0)).isEqualTo(100L);
+                    assertThat(skValues.getLong(1)).isEqualTo(99L);
+                    assertThat(skValues.getLong(2)).isEqualTo(98L);
 
                     // c_first_name is nullable Utf8, so it round-trips as a MaskedArray (validity +
                     // VarBin values child), like nullable primitives. The first three rows are non-null.
@@ -370,6 +374,31 @@ class ParquetImporterTest {
                     assertThat(nameValues.getString(0)).isEqualTo("Jeannette");
                     assertThat(nameValues.getString(1)).isEqualTo("Austin");
                     assertThat(nameValues.getString(2)).isEqualTo("David");
+                }
+            }
+        }
+
+        @Test
+        void importsFixture_nullableNumericColumn_preservesActualNulls(@TempDir Path tmp) throws Exception {
+            // Given — c_birth_day (nullable I64) is null at row 67 (1-based, so index 66) in this
+            // fixture. Before allocateBuffer switched nullable Bool/Primitive leaves to boxed
+            // arrays, a null row here silently became 0 with no validity tracking at all — found
+            // by running ParquetImporter against a wider slice of the Raincloud corpus (oasst1's
+            // "rank" column) where the same class of bug produced a real value mismatch.
+            Path vortex = tmp.resolve("out.vortex");
+
+            // When
+            ParquetImporter.importParquet(fixture(), vortex);
+
+            // Then
+            try (VortexReader reader = VortexReader.open(vortex);
+                 ScanIterator iter = reader.scan(ScanOptions.all())) {
+                assertThat(iter.hasNext()).isTrue();
+                try (Chunk first = iter.next()) {
+                    MaskedArray birthDay = first.column("c_birth_day");
+                    assertThat(birthDay.isValid(65)).isTrue();
+                    assertThat(birthDay.isValid(66)).isFalse();
+                    assertThat(birthDay.isValid(67)).isTrue();
                 }
             }
         }

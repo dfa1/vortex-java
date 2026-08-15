@@ -111,15 +111,17 @@ class ParquetImportIntegrationTest {
         // When
         ParquetImporter.importParquet(parquetFile, vortexFile);
 
-        // Then — c_customer_sk (INT64, nullable): first 3 values are 100, 99, 98
+        // Then — c_customer_sk (INT64, nullable): first 3 values are 100, 99, 98. Nullable, so it
+        // round-trips as a MaskedArray (validity + Primitive values child).
         try (VortexReader reader = VortexReader.open(vortexFile);
              ScanIterator iter = reader.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk first = iter.next()) {
-                LongArray col = first.column("c_customer_sk");
-                assertThat(col.getLong(0)).isEqualTo(100L);
-                assertThat(col.getLong(1)).isEqualTo(99L);
-                assertThat(col.getLong(2)).isEqualTo(98L);
+                MaskedArray col = first.column("c_customer_sk");
+                LongArray colValues = (LongArray) col.inner();
+                assertThat(colValues.getLong(0)).isEqualTo(100L);
+                assertThat(colValues.getLong(1)).isEqualTo(99L);
+                assertThat(colValues.getLong(2)).isEqualTo(98L);
             }
         }
     }

@@ -273,19 +273,26 @@ public final class ParquetImporter {
         return builders;
     }
 
+    /// Nullable Bool/Primitive columns allocate boxed arrays (`Boolean[]`, `Integer[]`, ...)
+    /// instead of primitive ones: a primitive array has no way to represent null, so a null row
+    /// would otherwise silently become the type's zero value with no validity tracking at all —
+    /// `ChunkImpl`/`VortexWriter` already auto-detect a boxed array's null elements into
+    /// `NullableData`, the same mechanism nullable `String[]`/`byte[][]` leaves rely on.
+    /// Non-nullable columns keep the primitive fast path unchanged.
     private static Object allocateBuffer(DType type, int chunkSize) {
+        boolean nullable = type.nullable();
         return switch (type) {
-            case DType.Bool ignored -> new boolean[chunkSize];
+            case DType.Bool ignored -> nullable ? new Boolean[chunkSize] : new boolean[chunkSize];
             case DType.Utf8 ignored -> new String[chunkSize];
             case DType.Binary ignored -> new byte[chunkSize][];
             case DType.Extension ignored -> new long[chunkSize]; // timestamp storage
             case DType.Primitive p -> switch (p.ptype()) {
-                case I8, U8 -> new byte[chunkSize];
-                case I16, U16 -> new short[chunkSize];
-                case I32, U32 -> new int[chunkSize];
-                case I64, U64 -> new long[chunkSize];
-                case F32 -> new float[chunkSize];
-                case F64 -> new double[chunkSize];
+                case I8, U8 -> nullable ? new Byte[chunkSize] : new byte[chunkSize];
+                case I16, U16 -> nullable ? new Short[chunkSize] : new short[chunkSize];
+                case I32, U32 -> nullable ? new Integer[chunkSize] : new int[chunkSize];
+                case I64, U64 -> nullable ? new Long[chunkSize] : new long[chunkSize];
+                case F32 -> nullable ? new Float[chunkSize] : new float[chunkSize];
+                case F64 -> nullable ? new Double[chunkSize] : new double[chunkSize];
                 case F16 -> throw new UnsupportedOperationException("F16 columns are not supported");
             };
             default -> throw new UnsupportedOperationException("unsupported type: " + type);
@@ -300,15 +307,25 @@ public final class ParquetImporter {
                 nestedBuilders[c].append(reader.isNull(name) ? null : reader.getValue(name));
                 continue;
             }
+            // isNull is only ever true for a nullable column, which never allocates a primitive
+            // (non-boxed) buffer — see allocateBuffer — so the primitive-array cases below never
+            // need an isNull check themselves.
             boolean isNull = types.get(c).nullable() && reader.isNull(name);
             switch (buffers[c]) {
-                case boolean[] arr -> arr[pos] = !isNull && reader.getBoolean(name);
-                case float[] arr -> arr[pos] = isNull ? 0f : reader.getFloat(name);
-                case double[] arr -> arr[pos] = isNull ? 0.0 : reader.getDouble(name);
-                case long[] arr -> arr[pos] = isNull ? 0L : reader.getLong(name);
-                case int[] arr -> arr[pos] = isNull ? 0 : reader.getInt(name);
-                case short[] arr -> arr[pos] = isNull ? (short) 0 : (short) reader.getInt(name);
-                case byte[] arr -> arr[pos] = isNull ? (byte) 0 : (byte) reader.getInt(name);
+                case boolean[] arr -> arr[pos] = reader.getBoolean(name);
+                case Boolean[] arr -> arr[pos] = isNull ? null : reader.getBoolean(name);
+                case float[] arr -> arr[pos] = reader.getFloat(name);
+                case Float[] arr -> arr[pos] = isNull ? null : reader.getFloat(name);
+                case double[] arr -> arr[pos] = reader.getDouble(name);
+                case Double[] arr -> arr[pos] = isNull ? null : reader.getDouble(name);
+                case long[] arr -> arr[pos] = reader.getLong(name);
+                case Long[] arr -> arr[pos] = isNull ? null : reader.getLong(name);
+                case int[] arr -> arr[pos] = reader.getInt(name);
+                case Integer[] arr -> arr[pos] = isNull ? null : reader.getInt(name);
+                case short[] arr -> arr[pos] = (short) reader.getInt(name);
+                case Short[] arr -> arr[pos] = isNull ? null : (short) reader.getInt(name);
+                case byte[] arr -> arr[pos] = (byte) reader.getInt(name);
+                case Byte[] arr -> arr[pos] = isNull ? null : (byte) reader.getInt(name);
                 case String[] arr -> arr[pos] = isNull ? null : reader.getString(name);
                 case byte[][] arr -> arr[pos] = isNull ? null : reader.getBinary(name);
                 default -> throw new UnsupportedOperationException(
@@ -363,12 +380,19 @@ public final class ParquetImporter {
     private static Object trimBuffer(Object buffer, int size) {
         return switch (buffer) {
             case boolean[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
+            case Boolean[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case float[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
+            case Float[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case double[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
+            case Double[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case long[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
+            case Long[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case int[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
+            case Integer[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case short[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
+            case Short[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case byte[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
+            case Byte[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case String[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case byte[][] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             default -> throw new UnsupportedOperationException(
