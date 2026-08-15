@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ParquetImporter` now fails with a clear `IllegalArgumentException` (column, row, source file) instead of a raw `NullPointerException` from Hardwood when a Parquet file's data violates its own schema — a column declared `REQUIRED` that still contains a null. Found on several real-world Raincloud `bi-*` slugs. ([071328a2](https://github.com/dfa1/vortex-java/commit/071328a2))
 - A `vortex.alp` column no longer turns `-0.0` into `0.0`: the encoder's lossless round-trip check used `==` (where `0.0 == -0.0` in Java) instead of a bit-exact comparison, so a negative-zero input was wrongly reconstructed with the sign bit dropped. ([ca33e8a8](https://github.com/dfa1/vortex-java/commit/ca33e8a8))
 - `ParquetImporter` no longer silently turns a null row in a nullable numeric or boolean column into that type's zero value: nullable leaves now allocate boxed arrays, which `ChunkImpl`/`VortexWriter` already track into a real validity bitmap. ([ce66670a](https://github.com/dfa1/vortex-java/commit/ce66670a))
 - A `vortex.list` column with a nullable element type (e.g. a list of optional structs) threw `ClassCastException` instead of masking the null elements, both outside and inside a cascading write. ([ddfd2737](https://github.com/dfa1/vortex-java/commit/ddfd2737), [8c8f4ea3](https://github.com/dfa1/vortex-java/commit/8c8f4ea3))
