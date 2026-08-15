@@ -84,6 +84,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private List<ChunkSpec> chunks;
     private List<ColumnName> projectedNames;
     private List<DType> projectedDtypes;
+    // True only when the file's root layout isn't itself a Struct layout (no per-column layout
+    // children — e.g. a single flat/chunked segment covering the whole file, as produced by some
+    // older writers), so #initialize() fell back to one synthetic "_col" placeholder covering the
+    // whole file. Gates #expandStruct(StructArray): that placeholder's decoded array may itself be
+    // a multi-field StructArray standing in for the file's real columns, which must be unpacked by
+    // field name. A *legitimately* single-column projection whose one real column happens to be
+    // Struct-typed (dtype.List/Struct nesting) must NOT be expanded the same way — it already has
+    // its own name and dtype from the schema, unlike the synthetic placeholder.
+    private boolean singleColumnIsSyntheticWrapper;
     private Map<ColumnName, DType> columnDtypes;
     private int chunkIndex;
     private int peekedChunkIdx = -1;
@@ -638,6 +647,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             ColumnName colName = ColumnName.of("_col");
             columnFlats.put(colName, flats);
             columnDtypes.put(colName, rootDtype);
+            singleColumnIsSyntheticWrapper = true;
         }
 
         projectedNames = List.copyOf(columnDtypes.keySet());
@@ -654,7 +664,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         int n = projectedNames.size();
         if (n == 1) {
             Array arr = decodeOrSlice(0, layouts[0], sliceOffsets[0], chunk.rowCount(), arena);
-            if (arr instanceof StructArray sa) {
+            if (singleColumnIsSyntheticWrapper && arr instanceof StructArray sa) {
                 return expandStruct(sa);
             }
             return singleColumn(arr);
@@ -677,7 +687,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         int n = projectedNames.size();
         if (n == 1) {
             Array arr = decodeOrSliceSelfContained(0, layouts[0], sliceOffsets[0], chunk.rowCount(), arena);
-            if (arr instanceof StructArray sa) {
+            if (singleColumnIsSyntheticWrapper && arr instanceof StructArray sa) {
                 return expandStruct(sa);
             }
             return singleColumn(arr);
