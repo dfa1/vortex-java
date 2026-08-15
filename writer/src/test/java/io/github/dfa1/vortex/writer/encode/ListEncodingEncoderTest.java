@@ -1,8 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.ListArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -11,7 +14,9 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoListMetadata;
+import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ListEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.MaskedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -148,6 +153,38 @@ class ListEncodingEncoderTest {
             for (int i = 0; i < elements.length; i++) {
                 assertThat(decodedElems.getInt(i)).isEqualTo(elements[i]);
             }
+        }
+
+        @Test
+        void roundTrip_nullableElementType_routesThroughMaskedEncoding() {
+            // Given — LIST<I32?> (nullable elements), the same shape as Raincloud
+            // ultrachat-200k's "messages: LIST<STRUCT>" where the element itself is OPTIONAL.
+            // Before this fix, ListEncodingEncoder picked the element's encoder straight from
+            // elementType's own fallback (ignoring that ld.elements() is a NullableData), and
+            // PrimitiveEncodingEncoder's `(int[]) data` cast threw a ClassCastException.
+            DType.List nullableElemList = new DType.List(new DType.Primitive(PType.I32, true), false);
+            NullableData elements = new NullableData(new int[]{1, 0, 3}, new boolean[]{true, false, true});
+            ListData data = new ListData(elements, new long[]{0, 2, 3}, 2);
+            EncodeResult encoded = ENCODER.encode(nullableElemList, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
+            ReadRegistry registry = TestRegistry.ofDecoders(
+                    DECODER, new PrimitiveEncodingDecoder(), new MaskedEncodingDecoder(), new BoolEncodingDecoder());
+            DecodeContext ctx = new DecodeContext(
+                    toArrayNode(encoded.rootNode()), nullableElemList, 2, bufs, registry, Arena.global());
+
+            // When
+            ListArray result = (ListArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(2);
+            MaskedArray decodedElems = (MaskedArray) result.elements();
+            assertThat(decodedElems.length()).isEqualTo(3);
+            assertThat(decodedElems.isValid(0)).isTrue();
+            assertThat(decodedElems.isValid(1)).isFalse();
+            assertThat(decodedElems.isValid(2)).isTrue();
+            IntArray values = (IntArray) decodedElems.inner();
+            assertThat(values.getInt(0)).isEqualTo(1);
+            assertThat(values.getInt(2)).isEqualTo(3);
         }
 
         @Test

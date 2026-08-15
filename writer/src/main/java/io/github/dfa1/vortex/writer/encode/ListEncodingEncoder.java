@@ -37,8 +37,15 @@ public final class ListEncodingEncoder implements EncodingEncoder {
         DType.List listDtype = (DType.List) dtype;
         ListData ld = (ListData) data;
         DType elementType = listDtype.elementType();
-        EncodingEncoder elemEncoding = findEncoding(elementType);
-        EncodeResult elemResult = elemEncoding.encode(elementType, ld.elements(), ctx);
+        Object elements = ld.elements();
+        // Nullable elements (e.g. LIST<STRUCT> where the element itself is OPTIONAL) carry a
+        // NullableData(values, validity) pair, mirroring how StructEncodingEncoder routes a
+        // nullable field through MaskedEncodingEncoder rather than the element type's own
+        // fallback encoder (which expects dense values, not a NullableData wrapper).
+        EncodingEncoder elemEncoding = (elements instanceof NullableData && !(elementType instanceof DType.Extension))
+                ? new MaskedEncodingEncoder()
+                : findEncoding(elementType);
+        EncodeResult elemResult = elemEncoding.encode(elementType, elements, ctx);
 
         List<MemorySegment> allBuffers = new ArrayList<>(elemResult.buffers());
         int elemBufCount = allBuffers.size();
