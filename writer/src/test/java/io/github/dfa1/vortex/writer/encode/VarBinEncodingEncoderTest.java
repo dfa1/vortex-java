@@ -122,6 +122,43 @@ class VarBinEncodingEncoderTest {
         }
 
         @Test
+        void encode_rawBytes_roundTripByteForByte_notThroughUtf8() {
+            // Given — non-UTF8 bytes (0x80 alone is not a valid UTF-8 sequence); routing this
+            // through String[].getBytes(UTF_8) would corrupt it via the UTF-8 replacement
+            // character. DType.Binary carries data as byte[][], not String[].
+            byte[][] data = {{(byte) 0x80, (byte) 0xFF, 0x00, 0x01}, {}, {0x41, 0x42}};
+            EncodeResult encoded = ENCODER.encode(DTypes.BINARY, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.BINARY, REGISTRY);
+
+            // When
+            VarBinArray result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            assertThat(result.getBytes(0)).isEqualTo(data[0]);
+            assertThat(result.getBytes(1)).isEmpty();
+            assertThat(result.getBytes(2)).isEqualTo(data[2]);
+        }
+
+        @Test
+        void encode_rawBytesWithNullEntry_nullBecomesZeroLengthSlot() {
+            // Given — mirrors encode_emptyStringInArray_roundTrips for the byte[][] path: a null
+            // entry (values child of a masked/nullable layout) contributes a zero-length slot
+            byte[][] data = {{0x01}, null, {0x02}};
+            EncodeResult encoded = ENCODER.encode(DTypes.BINARY, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.BINARY, REGISTRY);
+
+            // When
+            VarBinArray result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            assertThat(result.getBytes(0)).isEqualTo(new byte[]{0x01});
+            assertThat(result.getBytes(1)).isEmpty();
+            assertThat(result.getBytes(2)).isEqualTo(new byte[]{0x02});
+        }
+
+        @Test
         void encode_emptyStringInArray_roundTrips() {
             // Given
             String[] data = {"a", "", "b"};

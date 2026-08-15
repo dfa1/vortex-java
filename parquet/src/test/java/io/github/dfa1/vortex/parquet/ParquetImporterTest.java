@@ -1,11 +1,13 @@
 package io.github.dfa1.vortex.parquet;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
+import dev.hardwood.metadata.ConvertedType;
 import dev.hardwood.metadata.FieldPath;
 import dev.hardwood.metadata.LogicalType;
 import dev.hardwood.metadata.PhysicalType;
 import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.schema.ColumnSchema;
+import dev.hardwood.schema.SchemaNode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -32,6 +34,11 @@ class ParquetImporterTest {
 
     private static ColumnSchema col(String name, PhysicalType type, RepetitionType rep, LogicalType logical) {
         return new ColumnSchema(FieldPath.of(name), type, rep, null, 0, 0, 0, logical);
+    }
+
+    private static SchemaNode.PrimitiveNode primitiveNode(
+            String name, PhysicalType type, RepetitionType rep, LogicalType logical) {
+        return new SchemaNode.PrimitiveNode(name, type, rep, logical, 0, 0, 0);
     }
 
     @Nested
@@ -129,14 +136,29 @@ class ParquetImporterTest {
         }
 
         @Test
-        void byteArray_withoutStringAnnotation_throws() {
-            // Given — raw BYTE_ARRAY with no string logical type is unsupported
-            ColumnSchema schema = col("blob", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED, null);
+        void byteArray_withoutAnnotation_mapsToBinary() {
+            // Given — raw BYTE_ARRAY with no logical-type annotation (e.g. an embedded audio
+            // blob, Raincloud's waxal-dagbani-asr-test "audio.bytes" field)
+            ColumnSchema schema = col("blob", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL, null);
+
+            // When
+            DType result = ParquetImporter.mapDType(schema);
+
+            // Then
+            assertThat(result).isEqualTo(new DType.Binary(true));
+        }
+
+        @Test
+        void byteArray_unsupportedAnnotation_stillThrows() {
+            // Given — a BYTE_ARRAY annotation that is neither string-like nor absent (e.g.
+            // DECIMAL) must not be silently downgraded to raw Binary, losing its semantic
+            ColumnSchema schema = col("amount", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED,
+                    new LogicalType.DecimalType(2, 10));
 
             // When / Then
             assertThatThrownBy(() -> ParquetImporter.mapDType(schema))
                     .isInstanceOf(UnsupportedOperationException.class)
-                    .hasMessageContaining("blob");
+                    .hasMessageContaining("amount");
         }
 
         @ParameterizedTest
@@ -153,32 +175,124 @@ class ParquetImporterTest {
     }
 
     @Nested
-    class FilterColumns {
+    class FilterTopLevel {
 
         @Test
         void keepsRequestedColumnsInRequestedOrder() {
             // Given — schema a, b, c; request c, a
-            List<ColumnSchema> all = List.of(
-                    col("a", PhysicalType.INT32, RepetitionType.REQUIRED, null),
-                    col("b", PhysicalType.INT32, RepetitionType.REQUIRED, null),
-                    col("c", PhysicalType.INT32, RepetitionType.REQUIRED, null));
+            List<SchemaNode> all = List.of(
+                    primitiveNode("a", PhysicalType.INT32, RepetitionType.REQUIRED, null),
+                    primitiveNode("b", PhysicalType.INT32, RepetitionType.REQUIRED, null),
+                    primitiveNode("c", PhysicalType.INT32, RepetitionType.REQUIRED, null));
 
             // When
-            List<ColumnSchema> result = ParquetImporter.filterColumns(all, List.of("c", "a"));
+            List<SchemaNode> result = ParquetImporter.filterTopLevel(all, List.of("c", "a"));
 
             // Then — projection order wins over schema order
-            assertThat(result).extracting(ColumnSchema::name).containsExactly("c", "a");
+            assertThat(result).extracting(SchemaNode::name).containsExactly("c", "a");
         }
 
         @Test
         void unknownColumn_throws() {
             // Given
-            List<ColumnSchema> all = List.of(col("a", PhysicalType.INT32, RepetitionType.REQUIRED, null));
+            List<SchemaNode> all = List.of(primitiveNode("a", PhysicalType.INT32, RepetitionType.REQUIRED, null));
 
             // When / Then
-            assertThatThrownBy(() -> ParquetImporter.filterColumns(all, List.of("missing")))
+            assertThatThrownBy(() -> ParquetImporter.filterTopLevel(all, List.of("missing")))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("missing");
+        }
+    }
+
+    @Nested
+    class NestedTypeMapping {
+
+        @Test
+        void struct_mapsToDTypeStruct_recursingOverFields() {
+            // Given — a plain group (no LIST/MAP annotation) with two primitive fields, matching
+            // Raincloud's waxal-dagbani-asr-test "audio: STRUCT{bytes: binary, path: string}"
+            SchemaNode.GroupNode group = new SchemaNode.GroupNode(
+                    "audio", RepetitionType.OPTIONAL, null, null,
+                    List.of(
+                            primitiveNode("bytes", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL, null),
+                            primitiveNode("path", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL,
+                                    new LogicalType.StringType())),
+                    0, 0);
+
+            // When
+            DType result = ParquetImporter.mapDType(group);
+
+            // Then
+            assertThat(result).isEqualTo(new DType.Struct(
+                    List.of(ColumnName.of("bytes"), ColumnName.of("path")),
+                    List.of(new DType.Binary(true), new DType.Utf8(true)),
+                    true));
+        }
+
+        @Test
+        void list_ofPrimitive_mapsToDTypeList_twoLevelEncoding() {
+            // Given — legacy 2-level LIST encoding: the repeated field is itself the element
+            // (not a group), matching Raincloud's finetranslations-swedish "og_chunks: LIST<string>"
+            SchemaNode.GroupNode list = new SchemaNode.GroupNode(
+                    "chunks", RepetitionType.OPTIONAL, ConvertedType.LIST, null,
+                    List.of(primitiveNode("chunks_tuple", PhysicalType.BYTE_ARRAY, RepetitionType.REPEATED,
+                            new LogicalType.StringType())),
+                    0, 0);
+
+            // When
+            DType result = ParquetImporter.mapDType(list);
+
+            // Then
+            assertThat(result).isEqualTo(new DType.List(new DType.Utf8(false), true));
+        }
+
+        @Test
+        void list_ofStruct_mapsToDTypeListOfStruct_threeLevelEncoding() {
+            // Given — standard 3-level LIST encoding wrapping a struct element, matching
+            // Raincloud's ultrachat-200k "messages: LIST<STRUCT{content, role}>"
+            SchemaNode.GroupNode element = new SchemaNode.GroupNode(
+                    "element", RepetitionType.OPTIONAL, null, null,
+                    List.of(
+                            primitiveNode("content", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL,
+                                    new LogicalType.StringType()),
+                            primitiveNode("role", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL,
+                                    new LogicalType.StringType())),
+                    0, 0);
+            SchemaNode.GroupNode wrapper = new SchemaNode.GroupNode(
+                    "list", RepetitionType.REPEATED, null, null, List.of(element), 0, 0);
+            SchemaNode.GroupNode messages = new SchemaNode.GroupNode(
+                    "messages", RepetitionType.OPTIONAL, null, new LogicalType.ListType(),
+                    List.of(wrapper), 0, 0);
+
+            // When
+            DType result = ParquetImporter.mapDType(messages);
+
+            // Then
+            DType.Struct expectedElement = new DType.Struct(
+                    List.of(ColumnName.of("content"), ColumnName.of("role")),
+                    List.of(new DType.Utf8(true), new DType.Utf8(true)),
+                    true);
+            assertThat(result).isEqualTo(new DType.List(expectedElement, true));
+        }
+
+        @Test
+        void mapGroup_throws() {
+            // Given — MAP is not yet supported
+            SchemaNode.GroupNode keyValue = new SchemaNode.GroupNode(
+                    "key_value", RepetitionType.REPEATED, null, null,
+                    List.of(
+                            primitiveNode("key", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED,
+                                    new LogicalType.StringType()),
+                            primitiveNode("value", PhysicalType.INT32, RepetitionType.OPTIONAL, null)),
+                    0, 0);
+            SchemaNode.GroupNode map = new SchemaNode.GroupNode(
+                    "counts", RepetitionType.OPTIONAL, null, new LogicalType.MapType(),
+                    List.of(keyValue), 0, 0);
+
+            // When / Then
+            assertThatThrownBy(() -> ParquetImporter.mapDType(map))
+                    .isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining("counts");
         }
     }
 

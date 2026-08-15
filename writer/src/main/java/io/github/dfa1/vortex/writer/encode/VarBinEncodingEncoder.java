@@ -29,16 +29,29 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        String[] strings = (String[]) data;
-        int n = strings.length;
-
-        byte[][] byteArrays = new byte[n][];
+        // Binary (DType.Binary) arrives as raw byte[][] and must round-trip byte-for-byte —
+        // routing it through the Utf8 String[] path below would corrupt any byte sequence that
+        // isn't valid UTF-8 (e.g. an embedded audio/image blob). Utf8 arrives as String[] and is
+        // UTF-8 encoded. Either way a null entry (this encoder is the values child of a
+        // masked/nullable layout, where validity carries nullity) contributes a zero-length slot.
+        byte[][] byteArrays;
+        String[] strings = null;
+        if (data instanceof byte[][] raw) {
+            byteArrays = new byte[raw.length][];
+            for (int i = 0; i < raw.length; i++) {
+                byteArrays[i] = raw[i] == null ? EMPTY_BYTES : raw[i];
+            }
+        } else {
+            strings = (String[]) data;
+            byteArrays = new byte[strings.length][];
+            for (int i = 0; i < strings.length; i++) {
+                byteArrays[i] = strings[i] == null ? EMPTY_BYTES : strings[i].getBytes(StandardCharsets.UTF_8);
+            }
+        }
+        int n = byteArrays.length;
         int totalBytes = 0;
-        for (int i = 0; i < n; i++) {
-            // Null entries (this encoder is the values child of a masked/nullable layout, where
-            // validity carries nullity) contribute a zero-length slot, not an NPE.
-            byteArrays[i] = strings[i] == null ? EMPTY_BYTES : strings[i].getBytes(StandardCharsets.UTF_8);
-            totalBytes += byteArrays[i].length;
+        for (byte[] b : byteArrays) {
+            totalBytes += b.length;
         }
 
         Arena arena = ctx.arena();
@@ -55,7 +68,9 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
 
         byte[] metaBytes = new ProtoVarBinMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal())).encode();
 
-        byte[][] stats = minMaxStats(strings);
+        // Zone-map min/max stats are lexicographic-string-only (minMaxStats(String[])); binary
+        // blobs (e.g. audio bytes) aren't usefully zone-mapped, so skip stats for that path.
+        byte[][] stats = strings != null ? minMaxStats(strings) : null;
         byte[] statsMin = stats != null ? stats[0] : null;
         byte[] statsMax = stats != null ? stats[1] : null;
 

@@ -65,6 +65,7 @@ final class ChunkImpl implements Chunk {
         return switch (dtype) {
             case DType.Primitive p -> adaptPrimitive(column, p, value);
             case DType.Utf8 u -> adaptUtf8(column, u, value);
+            case DType.Binary bin -> adaptBinary(column, bin, value);
             case DType.Bool b -> adaptBool(column, b, value);
             // Other dtypes (Struct, List, Extension, …) still accept their existing carriers
             // without typed adaptation; the writer's per-encoding path validates downstream.
@@ -130,6 +131,29 @@ final class ChunkImpl implements Chunk {
         // Nullable utf8/binary unifies on the NullableData carrier like the primitive paths: the
         // raw String[] (null elements preserved) plus a derived validity bitmap. The writer then
         // routes it through MaskedEncoding (or a nullable-capable encoder such as vortex.zstd).
+        boolean[] validity = new boolean[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            validity[i] = arr[i] != null;
+        }
+        return new NullableData(arr, validity);
+    }
+
+    private static Object adaptBinary(String column, DType.Binary dtype, Object value) {
+        if (!(value instanceof byte[][] arr)) {
+            throw new IllegalArgumentException(
+                    "column '" + column + "' expects byte[][] for Binary; got " + value.getClass().getSimpleName());
+        }
+        if (!dtype.nullable()) {
+            for (int i = 0; i < arr.length; i++) {
+                if (arr[i] == null) {
+                    throw new IllegalArgumentException(
+                            "non-nullable column '" + column + "' received null at row " + i);
+                }
+            }
+            return arr;
+        }
+        // Mirrors adaptUtf8: raw byte[][] (null elements preserved) plus a derived validity
+        // bitmap, routed through MaskedEncoding downstream.
         boolean[] validity = new boolean[arr.length];
         for (int i = 0; i < arr.length; i++) {
             validity[i] = arr[i] != null;

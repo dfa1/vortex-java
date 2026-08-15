@@ -4,6 +4,9 @@ import dev.hardwood.InputFile;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.csv.CsvExporter;
+import io.github.dfa1.vortex.csv.ExportOptions;
+import io.github.dfa1.vortex.parquet.ImportOptions;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -59,6 +62,15 @@ class ParquetImportIntegrationTest {
     private static Path download(Path tmp, String name) throws Exception {
         return LocalHttpCache.downloadIfMissing(tmp,
                 Path.of("/tmp/parquet-fixtures"), URI.create(FIXTURE_URL), name);
+    }
+
+    /// Downloads any other `apache/parquet-testing` fixture by filename (same repo, same
+    /// `data/` path as [#FIXTURE_URL], different file — used by the nested-schema fixtures
+    /// below, which are unrelated to the TPC-DS `delta_encoding_optional_column.parquet` fixture
+    /// the rest of this class exercises).
+    private static Path downloadFixture(Path tmp, String name) throws Exception {
+        return LocalHttpCache.downloadIfMissing(tmp, Path.of("/tmp/parquet-fixtures"),
+                URI.create("https://raw.githubusercontent.com/apache/parquet-testing/master/data/" + name), name);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -179,5 +191,51 @@ class ParquetImportIntegrationTest {
             vortexRows = reader.layout().rowCount();
         }
         assertThat(vortexRows).isEqualTo(parquetRows);
+    }
+
+    @Test
+    void nestedListOfList_roundTrips(@TempDir Path tmp) throws Exception {
+        // Given — old_list_structure.parquet: "a" is LIST<LIST<INT32>> (legacy 2-level
+        // encoding, REQUIRED throughout), one row: [[1,2],[3,4]]
+        assumeNetworkAvailable();
+        Path parquetFile = downloadFixture(tmp, "old_list_structure.parquet");
+        Path vortexFile = tmp.resolve("out.vortex");
+        Path csvFile = tmp.resolve("out.csv");
+
+        // When
+        ParquetImporter.importParquet(parquetFile, vortexFile);
+        CsvExporter.exportCsv(vortexFile, csvFile, ExportOptions.defaults());
+
+        // Then — CsvExporter renders a nested LIST as a JSON array cell (same rule the Raincloud
+        // conformance oracle mirrors), so the recursive List<List<primitive>> plumbing round-trips
+        // exactly if this string matches the source values verbatim
+        List<String> lines = Files.readAllLines(csvFile);
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0)).isEqualTo("a");
+        assertThat(lines.get(1)).isEqualTo("\"[[1,2],[3,4]]\"");
+    }
+
+    @Test
+    void nestedStructOfPrimitives_roundTrips(@TempDir Path tmp) throws Exception {
+        // Given — nested_structs.rust.parquet: "roll_num" is STRUCT{min,max,mean,count,sum,
+        // variance}, all REQUIRED INT64. Projected to just this column: the file's other struct
+        // columns include a nested TIMESTAMP field, which ColumnBuilder deliberately doesn't
+        // support (no generic way to recover the target TimeUnit from Hardwood's decoded Instant).
+        assumeNetworkAvailable();
+        Path parquetFile = downloadFixture(tmp, "nested_structs.rust.parquet");
+        Path vortexFile = tmp.resolve("out.vortex");
+        Path csvFile = tmp.resolve("out.csv");
+        ImportOptions options = ImportOptions.defaults().withColumns(List.of("roll_num"));
+
+        // When
+        ParquetImporter.importParquet(parquetFile, vortexFile, options);
+        CsvExporter.exportCsv(vortexFile, csvFile, ExportOptions.defaults());
+
+        // Then — CsvExporter renders a STRUCT as a JSON object cell, fields in schema order
+        List<String> lines = Files.readAllLines(csvFile);
+        assertThat(lines.get(0)).isEqualTo("roll_num");
+        assertThat(lines.get(1)).isEqualTo(
+                "\"{\"\"min\"\":190406409000602,\"\"max\"\":190407175004000,\"\"mean\"\":190406671229999,"
+                        + "\"\"count\"\":495,\"\"sum\"\":94251302258849568,\"\"variance\"\":0}\"");
     }
 }
