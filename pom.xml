@@ -80,7 +80,7 @@
 		<jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
 		<!-- byte-buddy-agent version must match what mockito-core pulls in transitively.
 		     Update this when bumping mockito.version (run: mvn dependency:tree -pl reader | grep byte-buddy-agent). -->
-		<bytebuddy.version>1.18.11</bytebuddy.version>
+		<bytebuddy.version>1.18.12</bytebuddy.version>
 		<!-- Generated sources (FlatBuffers + Protobuf) live under fbs/ and proto/. They
 		     are emitted by external code-gen and have no hand-written behavior worth
 		     covering; counting them tanks the project-wide coverage ratio without
