@@ -4,7 +4,7 @@
 
 	<groupId>io.github.dfa1.vortex</groupId>
 	<artifactId>vortex-java</artifactId>
-	<version>0.13.3-SNAPSHOT</version>
+	<version>0.13.4-SNAPSHOT</version>
 	<packaging>pom</packaging>
 
 	<name>vortex-java</name>

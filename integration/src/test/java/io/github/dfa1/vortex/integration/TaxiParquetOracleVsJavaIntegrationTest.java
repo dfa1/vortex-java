@@ -106,25 +106,25 @@ class TaxiParquetOracleVsJavaIntegrationTest {
         }
     }
 
-    /// Formats a parquet cell using the same rules as `CsvExporter.cellValue`.
-    ///
-    /// Null values map to the same defaults as `ParquetImporter.fillRow`:
-    /// 0 for numeric types, `false` for booleans, and `""` for strings.
-    /// `CsvExporter` then serializes these defaults as their string equivalents.
+    /// Formats a parquet cell using the same rules as `CsvExporter.cellValue`: a null field
+    /// renders as an empty CSV field regardless of the column's type, matching how a
+    /// `MaskedArray`'s validity bit — not a type-specific zero default — decides nullness.
     ///
     /// @param col    the column schema
     /// @param reader the row reader positioned at the current row
     /// @return the formatted cell string
     private static String formatCell(ColumnSchema col, RowReader reader) {
         String name = col.name();
-        boolean isNull = col.repetitionType() == RepetitionType.OPTIONAL && reader.isNull(name);
+        if (col.repetitionType() == RepetitionType.OPTIONAL && reader.isNull(name)) {
+            return "";
+        }
         return switch (col.type()) {
-            case INT32 -> isNull ? "0" : Integer.toString(reader.getInt(name));
-            case INT64 -> isNull ? "0" : Long.toString(reader.getLong(name));
-            case FLOAT -> isNull ? "0.0" : Float.toString(reader.getFloat(name));
-            case DOUBLE -> isNull ? "0.0" : Double.toString(reader.getDouble(name));
-            case BOOLEAN -> isNull ? "false" : Boolean.toString(reader.getBoolean(name));
-            case BYTE_ARRAY -> isNull ? "" : reader.getString(name);
+            case INT32 -> Integer.toString(reader.getInt(name));
+            case INT64 -> Long.toString(reader.getLong(name));
+            case FLOAT -> Float.toString(reader.getFloat(name));
+            case DOUBLE -> Double.toString(reader.getDouble(name));
+            case BOOLEAN -> Boolean.toString(reader.getBoolean(name));
+            case BYTE_ARRAY -> reader.getString(name);
             default -> throw new UnsupportedOperationException(
                     "unsupported parquet type: " + col.type() + " (column: " + name + ")");
         };
