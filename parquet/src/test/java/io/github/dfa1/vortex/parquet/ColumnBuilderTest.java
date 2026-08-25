@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
@@ -98,6 +99,129 @@ class ColumnBuilderTest {
             assertThat(values[1]).isNull();
             assertThat(data.validity()).containsExactly(true, false);
         }
+
+        @Test
+        void nullableBoolean_wrapsInNullableData_withDefaultsAtNullPositions() {
+            // Given
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.Bool(true));
+
+            // When
+            sut.append(true);
+            sut.append(null);
+            Object result = sut.build();
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData data = (NullableData) result;
+            assertThat((boolean[]) data.values()).containsExactly(true, false);
+            assertThat(data.validity()).containsExactly(true, false);
+        }
+
+        @Test
+        void nullableByte_wrapsInNullableData_withDefaultsAtNullPositions() {
+            // Given — I8/U8 share a buildPrimitive case arm
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.Primitive(PType.I8, true));
+
+            // When
+            sut.append((byte) 5);
+            sut.append(null);
+            Object result = sut.build();
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData data = (NullableData) result;
+            assertThat((byte[]) data.values()).containsExactly((byte) 5, (byte) 0);
+            assertThat(data.validity()).containsExactly(true, false);
+        }
+
+        @Test
+        void nullableShort_wrapsInNullableData_withDefaultsAtNullPositions() {
+            // Given — I16/U16 share a buildPrimitive case arm
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.Primitive(PType.I16, true));
+
+            // When
+            sut.append((short) 5);
+            sut.append(null);
+            Object result = sut.build();
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData data = (NullableData) result;
+            assertThat((short[]) data.values()).containsExactly((short) 5, (short) 0);
+            assertThat(data.validity()).containsExactly(true, false);
+        }
+
+        @Test
+        void nullableFloat_wrapsInNullableData_withDefaultsAtNullPositions() {
+            // Given
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.Primitive(PType.F32, true));
+
+            // When
+            sut.append(1.5f);
+            sut.append(null);
+            Object result = sut.build();
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData data = (NullableData) result;
+            assertThat((float[]) data.values()).containsExactly(1.5f, 0f);
+            assertThat(data.validity()).containsExactly(true, false);
+        }
+
+        @Test
+        void nullableDouble_wrapsInNullableData_withDefaultsAtNullPositions() {
+            // Given
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.Primitive(PType.F64, true));
+
+            // When
+            sut.append(1.5);
+            sut.append(null);
+            Object result = sut.build();
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData data = (NullableData) result;
+            assertThat((double[]) data.values()).containsExactly(1.5, 0.0);
+            assertThat(data.validity()).containsExactly(true, false);
+        }
+
+        @Test
+        void f16_rejectedAtBuild() {
+            // Given — no target TimeUnit-style workaround for F16 either; unsupported outright
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.Primitive(PType.F16, false));
+            sut.append((short) 1);
+
+            // When / Then
+            assertThatThrownBy(sut::build)
+                    .isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining("F16");
+        }
+
+        @Test
+        void extensionDtype_rejectedAtConstruction() {
+            // Given — nested Extension (timestamp) columns are unsupported; see class javadoc
+            DType.Extension extensionDtype = new DType.Extension(
+                    "vortex.date", new DType.Primitive(PType.I32, false), null, false);
+
+            // When / Then
+            assertThatThrownBy(() -> ColumnBuilder.forType(extensionDtype))
+                    .isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining("Extension");
+        }
+
+        @Test
+        void unsupportedNestedLeafDtype_rejectedAtBuild() {
+            // Given — DType.Null isn't Struct/List (so ColumnBuilder.forType routes it to
+            // LeafColumnBuilder) and isn't Bool/Utf8/Binary/Primitive either, so its build()
+            // switch falls through to the default arm.
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.Null(true));
+            sut.append(null);
+
+            // When / Then
+            assertThatThrownBy(sut::build)
+                    .isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining("unsupported nested leaf dtype");
+        }
     }
 
     @Nested
@@ -135,6 +259,19 @@ class ColumnBuilderTest {
             assertThat(bytesField.validity()).containsExactly(true, false);
             NullableData pathField = (NullableData) fields.fieldArrays().get(1);
             assertThat((String[]) pathField.values()).containsExactly("clip.wav", null);
+        }
+
+        @Test
+        void nonNullableStruct_rejectsNullRow() {
+            // Given
+            DType.Struct dtype = new DType.Struct(
+                    List.of(ColumnName.of("bytes")), List.of(new DType.Binary(true)), false);
+            ColumnBuilder sut = ColumnBuilder.forType(dtype);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.append(null))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("null value for non-nullable struct column");
         }
     }
 
@@ -194,6 +331,17 @@ class ColumnBuilderTest {
             StructData structData = (StructData) elements.values();
             NullableData contentField = (NullableData) structData.fieldArrays().get(0);
             assertThat((String[]) contentField.values()).containsExactly("hi", null);
+        }
+
+        @Test
+        void nonNullableList_rejectsNullRow() {
+            // Given
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.List(new DType.Utf8(false), false));
+
+            // When / Then
+            assertThatThrownBy(() -> sut.append(null))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("null value for non-nullable list column");
         }
     }
 }

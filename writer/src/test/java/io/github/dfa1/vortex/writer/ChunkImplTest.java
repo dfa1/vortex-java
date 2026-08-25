@@ -203,6 +203,42 @@ class ChunkImplTest {
     }
 
     @Nested
+    class Binary {
+
+        @Test
+        void byteArrayArrayAccepted() {
+            byte[][] value = {{1, 2}, {3}};
+            assertThat(putGet(DType.BINARY, value)).isInstanceOf(byte[][].class);
+        }
+
+        @Test
+        void nullableConvertsToNullableData() {
+            // Mirrors Utf8.nullableConvertsToNullableData: raw byte[][] with null elements
+            // preserved, plus a derived validity bitmap.
+            byte[] blob = {1};
+            Object result = putGet(new DType.Binary(true), new byte[][]{blob, null});
+
+            assertThat(result).isInstanceOf(NullableData.class);
+            assertThat(((NullableData) result).validity()).containsExactly(true, false);
+            byte[][] values = (byte[][]) ((NullableData) result).values();
+            assertThat(values[0]).isEqualTo(blob);
+            assertThat(values[1]).isNull();
+        }
+
+        @Test
+        void nonNullableRejectsNullElement() {
+            assertThatThrownBy(() -> putGet(DType.BINARY, new byte[][]{{1}, null}))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("null at row 1");
+        }
+
+        @Test
+        void wrongTypeRejected() {
+            assertThatThrownBy(() -> putGet(DType.BINARY, new int[]{1}))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("expects byte[][]");
+        }
+    }
+
+    @Nested
     class Bool {
 
         @Test
