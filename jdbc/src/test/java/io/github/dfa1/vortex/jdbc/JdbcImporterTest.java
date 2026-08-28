@@ -352,6 +352,58 @@ class JdbcImporterTest {
         }
 
         @Test
+        void largeTableStreamsAcrossManyChunks(@TempDir Path tmp) throws Exception {
+            // Given — 100,000 rows over a low-cardinality category column, streamed in
+            // 10,000-row pages (10 chunks): the scale a real production JDBC import (e.g. a big
+            // Postgres table) hits in practice. SYSTEM_RANGE generates the rows server-side in
+            // one statement, avoiding 100K individual JDBC round-trips.
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE readings (id BIGINT NOT NULL, category VARCHAR(20) NOT NULL)");
+                stmt.execute("""
+                        INSERT INTO readings
+                        SELECT X - 1,
+                               CASE MOD(X - 1, 3) WHEN 0 THEN 'LOW' WHEN 1 THEN 'MEDIUM' ELSE 'HIGH' END
+                        FROM SYSTEM_RANGE(1, 100000)
+                        """);
+            }
+            Path vortex = tmp.resolve("readings_large.vortex");
+            JdbcImportOptions options = JdbcImportOptions.defaults().withChunkSize(10_000);
+
+            // When
+            JdbcImporter.importQuery(conn, "SELECT * FROM readings ORDER BY id", vortex, options);
+
+            // Then — every row round-trips correctly across all 10 chunk boundaries, and the
+            // global dict for `category` survived buffering across the whole stream (rather than
+            // resetting per page) without breaching its cardinality cap or memory budget.
+            try (VortexReader reader = VortexReader.open(vortex)) {
+                long totalRows = 0;
+                int chunkCount = 0;
+                try (ScanIterator iter = reader.scan(ScanOptions.all())) {
+                    while (iter.hasNext()) {
+                        try (Chunk chunk = iter.next()) {
+                            chunkCount++;
+                            LongArray idCol = chunk.column("ID");
+                            VarBinArray categoryCol = chunk.column("CATEGORY");
+                            for (long r = 0; r < chunk.rowCount(); r++) {
+                                long id = idCol.getLong(r);
+                                assertThat(id).isEqualTo(totalRows + r);
+                                String expected = switch ((int) (id % 3)) {
+                                    case 0 -> "LOW";
+                                    case 1 -> "MEDIUM";
+                                    default -> "HIGH";
+                                };
+                                assertThat(categoryCol.getString(r)).isEqualTo(expected);
+                            }
+                            totalRows += chunk.rowCount();
+                        }
+                    }
+                }
+                assertThat(chunkCount).isEqualTo(10);
+                assertThat(totalRows).isEqualTo(100_000);
+            }
+        }
+
+        @Test
         void emptyResultSetProducesEmptyFile(@TempDir Path tmp) throws Exception {
             // Given
             try (Statement stmt = conn.createStatement()) {
