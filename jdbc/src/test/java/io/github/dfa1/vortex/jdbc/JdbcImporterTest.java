@@ -309,6 +309,49 @@ class JdbcImporterTest {
         }
 
         @Test
+        void globalDictSpansMultipleChunks(@TempDir Path tmp) throws Exception {
+            // Given — a low-cardinality column (3 distinct values) over 23 rows, streamed in
+            // chunks of 5 (4 full pages + 1 partial). Global dict is on by default
+            // (JdbcImportOptions.defaults() does not disable it, unlike the CSV importer), so
+            // the writer must detect the candidate on page 1 and keep buffering it as ONE shared
+            // dictionary across every subsequent page — not a fresh dict per chunk — then flush
+            // it as a single vortex.dict layout at close().
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE readings (id BIGINT NOT NULL, category VARCHAR(20) NOT NULL)");
+                String[] categories = {"LOW", "MEDIUM", "HIGH"};
+                for (int i = 0; i < 23; i++) {
+                    stmt.execute("INSERT INTO readings VALUES (" + i + ", '" + categories[i % 3] + "')");
+                }
+            }
+            Path vortex = tmp.resolve("readings.vortex");
+            JdbcImportOptions options = JdbcImportOptions.defaults().withChunkSize(5);
+
+            // When
+            JdbcImporter.importQuery(conn, "SELECT * FROM readings ORDER BY id", vortex, options);
+
+            // Then — every row round-trips correctly across the chunk boundaries and the demoted
+            // (or never-demoted) dict state at close()
+            try (VortexReader reader = VortexReader.open(vortex)) {
+                List<Long> ids = new ArrayList<>();
+                List<String> categories = new ArrayList<>();
+                try (ScanIterator iter = reader.scan(ScanOptions.all())) {
+                    iter.forEachRemaining(chunk -> {
+                        LongArray idCol = chunk.column("ID");
+                        VarBinArray categoryCol = chunk.column("CATEGORY");
+                        for (long r = 0; r < chunk.rowCount(); r++) {
+                            ids.add(idCol.getLong(r));
+                            categories.add(categoryCol.getString(r));
+                        }
+                    });
+                }
+                assertThat(ids).containsExactlyElementsOf(java.util.stream.LongStream.range(0, 23).boxed().toList());
+                assertThat(categories).containsExactly(
+                        "LOW", "MEDIUM", "HIGH", "LOW", "MEDIUM", "HIGH", "LOW", "MEDIUM", "HIGH", "LOW", "MEDIUM",
+                        "HIGH", "LOW", "MEDIUM", "HIGH", "LOW", "MEDIUM", "HIGH", "LOW", "MEDIUM", "HIGH", "LOW", "MEDIUM");
+            }
+        }
+
+        @Test
         void emptyResultSetProducesEmptyFile(@TempDir Path tmp) throws Exception {
             // Given
             try (Statement stmt = conn.createStatement()) {
