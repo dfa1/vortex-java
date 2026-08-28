@@ -7,16 +7,16 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
-import static io.github.dfa1.vortex.writer.VortexWriter.GLOBAL_DICT_MAX_CARDINALITY;
-import static io.github.dfa1.vortex.writer.VortexWriter.GLOBAL_DICT_MAX_CARDINALITY_UTF8;
+import static io.github.dfa1.vortex.writer.DictColumnState.GLOBAL_DICT_MAX_CARDINALITY;
+import static io.github.dfa1.vortex.writer.DictColumnState.GLOBAL_DICT_MAX_CARDINALITY_UTF8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
-/// Direct unit tests for the global-dictionary decision helpers in [VortexWriter]. These choices
+/// Direct unit tests for the global-dictionary decision helpers in [DictColumnState]. These choices
 /// (dict vs cascade fallback, and the code width) only affect *encoding*, not the values a reader
 /// gets back — so a round-trip cannot pin their boundaries. Testing the pure predicates directly
 /// fixes each cardinality / ratio edge.
-class VortexWriterDictDecisionTest {
+class DictColumnStateTest {
 
     // ── isDictCandidate (primitive) ──────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ class VortexWriterDictDecisionTest {
         // Given — a column of `ptype` with the case's data
 
         // When
-        boolean result = VortexWriter.isDictCandidate(ptype, data);
+        boolean result = DictColumnState.isDictCandidate(ptype, data);
 
         // Then
         assertThat(result).isEqualTo(expected);
@@ -84,7 +84,7 @@ class VortexWriterDictDecisionTest {
         // Given — an I64 column with the case's values and validity
 
         // When
-        boolean result = VortexWriter.isDictCandidate(PType.I64, data, validity);
+        boolean result = DictColumnState.isDictCandidate(PType.I64, data, validity);
 
         // Then
         assertThat(result).isEqualTo(expected);
@@ -111,7 +111,7 @@ class VortexWriterDictDecisionTest {
         // Given — a string column with the case's data
 
         // When
-        boolean result = VortexWriter.isUtf8DictCandidate(data);
+        boolean result = DictColumnState.isUtf8DictCandidate(data);
 
         // Then
         assertThat(result).isEqualTo(expected);
@@ -142,7 +142,7 @@ class VortexWriterDictDecisionTest {
         // Given — a string column with the case's values and validity
 
         // When
-        boolean result = VortexWriter.isUtf8DictCandidate(data, validity);
+        boolean result = DictColumnState.isUtf8DictCandidate(data, validity);
 
         // Then
         assertThat(result).isEqualTo(expected);
@@ -165,7 +165,7 @@ class VortexWriterDictDecisionTest {
         // Given — a dictionary of `dictSize` distinct values
 
         // When
-        PType result = VortexWriter.codePTypeForSize(dictSize);
+        PType result = DictColumnState.codePTypeForSize(dictSize);
 
         // Then
         assertThat(result).isEqualTo(expected);
@@ -187,7 +187,7 @@ class VortexWriterDictDecisionTest {
         // Given — a typed primitive array of `ptype`
 
         // When
-        int result = VortexWriter.primitiveArrayLen(data, ptype);
+        int result = DictColumnState.primitiveArrayLen(data, ptype);
 
         // Then
         assertThat(result).isEqualTo(expected);
@@ -207,7 +207,7 @@ class VortexWriterDictDecisionTest {
         // Given — a typed primitive array of `ptype`
 
         // When
-        Object result = VortexWriter.readPrimitiveElement(data, ptype, index);
+        Object result = DictColumnState.readPrimitiveElement(data, ptype, index);
 
         // Then
         assertThat(result).isEqualTo(expected);
