@@ -48,14 +48,12 @@ import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
 import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
-import io.github.dfa1.vortex.core.fbs.FbsExtension;
 import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
 import io.github.dfa1.vortex.core.fbs.FbsPostscriptSegment;
 import io.github.dfa1.vortex.core.fbs.FbsSegmentSpec;
-import io.github.dfa1.vortex.core.fbs.FbsType;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -375,90 +373,6 @@ public final class VortexWriter implements Closeable {
         };
     }
 
-    private static ByteBuffer buildDType(DType dtype) {
-        var fbb = new FbsBuilder(128);
-        int off = serializeDType(fbb, dtype);
-        io.github.dfa1.vortex.core.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
-        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-    }
-
-    private static int serializeDType(FbsBuilder fbb, DType dtype) {
-        return switch (dtype) {
-            case DType.Null _ -> {
-                io.github.dfa1.vortex.core.fbs.FbsNull.startFbsNull(fbb);
-                int inner = io.github.dfa1.vortex.core.fbs.FbsNull.endFbsNull(fbb);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsNull, inner);
-            }
-            case DType.Bool(var nullable) -> {
-                int inner = io.github.dfa1.vortex.core.fbs.FbsBool.createFbsBool(fbb, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsBool, inner);
-            }
-            case DType.Primitive(var ptype, var nullable) -> {
-                int inner = io.github.dfa1.vortex.core.fbs.FbsPrimitive.createFbsPrimitive(
-                        fbb, ptype.ordinal(), nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, inner);
-            }
-            case DType.Struct(var fieldNames, var fieldTypes, var nullable) -> {
-                // Build child DType tables first (FlatBuffers bottom-up requirement)
-                int[] fieldOffsets = new int[fieldTypes.size()];
-                for (int i = 0; i < fieldOffsets.length; i++) {
-                    fieldOffsets[i] = serializeDType(fbb, fieldTypes.get(i));
-                }
-                int[] nameOffsets = new int[fieldNames.size()];
-                for (int i = 0; i < nameOffsets.length; i++) {
-                    nameOffsets[i] = fbb.createString(fieldNames.get(i).value());
-                }
-                int namesVec = io.github.dfa1.vortex.core.fbs.FbsStruct.createNamesVector(fbb, nameOffsets);
-                int dtypesVec = io.github.dfa1.vortex.core.fbs.FbsStruct.createDtypesVector(fbb, fieldOffsets);
-                int inner = io.github.dfa1.vortex.core.fbs.FbsStruct.createFbsStruct(
-                        fbb, namesVec, dtypesVec, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsStruct, inner);
-            }
-            case DType.Utf8(var nullable) -> {
-                int inner = io.github.dfa1.vortex.core.fbs.FbsUtf8.createFbsUtf8(fbb, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsUtf8, inner);
-            }
-            case DType.Binary(var nullable) -> {
-                int inner = io.github.dfa1.vortex.core.fbs.FbsBinary.createFbsBinary(fbb, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsBinary, inner);
-            }
-            case DType.List(var elementType, var nullable) -> {
-                int elemTypeOff = serializeDType(fbb, elementType);
-                int inner = io.github.dfa1.vortex.core.fbs.FbsList.createFbsList(fbb, elemTypeOff, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsList, inner);
-            }
-            case DType.FixedSizeList(var elementType, var fixedSize, var nullable) -> {
-                int elemTypeOff = serializeDType(fbb, elementType);
-                int inner = io.github.dfa1.vortex.core.fbs.FbsFixedSizeList.createFbsFixedSizeList(
-                        fbb, elemTypeOff, fixedSize, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsFixedSizeList, inner);
-            }
-            case DType.Map(var keyType, var valueType, var keysSorted, var nullable) -> {
-                int keyTypeOff = serializeDType(fbb, keyType);
-                int valueTypeOff = serializeDType(fbb, valueType);
-                int inner = io.github.dfa1.vortex.core.fbs.FbsMap.createFbsMap(
-                        fbb, keyTypeOff, valueTypeOff, keysSorted, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsMap, inner);
-            }
-            case DType.Extension e -> {
-                int idOff = fbb.createString(e.extensionId());
-                int storageDtypeOff = serializeDType(fbb, e.storageDType());
-                int metaOff = 0;
-                if (e.metadata() != null) {
-                    byte[] metaBytes = e.metadata().toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
-                    metaOff = FbsExtension.createMetadataVector(fbb, metaBytes);
-                }
-                int inner = FbsExtension.createFbsExtension(fbb, idOff, storageDtypeOff, metaOff);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsExtension, inner);
-            }
-            case DType.Variant(var nullable) -> {
-                int inner = io.github.dfa1.vortex.core.fbs.FbsVariant.createFbsVariant(fbb, nullable);
-                yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsVariant, inner);
-            }
-            default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);
-        };
-    }
-
     private static ByteBuffer buildPostscript(
             long footerOff, int footerLen,
             long dtypeOff, int dtypeLen,
@@ -631,7 +545,7 @@ public final class VortexWriter implements Closeable {
         long footerOff = bytesWritten;
         write(footerBuf);
 
-        ByteBuffer dtypeBuf = buildDType(schema);
+        ByteBuffer dtypeBuf = DTypeFbsSerializer.buildDType(schema);
         long dtypeOff = bytesWritten;
         write(dtypeBuf);
 
