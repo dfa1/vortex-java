@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `dev.vortex:vortex-jni` 0.84.0 → 0.85.0; vortex-jni's writer no longer emits a per-zone `SUM` in the `vortex.zoned` stats table (upstream: a zone sum prunes nothing and its null-on-empty semantics were unsettled), so `ZoneReducer#sum` now falls back to a full scan for Rust-written files instead of pushing the reduction down. ([#360](https://github.com/dfa1/vortex-java/pull/360))
+
 ## [0.13.3] — 2026-08-15
 
 Nested Parquet import, plus a cluster of real correctness bugs (three writer-side, one reader-side)
