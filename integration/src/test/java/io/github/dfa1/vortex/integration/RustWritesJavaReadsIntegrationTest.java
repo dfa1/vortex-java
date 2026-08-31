@@ -248,10 +248,16 @@ class RustWritesJavaReadsIntegrationTest {
     }
 
     @Test
-    void jniWriter_perZoneSum_readFromZoneMapTable(@TempDir Path tmp) throws IOException {
+    void jniWriter_noPerZoneSum_zoneReducerSignalsFallbackAndDecodeStillCorrect(@TempDir Path tmp)
+            throws IOException {
         // Given — a Rust-written file large enough that the JNI writer emits a multi-zone column.
-        // Sum lives only in Rust's vortex.stats zone-map table (its flat writer doesn't retain it),
-        // so this proves the Java reader decodes that table for per-zone SUM (ADR 0013 §6 parity).
+        // vortex-jni 0.85.0 dropped SUM from the zone-map aggregate defaults (a zone sum prunes
+        // nothing, and its null-on-empty semantics were unsettled — see spiraldb/vortex#9206's
+        // writer comment), so zones now carry only MAX/MIN/NAN_COUNT/NULL_COUNT. This proves the
+        // Java reader reflects that absence faithfully (no fabricated SUM), that
+        // [io.github.dfa1.vortex.reader.compute.ZoneReducer#sum(String)] signals the caller to fall
+        // back instead of under-counting, and that decoding the column directly still yields the
+        // right total.
         int n = 200_000;
         long[] ids = new long[n];
         double[] vals = new double[n];
@@ -263,15 +269,22 @@ class RustWritesJavaReadsIntegrationTest {
         writeJni(file, ids, vals);
         long expected = (long) n * (n - 1) / 2; // Σ 0..n-1
 
-        // When — fold the per-zone SUM rows the reader surfaces from the zone-map table
+        // When / Then — no zone carries a SUM statistic anymore
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             List<ArrayStats> zones = iter.columnZoneStats("id");
+            assertThat(zones).isNotEmpty().allSatisfy(z -> assertThat(z.sum()).isNull());
+        }
 
-            // Then — every zone carries a SUM (came from Rust's table, not a Java-side recompute)
-            // and the whole-zone fold equals the column total.
-            assertThat(zones).isNotEmpty().allSatisfy(z -> assertThat(z.sum()).isNotNull());
-            long total = zones.stream().mapToLong(z -> (Long) z.sum()).sum();
+        // When / Then — the reducer refuses to guess and tells the caller to stream instead
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            Number pushedDown = new io.github.dfa1.vortex.reader.compute.ZoneReducer(vf).sum("id");
+            assertThat(pushedDown).isNull();
+        }
+
+        // When / Then — decoding the column the ordinary way still returns the exact total
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            long total = scanAll(vf).stream().flatMapToLong(c -> Arrays.stream(ids(c))).sum();
             assertThat(total).isEqualTo(expected);
         }
     }
