@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `FsstEncodingEncoder`, `VarBinViewEncodingEncoder`, and `ZstdEncodingEncoder` now handle `DType.Binary` byte-for-byte instead of casting straight to `String[]` (a `ClassCastException` if the cascade competition picked one of them for an embedded blob column, e.g. Raincloud's `waxal-dagbani-asr-test` `audio.bytes`); `DType.Binary` also joins `DType.Utf8` in the cascade's real sample-and-measure competition instead of a first-match dispatch, so it gets the same Dict/FSST/VarBinView/Zstd contest Utf8 already had. A non-nullable `DType.Binary` column could not be written at all before this fix (`VortexWriter`'s row-count validation had no `byte[][]` case). ([#352](https://github.com/dfa1/vortex-java/issues/352))
+
 ### Changed
 
 - `dev.vortex:vortex-jni` 0.84.0 → 0.85.0; vortex-jni's writer no longer emits a per-zone `SUM` in the `vortex.zoned` stats table (upstream: a zone sum prunes nothing and its null-on-empty semantics were unsettled), so `ZoneReducer#sum` now falls back to a full scan for Rust-written files instead of pushing the reduction down. ([#360](https://github.com/dfa1/vortex-java/pull/360))

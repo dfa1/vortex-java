@@ -43,14 +43,13 @@ class VarBinViewEncodingEncoderTest {
         }
 
         @Test
-        void accepts_binary_false() {
-            // Given — encode() casts data straight to String[], not byte-safe for arbitrary
-            // bytes yet (#352)
+        void accepts_binary_true() {
+            // Given
             // When
             boolean result = ENCODER.accepts(DTypes.BINARY);
 
             // Then
-            assertThat(result).isFalse();
+            assertThat(result).isTrue();
         }
 
         @Test
@@ -83,6 +82,36 @@ class VarBinViewEncodingEncoderTest {
             for (int i = 0; i < values.length; i++) {
                 assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(values[i]);
             }
+        }
+
+        @Test
+        void encode_binaryRawBytes_roundTripsByteForByte_notThroughUtf8() {
+            // Given — non-UTF8 bytes (0x80 alone is not a valid UTF-8 sequence); routing this
+            // through String[].getBytes(UTF_8) would corrupt it via the UTF-8 replacement
+            // character. DType.Binary carries data as byte[][], not String[] (#352). One row
+            // stays under the 12-byte inline threshold, one exceeds it (out-of-line data buffer),
+            // and one is a null entry (values child of a masked/nullable layout).
+            byte[][] data = {
+                    {(byte) 0x80, (byte) 0xFF, 0x00, 0x01},
+                    "this exceeds the twelve byte inline threshold".getBytes(StandardCharsets.UTF_8),
+                    null
+            };
+            Arena arena = Arena.ofAuto();
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.BINARY, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            ArrayNode node = new ArrayNode(
+                    EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0],
+                    result.rootNode().bufferIndices());
+            DecodeContext ctx = new DecodeContext(node, DTypes.BINARY, data.length, bufs, REGISTRY, arena);
+            var decoded = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(data.length);
+            assertThat(decoded.getBytes(0)).isEqualTo(data[0]);
+            assertThat(decoded.getBytes(1)).isEqualTo(data[1]);
+            assertThat(decoded.getBytes(2)).isEmpty();
         }
     }
 
