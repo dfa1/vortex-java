@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.foreign.MemorySegment;
-import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
@@ -34,9 +33,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// implement first).
 class PcoFixtureInspectionIntegrationTest {
 
-    private static final String FIXTURE_VERSION = "v0.75.0";
-    private static final String BASE =
-            "https://vortex-compat-fixtures.s3.amazonaws.com/" + FIXTURE_VERSION + "/arrays/";
     private static final String[] FIXTURES = {
             "pco.vortex",
             "tpch_lineitem.compact.vortex",
@@ -302,27 +298,15 @@ class PcoFixtureInspectionIntegrationTest {
         return String.valueOf(d);
     }
 
-    // Reuse the version-keyed /tmp/pco-fixtures cache if present. The version segment
-    // matters: the Rust reference rewrites identical file names with different bytes
-    // across versions, so a version-less cache would serve stale bytes after a bump.
-    private static Path downloadIfMissing(Path tmp, String name) throws Exception {
-        return LocalHttpCache.downloadIfMissing(tmp,
-                Path.of("/tmp/pco-fixtures", FIXTURE_VERSION), URI.create(BASE + name), name);
-    }
-
-    private static void assumeNetworkAvailable() {
-        LocalHttpCache.assumeNetworkAvailable(URI.create("https://vortex-compat-fixtures.s3.amazonaws.com"));
-    }
-
     @Test
     void dumpPcoMetadataForAllBlockedFixtures(@TempDir Path tmp) throws Exception {
         // Given
-        assumeNetworkAvailable();
+        RustFixtures.assumeNetworkAvailable();
 
         // When
         StringBuilder result = new StringBuilder();
         for (String name : FIXTURES) {
-            Path local = downloadIfMissing(tmp, name);
+            Path local = RustFixtures.downloadArray(tmp, name);
             result.append("=== ").append(name).append(" ===\n");
             inspect(local, result);
             result.append('\n');

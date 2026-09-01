@@ -39,7 +39,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.ValueLayout;
-import java.net.URI;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -53,10 +52,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// Cross-compatibility: Rust (JNI) writer → Java reader.
 class RustWritesJavaReadsIntegrationTest {
-
-    private static final String FIXTURE_VERSION = "v0.75.0";
-    private static final String S3_BASE =
-            "https://vortex-compat-fixtures.s3.amazonaws.com/" + FIXTURE_VERSION + "/arrays/";
 
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
@@ -213,18 +208,6 @@ class RustWritesJavaReadsIntegrationTest {
             });
             return longs.stream().mapToLong(Long::longValue).toArray();
         }
-    }
-
-    // Cache is keyed by fixture version: the Rust reference rewrites the same file names
-    // with different bytes across versions, so a version-less cache would silently serve
-    // stale bytes after a version bump.
-    private static Path downloadIfMissing(Path tmp, String name) throws Exception {
-        return LocalHttpCache.downloadIfMissing(tmp,
-                Path.of("/tmp/pco-fixtures", FIXTURE_VERSION), URI.create(S3_BASE + name), name);
-    }
-
-    private static void assumeNetworkAvailable() {
-        LocalHttpCache.assumeNetworkAvailable(URI.create("https://vortex-compat-fixtures.s3.amazonaws.com"));
     }
 
     // ── S3 fixture round-trip: Rust-written pco → Java reader ────────────────
@@ -542,8 +525,8 @@ class RustWritesJavaReadsIntegrationTest {
     })
     void s3_javaDecodeMatchesJni(String fixture, @TempDir Path tmp) throws Exception {
         // Given — Java decode of a first-I64 column from an S3 fixture
-        assumeNetworkAvailable();
-        Path file = downloadIfMissing(tmp, fixture);
+        RustFixtures.assumeNetworkAvailable();
+        Path file = RustFixtures.downloadArray(tmp, fixture);
         String col = firstI64Column(file);
 
         // When

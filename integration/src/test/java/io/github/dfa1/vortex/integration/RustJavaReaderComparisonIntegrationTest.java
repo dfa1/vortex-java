@@ -40,7 +40,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.net.URI;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -56,25 +55,11 @@ import static org.assertj.core.data.Percentage.withPercentage;
 /// decode. A mismatch in any column value points to a decoding bug in the Java reader.
 class RustJavaReaderComparisonIntegrationTest {
 
-    private static final String FIXTURE_VERSION = "v0.75.0";
-    private static final URI BASE =
-            URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/" + FIXTURE_VERSION + "/arrays/");
-
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
 
     static {
         NativeLoader.loadJni();
-    }
-
-    private static Path download(URI uri, Path tmp) throws Exception {
-        String name = uri.getPath().substring(uri.getPath().lastIndexOf('/') + 1);
-        return LocalHttpCache.downloadIfMissing(tmp,
-                Path.of("/tmp/rust-fixtures", FIXTURE_VERSION), uri, name);
-    }
-
-    private static void assumeNetworkAvailable() {
-        LocalHttpCache.assumeNetworkAvailable(URI.create("https://vortex-compat-fixtures.s3.amazonaws.com"));
     }
 
     private static Stats rustStats(Path file) throws Exception {
@@ -400,8 +385,8 @@ class RustJavaReaderComparisonIntegrationTest {
     })
     void rust_vs_javaReader_statsMatch(String fixture, @TempDir Path tmp) throws Exception {
         // Given
-        assumeNetworkAvailable();
-        Path local = download(BASE.resolve(fixture), tmp);
+        RustFixtures.assumeNetworkAvailable();
+        Path local = RustFixtures.downloadArray(tmp, fixture);
         String inspect = VortexInspector.inspect(VortexReader.open(local));
         System.out.println(inspect);
         // When
