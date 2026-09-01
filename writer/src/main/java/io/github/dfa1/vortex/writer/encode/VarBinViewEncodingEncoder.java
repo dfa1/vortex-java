@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /// Write-only encoder for `vortex.varbinview`.
@@ -22,20 +21,16 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        // Binary excluded: encode() casts data straight to String[], not byte-safe for
-        // arbitrary bytes yet (#352).
-        return dtype instanceof DType.Utf8;
+        return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        String[] strings = (String[]) data;
-        int n = strings.length;
+        byte[][] bytes = VarBinBytes.toByteArrays(data);
+        int n = bytes.length;
 
-        byte[][] bytes = new byte[n][];
         int totalDataBytes = 0;
         for (int i = 0; i < n; i++) {
-            bytes[i] = strings[i].getBytes(StandardCharsets.UTF_8);
             if (bytes[i].length > MAX_INLINED_SIZE) {
                 totalDataBytes += bytes[i].length;
             }

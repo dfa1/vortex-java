@@ -78,6 +78,82 @@ class ZstdEncodingEncoderTest {
         }
 
         @Test
+        void accepts_binary_true() {
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.BINARY);
+
+            // Then
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        void acceptsNullable_binary_true() {
+            // Given
+            // When
+            boolean result = ENCODER.acceptsNullable(DTypes.BINARY);
+
+            // Then
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        void encode_binaryRawBytes_roundTripsByteForByte_notThroughUtf8() {
+            // Given — non-UTF8 bytes (0x80 alone is not a valid UTF-8 sequence); routing this
+            // through String[].getBytes(UTF_8) would corrupt it via the UTF-8 replacement
+            // character. DType.Binary carries data as byte[][], not String[] (#352).
+            byte[][] data = {{(byte) 0x80, (byte) 0xFF, 0x00, 0x01}, {}, {0x41, 0x42}};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.BINARY, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, data.length, DTypes.BINARY, ReadRegistry.empty());
+            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            for (int i = 0; i < data.length; i++) {
+                assertThat(decoded.getBytes(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @Test
+        void encode_nullableBinary_roundTrips() {
+            // Given — nullable binary as a NullableData carrier (byte[][] with null elements + the
+            // derived validity), mirroring encode_nullableUtf8_roundTrips for raw bytes.
+            byte[][] storage = {{0x01}, null, {(byte) 0x80, (byte) 0xFF}, null};
+            boolean[] validity = {true, false, true, false};
+            DType binaryNullable = new DType.Binary(true);
+            NullableData data = new NullableData(storage, validity);
+
+            // When
+            EncodeResult result = ENCODER.encode(binaryNullable, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(
+                    result, validity.length, binaryNullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
+            MaskedArray decoded = (MaskedArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(4);
+            assertThat(decoded.isValid(0)).isTrue();
+            assertThat(decoded.isValid(1)).isFalse();
+            assertThat(decoded.isValid(2)).isTrue();
+            assertThat(decoded.isValid(3)).isFalse();
+            VarBinArray child = (VarBinArray) decoded.inner();
+            assertThat(child.getBytes(0)).isEqualTo(storage[0]);
+            assertThat(child.getBytes(2)).isEqualTo(storage[2]);
+        }
+
+        @Test
+        void encode_nonNullableBinaryWithNull_throwsVortexException() {
+            // Given — a non-nullable Binary dtype whose data carries a stray null. The encoder must
+            // reject it rather than silently emit a nullable layout the dtype does not declare.
+            byte[][] data = {{0x01}, null, {0x02}};
+            DType binary = new DType.Binary(false);
+
+            // When / Then
+            assertThatThrownBy(() -> ENCODER.encode(binary, data, EncodeTestHelper.testCtx()))
+                    .isInstanceOf(VortexException.class);
+        }
+
+        @Test
         void encode_emptyArray_roundTrips() {
             int[] data = {};
             EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());

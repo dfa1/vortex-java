@@ -144,14 +144,13 @@ class FsstEncodingEncoderTest {
         }
 
         @Test
-        void accepts_binary_false() {
-            // Given — encode()/encodeCascade() cast data straight to String[], not byte-safe
-            // for arbitrary bytes yet (#352)
+        void accepts_binary_true() {
+            // Given
             // When
             boolean result = ENCODER.accepts(DTypes.BINARY);
 
             // Then
-            assertThat(result).isFalse();
+            assertThat(result).isTrue();
         }
 
         @Test
@@ -181,6 +180,32 @@ class FsstEncodingEncoderTest {
             assertThat(decoded.length()).isEqualTo(values.length);
             for (int i = 0; i < values.length; i++) {
                 assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(values[i]);
+            }
+        }
+
+        @Test
+        void encode_binaryRawBytes_roundTripsByteForByte_notThroughUtf8() {
+            // Given — non-UTF8 bytes (0x80 alone is not a valid UTF-8 sequence); routing this
+            // through String[].getBytes(UTF_8) would corrupt it via the UTF-8 replacement
+            // character. DType.Binary carries data as byte[][], not String[] (#352).
+            byte[][] data = {
+                    {(byte) 0x80, (byte) 0xFF, 0x00, 0x01},
+                    {},
+                    {0x41, 0x42, 0x43}
+            };
+            Arena arena = Arena.ofAuto();
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.BINARY, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            ArrayNode node = toArrayNode(result.rootNode());
+            DecodeContext ctx = new DecodeContext(node, DTypes.BINARY, data.length, bufs, REGISTRY, arena);
+            var decoded = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(data.length);
+            for (int i = 0; i < data.length; i++) {
+                assertThat(decoded.getBytes(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 

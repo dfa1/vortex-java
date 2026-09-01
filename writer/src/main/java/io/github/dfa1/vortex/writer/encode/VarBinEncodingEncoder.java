@@ -9,13 +9,10 @@ import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /// Write-only encoder for `vortex.varbin`.
 public final class VarBinEncodingEncoder implements EncodingEncoder {
-
-    private static final byte[] EMPTY_BYTES = new byte[0];
 
     @Override
     public EncodingId encodingId() {
@@ -30,24 +27,12 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         // Binary (DType.Binary) arrives as raw byte[][] and must round-trip byte-for-byte —
-        // routing it through the Utf8 String[] path below would corrupt any byte sequence that
-        // isn't valid UTF-8 (e.g. an embedded audio/image blob). Utf8 arrives as String[] and is
-        // UTF-8 encoded. Either way a null entry (this encoder is the values child of a
-        // masked/nullable layout, where validity carries nullity) contributes a zero-length slot.
-        byte[][] byteArrays;
-        String[] strings = null;
-        if (data instanceof byte[][] raw) {
-            byteArrays = new byte[raw.length][];
-            for (int i = 0; i < raw.length; i++) {
-                byteArrays[i] = raw[i] == null ? EMPTY_BYTES : raw[i];
-            }
-        } else {
-            strings = (String[]) data;
-            byteArrays = new byte[strings.length][];
-            for (int i = 0; i < strings.length; i++) {
-                byteArrays[i] = strings[i] == null ? EMPTY_BYTES : strings[i].getBytes(StandardCharsets.UTF_8);
-            }
-        }
+        // routing it through the Utf8 String[] path would corrupt any byte sequence that isn't
+        // valid UTF-8 (e.g. an embedded audio/image blob). Utf8 arrives as String[] and is UTF-8
+        // encoded. Either way a null entry (this encoder is the values child of a masked/nullable
+        // layout, where validity carries nullity) contributes a zero-length slot.
+        String[] strings = data instanceof String[] s ? s : null;
+        byte[][] byteArrays = VarBinBytes.toByteArrays(data);
         int n = byteArrays.length;
         int totalBytes = 0;
         for (byte[] b : byteArrays) {

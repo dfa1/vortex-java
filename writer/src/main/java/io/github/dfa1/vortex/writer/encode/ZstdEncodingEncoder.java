@@ -12,7 +12,6 @@ import io.github.dfa1.vortex.core.proto.ProtoZstdMetadata;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -82,17 +81,16 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        // Binary excluded: the Utf8-or-Binary branch of encode() casts data straight to
-        // String[], not byte-safe for arbitrary bytes yet (#352).
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8;
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8
+                || dtype instanceof DType.Binary;
     }
 
     @Override
     public boolean acceptsNullable(DType dtype) {
-        // Nullable primitive and utf8 columns arrive as a NullableData carrier and are encoded
-        // directly here (validity emitted as Bool child[0]) rather than masked-wrapped. Binary
-        // excluded along with accepts() above (#352).
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8;
+        // Nullable primitive, utf8, and binary columns arrive as a NullableData carrier and are
+        // encoded directly here (validity emitted as Bool child[0]) rather than masked-wrapped.
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8
+                || dtype instanceof DType.Binary;
     }
 
     @Override
@@ -112,12 +110,12 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
             return encodePrimitive(dt, data, ctx.arena());
         }
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-            String[] strings = (String[]) data;
-            if (containsNull(strings)) {
+            byte[][] encoded = VarBinBytes.toRawByteArrays(data);
+            if (containsNull(encoded)) {
                 throw new VortexException(EncodingId.VORTEX_ZSTD,
                         "non-nullable " + dtype + " contains null");
             }
-            return encodeVarBin(strings, ctx.arena());
+            return encodeVarBin(encoded, ctx.arena());
         }
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
     }
@@ -129,9 +127,9 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         return buildResult(raw, uniformLayout(n, byteWidth), arena);
     }
 
-    private EncodeResult encodeVarBin(String[] strings, Arena arena) {
-        MemorySegment raw = buildLengthPrefixed(strings, arena);
-        return buildResult(raw, varBinLayout(raw, strings.length), arena);
+    private EncodeResult encodeVarBin(byte[][] encoded, Arena arena) {
+        MemorySegment raw = buildLengthPrefixed(encoded, arena);
+        return buildResult(raw, varBinLayout(raw, encoded.length), arena);
     }
 
     private EncodeResult buildResult(MemorySegment raw, FrameLayout layout, Arena arena) {
@@ -155,9 +153,9 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     }
 
     private EncodeResult encodeNullableVarBin(NullableData nd, EncodeContext ctx) {
-        // Strip null positions: only valid strings reach the compressed payload (mirrors the Rust
+        // Strip null positions: only valid rows reach the compressed payload (mirrors the Rust
         // reference). The decoder scatters them back over the validity mask carried by child[0].
-        String[] valid = stripNulls((String[]) nd.values());
+        byte[][] valid = stripNulls(VarBinBytes.toRawByteArrays(nd.values()));
         MemorySegment packed = buildLengthPrefixed(valid, ctx.arena());
         return buildNullableResult(packed, varBinLayout(packed, valid.length), nd.validity(), ctx);
     }
@@ -313,30 +311,30 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         return count;
     }
 
-    private static boolean containsNull(String[] strings) {
-        for (String s : strings) {
-            if (s == null) {
+    private static boolean containsNull(byte[][] rows) {
+        for (byte[] b : rows) {
+            if (b == null) {
                 return true;
             }
         }
         return false;
     }
 
-    private static String[] stripNulls(String[] strings) {
-        String[] valid = new String[countNonNull(strings)];
+    private static byte[][] stripNulls(byte[][] rows) {
+        byte[][] valid = new byte[countNonNull(rows)][];
         int j = 0;
-        for (String s : strings) {
-            if (s != null) {
-                valid[j++] = s;
+        for (byte[] b : rows) {
+            if (b != null) {
+                valid[j++] = b;
             }
         }
         return valid;
     }
 
-    private static int countNonNull(String[] strings) {
+    private static int countNonNull(byte[][] rows) {
         int count = 0;
-        for (String s : strings) {
-            if (s != null) {
+        for (byte[] b : rows) {
+            if (b != null) {
                 count++;
             }
         }
@@ -405,12 +403,10 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static MemorySegment buildLengthPrefixed(String[] strings, Arena arena) {
+    private static MemorySegment buildLengthPrefixed(byte[][] encoded, Arena arena) {
         int total = 0;
-        byte[][] encoded = new byte[strings.length][];
-        for (int i = 0; i < strings.length; i++) {
-            encoded[i] = strings[i].getBytes(StandardCharsets.UTF_8);
-            total += 4 + encoded[i].length;
+        for (byte[] bytes : encoded) {
+            total += 4 + bytes.length;
         }
         MemorySegment seg = arena.allocate(total > 0 ? total : 1);
         long pos = 0;

@@ -613,4 +613,76 @@ class VortexWriterTest {
             }
         }
     }
+
+    @Test
+    void create_nonNullableBinaryColumn_roundTrips(@TempDir Path tmp) throws IOException {
+        // Given — a non-nullable DType.Binary column. arrayLength() (row-count validation) had no
+        // case for byte[][], so this threw IllegalArgumentException("unsupported data type:
+        // byte[][]") before a single row was encoded — a non-nullable Binary column could never be
+        // written at all, nullable ones only worked because NullableData carries its own length (#352).
+        var schema = new DType.Struct(
+                List.of(ColumnName.of("bytes")), List.of(new DType.Binary(false)), false);
+        Path file = tmp.resolve("binary_nonnull.vortex");
+        byte[][] data = {{(byte) 0x80, 0x01}, {}, {0x02, 0x03}};
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(1), WriteRegistry.loadAll())) {
+            sut.writeChunk(Map.of(ColumnName.of("bytes"), data));
+        }
+
+        // Then
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
+            try (var iter = reader.scan(ScanOptions.all())) {
+                assertThat(iter.hasNext()).isTrue();
+                try (var chunk = iter.next()) {
+                    io.github.dfa1.vortex.reader.array.VarBinArray values = chunk.column("bytes");
+                    for (int i = 0; i < data.length; i++) {
+                        assertThat(values.getBytes(i)).as("index %d", i).isEqualTo(data[i]);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void create_binaryColumn_cascadeCompetition_roundTripsByteForByte(@TempDir Path tmp) throws IOException {
+        // Given — highly repetitive binary rows, large enough to give FSST/VarBinView/Zstd a real
+        // shot at winning the cascade competition over the plain vortex.varbin fallback (#352
+        // follow-up: Binary now competes the same way Utf8 does). Whichever encoding wins, the
+        // decoded bytes must match exactly — this is a correctness guard, not a "which encoding
+        // won" assertion.
+        var schema = new DType.Struct(
+                List.of(ColumnName.of("bytes")), List.of(new DType.Binary(true)), false);
+        Path file = tmp.resolve("binary_cascade.vortex");
+        byte[] pattern = "the quick brown fox jumps over the lazy dog".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[][] data = new byte[500][];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = i % 37 == 0 ? null : pattern;
+        }
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3), WriteRegistry.loadAll())) {
+            sut.writeChunk(Map.of(ColumnName.of("bytes"), data));
+        }
+
+        // Then
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
+            try (var iter = reader.scan(ScanOptions.all())) {
+                assertThat(iter.hasNext()).isTrue();
+                try (var chunk = iter.next()) {
+                    io.github.dfa1.vortex.reader.array.MaskedArray col = chunk.column("bytes");
+                    io.github.dfa1.vortex.reader.array.VarBinArray values =
+                            (io.github.dfa1.vortex.reader.array.VarBinArray) col.inner();
+                    for (int i = 0; i < data.length; i++) {
+                        assertThat(col.isValid(i)).as("validity[%d]", i).isEqualTo(data[i] != null);
+                        if (data[i] != null) {
+                            assertThat(values.getBytes(i)).as("index %d", i).isEqualTo(data[i]);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

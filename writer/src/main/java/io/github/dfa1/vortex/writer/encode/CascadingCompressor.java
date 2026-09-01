@@ -38,6 +38,7 @@ public final class CascadingCompressor {
             case float[] a -> a.length;
             case double[] a -> a.length;
             case String[] a -> a.length;
+            case byte[][] a -> a.length;
             default -> throw new IllegalArgumentException("unsupported data type: " + data.getClass());
         };
     }
@@ -93,6 +94,12 @@ public final class CascadingCompressor {
             }
             case String[] a -> {
                 String[] out = new String[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
+            case byte[][] a -> {
+                byte[][] out = new byte[sampleSize][];
                 forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
                         System.arraycopy(a, srcOff, out, dstOff, len));
                 yield out;
@@ -160,24 +167,25 @@ public final class CascadingCompressor {
             return encodeStruct(structDtype, (StructData) data, ctx);
         }
 
-        // Utf8: same sample-and-measure competition as Primitive below (Dict, FSST, VarBin,
-        // Zstd all genuinely compete on measured size) rather than the extension-type
-        // first-match dispatch. No stats are computed — DictEncodingEncoder.expectedRatio()
-        // already defers to this path for Utf8 rather than consuming them — and there is no
-        // cheap analytic "no compression" baseline the way primitiveBytes is for fixed-width
-        // types, so the competition simply keeps whichever accepting encoder measures
-        // smallest (VarBinEncodingEncoder unconditionally accepts Utf8, so a winner always
-        // exists in practice).
-        if (dtype instanceof DType.Utf8) {
+        // Utf8/Binary: same sample-and-measure competition as Primitive below (Dict/VarBin
+        // compete on Utf8 too; FSST, VarBinView, and Zstd compete on both — all genuinely measured)
+        // rather than the extension-type first-match dispatch. No stats are computed —
+        // DictEncodingEncoder.expectedRatio() already defers to this path for Utf8 rather than
+        // consuming them, Binary isn't a Dict candidate at all — and there is no cheap analytic
+        // "no compression" baseline the way primitiveBytes is for fixed-width types, so the
+        // competition simply keeps whichever accepting encoder measures smallest
+        // (VarBinEncodingEncoder unconditionally accepts both, so a winner always exists in
+        // practice).
+        if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
             return competeAndEncode(dtype, data, ctx, ArrayStats.EMPTY, sampleSize -> Long.MAX_VALUE);
         }
 
-        // Remaining non-primitives (extension types, Binary, List, ...): find the accepting
-        // encoding and splice through it so its cascaded children (e.g. datetimeparts →
-        // days/seconds/subseconds) are recursively compressed rather than stored as raw
-        // primitives. Honor the excluded set so spliceResult's notApplicable retry can rotate
-        // to the next accepting encoding (e.g. DateTimePartsEncoding → ExtEncoding when the
-        // input is raw storage rather than DateTimePartsData).
+        // Remaining non-primitives (extension types, List, ...): find the accepting encoding and
+        // splice through it so its cascaded children (e.g. datetimeparts → days/seconds/
+        // subseconds) are recursively compressed rather than stored as raw primitives. Honor the
+        // excluded set so spliceResult's notApplicable retry can rotate to the next accepting
+        // encoding (e.g. DateTimePartsEncoding → ExtEncoding when the input is raw storage rather
+        // than DateTimePartsData).
         if (!(dtype instanceof DType.Primitive p)) {
             return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
@@ -340,8 +348,8 @@ public final class CascadingCompressor {
             DType fieldDtype = fieldTypes.get(i);
             Object fieldData = fields.get(i);
             // Mirrors StructEncodingEncoder's own field loop: a nullable field arrives as
-            // NullableData(values, validity), not the dense array encodeWithCtx's per-dtype
-            // dispatch expects (e.g. VarBinEncodingEncoder casts data straight to String[]).
+            // NullableData(values, validity), not the dense array (String[], byte[][], ...)
+            // encodeWithCtx's per-dtype dispatch expects.
             EncodeResult fieldResult = (fieldData instanceof NullableData && !(fieldDtype instanceof DType.Extension))
                     ? new MaskedEncodingEncoder().encode(fieldDtype, fieldData, ctx)
                     : encodeWithCtx(fieldDtype, fieldData, ctx);

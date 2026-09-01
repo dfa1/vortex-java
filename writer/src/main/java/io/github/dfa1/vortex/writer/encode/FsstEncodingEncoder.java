@@ -12,17 +12,17 @@ import io.github.dfa1.vortex.fsst.CompressorBuilder;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /// Write-only encoder for `vortex.fsst`.
 ///
 /// This class is a thin wire adapter over the standalone `vortex-fsst` module (issue #287): the
 /// FSST compression algorithm — symbol-table training and greedy longest-match compression — lives
-/// entirely in [CompressorBuilder]/[Compressor]. This adapter converts the input strings to UTF-8
-/// bytes, drives training, compresses each row, and lays the result out in the `vortex.fsst` wire
-/// format (symbol table buffers, remapped code stream, per-row uncompressed lengths and code
-/// offsets, plus the [ProtoFSSTMetadata] describing the two offset ptypes).
+/// entirely in [CompressorBuilder]/[Compressor]. This adapter normalizes the input (Utf8 `String[]`
+/// UTF-8 encoded, Binary `byte[][]` passed through — [VarBinBytes]) to raw row bytes, drives
+/// training, compresses each row, and lays the result out in the `vortex.fsst` wire format (symbol
+/// table buffers, remapped code stream, per-row uncompressed lengths and code offsets, plus the
+/// [ProtoFSSTMetadata] describing the two offset ptypes).
 ///
 /// The wire format packs each symbol's bytes LSB-first into a `long` (first byte in the low byte)
 /// alongside a per-symbol length byte, and reserves code `0xFF` as the single-literal-byte escape.
@@ -49,15 +49,13 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        // Binary excluded: encode()/encodeCascade() cast data straight to String[], not byte-safe
-        // for arbitrary bytes yet (#352).
-        return dtype instanceof DType.Utf8;
+        return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         Arena arena = ctx.arena();
-        Fsst c = compress((String[]) data, arena);
+        Fsst c = compress(data, arena);
 
         // Terminal layout: the per-row length and cumulative-offset children are raw primitive
         // segments (buffers 3 and 4). The cascading path (encodeCascade) instead exposes them as
@@ -95,7 +93,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// to the terminal raw-primitive layout.
     ///
     /// @param dtype the Utf8/Binary type being encoded
-    /// @param data  the string values
+    /// @param data  the Utf8 (`String[]`) or Binary (`byte[][]`) values
     /// @param ctx   encoding context supplying the arena and cascade depth
     /// @return a cascade step with the two offset children left open, or a terminal step at depth 0
     @Override
@@ -103,7 +101,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         if (ctx.allowedCascading() == 0) {
             return CascadeStep.terminal(encode(dtype, data, ctx));
         }
-        Fsst c = compress((String[]) data, ctx.arena());
+        Fsst c = compress(data, ctx.arena());
         Object uncompLens = typedUnsigned(c.uncompLenPType(), c.uncompLens());
         Object codesOffsets = typedUnsigned(c.codesOffPType(), c.codesOffsets());
         EncodeNode partialRoot = new EncodeNode(
@@ -128,14 +126,13 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             PType uncompLenPType, PType codesOffPType, int n) {
     }
 
-    private static Fsst compress(String[] strings, Arena arena) {
-        int n = strings.length;
+    private static Fsst compress(Object data, Arena arena) {
+        byte[][] byteArrays = VarBinBytes.toByteArrays(data);
+        int n = byteArrays.length;
 
-        byte[][] byteArrays = new byte[n][];
         long totalInput = 0;
         int maxUncompLen = 0;
         for (int i = 0; i < n; i++) {
-            byteArrays[i] = strings[i].getBytes(StandardCharsets.UTF_8);
             totalInput += byteArrays[i].length;
             maxUncompLen = Math.max(maxUncompLen, byteArrays[i].length);
         }

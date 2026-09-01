@@ -19,6 +19,8 @@ import java.util.List;
 /// (primitive / varbin / fixed-size-list).
 public final class MaskedEncodingEncoder implements EncodingEncoder {
 
+    private static final byte[] EMPTY_BYTES = new byte[0];
+
     private static final List<EncodingEncoder> INNER_FALLBACK = List.of(
             new PrimitiveEncodingEncoder(),
             new VarBinEncodingEncoder(),
@@ -69,11 +71,11 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// never selects itself: its [#accepts] returns `false`, so the compressor cannot recurse into it.
     private static EncodeResult encodeValues(DType nonNullable, Object values, EncodeContext ctx) {
         if (ctx.allowedCascading() > 0) {
-            // The NullableData Utf8/Binary carrier keeps null elements in the String[] at null
-            // positions (validity masks them). Dict/FSST call getBytes() on every element, so
-            // substitute the empty string for nulls first — matching VarBinEncodingEncoder, which
-            // encodes a null as a zero-length slot. Those slots are never read: the enclosing
-            // vortex.masked validity bitmap marks the rows null.
+            // The NullableData Utf8/Binary carrier keeps null elements at null positions in the
+            // String[]/byte[][] (validity masks them). Dict/FSST/Zstd call getBytes()/read the row
+            // bytes of every element, so substitute an empty placeholder for nulls first —
+            // matching VarBinEncodingEncoder, which encodes a null as a zero-length slot. Those
+            // slots are never read: the enclosing vortex.masked validity bitmap marks the rows null.
             Object dense = denseValues(values);
             List<EncodingEncoder> candidates =
                     List.copyOf(ctx.registry().encoderMap().values());
@@ -142,15 +144,23 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         return true;
     }
 
-    /// Returns `values` unchanged, except a `String[]` with null elements is copied with each null
-    /// replaced by the empty string so cascade encoders (Dict, FSST) can call `getBytes()` safely.
+    /// Returns `values` unchanged, except a `String[]`/`byte[][]` with null elements is copied
+    /// with each null replaced by an empty placeholder so cascade encoders (Dict, FSST, Zstd,
+    /// VarBinView) can read every element's bytes safely.
     ///
     /// @param values the non-nullable values carrier extracted from the [NullableData]
-    /// @return the same array, or a null-free copy when it is a `String[]` containing nulls
+    /// @return the same array, or a null-free copy when it is a `String[]`/`byte[][]` containing nulls
     private static Object denseValues(Object values) {
-        if (!(values instanceof String[] strings)) {
-            return values;
+        if (values instanceof String[] strings) {
+            return densifyStrings(strings);
         }
+        if (values instanceof byte[][] raw) {
+            return densifyBytes(raw);
+        }
+        return values;
+    }
+
+    private static String[] densifyStrings(String[] strings) {
         String[] out = null;
         for (int i = 0; i < strings.length; i++) {
             if (strings[i] == null) {
@@ -161,6 +171,19 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
             }
         }
         return out != null ? out : strings;
+    }
+
+    private static byte[][] densifyBytes(byte[][] raw) {
+        byte[][] out = null;
+        for (int i = 0; i < raw.length; i++) {
+            if (raw[i] == null) {
+                if (out == null) {
+                    out = raw.clone();
+                }
+                out[i] = EMPTY_BYTES;
+            }
+        }
+        return out != null ? out : raw;
     }
 
     private static EncodingEncoder pickInner(DType nonNullable) {
