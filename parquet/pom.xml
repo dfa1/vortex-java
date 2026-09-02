@@ -16,6 +16,10 @@
 		<!-- production -->
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-reader</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-writer</artifactId>
 		</dependency>
 		<dependency>
@@ -29,12 +33,6 @@
 			<artifactId>zstd-jni</artifactId>
 		</dependency>
 		<!-- testing -->
-		<!-- project-internal test deps first: reader verifies the imported Vortex output. -->
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-reader</artifactId>
-			<scope>test</scope>
-		</dependency>
 		<!-- reader declares the zstd bindings optional; pull it in so the test can decode ZSTD chunks -->
 		<dependency>
 			<groupId>io.github.dfa1.zstd</groupId>

@@ -253,6 +253,13 @@ ImportOptions opts = ImportOptions.defaults()
 ParquetImporter.importParquet(Path.of("data.parquet"), Path.of("data.vortex"), opts);
 ```
 
+From a remote Parquet file over HTTP(S), fetched entirely through targeted Range requests —
+no full-file download occurs:
+
+```java
+ParquetImporter.importParquet(URI.create("https://example.com/data.parquet"), Path.of("data.vortex"));
+```
+
 **CLI:**
 
 ```bash
@@ -261,6 +268,59 @@ java -jar cli/target/vortex-cli-*-all.jar import data.parquet
 
 # explicit output path
 java -jar cli/target/vortex-cli-*-all.jar import data.parquet out.vortex
+
+# remote source — Parquet only, output path required or derived from the URL's file name
+java -jar cli/target/vortex-cli-*-all.jar import https://example.com/data.parquet out.vortex
+```
+
+---
+
+## Convert Vortex to Parquet
+
+Flat schemas only (`Bool`, non-`F16` `Primitive`, `Utf8`, `Binary`, `vortex.timestamp`); a
+`Struct`/`List`/`Map` top-level column throws `UnsupportedOperationException`.
+
+**API:**
+
+```java
+import io.github.dfa1.vortex.parquet.ParquetExporter;
+
+ParquetExporter.exportParquet(
+    Path.of("data.vortex"),
+    Path.of("data.parquet")
+);
+```
+
+Project specific columns during conversion:
+
+```java
+import io.github.dfa1.vortex.parquet.ExportOptions;
+
+ExportOptions opts = ExportOptions.defaults()
+    .withColumns(List.of("trip_distance", "fare_amount"));
+
+ParquetExporter.exportParquet(Path.of("data.vortex"), Path.of("data.parquet"), opts);
+```
+
+From an already-open handle — a local `VortexReader` or a remote `VortexHttpReader` — without an
+intervening local copy; the handle isn't closed here, the caller keeps ownership of its lifecycle:
+
+```java
+import io.github.dfa1.vortex.reader.VortexHttpReader;
+
+try (var vortex = VortexHttpReader.open(URI.create("https://example.com/data.vortex"))) {
+    ParquetExporter.exportParquet(vortex, Path.of("data.parquet"));
+}
+```
+
+**CLI:**
+
+```bash
+# dispatches on the output extension — same `export` subcommand CSV export uses
+java -jar cli/target/vortex-cli-*-all.jar export data.vortex out.parquet
+
+# remote source — Parquet output only, and the output path must be given explicitly
+java -jar cli/target/vortex-cli-*-all.jar export https://example.com/data.vortex out.parquet
 ```
 
 ---

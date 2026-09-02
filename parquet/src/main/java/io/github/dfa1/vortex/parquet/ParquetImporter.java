@@ -19,6 +19,7 @@ import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.writer.VortexWriter;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -60,7 +61,32 @@ public final class ParquetImporter {
     }
 
     public static void importParquet(Path parquetPath, Path vortexPath, ImportOptions options) throws IOException {
-        try (ParquetFileReader parquet = ParquetFileReader.open(InputFile.of(parquetPath))) {
+        importParquet(InputFile.of(parquetPath), parquetPath.toString(), vortexPath, options);
+    }
+
+    /// Imports a Parquet file served over HTTP(S), fetched entirely through targeted Range
+    /// requests (see [HttpInputFile]) — no full-file download occurs.
+    ///
+    /// @param parquetUri the `http(s)://` URL of the source Parquet file
+    /// @param vortexPath destination Vortex file
+    /// @throws IOException if reading `parquetUri` or writing `vortexPath` fails
+    public static void importParquet(URI parquetUri, Path vortexPath) throws IOException {
+        importParquet(parquetUri, vortexPath, ImportOptions.defaults());
+    }
+
+    /// Imports a Parquet file served over HTTP(S), tuned by `options`.
+    ///
+    /// @param parquetUri the `http(s)://` URL of the source Parquet file
+    /// @param vortexPath destination Vortex file
+    /// @param options    import tuning (chunk size, column projection, progress, write options)
+    /// @throws IOException if reading `parquetUri` or writing `vortexPath` fails
+    public static void importParquet(URI parquetUri, Path vortexPath, ImportOptions options) throws IOException {
+        importParquet(new HttpInputFile(parquetUri), parquetUri.toString(), vortexPath, options);
+    }
+
+    private static void importParquet(InputFile input, String sourceName, Path vortexPath, ImportOptions options)
+            throws IOException {
+        try (ParquetFileReader parquet = ParquetFileReader.open(input)) {
             FileSchema fileSchema = parquet.getFileSchema();
             List<SchemaNode> allTopLevel = fileSchema.getRootNode().children();
             List<SchemaNode> topLevel = options.hasProjection()
@@ -75,7 +101,7 @@ public final class ParquetImporter {
                 names.add(ColumnName.of(node.name()));
                 types.add(mapDType(node));
             }
-            checkNoDuplicateNames(names, parquetPath);
+            checkNoDuplicateNames(names, sourceName);
             DType.Struct schema = new DType.Struct(names, types, false);
             long totalRows = parquet.getFileMetaData().numRows();
 
@@ -97,7 +123,7 @@ public final class ParquetImporter {
 
                 while (rowReader.hasNext()) {
                     rowReader.next();
-                    fillRow(rowReader, names, types, buffers, nestedBuilders, chunkPos, parquetPath, rowsDone);
+                    fillRow(rowReader, names, types, buffers, nestedBuilders, chunkPos, sourceName, rowsDone);
                     chunkPos++;
                     rowsDone++;
 
@@ -122,7 +148,7 @@ public final class ParquetImporter {
         }
     }
 
-    static void checkNoDuplicateNames(List<ColumnName> names, Path parquetPath) {
+    static void checkNoDuplicateNames(List<ColumnName> names, String sourceName) {
         Set<ColumnName> seen = new HashSet<>();
         Set<ColumnName> duplicates = new LinkedHashSet<>();
         for (ColumnName name : names) {
@@ -132,7 +158,7 @@ public final class ParquetImporter {
         }
         if (!duplicates.isEmpty()) {
             throw new IllegalArgumentException(
-                    "Parquet schema has duplicate column name(s): " + duplicates + "; source file: " + parquetPath);
+                    "Parquet schema has duplicate column name(s): " + duplicates + "; source file: " + sourceName);
         }
     }
 
@@ -300,7 +326,7 @@ public final class ParquetImporter {
     }
 
     static void fillRow(RowReader reader, List<ColumnName> names, List<DType> types,
-            Object[] buffers, ColumnBuilder[] nestedBuilders, int pos, Path parquetPath, long rowIndex) {
+            Object[] buffers, ColumnBuilder[] nestedBuilders, int pos, String sourceName, long rowIndex) {
         for (int c = 0; c < names.size(); c++) {
             String name = names.get(c).value();
             try {
@@ -339,7 +365,7 @@ public final class ParquetImporter {
                 throw new IllegalArgumentException(
                         "Parquet column '" + name + "' is declared REQUIRED (non-nullable) but row "
                                 + rowIndex + " is null; the file's data violates its own schema. Source file: "
-                                + parquetPath, e);
+                                + sourceName, e);
             }
         }
     }

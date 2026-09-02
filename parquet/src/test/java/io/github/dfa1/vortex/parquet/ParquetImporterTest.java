@@ -310,7 +310,7 @@ class ParquetImporterTest {
             List<ColumnName> names = List.of(ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("c"));
 
             // When / Then
-            assertThatCode(() -> ParquetImporter.checkNoDuplicateNames(names, Path.of("source.parquet")))
+            assertThatCode(() -> ParquetImporter.checkNoDuplicateNames(names, "source.parquet"))
                     .doesNotThrowAnyException();
         }
 
@@ -320,7 +320,7 @@ class ParquetImporterTest {
             // headerless source CSV made a Parquet conversion tool use the first data row as column
             // names, and two property-type flag columns happened to share the value "A".
             List<ColumnName> names = List.of(ColumnName.of("A"), ColumnName.of("B"), ColumnName.of("A"));
-            Path source = Path.of("uk-price-paid.parquet");
+            String source = "uk-price-paid.parquet";
 
             // When / Then
             assertThatThrownBy(() -> ParquetImporter.checkNoDuplicateNames(names, source))
@@ -349,7 +349,7 @@ class ParquetImporterTest {
             List<DType> types = List.of(DType.I64);
             Object[] buffers = {new long[1]};
             ColumnBuilder[] nestedBuilders = new ColumnBuilder[1];
-            Path source = Path.of("malformed.parquet");
+            String source = "malformed.parquet";
             given(reader.getLong("id"))
                     .willThrow(new NullPointerException("[malformed.parquet] Column 'id' is null at row 0"));
 
