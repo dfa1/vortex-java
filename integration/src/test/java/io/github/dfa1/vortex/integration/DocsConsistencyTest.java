@@ -58,8 +58,9 @@ class DocsConsistencyTest {
             "ServiceLoader", "DriverManager", "Class", "Object", "Thread", "LockSupport",
             "System", "MemorySegment", "Arena", "ValueLayout", "FileChannel", "ByteBuffer",
             "Runtime", "Math", "Integer", "Long", "Double",
-            // Hardwood parquet API, cited in the benchmark comparison (explanation.md)
-            "ColumnReader", "RowReader");
+            // Hardwood parquet API, cited in the benchmark comparison (explanation.md) and the
+            // ParquetExporter/ExportOptions reference (reference.md)
+            "ColumnReader", "RowReader", "WriterConfig");
 
     private static Path repoRoot;
     private static List<Path> livingDocs;

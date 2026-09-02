@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ParquetExporter` (`parquet` module): writes a Vortex file to Parquet, the inverse of `ParquetImporter`. Flat schemas only — `Bool`, non-`F16` `Primitive`, `Utf8`, `Binary`, and `vortex.timestamp` (MILLIS/MICROS/NANOS); `Struct`/`List`/`Map` top-level columns throw `UnsupportedOperationException`. Built on Hardwood 1.1's new `ColumnWriter`/`ParquetFileWriter` write API. The CLI's `export` subcommand now dispatches to it when the output path ends `.parquet` (previously CSV-only). ([#362](https://github.com/dfa1/vortex-java/pull/362))
+- `ParquetExporter.exportParquet(VortexHandle, Path[, ExportOptions])` and `ParquetImporter.importParquet(URI, Path[, ImportOptions])`: both directions now work against a remote source over HTTP(S) — export from an already-open `VortexHttpReader` handle (no intervening local copy), import from a Parquet file served over HTTP(S) (new `HttpInputFile`, fetched entirely through targeted Range requests, mirroring `VortexHttpReader`'s own range-fetch pattern). The CLI's `export`/`import` subcommands accept a `url` source too, Parquet-only in both directions. ([#362](https://github.com/dfa1/vortex-java/pull/362))
+
+### Changed
+
+- `dev.hardwood:hardwood-core` 1.0.0.Final → 1.1.0.Beta1: faster `DELTA_BINARY_PACKED` and dictionary-index decoding plus a fixed-length `LIST` fast path speed up `ParquetImporter`'s read path; its new Parquet write support now backs `ParquetExporter`. ([e66fb6eb](https://github.com/dfa1/vortex-java/commit/e66fb6eb))
+
 ## [0.13.4] — 2026-09-01
 
 ### Fixed

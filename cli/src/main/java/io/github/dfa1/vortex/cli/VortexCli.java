@@ -47,7 +47,7 @@ public final class VortexCli {
         out.println("  inspect <file|url>                  print file structure; url is http(s)://");
         out.println("  tui     <file|url>                  open interactive inspector; url is http(s)://");
         out.println("  view    <file|url>                  open scrollable data grid; url is http(s)://");
-        out.println("  export  <file.vortex> [out.csv|-]   write CSV; default output is <name>.csv, `-` for stdout");
+        out.println("  export  <file.vortex> [out.csv|out.parquet|-]  write CSV or Parquet; default is <name>.csv, `-` for stdout");
         out.println("  import  <file.csv|file.parquet> [out.vortex]  convert CSV or Parquet to Vortex");
         out.println("  schema  <file.vortex>               print dtype (machine-readable)");
         out.println("  count   <file.vortex>               print row count");

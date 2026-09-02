@@ -61,6 +61,18 @@ class ImportCommandTest {
             assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
             assertThat(result.stderr()).contains("input path");
         }
+
+        @Test
+        void urlInput_nonParquetExtension_returnsUsageError() {
+            // Given / When — CSV import from a URL isn't supported; caught before any network
+            // call is made, so this needs no mocked HTTP client
+            CliTestSupport.Captured result = capture(() ->
+                    ImportCommand.run(new String[]{"import", "http://example.com/data.csv"}));
+
+            // Then
+            assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+            assertThat(result.stderr()).contains("only Parquet import is supported from a URL");
+        }
     }
 
     @Nested

@@ -9,7 +9,7 @@ For task-oriented usage see [how-to.md](how-to.md); for design rationale see [ex
 - [Scan API](#scan-api)
 - [Encoding registry](#encoding-registry)
 - [FSST (`io.github.dfa1.vortex.fsst`)](#fsst-iogithubdfa1vortexfsst)
-- [Parquet / CSV import](#parquet--csv-import)
+- [Parquet / CSV import and Parquet export](#parquet--csv-import-and-parquet-export)
 - [CLI](#cli)
 - [Encoding compatibility](compatibility.md)
 
@@ -379,7 +379,7 @@ A decoder claims its ids via `LayoutDecoder.layoutIds()` (a set — the zoned de
 (`decodeChild`, `decodeSegment` access, `arena`) and are reachable end-to-end via
 `VortexReader.open(path, readRegistry, layoutRegistry)`.
 
-## Parquet / CSV import
+## Parquet / CSV import and Parquet export
 
 ### `ParquetImporter` (`io.github.dfa1.vortex.parquet.ParquetImporter`)
 
@@ -387,10 +387,15 @@ Supports flat schemas and nested `LIST`/`STRUCT` columns, recursively composable
 `LIST<STRUCT<...>>`); `MAP` and `VARIANT` are not yet supported. Un-annotated `BYTE_ARRAY` maps
 to `DType.Binary`.
 
-| Method                                            | Notes    |
-|---------------------------------------------------|----------|
-| `importParquet(Path in, Path out)`                | Defaults |
-| `importParquet(Path in, Path out, ImportOptions)` | Tuned    |
+| Method                                            | Notes                              |
+|---------------------------------------------------|-------------------------------------|
+| `importParquet(Path in, Path out)`                | Defaults                            |
+| `importParquet(Path in, Path out, ImportOptions)` | Tuned                                |
+| `importParquet(URI in, Path out)`                 | Remote source over HTTP(S), defaults |
+| `importParquet(URI in, Path out, ImportOptions)`  | Remote source over HTTP(S), tuned    |
+
+A `URI` source is fetched entirely through targeted HTTP Range requests (`HttpInputFile`,
+internal) — no full-file download occurs.
 
 ### `ImportOptions` (`io.github.dfa1.vortex.parquet.ImportOptions`)
 
@@ -403,6 +408,38 @@ Record: `(int chunkSize, List<String> columns, ProgressListener progressListener
 | `.withProgressListener(listener)` | Progress callbacks                                             |
 | `.withWriteOptions(WriteOptions)` | Override write options                                         |
 | `.withChunkSize(int)`             | Override chunk size                                            |
+
+### `ParquetExporter` (`io.github.dfa1.vortex.parquet.ParquetExporter`)
+
+Supports flat schemas only: `Bool`, non-`F16` `Primitive`, `Utf8`, `Binary`, and the
+`vortex.timestamp` extension over MILLIS/MICROS/NANOS resolution. `Struct`/`List`/`Map` top-level
+columns throw `UnsupportedOperationException` — the inverse of `ParquetImporter`'s nested
+`LIST`/`STRUCT` support does not exist yet.
+
+| Method                                                   | Notes                                                    |
+|------------------------------------------------------------|-----------------------------------------------------------|
+| `exportParquet(Path in, Path out)`                       | Defaults                                                 |
+| `exportParquet(Path in, Path out, ExportOptions)`        | Tuned                                                    |
+| `exportParquet(VortexHandle in, Path out)`               | Already-open source (local `VortexReader` or remote `VortexHttpReader`), defaults |
+| `exportParquet(VortexHandle in, Path out, ExportOptions)`| Already-open source, tuned                               |
+
+The `VortexHandle` overloads don't close `in` — the caller opened it and keeps ownership of its
+lifecycle, so a remote `VortexHttpReader.open(uri)` can be exported without an intervening local
+copy.
+
+### `ExportOptions` (`io.github.dfa1.vortex.parquet.ExportOptions`)
+
+Record: `(List<String> columns, ProgressListener progressListener, WriterConfig writerConfig)`.
+`WriterConfig` is Hardwood's own writer configuration type
+(`dev.hardwood.writer.WriterConfig`) — row group/page targets, compression codec, column
+encoding policy.
+
+| Factory / builder                 | Notes                                               |
+|------------------------------------|-----------------------------------------------------|
+| `ExportOptions.defaults()`        | No projection, Hardwood's `WriterConfig.defaults()` |
+| `.withColumns(List<String>)`      | Project columns during export                       |
+| `.withProgressListener(listener)` | Progress callbacks                                  |
+| `.withWriterConfig(WriterConfig)` | Override Hardwood writer configuration              |
 
 CSV import is CLI-only — types are inferred from the data.
 
@@ -428,10 +465,10 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | `schema`   | `schema <file.vortex>`                         | Column names and types                           |
 | `count`    | `count <file.vortex>`                          | Total row count                                  |
 | `stats`    | `stats <file.vortex>`                          | Per-column min/max                               |
-| `export`   | `export <file.vortex>`                         | All columns to CSV on stdout                     |
+| `export`   | `export <file.vortex\|url> [out.csv\|out.parquet\|-]` | All columns to CSV (default) or Parquet, by output extension; `-` for CSV on stdout. A `url` source requires an explicit `out.parquet` path — CSV/stdout from a URL isn't supported |
 | `select`   | `select <file.vortex> <col> [col2 ...]`        | Project columns to CSV                           |
 | `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
-| `import`   | `import [--delimiter <char>] <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex                 |
+| `import`   | `import [--delimiter <char>] <file.csv\|file.parquet\|url> [out.vortex]` | Convert CSV or Parquet to Vortex; a `url` source must be `.parquet` — CSV import from a URL isn't supported |
 
 ### `filter` expression syntax
 

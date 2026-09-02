@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.csv.ImportOptions;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -14,7 +15,10 @@ import java.util.List;
 @SuppressWarnings("java:S106")
 final class ImportCommand {
 
-    private record ParsedArgs(Path inputPath, Path outputPath, Character delimiter) {
+    /// `outputTarget` is the raw second positional argument, or `null` when omitted — kept
+    /// unresolved here because deriving a default depends on whether `inputTarget` turns out to
+    /// be a local path or a URL, decided in [#run].
+    private record ParsedArgs(String inputTarget, String outputTarget, Character delimiter) {
     }
 
     private ImportCommand() {
@@ -26,26 +30,54 @@ final class ImportCommand {
             parsedArgs = parseArgs(args);
         } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
-            System.err.println("usage: import [--delimiter <char>] <file.csv|file.parquet> [out.vortex]");
+            System.err.println("usage: import [--delimiter <char>] <file.csv|file.parquet|url> [out.vortex]");
             return ExitStatus.USAGE_ERROR;
         }
-        Path inputPath = parsedArgs.inputPath();
-        if (!Files.exists(inputPath)) {
-            System.err.println("file not found: " + inputPath);
-            return ExitStatus.FILE_NOT_FOUND;
-        }
+        String target = parsedArgs.inputTarget();
+        boolean remote = target.startsWith("http://") || target.startsWith("https://");
         try {
+            if (remote) {
+                return runRemote(target, parsedArgs.outputTarget());
+            }
+            Path inputPath = Path.of(target);
+            if (!Files.exists(inputPath)) {
+                System.err.println("file not found: " + inputPath);
+                return ExitStatus.FILE_NOT_FOUND;
+            }
             String name = inputPath.getFileName().toString();
+            Path outputPath = parsedArgs.outputTarget() != null
+                    ? Path.of(parsedArgs.outputTarget())
+                    : inputPath.resolveSibling(vortexName(name));
             if (name.endsWith(".parquet")) {
-                return runParquet(inputPath, parsedArgs.outputPath());
+                return runParquet(inputPath, outputPath);
             } else {
-                return runCsv(inputPath, parsedArgs.outputPath(), parsedArgs.delimiter());
+                return runCsv(inputPath, outputPath, parsedArgs.delimiter());
             }
         } catch (IOException e) {
             ProgressBar.clear();
             System.err.println("error: " + e.getMessage());
             return ExitStatus.ERROR;
         }
+    }
+
+    /// Handles an `http(s)://` source: Parquet import only (CSV import from a URL isn't
+    /// supported yet — CSV has no schema of its own, and type inference over a remote stream
+    /// needs a design of its own).
+    private static int runRemote(String parquetUrl, String outputTarget) throws IOException {
+        if (!parquetUrl.endsWith(".parquet")) {
+            System.err.println("only Parquet import is supported from a URL");
+            return ExitStatus.USAGE_ERROR;
+        }
+        Path vortexPath = outputTarget != null
+                ? Path.of(outputTarget)
+                : Path.of(vortexName(lastPathSegment(parquetUrl)));
+        io.github.dfa1.vortex.parquet.ImportOptions options =
+                io.github.dfa1.vortex.parquet.ImportOptions.defaults()
+                        .withProgressListener(ImportCommand::renderProgress);
+        ParquetImporter.importParquet(URI.create(parquetUrl), vortexPath, options);
+        ProgressBar.clear();
+        System.out.printf("written: %s  (%s)%n", vortexPath, ByteSize.format(Files.size(vortexPath)));
+        return ExitStatus.OK;
     }
 
     private static ParsedArgs parseArgs(String[] args) {
@@ -72,9 +104,8 @@ final class ImportCommand {
         if (positional.size() < 1 || positional.size() > 2) {
             throw new IllegalArgumentException("expected input path and optional output path");
         }
-        Path inputPath = Path.of(positional.getFirst());
-        Path outputPath = positional.size() == 2 ? Path.of(positional.get(1)) : deriveOutputPath(inputPath);
-        return new ParsedArgs(inputPath, outputPath, delimiter);
+        String outputTarget = positional.size() == 2 ? positional.get(1) : null;
+        return new ParsedArgs(positional.getFirst(), outputTarget, delimiter);
     }
 
     private static int runCsv(Path csvPath, Path vortexPath, Character delimiter) throws IOException {
@@ -125,13 +156,23 @@ final class ImportCommand {
         }
     }
 
-    private static Path deriveOutputPath(Path inputPath) {
-        String name = inputPath.getFileName().toString();
+    /// Strips a known `.csv`/`.parquet` suffix from `inputFileName` and appends `.vortex`.
+    private static String vortexName(String inputFileName) {
+        String name = inputFileName;
         if (name.endsWith(".csv")) {
             name = name.substring(0, name.length() - 4);
         } else if (name.endsWith(".parquet")) {
             name = name.substring(0, name.length() - 8);
         }
-        return inputPath.resolveSibling(name + ".vortex");
+        return name + ".vortex";
+    }
+
+    /// The last `/`-separated segment of a URL's path, used as the file name a downloaded
+    /// source is named after (mirroring what a browser would save the URL as).
+    private static String lastPathSegment(String url) {
+        String path = URI.create(url).getPath();
+        int slash = path.lastIndexOf('/');
+        String name = slash < 0 ? path : path.substring(slash + 1);
+        return name.isEmpty() ? "output.parquet" : name;
     }
 }

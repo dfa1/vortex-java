@@ -49,4 +49,55 @@ class ExportCommandTest {
         assertThat(result.stdout()).startsWith("id");
         assertThat(result.stdout().lines().count()).isEqualTo(4);
     }
+
+    @Test
+    void parquetOutputPath_dispatchesToParquetExport(@TempDir Path tmp) throws IOException {
+        // Given — a `.parquet` destination, dispatching away from the CSV default
+        Path file = writeSmallVortex(tmp, "export.vortex");
+        Path outputPath = tmp.resolve("export.parquet");
+
+        // When
+        CliTestSupport.Captured result = capture(
+                () -> ExportCommand.run(new String[]{"export", file.toString(), outputPath.toString()}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(outputPath).exists();
+        assertThat(result.stdout()).contains("written:").contains("export.parquet");
+    }
+
+    // ── URL source: argument validation only — these fail before any network call, so no
+    // mocked HTTP client is needed (mirrors ImportCommandTest's equivalent coverage). ──
+
+    @Test
+    void urlInput_missingOutputPath_returnsUsageError() {
+        // Given / When — a remote source needs an explicit `out.parquet` path
+        CliTestSupport.Captured result = capture(
+                () -> ExportCommand.run(new String[]{"export", "http://example.com/data.vortex"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("out.parquet");
+    }
+
+    @Test
+    void urlInput_stdoutRequested_returnsUsageError() {
+        // Given / When — stdout streaming from a URL isn't supported
+        CliTestSupport.Captured result = capture(
+                () -> ExportCommand.run(new String[]{"export", "http://example.com/data.vortex", "-"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+    }
+
+    @Test
+    void urlInput_csvOutputRequested_returnsUsageError(@TempDir Path tmp) {
+        // Given / When — CSV export from a URL isn't supported, only `.parquet`
+        Path outputPath = tmp.resolve("out.csv");
+        CliTestSupport.Captured result = capture(() ->
+                ExportCommand.run(new String[]{"export", "http://example.com/data.vortex", outputPath.toString()}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+    }
 }
