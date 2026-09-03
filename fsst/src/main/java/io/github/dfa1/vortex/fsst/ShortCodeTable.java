@@ -32,10 +32,10 @@ final class ShortCodeTable {
     private static final int NO_MATCH = NO_CODE << 8;
 
     /// Packed `code << 8 | length` per 16-bit key. A zero length marks "no match" ([#NO_MATCH]).
-    private final int[] slots;
+    private final int[] table;
 
-    private ShortCodeTable(int[] slots) {
-        this.slots = slots;
+    private ShortCodeTable(int[] table) {
+        this.table = table;
     }
 
     /// Builds the table from symbols in descending-gain order, keeping only the length-1 and
@@ -51,8 +51,8 @@ final class ShortCodeTable {
     /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
     /// @return a table resolving 0/1/2-byte matches for any two-byte input prefix
     static ShortCodeTable of(List<Symbol> symbolsByGainDescending) {
-        int[] slots = new int[SLOTS];
-        Arrays.fill(slots, NO_MATCH);
+        int[] table = new int[SLOTS];
+        Arrays.fill(table, NO_MATCH);
         for (int code = 0; code < symbolsByGainDescending.size(); code++) {
             Symbol symbol = symbolsByGainDescending.get(code);
             if (symbol.length() == 1) {
@@ -60,8 +60,8 @@ final class ShortCodeTable {
                 int packed = code << 8 | 1;
                 for (int high = 0; high < 256; high++) {
                     int key = high << 8 | low;
-                    if (length(slots[key]) == 0) {
-                        slots[key] = packed;
+                    if (length(table[key]) == 0) {
+                        table[key] = packed;
                     }
                 }
             }
@@ -70,10 +70,10 @@ final class ShortCodeTable {
             Symbol symbol = symbolsByGainDescending.get(code);
             if (symbol.length() == 2) {
                 int key = (int) (symbol.packedBytes() & 0xFFFF);
-                slots[key] = code << 8 | 2;
+                table[key] = code << 8 | 2;
             }
         }
-        return new ShortCodeTable(slots);
+        return new ShortCodeTable(table);
     }
 
     /// Returns the match for the low two bytes of `word` as `code << 8 | length`, or
@@ -84,7 +84,7 @@ final class ShortCodeTable {
     /// @param word an input word; only its low 16 bits (first two input bytes) are consulted
     /// @return the match as `code << 8 | length`; length 0 (and code [#NO_CODE]) means no match
     int packedFor(long word) {
-        return slots[(int) (word & 0xFFFF)];
+        return table[(int) (word & 0xFFFF)];
     }
 
     /// Returns the code matched by the low two bytes of `word`, or [#NO_CODE] if none.

@@ -70,6 +70,8 @@ class RaincloudConformanceIntegrationTest {
             Path.of(System.getProperty("user.home"), ".cache", "raincloud", "corpus-manifest.tsv");
 
     @Test
+    @SuppressWarnings("java:S2699") // assumeTrue IS this test's check: a visible skip marker,
+                                     // not a pass/fail assertion — there is nothing else to assert
     void corpusIsHydrated() {
         // Given / When / Then — visible skip marker when the corpus is absent; the
         // factory below yields zero tests in that case, which would otherwise pass silently

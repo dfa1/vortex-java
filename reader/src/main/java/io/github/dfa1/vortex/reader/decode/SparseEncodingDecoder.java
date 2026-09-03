@@ -35,6 +35,12 @@ import java.nio.charset.StandardCharsets;
 /// Read-only decoder for `vortex.sparse`.
 public final class SparseEncodingDecoder implements EncodingDecoder {
 
+    /// `role` argument naming the patch indices child, for error messages.
+    private static final String ROLE_INDICES = "indices";
+
+    /// `role` argument naming the patch values child, for error messages.
+    private static final String ROLE_VALUES = "values";
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_SPARSE;
@@ -119,10 +125,10 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                 valData = m.inner();
                 patchValidity = m.validity();
             }
-            checkPatchChild(idxData, numPatches, "indices");
-            checkPatchChild(valData, numPatches, "values");
+            checkPatchChild(idxData, numPatches, ROLE_INDICES);
+            checkPatchChild(valData, numPatches, ROLE_VALUES);
             boolean fillValue = Boolean.TRUE.equals(fillScalar.bool_value());
-            BoolArray boolValues = checkedCast(valData, BoolArray.class, "values");
+            BoolArray boolValues = checkedCast(valData, BoolArray.class, ROLE_VALUES);
             Array result = new LazySparseBoolArray(ctx.dtype(), n, fillValue, boolValues, idxData, offset);
             return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
         }
@@ -146,26 +152,26 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             valData = m.inner();
             patchValidity = m.validity();
         }
-        checkPatchChild(idxData, numPatches, "indices");
-        checkPatchChild(valData, numPatches, "values");
+        checkPatchChild(idxData, numPatches, ROLE_INDICES);
+        checkPatchChild(valData, numPatches, ROLE_VALUES);
 
         Array result = switch (valuePtype) {
             case I64, U64 -> new LazySparseLongArray(ctx.dtype(), n, fillBits,
-                    checkedCast(valData, LongArray.class, "values"), idxData, offset);
+                    checkedCast(valData, LongArray.class, ROLE_VALUES), idxData, offset);
             case I32, U32 -> new LazySparseIntArray(ctx.dtype(), n, (int) fillBits,
-                    checkedCast(valData, IntArray.class, "values"), idxData, offset);
+                    checkedCast(valData, IntArray.class, ROLE_VALUES), idxData, offset);
             case F64 -> new LazySparseDoubleArray(ctx.dtype(), n, Double.longBitsToDouble(fillBits),
-                    checkedCast(valData, DoubleArray.class, "values"), idxData, offset);
+                    checkedCast(valData, DoubleArray.class, ROLE_VALUES), idxData, offset);
             case F32 -> new LazySparseFloatArray(ctx.dtype(), n, Float.intBitsToFloat((int) fillBits),
-                    checkedCast(valData, FloatArray.class, "values"), idxData, offset);
+                    checkedCast(valData, FloatArray.class, ROLE_VALUES), idxData, offset);
             case I16 -> new LazySparseShortArray(ctx.dtype(), n, (short) fillBits, (short) fillBits,
-                    checkedCast(valData, ShortArray.class, "values"), idxData, offset);
+                    checkedCast(valData, ShortArray.class, ROLE_VALUES), idxData, offset);
             case U16 -> new LazySparseShortArray(ctx.dtype(), n, (short) fillBits, (int) (fillBits & 0xFFFFL),
-                    checkedCast(valData, ShortArray.class, "values"), idxData, offset);
+                    checkedCast(valData, ShortArray.class, ROLE_VALUES), idxData, offset);
             case I8 -> new LazySparseByteArray(ctx.dtype(), n, (byte) fillBits, (byte) fillBits,
-                    checkedCast(valData, ByteArray.class, "values"), idxData, offset);
+                    checkedCast(valData, ByteArray.class, ROLE_VALUES), idxData, offset);
             case U8 -> new LazySparseByteArray(ctx.dtype(), n, (byte) fillBits, (int) (fillBits & 0xFFL),
-                    checkedCast(valData, ByteArray.class, "values"), idxData, offset);
+                    checkedCast(valData, ByteArray.class, ROLE_VALUES), idxData, offset);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
         };
         return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
@@ -275,7 +281,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         DType indicesDtype = new DType.Primitive(indicesPtype, false);
         Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
         Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
-        checkPatchChild(idxData, numPatches, "indices");
+        checkPatchChild(idxData, numPatches, ROLE_INDICES);
         byte[] fill = fillBytes(fillScalar, fillValid);
 
         if (numPatches == 0) {
@@ -294,7 +300,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             valData = m.inner();
             patchValidity = m.validity();
         }
-        VarBinArray values = checkedCast(valData, VarBinArray.class, "values");
+        VarBinArray values = checkedCast(valData, VarBinArray.class, ROLE_VALUES);
         Array result = new VarBinSparseArray(ctx.dtype(), n, fill, values, idxData, offset);
         return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
     }

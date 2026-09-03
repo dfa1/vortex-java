@@ -113,6 +113,15 @@ public final class VortexInspectorTui {
         /// ASCII spinner frames; cycled by render tick.
         private static final char[] SPINNER = {'|', '/', '-', '\\'};
 
+        /// Suffix appended after the spinner frame while a background fetch is still pending.
+        private static final String LOADING_SUFFIX = " loading...";
+
+        /// Format for one numbered preview line (dictionary entry, zone-stats row, or data row).
+        private static final String ENTRY_FORMAT = "  [%2d] %s";
+
+        /// Label prefix for the selected column's data preview.
+        private static final String DATA_COLUMN_PREFIX = "Data (column '";
+
         private final Terminal term;
         private final InspectorTree tree;
         private final VortexHandle handle;
@@ -508,13 +517,13 @@ public final class VortexInspectorTui {
                 lines.add("");
                 switch (dictState) {
                     case DataState.Pending _ ->
-                            lines.add("Dictionary:  " + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
+                            lines.add("Dictionary:  " + SPINNER[(int) (tick % SPINNER.length)] + LOADING_SUFFIX);
                     case DataState.Failed(String msg) ->
                             lines.add("Dictionary:  ! " + msg);
                     case DataState.Loaded(List<String> values) -> {
                         lines.add("Dictionary (" + values.size() + " entries):");
                         for (int i = 0; i < values.size(); i++) {
-                            lines.add(String.format("  [%2d] %s", i, values.get(i)));
+                            lines.add(String.format(ENTRY_FORMAT, i, values.get(i)));
                         }
                     }
                 }
@@ -529,13 +538,13 @@ public final class VortexInspectorTui {
                 switch (zoneState) {
                     case DataState.Pending _ ->
                             lines.add("Per-chunk stats:  "
-                                    + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
+                                    + SPINNER[(int) (tick % SPINNER.length)] + LOADING_SUFFIX);
                     case DataState.Failed(String msg) ->
                             lines.add("Per-chunk stats:  ! " + msg);
                     case DataState.Loaded(List<String> rows) -> {
                         lines.add("Per-chunk stats (" + rows.size() + " chunks):");
                         for (int i = 0; i < rows.size(); i++) {
-                            lines.add(String.format("  [%2d] %s", i, rows.get(i)));
+                            lines.add(String.format(ENTRY_FORMAT, i, rows.get(i)));
                         }
                     }
                 }
@@ -545,14 +554,14 @@ public final class VortexInspectorTui {
                 lines.add("");
                 switch (state) {
                     case DataState.Pending _ ->
-                            lines.add("Data (column '" + col + "'):  "
-                                    + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
+                            lines.add(DATA_COLUMN_PREFIX + col + "'):  "
+                                    + SPINNER[(int) (tick % SPINNER.length)] + LOADING_SUFFIX);
                     case DataState.Failed(String msg) ->
-                            lines.add("Data (column '" + col + "'):  ! " + msg);
+                            lines.add(DATA_COLUMN_PREFIX + col + "'):  ! " + msg);
                     case DataState.Loaded(List<String> values) -> {
-                        lines.add("Data (column '" + col + "', first " + values.size() + " rows):");
+                        lines.add(DATA_COLUMN_PREFIX + col + "', first " + values.size() + " rows):");
                         for (int i = 0; i < values.size(); i++) {
-                            lines.add(String.format("  [%2d] %s", i, values.get(i)));
+                            lines.add(String.format(ENTRY_FORMAT, i, values.get(i)));
                         }
                     }
                 }
