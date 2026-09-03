@@ -8,52 +8,12 @@
 
 Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) columnar file format.
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
-for zero-copy memory-mapped reads.
-This has good performance out of the box, without using native dependencies.
-JMH read throughput: **vortex-java** (this project) vs **vortex-jni** (the Rust
-reference implementation's JNI bindings).
-80 M rows of OHLC trade data, single-column projection, Apple M5, Zulu JDK 25.0.2.
+for zero-copy memory-mapped reads — good performance out of the box, without native dependencies.
 
-| Column | Type | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup |
-|--------|------|--------------------|-------------------|---------|
-| volume | I64 / bitpacked | 14.0 | 6.3 | **2.2×** |
-| close  | F64 / ALP       | 8.4  | 6.0 | **1.4×** |
-| symbol | Utf8 / varbin   | 15.0 | 2.1 | **7.0×** |
-
-ops/s = complete file scans per second; higher is better.
-
-> **Naming:** `vortex-java` is this project; `vortex-jni` is the Vortex Rust reference's JNI
-> bindings (its numbers include the JNI-boundary cost — it is not pure Rust). We use these two
-> labels everywhere instead of "Rust vs Java".
-
-**Top-N reads** on the same 80 M-row file, "volume" column, exit after N rows
-(measures open + footer/layout decode + first-chunk overhead):
-
-| N rows | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup |
-|--------|--------------------|-------------------|---------|
-| 10     | 2,601       | 632             | **4.1×** |
-| 100    | 2,624       | 590             | **4.4×** |
-
-Measured 2026-07-24, commit `4a170f1b`, vortex-jni 0.79.0. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
-
-**Compression** — NYC Yellow Taxi 2024-01, 2,964,624 rows × 19 columns, imported from the
-same Parquet file (47.6 MB), cascading depth 3, Apple M5:
-
-| Implementation | Output size | vs Parquet |
-|----------------|-------------|------------|
-| vortex-jni¹    | 47.0 MB     | −1.3%      |
-| **vortex-java** | **40.6 MB** | **−14.6%** |
-
-¹ vortex-jni figure measured against 0.78.0 and not re-run (the JNI API has no
-Parquet-import path); the vortex-java and Parquet figures were re-measured 2026-07-24.
-
-vortex-java produces a 13% smaller file than the Rust reference from identical input.
-The gap comes from the global dictionary encoder that catches low-cardinality `F64`
-columns (`mta_tax`, `Airport_fee`, `congestion_surcharge`) that Rust's compressor
-leaves as plain ALP. Data integrity is verified by
-`TaxiParquetOracleVsJavaIntegrationTest`: hardwood reads the Parquet file directly
-to a CSV (oracle); `ParquetImporter` → `CsvExporter` produces a second CSV (SUT);
-line-by-line diff is zero.
+Benchmarked against **vortex-jni** (the Vortex Rust reference's JNI bindings) on read
+throughput, Top-N read latency, and compression ratio — see
+[docs/explanation.md#benchmarks](docs/explanation.md#benchmarks) for the full tables and
+methodology.
 
 ## Who is this for
 
