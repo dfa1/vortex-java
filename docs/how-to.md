@@ -327,11 +327,33 @@ java -jar cli/target/vortex-cli-*-all.jar export https://example.com/data.vortex
 
 ## Convert CSV to Vortex
 
-**CLI only** (CSV has no schema — types are inferred):
+**API:**
+
+```java
+import io.github.dfa1.vortex.csv.CsvImporter;
+
+CsvImporter.importCsv(Path.of("data.csv"), Path.of("data.vortex"));
+```
+
+From a remote CSV file over HTTP(S). CSV is read front to back in one streaming pass, so the
+response body is consumed directly — no Range requests, no local temp file:
+
+```java
+CsvImporter.importCsv(URI.create("https://example.com/data.csv"), Path.of("data.vortex"));
+```
+
+**CLI** (types are inferred from the data):
 
 ```bash
 java -jar cli/target/vortex-cli-*-all.jar import data.csv
 # writes data.vortex, prints size savings
+
+# remote source
+java -jar cli/target/vortex-cli-*-all.jar import https://example.com/data.csv out.vortex
+
+# straight to Parquet — chains CSV -> temp Vortex -> Parquet internally, local or remote source
+java -jar cli/target/vortex-cli-*-all.jar import data.csv out.parquet
+java -jar cli/target/vortex-cli-*-all.jar import https://example.com/data.csv out.parquet
 ```
 
 ---
