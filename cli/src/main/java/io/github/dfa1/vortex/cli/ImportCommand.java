@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.csv.ImportOptions;
 import io.github.dfa1.vortex.parquet.ParquetExporter;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.FileSystems;
@@ -200,18 +201,25 @@ final class ImportCommand {
         }
     }
 
-    /// Creates the CSV-to-Parquet chain's scratch file, owner-only readable/writable on POSIX
-    /// systems (`rw-------`) — the system temp directory is commonly world-writable, so a
-    /// predictable or loosely-permissioned temp name is a symlink/race target for another local
-    /// user. `FileAttribute`-based permissions aren't supported on Windows, whose per-user temp
-    /// directory doesn't share this exposure, so this falls back to the plain overload there.
+    /// Creates the CSV-to-Parquet chain's scratch file, owner-only readable/writable
+    /// (`rw-------`) — the system temp directory is commonly world-writable, so a predictable or
+    /// loosely-permissioned temp name is a symlink/race target for another local user.
+    /// `FileAttribute`-based permissions aren't supported on non-POSIX filesystems, so that case
+    /// falls back to restricting access after creation via [java.io.File#setReadable] /
+    /// [java.io.File#setWritable], the standard cross-platform equivalent.
     private static Path createTempVortex() throws IOException {
         String suffix = FileFormat.VORTEX.extension();
         if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
             FileAttribute<?> ownerOnly = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
             return Files.createTempFile("vortex-cli-import-", suffix, ownerOnly);
         }
-        return Files.createTempFile("vortex-cli-import-", suffix);
+        Path path = Files.createTempFile("vortex-cli-import-", suffix);
+        File file = path.toFile();
+        file.setReadable(false, false);
+        file.setReadable(true, true);
+        file.setWritable(false, false);
+        file.setWritable(true, true);
+        return path;
     }
 
     private static void printResult(Path inputPath, Path vortexPath, int cascadingDepth) throws IOException {
