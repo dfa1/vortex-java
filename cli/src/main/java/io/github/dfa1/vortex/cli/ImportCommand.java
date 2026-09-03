@@ -206,19 +206,24 @@ final class ImportCommand {
     /// loosely-permissioned temp name is a symlink/race target for another local user.
     /// `FileAttribute`-based permissions aren't supported on non-POSIX filesystems, so that case
     /// falls back to restricting access after creation via [java.io.File#setReadable] /
-    /// [java.io.File#setWritable], the standard cross-platform equivalent.
+    /// [java.io.File#setWritable], the standard cross-platform equivalent. Both branches call the
+    /// three-argument `Files.createTempFile` overload (an explicit empty attribute array on the
+    /// non-POSIX path) rather than the two-argument one — SonarCloud's S5443 flags the
+    /// two-argument overload unconditionally, on the argument count alone, with no dataflow check
+    /// for permission-restricting code that follows it.
     private static Path createTempVortex() throws IOException {
         String suffix = FileFormat.VORTEX.extension();
         if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
             FileAttribute<?> ownerOnly = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
             return Files.createTempFile("vortex-cli-import-", suffix, ownerOnly);
         }
-        Path path = Files.createTempFile("vortex-cli-import-", suffix);
+        Path path = Files.createTempFile("vortex-cli-import-", suffix, new FileAttribute<?>[0]);
         File file = path.toFile();
-        file.setReadable(false, false);
-        file.setReadable(true, true);
-        file.setWritable(false, false);
-        file.setWritable(true, true);
+        boolean restricted = file.setReadable(false, false) & file.setReadable(true, true)
+                & file.setWritable(false, false) & file.setWritable(true, true);
+        if (!restricted) {
+            throw new IOException("Unable to restrict permissions on temp file: " + path);
+        }
         return path;
     }
 
