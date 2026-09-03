@@ -35,8 +35,8 @@ final class LossyPerfectHashTable {
     /// Low three bytes of the input word — the only bytes the hash keys on.
     private static final long PREFIX_MASK = 0x00FF_FFFFL;
 
-    /// Slot table with two adjacent longs per slot (the FSST paper's C layout): `slots[2 * s]` is
-    /// the candidate's packed symbol bytes (LSB-first, [Symbol] convention) and `slots[2 * s + 1]`
+    /// Slot table with two adjacent longs per slot (the FSST paper's C layout): `table[2 * s]` is
+    /// the candidate's packed symbol bytes (LSB-first, [Symbol] convention) and `table[2 * s + 1]`
     /// is its metadata `ignoredBits << 16 | code << 8 | length` (`ignoredBits = 64 - 8 * length`).
     /// A lookup derives the keep-mask from the ignored-bits with one shift instead of loading a
     /// separate mask array, so the whole 16-byte slot lands in a single cache line — one memory
@@ -46,10 +46,10 @@ final class LossyPerfectHashTable {
     /// input word of exactly 0 can "hit" an empty slot — harmlessly, because the returned low 16
     /// bits (`code << 8 | length`) are then 0, which is precisely the "no match" answer. No
     /// occupancy flag or sentinel is needed.
-    private final long[] slots;
+    private final long[] table;
 
-    private LossyPerfectHashTable(long[] slots) {
-        this.slots = slots;
+    private LossyPerfectHashTable(long[] table) {
+        this.table = table;
     }
 
     /// Builds the table from the trained symbols in descending-gain order, keeping only those of
@@ -67,21 +67,21 @@ final class LossyPerfectHashTable {
     /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
     /// @return a hash table resolving 3-8 byte matches with first-writer-wins on collision
     static LossyPerfectHashTable of(List<Symbol> symbolsByGainDescending) {
-        long[] slots = new long[2 * SLOTS];
+        long[] table = new long[2 * SLOTS];
         for (int code = 0; code < symbolsByGainDescending.size(); code++) {
             Symbol symbol = symbolsByGainDescending.get(code);
             if (symbol.length() < 3) {
                 continue; // Length 1-2 belongs to ShortCodeTable.
             }
             int slot = slotFor(symbol.packedBytes());
-            if (slots[2 * slot + 1] != 0) {
+            if (table[2 * slot + 1] != 0) {
                 continue; // First writer (higher gain) wins; skip the collision.
             }
             long ignoredBits = 64L - 8 * symbol.length();
-            slots[2 * slot] = symbol.packedBytes();
-            slots[2 * slot + 1] = ignoredBits << 16 | (long) code << 8 | symbol.length();
+            table[2 * slot] = symbol.packedBytes();
+            table[2 * slot + 1] = ignoredBits << 16 | (long) code << 8 | symbol.length();
         }
-        return new LossyPerfectHashTable(slots);
+        return new LossyPerfectHashTable(table);
     }
 
     /// Looks up `word` and returns the matched symbol as `code << 8 | length`, or 0 when no stored
@@ -99,8 +99,8 @@ final class LossyPerfectHashTable {
     /// @return the match as `code << 8 | length`, or 0 when there is no match
     int lookup(long word) {
         int slot = slotFor(word) << 1;
-        long symbol = slots[slot];
-        long meta = slots[slot + 1];
+        long symbol = table[slot];
+        long meta = table[slot + 1];
         return (word & (~0L >>> (int) (meta >>> 16))) == symbol ? (int) (meta & 0xFFFF) : 0;
     }
 

@@ -3,6 +3,8 @@ package io.github.dfa1.vortex.calcite;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -53,6 +55,8 @@ class CalciteDemo {
                 }
                 double ms = (System.nanoTime() - t0) / 1e6 / iterations;
                 System.out.printf("full scan x%d: %.2f ms/query | count=%,d%n", iterations, ms, count);
+                // A wrong count here means the profile below is timing a broken scan.
+                assertThat(count).isEqualTo(rows);
             }
         } finally {
             Files.deleteIfExists(file);

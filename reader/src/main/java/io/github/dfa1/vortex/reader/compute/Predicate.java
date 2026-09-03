@@ -32,6 +32,10 @@ public sealed interface Predicate
                 Predicate.Gte, Predicate.Between, Predicate.IsNull, Predicate.IsNotNull,
                 Predicate.And, Predicate.Or {
 
+    /// `Objects.requireNonNull` message naming the rejected component, shared by every leaf
+    /// below whose sole component is named `value`.
+    String VALUE = "value";
+
     /// Matches rows whose value equals `value`.
     ///
     /// Equality is value-domain equality (the kernel decides how that maps onto the encoded form);
@@ -44,7 +48,7 @@ public sealed interface Predicate
         ///
         /// @param value the value to compare against, must be non-null
         public Eq {
-            Objects.requireNonNull(value, "value");
+            Objects.requireNonNull(value, VALUE);
         }
     }
 
@@ -61,7 +65,7 @@ public sealed interface Predicate
         ///
         /// @param value the value to compare against, must be non-null
         public Neq {
-            Objects.requireNonNull(value, "value");
+            Objects.requireNonNull(value, VALUE);
         }
     }
 
@@ -74,7 +78,7 @@ public sealed interface Predicate
         ///
         /// @param value the exclusive upper bound, must be non-null
         public Lt {
-            Objects.requireNonNull(value, "value");
+            Objects.requireNonNull(value, VALUE);
         }
     }
 
@@ -87,7 +91,7 @@ public sealed interface Predicate
         ///
         /// @param value the exclusive lower bound, must be non-null
         public Gt {
-            Objects.requireNonNull(value, "value");
+            Objects.requireNonNull(value, VALUE);
         }
     }
 
@@ -100,7 +104,7 @@ public sealed interface Predicate
         ///
         /// @param value the inclusive upper bound, must be non-null
         public Lte {
-            Objects.requireNonNull(value, "value");
+            Objects.requireNonNull(value, VALUE);
         }
     }
 
@@ -113,7 +117,7 @@ public sealed interface Predicate
         ///
         /// @param value the inclusive lower bound, must be non-null
         public Gte {
-            Objects.requireNonNull(value, "value");
+            Objects.requireNonNull(value, VALUE);
         }
     }
 
