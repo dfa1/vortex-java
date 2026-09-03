@@ -217,7 +217,14 @@ final class ImportCommand {
             FileAttribute<?> ownerOnly = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
             return Files.createTempFile("vortex-cli-import-", suffix, ownerOnly);
         }
-        Path path = Files.createTempFile("vortex-cli-import-", suffix, new FileAttribute<?>[0]);
+        return restrictToOwner(Files.createTempFile("vortex-cli-import-", suffix, new FileAttribute<?>[0]));
+    }
+
+    /// Restricts `path` to owner-only read/write, the non-POSIX equivalent of the `rw-------`
+    /// `FileAttribute` the POSIX branch of [#createTempVortex] passes at creation time. Split out
+    /// so it can be exercised by a direct unit test regardless of the test host's own filesystem
+    /// type — `File#setReadable`/`#setWritable` work on any OS, unlike `PosixFilePermissions`.
+    static Path restrictToOwner(Path path) throws IOException {
         File file = path.toFile();
         boolean restricted = file.setReadable(false, false) & file.setReadable(true, true)
                 & file.setWritable(false, false) & file.setWritable(true, true);

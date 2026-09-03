@@ -185,4 +185,23 @@ class ImportCommandTest {
             assertThat(parquetOut).doesNotExist();
         }
     }
+
+    @Nested
+    class RestrictToOwner {
+
+        @Test
+        void ownerCanStillReadAndWriteAfterRestricting(@TempDir Path tmp) throws IOException {
+            // Given
+            Path file = Files.createFile(tmp.resolve("scratch.vortex"));
+
+            // When
+            Path result = ImportCommand.restrictToOwner(file);
+
+            // Then — this is the non-POSIX equivalent of the POSIX branch's `rw-------`
+            // FileAttribute; it must not lock the owner itself out of the file it just created
+            assertThat(result).isEqualTo(file);
+            assertThat(file.toFile().canRead()).isTrue();
+            assertThat(file.toFile().canWrite()).isTrue();
+        }
+    }
 }

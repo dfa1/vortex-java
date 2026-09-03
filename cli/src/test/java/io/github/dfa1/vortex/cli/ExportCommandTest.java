@@ -51,6 +51,22 @@ class ExportCommandTest {
     }
 
     @Test
+    void defaultOutputPath_writesCsvFileAndPrintsResult(@TempDir Path tmp) throws IOException {
+        // Given — no explicit output argument; the default is the input's own name with a
+        // `.csv` extension, written as a real file rather than streamed to stdout
+        Path file = writeSmallVortex(tmp, "export.vortex");
+
+        // When
+        CliTestSupport.Captured result = capture(() -> ExportCommand.run(new String[]{"export", file.toString()}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        Path outputPath = tmp.resolve("export.csv");
+        assertThat(outputPath).exists();
+        assertThat(result.stdout()).contains("written:").contains("export.csv");
+    }
+
+    @Test
     void parquetOutputPath_dispatchesToParquetExport(@TempDir Path tmp) throws IOException {
         // Given — a `.parquet` destination, dispatching away from the CSV default
         Path file = writeSmallVortex(tmp, "export.vortex");
