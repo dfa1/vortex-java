@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-09-03
+
 ### Added
 
 - `ParquetExporter` (`parquet` module): writes a Vortex file to Parquet, the inverse of `ParquetImporter`. Flat schemas only — `Bool`, non-`F16` `Primitive`, `Utf8`, `Binary`, and `vortex.timestamp` (MILLIS/MICROS/NANOS); `Struct`/`List`/`Map` top-level columns throw `UnsupportedOperationException`. Built on Hardwood 1.1's new `ColumnWriter`/`ParquetFileWriter` write API. The CLI's `export` subcommand now dispatches to it when the output path ends `.parquet` (previously CSV-only). ([#362](https://github.com/dfa1/vortex-java/pull/362))
