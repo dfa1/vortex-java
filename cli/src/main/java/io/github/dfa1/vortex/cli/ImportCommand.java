@@ -220,14 +220,17 @@ final class ImportCommand {
         return restrictToOwner(Files.createTempFile("vortex-cli-import-", suffix, new FileAttribute<?>[0]));
     }
 
-    /// Restricts `path` to owner-only read/write, the non-POSIX equivalent of the `rw-------`
+    /// Restricts `path` to owner read/write, the non-POSIX equivalent of the `rw-------`
     /// `FileAttribute` the POSIX branch of [#createTempVortex] passes at creation time. Split out
     /// so it can be exercised by a direct unit test regardless of the test host's own filesystem
     /// type — `File#setReadable`/`#setWritable` work on any OS, unlike `PosixFilePermissions`.
+    /// Grant-only (no preceding `setReadable(false, false)`/`setWritable(false, false)` to
+    /// revoke group/other access first): the JDK's Windows implementation of that revoke-for-all
+    /// call reports failure — "denied to all other users" isn't expressible through this API on
+    /// Windows — so requiring it here would make every Windows run fail outright.
     static Path restrictToOwner(Path path) throws IOException {
         File file = path.toFile();
-        boolean restricted = file.setReadable(false, false) & file.setReadable(true, true)
-                & file.setWritable(false, false) & file.setWritable(true, true);
+        boolean restricted = file.setReadable(true, true) & file.setWritable(true, true);
         if (!restricted) {
             throw new IOException("Unable to restrict permissions on temp file: " + path);
         }
