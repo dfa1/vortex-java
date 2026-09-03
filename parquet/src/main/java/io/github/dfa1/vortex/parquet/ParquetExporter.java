@@ -153,10 +153,10 @@ public final class ParquetExporter {
     static void addColumn(FileSchema.Builder builder, String name, DType type) {
         RepetitionType rep = type.nullable() ? RepetitionType.OPTIONAL : RepetitionType.REQUIRED;
         switch (type) {
-            case DType.Bool ignored -> builder.addColumn(name, PhysicalType.BOOLEAN, rep);
-            case DType.Utf8 ignored ->
+            case DType.Bool _ -> builder.addColumn(name, PhysicalType.BOOLEAN, rep);
+            case DType.Utf8 _ ->
                     builder.addColumn(name, PhysicalType.BYTE_ARRAY, rep, new LogicalType.StringType());
-            case DType.Binary ignored -> builder.addColumn(name, PhysicalType.BYTE_ARRAY, rep);
+            case DType.Binary _ -> builder.addColumn(name, PhysicalType.BYTE_ARRAY, rep);
             case DType.Primitive p -> addPrimitiveColumn(builder, name, p.ptype(), rep);
             case DType.Extension ext -> addTimestampColumn(builder, name, ext, rep);
             default -> throw new UnsupportedOperationException(
@@ -217,11 +217,11 @@ public final class ParquetExporter {
             nulls = readNulls(masked, rowCount);
         }
         switch (type) {
-            case DType.Bool ignored -> writeBooleans(batch, idx, target, rowCount, nulls);
-            case DType.Utf8 ignored -> writeBytes(batch, idx, target, rowCount, nulls);
-            case DType.Binary ignored -> writeBytes(batch, idx, target, rowCount, nulls);
+            case DType.Bool _ -> writeBooleans(batch, idx, target, rowCount, nulls);
+            case DType.Utf8 _ -> writeBytes(batch, idx, target, rowCount, nulls);
+            case DType.Binary _ -> writeBytes(batch, idx, target, rowCount, nulls);
             case DType.Primitive p -> writePrimitive(batch, idx, p.ptype(), target, rowCount, nulls);
-            case DType.Extension ignored -> writeLongs(batch, idx, target, rowCount, nulls);
+            case DType.Extension _ -> writeLongs(batch, idx, target, rowCount, nulls);
             default -> throw new UnsupportedOperationException("unsupported column type for Parquet export: " + type);
         }
     }

@@ -37,9 +37,9 @@ final class ExportCommand {
         }
         Path outputPath = (args.length == 3 && !toStdout)
                 ? Path.of(args[2])
-                : deriveOutputPath(inputPath);
+                : inputPath.resolveSibling(FileName.of(inputPath).withFormat(FileFormat.CSV));
         try {
-            if (!toStdout && outputPath.getFileName().toString().endsWith(".parquet")) {
+            if (!toStdout && FileName.of(outputPath).is(FileFormat.PARQUET)) {
                 return runParquet(inputPath, outputPath);
             }
             return runCsv(inputPath, outputPath, toStdout);
@@ -53,7 +53,7 @@ final class ExportCommand {
     /// Handles an `http(s)://` source: Parquet output only (an explicit `out.parquet` path is
     /// required — CSV export and stdout streaming from a remote source aren't supported yet).
     private static int runRemote(String target, String[] args, boolean toStdout) {
-        if (toStdout || args.length != 3 || !args[2].endsWith(".parquet")) {
+        if (toStdout || args.length != 3 || !new FileName(args[2]).is(FileFormat.PARQUET)) {
             System.err.println("usage: export <url> out.parquet  (CSV/stdout export from a URL isn't supported yet)");
             return ExitStatus.USAGE_ERROR;
         }
@@ -100,16 +100,6 @@ final class ExportCommand {
         ProgressBar.clear();
         printResult(inputPath, outputPath);
         return ExitStatus.OK;
-    }
-
-    /// Defaults to `.csv` — a Parquet destination must be named explicitly (`out.parquet`),
-    /// matching [ExportCommand#run]'s extension-on-the-output-path dispatch.
-    private static Path deriveOutputPath(Path inputPath) {
-        String name = inputPath.getFileName().toString();
-        if (name.endsWith(".vortex")) {
-            name = name.substring(0, name.length() - 7);
-        }
-        return inputPath.resolveSibling(name + ".csv");
     }
 
     private static void printResult(Path inputPath, Path outputPath) throws IOException {

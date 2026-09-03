@@ -147,9 +147,10 @@ class ZstdEncodingEncoderTest {
             // reject it rather than silently emit a nullable layout the dtype does not declare.
             byte[][] data = {{0x01}, null, {0x02}};
             DType binary = new DType.Binary(false);
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(binary, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(binary, data, ctx))
                     .isInstanceOf(VortexException.class);
         }
 

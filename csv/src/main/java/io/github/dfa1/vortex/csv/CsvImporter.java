@@ -125,14 +125,37 @@ public final class CsvImporter {
         }
     }
 
+    /// The buffered first chunk of data rows (used for schema inference) plus the resolved
+    /// header names and schema, produced by [#readFirstChunk].
+    private record FirstChunk(List<String[]> rows, DType.Struct schema) {
+    }
+
     private static void importCsv(CsvReader<CsvRecord> reader, Path vortexPath, ImportOptions options)
             throws IOException {
-        int chunkSize = options.chunkSize();
+        FirstChunk firstChunk = readFirstChunk(reader, options);
+        DType.Struct schema = firstChunk.schema();
 
-        // Read header row (if present) and buffer the first chunk of data rows.
-        // Both happen in a single pass so the reader position advances correctly.
+        try (FileChannel channel = FileChannel.open(
+                vortexPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING);
+             VortexWriter writer = VortexWriter.create(channel, schema, options.writeOptions())) {
+            // firstChunk isn't touched again after this call, so its buffered rows (up to
+            // chunkSize row arrays) become collectible before the streaming loop below runs,
+            // rather than staying reachable for the rest of a potentially large import.
+            long totalRows = writeFirstChunk(writer, firstChunk, options);
+            streamRemainingChunks(reader, writer, schema, options, totalRows);
+        }
+    }
+
+    /// Reads the header row (if present) and buffers the first [ImportOptions#chunkSize()] data
+    /// rows in the same pass, so the reader position advances correctly; infers the schema from
+    /// those buffered rows unless [ImportOptions#schema()] already gives one.
+    ///
+    /// @throws IllegalArgumentException if the CSV file has no data rows
+    private static FirstChunk readFirstChunk(CsvReader<CsvRecord> reader, ImportOptions options) {
+        int chunkSize = options.chunkSize();
         String[] headers = null;
-        List<String[]> firstChunk = new ArrayList<>(chunkSize);
+        List<String[]> rows = new ArrayList<>(chunkSize);
         boolean expectHeader = options.hasHeader();
 
         for (CsvRecord csvRecord : reader) {
@@ -140,61 +163,64 @@ public final class CsvImporter {
                 headers = csvRecord.getFields().toArray(String[]::new);
                 expectHeader = false;
             } else {
-                firstChunk.add(csvRecord.getFields().toArray(String[]::new));
-                if (firstChunk.size() == chunkSize) {
+                rows.add(csvRecord.getFields().toArray(String[]::new));
+                if (rows.size() == chunkSize) {
                     break;
                 }
             }
         }
 
-        if (firstChunk.isEmpty()) {
+        if (rows.isEmpty()) {
             throw new IllegalArgumentException("CSV file has no data rows");
         }
 
         // Generate synthetic column names when the file has no header row.
         if (headers == null) {
-            headers = generateHeaders(firstChunk.getFirst().length);
+            headers = generateHeaders(rows.getFirst().length);
         }
 
         DType.Struct schema = options.schema() != null
                 ? options.schema()
-                : inferSchemaFromRows(headers, firstChunk);
+                : inferSchemaFromRows(headers, rows);
+        return new FirstChunk(rows, schema);
+    }
 
-        try (FileChannel channel = FileChannel.open(
-                vortexPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
-                StandardOpenOption.TRUNCATE_EXISTING);
-             VortexWriter writer = VortexWriter.create(channel, schema, options.writeOptions())) {
+    /// Writes the buffered first chunk and reports progress once.
+    ///
+    /// @return the row count written so far (the first chunk's size)
+    private static long writeFirstChunk(VortexWriter writer, FirstChunk firstChunk, ImportOptions options)
+            throws IOException {
+        writer.writeChunk(buildChunk(firstChunk.schema(), firstChunk.rows()));
+        long totalRows = firstChunk.rows().size();
+        reportProgress(options, totalRows);
+        return totalRows;
+    }
 
-            long totalRows = 0;
-            long lastReported = 0;
-
-            // Write the buffered first chunk.
-            writer.writeChunk(buildChunk(schema, firstChunk));
-            totalRows += firstChunk.size();
-            lastReported = totalRows;
-            reportProgress(options, totalRows);
-            firstChunk.clear();
-
-            // Stream the rest of the file through the still-open reader.
-            List<String[]> chunk = new ArrayList<>(chunkSize);
-            for (CsvRecord csvRecord : reader) {
-                chunk.add(csvRecord.getFields().toArray(String[]::new));
-                totalRows++;
-                if (chunk.size() == chunkSize) {
-                    writer.writeChunk(buildChunk(schema, chunk));
-                    chunk.clear();
-                }
-                if (totalRows - lastReported >= PROGRESS_BATCH) {
-                    reportProgress(options, totalRows);
-                    lastReported = totalRows;
-                }
-            }
-            if (!chunk.isEmpty()) {
+    /// Streams the rest of the file through the still-open `reader`, writing a chunk every
+    /// [ImportOptions#chunkSize()] rows and reporting progress every [#PROGRESS_BATCH] rows.
+    private static void streamRemainingChunks(CsvReader<CsvRecord> reader, VortexWriter writer,
+            DType.Struct schema, ImportOptions options, long rowsSoFar) throws IOException {
+        int chunkSize = options.chunkSize();
+        long totalRows = rowsSoFar;
+        long lastReported = totalRows;
+        List<String[]> chunk = new ArrayList<>(chunkSize);
+        for (CsvRecord csvRecord : reader) {
+            chunk.add(csvRecord.getFields().toArray(String[]::new));
+            totalRows++;
+            if (chunk.size() == chunkSize) {
                 writer.writeChunk(buildChunk(schema, chunk));
+                chunk.clear();
             }
-            if (totalRows > lastReported) {
+            if (totalRows - lastReported >= PROGRESS_BATCH) {
                 reportProgress(options, totalRows);
+                lastReported = totalRows;
             }
+        }
+        if (!chunk.isEmpty()) {
+            writer.writeChunk(buildChunk(schema, chunk));
+        }
+        if (totalRows > lastReported) {
+            reportProgress(options, totalRows);
         }
     }
 
