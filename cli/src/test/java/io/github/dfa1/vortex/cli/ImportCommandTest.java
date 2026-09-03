@@ -63,15 +63,15 @@ class ImportCommandTest {
         }
 
         @Test
-        void urlInput_nonParquetExtension_returnsUsageError() {
-            // Given / When — CSV import from a URL isn't supported; caught before any network
-            // call is made, so this needs no mocked HTTP client
+        void urlInput_unsupportedExtension_returnsUsageError() {
+            // Given / When — only Parquet and CSV sources are supported from a URL; caught
+            // before any network call is made, so this needs no mocked HTTP client
             CliTestSupport.Captured result = capture(() ->
-                    ImportCommand.run(new String[]{"import", "http://example.com/data.csv"}));
+                    ImportCommand.run(new String[]{"import", "http://example.com/data.json"}));
 
             // Then
             assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
-            assertThat(result.stderr()).contains("only Parquet import is supported from a URL");
+            assertThat(result.stderr()).contains("only Parquet or CSV import is supported from a URL");
         }
     }
 
@@ -142,6 +142,47 @@ class ImportCommandTest {
             // `.csv`/`.parquet` suffixes, so the result is `data.tsv.vortex`.
             assertThat(result.status()).isEqualTo(ExitStatus.OK);
             assertThat(tmp.resolve("data.tsv.vortex")).exists();
+        }
+
+        @Test
+        void csvWithParquetOutputPath_chainsThroughTempVortex(@TempDir Path tmp) throws IOException {
+            // Given — a `.parquet` destination; Vortex is always the hub, so this chains
+            // CSV -> temp Vortex -> Parquet internally and discards the temp file
+            Path csv = tmp.resolve("in.csv");
+            Files.writeString(csv, "id,name\n1,Ada\n2,Grace\n", StandardCharsets.UTF_8);
+            Path out = tmp.resolve("out.parquet");
+
+            // When
+            CliTestSupport.Captured result = capture(() ->
+                    ImportCommand.run(new String[]{"import", csv.toString(), out.toString()}));
+
+            // Then — the real Parquet output exists; the temp Vortex file (system temp dir, not
+            // this directory) leaves nothing behind in the working directory
+            assertThat(result.status()).isEqualTo(ExitStatus.OK);
+            assertThat(out).exists();
+            assertThat(result.stdout()).contains(out.toString());
+            try (var files = Files.list(tmp)) {
+                assertThat(files.map(p -> p.getFileName().toString())).containsExactlyInAnyOrder("in.csv", "out.parquet");
+            }
+        }
+
+        @Test
+        void parquetInputWithParquetOutputPath_returnsUsageError(@TempDir Path tmp) throws IOException {
+            // Given — a Parquet source always produces Vortex; a `.parquet`-named output would
+            // silently write a Vortex-format file under a misleading name if left unchecked
+            Path vortex = CliTestSupport.writeSmallVortex(tmp, "src.vortex");
+            Path parquetIn = tmp.resolve("src.parquet");
+            io.github.dfa1.vortex.parquet.ParquetExporter.exportParquet(vortex, parquetIn);
+            Path parquetOut = tmp.resolve("out.parquet");
+
+            // When
+            CliTestSupport.Captured result = capture(() ->
+                    ImportCommand.run(new String[]{"import", parquetIn.toString(), parquetOut.toString()}));
+
+            // Then
+            assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+            assertThat(result.stderr()).contains("Parquet source cannot import to a .parquet output");
+            assertThat(parquetOut).doesNotExist();
         }
     }
 }

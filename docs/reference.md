@@ -441,7 +441,24 @@ encoding policy.
 | `.withProgressListener(listener)` | Progress callbacks                                  |
 | `.withWriterConfig(WriterConfig)` | Override Hardwood writer configuration              |
 
-CSV import is CLI-only — types are inferred from the data.
+### `CsvImporter` (`io.github.dfa1.vortex.csv.CsvImporter`)
+
+Column types are inferred from the data (long → double → boolean → utf8, in priority order)
+unless a schema is given via `ImportOptions#withSchema`. Schema-driven CLI subcommands
+(`schema`, `count`, …) are documented for Vortex/Parquet files only — CSV has no schema of its
+own, so it is only ever an `import` *source*: never a destination (there is no CSV export from
+`import`), and never a source for the other subcommands, which all expect a Vortex or Parquet
+file.
+
+| Method                                       | Notes                                                     |
+|-----------------------------------------------|------------------------------------------------------------|
+| `importCsv(Path in, Path out)`               | Defaults                                                  |
+| `importCsv(Path in, Path out, ImportOptions)`| Tuned                                                     |
+| `importCsv(URI in, Path out)`                | Remote source over HTTP(S), defaults                       |
+| `importCsv(URI in, Path out, ImportOptions)` | Remote source over HTTP(S), tuned                           |
+
+A `URI` source streams the response body directly, front to back, as it arrives — unlike
+Parquet's random-access footer-first format, CSV needs no Range requests and no local temp file.
 
 ---
 
@@ -468,7 +485,7 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | `export`   | `export <file.vortex\|url> [out.csv\|out.parquet\|-]` | All columns to CSV (default) or Parquet, by output extension; `-` for CSV on stdout. A `url` source requires an explicit `out.parquet` path — CSV/stdout from a URL isn't supported |
 | `select`   | `select <file.vortex> <col> [col2 ...]`        | Project columns to CSV                           |
 | `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
-| `import`   | `import [--delimiter <char>] <file.csv\|file.parquet\|url> [out.vortex]` | Convert CSV or Parquet to Vortex; a `url` source must be `.parquet` — CSV import from a URL isn't supported |
+| `import`   | `import [--delimiter <char>] <file.csv\|file.parquet\|url> [out.vortex\|out.parquet]` | CSV or Parquet (local or remote) source to Vortex; a `.parquet` output is CSV-only (chains through a temp Vortex file internally) — a Parquet source always produces Vortex, `.parquet` output is rejected |
 
 ### `filter` expression syntax
 
