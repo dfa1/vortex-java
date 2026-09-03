@@ -8,8 +8,11 @@ import io.github.dfa1.vortex.parquet.ParquetImporter;
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,12 +49,12 @@ final class ImportCommand {
                 System.err.println("file not found: " + inputPath);
                 return ExitStatus.FILE_NOT_FOUND;
             }
-            String name = inputPath.getFileName().toString();
+            FileName name = FileName.of(inputPath);
             Path outputPath = parsedArgs.outputTarget() != null
                     ? Path.of(parsedArgs.outputTarget())
-                    : inputPath.resolveSibling(vortexName(name));
-            if (name.endsWith(".parquet")) {
-                if (isParquetTarget(outputPath)) {
+                    : inputPath.resolveSibling(name.withFormat(FileFormat.VORTEX));
+            if (name.is(FileFormat.PARQUET)) {
+                if (FileName.of(outputPath).is(FileFormat.PARQUET)) {
                     System.err.println("import always converts Parquet to Vortex; "
                             + "a Parquet source cannot import to a .parquet output");
                     return ExitStatus.USAGE_ERROR;
@@ -71,21 +74,22 @@ final class ImportCommand {
     /// nothing else is supported from a URL). The output target may independently be `.vortex`
     /// or `.parquet` — see [#runCsv] / [#runRemoteCsv] for the CSV-to-Parquet chain.
     private static int runRemote(String url, String outputTarget, Character delimiter) throws IOException {
-        if (url.endsWith(".parquet")) {
-            Path vortexPath = outputTarget != null
-                    ? Path.of(outputTarget)
-                    : Path.of(vortexName(lastPathSegment(url, "output.parquet")));
-            if (isParquetTarget(vortexPath)) {
+        FileName source = new FileName(url);
+        if (source.is(FileFormat.PARQUET)) {
+            Path vortexPath = Path.of(outputTarget != null
+                    ? outputTarget
+                    : lastPathSegment(url, "output.parquet").withFormat(FileFormat.VORTEX));
+            if (FileName.of(vortexPath).is(FileFormat.PARQUET)) {
                 System.err.println("import always converts Parquet to Vortex; "
                         + "a Parquet source cannot import to a .parquet output");
                 return ExitStatus.USAGE_ERROR;
             }
             return runRemoteParquet(url, vortexPath);
         }
-        if (url.endsWith(".csv")) {
-            Path outputPath = outputTarget != null
-                    ? Path.of(outputTarget)
-                    : Path.of(vortexName(lastPathSegment(url, "output.csv")));
+        if (source.is(FileFormat.CSV)) {
+            Path outputPath = Path.of(outputTarget != null
+                    ? outputTarget
+                    : lastPathSegment(url, "output.csv").withFormat(FileFormat.VORTEX));
             return runRemoteCsv(url, outputPath, delimiter);
         }
         System.err.println("only Parquet or CSV import is supported from a URL");
@@ -106,7 +110,7 @@ final class ImportCommand {
     /// progress/result print, so the result line reports only the output size.
     private static int runRemoteCsv(String csvUrl, Path outputPath, Character delimiter) throws IOException {
         ImportOptions options = csvOptions(delimiter);
-        if (isParquetTarget(outputPath)) {
+        if (FileName.of(outputPath).is(FileFormat.PARQUET)) {
             chainCsvToParquet(tempVortex -> CsvImporter.importCsv(URI.create(csvUrl), tempVortex, options),
                     outputPath);
         } else {
@@ -150,7 +154,7 @@ final class ImportCommand {
     /// always the hub, Parquet is never a direct CSV-import target.
     private static int runCsv(Path csvPath, Path outputPath, Character delimiter) throws IOException {
         ImportOptions options = csvOptions(delimiter);
-        if (isParquetTarget(outputPath)) {
+        if (FileName.of(outputPath).is(FileFormat.PARQUET)) {
             chainCsvToParquet(tempVortex -> CsvImporter.importCsv(csvPath, tempVortex, options), outputPath);
             ProgressBar.clear();
             // cascading depth doesn't apply to a Parquet destination — suppressed via 0.
@@ -187,7 +191,7 @@ final class ImportCommand {
     /// Imports CSV to a temp Vortex file via `importer`, exports that to `parquetOut`, then
     /// discards the temp file — the CSV-to-Parquet chain shared by [#runCsv] and [#runRemoteCsv].
     private static void chainCsvToParquet(CsvToVortex importer, Path parquetOut) throws IOException {
-        Path tempVortex = Files.createTempFile("vortex-cli-import-", ".vortex");
+        Path tempVortex = createTempVortex();
         try {
             importer.importTo(tempVortex);
             ParquetExporter.exportParquet(tempVortex, parquetOut);
@@ -196,8 +200,18 @@ final class ImportCommand {
         }
     }
 
-    private static boolean isParquetTarget(Path path) {
-        return path.getFileName().toString().endsWith(".parquet");
+    /// Creates the CSV-to-Parquet chain's scratch file, owner-only readable/writable on POSIX
+    /// systems (`rw-------`) — the system temp directory is commonly world-writable, so a
+    /// predictable or loosely-permissioned temp name is a symlink/race target for another local
+    /// user. `FileAttribute`-based permissions aren't supported on Windows, whose per-user temp
+    /// directory doesn't share this exposure, so this falls back to the plain overload there.
+    private static Path createTempVortex() throws IOException {
+        String suffix = FileFormat.VORTEX.extension();
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            FileAttribute<?> ownerOnly = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
+            return Files.createTempFile("vortex-cli-import-", suffix, ownerOnly);
+        }
+        return Files.createTempFile("vortex-cli-import-", suffix);
     }
 
     private static void printResult(Path inputPath, Path vortexPath, int cascadingDepth) throws IOException {
@@ -232,24 +246,13 @@ final class ImportCommand {
         }
     }
 
-    /// Strips a known `.csv`/`.parquet` suffix from `inputFileName` and appends `.vortex`.
-    private static String vortexName(String inputFileName) {
-        String name = inputFileName;
-        if (name.endsWith(".csv")) {
-            name = name.substring(0, name.length() - 4);
-        } else if (name.endsWith(".parquet")) {
-            name = name.substring(0, name.length() - 8);
-        }
-        return name + ".vortex";
-    }
-
     /// The last `/`-separated segment of a URL's path, used as the file name a downloaded
     /// source is named after (mirroring what a browser would save the URL as). Falls back to
     /// `fallback` when the path has no final segment (e.g. `https://host` with no path).
-    private static String lastPathSegment(String url, String fallback) {
+    private static FileName lastPathSegment(String url, String fallback) {
         String path = URI.create(url).getPath();
         int slash = path.lastIndexOf('/');
         String name = slash < 0 ? path : path.substring(slash + 1);
-        return name.isEmpty() ? fallback : name;
+        return new FileName(name.isEmpty() ? fallback : name);
     }
 }

@@ -132,9 +132,11 @@ class ParquetExporterTest {
 
         @Test
         void f16_throws() {
-            // When / Then — mirrors ParquetImporter, which never produces F16 either
-            assertThatThrownBy(() -> schemaOf("f", new DType.Primitive(PType.F16, false)))
-                    .isInstanceOf(UnsupportedOperationException.class);
+            // Given — mirrors ParquetImporter, which never produces F16 either
+            DType f16 = new DType.Primitive(PType.F16, false);
+
+            // When / Then
+            assertThatThrownBy(() -> schemaOf("f", f16)).isInstanceOf(UnsupportedOperationException.class);
         }
 
         @Test
@@ -290,7 +292,7 @@ class ParquetExporterTest {
                 rows.next();
                 assertThat(rows.getLong("events")).isEqualTo(-1_500L);
                 rows.next();
-                assertThat(rows.getLong("events")).isEqualTo(0L);
+                assertThat(rows.getLong("events")).isZero();
                 rows.next();
                 assertThat(rows.getLong("events")).isEqualTo(1_733_000_000_000L);
             }
@@ -399,7 +401,7 @@ class ParquetExporterTest {
                     assertThat(idValues.getLong(2)).isEqualTo(-3L);
 
                     ByteArray age = chunk.column("age");
-                    assertThat(age.getInt(0)).isEqualTo(0);
+                    assertThat(age.getInt(0)).isZero();
                     assertThat(age.getInt(1)).isEqualTo(255);
                     assertThat(age.getInt(2)).isEqualTo(42);
 
@@ -427,7 +429,7 @@ class ParquetExporterTest {
 
                     // bigCount is U32: row 1's raw bit pattern -1 represents 4294967295 unsigned
                     IntArray bigCount = chunk.column("bigCount");
-                    assertThat(bigCount.getInt(0)).isEqualTo(0);
+                    assertThat(bigCount.getInt(0)).isZero();
                     assertThat(bigCount.getInt(1)).isEqualTo(-1);
                     assertThat(bigCount.getInt(2)).isEqualTo(12345);
                 }
