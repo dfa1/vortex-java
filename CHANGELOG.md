@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `WriteOptions.withZstd(true)` now throws `IllegalArgumentException` when `allowedCascading()` is `0` — Zstd only ever competes inside the cascade, so at the default cascading depth the flag was a silent no-op producing byte-identical output to `defaults()`. ([#366](https://github.com/dfa1/vortex-java/pull/366))
+
 ## [0.14.0] — 2026-09-03
 
 ### Added
