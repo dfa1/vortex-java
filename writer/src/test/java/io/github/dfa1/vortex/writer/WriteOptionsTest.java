@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.MemorySize;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 /// Unit tests for [WriteOptions] factories and copy-methods.
 class WriteOptionsTest {
@@ -62,5 +63,26 @@ class WriteOptionsTest {
         // Then — records are immutable; the copy-method must not mutate the original.
         assertThat(result).isNotSameAs(base);
         assertThat(base.globalDictMaxRetainedBytes()).isEqualTo(DEFAULT_BUDGET);
+    }
+
+    @Test
+    void withZstd_onDefaults_rejectedBecauseCascadingIsZero() {
+        // Given — defaults() has allowedCascading == 0, so Zstd could never be reached by
+        // VortexWriter (it is only added to the cascade codec list, which is only consulted when
+        // allowedCascading > 0); this must fail loudly rather than silently write plain files.
+        WriteOptions base = WriteOptions.defaults();
+
+        // When / Then
+        assertThatIllegalArgumentException().isThrownBy(() -> base.withZstd(true));
+    }
+
+    @Test
+    void cascading_withZstd_succeeds() {
+        // Given / When
+        WriteOptions result = WriteOptions.cascading(3).withZstd(true);
+
+        // Then
+        assertThat(result.enableZstd()).isTrue();
+        assertThat(result.allowedCascading()).isEqualTo(3);
     }
 }

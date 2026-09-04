@@ -21,6 +21,9 @@ import java.util.Map;
 ///                                  file size by 10–15% on real-world datasets compared to ALP+bitpack alone.
 ///                                  Trade-off: Zstd decompression is ~6× slower than ALP decode;
 ///                                  prefer the default (`false`) for read-heavy workloads.
+///                                  Requires `allowedCascading > 0`: Zstd only ever competes inside the
+///                                  cascade, so `true` at depth 0 would be a silent no-op — the compact
+///                                  constructor rejects that combination instead.
 /// @param globalDictMaxRetainedBytes aggregate byte budget for the buffered per-chunk code arrays all
 ///                                  global-dictionary candidate columns may retain in the heap while
 ///                                  waiting for `close()` (default 1 GB). A shared dictionary must see
@@ -55,8 +58,20 @@ public record WriteOptions(
         MemorySize globalDictMaxRetainedBytes,
         Map<EditionFamily, Edition> editions
 ) {
-    /// Defensively copies `editions` into an immutable map.
+    /// Defensively copies `editions` into an immutable map and rejects a Zstd flag that could
+    /// never take effect.
+    ///
+    /// @throws IllegalArgumentException if `enableZstd` is `true` while `allowedCascading` is `0`:
+    ///                                  Zstd only ever competes inside the cascade
+    ///                                  (`VortexWriter` only builds a `CascadingCompressor`, which
+    ///                                  is where the Zstd codec is added, when `allowedCascading >
+    ///                                  0`); at depth 0 the flag would be silently ignored.
     public WriteOptions {
+        if (enableZstd && allowedCascading == 0) {
+            throw new IllegalArgumentException(
+                    "enableZstd requires allowedCascading > 0 (Zstd only competes inside the cascade); "
+                            + "use WriteOptions.cascading(depth).withZstd(true)");
+        }
         editions = Map.copyOf(editions);
     }
 
@@ -120,8 +135,13 @@ public record WriteOptions(
     /// Trade-off: Zstd decompression is ~6× slower than ALP reconstruction or bitpack unpack.
     /// Use `false` (the default) for read-heavy or latency-sensitive workloads.
     ///
+    /// `enabled=true` requires `allowedCascading() > 0` — Zstd only ever competes inside the
+    /// cascade, so enabling it at depth 0 (e.g. straight off [#defaults()]) would be a silent
+    /// no-op. Combine with [#cascading(int)]: `WriteOptions.cascading(depth).withZstd(true)`.
+    ///
     /// @param enabled `true` to enable Zstd in the compression cascade
     /// @return a new `WriteOptions` with the Zstd flag updated
+    /// @throws IllegalArgumentException if `enabled` is `true` and `allowedCascading()` is `0`
     public WriteOptions withZstd(boolean enabled) {
         return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled,
                 globalDictMaxRetainedBytes, editions);

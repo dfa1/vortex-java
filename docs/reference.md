@@ -144,7 +144,7 @@ Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshol
 |--------|-------|
 | `withZoneMaps(boolean)` | Toggle per-chunk min/max/sum statistics |
 | `withGlobalDict(boolean)` | Toggle the shared cross-chunk dictionary |
-| `withZstd(boolean)` | Add Zstandard to the cascade codec competition |
+| `withZstd(boolean)` | Add Zstandard to the cascade codec competition. Requires `allowedCascading > 0` — Zstd only competes inside the cascade, so `withZstd(true)` throws `IllegalArgumentException` at depth 0; combine with `cascading(depth)` |
 | `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |
 | `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family. No method disables the guard entirely — an `unstable`-family encoding is reached by enabling its edition explicitly, e.g. `withEdition(Editions.UNSTABLE_2025_05_0)` |
 
