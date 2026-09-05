@@ -308,10 +308,10 @@ public final class ParquetImporter {
     private static Object allocateBuffer(DType type, int chunkSize) {
         boolean nullable = type.nullable();
         return switch (type) {
-            case DType.Bool ignored -> nullable ? new Boolean[chunkSize] : new boolean[chunkSize];
-            case DType.Utf8 ignored -> new String[chunkSize];
-            case DType.Binary ignored -> new byte[chunkSize][];
-            case DType.Extension ignored -> new long[chunkSize]; // timestamp storage
+            case DType.Bool _ -> nullable ? new Boolean[chunkSize] : new boolean[chunkSize];
+            case DType.Utf8 _ -> new String[chunkSize];
+            case DType.Binary _ -> new byte[chunkSize][];
+            case DType.Extension _ -> new long[chunkSize]; // timestamp storage
             case DType.Primitive p -> switch (p.ptype()) {
                 case I8, U8 -> nullable ? new Byte[chunkSize] : new byte[chunkSize];
                 case I16, U16 -> nullable ? new Short[chunkSize] : new short[chunkSize];

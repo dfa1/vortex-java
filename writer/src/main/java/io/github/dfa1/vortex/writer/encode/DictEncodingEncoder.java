@@ -110,8 +110,6 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     /// @param ctx     encoding context supplying the arena
     /// @return a cascade step whose values child (index 1) is left open for compression
     private static CascadeStep encodeUtf8Cascade(String[] strings, EncodeContext ctx) {
-        int n = strings.length;
-
         var valueMap = new LinkedHashMap<String, Integer>();
         for (String s : strings) {
             valueMap.computeIfAbsent(s, _ -> valueMap.size());
