@@ -187,9 +187,9 @@ final class LeafColumnBuilder implements ColumnBuilder {
         boolean nullable = dtype.nullable();
         boolean[] validity = nullable ? new boolean[n] : null;
         Object result = switch (dtype) {
-            case DType.Bool ignored -> buildBoolean(n, validity);
-            case DType.Utf8 ignored -> buildUtf8(n, validity);
-            case DType.Binary ignored -> buildBinary(n, validity);
+            case DType.Bool _ -> buildBoolean(n, validity);
+            case DType.Utf8 _ -> buildUtf8(n, validity);
+            case DType.Binary _ -> buildBinary(n, validity);
             case DType.Primitive p -> buildPrimitive(p.ptype(), n, validity);
             default -> throw new UnsupportedOperationException("unsupported nested leaf dtype: " + dtype);
         };

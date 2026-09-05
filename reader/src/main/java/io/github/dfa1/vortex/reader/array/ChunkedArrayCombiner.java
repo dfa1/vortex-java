@@ -45,9 +45,9 @@ public final class ChunkedArrayCombiner {
             throw new VortexException("chunked combine: empty chunk list");
         }
         Array data = switch (dtype) {
-            case DType.Bool ignored -> ChunkedBoolArray.of(dtype, totalRows, chunks);
-            case DType.Utf8 ignored -> VarBinChunkedArray.of(dtype, totalRows, chunks, arena);
-            case DType.Binary ignored -> VarBinChunkedArray.of(dtype, totalRows, chunks, arena);
+            case DType.Bool _ -> ChunkedBoolArray.of(dtype, totalRows, chunks);
+            case DType.Utf8 _ -> VarBinChunkedArray.of(dtype, totalRows, chunks, arena);
+            case DType.Binary _ -> VarBinChunkedArray.of(dtype, totalRows, chunks, arena);
             case DType.List list -> combineLists(list, totalRows, chunks, arena);
             case DType.Primitive prim -> combinePrimitive(prim.ptype(), dtype, totalRows, chunks);
             default -> throw new VortexException("unsupported dtype for chunked layout: " + dtype);

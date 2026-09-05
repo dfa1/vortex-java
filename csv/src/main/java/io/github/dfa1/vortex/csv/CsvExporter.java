@@ -192,7 +192,7 @@ public final class CsvExporter {
             }
             // All-null columns (DType.Null) hold only a row count: every cell is an empty
             // field, same rule as a MaskedArray null row.
-            case NullArray ignored -> "";
+            case NullArray _ -> "";
             // Nested struct column: render the whole row as a JSON object cell, unless the row is
             // itself null (a null struct row is decoded as every field masked invalid, never as the
             // StructArray being wrapped once), which exports as an empty field like any other null.
@@ -262,7 +262,7 @@ public final class CsvExporter {
                 long end = offsetAt(la.offsets(), rowIdx + 1);
                 yield jsonArray(la.elements(), start, end);
             }
-            case NullArray ignored -> "null";
+            case NullArray _ -> "null";
             case VarBinArray va -> {
                 StringBuilder sb = new StringBuilder();
                 jsonString(sb, va.getString(rowIdx));

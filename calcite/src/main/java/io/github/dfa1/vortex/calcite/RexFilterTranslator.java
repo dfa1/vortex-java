@@ -95,7 +95,7 @@ final class RexFilterTranslator {
     static void collectColumns(RowFilter filter, Set<String> out) {
         switch (filter) {
             case RowFilter.And(var parts) -> parts.forEach(f -> collectColumns(f, out));
-            case RowFilter.Column(var col, var ignored) -> out.add(col.value());
+            case RowFilter.Column(var col, var _) -> out.add(col.value());
         }
     }
 
