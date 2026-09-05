@@ -121,4 +121,5 @@ Architecture, API design, and all decisions are human-driven.
 
 ## See also
 
+- [vortex.dev](https://vortex.dev) — the Vortex project's website
 - [Vortex: A Columnar File Format for GPU Streaming](https://www.infoq.com/presentations/vortex-columnar-file-format-gpu-streaming/) — InfoQ presentation
