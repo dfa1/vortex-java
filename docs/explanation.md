@@ -482,27 +482,8 @@ id from the array node to the right `EncodingDecoder` instance and calls `decode
 Custom decoders can be added at build time: `ReadRegistry.builder().registerDefaults().register(myDecoder).build()`.
 Files with unrecognized IDs throw `VortexException` unless the builder enabled `allowUnknown()`.
 
-## Testing strategy
-
-Unit tests verify internal correctness (encoding round-trips, edge cases), but the format
-has no formal specification — the Rust implementation is the ground truth. Unit tests alone
-miss cross-language wire-format bugs: Java can round-trip a value internally while writing
-bytes that another implementation cannot decode.
-
-The `integration` module addresses this by using the Rust JNI reader as a **test oracle**:
-Java writes a file, the Rust reader decodes it, and the values are compared exactly.
-Seeded random parameterized tests generate large, diverse inputs automatically,
-covering edge cases no hand-written test would anticipate.
-
-This combination caught two real bugs in ALP floating-point encoding:
-
-- Java selected exponents outside the range Rust's decoder accepts (silent data corruption)
-- Java's encode round-trip check used a different floating-point associativity than Rust's
-  decode (`encoded * (F10[f] * IF10[e])` vs `(encoded * F10[f]) * IF10[e]`), passing values
-  that Rust decoded differently
-
-Both bugs were invisible to pure-Java tests and would have shipped undetected without the
-cross-language oracle.
+For the testing strategy (unit vs. integration vs. mutation layers, the Rust oracle, and
+concrete bugs it caught), see [testing.md](testing.md).
 
 ## Vortex vs Parquet
 

@@ -92,6 +92,17 @@ JNI boundary to the Rust reference and read/write real files.
 There is **one integration round-trip per encoding and per file-format boundary** — this is
 where a wire-format regression surfaces.
 
+The oracle isn't hypothetical — it caught two real bugs in ALP floating-point encoding that
+pure-Java tests missed entirely, because Java's own round-trip (`decode(encode(x)) == x`)
+passed in both cases:
+
+- Java selected exponents outside the range Rust's decoder accepts (silent data corruption).
+- Java's encode round-trip check used a different floating-point associativity than Rust's
+  decode (`encoded * (F10[f] * IF10[e])` vs `(encoded * F10[f]) * IF10[e]`), passing values
+  that Rust decoded differently.
+
+Both were invisible internally — only cross-checking against Rust's actual decoder surfaced them.
+
 ### Load test (`LargeCsvRoundTripLoadIntegrationTest`)
 
 A CSV → Vortex → CSV round-trip whose data is a **deterministic seeded generator** that also
