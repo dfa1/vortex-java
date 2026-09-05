@@ -25,7 +25,7 @@ Physical primitive type — wire-level numeric kind for a column.
 |---------------------------|---------------|------------------------------------------|
 | `U8`, `U16`, `U32`, `U64` | 1 / 2 / 4 / 8 | Unsigned integers                        |
 | `I8`, `I16`, `I32`, `I64` | 1 / 2 / 4 / 8 | Signed integers                          |
-| `F16`                     | 2             | IEEE 754 half — decode not yet supported |
+| `F16`                     | 2             | IEEE 754 half — decoded via `Float#float16ToFloat` |
 | `F32`, `F64`              | 4 / 8         | IEEE 754 single / double                 |
 
 Methods: `byteSize()`, `isFloating()`, `isSigned()`.
@@ -169,17 +169,23 @@ Record: `(List<ColumnName> columns, RowFilter rowFilter, long limit)` (built via
 
 ### `RowFilter` (`io.github.dfa1.vortex.reader.RowFilter`)
 
-Sealed predicate used for zone-map pruning (per-chunk min/max). Chunks that cannot match are skipped entirely.
+Sealed predicate tree used for zone-map pruning (per-chunk min/max) and row selection. Two
+variants: `RowFilter.Column(ColumnName, Predicate)` binds one column to a value-test
+`Predicate` (`io.github.dfa1.vortex.reader.compute.Predicate` — the same vocabulary the
+compute kernels evaluate); `RowFilter.And(List<RowFilter>)` conjoins several. Chunks that
+cannot match are skipped entirely.
 
-| Record                         | Static factory             | Builder      |
-|--------------------------------|----------------------------|--------------|
-| `RowFilter.Gt(column, value)`  | `RowFilter.gt(col, val)`   | —            |
-| `RowFilter.Gte(column, value)` | `RowFilter.gte(col, val)`  | —            |
-| `RowFilter.Lt(column, value)`  | `RowFilter.lt(col, val)`   | —            |
-| `RowFilter.Lte(column, value)` | `RowFilter.lte(col, val)`  | —            |
-| `RowFilter.Eq(column, value)`  | `RowFilter.eq(col, val)`   | —            |
-| `RowFilter.Neq(column, value)` | `RowFilter.neq(col, val)`  | —            |
-| `RowFilter.And(filters)`       | `RowFilter.and(f1, f2, …)` | `f1.and(f2)` |
+| Static factory              | Builds                            |
+|------------------------------|------------------------------------|
+| `RowFilter.eq(col, val)`    | `Column` bound to `Predicate.Eq`   |
+| `RowFilter.neq(col, val)`   | `Column` bound to `Predicate.Neq`  |
+| `RowFilter.gt(col, val)`    | `Column` bound to `Predicate.Gt`   |
+| `RowFilter.gte(col, val)`   | `Column` bound to `Predicate.Gte`  |
+| `RowFilter.lt(col, val)`    | `Column` bound to `Predicate.Lt`   |
+| `RowFilter.lte(col, val)`   | `Column` bound to `Predicate.Lte`  |
+| `RowFilter.isNull(col)`     | `Column` bound to `Predicate.IsNull`    |
+| `RowFilter.isNotNull(col)`  | `Column` bound to `Predicate.IsNotNull` |
+| `RowFilter.and(f1, f2, …)` / `f1.and(f2)` | `And` over the given filters |
 
 ### `ScanIterator` (`io.github.dfa1.vortex.reader.ScanIterator`)
 
@@ -478,7 +484,8 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | Subcommand | Syntax                                         | Description                                      |
 |------------|------------------------------------------------|--------------------------------------------------|
 | `inspect`  | `inspect <file.vortex>`                        | Layout tree, encodings, row counts, buffer sizes |
-| `tui`      | `tui <file.vortex \| http(s)://url>`           | Interactive terminal browser (lazy stats + data) |
+| `tui`      | `tui <file.vortex \| http(s)://url>`           | Interactive layout-tree browser (lazy stats + data) |
+| `view`     | `view <file.vortex \| http(s)://url>`          | Interactive spreadsheet-grid browser over the row data |
 | `schema`   | `schema <file.vortex>`                         | Column names and types                           |
 | `count`    | `count <file.vortex>`                          | Total row count                                  |
 | `stats`    | `stats <file.vortex>`                          | Per-column min/max                               |
@@ -513,6 +520,6 @@ version (u16 LE) | postscriptLen (u16 LE) | magic ("VTXF")
 ```
 
 The postscript is a FlatBuffer blob immediately before the trailer. It points (offset + length) to:
-the Footer (FlatBuffer), the DType (Protobuf), and the Layout (FlatBuffer) — each stored elsewhere in the file.
+the Footer (FlatBuffer), the DType (FlatBuffer), and the Layout (FlatBuffer) — each stored elsewhere in the file.
 
 See [explanation.md#memory-model](explanation.md#memory-model) for the mmap lifecycle.

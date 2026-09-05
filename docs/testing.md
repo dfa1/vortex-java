@@ -25,14 +25,14 @@ caught at the lowest layer that can see them.
 
 | Layer | Runner | ~Executions | Scope |
 |-------|--------|-------------|-------|
-| Unit | surefire | ~2,690 | One class/behavior, in-memory, no I/O |
+| Unit | surefire | ~4,230 | One class/behavior, in-memory, no I/O |
 | Property-based | surefire | (subset of unit) | Seeded-random sweeps over encode/decode |
-| Integration | failsafe | ~271 | Java↔Rust interop + real files + CLI end-to-end |
+| Integration | failsafe | ~317 | Java↔Rust interop + real files + CLI end-to-end |
 | Mutation | PIT (opt-in) | — | Adequacy of tests for bounds/parse classes |
 | Benchmarks | JMH (`./bench`) | — | Performance, not correctness |
 
-Per-module unit counts: core 256, proto-gen 9, reader 780, writer 1,419, cli 154,
-inspector 34, parquet 24, jdbc 9, csv 7. ~174 test classes total.
+Per-module unit counts: core 479, fsst 52, proto-gen 9, reader 1,468, writer 1,757, cli 215,
+inspector 34, parquet 86, jdbc 11, csv 25, calcite 76. ~257 test classes total.
 
 ## Unit tests (`./mvnw test`)
 
@@ -42,14 +42,17 @@ I/O, no network, no sleep — mock or use in-memory `MemorySegment`s. Each test 
 
 What they cover, by module:
 
-- **core** (256) — `DType`/`PType` modeling, `IoBounds` guards, `PTypeIO` little-endian
+- **core** (479) — `DType`/`PType` modeling, `IoBounds` guards, `PTypeIO` little-endian
   segment reads/writes, proto record encode/decode.
-- **reader** (780) — every `EncodingDecoder` and `Array` subtype, the file-structure
+- **reader** (1,468) — every `EncodingDecoder` and `Array` subtype, the file-structure
   parsers (`Footer`, `Trailer`, `PostscriptParser`, `Layout`), and the lazy/chunked/dict
   array families. Largest suite because decode has the most branches.
-- **writer** (1,419) — every `EncodingEncoder`, the `CascadingCompressor` selection logic,
+- **writer** (1,757) — every `EncodingEncoder`, the `CascadingCompressor` selection logic,
   `WriteRegistry`, and the extension encoders. Largest module overall.
-- **cli / inspector / parquet / jdbc / csv** — command parsing, TUI rendering, importers.
+- **fsst** (52) — the standalone FSST compression algorithm (`Compressor`/`Decompressor`,
+  symbol-table training), independent of the wire format.
+- **cli / inspector / parquet / jdbc / csv / calcite** — command parsing, TUI rendering,
+  importers/exporters, SQL push-down (Calcite adapter).
 
 Each encoding aims to cover the happy path, negative cases (invalid input → `VortexException`),
 and corners (empty, zero, max, boundaries).
@@ -78,7 +81,7 @@ JNI boundary to the Rust reference and read/write real files.
 
 - **`RustWritesJavaReadsIntegrationTest`** — Rust writes, Java reads; verifies our decoders
   against the canonical writer.
-- **`JavaWritesRustReadsIntegrationTest`** (212 cases) — Java writes, Rust reads; verifies
+- **`JavaWritesRustReadsIntegrationTest`** (217 cases) — Java writes, Rust reads; verifies
   our encoders produce spec-correct files. Per-encoding round-trips are generated from the
   seeded `RandomArrays` source.
 - **`RustJavaReaderComparisonIntegrationTest`** — both read the same file; values must match.

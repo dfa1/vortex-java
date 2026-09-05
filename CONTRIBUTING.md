@@ -42,15 +42,19 @@ CI runs `./mvnw verify` on Java 25 and 26. Both must pass before merge.
 
 | Module        | Purpose                                              |
 |---------------|------------------------------------------------------|
+| `fsst`        | Standalone FSST string compression algorithm         |
 | `core`        | DTypes, encodings, memory model, protobuf/flatbuf    |
 | `reader`      | `VortexReader`, scan API, layout decoders            |
 | `writer`      | `VortexWriter`, cascading compressor                 |
 | `integration` | Cross-language tests (Java ↔ Rust JNI oracle)        |
+| `fuzz`        | Jazzer fuzz targets (opt-in, `JAZZER_FUZZ=1`)         |
 | `performance` | JMH benchmarks                                       |
 | `cli`         | Fat-jar CLI (`count`, `schema`, `inspect`, `import`) |
-| `parquet`     | Parquet → Vortex converter                           |
-| `csv`         | CSV → Vortex converter                               |
+| `inspector`   | Layout-tree introspection (TUI + `VortexInspector`)  |
+| `parquet`     | Parquet ↔ Vortex converter                           |
+| `csv`         | CSV ↔ Vortex converter                               |
 | `jdbc`        | JDBC driver (experimental)                           |
+| `calcite`     | Apache Calcite SQL adapter (filter/project/aggregate push-down) |
 
 ## Finding work
 
@@ -100,40 +104,47 @@ MemorySegment out = MemorySegment.ofArray(outBytes);
 MemorySegment out = ctx.arena().allocate(n * elemBytes);
 ```
 
-### Encoding class structure
+### Encoding structure
 
-Non-trivial encodings split encode and decode into private static inner classes:
+Decode and encode live in **separate classes, in separate modules** — the writer module never
+depends on the reader module, so there is no single class that implements both directions.
+A non-trivial decoder or encoder factors its logic into private static helper methods on the
+class itself (see `AlpEncodingDecoder`, `DictEncodingEncoder` for examples):
 
 ```java
-public final class FooEncoding implements Encoding {
+public final class FooEncodingDecoder implements EncodingDecoder {
 
     @Override
-    public EncodeResult encode(DType dtype, Object data) {
-        return Encoder.encode(dtype, data);
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_FOO;
     }
 
     @Override
     public Array decode(DecodeContext ctx) {
-        return Decoder.decode(ctx);
+        return decodeSomething(ctx);
     }
 
-    private static final class Encoder { ... }
-    private static final class Decoder { ... }
+    private static Array decodeSomething(DecodeContext ctx) { ... }
 }
 ```
 
-Simple encodings (≤ ~80 lines total) are exempt.
-
 ## Adding a new encoding
 
-Three touch-points, always all three:
+Two touch-points, one per side:
 
-1. **`EncodingId.java`** — add enum constant `VORTEX_FOO("vortex.foo")`
-2. **`FooEncoding.java`** — implement `Encoding`
-3. **`core/src/main/resources/META-INF/services/io.github.dfa1.vortex.encoding.Encoding`** —
-   add the fully-qualified class name
+1. **`EncodingId.java`** — add a `WellKnown` constant `VORTEX_FOO("vortex.foo")`.
+2. **Decode** — `FooEncodingDecoder implements EncodingDecoder` in `reader`'s
+   `io.github.dfa1.vortex.reader.decode` package, registered via
+   `.register(new FooEncodingDecoder())` in `ReadRegistry.Builder#registerDefaults()`.
+3. **Encode** — `FooEncodingEncoder implements EncodingEncoder` in `writer`'s
+   `io.github.dfa1.vortex.writer.encode` package, registered via
+   `.register(new FooEncodingEncoder())` in `WriteRegistry.Builder#registerDefaults()`.
 
-Missing any one of these causes silent failures (encoding not found at runtime).
+Registration is builder-only, by design — no `ServiceLoader`/`META-INF/services`: a classpath
+jar must not silently change decode/scan behavior, so registration stays visible at the
+`ReadRegistry.builder()...build()` / `WriteRegistry.builder()...build()` call site. Missing a
+registration call means the encoding works in isolation but is invisible to
+`VortexReader.open`/`VortexWriter.create` when they use the default registries.
 
 When unsure about the wire format, read the Rust reference implementation — do not
 reverse-engineer byte patterns:
@@ -186,10 +197,12 @@ wire-format bugs that pure Java round-trips miss.
 ## Javadoc
 
 Every public method needs a main description, `@param` for each parameter, and `@return`
-(unless `void`). Cross-references use `{@link ClassName#method(ParamType)}` — verify the
-target exists before writing it. Wrong references are build errors.
+(unless `void`). All `///` Markdown — no HTML. Cross-references use Markdown links,
+`[ClassName#method(ParamType)]` — verify the target exists before writing it. Wrong
+references are build errors.
 
-Check: `./mvnw javadoc:javadoc -pl core` must produce zero output.
+Check: `./mvnw package -DskipTests javadoc:javadoc -fae` (the bare `./mvnw javadoc:javadoc`
+fails on dependency resolution, not javadoc, since the goal runs no lifecycle phase).
 
 ## Documentation
 
@@ -202,15 +215,16 @@ Update docs alongside code. Each file has a defined scope — touch the right on
 | `docs/reference.md`        | New API surface, CLI flags, operator table entries |
 | `docs/compatibility.md`    | New encoding support or S3 fixture status change   |
 | `docs/explanation.md`      | Design decisions, architecture changes, benchmarks |
+| `docs/testing.md`          | New test layer, or a module's test counts/scope changed |
 
 ## Regenerating generated sources
 
-Only needed after editing `.fbs` or `.proto` schemas:
+Only needed after editing `.fbs` or `.proto` schemas. Both schema languages are compiled
+in-process by in-house generators (`fbs-gen`, `proto-gen`) — no `flatc`/`protoc` install needed:
 
 ```bash
-brew install flatbuffers protobuf
-./mvnw generate-sources -pl core -P regenerate-sources
-# commit the updated files
+./mvnw compile -pl fbs-gen,proto-gen                     # build the generators
+./mvnw generate-sources -pl core -P regenerate-sources   # then commit the updated files
 ```
 
 Generated sources under `core/src/main/java` are committed — normal builds need no

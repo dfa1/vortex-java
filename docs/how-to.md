@@ -154,8 +154,9 @@ ScanOptions opts = ScanOptions.all().withColumns("symbol", "price");
 try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
      var iter = vf.scan(opts)) {
     while (iter.hasNext()) {
-        var chunk = iter.next();
-        // chunk.columns() contains only "symbol" and "price"
+        try (var chunk = iter.next()) {
+            // chunk.columns() contains only "symbol" and "price"
+        }
     }
 }
 ```
@@ -173,14 +174,15 @@ java -jar cli/target/vortex-cli-*-all.jar select trades.vortex symbol price
 **API:**
 
 ```java
-RowFilter filter = new RowFilter.Gte("volume", 1_000_000);
+RowFilter filter = RowFilter.gte("volume", 1_000_000);
 ScanOptions opts = ScanOptions.all().withFilter(filter);
 
 try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
      var iter = vf.scan(opts)) {
     while (iter.hasNext()) {
-        var chunk = iter.next();
-        // only rows where volume >= 1_000_000
+        try (var chunk = iter.next()) {
+            // only rows where volume >= 1_000_000
+        }
     }
 }
 ```
@@ -188,12 +190,12 @@ try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
 Combine filters with `and()`:
 
 ```java
-RowFilter filter = new RowFilter.Gte("volume", 1_000_000)
-    .and(new RowFilter.Lte("price", 200.0));
+RowFilter filter = RowFilter.gte("volume", 1_000_000)
+    .and(RowFilter.lte("price", 200.0));
 ```
 
 For the supported predicate set and CLI operator syntax, see
-[reference.md#rowfilter](reference.md#rowfilter-iogithubdfa1vortexscanrowfilter)
+[reference.md#rowfilter](reference.md#rowfilter-iogithubdfa1vortexreaderrowfilter)
 and [reference.md#filter-expression-syntax](reference.md#filter-expression-syntax).
 
 **CLI:**
@@ -214,8 +216,9 @@ ScanOptions opts = ScanOptions.all().withLimit(10);
 try (VortexReader vf = VortexReader.open(Path.of("data.vortex"));
      var iter = vf.scan(opts)) {
     while (iter.hasNext()) {
-        var chunk = iter.next();
-        // at most 10 rows total across all chunks
+        try (var chunk = iter.next()) {
+            // at most 10 rows total across all chunks
+        }
     }
 }
 ```
@@ -481,12 +484,13 @@ ReadRegistry registry = ReadRegistry.builder()
 try (VortexReader vf = VortexReader.open(Path.of("future.vortex"), registry);
      var iter = vf.scan(ScanOptions.all())) {
     while (iter.hasNext()) {
-        var chunk = iter.next();
-        chunk.columns().forEach((name, arr) -> {
-            if (arr instanceof UnknownArray u) {
-                System.out.println(name + ": unknown encoding " + u.encodingId());
-            }
-        });
+        try (var chunk = iter.next()) {
+            chunk.columns().forEach((name, arr) -> {
+                if (arr instanceof UnknownArray u) {
+                    System.out.println(name + ": unknown encoding " + u.encodingId());
+                }
+            });
+        }
     }
 }
 ```
