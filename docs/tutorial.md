@@ -26,7 +26,7 @@ Add the dependency to `pom.xml` (inside `<dependencies>`):
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.13.2</version>
+  <version>0.14.0</version>
 </dependency>
 ```
 
@@ -110,23 +110,26 @@ try (VortexReader vf = VortexReader.open(outPath);
      var iter = vf.scan(ScanOptions.all())) {
 
     while (iter.hasNext()) {
-        var chunk = iter.next();   // advances to the next batch
+        try (var chunk = iter.next()) {   // advances to the next batch
 
-        LongArray  ts     = chunk.column("timestamp");
-        DoubleArray price = chunk.column("price");
+            LongArray  ts     = chunk.column("timestamp");
+            DoubleArray price = chunk.column("price");
 
-        for (long i = 0; i < chunk.rowCount(); i++) {
-            System.out.printf("%d  %.2f%n", ts.getLong(i), price.getDouble(i));
+            for (long i = 0; i < chunk.rowCount(); i++) {
+                System.out.printf("%d  %.2f%n", ts.getLong(i), price.getDouble(i));
+            }
         }
         // ⚠ do not store references past this point —
-        //   iter.hasNext() frees the chunk's memory
+        //   closing the chunk frees its memory
     }
 }
 ```
 
-**Important:** every chunk lives in an off-heap `Arena`. Calling `iter.hasNext()` closes
-that arena and releases the memory. Read all values before advancing the iterator.
-See [explanation.md#memory-model](explanation.md#memory-model) for why the lifetime works this way.
+**Important:** every chunk lives in an off-heap `Arena`. `Chunk` is `AutoCloseable`; closing
+it releases that arena. Calling `iter.next()` while a prior chunk is still open throws
+`IllegalStateException`, so use try-with-resources per chunk (or `iter.forEachRemaining(c -> ...)`,
+which closes each chunk for you). See
+[explanation.md#memory-model](explanation.md#memory-model) for why the lifetime works this way.
 
 Expected output:
 
@@ -152,8 +155,9 @@ try (VortexReader vf = VortexReader.open(outPath);
      var iter = vf.scan(opts)) {
 
     while (iter.hasNext()) {
-        var chunk = iter.next();
-        // chunk only contains "symbol" and "price"
+        try (var chunk = iter.next()) {
+            // chunk only contains "symbol" and "price"
+        }
     }
 }
 ```

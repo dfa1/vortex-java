@@ -319,21 +319,25 @@ Style rules (aspirational in the un-ratcheted modules, enforced in `core`/`fsst`
 
 ### Encoding class structure
 
-Encodings with non-trivial encode **and** decode separate them into private static inner classes
-`Encoder` and `Decoder` (shared low-level helpers live with their owner or a third inner class):
+Decode and encode are separate classes in separate modules (writer never depends on reader) —
+there is no unified class implementing both directions. A non-trivial `FooEncodingDecoder`/
+`FooEncodingEncoder` factors its logic into a single private static inner class named after its
+own direction (shared low-level helpers live with their owner):
 
 ```java
-public final class FooEncoding implements Encoding {
-    @Override public EncodeResult encode(DType dtype, Object data) { return Encoder.encode(dtype, data); }
-    @Override public Array decode(DecodeContext ctx) { return Decoder.decode(ctx); }
-    private static final class Encoder { static EncodeResult encode(DType dtype, Object data) { ... } }
-    private static final class Decoder { static Array decode(DecodeContext ctx) { ... } }
+public final class FooEncodingEncoder implements EncodingEncoder {
+    @Override public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        return Encoder.encode(dtype, data, ctx);
+    }
+    private static final class Encoder { static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) { ... } }
 }
 ```
 
-Simple encodings (≤ ~80 lines, e.g. `NullEncoding`, `BoolEncoding`) are exempt.
+Simple encodings (≤ ~30 lines, e.g. `NullEncodingDecoder`, `NullEncodingEncoder`) are exempt and
+put their logic straight in the class body — no inner helper class.
 
-**Metadata-only encodings** (all data in proto3 metadata, no buffers/children, e.g. `SequenceEncoding`):
+**Metadata-only encodings** (all data in proto3 metadata, no buffers/children, e.g.
+`SequenceEncodingEncoder`/`SequenceEncodingDecoder`):
 `EncodeResult` uses an `EncodeNode` with `metadata` set and empty `bufferIndices`; the decoder reads
 `ctx.metadata()` (not `ctx.buffer(n)`):
 

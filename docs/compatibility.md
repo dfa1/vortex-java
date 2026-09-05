@@ -1,6 +1,6 @@
 # Compatibility
 
-Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.74.0.
+Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.85.0.
 For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](reference.md).
 
 ## Read-only deployment
@@ -12,14 +12,14 @@ A consumer that only needs to read Vortex files can depend on a strict subset:
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.13.2</version>
+  <version>0.14.0</version>
 </dependency>
 
 <!-- optional: inspector for layout-tree introspection -->
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-inspector</artifactId>
-  <version>0.13.2</version>
+  <version>0.14.0</version>
 </dependency>
 ```
 
@@ -39,7 +39,7 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 | `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
 | `vortex.onpair` experimental string encoding | Rust 0.74.0 | ❌ Not registered. Files using it fail to decode unless `ReadRegistry.builder().allowUnknown()` is enabled. |
 | `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). |
-| Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested. Re-run integration fixtures against v0.74.0 once published. |
+| Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested against the currently pinned v0.85.0 fixtures; #8125 not yet re-verified. |
 | `vortex.dict` **layout** over a values pool that is neither VarBin- nor primitive-shaped (e.g. a dict-encoded `vortex.uuid`, whose storage is `FixedSizeList(U8, 16)`) | Rust's dict layout accepts any dtype | ❌ No lazy dict carrier exists for that pool shape, so decode throws `VortexException("unsupported dict values shape: …")`. The `vortex.dict` *encoding* is unaffected. |
 | Duplicate struct field names | Rust writer rejects ("StructLayout must have unique field names"); Rust reader tolerates foreign files (first-match access) | ⚠️ Deliberate divergence on read: Java rejects such files with `VortexException("duplicate field name in file schema")` instead of tolerating them — the name-keyed `Chunk` API cannot represent both columns, and silent column loss is worse than a loud failure on a file the reference writer refuses to produce. Java's writer mirrors the Rust writer's rejection. |
 | Blank / control-character field names | Wire-legal; the Rust writer produces `""` and whitespace-only names. NUL (`U+0000`) additionally aborts the Rust toolchain: Arrow FFI schema export hits a panic-cannot-unwind in `arrow-rs` (`ffi_stream::get_schema`) and SIGABRTs the process (measured against vortex-jni 0.75.0) | ⚠️ Deliberate strictness BOTH ways: vortex-java's writer refuses blank and control-character field names (`IllegalArgumentException`), and its reader rejects files carrying them (`VortexException` naming the producing pipeline as the likely bug) — the JSON-`""`-key principle: wire-legal is a floor, not a policy. Printable names of any shape (`$`-runs, spaces inside, emoji) are legal and round-trip intact both directions (measured; pinned by `ColumnNameEdgeCasesIntegrationTest`). |
@@ -61,9 +61,11 @@ scripts/hydrate-raincloud-corpus.sh --max-mb 200      # cache → mirror → loc
 
 Per-slug status lives in `integration/src/test/resources/raincloud/expected-status.csv`
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
-`untriaged` runs and reports without failing the build). A scheduled workflow
+`untriaged` runs and reports without failing the build; `missing_auth` marks a slug that can't
+even be hydrated without credentials this environment lacks — Kaggle, gated HuggingFace, etc. —
+distinguishing "blocked on a credential" from plain `untriaged`). A scheduled workflow
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
-117 `ok`, 0 known gaps; 130 slugs untriaged. Every gap found so far is fixed
+179 `ok`, 0 known gaps, 33 `missing_auth`, 35 untriaged. Every gap found so far is fixed
 ([#206](https://github.com/dfa1/vortex-java/issues/206)–[#211](https://github.com/dfa1/vortex-java/issues/211),
 [#215](https://github.com/dfa1/vortex-java/issues/215)–[#217](https://github.com/dfa1/vortex-java/issues/217),
 [#221](https://github.com/dfa1/vortex-java/issues/221),
@@ -280,16 +282,16 @@ For unsupported extension ids the inspector falls back to a placeholder cell
 correctly via the primitive accessors, callers just have to format the value
 themselves.
 
-## S3 Fixture Status (v0.75.0)
+## S3 Fixture Status (v0.85.0)
 
-> **Note:** the oracle round-trip suite is pinned to `v0.75.0/` (current Rust
+> **Note:** the oracle round-trip suite is pinned to `v0.85.0/` (current Rust
 > release). The bucket reuses identical fixture file names across versions but
-> rewrites the bytes, so the `/tmp/pco-fixtures` cache is version-keyed; bump the
-> `FIXTURE_VERSION` constant in the integration tests and refresh this section
+> rewrites the bytes, so the local cache is version-keyed; bump the
+> `RustFixtures.VERSION` constant in the integration tests and refresh this section
 > when a newer set is published.
 
 Cross-language round-trips tested against Rust-written fixture files hosted at
-`s3://vortex-compat-fixtures/v0.75.0/arrays/`.
+`s3://vortex-compat-fixtures/v0.85.0/arrays/`.
 
 | Fixture                             | Status |
 |-------------------------------------|--------|
@@ -317,18 +319,18 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `decimal.vortex`                    | ✅      |
 | `decimal_byte_parts.vortex`         | ✅      |
 | `datetimeparts.vortex`              | ✅      |
-| `list.vortex`                       | ✅      |
-| `listview.vortex`                   | ✅      |
+| `list.vortex`                       | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
+| `listview.vortex`                   | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
 | `fixed_size_list.vortex`            | ✅      |
 | `zstd.vortex`                       | ✅      |
 | `tpch_lineitem.compact.vortex`      | ✅      |
-| `tpch_lineitem.regular.vortex`      | ✅      |
+| `tpch_lineitem.regular.vortex`      | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
 | `tpch_orders.compact.vortex`        | ✅      |
-| `tpch_orders.regular.vortex`        | ✅      |
+| `tpch_orders.regular.vortex`        | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
 | `pco.vortex`                        | ✅      |
 | `clickbench_hits_5k.compact.vortex` | ✅      |
-| `clickbench_hits_5k.regular.vortex` | ✅      |
-| `masked.vortex`                     | ❓      | No fixture through v0.84.0 |
-| `patched.vortex`                    | ❓      | No fixture through v0.84.0 |
-| `variant.vortex`                    | ❓      | No fixture through v0.84.0 |
-| `map.vortex`                        | ❓      | No fixture through v0.84.0; `vortex.map` decode/encode is covered by the vortex-jni oracle instead (issue #351) |
+| `clickbench_hits_5k.regular.vortex` | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
+| `masked.vortex`                     | ❓      | No fixture through v0.85.0 |
+| `patched.vortex`                    | ❓      | No fixture through v0.85.0 |
+| `variant.vortex`                    | ❓      | No fixture through v0.85.0 |
+| `map.vortex`                        | ❓      | No fixture through v0.85.0; `vortex.map` decode/encode is covered by the vortex-jni oracle instead (issue #351) |

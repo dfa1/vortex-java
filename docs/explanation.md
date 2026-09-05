@@ -7,7 +7,7 @@ Background reading on design decisions, architecture, and benchmarks.
 The official Vortex ecosystem provides JVM bindings via JNI (bundled native `.so`/`.dylib`).
 JNI bindings are fast but add deployment friction: platform-specific artifacts, native build
 toolchains, and crash-domain coupling between the JVM and native code. The JAR for
-vortex-jni 0.74.0 is **33MB**.
+vortex-jni 0.85.0 is **52.5MB**.
 
 This library takes a different approach — 100% Java, no JNI, no `sun.misc.Unsafe`.
 It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped
@@ -376,8 +376,8 @@ Calling `iter.next()` while a previous chunk is still open throws
 After `chunk.close()`, touching any previously-returned `Array` raises FFM's scope
 check (`IllegalStateException` from `MemorySegment`), not undefined behavior.
 
-For bulk consumption with auto-close per element, override the standard
-`Iterator.forEachRemaining` is provided:
+For bulk consumption with auto-close per element, `ScanIterator` overrides the standard
+`Iterator.forEachRemaining`:
 
 ```java
 try (var iter = reader.scan(opts)) {
@@ -394,7 +394,7 @@ For the reader / scan method signatures, see [reference.md#reader-api](reference
 ```
          ┌──────────────────────────────────────────┐
          │                  core                    │
-         │  DType · Encoding · Registry     │
+         │  DType · EncodingId · LayoutId           │
          │  proto/fbs generated sources             │
          └──────────┬─────────────────┬─────────────┘
                     │                 │
@@ -418,7 +418,9 @@ For the reader / scan method signatures, see [reference.md#reader-api](reference
                                └───────────────┘
 ```
 
-`performance` depends on `reader` + `writer` but is omitted for clarity.
+`performance` depends on `reader` + `writer` but is omitted for clarity, as are the
+supporting/tooling modules `fsst` (standalone dependency of `reader`/`writer`), `inspector`,
+`calcite`, `jdbc`, `bom`, `fuzz`, `fbs-gen`, and `proto-gen`.
 
 ### Read path
 
@@ -526,7 +528,9 @@ See the [benchmark tables](#benchmarks) for numbers. Summary:
 - **Single-column scan**: Vortex 1.4× faster than Parquet batch. ALP + mmap zero-copy
   beats Parquet's RLE definition-level decode + page framing overhead.
 - **Multi-column scan**: roughly even today. Gap caused by per-chunk dict encoding in Java
-  vs Rust's global dict — closes when global dict is implemented.
+  vs Rust's global dict — global dict is now implemented as an opt-in
+  `WriteOptions.withGlobalDict(true)` ([ADR 0021](../adr/0021-cardinality-bounded-global-dict-buffering.md)),
+  not yet the default, so this benchmark (run with default write options) doesn't reflect it.
 - **Filtered scan (zone-map pruning)**: Vortex skips entire chunks when the Zoned
   min/max rules out a predicate. Parquet does the same at row-group granularity, but
   Vortex chunks are smaller (131 072 rows vs Parquet's typical 1 M row groups), so
