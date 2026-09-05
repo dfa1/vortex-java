@@ -10,11 +10,6 @@ Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) 
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
 for zero-copy memory-mapped reads — good performance out of the box, without native dependencies.
 
-Benchmarked against **vortex-jni** (the Vortex Rust reference's JNI bindings) on read
-throughput, Top-N read latency, and compression ratio — see
-[docs/explanation.md#benchmarks](docs/explanation.md#benchmarks) for the full tables and
-methodology.
-
 ## Who is this for
 
 - JVM analytics engines and OLAP systems
@@ -123,3 +118,7 @@ coding conventions, and how to add a new encoding.
 
 This project uses [Claude Code](https://claude.ai/code) for implementation work.
 Architecture, API design, and all decisions are human-driven.
+
+## See also
+
+- [Vortex: A Columnar File Format for GPU Streaming](https://www.infoq.com/presentations/vortex-columnar-file-format-gpu-streaming/) — InfoQ presentation
