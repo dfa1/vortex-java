@@ -53,7 +53,6 @@ known gap, a contract audit, or supporting infra.
 
 ## Build
 
-- [ ] use JPMS, watch out for "dfa1" in package name
 - [ ] **Docs compiler — remaining tier** — `DocsConsistencyTest` (integration) now gates FQNs,
   method claims, service-file paths, and relative links in the living docs (first run caught 11
   fossils the same-day manual audit missed); `EncodingTableFitnessTest` now golden-tests the
