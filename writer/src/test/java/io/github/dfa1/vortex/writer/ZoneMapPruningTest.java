@@ -434,9 +434,10 @@ class ZoneMapPruningTest {
                 @TempDir Path tmp) throws IOException {
             // Given
             Path file = writeThreeChunks(tmp);
+            RowFilter filter = make.apply("not-a-number");
 
             // When / Then
-            assertThatThrownBy(() -> scanRowCounts(file, make.apply("not-a-number")))
+            assertThatThrownBy(() -> scanRowCounts(file, filter))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("not comparable");
         }

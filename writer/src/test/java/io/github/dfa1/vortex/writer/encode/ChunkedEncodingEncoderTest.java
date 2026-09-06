@@ -85,8 +85,11 @@ class ChunkedEncodingEncoderTest {
 
         @Test
         void mismatchedLengths_throws() {
-            // Given / When / Then
-            assertThatThrownBy(() -> new ChunkedData(List.of(new long[]{1L}), new long[]{1, 2}))
+            // Given — one chunk but two declared chunk lengths
+            List<Object> chunks = List.of(new long[]{1L});
+
+            // When / Then
+            assertThatThrownBy(() -> new ChunkedData(chunks, new long[]{1, 2}))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }

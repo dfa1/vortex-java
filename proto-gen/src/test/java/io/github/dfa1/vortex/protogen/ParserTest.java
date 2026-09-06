@@ -106,9 +106,10 @@ class ParserTest {
                     syntax = "proto2";
                     message Foo {}
                     """;
+            Parser parser = new Parser(new Lexer(src).tokenize());
 
             // When + Then
-            assertThatThrownBy(() -> new Parser(new Lexer(src).tokenize()).parseFile())
+            assertThatThrownBy(parser::parseFile)
                     .isInstanceOf(ProtoParseException.class)
                     .hasMessageContaining("proto3");
         }

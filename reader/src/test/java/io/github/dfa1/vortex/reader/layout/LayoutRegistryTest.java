@@ -49,9 +49,10 @@ class LayoutRegistryTest {
     void register_duplicateId_throwsVortexException() {
         // Given — a decoder claiming vortex.flat, an id the defaults already own
         LayoutDecoder duplicate = stubDecoder(LayoutId.FLAT, sentinelArray());
+        LayoutRegistry.Builder builder = LayoutRegistry.builder().registerDefaults();
 
         // When / Then — re-registering an occupied id is rejected loudly
-        assertThatThrownBy(() -> LayoutRegistry.builder().registerDefaults().register(duplicate))
+        assertThatThrownBy(() -> builder.register(duplicate))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("already registered")
                 .hasMessageContaining("vortex.flat");
@@ -63,9 +64,10 @@ class LayoutRegistryTest {
         LayoutRegistry sut = LayoutRegistry.defaults();
         Layout unknown = new Layout(new LayoutId.Custom("acme.frobnicate"), 0L, null, List.of(), List.of());
         LayoutDecodeContext ctx = mock(LayoutDecodeContext.class);
+        DType dtype = primitive();
 
         // When / Then — no allow-unknown mode: the message is byte-identical to the pre-SPI throw
-        assertThatThrownBy(() -> sut.decode(ctx, unknown, primitive()))
+        assertThatThrownBy(() -> sut.decode(ctx, unknown, dtype))
                 .isInstanceOf(VortexException.class)
                 .hasMessage("cannot decode layout acme.frobnicate");
     }

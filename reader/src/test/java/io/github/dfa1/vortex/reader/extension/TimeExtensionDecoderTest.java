@@ -86,9 +86,10 @@ class TimeExtensionDecoderTest {
         // Given — Days isn't a sub-second unit
         try (Arena arena = Arena.ofConfined()) {
             DType.Extension dtype = ext("vortex.time", I32, unitByte((byte) 4));
+            IntArray storage = i32(arena, 0);
 
             // When / Then
-            assertThatThrownBy(() -> sut.decode(dtype, i32(arena, 0), 0))
+            assertThatThrownBy(() -> sut.decode(dtype, storage, 0))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("Days unit not valid");
         }

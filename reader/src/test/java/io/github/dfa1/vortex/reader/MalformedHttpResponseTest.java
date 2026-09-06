@@ -37,9 +37,10 @@ class MalformedHttpResponseTest {
         // Given — server claims bytes 0-65535/131072 but returns only 100 bytes
         doReturn(response206("bytes 0-65535/131072", new byte[100]))
                 .when(client).send(any(), any());
+        ReadRegistry emptyRegistry = ReadRegistry.empty();
 
         // When / Then — 65536 declared, 100 received
-        assertThatThrownBy(() -> VortexHttpReader.open(URI, ReadRegistry.empty(), client))
+        assertThatThrownBy(() -> VortexHttpReader.open(URI, emptyRegistry, client))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("65536 bytes")
                 .hasMessageContaining("body has 100");
@@ -50,9 +51,10 @@ class MalformedHttpResponseTest {
         // Given — server claims bytes 0-99/131072 but returns 200 bytes
         doReturn(response206("bytes 0-99/131072", new byte[200]))
                 .when(client).send(any(), any());
+        ReadRegistry emptyRegistry = ReadRegistry.empty();
 
         // When / Then — 100 declared, 200 received
-        assertThatThrownBy(() -> VortexHttpReader.open(URI, ReadRegistry.empty(), client))
+        assertThatThrownBy(() -> VortexHttpReader.open(URI, emptyRegistry, client))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("100 bytes")
                 .hasMessageContaining("body has 200");
@@ -62,9 +64,10 @@ class MalformedHttpResponseTest {
     void tailFetch_missingContentRange_throws() throws Exception {
         // Given — 206 but no Content-Range header
         doReturn(response206(null, new byte[64])).when(client).send(any(), any());
+        ReadRegistry emptyRegistry = ReadRegistry.empty();
 
         // When / Then
-        assertThatThrownBy(() -> VortexHttpReader.open(URI, ReadRegistry.empty(), client))
+        assertThatThrownBy(() -> VortexHttpReader.open(URI, emptyRegistry, client))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("Content-Range");
     }
@@ -85,9 +88,10 @@ class MalformedHttpResponseTest {
         // must surface as a VortexException, never a raw NumberFormatException or
         // StringIndexOutOfBoundsException leaking from substring/Long.parseLong.
         doReturn(response206(contentRange, new byte[64])).when(client).send(any(), any());
+        ReadRegistry emptyRegistry = ReadRegistry.empty();
 
         // When / Then
-        assertThatThrownBy(() -> VortexHttpReader.open(URI, ReadRegistry.empty(), client))
+        assertThatThrownBy(() -> VortexHttpReader.open(URI, emptyRegistry, client))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("Content-Range");
     }

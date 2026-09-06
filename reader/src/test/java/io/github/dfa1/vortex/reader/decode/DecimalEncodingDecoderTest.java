@@ -86,8 +86,11 @@ class DecimalEncodingDecoderTest {
 
         @Test
         void emptyMetadata_throws() {
-            // When / Then — present but zero remaining
-            assertThatThrownBy(() -> decode(MemorySegment.ofArray(new byte[0]), 1, 8))
+            // Given — present but zero remaining
+            MemorySegment empty = MemorySegment.ofArray(new byte[0]);
+
+            // When / Then
+            assertThatThrownBy(() -> decode(empty, 1, 8))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
         }

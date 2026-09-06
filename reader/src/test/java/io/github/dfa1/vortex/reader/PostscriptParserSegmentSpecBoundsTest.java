@@ -70,9 +70,10 @@ class PostscriptParserSegmentSpecBoundsTest {
     @MethodSource("outOfBoundsRanges")
     void validateSegmentSpecs_rejects_outOfBoundsRange(String name, SegmentSpec s, long fileSize) {
         // Given — a spec one step past a bound (see provider)
+        List<SegmentSpec> specs = List.of(s);
 
         // When / Then — the smallest overrun must be rejected as a VortexException, not leak an IOOBE
-        assertThatThrownBy(() -> PostscriptParser.validateSegmentSpecs(List.of(s), fileSize))
+        assertThatThrownBy(() -> PostscriptParser.validateSegmentSpecs(specs, fileSize))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("out of bounds");
     }

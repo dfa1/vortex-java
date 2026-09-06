@@ -89,13 +89,18 @@ class ZipBombSecurityTest {
 
         // When / Then — VortexException before any O(n) allocation. Decode now runs
         // in next() (hasNext() is side-effect free), so the validation throws there.
-        assertThatThrownBy(() -> {
-            try (var reader = VortexReader.open(bomb, registry);
-                 var iter = reader.scan(ScanOptions.all())) {
-                iter.next();
-            }
-        }).isInstanceOf(VortexException.class)
-          .hasMessageContaining("codes");
+        assertThatThrownBy(() -> decodeFirstChunk(bomb, registry))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("codes");
+    }
+
+    /// Opens the file and decodes its first chunk, discarding it. Keeps the assertion lambda
+    /// down to a single call so the decode-time guard is the only thing that can throw.
+    private static void decodeFirstChunk(Path file, ReadRegistry registry) throws Exception {
+        try (var reader = VortexReader.open(file, registry);
+             var iter = reader.scan(ScanOptions.all())) {
+            iter.next();
+        }
     }
 
     // ── File builders ─────────────────────────────────────────────────────────

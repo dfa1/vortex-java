@@ -130,10 +130,11 @@ class ChunkedArrayCombinerTest {
     void rowCountMismatchThrowsVortexException() {
         // Given — the declared totalRows disagrees with the summed chunk lengths.
         ListArray chunk = new ListArray(LIST_OF_INT, 2, ints(10, 11, 12), longs(0L, 2L, 3L));
+        List<Array> chunks = List.of(chunk, chunk);
 
         // When / Then
         try (Arena arena = Arena.ofConfined()) {
-            assertThatThrownBy(() -> ChunkedArrayCombiner.combine(LIST_OF_INT, 99, List.of(chunk, chunk), arena))
+            assertThatThrownBy(() -> ChunkedArrayCombiner.combine(LIST_OF_INT, 99, chunks, arena))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("expected 99");
         }
@@ -147,10 +148,11 @@ class ChunkedArrayCombinerTest {
         DType.Struct struct = new DType.Struct(List.of(), List.of(), false);
         Array chunk0 = ints(1);
         Array chunk1 = ints(2);
+        List<Array> chunks = List.of(chunk0, chunk1);
 
         // When / Then
         try (Arena arena = Arena.ofConfined()) {
-            assertThatThrownBy(() -> ChunkedArrayCombiner.combine(struct, 2, List.of(chunk0, chunk1), arena))
+            assertThatThrownBy(() -> ChunkedArrayCombiner.combine(struct, 2, chunks, arena))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unsupported dtype for chunked layout");
         }

@@ -270,10 +270,11 @@ class ConstantEncodingEncoderTest {
         void encode_mixedValues_throws() {
             // Given
             boolean[] data = {true, false};
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When
             // Then
-            assertThatThrownBy(() -> ENCODER.encode(DType.BOOL, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(DType.BOOL, data, ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("not a constant array");
         }

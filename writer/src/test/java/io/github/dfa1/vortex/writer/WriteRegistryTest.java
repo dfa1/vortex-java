@@ -58,9 +58,10 @@ class WriteRegistryTest {
         // Given — two encoders advertising the same id
         WriteRegistry.Builder sut = WriteRegistry.builder()
                 .register(encoder(EncodingId.VORTEX_PRIMITIVE));
+        EncodingEncoder duplicate = encoder(EncodingId.VORTEX_PRIMITIVE);
 
         // When / Then
-        assertThatThrownBy(() -> sut.register(encoder(EncodingId.VORTEX_PRIMITIVE)))
+        assertThatThrownBy(() -> sut.register(duplicate))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("already registered");
     }
@@ -94,9 +95,10 @@ class WriteRegistryTest {
         // Given
         WriteRegistry.Builder sut = WriteRegistry.builder()
                 .register(extension(ExtensionId.VORTEX_DATE));
+        ExtensionEncoder duplicate = extension(ExtensionId.VORTEX_DATE);
 
         // When / Then
-        assertThatThrownBy(() -> sut.register(extension(ExtensionId.VORTEX_DATE)))
+        assertThatThrownBy(() -> sut.register(duplicate))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("already registered");
     }

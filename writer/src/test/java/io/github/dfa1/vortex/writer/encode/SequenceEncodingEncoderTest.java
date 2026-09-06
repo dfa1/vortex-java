@@ -197,9 +197,10 @@ class SequenceEncodingEncoderTest {
         void encode_nonArithmeticF32_throwsVortexException() {
             // Given
             float[] data = {1.0f, 2.0f, 4.0f};
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DTypes.F32, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.F32, data, ctx))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -207,9 +208,10 @@ class SequenceEncodingEncoderTest {
         void encode_nonArithmeticF64_throwsVortexException() {
             // Given
             double[] data = {1.0, 2.0, 4.0};
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DTypes.F64, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.F64, data, ctx))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -220,9 +222,10 @@ class SequenceEncodingEncoderTest {
                     Float.floatToFloat16(1.0f),
                     Float.floatToFloat16(2.0f),
                     Float.floatToFloat16(4.0f)};
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.F16, data, ctx))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -278,16 +281,20 @@ class SequenceEncodingEncoderTest {
         void encode_nonArithmeticSequence_throwsVortexException() {
             // Given
             long[] data = {1L, 2L, 4L};
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.I64, data, ctx))
                     .isInstanceOf(VortexException.class);
         }
 
         @Test
         void encode_nonPrimitiveDtype_throwsVortexException() {
-            // Given / When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DType.UTF8, new long[]{1L}, EncodeTestHelper.testCtx()))
+            // Given
+            EncodeContext ctx = EncodeTestHelper.testCtx();
+
+            // When / Then
+            assertThatThrownBy(() -> ENCODER.encode(DType.UTF8, new long[]{1L}, ctx))
                     .isInstanceOf(VortexException.class);
         }
     }

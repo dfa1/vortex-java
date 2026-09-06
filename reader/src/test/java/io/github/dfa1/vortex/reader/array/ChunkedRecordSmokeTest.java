@@ -86,9 +86,10 @@ class ChunkedRecordSmokeTest {
             // Given
             LongArray c0 = longs(1L, 2L, 3L);
             LongArray c1 = longs(4L, 5L);
+            List<LongArray> chunks = List.of(c0, c1);
 
             // When / Then
-            assertThatThrownBy(() -> ChunkedLongArray.of(I64, 99, List.of(c0, c1)))
+            assertThatThrownBy(() -> ChunkedLongArray.of(I64, 99, chunks))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -178,9 +179,10 @@ class ChunkedRecordSmokeTest {
         void wrongTypeRejected() {
             // Given — stuffing a LongArray into a Double container is a bug
             LongArray longChunk = longs(1L);
+            List<LongArray> chunks = List.of(longChunk);
 
             // When / Then
-            assertThatThrownBy(() -> ChunkedDoubleArray.of(F64, 1, List.of(longChunk)))
+            assertThatThrownBy(() -> ChunkedDoubleArray.of(F64, 1, chunks))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -284,9 +286,10 @@ class ChunkedRecordSmokeTest {
         void rowMismatchRejected() {
             // Given
             ByteArray c0 = bytes((byte) 1, (byte) 2);
+            List<ByteArray> chunks = List.of(c0);
 
             // When / Then
-            assertThatThrownBy(() -> ChunkedByteArray.of(I8, 99, List.of(c0)))
+            assertThatThrownBy(() -> ChunkedByteArray.of(I8, 99, chunks))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -413,8 +416,11 @@ class ChunkedRecordSmokeTest {
 
         @Test
         void wrongChunkTypeRejected() {
-            // Given / When / Then — a LongArray is not an IntArray chunk
-            assertThatThrownBy(() -> ChunkedIntArray.of(I32, 1, List.of(longs(1L))))
+            // Given — a LongArray is not an IntArray chunk
+            List<LongArray> chunks = List.of(longs(1L));
+
+            // When / Then
+            assertThatThrownBy(() -> ChunkedIntArray.of(I32, 1, chunks))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -427,9 +433,10 @@ class ChunkedRecordSmokeTest {
             assertThat(sut.getInt(4)).isEqualTo(5);
 
             // empty + row mismatch
+            List<IntArray> oneChunk = List.of(ints(1));
             assertThatThrownBy(() -> ChunkedIntArray.of(I32, 0, List.of()))
                     .isInstanceOf(VortexException.class);
-            assertThatThrownBy(() -> ChunkedIntArray.of(I32, 99, List.of(ints(1))))
+            assertThatThrownBy(() -> ChunkedIntArray.of(I32, 99, oneChunk))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -473,7 +480,8 @@ class ChunkedRecordSmokeTest {
             ChunkedDoubleArray sut = ChunkedDoubleArray.of(F64, 5, List.of(nested, doubles(4, 5)));
             assertThat(sut.children()).hasSize(3);
 
-            assertThatThrownBy(() -> ChunkedDoubleArray.of(F64, 99, List.of(doubles(1))))
+            List<DoubleArray> oneChunk = List.of(doubles(1));
+            assertThatThrownBy(() -> ChunkedDoubleArray.of(F64, 99, oneChunk))
                     .isInstanceOf(VortexException.class);
 
             // masked chunk flattens to its inner DoubleArray
@@ -525,9 +533,11 @@ class ChunkedRecordSmokeTest {
             ChunkedFloatArray sut = ChunkedFloatArray.of(F32, 5, List.of(nested, floats(4, 5)));
             assertThat(sut.children()).hasSize(3);
 
-            assertThatThrownBy(() -> ChunkedFloatArray.of(F32, 99, List.of(floats(1))))
+            List<FloatArray> oneFloatChunk = List.of(floats(1));
+            List<LongArray> oneLongChunk = List.of(longs(1L));
+            assertThatThrownBy(() -> ChunkedFloatArray.of(F32, 99, oneFloatChunk))
                     .isInstanceOf(VortexException.class);
-            assertThatThrownBy(() -> ChunkedFloatArray.of(F32, 1, List.of(longs(1L))))
+            assertThatThrownBy(() -> ChunkedFloatArray.of(F32, 1, oneLongChunk))
                     .isInstanceOf(VortexException.class);
 
             // masked chunk flattens to its inner FloatArray

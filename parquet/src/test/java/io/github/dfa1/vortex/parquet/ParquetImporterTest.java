@@ -201,9 +201,10 @@ class ParquetImporterTest {
         void unknownColumn_throws() {
             // Given
             List<SchemaNode> all = List.of(primitiveNode("a", PhysicalType.INT32, RepetitionType.REQUIRED, null));
+            List<String> projection = List.of("missing");
 
             // When / Then
-            assertThatThrownBy(() -> ParquetImporter.filterTopLevel(all, List.of("missing")))
+            assertThatThrownBy(() -> ParquetImporter.filterTopLevel(all, projection))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("missing");
         }
@@ -487,13 +488,14 @@ class ParquetImporterTest {
         }
 
         @Test
-        void projection_unknownColumn_throws(@TempDir Path tmp) {
+        void projection_unknownColumn_throws(@TempDir Path tmp) throws Exception {
             // Given
             Path vortex = tmp.resolve("out.vortex");
+            Path parquet = fixture();
             ImportOptions options = ImportOptions.defaults().withColumns(List.of("does_not_exist"));
 
             // When / Then
-            assertThatThrownBy(() -> ParquetImporter.importParquet(fixture(), vortex, options))
+            assertThatThrownBy(() -> ParquetImporter.importParquet(parquet, vortex, options))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("does_not_exist");
         }

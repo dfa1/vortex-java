@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.MaskedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -137,10 +138,11 @@ class MaskedEncodingEncoderTest {
                 new EncodeNode[]{childNode}, new int[]{1});
         MemorySegment dummyBuf = Arena.ofAuto().allocate(4);
         EncodeResult result = new EncodeResult(maskedNode, List.of(dummyBuf, dummyBuf), null, null);
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY);
 
         // When
         // Then
-        assertThatThrownBy(() -> DECODER.decode(DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY)))
+        assertThatThrownBy(() -> DECODER.decode(ctx))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected 0 buffers");
     }
@@ -153,10 +155,11 @@ class MaskedEncodingEncoderTest {
         EncodeNode maskedNode = new EncodeNode(
                 EncodingId.VORTEX_MASKED, null, new EncodeNode[]{}, new int[]{});
         EncodeResult result = new EncodeResult(maskedNode, List.of(), null, null);
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, 0L, i32Nullable, REGISTRY);
 
         // When
         // Then
-        assertThatThrownBy(() -> DECODER.decode(DecodeTestHelper.toDecodeContext(result, 0L, i32Nullable, REGISTRY)))
+        assertThatThrownBy(() -> DECODER.decode(ctx))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected 1 or 2 children");
     }
@@ -174,10 +177,11 @@ class MaskedEncodingEncoderTest {
                 new EncodeNode[]{childNode, childNode, childNode}, new int[]{});
         List<MemorySegment> bufs = new ArrayList<>(childResult.buffers());
         EncodeResult result = new EncodeResult(maskedNode, bufs, null, null);
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY);
 
         // When
         // Then
-        assertThatThrownBy(() -> DECODER.decode(DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY)))
+        assertThatThrownBy(() -> DECODER.decode(ctx))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected 1 or 2 children");
     }

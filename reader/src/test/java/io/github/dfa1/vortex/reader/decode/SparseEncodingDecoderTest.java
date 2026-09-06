@@ -371,10 +371,11 @@ class SparseEncodingDecoderTest {
             // Given — an i64 sparse array whose values child is `vortex.bool`, not primitive i64
             ArrayNode boolValuesNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{2});
             MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(1), boolBitmap(true)};
+            ArrayNode indicesNode = primitiveNode(1);
 
             // When / Then
             assertThatThrownBy(() -> decode(DType.I64, 1, 0, PType.U32, 5, segs,
-                    primitiveNode(1), boolValuesNode))
+                    indicesNode, boolValuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("patch values child decoded to unexpected type");
         }
@@ -386,10 +387,12 @@ class SparseEncodingDecoderTest {
         void emptyPatchIndicesChild_throws() {
             // Given — metadata claims 2 patches but the patch-indices segment carries no bytes
             MemorySegment[] segs = {f64Fill(0.0), empty(), TestSegments.leDoubles(5.0, 7.0)};
+            ArrayNode indicesNode = primitiveNode(1);
+            ArrayNode valuesNode = primitiveNode(2);
 
             // When / Then
             assertThatThrownBy(() -> decode(DType.F64, 2, 0, PType.U32, 5, segs,
-                    primitiveNode(1), primitiveNode(2)))
+                    indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("empty patch indices child");
         }
@@ -399,10 +402,12 @@ class SparseEncodingDecoderTest {
         void emptyPatchValuesChild_throws() {
             // Given — metadata claims 2 patches but the patch-values segment carries no bytes
             MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(1, 3), empty()};
+            ArrayNode indicesNode = primitiveNode(1);
+            ArrayNode valuesNode = primitiveNode(2);
 
             // When / Then
             assertThatThrownBy(() -> decode(DType.F64, 2, 0, PType.U32, 5, segs,
-                    primitiveNode(1), primitiveNode(2)))
+                    indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("empty patch values child");
         }
@@ -415,10 +420,13 @@ class SparseEncodingDecoderTest {
         void patchCountAboveRowCount_throws() {
             // Given — 5 rows but a patch count of 2^61, with a null fill to reach the bitmap alloc
             MemorySegment[] segs = {nullFill(), TestSegments.leInts(1, 3), TestSegments.leDoubles(5.0, 7.0)};
+            ArrayNode indicesNode = primitiveNode(1);
+            ArrayNode valuesNode = primitiveNode(2);
+            DType nullableF64 = nullableF64();
 
             // When / Then
-            assertThatThrownBy(() -> decode(nullableF64(), 1L << 61, 0, PType.U32, 5, segs,
-                    primitiveNode(1), primitiveNode(2)))
+            assertThatThrownBy(() -> decode(nullableF64, 1L << 61, 0, PType.U32, 5, segs,
+                    indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("patch count");
         }
@@ -429,10 +437,12 @@ class SparseEncodingDecoderTest {
         void negativePatchCount_throws() {
             // Given — a negative declared patch count
             MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(1, 3), TestSegments.leDoubles(5.0, 7.0)};
+            ArrayNode indicesNode = primitiveNode(1);
+            ArrayNode valuesNode = primitiveNode(2);
 
             // When / Then
             assertThatThrownBy(() -> decode(DType.F64, -1, 0, PType.U32, 5, segs,
-                    primitiveNode(1), primitiveNode(2)))
+                    indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("patch count");
         }
@@ -525,10 +535,12 @@ class SparseEncodingDecoderTest {
             // Given — an offset whose sum with the row count overflows
             MemorySegment[] segs = {utf8Fill("zz"), TestSegments.leInts(1), utf8Bytes("b"),
                     TestSegments.leInts(0, 1)};
+            ArrayNode indicesNode = primitiveNode(1);
+            ArrayNode valuesNode = varBinNode(2, 3);
 
             // When / Then
             assertThatThrownBy(() -> decode(DType.UTF8, 1, Long.MAX_VALUE - 2, PType.U32, 6, segs,
-                    primitiveNode(1), varBinNode(2, 3)))
+                    indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("patch offset");
         }
@@ -538,10 +550,12 @@ class SparseEncodingDecoderTest {
             // Given — a negative absolute start position
             MemorySegment[] segs = {utf8Fill("zz"), TestSegments.leInts(1), utf8Bytes("b"),
                     TestSegments.leInts(0, 1)};
+            ArrayNode indicesNode = primitiveNode(1);
+            ArrayNode valuesNode = varBinNode(2, 3);
 
             // When / Then
             assertThatThrownBy(() -> decode(DType.UTF8, 1, -1, PType.U32, 6, segs,
-                    primitiveNode(1), varBinNode(2, 3)))
+                    indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("patch offset");
         }
@@ -556,10 +570,12 @@ class SparseEncodingDecoderTest {
             MemorySegment[] segs = {
                     MemorySegment.ofArray(ProtoScalarValue.ofInt64Value(7L).encode()),
                     TestSegments.leInts(1), utf8Bytes("b"), TestSegments.leInts(0, 1)};
+            ArrayNode indicesNode = primitiveNode(1);
+            ArrayNode valuesNode = varBinNode(2, 3);
 
             // When / Then
             assertThatThrownBy(() -> decode(DType.UTF8, 1, 0, PType.U32, 3, segs,
-                    primitiveNode(1), varBinNode(2, 3)))
+                    indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("no string or bytes value");
         }

@@ -150,11 +150,12 @@ class FusedFilterSumTest {
         // Given columns of different lengths — the kernel must reject them before any scan
         Array filter = longColumn(new long[]{1, 2, 3}, null);
         Array agg = longColumn(new long[]{1, 2}, null);
+        Predicate predicate = new Predicate.Gt(0L);
 
         // When the fused kernel is asked to fold misaligned columns
         // Then it fails fast instead of reading out of bounds
         assertThatExceptionOfType(VortexException.class)
-                .isThrownBy(() -> Compute.filteredSum(filter, new Predicate.Gt(0L), agg))
+                .isThrownBy(() -> Compute.filteredSum(filter, predicate, agg))
                 .withMessageContaining("filter length");
     }
 

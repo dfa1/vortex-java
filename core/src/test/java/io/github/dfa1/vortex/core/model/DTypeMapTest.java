@@ -54,8 +54,10 @@ class DTypeMapTest {
             // Given a nullable key type — rejected because this constructor also runs while
             // parsing an untrusted file's DType blob, where a raw exception would breach the
             // security contract
+            DType nullableKey = DType.UTF8.asNullable();
+
             // When / Then
-            assertThatThrownBy(() -> new DType.Map(DType.UTF8.asNullable(), DType.I64, false, false))
+            assertThatThrownBy(() -> new DType.Map(nullableKey, DType.I64, false, false))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("map key dtype must be non-nullable");
         }

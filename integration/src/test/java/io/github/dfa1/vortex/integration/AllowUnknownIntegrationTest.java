@@ -71,6 +71,14 @@ class AllowUnknownIntegrationTest {
         }
     }
 
+    /// Scans the whole file, discarding chunks — used to trigger decode errors from a single call.
+    private static void scanAll(Path file, ReadRegistry registry) throws IOException {
+        try (VortexReader vf = VortexReader.open(file, registry);
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+            iter.forEachRemaining(_ -> {});
+        }
+    }
+
     @Test
     void allowUnknown_emptyRegistry_allColumnsReturnUnknownArray(@TempDir Path tmp) throws IOException {
         // Given — JNI writes a real file; empty registry has no decoders
@@ -105,14 +113,11 @@ class AllowUnknownIntegrationTest {
         // Given
         Path file = tmp.resolve("test.vtx");
         writeJni(file, 1_000);
+        ReadRegistry emptyRegistry = ReadRegistry.empty();
 
         // When / Then — strict mode throws rather than returning UnknownArray
-        assertThatThrownBy(() -> {
-            try (VortexReader vf = VortexReader.open(file, ReadRegistry.empty());
-                 var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
-                iter.forEachRemaining(_ -> {});
-            }
-        }).isInstanceOf(VortexException.class);
+        assertThatThrownBy(() -> scanAll(file, emptyRegistry))
+                .isInstanceOf(VortexException.class);
     }
 
     @Test

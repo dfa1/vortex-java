@@ -144,9 +144,10 @@ class TimeExtensionEncoderTest {
     void encodeAll_nullInNonNullableColumn_throws() {
         // Given a null in a non-nullable column
         DType.Extension dtype = SUT.dtype(TimeUnit.Milliseconds, false);
+        List<LocalTime> values = Arrays.asList(T, null);
 
         // When / Then
-        assertThatThrownBy(() -> SUT.encodeAll(dtype, Arrays.asList(T, null)))
+        assertThatThrownBy(() -> SUT.encodeAll(dtype, values))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("non-nullable");
     }
@@ -157,9 +158,10 @@ class TimeExtensionEncoderTest {
         MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) TimeUnit.Days.ordinal()});
         DType.Extension dtype = new DType.Extension(
                 ExtensionId.VORTEX_TIME.id(), DType.I32, meta, false);
+        List<LocalTime> values = List.of(T);
 
         // When / Then
-        assertThatThrownBy(() -> SUT.encodeAll(dtype, List.of(T)))
+        assertThatThrownBy(() -> SUT.encodeAll(dtype, values))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("Days");
     }

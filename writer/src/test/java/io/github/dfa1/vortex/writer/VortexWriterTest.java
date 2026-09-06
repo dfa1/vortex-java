@@ -109,10 +109,7 @@ class VortexWriterTest {
         // measured 2026-07-04). With fieldNames typed as ColumnName the schema can no longer even
         // be constructed, so the footgun is rejected before it can reach the writer.
         // When / Then
-        assertThatThrownBy(() -> new DType.Struct(
-                List.of(ColumnName.of("col\u0000hidden")),
-                List.of(new DType.Primitive(PType.I64, false)),
-                false))
+        assertThatThrownBy(() -> singleI64FieldSchema("col\u0000hidden"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("U+0000");
     }
@@ -123,11 +120,18 @@ class VortexWriterTest {
         // Given a control-character field name — rejected by ColumnName on both read and write.
         // Blank names are wire-legal and accepted; only control chars break downstream consumers.
         // When / Then
-        assertThatThrownBy(() -> new DType.Struct(
+        assertThatThrownBy(() -> singleI64FieldSchema(name))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /// Builds the one-column i64 schema whose field name is under test. The rejection can come
+    /// from `ColumnName` or from the struct constructor, so both stay inside the single call the
+    /// assertion invokes.
+    private static DType.Struct singleI64FieldSchema(String name) {
+        return new DType.Struct(
                 List.of(ColumnName.of(name)),
                 List.of(new DType.Primitive(PType.I64, false)),
-                false))
-                .isInstanceOf(IllegalArgumentException.class);
+                false);
     }
 
     // ── writeChunk validation ─────────────────────────────────────────────────

@@ -93,9 +93,10 @@ class StructLayoutDecoderTest {
         // Given — a struct layout handed a primitive dtype: a corrupt file could pair them
         Layout layout = new Layout(LayoutId.STRUCT, 1L, null, List.of(flat(0)), List.of());
         LayoutDecodeContext ctx = mock(LayoutDecodeContext.class);
+        DType dtype = intType();
 
         // When / Then — fail fast rather than reassemble a struct from a non-struct type
-        assertThatThrownBy(() -> sut.decode(ctx, layout, intType()))
+        assertThatThrownBy(() -> sut.decode(ctx, layout, dtype))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("requires a struct dtype");
     }

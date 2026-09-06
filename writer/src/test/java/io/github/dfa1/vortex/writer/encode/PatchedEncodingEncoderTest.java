@@ -147,9 +147,10 @@ class PatchedEncodingEncoderTest {
         void encode_throws_onUnsupportedPType() {
             // Given: a primitive float dtype slips past the instanceof check but has no integer mapping
             double[] data = {1.0, 2.0, 3.0};
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> SUT.encode(DTypes.F64, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> SUT.encode(DTypes.F64, data, ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unsupported ptype");
         }
@@ -158,9 +159,10 @@ class PatchedEncodingEncoderTest {
         void encode_throws_onNonPrimitiveDtype() {
             // Given
             long[] data = {1L, 2L, 3L};
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then: non-primitive dtype is a programmer error on the encode path
-            assertThatThrownBy(() -> SUT.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> SUT.encode(DTypes.UTF8, data, ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("expected primitive");
         }

@@ -706,9 +706,10 @@ class DictEncodingDecoderTest {
             // `% valuesCap`, so an empty pool used to die with ArithmeticException
             // (values_len stays 1 so the metadata is not elided to an empty proto payload)
             MemorySegment values = MemorySegment.ofArray(new byte[0]);
+            MemorySegment codes = u8Codes(0, 0);
 
             // When / Then
-            assertThatThrownBy(() -> decodeProtoSegments(DType.I32, PType.U8, u8Codes(0, 0), values, 1, 2))
+            assertThatThrownBy(() -> decodeProtoSegments(DType.I32, PType.U8, codes, values, 1, 2))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("empty dict child");
         }
@@ -717,9 +718,10 @@ class DictEncodingDecoderTest {
         void emptyCodesChild_throws() {
             // Given a zero-length codes child, which makes the `% codesCap` wrap divide by zero
             MemorySegment codes = MemorySegment.ofArray(new byte[0]);
+            MemorySegment values = TestSegments.leInts(1, 2);
 
             // When / Then
-            assertThatThrownBy(() -> decodeProtoSegments(DType.I32, PType.U8, codes, TestSegments.leInts(1, 2), 2, 2))
+            assertThatThrownBy(() -> decodeProtoSegments(DType.I32, PType.U8, codes, values, 2, 2))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("empty dict child");
         }

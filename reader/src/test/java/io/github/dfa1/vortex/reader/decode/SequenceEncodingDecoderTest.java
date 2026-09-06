@@ -133,9 +133,12 @@ class SequenceEncodingDecoderTest {
 
     @Test
     void nonPrimitiveDtype_throwsVortexException() {
-        // Given / When / Then
-        assertThatThrownBy(() -> decode(DType.UTF8,
-                ProtoScalarValue.ofInt64Value(0L), ProtoScalarValue.ofInt64Value(1L), 5))
+        // Given
+        ProtoScalarValue base = ProtoScalarValue.ofInt64Value(0L);
+        ProtoScalarValue step = ProtoScalarValue.ofInt64Value(1L);
+
+        // When / Then
+        assertThatThrownBy(() -> decode(DType.UTF8, base, step, 5))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected primitive dtype");
     }

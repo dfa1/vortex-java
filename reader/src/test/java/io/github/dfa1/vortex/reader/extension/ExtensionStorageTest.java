@@ -78,13 +78,21 @@ class ExtensionStorageTest {
 
         @Test
         void nullMetadata_throws() {
-            assertThatThrownBy(() -> ExtensionStorage.readUnit(ext(null)))
+            // Given
+            DType.Extension ext = ext(null);
+
+            // When / Then
+            assertThatThrownBy(() -> ExtensionStorage.readUnit(ext))
                     .isInstanceOf(VortexException.class).hasMessageContaining("missing TimeUnit");
         }
 
         @Test
         void emptyMetadata_throws() {
-            assertThatThrownBy(() -> ExtensionStorage.readUnit(ext(MemorySegment.ofArray(new byte[0]))))
+            // Given
+            DType.Extension ext = ext(MemorySegment.ofArray(new byte[0]));
+
+            // When / Then
+            assertThatThrownBy(() -> ExtensionStorage.readUnit(ext))
                     .isInstanceOf(VortexException.class).hasMessageContaining("missing TimeUnit");
         }
 

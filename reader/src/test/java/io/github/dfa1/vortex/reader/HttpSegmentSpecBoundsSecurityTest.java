@@ -47,9 +47,10 @@ class HttpSegmentSpecBoundsSecurityTest {
         byte[] file = buildFileWithOobSegment();
         doReturn(response206("bytes 0-" + (file.length - 1) + "/" + file.length, file))
                 .when(client).send(any(), any());
+        ReadRegistry emptyRegistry = ReadRegistry.empty();
 
         // When / Then
-        assertThatThrownBy(() -> VortexHttpReader.open(URI, ReadRegistry.empty(), client))
+        assertThatThrownBy(() -> VortexHttpReader.open(URI, emptyRegistry, client))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("out of bounds");
     }

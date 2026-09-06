@@ -33,9 +33,10 @@ class VarBinChunkedArrayTest {
             try (Arena arena = Arena.ofConfined()) {
                 // Given
                 VarBinArray c0 = stringChunk(arena, "a", "b");
+                List<VarBinArray> chunks = List.of(c0);
 
                 // When / Then
-                assertThatThrownBy(() -> VarBinChunkedArray.of(UTF8, 99, List.of(c0)))
+                assertThatThrownBy(() -> VarBinChunkedArray.of(UTF8, 99, chunks))
                         .isInstanceOf(VortexException.class);
             }
         }
@@ -48,9 +49,10 @@ class VarBinChunkedArrayTest {
                 seg.setAtIndex(ValueLayout.JAVA_LONG, 0, 42L);
                 LongArray notVarBin = new MaterializedLongArray(
                         DType.I64, 1, seg.asReadOnly());
+                List<LongArray> chunks = List.of(notVarBin);
 
                 // When / Then
-                assertThatThrownBy(() -> VarBinChunkedArray.of(UTF8, 1, List.of(notVarBin)))
+                assertThatThrownBy(() -> VarBinChunkedArray.of(UTF8, 1, chunks))
                         .isInstanceOf(VortexException.class);
             }
         }
@@ -89,10 +91,11 @@ class VarBinChunkedArrayTest {
         void nullChunkWithoutAllocatorRejected() {
             // Given — a NullArray chunk but no allocator to materialize it
             NullArray nullChunk = new NullArray(UTF8, 2);
+            List<NullArray> chunks = List.of(nullChunk);
 
             // When / Then
             assertThatThrownBy(
-                    () -> VarBinChunkedArray.of(UTF8, 2, List.of(nullChunk), null))
+                    () -> VarBinChunkedArray.of(UTF8, 2, chunks, null))
                     .isInstanceOf(VortexException.class);
         }
 

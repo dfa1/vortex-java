@@ -82,9 +82,10 @@ class ChunkedEncodingDecoderTest {
         void zeroChunksWithNonZeroRowCount_throws() {
             // Given — only the offsets child, but 10 rows claimed
             MemorySegment[] segs = {TestSegments.leLongs(0)};
+            ArrayNode offsetsChild = primitiveNode(0);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 10, segs, primitiveNode(0)))
+            assertThatThrownBy(() -> decode(DType.I64, 10, segs, offsetsChild))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("no chunks for 10 row(s)");
         }
@@ -95,9 +96,11 @@ class ChunkedEncodingDecoderTest {
         void emptyOffsetsChild_throws() {
             // Given — a zero-byte offsets segment in front of one real chunk
             MemorySegment[] segs = {MemorySegment.ofArray(new byte[0]), TestSegments.leLongs(1, 2, 3)};
+            ArrayNode offsetsChild = primitiveNode(0);
+            ArrayNode chunkChild = primitiveNode(1);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 3, segs, primitiveNode(0), primitiveNode(1)))
+            assertThatThrownBy(() -> decode(DType.I64, 3, segs, offsetsChild, chunkChild))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("decoded child segment is empty");
         }
@@ -115,10 +118,13 @@ class ChunkedEncodingDecoderTest {
                     TestSegments.leLongs(1, 2, 3, 4, 5),
                     TestSegments.leLongs(9, 9)
             };
+            ArrayNode offsetsChild = primitiveNode(0);
+            ArrayNode firstChunkChild = primitiveNode(1);
+            ArrayNode secondChunkChild = primitiveNode(2);
 
             // When / Then
             assertThatThrownBy(() -> decode(DType.I64, 3, segs,
-                    primitiveNode(0), primitiveNode(1), primitiveNode(2)))
+                    offsetsChild, firstChunkChild, secondChunkChild))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("non-decreasing");
         }
@@ -129,9 +135,11 @@ class ChunkedEncodingDecoderTest {
         void negativeFirstOffset_throws() {
             // Given — a first offset of -1
             MemorySegment[] segs = {TestSegments.leLongs(-1, 2), TestSegments.leLongs(1, 2, 3)};
+            ArrayNode offsetsChild = primitiveNode(0);
+            ArrayNode chunkChild = primitiveNode(1);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 3, segs, primitiveNode(0), primitiveNode(1)))
+            assertThatThrownBy(() -> decode(DType.I64, 3, segs, offsetsChild, chunkChild))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("non-decreasing");
         }

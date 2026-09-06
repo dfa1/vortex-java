@@ -136,10 +136,11 @@ class VortexReaderDecodeChunkTest {
     void decodeChunk_negativeIndex_throwsVortexException(@TempDir Path tmp) throws Exception {
         // Given
         Path file = writeMultiChunkFile(tmp);
+        List<String> columns = List.of("a");
         try (var reader = VortexReader.open(file, registry())) {
 
             // When / Then
-            assertThatThrownBy(() -> reader.decodeChunk(-1, List.of("a")))
+            assertThatThrownBy(() -> reader.decodeChunk(-1, columns))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("out of bounds");
         }
@@ -149,11 +150,12 @@ class VortexReaderDecodeChunkTest {
     void decodeChunk_indexAtChunkCount_throwsVortexException(@TempDir Path tmp) throws Exception {
         // Given — chunkCount() is one past the last valid index
         Path file = writeMultiChunkFile(tmp);
+        List<String> columns = List.of("a");
         try (var reader = VortexReader.open(file, registry())) {
             int oob = reader.chunkCount();
 
             // When / Then
-            assertThatThrownBy(() -> reader.decodeChunk(oob, List.of("a")))
+            assertThatThrownBy(() -> reader.decodeChunk(oob, columns))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("out of bounds");
         }
@@ -163,10 +165,11 @@ class VortexReaderDecodeChunkTest {
     void decodeChunk_unknownColumn_throwsVortexException(@TempDir Path tmp) throws Exception {
         // Given
         Path file = writeMultiChunkFile(tmp);
+        List<String> columns = List.of("nope");
         try (var reader = VortexReader.open(file, registry())) {
 
             // When / Then
-            assertThatThrownBy(() -> reader.decodeChunk(0, List.of("nope")))
+            assertThatThrownBy(() -> reader.decodeChunk(0, columns))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unknown column");
         }

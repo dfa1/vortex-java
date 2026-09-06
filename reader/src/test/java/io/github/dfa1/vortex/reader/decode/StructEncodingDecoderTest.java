@@ -67,10 +67,12 @@ class StructEncodingDecoderTest {
         void fewerChildrenThanFields_throws() {
             // Given — a three-field struct dtype but only two children in the array node
             MemorySegment[] segs = {TestSegments.leLongs(1, 2), TestSegments.leLongs(30, 40)};
+            DType.Struct dtype = structOf("a", "b", "c");
+            ArrayNode firstField = primitiveNode(0);
+            ArrayNode secondField = primitiveNode(1);
 
             // When / Then
-            assertThatThrownBy(() -> decode(structOf("a", "b", "c"), 2, segs,
-                    primitiveNode(0), primitiveNode(1)))
+            assertThatThrownBy(() -> decode(dtype, 2, segs, firstField, secondField))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("children for struct dtype");
         }
@@ -81,10 +83,11 @@ class StructEncodingDecoderTest {
         void moreChildrenThanFieldsPlusValidity_throws() {
             // Given — a one-field struct dtype with three children
             MemorySegment[] segs = {TestSegments.leLongs(1, 2)};
+            DType.Struct dtype = structOf("a");
+            ArrayNode child = primitiveNode(0);
 
             // When / Then
-            assertThatThrownBy(() -> decode(structOf("a"), 2, segs,
-                    primitiveNode(0), primitiveNode(0), primitiveNode(0)))
+            assertThatThrownBy(() -> decode(dtype, 2, segs, child, child, child))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("children for struct dtype");
         }
@@ -95,10 +98,10 @@ class StructEncodingDecoderTest {
         void scalarWrapperWithThreeChildren_throws() {
             // Given — an i64 dtype (not a struct) under a struct-encoded node with three children
             MemorySegment[] segs = {TestSegments.leLongs(1, 2)};
+            ArrayNode child = primitiveNode(0);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 2, segs,
-                    primitiveNode(0), primitiveNode(0), primitiveNode(0)))
+            assertThatThrownBy(() -> decode(DType.I64, 2, segs, child, child, child))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unexpected child count 3");
         }
@@ -112,9 +115,10 @@ class StructEncodingDecoderTest {
             // the stub decoder reproduces that without depending on any one of them.
             MemorySegment[] segs = {TestSegments.leLongs(1, 2), TestSegments.leLongs(30, 40)};
             ArrayNode notBool = new ArrayNode(NotBoolDecoder.ID, null, new ArrayNode[0], new int[0]);
+            ArrayNode valuesNode = primitiveNode(1);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 2, segs, notBool, primitiveNode(1)))
+            assertThatThrownBy(() -> decode(DType.I64, 2, segs, notBool, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("validity decoded to unexpected type");
         }
@@ -126,9 +130,11 @@ class StructEncodingDecoderTest {
             // Given — a one-field struct with a leading validity child that decodes to i64
             MemorySegment[] segs = {TestSegments.leLongs(1, 2)};
             ArrayNode notBool = new ArrayNode(NotBoolDecoder.ID, null, new ArrayNode[0], new int[0]);
+            DType.Struct dtype = structOf("a");
+            ArrayNode fieldNode = primitiveNode(0);
 
             // When / Then
-            assertThatThrownBy(() -> decode(structOf("a"), 2, segs, notBool, primitiveNode(0)))
+            assertThatThrownBy(() -> decode(dtype, 2, segs, notBool, fieldNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("validity decoded to unexpected type");
         }

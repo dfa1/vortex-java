@@ -268,15 +268,20 @@ class ZstdEncodingEncoderTest {
             // reject it rather than silently emit a nullable layout the dtype does not declare.
             String[] data = {"a", null, "c"};
             DType utf8 = new DType.Utf8(false);
+            EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(utf8, data, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(utf8, data, ctx))
                     .isInstanceOf(VortexException.class);
         }
 
         @Test
         void encode_unsupportedDtype_throwsVortexException() {
-            assertThatThrownBy(() -> ENCODER.encode(DType.NULL, null, EncodeTestHelper.testCtx()))
+            // Given
+            EncodeContext ctx = EncodeTestHelper.testCtx();
+
+            // When / Then
+            assertThatThrownBy(() -> ENCODER.encode(DType.NULL, null, ctx))
                     .isInstanceOf(VortexException.class);
         }
     }

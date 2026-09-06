@@ -223,36 +223,44 @@ class PredicateTest {
         @Test
         void andRejectsNullLeft() {
             // Given a null left operand
+            Predicate right = new Predicate.IsNull();
+
             // When constructing a conjunction
             // Then it is rejected
-            assertThatThrownBy(() -> new Predicate.And(null, new Predicate.IsNull()))
+            assertThatThrownBy(() -> new Predicate.And(null, right))
                     .isInstanceOf(NullPointerException.class);
         }
 
         @Test
         void andRejectsNullRight() {
             // Given a null right operand
+            Predicate left = new Predicate.IsNull();
+
             // When constructing a conjunction
             // Then it is rejected
-            assertThatThrownBy(() -> new Predicate.And(new Predicate.IsNull(), null))
+            assertThatThrownBy(() -> new Predicate.And(left, null))
                     .isInstanceOf(NullPointerException.class);
         }
 
         @Test
         void orRejectsNullLeft() {
             // Given a null left operand
+            Predicate right = new Predicate.IsNull();
+
             // When constructing a disjunction
             // Then it is rejected
-            assertThatThrownBy(() -> new Predicate.Or(null, new Predicate.IsNull()))
+            assertThatThrownBy(() -> new Predicate.Or(null, right))
                     .isInstanceOf(NullPointerException.class);
         }
 
         @Test
         void orRejectsNullRight() {
             // Given a null right operand
+            Predicate left = new Predicate.IsNull();
+
             // When constructing a disjunction
             // Then it is rejected
-            assertThatThrownBy(() -> new Predicate.Or(new Predicate.IsNull(), null))
+            assertThatThrownBy(() -> new Predicate.Or(left, null))
                     .isInstanceOf(NullPointerException.class);
         }
     }

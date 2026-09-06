@@ -52,12 +52,13 @@ class WriterEditionGuardTest {
         // it, bypassing CascadingCompressor's exclusion-aware competition entirely
         Path file = tmp.resolve("delta_guarded.vtx");
         long[] data = {100L, 105L, 110L, 115L, 120L};
+        Map<ColumnName, Object> chunk = Map.of(ColumnName.of("ts"), data);
 
         // When / Then
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
-            assertThatThrownBy(() -> sut.writeChunk(Map.of(ColumnName.of("ts"), data)))
+            assertThatThrownBy(() -> sut.writeChunk(chunk))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("fastlanes.delta")
                     .hasMessageContaining("core2026.08.0")

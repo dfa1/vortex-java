@@ -95,9 +95,10 @@ class DecimalEncodingEncoderTest {
         // Given
         MemorySegment input = Arena.ofAuto().allocate(7);
         DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
+        EncodeContext ctx = EncodeTestHelper.testCtx();
 
         // When / Then
-        assertThatThrownBy(() -> ENCODER.encode(dtype, input, EncodeTestHelper.testCtx()))
+        assertThatThrownBy(() -> ENCODER.encode(dtype, input, ctx))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("not multiple of byteWidth");
     }

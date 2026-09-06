@@ -134,9 +134,10 @@ class ParserTest {
         void rejectsUnterminatedTable() {
             // Given — a table missing its closing brace runs into EOF.
             String src = "namespace x; table T { a: int;";
+            Parser parser = new Parser(new Lexer(src).tokenize());
 
             // When + Then
-            assertThatThrownBy(() -> new Parser(new Lexer(src).tokenize()).parseFile())
+            assertThatThrownBy(parser::parseFile)
                     .isInstanceOf(FbsParseException.class);
         }
     }

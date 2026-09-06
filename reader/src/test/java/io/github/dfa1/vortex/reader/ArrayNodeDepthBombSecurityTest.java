@@ -41,9 +41,10 @@ class ArrayNodeDepthBombSecurityTest {
             // which would wrongly reject this legal max-depth tree with the depth message.
             byte[] fb = deeplyNestedArrayFlatBuffer(SerializedArrayDecoder.MAX_ARRAY_TREE_DEPTH);
             MemorySegment seg = wrapAsSegment(fb, arena);
+            List<EncodingId> encodings = List.of(EncodingId.parse("vortex.flat"));
 
             // When / Then
-            assertThatThrownBy(() -> sut.decode(seg, List.of(EncodingId.parse("vortex.flat")), DTYPE, 1, arena))
+            assertThatThrownBy(() -> sut.decode(seg, encodings, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("no decoder");
         }
@@ -56,9 +57,10 @@ class ArrayNodeDepthBombSecurityTest {
             // before any StackOverflowError can escape.
             byte[] fb = deeplyNestedArrayFlatBuffer(SerializedArrayDecoder.MAX_ARRAY_TREE_DEPTH + 1);
             MemorySegment seg = wrapAsSegment(fb, arena);
+            List<EncodingId> encodings = List.of(EncodingId.parse("vortex.flat"));
 
             // When / Then — must surface as VortexException, not StackOverflowError
-            assertThatThrownBy(() -> sut.decode(seg, List.of(EncodingId.parse("vortex.flat")), DTYPE, 1, arena))
+            assertThatThrownBy(() -> sut.decode(seg, encodings, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("depth");
         }

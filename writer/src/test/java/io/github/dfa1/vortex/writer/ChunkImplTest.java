@@ -36,9 +36,10 @@ class ChunkImplTest {
         void unknownColumnRejected() {
             // Given
             ChunkImpl sut = new ChunkImpl(schema(prim(PType.I32, false)));
+            ColumnName unknown = ColumnName.of("nope");
 
             // When / Then
-            assertThatThrownBy(() -> sut.put(ColumnName.of("nope"), new int[]{1}))
+            assertThatThrownBy(() -> sut.put(unknown, new int[]{1}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("unknown column");
         }
 
@@ -46,10 +47,11 @@ class ChunkImplTest {
         void duplicatePutRejected() {
             // Given
             ChunkImpl sut = new ChunkImpl(schema(prim(PType.I32, false)));
-            sut.put(ColumnName.of("c"), new int[]{1});
+            ColumnName column = ColumnName.of("c");
+            sut.put(column, new int[]{1});
 
             // When / Then
-            assertThatThrownBy(() -> sut.put(ColumnName.of("c"), new int[]{2}))
+            assertThatThrownBy(() -> sut.put(column, new int[]{2}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("duplicate");
         }
 
@@ -93,8 +95,11 @@ class ChunkImplTest {
 
         @Test
         void nullValueRejected() {
+            // Given
+            DType dtype = prim(PType.I32, false);
+
             // When / Then
-            assertThatThrownBy(() -> putGet(prim(PType.I32, false), null))
+            assertThatThrownBy(() -> putGet(dtype, null))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("null array");
         }
 
@@ -158,7 +163,8 @@ class ChunkImplTest {
         @Test
         void wrongTypeRejectedForEveryPType() {
             for (PType p : List.of(PType.I8, PType.I16, PType.I32, PType.I64, PType.F32, PType.F64, PType.F16)) {
-                assertThatThrownBy(() -> putGet(prim(p, false), "not an array"))
+                DType dtype = prim(p, false);
+                assertThatThrownBy(() -> putGet(dtype, "not an array"))
                         .as("ptype %s", p)
                         .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("expects");
             }

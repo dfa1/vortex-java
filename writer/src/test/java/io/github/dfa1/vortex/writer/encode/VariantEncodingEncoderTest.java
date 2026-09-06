@@ -243,9 +243,13 @@ class VariantEncodingEncoderTest {
 
         @Test
         void halfSpecifiedShredded_throws() {
-            assertThatThrownBy(() -> VariantData.shredded(List.of(i32Scalar(1L)), null, null))
+            // Given
+            List<ProtoScalar> values = List.of(i32Scalar(1L));
+
+            // When / Then
+            assertThatThrownBy(() -> VariantData.shredded(values, null, null))
                     .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> new VariantData(List.of(i32Scalar(1L)), new int[]{1}, null))
+            assertThatThrownBy(() -> new VariantData(values, new int[]{1}, null))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("both set or both null");
         }
@@ -256,16 +260,24 @@ class VariantEncodingEncoderTest {
 
         @Test
         void wrongDtype_throws() {
+            // Given
             VariantData data = VariantData.constant(1, i32Scalar(1L));
-            assertThatThrownBy(() -> SUT.encode(
-                    new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I64, false), data, EncodeTestHelper.testCtx()))
+            DType i64 = new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I64, false);
+            EncodeContext ctx = EncodeTestHelper.testCtx();
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.encode(i64, data, ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("Variant dtype");
         }
 
         @Test
         void wrongDataType_throws() {
-            assertThatThrownBy(() -> SUT.encode(VARIANT, new long[]{1L}, EncodeTestHelper.testCtx()))
+            // Given
+            EncodeContext ctx = EncodeTestHelper.testCtx();
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.encode(VARIANT, new long[]{1L}, ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("VariantData");
         }
@@ -283,7 +295,11 @@ class VariantEncodingEncoderTest {
 
         @Test
         void constant_nonPositiveLength_throws() {
-            assertThatThrownBy(() -> VariantData.constant(0, i32Scalar(1L)))
+            // Given
+            ProtoScalar value = i32Scalar(1L);
+
+            // When / Then
+            assertThatThrownBy(() -> VariantData.constant(0, value))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("length");
         }
