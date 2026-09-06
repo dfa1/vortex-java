@@ -152,7 +152,7 @@ class RaincloudConformanceIntegrationTest {
             try {
                 oracleThread.join();
                 vortexThread.join();
-            } catch (InterruptedException ie) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
 
@@ -239,7 +239,7 @@ class RaincloudConformanceIntegrationTest {
         try {
             try {
                 CsvExporter.exportCsv(vortex, vortexCsv, ExportOptions.defaults());
-            } catch (VortexException | IndexOutOfBoundsException e) {
+            } catch (VortexException | IndexOutOfBoundsException _) {
                 return; // gap still reproduces as a thrown exception
             }
 
@@ -252,7 +252,7 @@ class RaincloudConformanceIntegrationTest {
                 boolean stillMismatches = false;
                 try {
                     assertFilesMatch(vortexCsv, oracleCsv);
-                } catch (AssertionError ignored) {
+                } catch (AssertionError _) {
                     stillMismatches = true;
                 }
                 assertThat(stillMismatches)

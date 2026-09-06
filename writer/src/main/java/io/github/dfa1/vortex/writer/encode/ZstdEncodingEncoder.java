@@ -41,7 +41,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         try {
             Class.forName(className, false, ZstdEncodingEncoder.class.getClassLoader());
             return true;
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException _) {
             return false;
         }
     }

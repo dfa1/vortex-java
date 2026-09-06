@@ -31,7 +31,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         try {
             return CascadeStep.terminal(encode(dtype, data, ctx));
-        } catch (VortexException e) {
+        } catch (VortexException _) {
             return CascadeStep.notApplicable();
         }
     }

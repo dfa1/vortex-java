@@ -341,7 +341,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 for (long v : a) {
                     try {
                         s = Math.addExact(s, v);
-                    } catch (ArithmeticException overflow) {
+                    } catch (ArithmeticException _) {
                         yield null;
                     }
                 }

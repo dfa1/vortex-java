@@ -229,7 +229,7 @@ public final class Parser {
         Token t = expect(Token.Kind.INT_LITERAL);
         try {
             return Integer.parseInt(t.text());
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             throw new FbsParseException("invalid integer '" + t.text() + "' at line " + t.line());
         }
     }

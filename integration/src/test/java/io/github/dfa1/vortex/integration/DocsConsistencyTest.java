@@ -192,7 +192,7 @@ class DocsConsistencyTest {
             try {
                 Class.forName(candidate, false, DocsConsistencyTest.class.getClassLoader());
                 return true;
-            } catch (ClassNotFoundException e) {
+            } catch (ClassNotFoundException _) {
                 int lastDot = candidate.lastIndexOf('.');
                 if (lastDot < 0 || !Character.isUpperCase(candidate.charAt(lastDot + 1))) {
                     // also accept a class-like segment that is actually a package prefix mention
@@ -271,7 +271,7 @@ class DocsConsistencyTest {
                 toVisit.addAll(List.of(c.getDeclaredClasses()));
             }
             return false;
-        } catch (ClassNotFoundException | LinkageError e) {
+        } catch (ClassNotFoundException | LinkageError _) {
             return false;
         }
     }
