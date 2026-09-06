@@ -200,8 +200,8 @@ class ImportCommandTest {
             // Then — this is the non-POSIX equivalent of the POSIX branch's `rw-------`
             // FileAttribute; it must not lock the owner itself out of the file it just created
             assertThat(result).isEqualTo(file);
-            assertThat(file.toFile().canRead()).isTrue();
-            assertThat(file.toFile().canWrite()).isTrue();
+            assertThat(file.toFile()).canRead();
+            assertThat(file.toFile()).canWrite();
         }
     }
 }
