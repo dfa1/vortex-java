@@ -11,7 +11,7 @@ class AnsiTest {
     @Test
     void escConstant_isAsciiEscapeByte() {
         // Given / When / Then — every CSI sequence relies on this being 0x1B
-        assertThat(Ansi.ESC).isEqualTo(String.valueOf(ESC));
+        assertThat(String.valueOf(ESC)).isEqualTo(Ansi.ESC);
     }
 
     @Test
@@ -33,10 +33,10 @@ class AnsiTest {
         String csi = ESC + "[";
         assertThat(Ansi.CLEAR_SCREEN).startsWith(csi).endsWith("2J");
         assertThat(Ansi.CURSOR_HOME).startsWith(csi).endsWith("H");
-        assertThat(Ansi.HIDE_CURSOR).isEqualTo(csi + "?25l");
-        assertThat(Ansi.SHOW_CURSOR).isEqualTo(csi + "?25h");
-        assertThat(Ansi.ENTER_ALT_SCREEN).isEqualTo(csi + "?1049h");
-        assertThat(Ansi.EXIT_ALT_SCREEN).isEqualTo(csi + "?1049l");
-        assertThat(Ansi.RESET).isEqualTo(csi + "0m");
+        assertThat(csi + "?25l").isEqualTo(Ansi.HIDE_CURSOR);
+        assertThat(csi + "?25h").isEqualTo(Ansi.SHOW_CURSOR);
+        assertThat(csi + "?1049h").isEqualTo(Ansi.ENTER_ALT_SCREEN);
+        assertThat(csi + "?1049l").isEqualTo(Ansi.EXIT_ALT_SCREEN);
+        assertThat(csi + "0m").isEqualTo(Ansi.RESET);
     }
 }

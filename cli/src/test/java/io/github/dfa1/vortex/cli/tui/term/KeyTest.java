@@ -32,6 +32,9 @@ class KeyTest {
     class SingletonEnums {
 
         @Test
+        // S3415 false positive: isInstanceOf's 2nd arg is a Class literal, not a value that
+        // has an "order" to swap with the 1st — swapping would not even compile.
+        @SuppressWarnings("java:S3415")
         void allArrowsAreSealedKeyVariants() {
             // Given / When / Then — every arrow is an instance of the sealed Key interface.
             // Guards against accidentally moving a variant out of the permitted set.
