@@ -255,7 +255,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         List<ColumnName> names = sd.fieldNames();
         List<DType> types = sd.fieldTypes();
         int n = names.size();
-        var map = new LinkedHashMap<ColumnName, Chunk.Column>(n);
+        var map = LinkedHashMap.<ColumnName, Chunk.Column>newLinkedHashMap(n);
         for (int i = 0; i < n; i++) {
             map.put(names.get(i), new Chunk.Column(sa.field(i), types.get(i)));
         }
@@ -266,7 +266,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     private static SequencedMap<ColumnName, Chunk.Column> limitedColumns(
             SequencedMap<ColumnName, Chunk.Column> columns, long rows) {
-        var result = new LinkedHashMap<ColumnName, Chunk.Column>(columns.size());
+        var result = LinkedHashMap.<ColumnName, Chunk.Column>newLinkedHashMap(columns.size());
         for (var entry : columns.entrySet()) {
             Chunk.Column col = entry.getValue();
             result.put(entry.getKey(), new Chunk.Column(Array.limited(col.array(), rows), col.dtype()));
@@ -669,7 +669,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
             return singleColumn(arr);
         }
-        var scratch = new LinkedHashMap<ColumnName, Chunk.Column>(n);
+        var scratch = LinkedHashMap.<ColumnName, Chunk.Column>newLinkedHashMap(n);
         for (int i = 0; i < n; i++) {
             scratch.put(projectedNames.get(i), new Chunk.Column(
                     decodeOrSlice(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena),
@@ -692,7 +692,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
             return singleColumn(arr);
         }
-        var scratch = new LinkedHashMap<ColumnName, Chunk.Column>(n);
+        var scratch = LinkedHashMap.<ColumnName, Chunk.Column>newLinkedHashMap(n);
         for (int i = 0; i < n; i++) {
             scratch.put(projectedNames.get(i), new Chunk.Column(
                     decodeOrSliceSelfContained(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena),
@@ -702,7 +702,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     private SequencedMap<ColumnName, Chunk.Column> singleColumn(Array array) {
-        var map = new LinkedHashMap<ColumnName, Chunk.Column>(1);
+        var map = LinkedHashMap.<ColumnName, Chunk.Column>newLinkedHashMap(1);
         map.put(projectedNames.getFirst(), new Chunk.Column(array, projectedDtypes.getFirst()));
         return unmodifiable(map);
     }

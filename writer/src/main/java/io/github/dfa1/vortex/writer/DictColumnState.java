@@ -147,7 +147,7 @@ final class DictColumnState {
         // First pass: would this chunk's fresh distinct values push the map past the cap? Count them
         // without mutating so the whole chunk is either ingested or rejected atomically — a partial
         // ingest would corrupt the dictionary when the caller demotes on rejection.
-        var pendingNew = new HashSet<>(Math.min(cap, len) + 1);
+        var pendingNew = HashSet.newHashSet(Math.min(cap, len));
         for (int i = 0; i < len; i++) {
             if (validity != null && !validity[i]) {
                 continue;
@@ -387,7 +387,7 @@ final class DictColumnState {
         if (data.length == 0) {
             return false;
         }
-        var seen = new java.util.HashSet<String>(Math.min(GLOBAL_DICT_MAX_CARDINALITY_UTF8, data.length) + 1);
+        var seen = HashSet.<String>newHashSet(Math.min(GLOBAL_DICT_MAX_CARDINALITY_UTF8, data.length));
         for (int i = 0; i < data.length; i++) {
             if ((validity != null && !validity[i]) || data[i] == null) {
                 continue;
@@ -438,7 +438,7 @@ final class DictColumnState {
         if (n == 0) {
             return false;
         }
-        var seen = new HashSet<>(GLOBAL_DICT_MAX_CARDINALITY + 1);
+        var seen = HashSet.newHashSet(GLOBAL_DICT_MAX_CARDINALITY);
         for (int i = 0; i < n; i++) {
             if (validity != null && !validity[i]) {
                 continue;

@@ -44,7 +44,7 @@ public record ArrayStats(
             return new ArrayStats(n, -1, 0, 0);
         }
         HashMap<Long, int[]> counts = options.countDistinct() || options.trackMostFrequent()
-                                              ? new HashMap<>(Math.min(n, 1 << 16))
+                                              ? HashMap.newHashMap(Math.min(n, 1 << 16))
                                               : null;
         long topFreqBits = 0;
         int topFreq = 0;
