@@ -230,8 +230,9 @@ final class ImportCommand {
     /// Windows — so requiring it here would make every Windows run fail outright.
     static Path restrictToOwner(Path path) throws IOException {
         File file = path.toFile();
-        boolean restricted = file.setReadable(true, true) & file.setWritable(true, true);
-        if (!restricted) {
+        boolean readable = file.setReadable(true, true);
+        boolean writable = file.setWritable(true, true);
+        if (!readable || !writable) {
             throw new IOException("Unable to restrict permissions on temp file: " + path);
         }
         return path;

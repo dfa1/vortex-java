@@ -219,7 +219,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
     private static short[] topKByCount(Map<Short, Integer> counts) {
         List<Map.Entry<Short, Integer>> sorted = new ArrayList<>(counts.entrySet());
-        sorted.sort((a, b) -> b.getValue() - a.getValue());
+        sorted.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
         int dictSize = Math.min(sorted.size(), MAX_DICT_SIZE);
         short[] dict = new short[dictSize];
         for (int i = 0; i < dictSize; i++) {
