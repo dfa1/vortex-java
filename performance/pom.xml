@@ -13,7 +13,12 @@
 	<description>JMH benchmarks for the Vortex columnar file format Java implementation.</description>
 
 	<properties>
+		<!-- maven.deploy.skip only stops the standard deploy:deploy mojo. It has no effect here:
+		     central-publishing-maven-plugin takes over the deploy phase via <extensions>true</extensions>
+		     in the parent's release profile and runs regardless, with its own skip switch. Both are
+		     needed to actually keep this benchmark-only module off Maven Central. -->
 		<maven.deploy.skip>true</maven.deploy.skip>
+		<skipPublishing>true</skipPublishing>
 		<skipShade>true</skipShade>
 		<!-- This module is diagnostic CLI tooling (JMH benchmarks + ad-hoc taxi-data inspectors),
 		     not shipped library code. By-design uses of {@code System.out}, {@code System.err},
