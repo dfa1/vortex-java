@@ -51,14 +51,6 @@ known gap, a contract audit, or supporting infra.
   `vortex-jni`, regression-corpus wiring into routine `./mvnw test`, nightly CI profile, OSS-Fuzz
   submission.
 
-## Build
-
-- [ ] **Docs compiler — remaining tier** — `DocsConsistencyTest` (integration) now gates FQNs,
-  method claims, service-file paths, and relative links in the living docs (first run caught 11
-  fossils the same-day manual audit missed); `EncodingTableFitnessTest` now golden-tests the
-  encodings table in `docs/compatibility.md` against `ReadRegistry`/`WriteRegistry`. Remaining:
-  compile ` ```java ` blocks from living docs (tutorial imports were stale for months).
-
 ## Tooling
 
 - [ ] **`vortex-arrow` bridge module** — see [ADR-0016](adr/0016-vortex-arrow-bridge.md).

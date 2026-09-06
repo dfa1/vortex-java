@@ -485,8 +485,8 @@ try (VortexReader vf = VortexReader.open(Path.of("future.vortex"), registry);
      var iter = vf.scan(ScanOptions.all())) {
     while (iter.hasNext()) {
         try (var chunk = iter.next()) {
-            chunk.columns().forEach((name, arr) -> {
-                if (arr instanceof UnknownArray u) {
+            chunk.columns().forEach((name, column) -> {
+                if (column.array() instanceof UnknownArray u) {
                     System.out.println(name + ": unknown encoding " + u.encodingId());
                 }
             });
