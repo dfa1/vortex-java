@@ -1,46 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>io.github.dfa1.vortex</groupId>
-		<artifactId>vortex-java</artifactId>
-		<version>0.14.2-SNAPSHOT</version>
-	</parent>
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.dfa1.vortex</groupId>
+        <artifactId>vortex-java</artifactId>
+        <version>0.14.2-SNAPSHOT</version>
+    </parent>
 
-	<artifactId>vortex-fsst</artifactId>
+    <artifactId>vortex-fsst</artifactId>
 
-	<name>vortex-fsst</name>
-	<description>Standalone FSST (Fast Static Symbol Table) string compression algorithm. Zero dependency on the Vortex
-		wire format or FFM memory model beyond the JDK's own java.lang.foreign — so the compression algorithm can be
-		iterated on and benchmarked independently.
-	</description>
+    <name>vortex-fsst</name>
+    <description>Standalone FSST (Fast Static Symbol Table) string compression algorithm. Zero dependency on the Vortex
+        wire format or FFM memory model beyond the JDK's own java.lang.foreign — so the compression algorithm can be
+        iterated on and benchmarked independently.
+    </description>
 
-	<dependencies>
-		<!-- testing -->
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.assertj</groupId>
-			<artifactId>assertj-core</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+    <dependencies>
+        <!-- testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
-	<build>
-		<plugins>
-			<!-- Ratchet: fsst's javadoc is warning-free today, so keep it that way. The
-			     parent leaves failOnWarnings off because 313 warnings predate the check in
-			     other modules; nothing stops the already-clean ones from holding the line. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-javadoc-plugin</artifactId>
-				<configuration>
-					<failOnWarnings>true</failOnWarnings>
-				</configuration>
-			</plugin>
-		</plugins>
-	</build>
+    <build>
+        <plugins>
+            <!-- Ratchet: fsst's javadoc is warning-free today, so keep it that way. The
+                 parent leaves failOnWarnings off because 313 warnings predate the check in
+                 other modules; nothing stops the already-clean ones from holding the line. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <failOnWarnings>true</failOnWarnings>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

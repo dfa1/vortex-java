@@ -1,686 +1,686 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+    <modelVersion>4.0.0</modelVersion>
 
-	<groupId>io.github.dfa1.vortex</groupId>
-	<artifactId>vortex-java</artifactId>
-	<version>0.14.2-SNAPSHOT</version>
-	<packaging>pom</packaging>
+    <groupId>io.github.dfa1.vortex</groupId>
+    <artifactId>vortex-java</artifactId>
+    <version>0.14.2-SNAPSHOT</version>
+    <packaging>pom</packaging>
 
-	<name>vortex-java</name>
-	<description>Pure-Java reader/writer for the Vortex columnar file format. Zero-copy memory-mapped reads via the Java
-		FFM API (Java 25+), no JNI, no sun.misc.Unsafe.
-	</description>
-	<url>https://github.com/dfa1/vortex-java</url>
+    <name>vortex-java</name>
+    <description>Pure-Java reader/writer for the Vortex columnar file format. Zero-copy memory-mapped reads via the Java
+        FFM API (Java 25+), no JNI, no sun.misc.Unsafe.
+    </description>
+    <url>https://github.com/dfa1/vortex-java</url>
 
-	<licenses>
-		<license>
-			<name>Apache License, Version 2.0</name>
-			<url>https://www.apache.org/licenses/LICENSE-2.0</url>
-			<distribution>repo</distribution>
-		</license>
-	</licenses>
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
-	<developers>
-		<developer>
-			<id>dfa1</id>
-			<name>Davide Angelocola</name>
-			<email>davide.angelocola@gmail.com</email>
-			<url>https://github.com/dfa1</url>
-		</developer>
-	</developers>
+    <developers>
+        <developer>
+            <id>dfa1</id>
+            <name>Davide Angelocola</name>
+            <email>davide.angelocola@gmail.com</email>
+            <url>https://github.com/dfa1</url>
+        </developer>
+    </developers>
 
-	<scm>
-		<connection>scm:git:https://github.com/dfa1/vortex-java.git</connection>
-		<developerConnection>scm:git:git@github.com:dfa1/vortex-java.git</developerConnection>
-		<url>https://github.com/dfa1/vortex-java</url>
-		<tag>HEAD</tag>
-	</scm>
+    <scm>
+        <connection>scm:git:https://github.com/dfa1/vortex-java.git</connection>
+        <developerConnection>scm:git:git@github.com:dfa1/vortex-java.git</developerConnection>
+        <url>https://github.com/dfa1/vortex-java</url>
+        <tag>HEAD</tag>
+    </scm>
 
-	<modules>
-		<module>proto-gen</module>
-		<module>fbs-gen</module>
-		<module>fsst</module>
-		<module>core</module>
-		<module>reader</module>
-		<module>writer</module>
-		<module>csv</module>
-		<module>jdbc</module>
-		<module>parquet</module>
-		<module>bom</module>
-		<module>cli</module>
-		<module>inspector</module>
-		<module>calcite</module>
-		<module>integration</module>
-		<module>fuzz</module>
-		<module>performance</module>
-	</modules>
+    <modules>
+        <module>proto-gen</module>
+        <module>fbs-gen</module>
+        <module>fsst</module>
+        <module>core</module>
+        <module>reader</module>
+        <module>writer</module>
+        <module>csv</module>
+        <module>jdbc</module>
+        <module>parquet</module>
+        <module>bom</module>
+        <module>cli</module>
+        <module>inspector</module>
+        <module>calcite</module>
+        <module>integration</module>
+        <module>fuzz</module>
+        <module>performance</module>
+    </modules>
 
-	<properties>
-		<maven.compiler.release>25</maven.compiler.release>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<!-- production -->
-		<zstd.version>0.12</zstd.version>
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- production -->
+        <zstd.version>0.12</zstd.version>
 
 
-		<fastcsv.version>4.4.0</fastcsv.version>
-		<hardwood.version>1.1.0.Beta1</hardwood.version>
-		<jmh.version>1.37</jmh.version>
-		<!-- testing -->
-		<zstd-jni.version>1.5.7-16</zstd-jni.version>
-		<h2.version>2.4.240</h2.version>
-		<junit.version>6.1.3</junit.version>
-		<jazzer.version>0.30.0</jazzer.version>
-		<assertj.version>3.27.7</assertj.version>
-		<mockito.version>5.23.0</mockito.version>
-		<vortex-jni.version>0.85.0</vortex-jni.version>
-		<arrow.version>19.0.0</arrow.version>
-		<slf4j.version>2.0.18</slf4j.version>
-		<!-- coverage -->
-		<jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
-		<!-- byte-buddy-agent version must match what mockito-core pulls in transitively.
-		     Update this when bumping mockito.version (run: mvn dependency:tree -pl reader | grep byte-buddy-agent). -->
-		<bytebuddy.version>1.18.13</bytebuddy.version>
-		<!-- Generated sources (FlatBuffers + Protobuf) live under fbs/ and proto/. They
-		     are emitted by external code-gen and have no hand-written behavior worth
-		     covering; counting them tanks the project-wide coverage ratio without
-		     reflecting real test gaps. The performance module is JMH benchmark main code
-		     with no tests by design — excluded for the same reason. -->
-		<sonar.coverage.exclusions>
-			**/fbs/**,
-			**/proto/**,
-			**/performance/**
-		</sonar.coverage.exclusions>
-		<!-- Generated FlatBuffers/Protobuf sources under fbs/ and proto/ are emitted
-		     verbatim by external code-gen and never hand-edited. Their machine style
-		     (getRootAsX naming, redundant casts) trips ~160 smells and pads the
-		     duplication metric with copy-shaped accessors, all unactionable noise.
-		     Exclude from analysis entirely, not just coverage. -->
-		<sonar.exclusions>
-			**/fbs/**,
-			**/proto/**
-		</sonar.exclusions>
-		<!-- The two in-house code generators (fbs-gen, proto-gen) are build-only developer
-		     tooling, not shipped runtime. Their lexers/parsers share the same tokenizer
-		     shape by design (scan char, classify token, advance), which the duplication
-		     metric counts as cross-module copy-paste. Exclude from CPD only — smell and
-		     bug analysis on this hand-written code is kept. -->
-		<sonar.cpd.exclusions>
-			**/fbsgen/**,
-			**/protogen/**
-		</sonar.cpd.exclusions>
-		<!-- Coverage sources:
-		     1. per-module surefire (unit tests)
-		     2. per-module failsafe (module-local integration tests)
-		     3. integration-module aggregate — report-aggregate in the integration
-		        module reads **/jacoco-it.exec from all dependency modules and reports
-		        on all their classes, giving Sonar coverage for BitpackedEncodingDecoder
-		        etc. that are exercised by cross-module integration tests. -->
-		<sonar.coverage.jacoco.xmlReportPaths>
-			${project.build.directory}/site/jacoco/jacoco.xml,
-			${project.build.directory}/site/jacoco-it/jacoco.xml,
-			${maven.multiModuleProjectDirectory}/integration/target/site/jacoco-aggregate/jacoco.xml
-		</sonar.coverage.jacoco.xmlReportPaths>
-		<!-- Default for the {@code @{argLine}} placeholder in surefire/failsafe configs. JaCoCo's
-		     {@code prepare-agent} goal overwrites this with the agent arguments when active; if
-		     the {@code coverage} profile is not enabled the empty default ensures surefire
-		     doesn't receive a literal {@code @{argLine}} token as a JVM argument. -->
-		<argLine />
-		<!-- release plugins -->
-		<central-publishing-plugin.version>0.11.0</central-publishing-plugin.version>
-		<maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
-		<maven-source-plugin.version>3.4.0</maven-source-plugin.version>
-		<maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
-	</properties>
+        <fastcsv.version>4.4.0</fastcsv.version>
+        <hardwood.version>1.1.0.Beta1</hardwood.version>
+        <jmh.version>1.37</jmh.version>
+        <!-- testing -->
+        <zstd-jni.version>1.5.7-16</zstd-jni.version>
+        <h2.version>2.4.240</h2.version>
+        <junit.version>6.1.3</junit.version>
+        <jazzer.version>0.30.0</jazzer.version>
+        <assertj.version>3.27.7</assertj.version>
+        <mockito.version>5.23.0</mockito.version>
+        <vortex-jni.version>0.85.0</vortex-jni.version>
+        <arrow.version>19.0.0</arrow.version>
+        <slf4j.version>2.0.18</slf4j.version>
+        <!-- coverage -->
+        <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
+        <!-- byte-buddy-agent version must match what mockito-core pulls in transitively.
+             Update this when bumping mockito.version (run: mvn dependency:tree -pl reader | grep byte-buddy-agent). -->
+        <bytebuddy.version>1.18.13</bytebuddy.version>
+        <!-- Generated sources (FlatBuffers + Protobuf) live under fbs/ and proto/. They
+             are emitted by external code-gen and have no hand-written behavior worth
+             covering; counting them tanks the project-wide coverage ratio without
+             reflecting real test gaps. The performance module is JMH benchmark main code
+             with no tests by design — excluded for the same reason. -->
+        <sonar.coverage.exclusions>
+            **/fbs/**,
+            **/proto/**,
+            **/performance/**
+        </sonar.coverage.exclusions>
+        <!-- Generated FlatBuffers/Protobuf sources under fbs/ and proto/ are emitted
+             verbatim by external code-gen and never hand-edited. Their machine style
+             (getRootAsX naming, redundant casts) trips ~160 smells and pads the
+             duplication metric with copy-shaped accessors, all unactionable noise.
+             Exclude from analysis entirely, not just coverage. -->
+        <sonar.exclusions>
+            **/fbs/**,
+            **/proto/**
+        </sonar.exclusions>
+        <!-- The two in-house code generators (fbs-gen, proto-gen) are build-only developer
+             tooling, not shipped runtime. Their lexers/parsers share the same tokenizer
+             shape by design (scan char, classify token, advance), which the duplication
+             metric counts as cross-module copy-paste. Exclude from CPD only — smell and
+             bug analysis on this hand-written code is kept. -->
+        <sonar.cpd.exclusions>
+            **/fbsgen/**,
+            **/protogen/**
+        </sonar.cpd.exclusions>
+        <!-- Coverage sources:
+             1. per-module surefire (unit tests)
+             2. per-module failsafe (module-local integration tests)
+             3. integration-module aggregate — report-aggregate in the integration
+                module reads **/jacoco-it.exec from all dependency modules and reports
+                on all their classes, giving Sonar coverage for BitpackedEncodingDecoder
+                etc. that are exercised by cross-module integration tests. -->
+        <sonar.coverage.jacoco.xmlReportPaths>
+            ${project.build.directory}/site/jacoco/jacoco.xml,
+            ${project.build.directory}/site/jacoco-it/jacoco.xml,
+            ${maven.multiModuleProjectDirectory}/integration/target/site/jacoco-aggregate/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
+        <!-- Default for the {@code @{argLine}} placeholder in surefire/failsafe configs. JaCoCo's
+             {@code prepare-agent} goal overwrites this with the agent arguments when active; if
+             the {@code coverage} profile is not enabled the empty default ensures surefire
+             doesn't receive a literal {@code @{argLine}} token as a JVM argument. -->
+        <argLine />
+        <!-- release plugins -->
+        <central-publishing-plugin.version>0.11.0</central-publishing-plugin.version>
+        <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
+        <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+    </properties>
 
-	<dependencyManagement>
-		<dependencies>
-			<!-- production -->
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-core</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-core</artifactId>
-				<version>${project.version}</version>
-				<type>test-jar</type>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-reader</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-reader</artifactId>
-				<version>${project.version}</version>
-				<type>test-jar</type>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-writer</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-fsst</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-csv</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-jdbc</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-parquet</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-inspector</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>vortex-calcite</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>de.siegmar</groupId>
-				<artifactId>fastcsv</artifactId>
-				<version>${fastcsv.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>dev.hardwood</groupId>
-				<artifactId>hardwood-core</artifactId>
-				<version>${hardwood.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>io.github.dfa1.zstd</groupId>
-				<artifactId>zstd</artifactId>
-				<version>${zstd.version}</version>
-			</dependency>
-			<dependency>
-				<!-- Marker jar that transitively pulls zstd plus the native libzstd for every
-				     supported platform; the zstd FFM loader picks the one matching the runtime
-				     platform. Replaces the former per-platform zstd-native-<platform> artifacts. -->
-				<groupId>io.github.dfa1.zstd</groupId>
-				<artifactId>zstd-platform</artifactId>
-				<version>${zstd.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.github.luben</groupId>
-				<artifactId>zstd-jni</artifactId>
-				<version>${zstd-jni.version}</version>
-			</dependency>
+    <dependencyManagement>
+        <dependencies>
+            <!-- production -->
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-core</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-reader</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-reader</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-writer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-fsst</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-csv</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-jdbc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-parquet</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-inspector</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-calcite</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>de.siegmar</groupId>
+                <artifactId>fastcsv</artifactId>
+                <version>${fastcsv.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.hardwood</groupId>
+                <artifactId>hardwood-core</artifactId>
+                <version>${hardwood.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.zstd</groupId>
+                <artifactId>zstd</artifactId>
+                <version>${zstd.version}</version>
+            </dependency>
+            <dependency>
+                <!-- Marker jar that transitively pulls zstd plus the native libzstd for every
+                     supported platform; the zstd FFM loader picks the one matching the runtime
+                     platform. Replaces the former per-platform zstd-native-<platform> artifacts. -->
+                <groupId>io.github.dfa1.zstd</groupId>
+                <artifactId>zstd-platform</artifactId>
+                <version>${zstd.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.luben</groupId>
+                <artifactId>zstd-jni</artifactId>
+                <version>${zstd-jni.version}</version>
+            </dependency>
 
-			<dependency>
-				<groupId>org.openjdk.jmh</groupId>
-				<artifactId>jmh-core</artifactId>
-				<version>${jmh.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.openjdk.jmh</groupId>
-				<artifactId>jmh-generator-annprocess</artifactId>
-				<version>${jmh.version}</version>
-			</dependency>
-			<!-- testing -->
-			<dependency>
-				<groupId>com.h2database</groupId>
-				<artifactId>h2</artifactId>
-				<version>${h2.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.junit.jupiter</groupId>
-				<artifactId>junit-jupiter</artifactId>
-				<version>${junit.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<!-- Coverage-guided fuzzing (ADR 0020). JUnit 5 integration: @FuzzTest methods run
-				     as ordinary tests unless JAZZER_FUZZ=1 switches them into fuzzing mode. -->
-				<groupId>com.code-intelligence</groupId>
-				<artifactId>jazzer-junit</artifactId>
-				<version>${jazzer.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<!-- jazzer-junit declares junit-platform-commons / junit-platform-launcher 1.9.0 as
-			     direct dependencies, which Maven's nearest-wins mediation would prefer over the
-			     6.x platform that junit-jupiter pulls in one level deeper — silently downgrading
-			     the platform for any module using Jazzer. Pin both to ${junit.version}, which
-			     JUnit 6 versions in lockstep with junit-jupiter. -->
-			<dependency>
-				<groupId>org.junit.platform</groupId>
-				<artifactId>junit-platform-commons</artifactId>
-				<version>${junit.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.junit.platform</groupId>
-				<artifactId>junit-platform-launcher</artifactId>
-				<version>${junit.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.assertj</groupId>
-				<artifactId>assertj-core</artifactId>
-				<version>${assertj.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.mockito</groupId>
-				<artifactId>mockito-junit-jupiter</artifactId>
-				<version>${mockito.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>dev.vortex</groupId>
-				<artifactId>vortex-jni</artifactId>
-				<version>${vortex-jni.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.arrow</groupId>
-				<artifactId>arrow-vector</artifactId>
-				<version>${arrow.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.arrow</groupId>
-				<artifactId>arrow-c-data</artifactId>
-				<version>${arrow.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.apache.arrow</groupId>
-				<artifactId>arrow-memory-unsafe</artifactId>
-				<version>${arrow.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.slf4j</groupId>
-				<artifactId>slf4j-nop</artifactId>
-				<version>${slf4j.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.slf4j</groupId>
-				<artifactId>slf4j-simple</artifactId>
-				<version>${slf4j.version}</version>
-				<scope>test</scope>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-core</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-generator-annprocess</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+            <!-- testing -->
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <version>${h2.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <!-- Coverage-guided fuzzing (ADR 0020). JUnit 5 integration: @FuzzTest methods run
+                     as ordinary tests unless JAZZER_FUZZ=1 switches them into fuzzing mode. -->
+                <groupId>com.code-intelligence</groupId>
+                <artifactId>jazzer-junit</artifactId>
+                <version>${jazzer.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <!-- jazzer-junit declares junit-platform-commons / junit-platform-launcher 1.9.0 as
+                 direct dependencies, which Maven's nearest-wins mediation would prefer over the
+                 6.x platform that junit-jupiter pulls in one level deeper — silently downgrading
+                 the platform for any module using Jazzer. Pin both to ${junit.version}, which
+                 JUnit 6 versions in lockstep with junit-jupiter. -->
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-commons</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.platform</groupId>
+                <artifactId>junit-platform-launcher</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-junit-jupiter</artifactId>
+                <version>${mockito.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>dev.vortex</groupId>
+                <artifactId>vortex-jni</artifactId>
+                <version>${vortex-jni.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-vector</artifactId>
+                <version>${arrow.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-c-data</artifactId>
+                <version>${arrow.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-memory-unsafe</artifactId>
+                <version>${arrow.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-nop</artifactId>
+                <version>${slf4j.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-simple</artifactId>
+                <version>${slf4j.version}</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
-	<!-- byte-buddy-agent declared here so every module has it in its dependency tree,
-	     which allows maven-dependency-plugin:properties to resolve
-	     ${net.bytebuddy:byte-buddy-agent:jar} for the surefire -javaagent arg. -->
-	<dependencies>
-		<dependency>
-			<groupId>net.bytebuddy</groupId>
-			<artifactId>byte-buddy-agent</artifactId>
-			<version>${bytebuddy.version}</version>
-			<scope>test</scope>
-		</dependency>
-		<!-- Native libzstd for every supported platform, bundled by the zstd-platform marker
-		     jar; provides the runtime library the zstd FFM bindings load during our own build
-		     and tests. Optional like the zstd binding itself: not forced on downstream consumers,
-		     who add zstd-platform themselves (version pinned by the BOM). No per-OS profile. -->
-		<dependency>
-			<groupId>io.github.dfa1.zstd</groupId>
-			<artifactId>zstd-platform</artifactId>
-			<scope>runtime</scope>
-			<optional>true</optional>
-		</dependency>
-	</dependencies>
+    <!-- byte-buddy-agent declared here so every module has it in its dependency tree,
+         which allows maven-dependency-plugin:properties to resolve
+         ${net.bytebuddy:byte-buddy-agent:jar} for the surefire -javaagent arg. -->
+    <dependencies>
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy-agent</artifactId>
+            <version>${bytebuddy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Native libzstd for every supported platform, bundled by the zstd-platform marker
+             jar; provides the runtime library the zstd FFM bindings load during our own build
+             and tests. Optional like the zstd binding itself: not forced on downstream consumers,
+             who add zstd-platform themselves (version pinned by the BOM). No per-OS profile. -->
+        <dependency>
+            <groupId>io.github.dfa1.zstd</groupId>
+            <artifactId>zstd-platform</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
 
-	<build>
-		<pluginManagement>
-			<plugins>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-compiler-plugin</artifactId>
-					<version>3.16.0</version>
-					<configuration>
-						<release>25</release>
-						<!-- Zero-warning rule: every javac lint category is on and any warning
-						     fails the build. Suppress a genuinely-intentional one narrowly with
-						     @SuppressWarnings at the smallest scope (see PosixTerminal "restricted",
-						     JdbcImporter "unchecked"), never by relaxing this. -->
-						<showWarnings>true</showWarnings>
-						<failOnWarning>true</failOnWarning>
-						<compilerArgs>
-							<arg>-Xlint:all</arg>
-						</compilerArgs>
-					</configuration>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-surefire-plugin</artifactId>
-					<version>3.6.0</version>
-					<configuration>
-						<!-- {@code @{argLine}} expands to the JaCoCo agent arguments set by
-						     {@code jacoco:prepare-agent} when the {@code coverage} profile is active.
-						     Without {@code @{argLine}} the JaCoCo agent isn't attached and no
-						     coverage data is collected.
-						     {@code net.bytebuddy:byte-buddy-agent:jar} is resolved to an absolute path
-						     by {@code maven-dependency-plugin:properties} (declared in build/plugins);
-						     loading it as a javaagent suppresses the Mockito self-attach warning. -->
-						<argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
-					</configuration>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-dependency-plugin</artifactId>
-					<version>3.11.0</version>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-jar-plugin</artifactId>
-					<version>3.5.1</version>
-				</plugin>
-				<plugin>
-					<groupId>org.codehaus.mojo</groupId>
-					<artifactId>exec-maven-plugin</artifactId>
-					<version>3.6.3</version>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-antrun-plugin</artifactId>
-					<version>3.2.0</version>
-				</plugin>
-				<plugin>
-					<groupId>org.codehaus.mojo</groupId>
-					<artifactId>build-helper-maven-plugin</artifactId>
-					<version>3.6.1</version>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-shade-plugin</artifactId>
-					<version>3.6.2</version>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-failsafe-plugin</artifactId>
-					<version>3.6.0</version>
-				</plugin>
-				<plugin>
-					<groupId>org.jacoco</groupId>
-					<artifactId>jacoco-maven-plugin</artifactId>
-					<version>${jacoco-maven-plugin.version}</version>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-javadoc-plugin</artifactId>
-					<version>${maven-javadoc-plugin.version}</version>
-					<configuration>
-						<excludePackageNames>io.github.dfa1.vortex.core.fbs:io.github.dfa1.vortex.core.proto</excludePackageNames>
-						<!-- A dangling [Type#member] reference is a build failure: it means a
-						     refactor renamed or moved something and left the docs pointing at a
-						     type that no longer exists. Four such phantoms accumulated before
-						     this was enforced. Warnings (missing @param, undocumented default
-						     constructors) stay non-fatal for now — 313 of them predate this,
-						     concentrated in performance/reader/writer/fbs-gen/csv. Modules that
-						     are already warning-free raise failOnWarnings in their own POM to
-						     stop the count creeping back up. -->
-						<failOnError>true</failOnError>
-						<failOnWarnings>false</failOnWarnings>
-					</configuration>
-					<executions>
-						<execution>
-							<!-- verify, not test: contributors running ./mvnw test skip it, CI does not.
-							     Costs ~3s across the whole reactor. -->
-							<id>check-javadoc</id>
-							<phase>verify</phase>
-							<goals>
-								<goal>javadoc-no-fork</goal>
-							</goals>
-						</execution>
-					</executions>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-checkstyle-plugin</artifactId>
-					<version>3.6.0</version>
-					<executions>
-						<execution>
-							<phase>validate</phase>
-							<goals>
-								<goal>check</goal>
-							</goals>
-							<configuration>
-								<configLocation>${maven.multiModuleProjectDirectory}/checkstyle.xml</configLocation>
-								<failsOnError>true</failsOnError>
-								<consoleOutput>true</consoleOutput>
-								<sourceDirectories>
-									<sourceDirectory>src/main/java</sourceDirectory>
-									<sourceDirectory>src/test/java</sourceDirectory>
-								</sourceDirectories>
-								<excludes>**/module-info.java,**/fbs/*.java,**/proto/*.java</excludes>
-							</configuration>
-						</execution>
-					</executions>
-					<dependencies>
-						<dependency>
-							<groupId>com.puppycrawl.tools</groupId>
-							<artifactId>checkstyle</artifactId>
-							<version>14.1.0</version>
-						</dependency>
-					</dependencies>
-				</plugin>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-release-plugin</artifactId>
-					<version>3.3.1</version>
-					<configuration>
-						<autoVersionSubmodules>true</autoVersionSubmodules>
-						<tagNameFormat>v@{project.version}</tagNameFormat>
-						<pushChanges>false</pushChanges>
-						<localCheckout>true</localCheckout>
-					</configuration>
-				</plugin>
-			</plugins>
-		</pluginManagement>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-checkstyle-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-javadoc-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-dependency-plugin</artifactId>
-				<executions>
-					<execution>
-						<!-- Resolves ${net.bytebuddy:byte-buddy-agent:jar} so surefire can load it
-						     as a javaagent — eliminates the Mockito inline-mock-maker self-attach warning. -->
-						<id>locate-byte-buddy-agent</id>
-						<goals>
-							<goal>properties</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.16.0</version>
+                    <configuration>
+                        <release>25</release>
+                        <!-- Zero-warning rule: every javac lint category is on and any warning
+                             fails the build. Suppress a genuinely-intentional one narrowly with
+                             @SuppressWarnings at the smallest scope (see PosixTerminal "restricted",
+                             JdbcImporter "unchecked"), never by relaxing this. -->
+                        <showWarnings>true</showWarnings>
+                        <failOnWarning>true</failOnWarning>
+                        <compilerArgs>
+                            <arg>-Xlint:all</arg>
+                        </compilerArgs>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.6.0</version>
+                    <configuration>
+                        <!-- {@code @{argLine}} expands to the JaCoCo agent arguments set by
+                             {@code jacoco:prepare-agent} when the {@code coverage} profile is active.
+                             Without {@code @{argLine}} the JaCoCo agent isn't attached and no
+                             coverage data is collected.
+                             {@code net.bytebuddy:byte-buddy-agent:jar} is resolved to an absolute path
+                             by {@code maven-dependency-plugin:properties} (declared in build/plugins);
+                             loading it as a javaagent suppresses the Mockito self-attach warning. -->
+                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>3.11.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.5.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>3.6.3</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-antrun-plugin</artifactId>
+                    <version>3.2.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>3.6.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>3.6.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.6.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>${maven-javadoc-plugin.version}</version>
+                    <configuration>
+                        <excludePackageNames>io.github.dfa1.vortex.core.fbs:io.github.dfa1.vortex.core.proto</excludePackageNames>
+                        <!-- A dangling [Type#member] reference is a build failure: it means a
+                             refactor renamed or moved something and left the docs pointing at a
+                             type that no longer exists. Four such phantoms accumulated before
+                             this was enforced. Warnings (missing @param, undocumented default
+                             constructors) stay non-fatal for now — 313 of them predate this,
+                             concentrated in performance/reader/writer/fbs-gen/csv. Modules that
+                             are already warning-free raise failOnWarnings in their own POM to
+                             stop the count creeping back up. -->
+                        <failOnError>true</failOnError>
+                        <failOnWarnings>false</failOnWarnings>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <!-- verify, not test: contributors running ./mvnw test skip it, CI does not.
+                                 Costs ~3s across the whole reactor. -->
+                            <id>check-javadoc</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>javadoc-no-fork</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <version>3.6.0</version>
+                    <executions>
+                        <execution>
+                            <phase>validate</phase>
+                            <goals>
+                                <goal>check</goal>
+                            </goals>
+                            <configuration>
+                                <configLocation>${maven.multiModuleProjectDirectory}/checkstyle.xml</configLocation>
+                                <failsOnError>true</failsOnError>
+                                <consoleOutput>true</consoleOutput>
+                                <sourceDirectories>
+                                    <sourceDirectory>src/main/java</sourceDirectory>
+                                    <sourceDirectory>src/test/java</sourceDirectory>
+                                </sourceDirectories>
+                                <excludes>**/module-info.java,**/fbs/*.java,**/proto/*.java</excludes>
+                            </configuration>
+                        </execution>
+                    </executions>
+                    <dependencies>
+                        <dependency>
+                            <groupId>com.puppycrawl.tools</groupId>
+                            <artifactId>checkstyle</artifactId>
+                            <version>14.1.0</version>
+                        </dependency>
+                    </dependencies>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-release-plugin</artifactId>
+                    <version>3.3.1</version>
+                    <configuration>
+                        <autoVersionSubmodules>true</autoVersionSubmodules>
+                        <tagNameFormat>v@{project.version}</tagNameFormat>
+                        <pushChanges>false</pushChanges>
+                        <localCheckout>true</localCheckout>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!-- Resolves ${net.bytebuddy:byte-buddy-agent:jar} so surefire can load it
+                             as a javaagent — eliminates the Mockito inline-mock-maker self-attach warning. -->
+                        <id>locate-byte-buddy-agent</id>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
-	<profiles>
-		<profile>
-			<!-- Activated in CI: ./mvnw verify -P coverage  -->
-			<!-- Attaches the JaCoCo agent to surefire/failsafe and writes one
-			     {@code target/site/jacoco/jacoco.xml} per module so Codecov / Coveralls
-			     can ingest it. -->
-			<id>coverage</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.jacoco</groupId>
-						<artifactId>jacoco-maven-plugin</artifactId>
-						<executions>
-							<execution>
-								<id>prepare-agent</id>
-								<goals>
-									<goal>prepare-agent</goal>
-								</goals>
-							</execution>
-							<execution>
-								<id>prepare-agent-integration</id>
-								<goals>
-									<goal>prepare-agent-integration</goal>
-								</goals>
-							</execution>
-							<execution>
-								<id>report</id>
-								<phase>verify</phase>
-								<goals>
-									<goal>report</goal>
-								</goals>
-							</execution>
-							<execution>
-								<id>report-integration</id>
-								<phase>post-integration-test</phase>
-								<goals>
-									<goal>report-integration</goal>
-								</goals>
-							</execution>
-						</executions>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-		<profile>
-			<!-- Activated during release: ./mvnw deploy -P release -->
-			<!-- Prerequisites:
-			     1. Register namespace io.github.dfa1 at central.sonatype.com (GitHub auto-validates).
-			     2. Generate a user token at central.sonatype.com → Account → User Tokens.
-			     3. Add to ~/.m2/settings.xml:
-			          <servers>
-			            <server>
-			              <id>central</id>
-			              <username>TOKEN_USERNAME</username>
-			              <password>TOKEN_PASSWORD</password>
-			            </server>
-			          </servers>
-			     4. GPG key must be published: gpg -\-send-keys <KEYID>
-			-->
-			<id>release</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-source-plugin</artifactId>
-						<version>${maven-source-plugin.version}</version>
-						<executions>
-							<execution>
-								<id>attach-sources</id>
-								<goals>
-									<goal>jar-no-fork</goal>
-								</goals>
-							</execution>
-						</executions>
-					</plugin>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-javadoc-plugin</artifactId>
-						<version>${maven-javadoc-plugin.version}</version>
-						<executions>
-							<execution>
-								<id>attach-javadocs</id>
-								<goals>
-									<goal>jar</goal>
-								</goals>
-							</execution>
-						</executions>
-						<configuration>
-							<doclint>none</doclint>
-						</configuration>
-					</plugin>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-gpg-plugin</artifactId>
-						<version>${maven-gpg-plugin.version}</version>
-						<executions>
-							<execution>
-								<id>sign-artifacts</id>
-								<phase>verify</phase>
-								<goals>
-									<goal>sign</goal>
-								</goals>
-								<configuration>
-									<gpgArguments>
-										<arg>--pinentry-mode</arg>
-										<arg>loopback</arg>
-									</gpgArguments>
-								</configuration>
-							</execution>
-						</executions>
-					</plugin>
-					<plugin>
-						<groupId>org.sonatype.central</groupId>
-						<artifactId>central-publishing-maven-plugin</artifactId>
-						<version>${central-publishing-plugin.version}</version>
-						<extensions>true</extensions>
-						<configuration>
-							<publishingServerId>central</publishingServerId>
-							<autoPublish>true</autoPublish>
-							<waitUntil>published</waitUntil>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-		<!-- Mutation testing (opt-in: -P pitest). Common PIT setup lives here once; each module's
-		     own `pitest` profile only adds the plugin to <plugins> and names its <targetClasses>.
-		     targetTests is left to PIT's default (test packages matching the target classes). -->
-		<profile>
-			<id>pitest</id>
-			<build>
-				<pluginManagement>
-					<plugins>
-						<plugin>
-							<groupId>org.pitest</groupId>
-							<artifactId>pitest-maven</artifactId>
-							<version>1.30.0</version>
-							<dependencies>
-								<dependency>
-									<groupId>org.pitest</groupId>
-									<artifactId>pitest-junit5-plugin</artifactId>
-									<version>1.2.3</version>
-								</dependency>
-							</dependencies>
-							<executions>
-								<execution>
-									<id>pit-report</id>
-									<phase>verify</phase>
-									<goals>
-										<goal>mutationCoverage</goal>
-									</goals>
-								</execution>
-							</executions>
-							<configuration>
-								<outputFormats>
-									<param>HTML</param>
-									<param>XML</param>
-								</outputFormats>
-								<timestampedReports>false</timestampedReports>
-							</configuration>
-						</plugin>
-					</plugins>
-				</pluginManagement>
-			</build>
-		</profile>
-	</profiles>
+    <profiles>
+        <profile>
+            <!-- Activated in CI: ./mvnw verify -P coverage  -->
+            <!-- Attaches the JaCoCo agent to surefire/failsafe and writes one
+                 {@code target/site/jacoco/jacoco.xml} per module so Codecov / Coveralls
+                 can ingest it. -->
+            <id>coverage</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>prepare-agent</id>
+                                <goals>
+                                    <goal>prepare-agent</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>prepare-agent-integration</id>
+                                <goals>
+                                    <goal>prepare-agent-integration</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>report</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>report</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>report-integration</id>
+                                <phase>post-integration-test</phase>
+                                <goals>
+                                    <goal>report-integration</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <!-- Activated during release: ./mvnw deploy -P release -->
+            <!-- Prerequisites:
+                 1. Register namespace io.github.dfa1 at central.sonatype.com (GitHub auto-validates).
+                 2. Generate a user token at central.sonatype.com → Account → User Tokens.
+                 3. Add to ~/.m2/settings.xml:
+                      <servers>
+                        <server>
+                          <id>central</id>
+                          <username>TOKEN_USERNAME</username>
+                          <password>TOKEN_PASSWORD</password>
+                        </server>
+                      </servers>
+                 4. GPG key must be published: gpg -\-send-keys <KEYID>
+            -->
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven-javadoc-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <doclint>none</doclint>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Mutation testing (opt-in: -P pitest). Common PIT setup lives here once; each module's
+             own `pitest` profile only adds the plugin to <plugins> and names its <targetClasses>.
+             targetTests is left to PIT's default (test packages matching the target classes). -->
+        <profile>
+            <id>pitest</id>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.pitest</groupId>
+                            <artifactId>pitest-maven</artifactId>
+                            <version>1.30.0</version>
+                            <dependencies>
+                                <dependency>
+                                    <groupId>org.pitest</groupId>
+                                    <artifactId>pitest-junit5-plugin</artifactId>
+                                    <version>1.2.3</version>
+                                </dependency>
+                            </dependencies>
+                            <executions>
+                                <execution>
+                                    <id>pit-report</id>
+                                    <phase>verify</phase>
+                                    <goals>
+                                        <goal>mutationCoverage</goal>
+                                    </goals>
+                                </execution>
+                            </executions>
+                            <configuration>
+                                <outputFormats>
+                                    <param>HTML</param>
+                                    <param>XML</param>
+                                </outputFormats>
+                                <timestampedReports>false</timestampedReports>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

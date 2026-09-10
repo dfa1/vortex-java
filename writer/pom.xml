@@ -1,94 +1,94 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>io.github.dfa1.vortex</groupId>
-		<artifactId>vortex-java</artifactId>
-		<version>0.14.2-SNAPSHOT</version>
-	</parent>
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.dfa1.vortex</groupId>
+        <artifactId>vortex-java</artifactId>
+        <version>0.14.2-SNAPSHOT</version>
+    </parent>
 
-	<artifactId>vortex-writer</artifactId>
+    <artifactId>vortex-writer</artifactId>
 
-	<name>vortex-writer</name>
-	<description>Writer for the Vortex columnar file format. Produces compressed columnar files readable by any Vortex
-		implementation.
-	</description>
+    <name>vortex-writer</name>
+    <description>Writer for the Vortex columnar file format. Produces compressed columnar files readable by any Vortex
+        implementation.
+    </description>
 
-	<dependencies>
-		<!-- production -->
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-fsst</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.zstd</groupId>
-			<artifactId>zstd</artifactId>
-			<optional>true</optional>
-		</dependency>
-		<!-- testing -->
-		<!-- project-internal test deps -->
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-core</artifactId>
-			<type>test-jar</type>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-reader</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-reader</artifactId>
-			<type>test-jar</type>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.assertj</groupId>
-			<artifactId>assertj-core</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.mockito</groupId>
-			<artifactId>mockito-junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+    <dependencies>
+        <!-- production -->
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-fsst</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.zstd</groupId>
+            <artifactId>zstd</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- testing -->
+        <!-- project-internal test deps -->
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-core</artifactId>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-reader</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-reader</artifactId>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
-	<profiles>
-		<!-- Mutation testing (opt-in: -P pitest). Common PIT setup is inherited from the parent
-		     `pitest` profile; only the scope differs. Run: ./mvnw -pl writer -am -P pitest verify
-		     Report: writer/target/pit-reports/. -->
-		<profile>
-			<id>pitest</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.pitest</groupId>
-						<artifactId>pitest-maven</artifactId>
-						<configuration>
-							<targetClasses>
-								<param>io.github.dfa1.vortex.writer.ChunkImpl</param>
-								<param>io.github.dfa1.vortex.writer.WriteRegistry</param>
-								<param>io.github.dfa1.vortex.writer.WriteRegistry$Builder</param>
-								<param>io.github.dfa1.vortex.writer.VortexWriter</param>
-								<param>io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder</param>
-								<param>io.github.dfa1.vortex.writer.encode.AlpRdEncodingEncoder</param>
-							</targetClasses>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-	</profiles>
+    <profiles>
+        <!-- Mutation testing (opt-in: -P pitest). Common PIT setup is inherited from the parent
+             `pitest` profile; only the scope differs. Run: ./mvnw -pl writer -am -P pitest verify
+             Report: writer/target/pit-reports/. -->
+        <profile>
+            <id>pitest</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <configuration>
+                            <targetClasses>
+                                <param>io.github.dfa1.vortex.writer.ChunkImpl</param>
+                                <param>io.github.dfa1.vortex.writer.WriteRegistry</param>
+                                <param>io.github.dfa1.vortex.writer.WriteRegistry$Builder</param>
+                                <param>io.github.dfa1.vortex.writer.VortexWriter</param>
+                                <param>io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder</param>
+                                <param>io.github.dfa1.vortex.writer.encode.AlpRdEncodingEncoder</param>
+                            </targetClasses>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

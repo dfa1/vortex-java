@@ -1,161 +1,161 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>io.github.dfa1.vortex</groupId>
-		<artifactId>vortex-java</artifactId>
-		<version>0.14.2-SNAPSHOT</version>
-	</parent>
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.dfa1.vortex</groupId>
+        <artifactId>vortex-java</artifactId>
+        <version>0.14.2-SNAPSHOT</version>
+    </parent>
 
-	<artifactId>vortex-core</artifactId>
+    <artifactId>vortex-core</artifactId>
 
-	<name>vortex-core</name>
-	<description>Core encoding/decoding library for the Vortex columnar file format. Zero-copy memory-mapped reads via
-		the Java FFM API (Java 25+), no JNI, no sun.misc.Unsafe.
-	</description>
+    <name>vortex-core</name>
+    <description>Core encoding/decoding library for the Vortex columnar file format. Zero-copy memory-mapped reads via
+        the Java FFM API (Java 25+), no JNI, no sun.misc.Unsafe.
+    </description>
 
-	<dependencies>
-		<!-- testing -->
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.assertj</groupId>
-			<artifactId>assertj-core</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.mockito</groupId>
-			<artifactId>mockito-junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+    <dependencies>
+        <!-- testing -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
-	<build>
-		<plugins>
-			<!-- Ratchet: core's javadoc is warning-free today, so keep it that way. The
-			     parent leaves failOnWarnings off because 313 warnings predate the check in
-			     other modules; nothing stops the already-clean ones from holding the line. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-javadoc-plugin</artifactId>
-				<configuration>
-					<failOnWarnings>true</failOnWarnings>
-				</configuration>
-			</plugin>
-			<!-- Publish a test-jar so reader/ and writer/ tests can reuse core test
-			     helpers (DTypes, EncodeTestHelper) without duplication. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-jar-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>publish-test-jar</id>
-						<goals>
-							<goal>test-jar</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
+    <build>
+        <plugins>
+            <!-- Ratchet: core's javadoc is warning-free today, so keep it that way. The
+                 parent leaves failOnWarnings off because 313 warnings predate the check in
+                 other modules; nothing stops the already-clean ones from holding the line. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <failOnWarnings>true</failOnWarnings>
+                </configuration>
+            </plugin>
+            <!-- Publish a test-jar so reader/ and writer/ tests can reuse core test
+                 helpers (DTypes, EncodeTestHelper) without duplication. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>publish-test-jar</id>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
-	<!--
-	  Generated sources (src/main/java/…/fbs and …/proto) are committed to the repo.
-	  Normal builds need no external tools — both generators are pure in-house Java.
+    <!--
+      Generated sources (src/main/java/…/fbs and …/proto) are committed to the repo.
+      Normal builds need no external tools — both generators are pure in-house Java.
 
-	  To regenerate after editing .fbs or .proto schemas:
-	    ./mvnw compile -pl fbs-gen,proto-gen
-	    ./mvnw generate-sources -pl core -P regenerate-sources
-	  Then commit the updated files.
-	-->
-	<profiles>
-		<profile>
-			<id>regenerate-sources</id>
-			<build>
-				<plugins>
-					<!--
-						Generate MemorySegment-native Java from the .fbs (FlatBuffers) and .proto
-						(Protobuf) schemas via the in-house vortex-fbs-gen / vortex-proto-gen tools.
+      To regenerate after editing .fbs or .proto schemas:
+        ./mvnw compile -pl fbs-gen,proto-gen
+        ./mvnw generate-sources -pl core -P regenerate-sources
+      Then commit the updated files.
+    -->
+    <profiles>
+        <profile>
+            <id>regenerate-sources</id>
+            <build>
+                <plugins>
+                    <!--
+                        Generate MemorySegment-native Java from the .fbs (FlatBuffers) and .proto
+                        (Protobuf) schemas via the in-house vortex-fbs-gen / vortex-proto-gen tools.
 
-						Pre-step: run `./mvnw compile -pl fbs-gen,proto-gen` once so these execs find
-						the classes. We use direct execs (rather than declaring the generators as Maven
-						deps) to avoid artificial provided-scope deps leaking into the published core POM.
-					-->
-					<plugin>
-						<groupId>org.codehaus.mojo</groupId>
-						<artifactId>exec-maven-plugin</artifactId>
-						<executions>
-							<execution>
-								<id>fbsgen-generate</id>
-								<phase>generate-sources</phase>
-								<goals>
-									<goal>exec</goal>
-								</goals>
-								<configuration>
-									<executable>java</executable>
-									<arguments>
-										<argument>-cp</argument>
-										<argument>${project.basedir}/../fbs-gen/target/classes</argument>
-										<argument>io.github.dfa1.vortex.fbsgen.Main</argument>
-										<argument>--out</argument>
-										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/core/fbs</argument>
-										<argument>${project.basedir}/src/main/fbs/array.fbs</argument>
-										<argument>${project.basedir}/src/main/fbs/dtype.fbs</argument>
-										<argument>${project.basedir}/src/main/fbs/footer.fbs</argument>
-										<argument>${project.basedir}/src/main/fbs/layout.fbs</argument>
-									</arguments>
-								</configuration>
-							</execution>
-							<execution>
-								<id>protogen-generate</id>
-								<phase>generate-sources</phase>
-								<goals>
-									<goal>exec</goal>
-								</goals>
-								<configuration>
-									<executable>java</executable>
-									<arguments>
-										<argument>-cp</argument>
-										<argument>${project.basedir}/../proto-gen/target/classes</argument>
-										<argument>io.github.dfa1.vortex.protogen.Main</argument>
-										<argument>--out</argument>
-										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/core/proto</argument>
-										<argument>${project.basedir}/src/main/proto/dtype.proto</argument>
-										<argument>${project.basedir}/src/main/proto/scalar.proto</argument>
-										<argument>${project.basedir}/src/main/proto/encodings.proto</argument>
-									</arguments>
-								</configuration>
-							</execution>
-						</executions>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
+                        Pre-step: run `./mvnw compile -pl fbs-gen,proto-gen` once so these execs find
+                        the classes. We use direct execs (rather than declaring the generators as Maven
+                        deps) to avoid artificial provided-scope deps leaking into the published core POM.
+                    -->
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>fbsgen-generate</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>java</executable>
+                                    <arguments>
+                                        <argument>-cp</argument>
+                                        <argument>${project.basedir}/../fbs-gen/target/classes</argument>
+                                        <argument>io.github.dfa1.vortex.fbsgen.Main</argument>
+                                        <argument>--out</argument>
+                                        <argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/core/fbs</argument>
+                                        <argument>${project.basedir}/src/main/fbs/array.fbs</argument>
+                                        <argument>${project.basedir}/src/main/fbs/dtype.fbs</argument>
+                                        <argument>${project.basedir}/src/main/fbs/footer.fbs</argument>
+                                        <argument>${project.basedir}/src/main/fbs/layout.fbs</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>protogen-generate</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>java</executable>
+                                    <arguments>
+                                        <argument>-cp</argument>
+                                        <argument>${project.basedir}/../proto-gen/target/classes</argument>
+                                        <argument>io.github.dfa1.vortex.protogen.Main</argument>
+                                        <argument>--out</argument>
+                                        <argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/core/proto</argument>
+                                        <argument>${project.basedir}/src/main/proto/dtype.proto</argument>
+                                        <argument>${project.basedir}/src/main/proto/scalar.proto</argument>
+                                        <argument>${project.basedir}/src/main/proto/encodings.proto</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
 
-		<!-- Mutation testing for the bounds primitive (ADR 0003 Phase E). Opt-in only:
-		     ./mvnw -pl core -P pitest verify
-		     Common PIT setup is inherited from the parent `pitest` profile; only the scope differs.
-		     Report: core/target/pit-reports/. -->
-		<profile>
-			<id>pitest</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.pitest</groupId>
-						<artifactId>pitest-maven</artifactId>
-						<configuration>
-							<targetClasses>
-								<param>io.github.dfa1.vortex.core.io.IoBounds</param>
-								<param>io.github.dfa1.vortex.core.io.PTypeIO</param>
-							</targetClasses>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-	</profiles>
+        <!-- Mutation testing for the bounds primitive (ADR 0003 Phase E). Opt-in only:
+             ./mvnw -pl core -P pitest verify
+             Common PIT setup is inherited from the parent `pitest` profile; only the scope differs.
+             Report: core/target/pit-reports/. -->
+        <profile>
+            <id>pitest</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <configuration>
+                            <targetClasses>
+                                <param>io.github.dfa1.vortex.core.io.IoBounds</param>
+                                <param>io.github.dfa1.vortex.core.io.PTypeIO</param>
+                            </targetClasses>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

@@ -1,166 +1,166 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>io.github.dfa1.vortex</groupId>
-		<artifactId>vortex-java</artifactId>
-		<version>0.14.2-SNAPSHOT</version>
-	</parent>
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.dfa1.vortex</groupId>
+        <artifactId>vortex-java</artifactId>
+        <version>0.14.2-SNAPSHOT</version>
+    </parent>
 
-	<artifactId>vortex-performance</artifactId>
+    <artifactId>vortex-performance</artifactId>
 
-	<name>vortex-performance</name>
-	<description>JMH benchmarks for the Vortex columnar file format Java implementation.</description>
+    <name>vortex-performance</name>
+    <description>JMH benchmarks for the Vortex columnar file format Java implementation.</description>
 
-	<properties>
-		<!-- maven.deploy.skip only stops the standard deploy:deploy mojo. It has no effect here:
-		     central-publishing-maven-plugin takes over the deploy phase via <extensions>true</extensions>
-		     in the parent's release profile and runs regardless, with its own skip switch. Both are
-		     needed to actually keep this benchmark-only module off Maven Central. -->
-		<maven.deploy.skip>true</maven.deploy.skip>
-		<skipPublishing>true</skipPublishing>
-		<skipShade>true</skipShade>
-		<!-- This module is diagnostic CLI tooling (JMH benchmarks + ad-hoc taxi-data inspectors),
-		     not shipped library code. By-design uses of {@code System.out}, {@code System.err},
-		     {@code java.io.tmpdir}, and {@code main(String[] args)} dominate the Sonar findings
-		     and have no library-quality signal. Excluded from analysis to keep the dashboard
-		     focused on library modules. -->
-		<sonar.skip>true</sonar.skip>
-	</properties>
+    <properties>
+        <!-- maven.deploy.skip only stops the standard deploy:deploy mojo. It has no effect here:
+             central-publishing-maven-plugin takes over the deploy phase via <extensions>true</extensions>
+             in the parent's release profile and runs regardless, with its own skip switch. Both are
+             needed to actually keep this benchmark-only module off Maven Central. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <skipPublishing>true</skipPublishing>
+        <skipShade>true</skipShade>
+        <!-- This module is diagnostic CLI tooling (JMH benchmarks + ad-hoc taxi-data inspectors),
+             not shipped library code. By-design uses of {@code System.out}, {@code System.err},
+             {@code java.io.tmpdir}, and {@code main(String[] args)} dominate the Sonar findings
+             and have no library-quality signal. Excluded from analysis to keep the dashboard
+             focused on library modules. -->
+        <sonar.skip>true</sonar.skip>
+    </properties>
 
-	<dependencies>
-		<!-- production -->
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-writer</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-parquet</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>dev.hardwood</groupId>
-			<artifactId>hardwood-core</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-reader</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-inspector</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-calcite</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>dev.vortex</groupId>
-			<artifactId>vortex-jni</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.zstd</groupId>
-			<artifactId>zstd</artifactId>
-		</dependency>
-		<!-- hardwood (Parquet reader) requires zstd-jni to decompress ZSTD-compressed Parquet pages -->
-		<dependency>
-			<groupId>com.github.luben</groupId>
-			<artifactId>zstd-jni</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.arrow</groupId>
-			<artifactId>arrow-vector</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.arrow</groupId>
-			<artifactId>arrow-c-data</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.arrow</groupId>
-			<artifactId>arrow-memory-unsafe</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.openjdk.jmh</groupId>
-			<artifactId>jmh-core</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.openjdk.jmh</groupId>
-			<artifactId>jmh-generator-annprocess</artifactId>
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-simple</artifactId>
-			<scope>runtime</scope>
-		</dependency>
-	</dependencies>
+    <dependencies>
+        <!-- production -->
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-writer</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-parquet</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.hardwood</groupId>
+            <artifactId>hardwood-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-reader</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-inspector</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-calcite</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.vortex</groupId>
+            <artifactId>vortex-jni</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.zstd</groupId>
+            <artifactId>zstd</artifactId>
+        </dependency>
+        <!-- hardwood (Parquet reader) requires zstd-jni to decompress ZSTD-compressed Parquet pages -->
+        <dependency>
+            <groupId>com.github.luben</groupId>
+            <artifactId>zstd-jni</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-vector</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-c-data</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-memory-unsafe</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<configuration>
-					<release>25</release>
-					<!-- Benchmarks compile against Apache Arrow; its bytecode carries
-					     @org.immutables.value.Generated without the annotation jar, tripping
-					     javac's classfile lint on a dependency we don't own. Drop only that
-					     category; the parent's -Werror keeps every other lint strict. -->
-					<compilerArgs combine.self="override">
-						<arg>-Xlint:all,-classfile</arg>
-					</compilerArgs>
-					<annotationProcessorPaths>
-						<path>
-							<groupId>org.openjdk.jmh</groupId>
-							<artifactId>jmh-generator-annprocess</artifactId>
-						</path>
-					</annotationProcessorPaths>
-				</configuration>
-			</plugin>
-			<!-- Run benchmarks: ./bench [ClassName.methodName] -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-shade-plugin</artifactId>
-				<executions>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>shade</goal>
-						</goals>
-						<configuration>
-							<skip>${skipShade}</skip>
-							<finalName>benchmarks</finalName>
-							<transformers>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>org.openjdk.jmh.Main</mainClass>
-								</transformer>
-								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
-							</transformers>
-							<filters>
-								<filter>
-									<artifact>*:*</artifact>
-									<excludes>
-										<exclude>META-INF/*.SF</exclude>
-										<exclude>META-INF/*.DSA</exclude>
-										<exclude>META-INF/*.RSA</exclude>
-									</excludes>
-								</filter>
-							</filters>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>25</release>
+                    <!-- Benchmarks compile against Apache Arrow; its bytecode carries
+                         @org.immutables.value.Generated without the annotation jar, tripping
+                         javac's classfile lint on a dependency we don't own. Drop only that
+                         category; the parent's -Werror keeps every other lint strict. -->
+                    <compilerArgs combine.self="override">
+                        <arg>-Xlint:all,-classfile</arg>
+                    </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.openjdk.jmh</groupId>
+                            <artifactId>jmh-generator-annprocess</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- Run benchmarks: ./bench [ClassName.methodName] -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${skipShade}</skip>
+                            <finalName>benchmarks</finalName>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>org.openjdk.jmh.Main</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -1,239 +1,239 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>io.github.dfa1.vortex</groupId>
-		<artifactId>vortex-java</artifactId>
-		<version>0.14.2-SNAPSHOT</version>
-	</parent>
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.dfa1.vortex</groupId>
+        <artifactId>vortex-java</artifactId>
+        <version>0.14.2-SNAPSHOT</version>
+    </parent>
 
-	<artifactId>vortex-integration</artifactId>
+    <artifactId>vortex-integration</artifactId>
 
-	<name>vortex-integration</name>
-	<description>Integration tests for the Vortex columnar file format Java implementation.</description>
+    <name>vortex-integration</name>
+    <description>Integration tests for the Vortex columnar file format Java implementation.</description>
 
-	<properties>
-		<maven.deploy.skip>true</maven.deploy.skip>
-		<!-- JUnit tags excluded from a routine `./mvnw verify`. Defaults to `raincloud` so the
-		     real-world Raincloud corpus tests never run by default — see the failsafe plugin
-		     config below. Override on the CLI to opt in, e.g. `-Dvortex.it.excludedGroups=`
-		     (empty) runs every tag; a literal pom value could not be cleared this way. -->
-		<vortex.it.excludedGroups>raincloud</vortex.it.excludedGroups>
-	</properties>
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- JUnit tags excluded from a routine `./mvnw verify`. Defaults to `raincloud` so the
+             real-world Raincloud corpus tests never run by default — see the failsafe plugin
+             config below. Override on the CLI to opt in, e.g. `-Dvortex.it.excludedGroups=`
+             (empty) runs every tag; a literal pom value could not be cleared this way. -->
+        <vortex.it.excludedGroups>raincloud</vortex.it.excludedGroups>
+    </properties>
 
-	<dependencies>
-		<!-- testing -->
-		<dependency>
-			<groupId>io.github.dfa1.zstd</groupId>
-			<artifactId>zstd</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<!-- hardwood (Parquet reader) requires zstd-jni to decompress ZSTD-compressed Parquet pages -->
-		<dependency>
-			<groupId>com.github.luben</groupId>
-			<artifactId>zstd-jni</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-writer</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-parquet</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-csv</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>dev.hardwood</groupId>
-			<artifactId>hardwood-core</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-core</artifactId>
-			<type>test-jar</type>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-reader</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-inspector</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>dev.vortex</groupId>
-			<artifactId>vortex-jni</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.arrow</groupId>
-			<artifactId>arrow-vector</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.arrow</groupId>
-			<artifactId>arrow-c-data</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.arrow</groupId>
-			<artifactId>arrow-memory-unsafe</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.assertj</groupId>
-			<artifactId>assertj-core</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-simple</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+    <dependencies>
+        <!-- testing -->
+        <dependency>
+            <groupId>io.github.dfa1.zstd</groupId>
+            <artifactId>zstd</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- hardwood (Parquet reader) requires zstd-jni to decompress ZSTD-compressed Parquet pages -->
+        <dependency>
+            <groupId>com.github.luben</groupId>
+            <artifactId>zstd-jni</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-writer</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-parquet</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-csv</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.hardwood</groupId>
+            <artifactId>hardwood-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-core</artifactId>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-reader</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-inspector</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.vortex</groupId>
+            <artifactId>vortex-jni</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-vector</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-c-data</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-memory-unsafe</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
-	<profiles>
-		<profile>
-			<id>coverage</id>
-			<!-- When reporting coverage, promote every dependency module exercised by the
-			     integration tests from test to compile scope so jacoco:report-aggregate can
-			     locate their class directories — otherwise their cross-module integration
-			     coverage never reaches Sonar (parquet/csv were previously omitted). The
-			     integration module is never published (maven.deploy.skip=true) so this has no
-			     downstream impact. Unit coverage of non-dependency modules (cli, calcite,
-			     fbs-gen, …) reaches Sonar through their own per-module jacoco.xml, not here. -->
-			<dependencies>
-				<dependency>
-					<groupId>io.github.dfa1.vortex</groupId>
-					<artifactId>vortex-core</artifactId>
-					<scope>compile</scope>
-				</dependency>
-				<dependency>
-					<groupId>io.github.dfa1.vortex</groupId>
-					<artifactId>vortex-reader</artifactId>
-					<scope>compile</scope>
-				</dependency>
-				<dependency>
-					<groupId>io.github.dfa1.vortex</groupId>
-					<artifactId>vortex-writer</artifactId>
-					<scope>compile</scope>
-				</dependency>
-				<dependency>
-					<groupId>io.github.dfa1.vortex</groupId>
-					<artifactId>vortex-inspector</artifactId>
-					<scope>compile</scope>
-				</dependency>
-				<dependency>
-					<groupId>io.github.dfa1.vortex</groupId>
-					<artifactId>vortex-parquet</artifactId>
-					<scope>compile</scope>
-				</dependency>
-				<dependency>
-					<groupId>io.github.dfa1.vortex</groupId>
-					<artifactId>vortex-csv</artifactId>
-					<scope>compile</scope>
-				</dependency>
-			</dependencies>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.jacoco</groupId>
-						<artifactId>jacoco-maven-plugin</artifactId>
-						<executions>
-							<!-- Aggregate integration-test coverage across all dependency modules.
-							     report-integration only covers classes in THIS module (none), so
-							     we use report-aggregate to collect reader/writer/core class hits
-							     from the jacoco-it.exec files that failsafe produces here. -->
-							<execution>
-								<id>report-aggregate-it</id>
-								<phase>verify</phase>
-								<goals>
-									<goal>report-aggregate</goal>
-								</goals>
-								<configuration>
-									<outputDirectory>${project.reporting.outputDirectory}/jacoco-aggregate</outputDirectory>
-								</configuration>
-							</execution>
-						</executions>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-	</profiles>
+    <profiles>
+        <profile>
+            <id>coverage</id>
+            <!-- When reporting coverage, promote every dependency module exercised by the
+                 integration tests from test to compile scope so jacoco:report-aggregate can
+                 locate their class directories — otherwise their cross-module integration
+                 coverage never reaches Sonar (parquet/csv were previously omitted). The
+                 integration module is never published (maven.deploy.skip=true) so this has no
+                 downstream impact. Unit coverage of non-dependency modules (cli, calcite,
+                 fbs-gen, …) reaches Sonar through their own per-module jacoco.xml, not here. -->
+            <dependencies>
+                <dependency>
+                    <groupId>io.github.dfa1.vortex</groupId>
+                    <artifactId>vortex-core</artifactId>
+                    <scope>compile</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.github.dfa1.vortex</groupId>
+                    <artifactId>vortex-reader</artifactId>
+                    <scope>compile</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.github.dfa1.vortex</groupId>
+                    <artifactId>vortex-writer</artifactId>
+                    <scope>compile</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.github.dfa1.vortex</groupId>
+                    <artifactId>vortex-inspector</artifactId>
+                    <scope>compile</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.github.dfa1.vortex</groupId>
+                    <artifactId>vortex-parquet</artifactId>
+                    <scope>compile</scope>
+                </dependency>
+                <dependency>
+                    <groupId>io.github.dfa1.vortex</groupId>
+                    <artifactId>vortex-csv</artifactId>
+                    <scope>compile</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <executions>
+                            <!-- Aggregate integration-test coverage across all dependency modules.
+                                 report-integration only covers classes in THIS module (none), so
+                                 we use report-aggregate to collect reader/writer/core class hits
+                                 from the jacoco-it.exec files that failsafe produces here. -->
+                            <execution>
+                                <id>report-aggregate-it</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>report-aggregate</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.reporting.outputDirectory}/jacoco-aggregate</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<configuration>
-					<!-- This module compiles against Apache Arrow, whose classes carry
-					     @org.immutables.value.Generated in their bytecode without exporting
-					     the annotation jar — javac's classfile lint then warns about a
-					     dependency we don't own. Drop only that category here; every other
-					     lint stays strict via the parent's -Werror. -->
-					<compilerArgs combine.self="override">
-						<arg>-Xlint:all,-classfile</arg>
-					</compilerArgs>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration>
-					<excludes>
-						<exclude>**/*IntegrationTest.java</exclude>
-					</excludes>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-failsafe-plugin</artifactId>
-				<configuration>
-					<includes>
-						<include>**/*IntegrationTest.java</include>
-					</includes>
-					<!-- Exclude the real-world Raincloud corpus tests from a routine
-					     `./mvnw verify`: they only do real work when the corpus is hydrated
-					     locally, and the size-comparison test in particular runs a CPU-heavy
-					     Parquet->Vortex re-encode per slug that a developer would not expect
-					     from a default build. Bound to a property (not a literal) so the CLI
-					     can clear it: `-Dvortex.it.excludedGroups=` opts every raincloud test
-					     back in. This exclusion filters even an explicit `-Dit.test=Raincloud...`
-					     class selection, so running a raincloud test always requires clearing
-					     the property as well. -->
-					<excludedGroups>${vortex.it.excludedGroups}</excludedGroups>
-					<argLine>
-						@{argLine}
-						--add-opens java.base/java.nio=ALL-UNNAMED
-						--enable-native-access=ALL-UNNAMED
-						--sun-misc-unsafe-memory-access=allow
-					</argLine>
-				</configuration>
-				<executions>
-					<execution>
-						<goals>
-							<goal>integration-test</goal>
-							<goal>verify</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- This module compiles against Apache Arrow, whose classes carry
+                         @org.immutables.value.Generated in their bytecode without exporting
+                         the annotation jar — javac's classfile lint then warns about a
+                         dependency we don't own. Drop only that category here; every other
+                         lint stays strict via the parent's -Werror. -->
+                    <compilerArgs combine.self="override">
+                        <arg>-Xlint:all,-classfile</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*IntegrationTest.java</include>
+                    </includes>
+                    <!-- Exclude the real-world Raincloud corpus tests from a routine
+                         `./mvnw verify`: they only do real work when the corpus is hydrated
+                         locally, and the size-comparison test in particular runs a CPU-heavy
+                         Parquet->Vortex re-encode per slug that a developer would not expect
+                         from a default build. Bound to a property (not a literal) so the CLI
+                         can clear it: `-Dvortex.it.excludedGroups=` opts every raincloud test
+                         back in. This exclusion filters even an explicit `-Dit.test=Raincloud...`
+                         class selection, so running a raincloud test always requires clearing
+                         the property as well. -->
+                    <excludedGroups>${vortex.it.excludedGroups}</excludedGroups>
+                    <argLine>
+                        @{argLine}
+                        --add-opens java.base/java.nio=ALL-UNNAMED
+                        --enable-native-access=ALL-UNNAMED
+                        --sun-misc-unsafe-memory-access=allow
+                    </argLine>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
