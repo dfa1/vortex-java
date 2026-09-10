@@ -10,6 +10,8 @@ For task-oriented usage see [how-to.md](how-to.md); for design rationale see [ex
 - [Encoding registry](#encoding-registry)
 - [FSST (`io.github.dfa1.vortex.fsst`)](#fsst-iogithubdfa1vortexfsst)
 - [Parquet / CSV import and Parquet export](#parquet--csv-import-and-parquet-export)
+- [JDBC import](#jdbc-import)
+- [Calcite SQL adapter](#calcite-sql-adapter)
 - [CLI](#cli)
 - [Encoding compatibility](compatibility.md)
 
@@ -73,6 +75,18 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 
 ## Reader API
 
+### `VortexHandle` (`io.github.dfa1.vortex.reader.VortexHandle`)
+
+Interface common to both handle implementations below — everything scan-shaped
+(`dtype()`, `layout()`, `scan(ScanOptions)`, `rawSegment(SegmentSpec)`, …) is declared here so code
+that only reads (e.g. `ParquetExporter.exportParquet(VortexHandle, Path)`) doesn't care whether the
+source is a local file or a remote URL. Implements `Closeable`.
+
+| Implementation    | Backing storage                              |
+|--------------------|-----------------------------------------------|
+| `VortexReader`     | Memory-mapped local file                       |
+| `VortexHttpReader` | Remote file read via HTTP Range requests       |
+
 ### `VortexReader` (`io.github.dfa1.vortex.reader.VortexReader`)
 
 Memory-mapped handle to a Vortex file. Implements `AutoCloseable`. Closing releases the mmap region;
@@ -93,6 +107,26 @@ all `Array` buffers obtained during scans become invalid.
 | `slice(offset, length)`               | `MemorySegment`           | Zero-copy slice of mmap region                |
 | `close()`                             | —                         | Releases mmap                                 |
 
+### `VortexHttpReader` (`io.github.dfa1.vortex.reader.VortexHttpReader`)
+
+Handle to a remote Vortex file read via HTTP Range requests — no full-file download. Implements
+`VortexHandle`. On open, fetches the last 65 KB (`TAIL_SIZE`) in one request to locate the trailer,
+postscript, and metadata blobs, parsing `Content-Range` for the file size instead of a separate
+`HEAD` round trip; each subsequent `rawSegment(SegmentSpec)` call during a scan fires one targeted
+Range request. All fetched bytes share a single confined `Arena`, released on `close()`.
+
+| Method                                                                     | Notes                                                    |
+|------------------------------------------------------------------------------|-----------------------------------------------------------|
+| `static open(URI)`                                                        | Uses `ReadRegistry.loadAll()`, a shared default `HttpClient` |
+| `static open(URI, ReadRegistry)`                                          | Custom decode registry                                    |
+| `static open(URI, ReadRegistry, HttpClient)`                              | Caller-supplied `HttpClient` (proxy, custom TLS, per-request timeout) |
+| `static open(URI, ReadRegistry, LayoutRegistry, HttpClient)`              | Custom decode registry, layout registry, and `HttpClient`  |
+| `close()`                                                                  | Releases the confined `Arena` backing all fetched buffers  |
+
+The default `HttpClient` is a single JDK client shared across every `VortexHttpReader` instance
+(never closed — its lifetime tracks the JVM); supply your own via the three-or-four-argument
+`open` overloads to configure proxying, TLS, or timeouts per call site.
+
 ---
 
 ## Writer API
@@ -104,7 +138,8 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 | Method                                                                           | Notes                                                                                                            |
 |----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
 | `static create(WritableByteChannel, DType.Struct, WriteOptions)`                 | Default codec set                                                                                                |
-| `static create(WritableByteChannel, DType.Struct, WriteOptions, List<Encoding>)` | Custom codec set                                                                                                 |
+| `static create(WritableByteChannel, DType.Struct, WriteOptions, List<EncodingEncoder>)` | Custom encoder list; disables the global dict (would otherwise silently reach outside the given list) |
+| `static create(WritableByteChannel, DType.Struct, WriteOptions, WriteRegistry)`  | Custom [`WriteRegistry`](#writeregistry-iogithubdfa1vortexwriterwriteregistry) — encoders and extension encoders together |
 | `writeChunk(Consumer<Chunk>)`                                                    | One batch of rows; typed builder validates column names + array types at each `.put`; missing columns throw `IllegalStateException` when the lambda returns. Preferred when columns are known at compile time. |
 | `writeChunk(Map<ColumnName, Object>)`                                                | One batch of rows by map. Validates that every schema column is present and that all columns share the same row count. Use when the column set is built dynamically (Parquet/JDBC importers, generic exporters). |
 | `close()`                                                                        | Finalizes file (footer, postscript, trailer)                                                                     |
@@ -249,6 +284,39 @@ Register custom encoding decoders programmatically via `register(EncodingDecoder
 `ServiceLoader` discovery. Extension decoders
 (`io.github.dfa1.vortex.reader.extension.ExtensionDecoder`) are not registry-managed: the built-in
 implementations are singletons invoked directly by their `ExtensionId`.
+
+### `WriteRegistry` (`io.github.dfa1.vortex.writer.WriteRegistry`)
+
+The write-side mirror of `ReadRegistry`: maps `EncodingId` → `EncodingEncoder` and `ExtensionId` →
+`ExtensionEncoder`. Immutable after construction. Build via `WriteRegistry.builder()` or the static
+convenience factories.
+
+| Method                | Notes                                                                |
+|------------------------|-----------------------------------------------------------------------|
+| `static builder()`    | Returns a fresh `Builder`                                             |
+| `static loadAll()`    | Immutable registry populated with all built-in encoders + extensions  |
+| `static empty()`      | Immutable empty registry                                              |
+| `encoderMap()`        | `Map<EncodingId, EncodingEncoder>` for `EncodeContext`                |
+| `lookup(ExtensionId)` | Registered `ExtensionEncoder` for the id, or `null`                   |
+
+### `WriteRegistry.Builder`
+
+| Method                        | Notes                                                                      |
+|--------------------------------|------------------------------------------------------------------------------|
+| `register(EncodingEncoder)`   | Add a custom encoder; throws `VortexException` if its id is already registered |
+| `register(ExtensionEncoder)`  | Add an extension encoder, keyed by `ExtensionEncoder#extensionId()`; throws on duplicate |
+| `registerDefaults()`          | Add every built-in `EncodingEncoder` and `ExtensionEncoder`                |
+| `build()`                     | Produce the immutable `WriteRegistry`                                     |
+
+`EncodingId` is a sealed `WellKnown`/`Custom` type (see [Identity types](#identity-types-iogithubdfa1vortexcoremodel)),
+so `register(EncodingEncoder)` accepts a genuinely third-party encoding — `encodingId()` can return
+`new EncodingId.Custom("acme.myencoding")`, and `VortexWriter.create(channel, schema, options,
+registry)` will pick it whenever its `accepts(DType)` matches. `ExtensionId`, by contrast, is a
+**closed enum** with only the four spec-defined constants (`VORTEX_DATE`/`VORTEX_TIME`/
+`VORTEX_TIMESTAMP`/`VORTEX_UUID`) — `register(ExtensionEncoder)` can only re-implement one of
+those four, not introduce a wire-new extension type; adding a genuinely new extension type means
+adding an `ExtensionId` constant in `core` itself (see [CLAUDE.md § Adding an extension
+type](../CLAUDE.md#adding-an-extension-type)).
 
 ---
 
@@ -465,6 +533,69 @@ file.
 
 A `URI` source streams the response body directly, front to back, as it arrives — unlike
 Parquet's random-access footer-first format, CSV needs no Range requests and no local temp file.
+
+---
+
+## JDBC import
+
+### `JdbcImporter` (`io.github.dfa1.vortex.jdbc.JdbcImporter`)
+
+Reads rows from a JDBC `ResultSet` and writes a Vortex file. The schema is derived entirely from
+`ResultSetMetaData` — no type inference, unlike `CsvImporter`. SQL `NULL` is stored as a zero/empty
+placeholder plus a validity bit (`0`, `0.0`, `false`, `""`); `vortex.date`/`vortex.time`/
+`vortex.timestamp`/`vortex.uuid` columns round-trip through the matching JDBC getter
+(`getDate`/`getTime`/`getTimestamp`/`getObject`, the last handling `java.util.UUID`, `byte[16]`, and
+36-char string driver representations).
+
+| Method                                                       | Notes                                            |
+|-----------------------------------------------------------------|----------------------------------------------------|
+| `static importTable(Connection, String tableName, Path out)` | `SELECT * FROM tableName`, default options       |
+| `static importQuery(Connection, String sql, Path out)`       | Arbitrary `SELECT`, default options              |
+| `static importQuery(Connection, String sql, Path out, JdbcImportOptions)` | Arbitrary `SELECT`, tuned            |
+
+### `JdbcImportOptions` (`io.github.dfa1.vortex.jdbc.JdbcImportOptions`)
+
+Record: `(int fetchSize, int chunkSize, WriteOptions writeOptions, ProgressListener progressListener)`.
+
+| Factory / builder                 | Notes                                                                    |
+|-------------------------------------|-----------------------------------------------------------------------------|
+| `JdbcImportOptions.defaults()`    | `fetchSize=10_000`, `chunkSize=65_536`, `WriteOptions.cascading(3)`, no listener |
+| `.withFetchSize(int)`             | Rows the JDBC driver fetches per round trip                             |
+| `.withChunkSize(int)`             | Rows per Vortex chunk written to disk                                   |
+| `.withWriteOptions(WriteOptions)` | Override write options                                                  |
+| `.withProgressListener(listener)` | Callback invoked after each full chunk is flushed                       |
+
+### `ProgressListener` (`io.github.dfa1.vortex.jdbc.ProgressListener`)
+
+`@FunctionalInterface`: `void onProgress(long rowsDone, long rowsTotal)`. `rowsTotal` is `-1` —
+JDBC has no cheap way to know the row count ahead of a `SELECT COUNT(*)`.
+
+---
+
+## Calcite SQL adapter
+
+### `VortexCalcite` (`io.github.dfa1.vortex.calcite.VortexCalcite`)
+
+Entry point for querying Vortex files with SQL through [Apache
+Calcite](https://calcite.apache.org/). `connect(String, Map<String, Path>)` folds the
+`DriverManager` + `unwrap` + `getRootSchema().add(...)` boilerplate into one call, returning a plain
+`java.sql.Connection`.
+
+| Method                                                          | Notes                                                              |
+|--------------------------------------------------------------------|------------------------------------------------------------------------|
+| `static connect(String schemaName, Map<String, Path> tables)`  | Opens a Calcite JDBC connection with `tables` registered under `schemaName` (`schemaName.tableName` in SQL); connection is the caller's to close |
+
+The connection uses Calcite's `JAVA` lexical policy (case-sensitive identifiers, unquoted case
+preserved) and the **Babel** SQL parser, so a column named after a reserved word — `close`, `open`,
+`value`, `year`, … — is queryable unquoted (`select close, open from vtx.ohlc`). The exception is
+keywords that open a typed literal (`date`, `time`, `timestamp`, `interval`), which stay reserved
+even under Babel and need back-ticks: `` select `date` from vtx.ohlc ``.
+
+Whole-table aggregates (`min`/`max`/`sum`) are answered from zone-map statistics via
+`VortexAggregatePushDownRule` where possible — no data segment is decoded. `connect` is the
+supported entry point; `VortexSchema`/`VortexTable` (`io.github.dfa1.vortex.calcite`) are the
+underlying schema/table plumbing it assembles, exposed for callers building a Calcite schema tree
+by hand instead of going through `connect`.
 
 ---
 

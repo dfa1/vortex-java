@@ -361,6 +361,89 @@ java -jar cli/target/vortex-cli-*-all.jar import https://example.com/data.csv ou
 
 ---
 
+## Import from a JDBC source
+
+**API:**
+
+```java
+import io.github.dfa1.vortex.jdbc.JdbcImporter;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+
+try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost/mydb", "user", "pw")) {
+    JdbcImporter.importTable(conn, "trades", Path.of("trades.vortex"));
+}
+```
+
+An arbitrary query instead of a whole table:
+
+```java
+try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost/mydb", "user", "pw")) {
+    JdbcImporter.importQuery(conn, "SELECT * FROM trades WHERE volume > 1000000", Path.of("trades.vortex"));
+}
+```
+
+Tune the driver fetch size, Vortex chunk size, write options, and progress reporting:
+
+```java
+import io.github.dfa1.vortex.jdbc.JdbcImportOptions;
+
+JdbcImportOptions opts = JdbcImportOptions.defaults()
+    .withFetchSize(50_000)
+    .withProgressListener((rowsDone, rowsTotal) -> System.out.println("imported " + rowsDone + " rows"));
+
+try (Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost/mydb", "user", "pw")) {
+    JdbcImporter.importQuery(conn, "SELECT * FROM trades", Path.of("trades.vortex"), opts);
+}
+```
+
+The schema is derived entirely from `ResultSetMetaData` — no separate schema step needed. Columns
+mapping to `vortex.date`/`vortex.time`/`vortex.timestamp`/`vortex.uuid` round-trip through the
+matching JDBC getter; other SQL types map to the closest `DType.Primitive`/`Utf8`.
+
+---
+
+## Query a Vortex file with SQL (Calcite)
+
+**API:**
+
+```java
+import io.github.dfa1.vortex.calcite.VortexCalcite;
+
+import java.sql.ResultSet;
+import java.sql.Statement;
+
+try (Connection conn = VortexCalcite.connect("vtx", Map.of("ohlc", Path.of("ohlc.vortex")));
+     Statement st = conn.createStatement();
+     ResultSet rs = st.executeQuery("select symbol, avg(price) from vtx.ohlc group by symbol")) {
+    while (rs.next()) {
+        System.out.println(rs.getString(1) + ": " + rs.getDouble(2));
+    }
+}
+```
+
+Register several files under one schema — each map entry becomes `vtx.<tableName>`:
+
+```java
+Map<String, Path> tables = Map.of(
+    "ohlc", Path.of("ohlc.vortex"),
+    "trades", Path.of("trades.vortex")
+);
+try (Connection conn = VortexCalcite.connect("vtx", tables)) {
+    // select * from vtx.ohlc join vtx.trades on ...
+}
+```
+
+Whole-table `min`/`max`/`sum` aggregates are answered straight from zone-map statistics — no data
+segment is decoded. Column names that collide with SQL reserved words (`close`, `open`, `value`,
+`year`, …) work unquoted; the handful that open a typed literal (`date`, `time`, `timestamp`,
+`interval`) still need back-ticks: `` select `date` from vtx.ohlc ``. See
+[reference.md#calcite-sql-adapter](reference.md#calcite-sql-adapter) for the full lexical/parser
+policy.
+
+---
+
 ## Export to CSV
 
 **CLI:**
@@ -463,6 +546,121 @@ try (var reader = VortexReader.open(Path.of("attrs.vortex"));
 `ScanOptions.all()`/CLI `inspect` show `vortex.map` in a file's layout tree as a `vortex.listview`
 child under the `vortex.map` node — see `docs/reference.md#core-types` for `DType.Map`'s full
 field list (`keyType`, `valueType`, `keysSorted`, `nullable`) and `entriesDtype()`.
+
+---
+
+## Register a custom encoding (write side)
+
+`EncodingId` is a sealed `WellKnown`/`Custom` type — `EncodingId.Custom` lets a third party mint
+its own wire id (e.g. `"acme.xor64"`) without touching vortex-java itself. A custom
+`EncodingEncoder` writes it; the matching `EncodingDecoder`, registered separately in the reader
+module, reads it back — writer and reader never share code, only the wire id.
+
+**Write side** (encoder + registration + write, in one flow):
+
+```java
+import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.writer.encode.EncodeContext;
+import io.github.dfa1.vortex.writer.encode.EncodeResult;
+import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
+import io.github.dfa1.vortex.writer.WriteRegistry;
+
+import java.lang.foreign.MemorySegment;
+
+final class XorI64EncodingEncoder implements EncodingEncoder {
+    private static final EncodingId ID = new EncodingId.Custom("acme.xor64");
+    private static final long KEY = 0xA5A5_A5A5_A5A5_A5A5L;
+
+    @Override
+    public EncodingId encodingId() {
+        return ID;
+    }
+
+    @Override
+    public boolean accepts(DType dtype) {
+        return dtype instanceof DType.Primitive p && p.ptype() == PType.I64;
+    }
+
+    @Override
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        long[] values = (long[]) data;
+        MemorySegment seg = ctx.arena().allocate((long) values.length * 8, 8);
+        for (int i = 0; i < values.length; i++) {
+            seg.setAtIndex(VortexFormat.LE_LONG, i, values[i] ^ KEY);
+        }
+        return EncodeResult.simple(ID, seg, null, null);
+    }
+}
+
+DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false);
+
+// a registry containing only this encoder — accepts(DType) alone wouldn't win a default
+// cascade competition against the built-in vortex.primitive for every I64 column
+WriteRegistry registry = WriteRegistry.builder().register(new XorI64EncodingEncoder()).build();
+
+try (var ch = FileChannel.open(Path.of("data.vortex"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+     var writer = VortexWriter.create(ch, schema, WriteOptions.defaults(), registry)) {
+    writer.writeChunk(chunk -> chunk.put(ColumnName.of("id"), new long[]{1, 2, 3}));
+}
+```
+
+To mix a custom encoder into the normal cascade competition instead of a single-encoder registry,
+start from `WriteRegistry.builder().registerDefaults()` and override `EncodingEncoder#expectedRatio`
+to steer selection, rather than relying on `accepts(DType)` alone.
+
+**Read side** (matching decoder, registered on `ReadRegistry` — see
+[reference.md#encoding-registry](reference.md#encoding-registry)):
+
+```java
+import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.decode.DecodeContext;
+import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
+
+import java.lang.foreign.MemorySegment;
+
+final class XorI64EncodingDecoder implements EncodingDecoder {
+    private static final EncodingId ID = new EncodingId.Custom("acme.xor64");
+    private static final long KEY = 0xA5A5_A5A5_A5A5_A5A5L;
+
+    @Override
+    public EncodingId encodingId() {
+        return ID;
+    }
+
+    @Override
+    public Array decode(DecodeContext ctx) {
+        MemorySegment buf = ctx.buffer(0);
+        long n = ctx.rowCount();
+        MemorySegment out = ctx.arena().allocate(n * 8, 8);
+        for (long i = 0; i < n; i++) {
+            out.setAtIndex(VortexFormat.LE_LONG, i, buf.getAtIndex(VortexFormat.LE_LONG, i) ^ KEY);
+        }
+        return new MaterializedLongArray(ctx.dtype(), n, out);
+    }
+}
+
+ReadRegistry readRegistry = ReadRegistry.builder()
+    .registerDefaults()
+    .register(new XorI64EncodingDecoder())
+    .build();
+
+try (VortexReader vf = VortexReader.open(Path.of("data.vortex"), readRegistry)) {
+    // "id" decodes through XorI64EncodingDecoder
+}
+```
+
+`ExtensionId` (the `vortex.date`/`vortex.time`/`vortex.timestamp`/`vortex.uuid` family) is a
+**closed enum**, unlike `EncodingId` — a custom `ExtensionEncoder`/`ExtensionDecoder` pair can only
+re-implement one of those four spec-defined ids, not introduce a wire-new extension type from
+outside the codebase.
 
 ---
 
