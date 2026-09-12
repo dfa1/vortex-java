@@ -72,6 +72,7 @@ public final class HttpRangeDemo {
         long filterMin = DEFAULT_FILTER_MIN;
         long filterMax = DEFAULT_FILTER_MAX;
         String projectColumn = DEFAULT_PROJECT_COLUMN;
+        boolean upload = true;
 
         int i = 0;
         while (i < args.length) {
@@ -100,6 +101,10 @@ public final class HttpRangeDemo {
                     projectColumn = args[++i];
                     i++;
                 }
+                case "--no-upload" -> {
+                    upload = false;
+                    i++;
+                }
                 default -> throw new IllegalArgumentException("unknown argument: " + args[i]);
             }
         }
@@ -110,23 +115,30 @@ public final class HttpRangeDemo {
         long fileSize = Files.size(file);
 
         if (serverBaseUri != null) {
-            runAgainst(serverBaseUri, file, fileSize, filterColumn, filterMin, filterMax, projectColumn);
+            runAgainst(serverBaseUri, file, fileSize, filterColumn, filterMin, filterMax, projectColumn, upload);
         } else {
+            if (!upload) {
+                throw new IllegalArgumentException("--no-upload requires --server (an embedded server starts empty)");
+            }
             try (VortexServer server = VortexServer.start(Files.createTempDirectory("vortex-server"), 0)) {
                 System.out.println("Embedded vortex-server at " + server.baseUri());
-                runAgainst(server.baseUri(), file, fileSize, filterColumn, filterMin, filterMax, projectColumn);
+                runAgainst(server.baseUri(), file, fileSize, filterColumn, filterMin, filterMax, projectColumn, true);
             }
         }
     }
 
     private static void runAgainst(URI serverBaseUri, Path localFile, long fileSize,
-            String filterColumn, long filterMin, long filterMax, String projectColumn)
+            String filterColumn, long filterMin, long filterMax, String projectColumn, boolean upload)
             throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
         URI objectUri = serverBaseUri.resolve(localFile.getFileName().toString());
 
-        System.out.println("Uploading to " + objectUri + " ...");
-        upload(client, objectUri, localFile);
+        if (upload) {
+            System.out.println("Uploading to " + objectUri + " ...");
+            upload(client, objectUri, localFile);
+        } else {
+            System.out.println("Skipping upload, querying existing object at " + objectUri + " ...");
+        }
 
         long bytesServedBefore = readBytesServed(client, serverBaseUri);
         System.out.printf("%nScanning for %d <= %s <= %d, projecting '%s' over HTTP...%n%n",
@@ -234,6 +246,11 @@ public final class HttpRangeDemo {
                                          row [1000000, 1050000) window)
                   --filter-max N         inclusive upper bound
                   --project NAME         column to project (default: price)
+                  --no-upload            skip the PUT, query an object already on the server
+                                         (requires --server -- an embedded server starts empty).
+                                         Useful for trying several --filter-*/--project
+                                         combinations against the same uploaded file without
+                                         re-uploading it every time.
 
                 Generate a file first with vortex-fakedata-generator, e.g.:
                   vortex-fakedata-generator --rows 2000000 --out trades.vortex \\
