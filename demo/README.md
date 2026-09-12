@@ -115,11 +115,18 @@ audience can watch the server's request log update in real time.
   range query; an `enum(...)` column's values are scattered uniformly across every chunk by
   design, so an equality filter on it (e.g. `symbol == "SYM015"`) has nothing to prune — every
   chunk could contain a match.
+- **Why not filter `price`** — a `range()`-generated `f64` column pruning as if it were unclustered
+  is expected (see above), but `price` currently prunes *no better than that even for a filter
+  entirely outside its data range* — e.g. `[5, 6]` when every value is in `[50, 150)`. That's
+  [#382](https://github.com/dfa1/vortex-java/issues/382), still open: the cascade routes `f64`
+  through `vortex.alprd` (ALP-RD), which never computes zone-map `min`/`max` at all, so there is
+  no stat to prune with regardless of overlap. `timestamp`/`volume` (plain integer encodings) and
+  `symbol` (dict-encoded) are unaffected.
 
-## Bugs this demo surfaced (now fixed upstream)
+## Bugs this demo surfaced
 
-Building this surfaced three real gaps in zone-map pruning, filed and since fixed in vortex-java's
-`reader`/`writer` modules:
+Building this surfaced four real gaps in zone-map pruning in vortex-java's `reader`/`writer`
+modules. Three are fixed:
 
 - [#378](https://github.com/dfa1/vortex-java/issues/378) — `WriteOptions`'s default
   `globalDict=true` silently defeated zone-map pruning for `Utf8` columns.
@@ -129,5 +136,12 @@ Building this surfaced three real gaps in zone-map pruning, filed and since fixe
   could be pruned fetched that chunk's *entire* segment first, costing as much bandwidth as just
   reading it.
 
-This demo's numbers reflect the fixed behavior. If you're running against an older vortex-java
-build, pruning may not work and the byte percentage will be much higher than shown above.
+One is still open:
+
+- [#382](https://github.com/dfa1/vortex-java/issues/382) — `AlpRdEncodingEncoder` never emits
+  zone-map min/max stats at all, so any column the cascade routes through ALP-RD (typically `f64`)
+  never prunes, independent of the filter (see "Why not filter `price`" above).
+
+This demo's numbers reflect the fixed behavior for #378-#380. If you're running against an older
+vortex-java build, pruning may not work at all and the byte percentage will be much higher than
+shown above.
