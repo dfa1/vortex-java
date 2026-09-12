@@ -7,86 +7,23 @@
         <version>0.14.2-SNAPSHOT</version>
     </parent>
 
-    <artifactId>vortex-demo</artifactId>
+    <artifactId>vortex-demo-parent</artifactId>
+    <packaging>pom</packaging>
 
-    <name>vortex-demo</name>
-    <description>Standalone demo client: generates a synthetic tick dataset, uploads it to a
-        vortex-server (embedded by default, or an already-running one given on the command line),
-        then runs a filtered/projected VortexHttpReader scan against it -- showing that the scan
-        fetches only the bytes it touches instead of downloading the whole object.</description>
+    <name>vortex-demo-parent</name>
+    <description>Aggregator for the standalone HTTP range demo: vortex-server (a minimal
+        object-storage HTTP server) and vortex-demo (the client that generates data, uploads it,
+        and runs a filtered/projected VortexHttpReader scan against it).</description>
 
     <properties>
-        <!-- Demo/presentation tooling, not a consumable library: never published to Maven
-             Central. maven.deploy.skip alone is not enough: central-publishing-maven-plugin takes
-             over the deploy phase via <extensions>true</extensions> in the parent's release
-             profile and runs regardless, with its own skip switch (see 74780aa3). -->
+        <!-- Aggregator only, produces no jar of its own: nothing to publish or analyze. -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <skipPublishing>true</skipPublishing>
-        <!-- Demo/presentation tooling: main(String[] args), System.out logging, and a synthetic
-             data generator dominate the Sonar findings here with no library-quality signal,
-             same rationale as vortex-performance. -->
         <sonar.skip>true</sonar.skip>
     </properties>
 
-    <dependencies>
-        <!-- production -->
-        <dependency>
-            <groupId>io.github.dfa1.vortex</groupId>
-            <artifactId>vortex-writer</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.dfa1.vortex</groupId>
-            <artifactId>vortex-reader</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.dfa1.vortex</groupId>
-            <artifactId>vortex-server</artifactId>
-        </dependency>
-        <!-- testing -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.assertj</groupId>
-            <artifactId>assertj-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <finalName>vortex-demo</finalName>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>io.github.dfa1.vortex.demo.HttpRangeDemo</mainClass>
-                                </transformer>
-                            </transformers>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
+    <modules>
+        <module>server</module>
+        <module>client</module>
+    </modules>
 </project>

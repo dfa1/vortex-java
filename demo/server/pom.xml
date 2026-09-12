@@ -5,6 +5,7 @@
         <groupId>io.github.dfa1.vortex</groupId>
         <artifactId>vortex-java</artifactId>
         <version>0.14.2-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
     <artifactId>vortex-server</artifactId>

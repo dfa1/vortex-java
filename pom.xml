@@ -51,7 +51,6 @@
         <module>cli</module>
         <module>inspector</module>
         <module>calcite</module>
-        <module>server</module>
         <module>demo</module>
         <module>integration</module>
         <module>fuzz</module>
