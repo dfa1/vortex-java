@@ -293,6 +293,56 @@ class ConstantEncodingEncoderTest {
         }
     }
 
+    /// #384: encode() built its EncodeResult via EncodeResult.simple(...), which defaults stats to
+    /// null regardless of the constant value — even though min == max == that value by construction.
+    @Nested
+    class Stats {
+
+        @Test
+        void encode_i64_reportsValueAsMinAndMax() throws java.io.IOException {
+            // Given
+            long constant = -12345L;
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, new long[]{constant, constant}, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(constant);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(constant);
+        }
+
+        @Test
+        void encode_f64_reportsValueAsMinAndMax() throws java.io.IOException {
+            // Given
+            double constant = 3.5;
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.F64, new double[]{constant, constant, constant}, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).f64_value()).isEqualTo(constant);
+            assertThat(scalar(result.statsMax()).f64_value()).isEqualTo(constant);
+        }
+
+        @Test
+        void encode_empty_statsAreNull() {
+            // Given
+            long[] data = {};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+        }
+
+        private static ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
+            MemorySegment seg = MemorySegment.ofArray(bytes);
+            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
+        }
+    }
+
     /// Rust can write a constant array whose scalar is null (proto null_value tag).
     /// The decoder must return a [NullArray] — not 0 / false (#246).
     @Nested
