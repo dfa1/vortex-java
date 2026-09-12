@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 /// `http(s)://` URL, queries that object directly, no upload. Given a local file path, embeds its
 /// own [VortexServer], uploads the file, then queries it there:
 /// ```
-/// java -jar vortex-demo.jar http://127.0.0.1:8080/trades.vortex --filter-column price --filter-min 100 --filter-max 105
+/// java -jar vortex-demo.jar http://127.0.0.1:8080/trades.vortex --range price:100:105
 /// java -jar vortex-demo.jar trades.vortex
 /// ```
 ///
@@ -90,16 +90,15 @@ public final class HttpRangeDemo {
         int i = 1;
         while (i < args.length) {
             switch (args[i]) {
-                case "--filter-column" -> {
-                    filterColumn = args[++i];
-                    i++;
-                }
-                case "--filter-min" -> {
-                    filterMin = Long.parseLong(args[++i]);
-                    i++;
-                }
-                case "--filter-max" -> {
-                    filterMax = Long.parseLong(args[++i]);
+                case "--range" -> {
+                    String[] parts = args[++i].split(":", 3);
+                    if (parts.length != 3) {
+                        throw new IllegalArgumentException(
+                                "--range requires COLUMN:MIN:MAX, e.g. --range price:100:105");
+                    }
+                    filterColumn = parts[0];
+                    filterMin = Long.parseLong(parts[1]);
+                    filterMax = Long.parseLong(parts[2]);
                     i++;
                 }
                 case "--project" -> {
@@ -254,15 +253,13 @@ public final class HttpRangeDemo {
                   vortex-demo FILE [options]              embed a server, upload FILE, then query it
 
                 Options (query modes only):
-                  --filter-column NAME   numeric column to range-filter on (default: timestamp)
-                  --filter-min N         inclusive lower bound (default: matches the README example's
-                                         row [1000000, 1050000) window)
-                  --filter-max N         inclusive upper bound
-                  --project NAME         column to project (default: price)
+                  --range COLUMN:MIN:MAX   inclusive numeric range filter (default: matches the
+                                           README example's timestamp row [1000000, 1050000) window)
+                  --project NAME           column to project (default: price)
 
                 Examples:
                   vortex-demo --upload trades.vortex http://127.0.0.1:8080/
-                  vortex-demo http://127.0.0.1:8080/trades.vortex --filter-column price --filter-min 100 --filter-max 105
+                  vortex-demo http://127.0.0.1:8080/trades.vortex --range price:100:105
                   vortex-demo trades.vortex
 
                 Generate a file first with vortex-fakedata-generator, e.g.:

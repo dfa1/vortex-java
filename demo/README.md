@@ -63,8 +63,8 @@ java -jar demo/client/target/vortex-demo.jar http://127.0.0.1:8080/trades.vortex
 
 The first command just copies the file to the server and exits — no query. The second queries the
 object directly by URL: no local file, no upload, it's already there. Run the second command again
-with different `--filter-column`/`--filter-min`/`--filter-max`/`--project` values to try other
-queries against the same uploaded object without re-uploading it.
+with different `--range`/`--project` values to try other queries against the same uploaded object
+without re-uploading it.
 
 By default this filters `timestamp` to a narrow window (50,000 of the 2,000,000 rows) and
 projects `price` — a realistic "give me this time range" query, not an equality match on some
@@ -100,9 +100,9 @@ audience can watch the server's request log update in real time.
 
 ## Customizing the story
 
-- **Different filter/projection** — `vortex-demo` accepts `--filter-column`, `--filter-min`,
-  `--filter-max`, and `--project` (numeric-range filter, not equality — see below for why). Match
-  these to whatever schema you generate.
+- **Different filter/projection** — `vortex-demo` accepts `--range COLUMN:MIN:MAX` and `--project`
+  (numeric-range filter, not equality — see below for why). Match these to whatever schema you
+  generate, e.g. `--range price:100:105 --project timestamp`.
 - **Different dataset shape** — `vortex-fakedata-generator`'s column grammar is
   `name:type:generator(args)`. Run it with no arguments for the full grammar reference
   (types, generators, an example). The `series(start,step)` generator is a direct nod to SQL's
