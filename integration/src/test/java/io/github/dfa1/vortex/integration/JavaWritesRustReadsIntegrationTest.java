@@ -537,6 +537,51 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_jniReader_zoneMapped_allNullChunkStillRoundTrips(@TempDir Path tmp) throws IOException {
+        // Given — #378 regression: a nullable I64 column across 3 zone-mapped chunks where the
+        // middle chunk is entirely null (no chunk-level min/max to record). Before the fix, one
+        // stats-less chunk anywhere in the column dropped MIN/MAX from the zone-map for every
+        // chunk, not just the offending one; Rust's own zoned schema always wraps MIN/MAX nullable
+        // per zone (vortex-layout/src/layouts/zoned/schema.rs), so an all-or-nothing Java writer was
+        // silently out of step with the format it claims to speak, even though every file it wrote
+        // still parsed. This pins that the fixed writer round-trips through the real Rust reader:
+        // it isn't enough that vortex-java's own reader tolerates the shape it now writes.
+        Path file = tmp.resolve("java_zoned_null_chunk.vtx");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.I64, true)), false);
+        WriteOptions zoneMapped = new WriteOptions(4, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        Long[] data = {
+                0L, 1L, 2L, 3L,
+                null, null, null, null,
+                100L, 101L, 102L, 103L};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, zoneMapped)) {
+            for (int start = 0; start < data.length; start += 4) {
+                sut.writeChunk(Map.of(ColumnName.of("v"), Arrays.copyOfRange(data, start, start + 4)));
+            }
+        }
+
+        // Then — Rust parses the zone-map layout and returns every row, nulls included
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var values = new ArrayList<Long>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    BigIntVector vec = (BigIntVector) root.getVector("v");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        values.add(vec.isNull(i) ? null : vec.get(i));
+                    }
+                }
+            }
+        }
+        assertThat(values).containsExactly(data);
+    }
+
+    @Test
     void javaWriter_jniReader_i32Column(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("java_i32.vtx");

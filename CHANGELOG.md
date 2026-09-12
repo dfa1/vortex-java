@@ -5,6 +5,14 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Zone-map `MIN`/`MAX` is now per-zone nullable instead of all-or-nothing: one chunk without stats (e.g. an all-null chunk) used to blank `MIN`/`MAX` for every chunk in the column, silently disabling zone-map pruning for the whole column rather than just that chunk — matching Rust, which always wraps zone-map stats nullable (`vortex-layout/src/layouts/zoned/schema.rs`). ([#378](https://github.com/dfa1/vortex-java/issues/378))
+- `FrameOfReferenceEncodingEncoder` and `DictEncodingEncoder`'s primitive path now surface `MIN`/`MAX` stats instead of hardcoding `null`; combined with cascading compression (`WriteOptions.cascading`/`allowedCascading`), a numeric column whose chunks won the FOR or Dict competition previously lost zone-map pruning for those chunks with no indication. ([#379](https://github.com/dfa1/vortex-java/issues/379))
+- `ScanIterator`'s zone-map pruning check now decodes the column's compact zone-map table (once per scan, cached) instead of fetching each chunk's own full data segment just to read its embedded stats — over HTTP, checking whether a chunk could be pruned used to cost exactly as much as fetching it outright, so pruning saved nothing for the checked column itself (only for other, unfiltered columns in the same row window). ([#380](https://github.com/dfa1/vortex-java/issues/380))
+
 ## [0.14.1] — 2026-09-06
 
 ### Fixed

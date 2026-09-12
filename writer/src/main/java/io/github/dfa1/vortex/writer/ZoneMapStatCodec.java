@@ -85,11 +85,15 @@ final class ZoneMapStatCodec {
     }
 
     /// Builds the per-zone min (or max) values array for the resolved min/max `dtype`, decoding each
-    /// zone's serialized [ProtoScalarValue] stat into the array shape its encoder expects.
-    static Object zoneStatValues(DType minMaxDtype, List<byte[]> statBytes) throws IOException {
+    /// zone's serialized [ProtoScalarValue] stat into the array shape its encoder expects. A `null`
+    /// entry in `statBytes` (the chunk's encoder did not surface a min/max, e.g. an all-null chunk,
+    /// or an encoder that does not compute one) marks that zone invalid in `valid` rather than
+    /// failing the whole column's zone-map — matching Rust, which stores min/max as a nullable
+    /// per-zone stat.
+    static Object zoneStatValues(DType minMaxDtype, List<byte[]> statBytes, boolean[] valid) throws IOException {
         return switch (minMaxDtype) {
-            case DType.Primitive p -> statColumn(p.ptype(), statBytes);
-            case DType.Utf8 _ -> statStringColumn(statBytes);
+            case DType.Primitive p -> statColumn(p.ptype(), statBytes, valid);
+            case DType.Utf8 _ -> statStringColumn(statBytes, valid);
             default -> throw new IllegalStateException("no zone stat values for " + minMaxDtype);
         };
     }
@@ -118,58 +122,69 @@ final class ZoneMapStatCodec {
 
     /// Builds the per-zone string array by decoding each zone's serialized string [ProtoScalarValue]
     /// stat. Used for Utf8 columns whose `vortex.varbin` encoder records full string min/max scalars.
-    private static String[] statStringColumn(List<byte[]> statBytes) throws IOException {
+    /// A `null` entry in `statBytes` sets `valid[i]` to `false` and fills the slot with `""` (a
+    /// sum-neutral-style placeholder never read back, since [NullableData] carries validity
+    /// separately from values).
+    private static String[] statStringColumn(List<byte[]> statBytes, boolean[] valid) throws IOException {
         String[] out = new String[statBytes.size()];
         for (int i = 0; i < out.length; i++) {
-            out[i] = decodeScalar(statBytes.get(i)).string_value();
+            valid[i] = statBytes.get(i) != null;
+            out[i] = valid[i] ? decodeScalar(statBytes.get(i)).string_value() : "";
         }
         return out;
     }
 
     /// Builds the per-zone values array in the storage shape the primitive encoder expects, decoding
-    /// each zone's serialized [ProtoScalarValue] stat.
-    private static Object statColumn(PType ptype, List<byte[]> statBytes) throws IOException {
+    /// each zone's serialized [ProtoScalarValue] stat. A `null` entry in `statBytes` sets `valid[i]`
+    /// to `false` and fills the slot with a zero placeholder, never read back.
+    private static Object statColumn(PType ptype, List<byte[]> statBytes, boolean[] valid) throws IOException {
         int n = statBytes.size();
         return switch (ptype) {
             case I8, U8 -> {
                 byte[] a = new byte[n];
                 for (int i = 0; i < n; i++) {
-                    a[i] = (byte) scalarLong(statBytes.get(i));
+                    valid[i] = statBytes.get(i) != null;
+                    a[i] = valid[i] ? (byte) scalarLong(statBytes.get(i)) : 0;
                 }
                 yield a;
             }
             case I16, U16 -> {
                 short[] a = new short[n];
                 for (int i = 0; i < n; i++) {
-                    a[i] = (short) scalarLong(statBytes.get(i));
+                    valid[i] = statBytes.get(i) != null;
+                    a[i] = valid[i] ? (short) scalarLong(statBytes.get(i)) : 0;
                 }
                 yield a;
             }
             case I32, U32 -> {
                 int[] a = new int[n];
                 for (int i = 0; i < n; i++) {
-                    a[i] = (int) scalarLong(statBytes.get(i));
+                    valid[i] = statBytes.get(i) != null;
+                    a[i] = valid[i] ? (int) scalarLong(statBytes.get(i)) : 0;
                 }
                 yield a;
             }
             case I64, U64 -> {
                 long[] a = new long[n];
                 for (int i = 0; i < n; i++) {
-                    a[i] = scalarLong(statBytes.get(i));
+                    valid[i] = statBytes.get(i) != null;
+                    a[i] = valid[i] ? scalarLong(statBytes.get(i)) : 0L;
                 }
                 yield a;
             }
             case F32 -> {
                 float[] a = new float[n];
                 for (int i = 0; i < n; i++) {
-                    a[i] = (float) scalarDouble(statBytes.get(i));
+                    valid[i] = statBytes.get(i) != null;
+                    a[i] = valid[i] ? (float) scalarDouble(statBytes.get(i)) : 0f;
                 }
                 yield a;
             }
             case F64 -> {
                 double[] a = new double[n];
                 for (int i = 0; i < n; i++) {
-                    a[i] = scalarDouble(statBytes.get(i));
+                    valid[i] = statBytes.get(i) != null;
+                    a[i] = valid[i] ? scalarDouble(statBytes.get(i)) : 0.0;
                 }
                 yield a;
             }
@@ -177,7 +192,8 @@ final class ZoneMapStatCodec {
                 // F16 min/max are serialized as f32 scalars; re-pack to float16 storage.
                 short[] a = new short[n];
                 for (int i = 0; i < n; i++) {
-                    a[i] = Float.floatToFloat16((float) scalarDouble(statBytes.get(i)));
+                    valid[i] = statBytes.get(i) != null;
+                    a[i] = valid[i] ? Float.floatToFloat16((float) scalarDouble(statBytes.get(i))) : 0;
                 }
                 yield a;
             }

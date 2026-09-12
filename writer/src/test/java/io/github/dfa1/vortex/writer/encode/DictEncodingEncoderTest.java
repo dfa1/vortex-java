@@ -3,10 +3,12 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
@@ -18,6 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.stream.Stream;
@@ -199,5 +202,55 @@ class DictEncodingEncoderTest {
         ChildSlot values = result.openChildren().get(1);
         assertThat(values.childDtype()).isEqualTo(DTypes.UTF8);
         assertThat((String[]) values.childData()).containsExactly("apple", "banana", "cherry");
+    }
+
+    @Test
+    void encode_primitive_statsCarryMinAndMaxOfLogicalValues() throws IOException {
+        // Given — low-cardinality so dict encoding is a plausible pick; unordered so a broken
+        // scan (e.g. reading dict-code range instead of logical values) would surface a wrong
+        // min/max. Regression for #379: the primitive branch previously hardcoded null stats,
+        // silently disabling zone-map pruning for any numeric column that dict-encoded.
+        int[] data = {30, 10, 30, 20, 10};
+
+        // When
+        EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+
+        // Then — min/max reflect the logical column values (10..30), not the dict codes (0..2)
+        assertThat(result.hasStats()).isTrue();
+        assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
+        assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(30L);
+    }
+
+    @Test
+    void encodeCascade_primitive_statsCarryMinAndMaxOfLogicalValues() throws IOException {
+        // Given — same #379 regression as encode_primitive_statsCarryMinAndMaxOfLogicalValues, but
+        // for the cascade entry point (CascadingCompressor), the one the "better compression"
+        // option actually drives.
+        long[] data = {30L, 10L, 30L, 20L, 10L};
+
+        // When
+        CascadeStep result = ENCODER.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
+        assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(30L);
+    }
+
+    @Test
+    void encode_primitive_unsignedU32_statsUseUnsignedField() throws IOException {
+        // Given
+        int[] data = {300, 100, 200};
+
+        // When
+        EncodeResult result = ENCODER.encode(new DType.Primitive(PType.U32, false), data, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(scalar(result.statsMin()).uint64_value()).isEqualTo(100L);
+        assertThat(scalar(result.statsMax()).uint64_value()).isEqualTo(300L);
+    }
+
+    private static ProtoScalarValue scalar(byte[] bytes) throws IOException {
+        MemorySegment seg = MemorySegment.ofArray(bytes);
+        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 }
