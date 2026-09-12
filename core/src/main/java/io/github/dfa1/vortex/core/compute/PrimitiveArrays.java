@@ -15,8 +15,9 @@ import java.lang.foreign.ValueLayout;
 ///
 /// [#toLongs(Object, PType, EncodingId)] and [#fromLongs(long[], PType, SegmentAllocator)] are
 /// inverses: the first widens any 8–64 bit integer array to a `long[]`, the second writes a
-/// `long[]` back to a little-endian off-heap segment of the target width. Floating-point ptypes
-/// are not handled here — they reinterpret to raw bits or take type-specific encode paths instead.
+/// `long[]` back to a little-endian off-heap segment of the target width. Both are integer-only —
+/// floating-point ptypes reinterpret to raw bits or take type-specific encode paths instead.
+/// [#compact(PType, Object, boolean[])] covers every primitive ptype, integer and floating alike.
 public final class PrimitiveArrays {
 
     private PrimitiveArrays() {
@@ -108,5 +109,98 @@ public final class PrimitiveArrays {
             PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
         }
         return seg;
+    }
+
+    /// Copies only the elements at `true` positions in `mask` from `data`, preserving `ptype`'s
+    /// storage array shape (`byte[]` for I8/U8, `short[]` for I16/U16/F16, `int[]` for I32/U32,
+    /// `long[]` for I64/U64, `float[]` for F32, `double[]` for F64). Covers every primitive ptype,
+    /// unlike [#toLongs(Object, PType, EncodingId)]/[#fromLongs(long[], PType, SegmentAllocator)],
+    /// which are integer-only.
+    ///
+    /// Used to strip a nullable column's dense, placeholder-filled values down to its real
+    /// (row-valid) values before an operation that must not see the placeholder — a `byte[]`/
+    /// `int[]`/... has no way to represent "no value", so a nullable column's invalid slots carry
+    /// some placeholder chosen by the caller, commonly `0`; running e.g. a min/max scan over the
+    /// raw array would fold that placeholder in as if it were real data.
+    ///
+    /// @param ptype the logical primitive type of `data`
+    /// @param data  the value array; its runtime type must match `ptype`
+    /// @param mask  per-element validity, aligned with `data` (`true` = keep)
+    /// @return a new array of the same runtime type as `data`, holding only the `true`-masked elements
+    public static Object compact(PType ptype, Object data, boolean[] mask) {
+        int n = 0;
+        for (boolean v : mask) {
+            if (v) {
+                n++;
+            }
+        }
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] src = (byte[]) data;
+                byte[] out = new byte[n];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (mask[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case I16, U16, F16 -> {
+                short[] src = (short[]) data;
+                short[] out = new short[n];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (mask[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case I32, U32 -> {
+                int[] src = (int[]) data;
+                int[] out = new int[n];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (mask[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case I64, U64 -> {
+                long[] src = (long[]) data;
+                long[] out = new long[n];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (mask[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case F32 -> {
+                float[] src = (float[]) data;
+                float[] out = new float[n];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (mask[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case F64 -> {
+                double[] src = (double[]) data;
+                double[] out = new double[n];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (mask[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+        };
     }
 }
