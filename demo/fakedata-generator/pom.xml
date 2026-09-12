@@ -8,24 +8,23 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>vortex-demo</artifactId>
+    <artifactId>vortex-fakedata-generator</artifactId>
 
-    <name>vortex-demo</name>
-    <description>Standalone demo client: uploads an existing Vortex file (e.g. one produced by
-        vortex-fakedata-generator) to a vortex-server (embedded by default, or an already-running
-        one given on the command line), then runs a filtered/projected VortexHttpReader scan
-        against it -- showing that the scan fetches only the bytes it touches instead of
-        downloading the whole object.</description>
+    <name>vortex-fakedata-generator</name>
+    <description>Standalone CLI: generates a Vortex file of synthetic data from a compact
+        column-description grammar (name:type:generator(args), e.g.
+        "price:f64:range(50,150)"), inspired by PostgreSQL's generate_series. Independent of
+        any particular demo -- reusable wherever a quick synthetic .vortex file is needed.</description>
 
     <properties>
         <!-- Demo/presentation tooling, not a consumable library: never published to Maven
-             Central. maven.deploy.skip alone is not enough: central-publishing-maven-plugin takes
-             over the deploy phase via <extensions>true</extensions> in the parent's release
-             profile and runs regardless, with its own skip switch (see 74780aa3). -->
+             Central. maven.deploy.skip alone is not enough: central-publishing-maven-plugin
+             takes over the deploy phase via <extensions>true</extensions> in the parent's
+             release profile and runs regardless, with its own skip switch (see 74780aa3). -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <skipPublishing>true</skipPublishing>
-        <!-- Demo/presentation tooling: main(String[] args) and System.out logging dominate the
-             Sonar findings here with no library-quality signal, same rationale as
+        <!-- Demo/presentation tooling: main(String[] args) and a CLI argument parser dominate
+             the Sonar findings here with no library-quality signal, same rationale as
              vortex-performance. -->
         <sonar.skip>true</sonar.skip>
     </properties>
@@ -34,13 +33,14 @@
         <!-- production -->
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
-            <artifactId>vortex-reader</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.dfa1.vortex</groupId>
-            <artifactId>vortex-server</artifactId>
+            <artifactId>vortex-writer</artifactId>
         </dependency>
         <!-- testing -->
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-reader</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -65,10 +65,10 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <finalName>vortex-demo</finalName>
+                            <finalName>vortex-fakedata-generator</finalName>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>io.github.dfa1.vortex.demo.client.HttpRangeDemo</mainClass>
+                                    <mainClass>io.github.dfa1.vortex.demo.fakedata.FakeDataGeneratorCli</mainClass>
                                 </transformer>
                             </transformers>
                             <filters>

@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.server;
+package io.github.dfa1.vortex.demo.server;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;

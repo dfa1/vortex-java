@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.server;
+package io.github.dfa1.vortex.demo.server;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
