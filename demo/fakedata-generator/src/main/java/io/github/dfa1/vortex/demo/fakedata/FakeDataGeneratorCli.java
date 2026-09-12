@@ -34,7 +34,6 @@ public final class FakeDataGeneratorCli {
         long seed = DEFAULT_SEED;
         int chunkSize = DEFAULT_CHUNK_SIZE;
         int cascading = DEFAULT_CASCADING;
-        String sortBy = null;
         List<String> descriptors = new ArrayList<>();
 
         int i = 0;
@@ -61,10 +60,6 @@ public final class FakeDataGeneratorCli {
                     cascading = Integer.parseInt(args[++i]);
                     i++;
                 }
-                case "--sort-by" -> {
-                    sortBy = args[++i];
-                    i++;
-                }
                 default -> {
                     descriptors.add(arg);
                     i++;
@@ -77,7 +72,7 @@ public final class FakeDataGeneratorCli {
         }
 
         List<ColumnDescriptor> columns = descriptors.stream().map(DescriptorParser::parse).toList();
-        FakeDataGenerator.generate(columns, rows, seed, sortBy, chunkSize, cascading, out);
+        FakeDataGenerator.generate(columns, rows, seed, chunkSize, cascading, out);
         System.out.printf("Wrote %d rows (%d columns) to %s%n", rows, columns.size(), out);
     }
 
@@ -91,7 +86,6 @@ public final class FakeDataGeneratorCli {
                   --seed N          random seed (default 42)
                   --chunk-size N    rows per written chunk (default 65536)
                   --cascading N     write compression cascade depth (default 3)
-                  --sort-by COLUMN  sort all rows by this column (ascending) before writing
 
                 Column descriptor grammar: name:type:generator(args)
                   type:      i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 utf8 bool
@@ -102,8 +96,12 @@ public final class FakeDataGeneratorCli {
                              constant(value)      same value every row
                              bool()               random true/false
 
+                A series(start,step) column is naturally ordered by row position without any
+                sorting -- that alone is enough for zone-map pruning on a time-range query, no
+                "sort by column" option needed or offered.
+
                 Example:
-                  vortex-fakedata-generator --rows 2000000 --out trades.vortex --sort-by symbol \\
+                  vortex-fakedata-generator --rows 2000000 --out trades.vortex \\
                       "timestamp:i64:series(1700000000000,1000)" \\
                       "symbol:utf8:enum(SYM,30)" \\
                       "price:f64:range(50,150)" \\

@@ -19,8 +19,14 @@ import java.util.regex.Pattern;
 
 /// Demo client: uploads an existing Vortex file (e.g. one produced by
 /// `vortex-fakedata-generator`) to a `vortex-server` object store, then runs a
-/// filtered/projected [VortexHttpReader] scan against it — printing how many bytes the scan
-/// actually pulled over the wire against the object's full size.
+/// time-range-filtered, projected [VortexHttpReader] scan against it — printing how many bytes
+/// the scan actually pulled over the wire against the object's full size.
+///
+/// Filters by a numeric column range (`timestamp` by default) rather than an equality match on
+/// some other column: real data is written in the order it arrives, so a time-ordered column is
+/// naturally clustered by row position even without any artificial sorting -- zone-map pruning
+/// narrows a time-range query to the handful of chunks that actually overlap it, no
+/// `--sort-by`-style clustering needed.
 ///
 /// Run standalone (embeds its own [VortexServer]):
 /// ```
@@ -34,8 +40,11 @@ import java.util.regex.Pattern;
 /// ```
 public final class HttpRangeDemo {
 
-    private static final String DEFAULT_FILTER_COLUMN = "symbol";
-    private static final String DEFAULT_FILTER_VALUE = "SYM015";
+    private static final String DEFAULT_FILTER_COLUMN = "timestamp";
+    // Matches vortex-fakedata-generator's own README example: timestamp:i64:series(1700000000000,1000)
+    // over 2,000,000 rows. This window covers rows [1_000_000, 1_050_000) -- 50,000 of 2,000,000 rows.
+    private static final long DEFAULT_FILTER_MIN = 1_701_000_000_000L;
+    private static final long DEFAULT_FILTER_MAX = 1_701_049_999_000L;
     private static final String DEFAULT_PROJECT_COLUMN = "price";
 
     private static final Pattern BYTES_SERVED_LINE = Pattern.compile("bytesServed=(\\d+)");
@@ -60,7 +69,8 @@ public final class HttpRangeDemo {
         Path file = null;
         URI serverBaseUri = null;
         String filterColumn = DEFAULT_FILTER_COLUMN;
-        String filterValue = DEFAULT_FILTER_VALUE;
+        long filterMin = DEFAULT_FILTER_MIN;
+        long filterMax = DEFAULT_FILTER_MAX;
         String projectColumn = DEFAULT_PROJECT_COLUMN;
 
         int i = 0;
@@ -78,8 +88,12 @@ public final class HttpRangeDemo {
                     filterColumn = args[++i];
                     i++;
                 }
-                case "--filter-value" -> {
-                    filterValue = args[++i];
+                case "--filter-min" -> {
+                    filterMin = Long.parseLong(args[++i]);
+                    i++;
+                }
+                case "--filter-max" -> {
+                    filterMax = Long.parseLong(args[++i]);
                     i++;
                 }
                 case "--project" -> {
@@ -96,17 +110,18 @@ public final class HttpRangeDemo {
         long fileSize = Files.size(file);
 
         if (serverBaseUri != null) {
-            runAgainst(serverBaseUri, file, fileSize, filterColumn, filterValue, projectColumn);
+            runAgainst(serverBaseUri, file, fileSize, filterColumn, filterMin, filterMax, projectColumn);
         } else {
             try (VortexServer server = VortexServer.start(Files.createTempDirectory("vortex-server"), 0)) {
                 System.out.println("Embedded vortex-server at " + server.baseUri());
-                runAgainst(server.baseUri(), file, fileSize, filterColumn, filterValue, projectColumn);
+                runAgainst(server.baseUri(), file, fileSize, filterColumn, filterMin, filterMax, projectColumn);
             }
         }
     }
 
     private static void runAgainst(URI serverBaseUri, Path localFile, long fileSize,
-            String filterColumn, String filterValue, String projectColumn) throws IOException, InterruptedException {
+            String filterColumn, long filterMin, long filterMax, String projectColumn)
+            throws IOException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
         URI objectUri = serverBaseUri.resolve(localFile.getFileName().toString());
 
@@ -114,10 +129,10 @@ public final class HttpRangeDemo {
         upload(client, objectUri, localFile);
 
         long bytesServedBefore = readBytesServed(client, serverBaseUri);
-        System.out.printf("%nScanning for %s=%s, projecting '%s' over HTTP...%n%n",
-                filterColumn, filterValue, projectColumn);
+        System.out.printf("%nScanning for %d <= %s <= %d, projecting '%s' over HTTP...%n%n",
+                filterMin, filterColumn, filterMax, projectColumn);
         long rows = scanWithLiveDownloadCounter(client, serverBaseUri, objectUri, bytesServedBefore, fileSize,
-                filterColumn, filterValue, projectColumn);
+                filterColumn, filterMin, filterMax, projectColumn);
         long bytesServedAfter = readBytesServed(client, serverBaseUri);
 
         long servedDuringScan = bytesServedAfter - bytesServedBefore;
@@ -134,8 +149,8 @@ public final class HttpRangeDemo {
     /// file the whole scan finishes before the first redraw and this degrades gracefully to
     /// printing just the final line.
     private static long scanWithLiveDownloadCounter(HttpClient client, URI serverBaseUri, URI objectUri,
-            long bytesServedBefore, long fileSize, String filterColumn, String filterValue, String projectColumn)
-            throws IOException, InterruptedException {
+            long bytesServedBefore, long fileSize, String filterColumn, long filterMin, long filterMax,
+            String projectColumn) throws IOException, InterruptedException {
         AtomicBoolean scanning = new AtomicBoolean(true);
         Thread poller = Thread.ofVirtual().name("download-progress").start(() -> {
             while (scanning.get()) {
@@ -151,7 +166,7 @@ public final class HttpRangeDemo {
         });
 
         try {
-            return scan(objectUri, filterColumn, filterValue, projectColumn);
+            return scan(objectUri, filterColumn, filterMin, filterMax, projectColumn);
         } finally {
             scanning.set(false);
             poller.interrupt();
@@ -190,11 +205,10 @@ public final class HttpRangeDemo {
         return Long.parseLong(m.group(1));
     }
 
-    private static long scan(URI objectUri, String filterColumn, String filterValue, String projectColumn)
+    private static long scan(URI objectUri, String filterColumn, long filterMin, long filterMax, String projectColumn)
             throws IOException {
-        ScanOptions opts = ScanOptions.all()
-                .withColumns(filterColumn, projectColumn)
-                .withFilter(RowFilter.eq(filterColumn, filterValue));
+        RowFilter filter = RowFilter.gte(filterColumn, filterMin).and(RowFilter.lte(filterColumn, filterMax));
+        ScanOptions opts = ScanOptions.all().withColumns(filterColumn, projectColumn).withFilter(filter);
 
         long rows = 0;
         try (VortexHttpReader vf = VortexHttpReader.open(objectUri);
@@ -215,12 +229,14 @@ public final class HttpRangeDemo {
                 Options:
                   --file FILE            local .vortex file to upload and scan (required)
                   --server URI           base URI of an already-running vortex-server; omit to embed one
-                  --filter-column NAME   column to filter on (default: symbol)
-                  --filter-value VALUE   value to filter for (default: SYM015)
+                  --filter-column NAME   numeric column to range-filter on (default: timestamp)
+                  --filter-min N         inclusive lower bound (default: matches the README example's
+                                         row [1000000, 1050000) window)
+                  --filter-max N         inclusive upper bound
                   --project NAME         column to project (default: price)
 
                 Generate a file first with vortex-fakedata-generator, e.g.:
-                  vortex-fakedata-generator --rows 2000000 --out trades.vortex --sort-by symbol \\
+                  vortex-fakedata-generator --rows 2000000 --out trades.vortex \\
                       "timestamp:i64:series(1700000000000,1000)" \\
                       "symbol:utf8:enum(SYM,30)" \\
                       "price:f64:range(50,150)" \\

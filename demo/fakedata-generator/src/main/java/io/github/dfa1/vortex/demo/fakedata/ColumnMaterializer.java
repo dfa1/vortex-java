@@ -51,13 +51,18 @@ final class ColumnMaterializer {
         }
     }
 
-    /// Materializes `rows` values for `column`.
+    /// Materializes `rows` values for `column`, continuing from absolute row index `rowOffset`
+    /// (only meaningful to [GeneratorSpec.Series], so a chunk-by-chunk streaming caller gets the
+    /// same arithmetic progression as materializing the whole column at once would).
     ///
-    /// @param column the column to generate
-    /// @param rows   number of rows to generate
-    /// @param random shared random source (consumed in column-declaration order for determinism)
+    /// @param column    the column to generate
+    /// @param rowOffset absolute row index this call's first row corresponds to
+    /// @param rows      number of rows to generate
+    /// @param random    shared random source (consumed in column-declaration order for
+    ///                  determinism; the caller is responsible for not resetting it between
+    ///                  chunks of the same column)
     /// @return the typed array (`long[]`/`int[]`/.../`double[]`, `String[]`, or `boolean[]`)
-    static Object materialize(ColumnDescriptor column, int rows, Random random) {
+    static Object materialize(ColumnDescriptor column, long rowOffset, int rows, Random random) {
         DType dtype = column.dtype();
         GeneratorSpec generator = column.generator();
         if (dtype instanceof DType.Utf8) {
@@ -67,16 +72,16 @@ final class ColumnMaterializer {
             return materializeBool(generator, rows, random);
         }
         PType ptype = ((DType.Primitive) dtype).ptype();
-        double[] values = materializeNumeric(generator, rows, random);
+        double[] values = materializeNumeric(generator, rowOffset, rows, random);
         return narrow(ptype, values);
     }
 
-    private static double[] materializeNumeric(GeneratorSpec generator, int rows, Random random) {
+    private static double[] materializeNumeric(GeneratorSpec generator, long rowOffset, int rows, Random random) {
         double[] values = new double[rows];
         switch (generator) {
             case GeneratorSpec.Series(double start, double step) -> {
                 for (int i = 0; i < rows; i++) {
-                    values[i] = start + i * step;
+                    values[i] = start + (rowOffset + i) * step;
                 }
             }
             case GeneratorSpec.Range(double min, double max) -> {
