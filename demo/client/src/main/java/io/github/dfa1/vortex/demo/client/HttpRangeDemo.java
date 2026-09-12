@@ -1,0 +1,185 @@
+package io.github.dfa1.vortex.demo.client;
+
+import io.github.dfa1.vortex.demo.server.VortexServer;
+import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexHttpReader;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/// Demo client: uploads an existing Vortex file (e.g. one produced by
+/// `vortex-fakedata-generator`) to a `vortex-server` object store, then runs a
+/// filtered/projected [VortexHttpReader] scan against it — printing how many bytes the scan
+/// actually pulled over the wire against the object's full size.
+///
+/// Run standalone (embeds its own [VortexServer]):
+/// ```
+/// java -jar client/target/vortex-demo.jar --file trades.vortex
+/// ```
+///
+/// Or against an already-running server — e.g. `java -jar server/target/vortex-server.jar` in a
+/// separate terminal, for a two-process live demo:
+/// ```
+/// java -jar client/target/vortex-demo.jar --file trades.vortex --server http://127.0.0.1:8080/
+/// ```
+public final class HttpRangeDemo {
+
+    private static final String DEFAULT_FILTER_COLUMN = "symbol";
+    private static final String DEFAULT_FILTER_VALUE = "SYM015";
+    private static final String DEFAULT_PROJECT_COLUMN = "price";
+
+    private static final Pattern BYTES_SERVED_LINE = Pattern.compile("bytesServed=(\\d+)");
+
+    private HttpRangeDemo() {
+    }
+
+    /// @param args CLI arguments; run with no arguments to print usage
+    public static void main(String[] args) {
+        try {
+            run(args);
+        } catch (RuntimeException | IOException | InterruptedException e) {
+            System.err.println("error: " + e.getMessage());
+            System.err.println();
+            printUsage();
+            System.exit(1);
+        }
+    }
+
+    private static void run(String[] args) throws IOException, InterruptedException {
+        Path file = null;
+        URI serverBaseUri = null;
+        String filterColumn = DEFAULT_FILTER_COLUMN;
+        String filterValue = DEFAULT_FILTER_VALUE;
+        String projectColumn = DEFAULT_PROJECT_COLUMN;
+
+        int i = 0;
+        while (i < args.length) {
+            switch (args[i]) {
+                case "--file" -> {
+                    file = Path.of(args[++i]);
+                    i++;
+                }
+                case "--server" -> {
+                    serverBaseUri = URI.create(args[++i]);
+                    i++;
+                }
+                case "--filter-column" -> {
+                    filterColumn = args[++i];
+                    i++;
+                }
+                case "--filter-value" -> {
+                    filterValue = args[++i];
+                    i++;
+                }
+                case "--project" -> {
+                    projectColumn = args[++i];
+                    i++;
+                }
+                default -> throw new IllegalArgumentException("unknown argument: " + args[i]);
+            }
+        }
+
+        if (file == null) {
+            throw new IllegalArgumentException("--file is required");
+        }
+        long fileSize = Files.size(file);
+
+        if (serverBaseUri != null) {
+            runAgainst(serverBaseUri, file, fileSize, filterColumn, filterValue, projectColumn);
+        } else {
+            try (VortexServer server = VortexServer.start(Files.createTempDirectory("vortex-server"), 0)) {
+                System.out.println("Embedded vortex-server at " + server.baseUri());
+                runAgainst(server.baseUri(), file, fileSize, filterColumn, filterValue, projectColumn);
+            }
+        }
+    }
+
+    private static void runAgainst(URI serverBaseUri, Path localFile, long fileSize,
+            String filterColumn, String filterValue, String projectColumn) throws IOException, InterruptedException {
+        HttpClient client = HttpClient.newHttpClient();
+        URI objectUri = serverBaseUri.resolve(localFile.getFileName().toString());
+
+        System.out.println("Uploading to " + objectUri + " ...");
+        upload(client, objectUri, localFile);
+
+        long bytesServedBefore = readBytesServed(client, serverBaseUri);
+        System.out.printf("%nScanning for %s=%s, projecting '%s' over HTTP...%n%n",
+                filterColumn, filterValue, projectColumn);
+        long rows = scan(objectUri, filterColumn, filterValue, projectColumn);
+        long bytesServedAfter = readBytesServed(client, serverBaseUri);
+
+        long servedDuringScan = bytesServedAfter - bytesServedBefore;
+        System.out.println();
+        System.out.println("Matched rows: " + rows);
+        System.out.printf("Bytes fetched over HTTP during the scan: %,d / %,d (%.2f%% of the object)%n",
+                servedDuringScan, fileSize, 100.0 * servedDuringScan / fileSize);
+    }
+
+    private static void upload(HttpClient client, URI objectUri, Path localFile)
+            throws IOException, InterruptedException {
+        HttpRequest put = HttpRequest.newBuilder(objectUri)
+                .PUT(HttpRequest.BodyPublishers.ofFile(localFile))
+                .build();
+        HttpResponse<Void> response = client.send(put, HttpResponse.BodyHandlers.discarding());
+        if (response.statusCode() != 201) {
+            throw new IOException("upload failed: HTTP " + response.statusCode());
+        }
+    }
+
+    private static long readBytesServed(HttpClient client, URI serverBaseUri)
+            throws IOException, InterruptedException {
+        HttpRequest req = HttpRequest.newBuilder(serverBaseUri.resolve("_stats")).GET().build();
+        HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
+        Matcher m = BYTES_SERVED_LINE.matcher(response.body());
+        if (!m.find()) {
+            throw new IOException("could not parse /_stats response: " + response.body());
+        }
+        return Long.parseLong(m.group(1));
+    }
+
+    private static long scan(URI objectUri, String filterColumn, String filterValue, String projectColumn)
+            throws IOException {
+        ScanOptions opts = ScanOptions.all()
+                .withColumns(filterColumn, projectColumn)
+                .withFilter(RowFilter.eq(filterColumn, filterValue));
+
+        long rows = 0;
+        try (VortexHttpReader vf = VortexHttpReader.open(objectUri);
+             var iter = vf.scan(opts)) {
+            while (iter.hasNext()) {
+                try (var chunk = iter.next()) {
+                    rows += chunk.rowCount();
+                }
+            }
+        }
+        return rows;
+    }
+
+    private static void printUsage() {
+        System.err.println("""
+                Usage: vortex-demo --file FILE [options]
+
+                Options:
+                  --file FILE            local .vortex file to upload and scan (required)
+                  --server URI           base URI of an already-running vortex-server; omit to embed one
+                  --filter-column NAME   column to filter on (default: symbol)
+                  --filter-value VALUE   value to filter for (default: SYM015)
+                  --project NAME         column to project (default: price)
+
+                Generate a file first with vortex-fakedata-generator, e.g.:
+                  vortex-fakedata-generator --rows 2000000 --out trades.vortex --sort-by symbol \\
+                      "timestamp:i64:series(1700000000000,1000)" \\
+                      "symbol:utf8:enum(SYM,30)" \\
+                      "price:f64:range(50,150)" \\
+                      "volume:i64:range(100,10000)"
+                """);
+    }
+}

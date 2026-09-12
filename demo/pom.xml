@@ -12,8 +12,9 @@
 
     <name>vortex-demo-parent</name>
     <description>Aggregator for the standalone HTTP range demo: vortex-server (a minimal
-        object-storage HTTP server) and vortex-demo (the client that generates data, uploads it,
-        and runs a filtered/projected VortexHttpReader scan against it).</description>
+        object-storage HTTP server), vortex-fakedata-generator (a CLI for generating synthetic
+        Vortex files), and vortex-demo (the client that uploads a file and runs a
+        filtered/projected VortexHttpReader scan against it).</description>
 
     <properties>
         <!-- Aggregator only, produces no jar of its own: nothing to publish or analyze. -->
@@ -24,6 +25,7 @@
 
     <modules>
         <module>server</module>
+        <module>fakedata-generator</module>
         <module>client</module>
     </modules>
 </project>
