@@ -57,12 +57,15 @@ public final class FakeDataGenerator {
         // vortex-java's own reader module): the whole point of a fakedata tool feeding demos
         // that showcase pruning/partial fetches is to keep per-chunk stats meaningful.
         WriteOptions options = WriteOptions.cascading(cascading).withGlobalDict(false);
+        ProgressBar progress = new ProgressBar(rows);
         try (FileChannel channel = FileChannel.open(out, StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
              VortexWriter writer = VortexWriter.create(channel, schema, options)) {
+            progress.update(0);
             for (int start = 0; start < rows; start += chunkSize) {
                 int n = Math.min(chunkSize, rows - start);
                 writer.writeChunk(sliceChunk(columns, columnArrays, start, n));
+                progress.update(start + n);
             }
         }
     }
