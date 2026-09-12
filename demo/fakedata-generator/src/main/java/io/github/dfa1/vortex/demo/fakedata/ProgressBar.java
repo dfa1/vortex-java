@@ -13,6 +13,7 @@ final class ProgressBar {
     private final long total;
     private final long startNanos;
     private long lastDrawNanos;
+    private int maxLineLength;
 
     ProgressBar(long total) {
         this.total = total;
@@ -45,8 +46,14 @@ final class ProgressBar {
 
         int filled = (int) (fraction * BAR_WIDTH);
         String bar = "=".repeat(filled) + " ".repeat(BAR_WIDTH - filled);
-        System.err.printf("\r[%s] %5.1f%%  %,d/%,d rows  elapsed=%s  eta=%s",
+        String line = "[%s] %5.1f%%  %,d/%,d rows  elapsed=%s  eta=%s".formatted(
                 bar, fraction * 100, done, total, format(elapsed), isFinal ? format(Duration.ZERO) : format(eta));
+        // '\r' only returns the cursor to column 0, it doesn't erase anything -- a shorter line
+        // (e.g. the row count gaining a comma-grouped digit, or the ETA's minute count dropping)
+        // would otherwise leave trailing characters from the previous, longer redraw stuck on
+        // screen. Pad to the longest line drawn so far so every redraw fully overwrites the last.
+        maxLineLength = Math.max(maxLineLength, line.length());
+        System.err.print('\r' + line + " ".repeat(maxLineLength - line.length()));
         if (isFinal) {
             System.err.println();
         }
