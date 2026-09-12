@@ -48,6 +48,9 @@ java -jar demo/fakedata-generator/target/vortex-fakedata-generator.jar \
     "volume:i64:range(100,10000)"
 ```
 
+Prints a live progress bar with ETA to stderr while writing (throttled, so it won't flood the
+terminal — only really visible on larger row counts).
+
 2,000,000 rows across 30 symbols, sorted by symbol — the sort is what makes zone-map pruning
 dramatic for a single-symbol filter (each symbol ends up clustered into just one or two chunks).
 
