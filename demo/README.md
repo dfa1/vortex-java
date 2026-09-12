@@ -61,6 +61,11 @@ java -jar demo/client/target/vortex-demo.jar \
     --file /tmp/trades.vortex --server http://127.0.0.1:8080/
 ```
 
+While the scan runs, a live "bytes downloaded so far" counter updates in place on stderr — the
+audience watches it climb a little, then stop well short of the file's full size, rather than
+just seeing a single number appear at the end. It's mostly visible on larger row counts, since a
+small scan can finish before the first redraw.
+
 Expected output (numbers will vary slightly with row count):
 
 ```
@@ -68,6 +73,7 @@ Uploading to http://127.0.0.1:8080/trades.vortex ...
 
 Scanning for symbol=SYM015, projecting 'price' over HTTP...
 
+  Downloaded so far: 401,644 / 24,550,442 bytes (1.6%)
 Matched rows: 65536
 Bytes fetched over HTTP during the scan: 513,912 / 24,550,442 (2.09% of the object)
 ```

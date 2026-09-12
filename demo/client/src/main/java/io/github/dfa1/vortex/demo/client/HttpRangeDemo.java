@@ -12,6 +12,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,6 +39,7 @@ public final class HttpRangeDemo {
     private static final String DEFAULT_PROJECT_COLUMN = "price";
 
     private static final Pattern BYTES_SERVED_LINE = Pattern.compile("bytesServed=(\\d+)");
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(100);
 
     private HttpRangeDemo() {
     }
@@ -113,14 +116,56 @@ public final class HttpRangeDemo {
         long bytesServedBefore = readBytesServed(client, serverBaseUri);
         System.out.printf("%nScanning for %s=%s, projecting '%s' over HTTP...%n%n",
                 filterColumn, filterValue, projectColumn);
-        long rows = scan(objectUri, filterColumn, filterValue, projectColumn);
+        long rows = scanWithLiveDownloadCounter(client, serverBaseUri, objectUri, bytesServedBefore, fileSize,
+                filterColumn, filterValue, projectColumn);
         long bytesServedAfter = readBytesServed(client, serverBaseUri);
 
         long servedDuringScan = bytesServedAfter - bytesServedBefore;
-        System.out.println();
         System.out.println("Matched rows: " + rows);
         System.out.printf("Bytes fetched over HTTP during the scan: %,d / %,d (%.2f%% of the object)%n",
                 servedDuringScan, fileSize, 100.0 * servedDuringScan / fileSize);
+    }
+
+    /// Runs [#scan] while a background thread polls the server's `/_stats` endpoint and prints a
+    /// live, in-place-updating "bytes downloaded so far" line to stderr — the point being visible
+    /// on stage: the number climbs a little, then stops well short of the file's full size,
+    /// instead of the scan just silently returning a final count. Only really visible to the eye
+    /// on a large enough dataset that the scan takes more than a poll interval or two; on a small
+    /// file the whole scan finishes before the first redraw and this degrades gracefully to
+    /// printing just the final line.
+    private static long scanWithLiveDownloadCounter(HttpClient client, URI serverBaseUri, URI objectUri,
+            long bytesServedBefore, long fileSize, String filterColumn, String filterValue, String projectColumn)
+            throws IOException, InterruptedException {
+        AtomicBoolean scanning = new AtomicBoolean(true);
+        Thread poller = Thread.ofVirtual().name("download-progress").start(() -> {
+            while (scanning.get()) {
+                try {
+                    long servedSoFar = readBytesServed(client, serverBaseUri) - bytesServedBefore;
+                    System.err.printf("\r  Downloaded so far: %,d / %,d bytes (%.1f%%)",
+                            servedSoFar, fileSize, 100.0 * servedSoFar / fileSize);
+                    Thread.sleep(POLL_INTERVAL);
+                } catch (IOException | InterruptedException e) {
+                    return;
+                }
+            }
+        });
+
+        try {
+            return scan(objectUri, filterColumn, filterValue, projectColumn);
+        } finally {
+            scanning.set(false);
+            poller.interrupt();
+            joinQuietly(poller);
+            System.err.println();
+        }
+    }
+
+    private static void joinQuietly(Thread thread) {
+        try {
+            thread.join(Duration.ofSeconds(1));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static void upload(HttpClient client, URI objectUri, Path localFile)
