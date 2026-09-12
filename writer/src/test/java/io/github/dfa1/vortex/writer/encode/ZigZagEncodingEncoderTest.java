@@ -228,4 +228,55 @@ class ZigZagEncodingEncoderTest {
             }
         }
     }
+
+    /// #386: encode() hardcoded (null, null) regardless of the signed input. Stats must come from
+    /// the original values, not the zigzag-transformed (not order-preserving) output.
+    @Nested
+    class Stats {
+
+        @Test
+        void encode_i32_reportsMinMaxOfOriginalValues() throws java.io.IOException {
+            // Given — the most negative value zigzag-maps to the largest unsigned code (-1 -> 1,
+            // 5 -> 10); a bug reading stats off the transformed output would report min=0, max=10
+            int[] data = {5, -1, 0, 3};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(-1L);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(5L);
+        }
+
+        @Test
+        void encode_i64_reportsMinMaxOfOriginalValues() throws java.io.IOException {
+            // Given
+            long[] data = {Long.MIN_VALUE, Long.MAX_VALUE, 0L};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(Long.MIN_VALUE);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(Long.MAX_VALUE);
+        }
+
+        @Test
+        void encode_empty_statsAreNull() {
+            // Given
+            int[] data = {};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+        }
+
+        private static io.github.dfa1.vortex.core.proto.ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
+            MemorySegment seg = MemorySegment.ofArray(bytes);
+            return io.github.dfa1.vortex.core.proto.ProtoScalarValue.decode(seg, 0, seg.byteSize());
+        }
+    }
 }
