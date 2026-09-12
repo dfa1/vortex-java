@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoRunEndMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -109,13 +110,24 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         }
         PType ptype = p.ptype();
         int n = arrayLength(data, ptype);
+        boolean unsign = ptype.isUnsigned();
 
         List<Integer> ends = new ArrayList<>();
         List<Long> values = new ArrayList<>();
+        long minVal = 0L;
+        long maxVal = 0L;
         if (n > 0) {
             long runVal = readLong(data, ptype, 0);
+            minVal = runVal;
+            maxVal = runVal;
             for (int i = 1; i < n; i++) {
                 long cur = readLong(data, ptype, i);
+                if (unsign ? Long.compareUnsigned(cur, minVal) < 0 : cur < minVal) {
+                    minVal = cur;
+                }
+                if (unsign ? Long.compareUnsigned(cur, maxVal) > 0 : cur > maxVal) {
+                    maxVal = cur;
+                }
                 if (cur != runVal) {
                     ends.add(i);
                     values.add(runVal);
@@ -149,7 +161,16 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_RUNEND, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{endsNode, valuesNode}, new int[0]);
-        return new EncodeResult(root, List.of(endsBuf, valuesBuf), null, null);
+        byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
+        byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
+        return new EncodeResult(root, List.of(endsBuf, valuesBuf), statsMin, statsMax);
+    }
+
+    private static byte[] statsBytes(PType ptype, long value) {
+        if (ptype.isUnsigned()) {
+            return ProtoScalarValue.ofUint64Value(value).encode();
+        }
+        return ProtoScalarValue.ofInt64Value(value).encode();
     }
 
     private static int arrayLength(Object data, PType ptype) {

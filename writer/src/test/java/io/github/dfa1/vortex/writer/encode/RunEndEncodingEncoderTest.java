@@ -176,4 +176,54 @@ class RunEndEncodingEncoderTest {
             assertThat(meta.ends_ptype().value()).isEqualTo(2);
         }
     }
+
+    /// #385: encode() hardcoded (null, null) regardless of the run values actually encoded.
+    @Nested
+    class Stats {
+
+        @Test
+        void encode_i64_reportsMinMaxAcrossRuns() throws java.io.IOException {
+            // Given — min/max must come from every run's value, not just the first/last run
+            long[] data = {10L, 10L, -5L, -5L, 3L, 3L, 3L};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(-5L);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(10L);
+        }
+
+        @Test
+        void encode_u32_usesUnsignedComparison() throws java.io.IOException {
+            // Given — a raw-bit value that would look negative under signed comparison but is a
+            // huge positive magnitude as U32; a signed `<`/`>` comparison would pick the wrong min.
+            int[] data = {1, 1, -1, -1}; // -1 raw bits == 4294967295 unsigned
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.U32, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).uint64_value()).isEqualTo(1L);
+            assertThat(scalar(result.statsMax()).uint64_value()).isEqualTo(4294967295L);
+        }
+
+        @Test
+        void encode_empty_statsAreNull() {
+            // Given
+            long[] data = {};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+        }
+
+        private static io.github.dfa1.vortex.core.proto.ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
+            MemorySegment seg = MemorySegment.ofArray(bytes);
+            return io.github.dfa1.vortex.core.proto.ProtoScalarValue.decode(seg, 0, seg.byteSize());
+        }
+    }
 }
