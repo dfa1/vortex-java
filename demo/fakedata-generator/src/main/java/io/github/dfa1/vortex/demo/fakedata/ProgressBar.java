@@ -12,11 +12,19 @@ final class ProgressBar {
 
     private final long total;
     private final long startNanos;
-    private long lastDrawNanos = Long.MIN_VALUE;
+    private long lastDrawNanos;
 
     ProgressBar(long total) {
         this.total = total;
         this.startNanos = System.nanoTime();
+        // Not Long.MIN_VALUE: `nowNanos - lastDrawNanos` in #update would overflow a signed long
+        // on the very first call (a moderate positive nanoTime() value minus the most negative
+        // possible long), silently wrapping to a negative duration that always looks "too soon
+        // to redraw" -- every non-final update gets throttle-skipped for the rest of the run,
+        // since lastDrawNanos then never advances away from MIN_VALUE either. Backdating by one
+        // interval instead guarantees the first real call passes the threshold, with no
+        // overflow risk since both operands stay close to System.nanoTime()'s own range.
+        this.lastDrawNanos = startNanos - MIN_REDRAW_INTERVAL.toNanos();
     }
 
     /// Redraws the bar for `done` out of the total, unless the minimum redraw interval hasn't
