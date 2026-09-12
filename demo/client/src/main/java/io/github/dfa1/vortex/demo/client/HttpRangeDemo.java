@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.demo.server.VortexServer;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexHttpReader;
+import io.github.dfa1.vortex.reader.compute.Compute;
 
 import java.io.IOException;
 import java.net.URI;
@@ -233,8 +234,12 @@ public final class HttpRangeDemo {
         try (VortexHttpReader vf = VortexHttpReader.open(objectUri);
              var iter = vf.scan(opts)) {
             while (iter.hasNext()) {
+                // ScanOptions#withFilter only prunes whole chunks via zone-map stats -- a surviving
+                // chunk can still contain rows outside the range, so chunk.rowCount() alone would
+                // overcount. Compute#filteredAggregate applies the same filter row-by-row (fused,
+                // single pass, no aggregate column needed) to get the true matched-row count.
                 try (var chunk = iter.next()) {
-                    rows += chunk.rowCount();
+                    rows += Compute.filteredAggregate(chunk, filter, null).selectedRows();
                 }
             }
         }
