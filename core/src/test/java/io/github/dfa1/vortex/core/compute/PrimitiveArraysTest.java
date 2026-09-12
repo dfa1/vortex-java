@@ -170,4 +170,131 @@ class PrimitiveArraysTest {
             default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
         };
     }
+
+    @Test
+    void compact_i8_keepsOnlyValidElements() {
+        // Given a leading and a trailing invalid slot around real values
+        byte[] data = {9, 10, 20, 9};
+        boolean[] mask = {false, true, true, false};
+
+        // When
+        byte[] result = (byte[]) PrimitiveArrays.compact(PType.I8, data, mask);
+
+        // Then
+        assertThat(result).containsExactly((byte) 10, (byte) 20);
+    }
+
+    @Test
+    void compact_i16_keepsOnlyValidElements() {
+        // Given
+        short[] data = {9, 10, 20, 9};
+        boolean[] mask = {false, true, true, false};
+
+        // When
+        short[] result = (short[]) PrimitiveArrays.compact(PType.I16, data, mask);
+
+        // Then
+        assertThat(result).containsExactly((short) 10, (short) 20);
+    }
+
+    @Test
+    void compact_f16_keepsOnlyValidElements() {
+        // Given — F16 shares I16/U16's short[] storage shape
+        short[] data = {9, 10, 20, 9};
+        boolean[] mask = {false, true, true, false};
+
+        // When
+        short[] result = (short[]) PrimitiveArrays.compact(PType.F16, data, mask);
+
+        // Then
+        assertThat(result).containsExactly((short) 10, (short) 20);
+    }
+
+    @Test
+    void compact_i32_keepsOnlyValidElements() {
+        // Given
+        int[] data = {9, 10, 20, 9};
+        boolean[] mask = {false, true, true, false};
+
+        // When
+        int[] result = (int[]) PrimitiveArrays.compact(PType.I32, data, mask);
+
+        // Then
+        assertThat(result).containsExactly(10, 20);
+    }
+
+    @Test
+    void compact_i64_keepsOnlyValidElements() {
+        // Given
+        long[] data = {9L, 10L, 20L, 9L};
+        boolean[] mask = {false, true, true, false};
+
+        // When
+        long[] result = (long[]) PrimitiveArrays.compact(PType.I64, data, mask);
+
+        // Then
+        assertThat(result).containsExactly(10L, 20L);
+    }
+
+    @Test
+    void compact_f32_keepsOnlyValidElements() {
+        // Given
+        float[] data = {9f, 10f, 20f, 9f};
+        boolean[] mask = {false, true, true, false};
+
+        // When
+        float[] result = (float[]) PrimitiveArrays.compact(PType.F32, data, mask);
+
+        // Then
+        assertThat(result).containsExactly(10f, 20f);
+    }
+
+    @Test
+    void compact_f64_keepsOnlyValidElements() {
+        // Given
+        double[] data = {9.0, 10.0, 20.0, 9.0};
+        boolean[] mask = {false, true, true, false};
+
+        // When
+        double[] result = (double[]) PrimitiveArrays.compact(PType.F64, data, mask);
+
+        // Then
+        assertThat(result).containsExactly(10.0, 20.0);
+    }
+
+    @Test
+    void compact_allValid_returnsEveryElement() {
+        // Given no placeholder slots at all
+        long[] data = {1L, 2L, 3L};
+        boolean[] mask = {true, true, true};
+
+        // When
+        long[] result = (long[]) PrimitiveArrays.compact(PType.I64, data, mask);
+
+        // Then
+        assertThat(result).containsExactly(1L, 2L, 3L);
+    }
+
+    @Test
+    void compact_allInvalid_returnsEmptyArray() {
+        // Given — no real value exists anywhere, e.g. an all-null zone/chunk
+        long[] data = {0L, 0L, 0L};
+        boolean[] mask = {false, false, false};
+
+        // When
+        long[] result = (long[]) PrimitiveArrays.compact(PType.I64, data, mask);
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void compact_empty_returnsEmptyArray() {
+        // Given no elements at all
+        // When
+        long[] result = (long[]) PrimitiveArrays.compact(PType.I64, new long[0], new boolean[0]);
+
+        // Then
+        assertThat(result).isEmpty();
+    }
 }

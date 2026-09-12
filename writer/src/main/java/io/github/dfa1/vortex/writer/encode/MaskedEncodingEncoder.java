@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -84,91 +84,13 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// @return a two-element `{min, max}` array of encoded scalars, or `null` when no row is valid
     private static byte[][] maskedMinMaxStats(DType nonNullable, Object values, boolean[] validity) {
         if (nonNullable instanceof DType.Primitive p) {
-            return PrimitiveEncodingEncoder.minMaxStats(p.ptype(), compactValid(p.ptype(), values, validity));
+            Object compacted = PrimitiveArrays.compact(p.ptype(), values, validity);
+            return PrimitiveEncodingEncoder.minMaxStats(p.ptype(), compacted);
         }
         if (values instanceof String[] strings) {
             return VarBinEncodingEncoder.minMaxStats(strings);
         }
         return null;
-    }
-
-    /// Copies only the row-valid elements of a dense primitive array, preserving `ptype`'s storage
-    /// shape so the result can be handed straight to [PrimitiveEncodingEncoder#minMaxStats].
-    private static Object compactValid(PType ptype, Object values, boolean[] validity) {
-        int validCount = 0;
-        for (boolean v : validity) {
-            if (v) {
-                validCount++;
-            }
-        }
-        return switch (ptype) {
-            case I8, U8 -> {
-                byte[] src = (byte[]) values;
-                byte[] out = new byte[validCount];
-                int j = 0;
-                for (int i = 0; i < src.length; i++) {
-                    if (validity[i]) {
-                        out[j++] = src[i];
-                    }
-                }
-                yield out;
-            }
-            case I16, U16, F16 -> {
-                short[] src = (short[]) values;
-                short[] out = new short[validCount];
-                int j = 0;
-                for (int i = 0; i < src.length; i++) {
-                    if (validity[i]) {
-                        out[j++] = src[i];
-                    }
-                }
-                yield out;
-            }
-            case I32, U32 -> {
-                int[] src = (int[]) values;
-                int[] out = new int[validCount];
-                int j = 0;
-                for (int i = 0; i < src.length; i++) {
-                    if (validity[i]) {
-                        out[j++] = src[i];
-                    }
-                }
-                yield out;
-            }
-            case I64, U64 -> {
-                long[] src = (long[]) values;
-                long[] out = new long[validCount];
-                int j = 0;
-                for (int i = 0; i < src.length; i++) {
-                    if (validity[i]) {
-                        out[j++] = src[i];
-                    }
-                }
-                yield out;
-            }
-            case F32 -> {
-                float[] src = (float[]) values;
-                float[] out = new float[validCount];
-                int j = 0;
-                for (int i = 0; i < src.length; i++) {
-                    if (validity[i]) {
-                        out[j++] = src[i];
-                    }
-                }
-                yield out;
-            }
-            case F64 -> {
-                double[] src = (double[]) values;
-                double[] out = new double[validCount];
-                int j = 0;
-                for (int i = 0; i < src.length; i++) {
-                    if (validity[i]) {
-                        out[j++] = src[i];
-                    }
-                }
-                yield out;
-            }
-        };
     }
 
     /// Encodes the non-null values of a masked column.
