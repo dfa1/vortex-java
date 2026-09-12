@@ -273,12 +273,12 @@ class FrameOfReferenceEncodingEncoderTest {
             long[] data = {1030L, 990L, 1050L, 1020L, 1040L};
 
             // When
-            CascadeStep step = ENCODER.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+            CascadeStep result = ENCODER.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(step.applicable()).isTrue();
-            assertThat(scalar(step.statsMin()).int64_value()).isEqualTo(990L);
-            assertThat(scalar(step.statsMax()).int64_value()).isEqualTo(1050L);
+            assertThat(result.applicable()).isTrue();
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(990L);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(1050L);
         }
 
         private static ProtoScalarValue scalar(byte[] bytes) throws IOException {

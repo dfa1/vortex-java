@@ -40,9 +40,8 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode root = new EncodeNode(EncodingId.FASTLANES_FOR, meta, new EncodeNode[]{child}, new int[0]);
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(ptype, data);
-        byte[] min = stats == null ? null : stats[0];
-        byte[] max = stats == null ? null : stats[1];
-        return new EncodeResult(root, List.of(residuals), min, max);
+        return new EncodeResult(root, List.of(residuals),
+                PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats));
     }
 
     @Override
@@ -66,9 +65,8 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_FOR, meta, new EncodeNode[1], new int[0]);
         ChildSlot slot = new ChildSlot(dtype, residualsAsNativeArray(longs, ref, ptype), 0);
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(ptype, data);
-        byte[] min = stats == null ? null : stats[0];
-        byte[] max = stats == null ? null : stats[1];
-        return new CascadeStep(partialRoot, List.of(), List.of(slot), min, max, true);
+        return new CascadeStep(partialRoot, List.of(), List.of(slot),
+                PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
     }
 
     private static long computeRef(long[] longs, int n) {

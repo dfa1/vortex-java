@@ -93,6 +93,38 @@ public final class ZonedStatsSchema {
         return Integer.toUnsignedLong(metadata.get(LE_INT, 0));
     }
 
+    /// Returns the zone length declared in a newer `vortex.zoned` layout's aggregate-spec metadata
+    /// (field 1, `uint32 zone_len`, of the `ZonedMetadataProto` described in [#aggregateIds]), or
+    /// `0` when the blob is empty, carries an unsupported version, or is not well-formed protobuf.
+    ///
+    /// @param metadata raw `vortex.zoned` layout metadata, possibly `null`
+    /// @return decoded zone length, or `0` when absent
+    public static long aggregateZoneLength(MemorySegment metadata) {
+        if (metadata == null || metadata.byteSize() < 1) {
+            return 0L;
+        }
+        if ((metadata.get(ValueLayout.JAVA_BYTE, 0) & 0xff) != AGGREGATE_METADATA_VERSION) {
+            return 0L;
+        }
+        ProtoCursor cursor = new ProtoCursor(metadata, 1, metadata.byteSize());
+        while (cursor.hasRemaining()) {
+            long tag = cursor.readVarint();
+            if (tag < 0) {
+                return 0L;
+            }
+            int fieldNumber = (int) (tag >>> 3);
+            int wireType = (int) (tag & 0x7);
+            if (fieldNumber == 1 && wireType == ProtoCursor.WIRE_VARINT) {
+                long len = cursor.readVarint();
+                return len < 0 ? 0L : len;
+            }
+            if (!cursor.skipField(wireType)) {
+                return 0L;
+            }
+        }
+        return 0L;
+    }
+
     /// Returns the stats present in the layout metadata bitset, in ordinal order.
     ///
     /// Unknown bits (set at an index past [Stat#values()]'s length, which
