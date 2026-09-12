@@ -95,11 +95,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private boolean singleColumnIsSyntheticWrapper;
     private Map<ColumnName, DType> columnDtypes;
     // Total physical chunk count per column, captured at #initialize() from the same collectFlats()
-    // walk that built the scan grid. Guards the zone-map pruning fast path in #canPruneChunk: a
-    // window's chunk ordinal only indexes correctly into a decoded zone table when the table has
-    // exactly one zone per chunk (this writer's own invariant — see ZoneMapStatCodec). A file whose
-    // zone length is independent of chunk boundaries (columnZoneStats' javadoc) fails this check and
-    // falls back to the per-chunk embedded-stats path instead of risking a misaligned zone lookup.
+    // walk that built the scan grid. Guards #zoneIndexByOrdinal against a malformed or foreign
+    // "vortex.stats"-tagged file whose zone table doesn't actually carry one zone per chunk.
     private Map<ColumnName, Integer> columnChunkCounts;
     // Decoded zone-map table per column, fetched at most once per scan (one segment read instead of
     // one per pruning check) — see #zoneStatsFor(ColumnName). Absent entries (no zone map, or the
@@ -223,7 +220,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 sliceOffsets[j] = windowStart - starts[c];
                 chunkOrdinals[j] = c;
             }
-            result.add(new ChunkSpec(windowRows, colNames, layouts, sliceOffsets, chunkOrdinals));
+            result.add(new ChunkSpec(windowStart, windowRows, colNames, layouts, sliceOffsets, chunkOrdinals));
         }
         return List.copyOf(result);
     }
@@ -863,7 +860,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 if (flat == null) {
                     yield false;
                 }
-                ArrayStats stats = zoneStats(chunk, col);
+                ArrayStats stats = zoneStats(chunk, col, flat.rowCount());
                 if (stats == null) {
                     stats = readFlatStats(flat);
                 }
@@ -872,26 +869,75 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         };
     }
 
-    /// Returns `col`'s zone-map stats for the chunk covering `chunk`'s window, or `null` when the
-    /// column has no usable zone map — in which case the caller falls back to the chunk's own
-    /// embedded stats. Reading here decodes (and caches) one small zone-map segment per column for
-    /// the whole scan, instead of [#readFlatStats(Layout)]'s per-chunk read of the chunk's full data
-    /// segment — the difference that makes pruning over HTTP actually cheaper than not pruning.
-    private ArrayStats zoneStats(ChunkSpec chunk, ColumnName col) {
+    /// Returns `col`'s zone-map stats for the physical chunk covering `chunk`'s window, or `null`
+    /// when the column has no usable zone map — in which case the caller falls back to the chunk's
+    /// own embedded stats. Reading here decodes (and caches) one small zone-map segment per column
+    /// for the whole scan, instead of [#readFlatStats(Layout)]'s per-chunk read of the chunk's full
+    /// data segment — the difference that makes pruning over HTTP actually cheaper than not pruning.
+    ///
+    /// The two `vortex.zoned`-family layouts need different lookup strategies, dispatched by
+    /// [Layout#layoutId()]: this writer's legacy `vortex.stats` always emits exactly one zone per
+    /// physical chunk, in chunk order ([#zoneIndexByOrdinal]), regardless of each chunk's row count
+    /// (`options.chunkSize()` bounds a chunk's maximum size, not its actual size — a batch smaller
+    /// than the cap becomes its own, smaller chunk — so its declared zone-length metadata does not
+    /// describe a uniform stride and cannot drive arithmetic). The newer Rust `vortex.zoned` instead
+    /// declares a genuinely independent, uniform zone length ([#zoneIndexByLength]) with no fixed
+    /// relationship to chunk boundaries at all; a chunk's row range must fit entirely inside a single
+    /// zone for that zone's stats to safely describe it — never a partial overlap, or rows the chunk
+    /// covers would be invisible to the stats used to judge it.
+    private ArrayStats zoneStats(ChunkSpec chunk, ColumnName col, long chunkRowCount) {
+        Layout zoned = findZonedLayout(file.layout(), col);
+        if (zoned == null) {
+            return null;
+        }
+        Integer zoneIdx = zoned.layoutId() == LayoutId.ZONED
+                ? zoneIndexByLength(chunk, col, chunkRowCount, zoned.metadata())
+                : zoneIndexByOrdinal(chunk, col);
+        if (zoneIdx == null) {
+            return null;
+        }
+        List<ArrayStats> zones = zoneStatsFor(col);
+        return zones == null || zoneIdx >= zones.size() ? null : zones.get(zoneIdx);
+    }
+
+    /// Locates the zone covering a chunk under this writer's legacy `vortex.stats` layout, where
+    /// zone order always matches physical chunk order 1:1 (`VortexWriter#flushZoneMaps`) — so the
+    /// chunk's ordinal position among `col`'s own chunks IS the zone index. Guarded by a chunk-count
+    /// match against the decoded table, in case a malformed or foreign `vortex.stats`-tagged file
+    /// does not actually follow that convention.
+    private Integer zoneIndexByOrdinal(ChunkSpec chunk, ColumnName col) {
         Integer chunkCount = columnChunkCounts.get(col);
         if (chunkCount == null) {
             return null;
         }
         List<ArrayStats> zones = zoneStatsFor(col);
-        // The ordinal-indexed lookup below is only valid when the table has exactly one zone per
-        // physical chunk (this writer's invariant). A table with an independent zone length would
-        // silently misalign ordinal to zone, turning a cost optimization into a correctness bug, so
-        // any size mismatch bails to the always-correct per-chunk fallback instead.
         if (zones == null || zones.size() != chunkCount) {
             return null;
         }
         int ordinal = chunk.chunkOrdinalFor(col);
-        return ordinal < 0 || ordinal >= zones.size() ? null : zones.get(ordinal);
+        return ordinal < 0 ? null : ordinal;
+    }
+
+    /// Locates the zone covering a chunk under Rust's `vortex.zoned` layout, whose declared zone
+    /// length is a genuine uniform stride independent of chunk boundaries. Returns `null` unless the
+    /// chunk's whole row range — `[chunkStart, chunkStart + chunkRowCount)`, `chunkStart` recovered
+    /// from `chunk.windowStart() - chunk.sliceOffsetFor(col)` — fits inside a single zone's range.
+    private static Integer zoneIndexByLength(ChunkSpec chunk, ColumnName col, long chunkRowCount, MemorySegment metadata) {
+        long zoneLen = ZonedStatsSchema.aggregateZoneLength(metadata);
+        if (zoneLen <= 0) {
+            return null;
+        }
+        long sliceOffset = chunk.sliceOffsetFor(col);
+        if (sliceOffset < 0) {
+            return null;
+        }
+        long chunkStart = chunk.windowStart() - sliceOffset;
+        long zoneIdx = chunkStart / zoneLen;
+        long zoneEnd = (zoneIdx + 1) * zoneLen;
+        if (chunkStart + chunkRowCount > zoneEnd || zoneIdx > Integer.MAX_VALUE) {
+            return null;
+        }
+        return (int) zoneIdx;
     }
 
     private List<ArrayStats> zoneStatsFor(ColumnName col) {
@@ -1024,11 +1070,18 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record ChunkSpec(
-            long rowCount, ColumnName[] columnNames, Layout[] columnLayouts, long[] sliceOffsets,
-            int[] chunkOrdinals) {
+            long windowStart, long rowCount, ColumnName[] columnNames, Layout[] columnLayouts,
+            long[] sliceOffsets, int[] chunkOrdinals) {
         Layout layoutFor(ColumnName col) {
             int i = indexFor(col);
             return i < 0 ? null : columnLayouts[i];
+        }
+
+        /// The offset of this window into `col`'s covering chunk, or `-1` if `col` is not part of
+        /// this window. `windowStart() - sliceOffsetFor(col)` is that chunk's absolute row start.
+        long sliceOffsetFor(ColumnName col) {
+            int i = indexFor(col);
+            return i < 0 ? -1 : sliceOffsets[i];
         }
 
         /// The ordinal position (0-based) of this window's covering chunk within `col`'s own

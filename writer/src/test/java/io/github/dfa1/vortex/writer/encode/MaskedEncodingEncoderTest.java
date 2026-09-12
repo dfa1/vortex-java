@@ -245,6 +245,46 @@ class MaskedEncodingEncoderTest {
     }
 
     @Test
+    void mixedValidity_statsIgnoreThePlaceholderAtInvalidSlots() throws java.io.IOException {
+        // Given — a `long[]` cannot represent "no value", so NullableData's invalid slots carry a
+        // placeholder (0 here); 0 is not even in the true value set (500..900), and the true min
+        // (500) sits behind a leading invalid slot a naive scan would still see as 0. Regression
+        // guard: MaskedEncodingEncoder must compute stats from (values, validity), excluding invalid
+        // slots — not trust whichever inner encoder ran blindly over the placeholder-filled array.
+        DType i64Nullable = new DType.Primitive(PType.I64, true);
+        NullableData data = new NullableData(
+                new long[]{0L, 500L, 600L, 0L, 700L, 800L, 0L, 900L},
+                new boolean[]{false, true, true, false, true, true, false, true});
+
+        // When
+        EncodeResult result = SUT.encode(i64Nullable, data, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.hasStats()).isTrue();
+        assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(500L);
+        assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(900L);
+    }
+
+    @Test
+    void allInvalidColumn_hasNoStats() {
+        // Given — every slot invalid: no real value exists to report, so MIN/MAX must be null
+        // (not the 0 placeholder), matching Rust's per-zone-nullable zone-map semantics (#378).
+        DType i64Nullable = new DType.Primitive(PType.I64, true);
+        NullableData data = new NullableData(new long[]{0L, 0L, 0L}, new boolean[]{false, false, false});
+
+        // When
+        EncodeResult result = SUT.encode(i64Nullable, data, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.hasStats()).isFalse();
+    }
+
+    private static io.github.dfa1.vortex.core.proto.ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
+        MemorySegment seg = MemorySegment.ofArray(bytes);
+        return io.github.dfa1.vortex.core.proto.ProtoScalarValue.decode(seg, 0, seg.byteSize());
+    }
+
+    @Test
     void withCascade_periodicNulls_prefersSparseOverRawBitmap() {
         // Given — 2000 rows, every 10th null: a clustered/regular pattern (mirrors the real
         // low-cardinality-Utf8 benchmark) whose patch-index gaps compress far below a raw bitmap

@@ -60,9 +60,34 @@ class ScanIteratorChunkGridTest {
     }
 
     @Test
-    void chunkOrdinalsTrackPositionWithinEachColumnsOwnChunkList() {
+    void windowStartMinusSliceOffsetRecoversEachChunksAbsoluteRowStart() {
         // Given the same 1-vs-N shape as singleFlatColumnSharesTheChunkedGrid: one full-column flat
-        // [8] (A, a single physical chunk) beside a chunked column [4, 4] (B, two physical chunks).
+        // [8] (A, a single physical chunk starting at row 0) beside a chunked column [4, 4] (B, a
+        // second physical chunk starting at row 4).
+        var columnFlats = flats(A, new long[]{8}, B, new long[]{4, 4});
+
+        // When
+        List<ChunkSpec> result = ScanIterator.buildChunks(columnFlats);
+
+        // Then `windowStart() - sliceOffsetFor(col)` recovers each column's covering chunk's
+        // absolute row start: A's single chunk starts at row 0 in both windows (its one physical
+        // chunk spans both, so the derived start must not drift with the window), while B's second
+        // window is covered by its second chunk, starting at row 4. This is the invariant zone-map
+        // pruning's fast path (#380) relies on to locate which zone actually covers a given chunk.
+        assertThat(chunkStart(result.get(0), A)).isZero();
+        assertThat(chunkStart(result.get(0), B)).isZero();
+        assertThat(chunkStart(result.get(1), A)).isZero();
+        assertThat(chunkStart(result.get(1), B)).isEqualTo(4L);
+    }
+
+    private static long chunkStart(ChunkSpec spec, ColumnName column) {
+        return spec.windowStart() - spec.sliceOffsetFor(column);
+    }
+
+    @Test
+    void chunkOrdinalsTrackPositionWithinEachColumnsOwnChunkList() {
+        // Given the same 1-vs-N shape: one full-column flat [8] (A, a single physical chunk) beside
+        // a chunked column [4, 4] (B, two physical chunks).
         var columnFlats = flats(A, new long[]{8}, B, new long[]{4, 4});
 
         // When
@@ -70,9 +95,9 @@ class ScanIteratorChunkGridTest {
 
         // Then A's ordinal stays 0 in both windows — its one physical chunk spans both, so the
         // ordinal must not increment per window — while B's ordinal advances to its second chunk.
-        // This is the invariant zone-map pruning's fast path (#380) relies on: a window's chunk
-        // ordinal must always index the same physical chunk a decoded zone-map table's row order
-        // was built from, however many windows that chunk happens to span.
+        // This is the invariant this writer's own zone-map pruning fast path (#380) relies on: for
+        // the legacy vortex.stats layout, zone order always matches physical chunk order 1:1, so a
+        // window's chunk ordinal directly indexes the decoded zone table.
         assertThat(result.get(0).chunkOrdinalFor(A)).isZero();
         assertThat(result.get(0).chunkOrdinalFor(B)).isZero();
         assertThat(result.get(1).chunkOrdinalFor(A)).isZero();

@@ -286,6 +286,24 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
+    /// The min half of a [#minMaxStats] result, or `null` when `stats` itself is `null` (empty
+    /// data). Saves callers the repeated `stats == null ? null : stats[0]` idiom.
+    ///
+    /// @param stats a [#minMaxStats] result, possibly `null`
+    /// @return the serialized min scalar, or `null`
+    public static byte[] minOf(byte[][] stats) {
+        return stats == null ? null : stats[0];
+    }
+
+    /// The max half of a [#minMaxStats] result, or `null` when `stats` itself is `null` (empty
+    /// data). Saves callers the repeated `stats == null ? null : stats[1]` idiom.
+    ///
+    /// @param stats a [#minMaxStats] result, possibly `null`
+    /// @return the serialized max scalar, or `null`
+    public static byte[] maxOf(byte[][] stats) {
+        return stats == null ? null : stats[1];
+    }
+
     /// Computes the serialized SUM [io.github.dfa1.vortex.core.proto.ProtoScalarValue] for a raw primitive
     /// array, in the widened shape Rust uses for zone-map sums: signed ints → `i64`, unsigned ints
     /// → `u64`, floats → `f64`. Returns `null` on integer overflow (Rust drops the zone's sum) and

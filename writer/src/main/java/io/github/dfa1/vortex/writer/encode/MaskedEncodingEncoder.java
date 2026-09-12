@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -59,7 +60,115 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
                 null,
                 new EncodeNode[]{valuesResult.rootNode(), validityNode},
                 new int[0]);
-        return new EncodeResult(root, buffers, valuesResult.statsMin(), valuesResult.statsMax());
+        byte[][] stats = maskedMinMaxStats(nonNullable, values, validity);
+        byte[] statsMin = stats == null ? null : stats[0];
+        byte[] statsMax = stats == null ? null : stats[1];
+        return new EncodeResult(root, buffers, statsMin, statsMax);
+    }
+
+    /// Computes MIN/MAX over only the row-valid elements of `values`, never `valuesResult`'s own
+    /// stats. A primitive `NullableData` values array is always dense (a `long[]`/`int[]`/... has
+    /// no way to represent "no value"), so its invalid slots carry some placeholder — commonly `0`
+    /// — supplied by the caller; blindly reusing whichever inner encoder's stats (e.g.
+    /// [PrimitiveEncodingEncoder], [FrameOfReferenceEncodingEncoder], [DictEncodingEncoder]) ran over
+    /// that dense array folds the placeholder into MIN/MAX as if it were real data. A `String[]`
+    /// carries a real `null` at invalid positions (validity is redundant there, [#denseValues] only
+    /// substitutes `""` in a separate copy fed to the cascade, never in `values` itself), so
+    /// [VarBinEncodingEncoder#minMaxStats(String[])]'s existing null-skip is already correct and is
+    /// reused as-is. Binary and nested (List/FixedSizeList) values have no zone-map min/max
+    /// ([io.github.dfa1.vortex.writer.ZoneMapStatCodec#zoneMinMaxDtype]), so `null` there is a no-op.
+    ///
+    /// @param nonNullable the values' own dtype (validity stripped)
+    /// @param values      the dense values array from the [NullableData] carrier
+    /// @param validity    per-row validity, aligned with `values`
+    /// @return a two-element `{min, max}` array of encoded scalars, or `null` when no row is valid
+    private static byte[][] maskedMinMaxStats(DType nonNullable, Object values, boolean[] validity) {
+        if (nonNullable instanceof DType.Primitive p) {
+            return PrimitiveEncodingEncoder.minMaxStats(p.ptype(), compactValid(p.ptype(), values, validity));
+        }
+        if (values instanceof String[] strings) {
+            return VarBinEncodingEncoder.minMaxStats(strings);
+        }
+        return null;
+    }
+
+    /// Copies only the row-valid elements of a dense primitive array, preserving `ptype`'s storage
+    /// shape so the result can be handed straight to [PrimitiveEncodingEncoder#minMaxStats].
+    private static Object compactValid(PType ptype, Object values, boolean[] validity) {
+        int validCount = 0;
+        for (boolean v : validity) {
+            if (v) {
+                validCount++;
+            }
+        }
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] src = (byte[]) values;
+                byte[] out = new byte[validCount];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (validity[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case I16, U16, F16 -> {
+                short[] src = (short[]) values;
+                short[] out = new short[validCount];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (validity[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case I32, U32 -> {
+                int[] src = (int[]) values;
+                int[] out = new int[validCount];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (validity[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case I64, U64 -> {
+                long[] src = (long[]) values;
+                long[] out = new long[validCount];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (validity[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case F32 -> {
+                float[] src = (float[]) values;
+                float[] out = new float[validCount];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (validity[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+            case F64 -> {
+                double[] src = (double[]) values;
+                double[] out = new double[validCount];
+                int j = 0;
+                for (int i = 0; i < src.length; i++) {
+                    if (validity[i]) {
+                        out[j++] = src[i];
+                    }
+                }
+                yield out;
+            }
+        };
     }
 
     /// Encodes the non-null values of a masked column.
