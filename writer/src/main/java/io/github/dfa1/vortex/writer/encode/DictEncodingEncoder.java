@@ -78,7 +78,9 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{valuesNode, codesNode},
                 new int[0]);
 
-        return new EncodeResult(rootNode, List.of(d.valuesBuf(), codesBuf), null, null);
+        byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
+        return new EncodeResult(rootNode, List.of(d.valuesBuf(), codesBuf),
+                stats == null ? null : stats[0], stats == null ? null : stats[1]);
     }
 
     @Override
@@ -98,7 +100,10 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
         DType codesDtype = new DType.Primitive(codePType, false);
         ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 1);
-        return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot), null, null, true);
+        byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
+        byte[] min = stats == null ? null : stats[0];
+        byte[] max = stats == null ? null : stats[1];
+        return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot), min, max, true);
     }
 
     /// Cascading Utf8 dict: emit the codes leaf but expose the distinct-values pool as an open Utf8

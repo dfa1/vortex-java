@@ -212,10 +212,12 @@ class WriterZoneMapTest {
     }
 
     @Test
-    void chunkWithoutStats_emitsNullCountOnlyZoneMap(@TempDir Path tmp) throws IOException {
+    void chunkWithoutStats_marksOnlyThatZoneInvalid(@TempDir Path tmp) throws IOException {
         // Given a column with one normal chunk and one empty chunk (no min/max stats): MIN/MAX is
-        // dropped (it requires every chunk to carry stats), but NULL_COUNT and SUM are still emitted
-        // — SUM is independent (the empty zone's sum is simply null).
+        // still emitted for the column (I64 always resolves a min/max dtype) — only the empty
+        // chunk's own zone is recorded as invalid, not the whole column's MIN/MAX. This is the
+        // #378 fix: a single stats-less chunk (e.g. all-null) must not blank out zone-map pruning
+        // for every other chunk in the column.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")), List.of(DType.I64), false);
         WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
@@ -226,12 +228,27 @@ class WriterZoneMapTest {
             sut.writeChunk(Map.of(ColumnName.of("v"), new long[]{}));
         }
 
-        // When / Then — zoned with the SUM+NULL_COUNT bitset (bits 5+6 = 0x60), no MIN/MAX
+        // When / Then — zoned with the full MAX+MIN+SUM+NULL_COUNT bitset (0x78): zone 0 carries a
+        // valid min/max from its data, zone 1 (the empty chunk) carries an invalid (null) min/max.
         try (VortexReader reader = VortexReader.open(file)) {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
             MemorySegment meta = column.metadata();
-            assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x60);
+            assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x78);
+
+            Layout zonesFlat = column.children().get(1);
+            SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
+            try (Arena arena = Arena.ofConfined()) {
+                StructArray stats = (StructArray) reader.decodeSegment(spec, numericStatsTableDtype(), 2, arena);
+                MaskedArray min = (MaskedArray) stats.field("min");
+                MaskedArray max = (MaskedArray) stats.field("max");
+                assertThat(min.isValid(0)).isTrue();
+                assertThat(max.isValid(0)).isTrue();
+                assertThat(((LongArray) min.inner()).getLong(0)).isEqualTo(1L);
+                assertThat(((LongArray) max.inner()).getLong(0)).isEqualTo(2L);
+                assertThat(min.isValid(1)).isFalse();
+                assertThat(max.isValid(1)).isFalse();
+            }
         }
     }
 

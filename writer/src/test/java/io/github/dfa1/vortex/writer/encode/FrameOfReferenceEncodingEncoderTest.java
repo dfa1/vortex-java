@@ -23,6 +23,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -232,6 +233,57 @@ class FrameOfReferenceEncodingEncoderTest {
             for (int i = 0; i < data.length; i++) {
                 assertThat(arr.getInt(i)).as("index %d", i).isEqualTo(data[i]);
             }
+        }
+
+        @Test
+        void encode_signedI64_statsCarryMinAndMax() throws IOException {
+            // Given — unordered so a broken scan (e.g. reusing the residual instead of the logical
+            // value) would surface a wrong min/max. Regression for #379: FOR previously hardcoded
+            // null stats, silently disabling zone-map pruning for any numeric column the "better
+            // compression" cascading path routed through FOR.
+            long[] data = {1030L, 990L, 1050L, 1020L, 1040L};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.hasStats()).isTrue();
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(990L);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(1050L);
+        }
+
+        @Test
+        void encode_unsignedU32_statsUseUnsignedField() throws IOException {
+            // Given
+            int[] data = {200, 100, 300};
+
+            // When
+            EncodeResult result = ENCODER.encode(new DType.Primitive(PType.U32, false), data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).uint64_value()).isEqualTo(100L);
+            assertThat(scalar(result.statsMax()).uint64_value()).isEqualTo(300L);
+        }
+
+        @Test
+        void encodeCascade_signedI64_statsCarryMinAndMax() throws IOException {
+            // Given — same #379 regression as encode_signedI64_statsCarryMinAndMax, but for the
+            // cascade entry point (CascadingCompressor), the one the "better compression" option
+            // actually drives.
+            long[] data = {1030L, 990L, 1050L, 1020L, 1040L};
+
+            // When
+            CascadeStep step = ENCODER.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(step.applicable()).isTrue();
+            assertThat(scalar(step.statsMin()).int64_value()).isEqualTo(990L);
+            assertThat(scalar(step.statsMax()).int64_value()).isEqualTo(1050L);
+        }
+
+        private static ProtoScalarValue scalar(byte[] bytes) throws IOException {
+            MemorySegment seg = MemorySegment.ofArray(bytes);
+            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
         }
     }
 }

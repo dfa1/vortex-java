@@ -833,13 +833,12 @@ public final class VortexWriter implements Closeable {
             }
             DType colDtype = columnDtype(colName);
             DType minMaxDtype = ZoneMapStatCodec.zoneMinMaxDtype(colDtype);
-            boolean hasMinMax = minMaxDtype != null && chunks.stream().allMatch(ChunkRef::hasStats);
             DType sumDtype = ZoneMapStatCodec.zoneSumDtype(colDtype);
             long[] nullCounts = new long[chunks.size()];
             for (int i = 0; i < chunks.size(); i++) {
                 nullCounts[i] = chunks.get(i).nullCount();
             }
-            emitZoneMap(colName, hasMinMax ? minMaxDtype : null,
+            emitZoneMap(colName, minMaxDtype,
                     chunks.stream().map(ChunkRef::statsMin).toList(),
                     chunks.stream().map(ChunkRef::statsMax).toList(),
                     sumDtype, chunks.stream().map(ChunkRef::statsSum).toList(),
@@ -852,11 +851,8 @@ public final class VortexWriter implements Closeable {
             DictColRef ref = e.getValue();
             DType colDtype = columnDtype(e.getKey());
             DType minMaxDtype = ZoneMapStatCodec.zoneMinMaxDtype(colDtype);
-            boolean hasMinMax = minMaxDtype != null
-                    && ref.chunkStatsMin().stream().allMatch(java.util.Objects::nonNull)
-                    && ref.chunkStatsMax().stream().allMatch(java.util.Objects::nonNull);
             long[] nullCounts = ref.chunkNullCounts().stream().mapToLong(Long::longValue).toArray();
-            emitZoneMap(e.getKey(), hasMinMax ? minMaxDtype : null,
+            emitZoneMap(e.getKey(), minMaxDtype,
                     ref.chunkStatsMin(), ref.chunkStatsMax(),
                     ZoneMapStatCodec.zoneSumDtype(colDtype), ref.chunkStatsSum(), nullCounts);
         }
@@ -869,8 +865,10 @@ public final class VortexWriter implements Closeable {
     /// Writes one `vortex.stats` zone-map for `colName`: one zone per chunk, with NULL_COUNT always,
     /// MAX/MIN (plus always-false `_is_truncated` flags) when `minMaxDtype` is non-null, and SUM when
     /// `sumDtype` is non-null. `minBytes`/`maxBytes`/`sumBytes` hold each zone's serialized scalar —
-    /// read only when the matching dtype is set; a `null` `sumBytes` entry marks an overflowed zone
-    /// (recorded as a null sum). Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), SUM(5),
+    /// read only when the matching dtype is set; a `null` entry marks that specific zone's stat as
+    /// unknown (e.g. an all-null chunk, an overflowed sum, or an encoder that does not surface a
+    /// min/max) rather than dropping the stat for the whole column — MIN/MAX/SUM are nullable per
+    /// zone, matching Rust. Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), SUM(5),
     /// NULL_COUNT(6).
     private void emitZoneMap(ColumnName colName, DType minMaxDtype, List<byte[]> minBytes, List<byte[]> maxBytes,
                              DType sumDtype, List<byte[]> sumBytes, long[] nullCounts) throws IOException {
@@ -883,15 +881,19 @@ public final class VortexWriter implements Closeable {
         List<Object> fields = new java.util.ArrayList<>();
         if (minMaxDtype != null) {
             boolean[] notTruncated = new boolean[nZones];
+            boolean[] maxValid = new boolean[nZones];
+            Object maxValues = ZoneMapStatCodec.zoneStatValues(minMaxDtype, maxBytes, maxValid);
             names.add("max");
             types.add(minMaxDtype);
-            fields.add(new NullableData(ZoneMapStatCodec.zoneStatValues(minMaxDtype, maxBytes), allValid.clone()));
+            fields.add(new NullableData(maxValues, maxValid));
             names.add("max_is_truncated");
             types.add(DType.BOOL);
             fields.add(notTruncated);
+            boolean[] minValid = new boolean[nZones];
+            Object minValues = ZoneMapStatCodec.zoneStatValues(minMaxDtype, minBytes, minValid);
             names.add("min");
             types.add(minMaxDtype);
-            fields.add(new NullableData(ZoneMapStatCodec.zoneStatValues(minMaxDtype, minBytes), allValid.clone()));
+            fields.add(new NullableData(minValues, minValid));
             names.add("min_is_truncated");
             types.add(DType.BOOL);
             fields.add(notTruncated.clone());
@@ -1194,9 +1196,6 @@ public final class VortexWriter implements Closeable {
     @SuppressWarnings("java:S6218")
     private record ChunkRef(int segIdx, long rowCount, byte[] statsMin, byte[] statsMax,
             byte[] statsSum, long nullCount) {
-        boolean hasStats() {
-            return statsMin != null && statsMax != null;
-        }
     }
 
     /// Per-column zone-map: the flat segment holding the per-zone stats table, the zone

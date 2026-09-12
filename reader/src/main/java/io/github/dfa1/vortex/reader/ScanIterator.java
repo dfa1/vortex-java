@@ -94,6 +94,17 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // its own name and dtype from the schema, unlike the synthetic placeholder.
     private boolean singleColumnIsSyntheticWrapper;
     private Map<ColumnName, DType> columnDtypes;
+    // Total physical chunk count per column, captured at #initialize() from the same collectFlats()
+    // walk that built the scan grid. Guards the zone-map pruning fast path in #canPruneChunk: a
+    // window's chunk ordinal only indexes correctly into a decoded zone table when the table has
+    // exactly one zone per chunk (this writer's own invariant — see ZoneMapStatCodec). A file whose
+    // zone length is independent of chunk boundaries (columnZoneStats' javadoc) fails this check and
+    // falls back to the per-chunk embedded-stats path instead of risking a misaligned zone lookup.
+    private Map<ColumnName, Integer> columnChunkCounts;
+    // Decoded zone-map table per column, fetched at most once per scan (one segment read instead of
+    // one per pruning check) — see #zoneStatsFor(ColumnName). Absent entries (no zone map, or the
+    // decode failed) are not cached: those paths cost no I/O, so recomputing is cheap.
+    private Map<ColumnName, List<ArrayStats>> zoneStatsCache;
     private int chunkIndex;
     private int peekedChunkIdx = -1;
     private long rowsReturned;
@@ -193,6 +204,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             long windowRows = boundaries[w + 1] - windowStart;
             Layout[] layouts = new Layout[numCols];
             long[] sliceOffsets = new long[numCols];
+            int[] chunkOrdinals = new int[numCols];
             for (int j = 0; j < numCols; j++) {
                 long[] starts = colStarts[j];
                 int c = cursor[j];
@@ -209,8 +221,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 }
                 layouts[j] = flats.get(c);
                 sliceOffsets[j] = windowStart - starts[c];
+                chunkOrdinals[j] = c;
             }
-            result.add(new ChunkSpec(windowRows, colNames, layouts, sliceOffsets));
+            result.add(new ChunkSpec(windowRows, colNames, layouts, sliceOffsets, chunkOrdinals));
         }
         return List.copyOf(result);
     }
@@ -653,6 +666,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         projectedNames = List.copyOf(columnDtypes.keySet());
         projectedDtypes = List.copyOf(columnDtypes.values());
         lastCoveringFlats = new Layout[projectedNames.size()];
+        columnChunkCounts = new HashMap<>();
+        for (Map.Entry<ColumnName, List<Layout>> e : columnFlats.entrySet()) {
+            columnChunkCounts.put(e.getKey(), e.getValue().size());
+        }
         chunks = buildChunks(columnFlats);
     }
 
@@ -846,10 +863,50 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 if (flat == null) {
                     yield false;
                 }
-                ArrayStats stats = readFlatStats(flat);
+                ArrayStats stats = zoneStats(chunk, col);
+                if (stats == null) {
+                    stats = readFlatStats(flat);
+                }
                 yield canPrune(predicate, stats, flat.rowCount(), columnDType(col));
             }
         };
+    }
+
+    /// Returns `col`'s zone-map stats for the chunk covering `chunk`'s window, or `null` when the
+    /// column has no usable zone map — in which case the caller falls back to the chunk's own
+    /// embedded stats. Reading here decodes (and caches) one small zone-map segment per column for
+    /// the whole scan, instead of [#readFlatStats(Layout)]'s per-chunk read of the chunk's full data
+    /// segment — the difference that makes pruning over HTTP actually cheaper than not pruning.
+    private ArrayStats zoneStats(ChunkSpec chunk, ColumnName col) {
+        Integer chunkCount = columnChunkCounts.get(col);
+        if (chunkCount == null) {
+            return null;
+        }
+        List<ArrayStats> zones = zoneStatsFor(col);
+        // The ordinal-indexed lookup below is only valid when the table has exactly one zone per
+        // physical chunk (this writer's invariant). A table with an independent zone length would
+        // silently misalign ordinal to zone, turning a cost optimization into a correctness bug, so
+        // any size mismatch bails to the always-correct per-chunk fallback instead.
+        if (zones == null || zones.size() != chunkCount) {
+            return null;
+        }
+        int ordinal = chunk.chunkOrdinalFor(col);
+        return ordinal < 0 || ordinal >= zones.size() ? null : zones.get(ordinal);
+    }
+
+    private List<ArrayStats> zoneStatsFor(ColumnName col) {
+        if (zoneStatsCache == null) {
+            zoneStatsCache = new HashMap<>();
+        }
+        List<ArrayStats> cached = zoneStatsCache.get(col);
+        if (cached != null) {
+            return cached;
+        }
+        List<ArrayStats> decoded = decodeZoneTable(col);
+        if (decoded != null) {
+            zoneStatsCache.put(col, decoded);
+        }
+        return decoded;
     }
 
     /// Tests whether `predicate`, compiled against a chunk's zone-map statistics, can prove that no
@@ -967,14 +1024,27 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record ChunkSpec(
-            long rowCount, ColumnName[] columnNames, Layout[] columnLayouts, long[] sliceOffsets) {
+            long rowCount, ColumnName[] columnNames, Layout[] columnLayouts, long[] sliceOffsets,
+            int[] chunkOrdinals) {
         Layout layoutFor(ColumnName col) {
+            int i = indexFor(col);
+            return i < 0 ? null : columnLayouts[i];
+        }
+
+        /// The ordinal position (0-based) of this window's covering chunk within `col`'s own
+        /// physical chunk list, or `-1` if `col` is not part of this window.
+        int chunkOrdinalFor(ColumnName col) {
+            int i = indexFor(col);
+            return i < 0 ? -1 : chunkOrdinals[i];
+        }
+
+        private int indexFor(ColumnName col) {
             for (int i = 0; i < columnNames.length; i++) {
                 if (columnNames[i].equals(col)) {
-                    return columnLayouts[i];
+                    return i;
                 }
             }
-            return null;
+            return -1;
         }
     }
 }
