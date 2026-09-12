@@ -53,8 +53,14 @@ public final class VortexServer implements AutoCloseable {
     /// @throws IOException if `dataDir` cannot be created or the server socket cannot be bound
     public static VortexServer start(Path dataDir, int port) throws IOException {
         Files.createDirectories(dataDir);
+        // Absolute + normalized once here so every #resolve call's startsWith containment check
+        // compares like with like -- a relative dataDir (e.g. ".") left as-is would never
+        // startsWith-match a resolved candidate that Path#normalize stripped the "." from,
+        // 404-ing every GET/HEAD even though the file is right there (confirmed live: "vortex-server
+        // 8080 ." served a correct directory listing but 404'd every single-object request).
+        Path root = dataDir.toAbsolutePath().normalize();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
-        VortexServer instance = new VortexServer(server, dataDir);
+        VortexServer instance = new VortexServer(server, root);
         server.createContext("/", instance::handle);
         server.start();
         return instance;

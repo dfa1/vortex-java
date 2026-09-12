@@ -184,6 +184,28 @@ class VortexServerTest {
         assertThat(result.body()).contains("data.bin\t" + CONTENT.length());
     }
 
+    @Test
+    void servesObjectsWhenDataDirIsNotNormalized(@TempDir Path freshDir) throws Exception {
+        // Given a server started with an unnormalized dataDir -- a trailing "/." here reproduces
+        // the same shape as the real "vortex-server PORT ." invocation, whose relative "."
+        // previously survived un-normalized into #resolve's startsWith containment check. A
+        // resolved, Path#normalize-d candidate never has that trailing "." component, so it
+        // structurally failed startsWith against the un-normalized root and every single-object
+        // request 404'd -- even though #handleList (which just streams dataDir's own entries,
+        // no startsWith check) correctly showed the object was right there.
+        Files.writeString(freshDir.resolve("obj.bin"), "hello", StandardCharsets.US_ASCII);
+        Path unnormalized = freshDir.resolve(".");
+
+        try (VortexServer freshServer = VortexServer.start(unnormalized, 0)) {
+            // When
+            HttpResponse<String> result = get(freshServer.baseUri().resolve("obj.bin"), null);
+
+            // Then
+            assertThat(result.statusCode()).isEqualTo(200);
+            assertThat(result.body()).isEqualTo("hello");
+        }
+    }
+
     private HttpResponse<String> get(URI uri, String rangeHeader) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri).GET();
         if (rangeHeader != null) {
