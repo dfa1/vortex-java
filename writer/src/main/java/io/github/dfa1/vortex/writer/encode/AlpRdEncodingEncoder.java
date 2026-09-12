@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -69,8 +70,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         List<Long> excPos = new ArrayList<>();
         List<Short> excVals = new ArrayList<>();
 
+        double min = Double.MAX_VALUE;
+        double max = -Double.MAX_VALUE;
         for (int i = 0; i < n; i++) {
-            long bits = Double.doubleToRawLongBits(values[i]);
+            double v = values[i];
+            long bits = Double.doubleToRawLongBits(v);
             short leftU16 = (short) (bits >>> best.rightBitWidth);
             rightParts[i] = bits & rightMask;
             Short code = lookup.get(leftU16);
@@ -81,11 +85,17 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
                 excPos.add((long) i);
                 excVals.add(leftU16);
             }
+            if (v < min) {
+                min = v;
+            }
+            if (v > max) {
+                max = v;
+            }
         }
 
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, rightParts,
-            DType.U64, excPos, excVals, ctx);
+            DType.U64, excPos, excVals, scalarF64(min), scalarF64(max), ctx);
     }
 
     private static Dictionary64 findBestDictionaryF64(double[] values, int sampleLen) {
@@ -155,8 +165,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         List<Long> excPos = new ArrayList<>();
         List<Short> excVals = new ArrayList<>();
 
+        float min = Float.MAX_VALUE;
+        float max = -Float.MAX_VALUE;
         for (int i = 0; i < n; i++) {
-            int bits = Float.floatToRawIntBits(values[i]);
+            float v = values[i];
+            int bits = Float.floatToRawIntBits(v);
             short leftU16 = (short) (bits >>> best.rightBitWidth);
             rightParts[i] = bits & rightMask;
             Short code = lookup.get(leftU16);
@@ -167,11 +180,17 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
                 excPos.add((long) i);
                 excVals.add(leftU16);
             }
+            if (v < min) {
+                min = v;
+            }
+            if (v > max) {
+                max = v;
+            }
         }
 
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, rightParts,
-            DType.U32, excPos, excVals, ctx);
+            DType.U32, excPos, excVals, scalarF32(min), scalarF32(max), ctx);
     }
 
     private static Dictionary32 findBestDictionaryF32(float[] values, int sampleLen) {
@@ -239,7 +258,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     private static EncodeResult buildEncodeResult(
         short[] dict, int rightBitWidth,
         short[] leftCodes, Object rightPartsData, DType rightDtype,
-        List<Long> excPos, List<Short> excVals, EncodeContext ctx) {
+        List<Long> excPos, List<Short> excVals, byte[] statsMin, byte[] statsMax, EncodeContext ctx) {
 
         EncodingEncoder bp = ctx.lookupEncoder(EncodingId.FASTLANES_BITPACKED);
         EncodeResult leftResult = bp.encode(DType.U16, leftCodes, ctx);
@@ -296,7 +315,15 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         ).encode();
         EncodeNode root = new EncodeNode(
             EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(metaBytes), children, new int[]{});
-        return new EncodeResult(root, List.copyOf(allBuffers), null, null);
+        return new EncodeResult(root, List.copyOf(allBuffers), statsMin, statsMax);
+    }
+
+    private static byte[] scalarF64(double v) {
+        return ProtoScalarValue.ofF64Value(v).encode();
+    }
+
+    private static byte[] scalarF32(float v) {
+        return ProtoScalarValue.ofF32Value(v).encode();
     }
 
     private static EncodeResult emptyResult(DType rightDtype, EncodeContext ctx) {

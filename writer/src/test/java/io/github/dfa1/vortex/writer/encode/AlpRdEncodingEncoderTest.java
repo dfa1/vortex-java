@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -16,6 +17,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.util.Random;
 import java.util.stream.Stream;
 
@@ -129,6 +132,59 @@ class AlpRdEncodingEncoderTest {
     }
 
     @Test
+    void encode_f64_reportsMinMaxStats() throws IOException {
+        // Given — #382: buildEncodeResult hardcoded (null, null), silently defeating zone-map
+        // pruning on every column ALP-RD encoded, regardless of the input data.
+        double[] values = {0.5, -3.25, 10.0, 2.0, -1.0};
+
+        // When
+        EncodeResult result = new AlpRdEncodingEncoder().encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(scalar(result.statsMin()).f64_value()).isEqualTo(-3.25);
+        assertThat(scalar(result.statsMax()).f64_value()).isEqualTo(10.0);
+    }
+
+    @Test
+    void encode_f32_reportsMinMaxStats() throws IOException {
+        // Given — see #382 above; F32 has its own code path (encodeF32/Dictionary32)
+        float[] values = {0.5f, -3.25f, 10.0f, 2.0f, -1.0f};
+
+        // When
+        EncodeResult result = new AlpRdEncodingEncoder().encode(DTypes.F32, values, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(scalar(result.statsMin()).f32_value()).isEqualTo(-3.25f);
+        assertThat(scalar(result.statsMax()).f32_value()).isEqualTo(10.0f);
+    }
+
+    @Test
+    void encode_f64_empty_statsAreNull() {
+        // Given
+        double[] values = {};
+
+        // When
+        EncodeResult result = new AlpRdEncodingEncoder().encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.statsMin()).isNull();
+        assertThat(result.statsMax()).isNull();
+    }
+
+    @Test
+    void encode_f32_empty_statsAreNull() {
+        // Given
+        float[] values = {};
+
+        // When
+        EncodeResult result = new AlpRdEncodingEncoder().encode(DTypes.F32, values, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.statsMin()).isNull();
+        assertThat(result.statsMax()).isNull();
+    }
+
+    @Test
     void accepts_floatPtypesOnly() {
         // Given / When / Then — only F32/F64 are encodable; integers and non-primitives are rejected
         var encoder = new AlpRdEncodingEncoder();
@@ -165,5 +221,10 @@ class AlpRdEncodingEncoderTest {
             a[i] = f;
         }
         return a;
+    }
+
+    private static ProtoScalarValue scalar(byte[] bytes) throws IOException {
+        MemorySegment seg = MemorySegment.ofArray(bytes);
+        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 }
