@@ -54,12 +54,17 @@ terminal — only really visible on larger row counts). 2,000,000 rows, real com
 a `series(...)`, so it's naturally in row order simply because that's the order it was generated
 in, exactly like a real append-only ingestion stream.
 
-**Terminal 2 — upload and scan it:**
+**Terminal 2 — upload it, then query it:**
 
 ```bash
-java -jar demo/client/target/vortex-demo.jar \
-    --file /tmp/trades.vortex --server http://127.0.0.1:8080/
+java -jar demo/client/target/vortex-demo.jar --upload /tmp/trades.vortex http://127.0.0.1:8080/
+java -jar demo/client/target/vortex-demo.jar http://127.0.0.1:8080/trades.vortex
 ```
+
+The first command just copies the file to the server and exits — no query. The second queries the
+object directly by URL: no local file, no upload, it's already there. Run the second command again
+with different `--filter-column`/`--filter-min`/`--filter-max`/`--project` values to try other
+queries against the same uploaded object without re-uploading it.
 
 By default this filters `timestamp` to a narrow window (50,000 of the 2,000,000 rows) and
 projects `price` — a realistic "give me this time range" query, not an equality match on some
@@ -71,8 +76,6 @@ counts, since a small scan can finish before the first redraw.
 Expected output (numbers will vary slightly with row count):
 
 ```
-Uploading to http://127.0.0.1:8080/trades.vortex ...
-
 Scanning for 1701000000000 <= timestamp <= 1701049999000, projecting 'price' over HTTP...
 
   Downloaded so far: 401,644 / 24,552,440 bytes (1.6%)
@@ -85,10 +88,11 @@ Switch back to **Terminal 1** — you'll see the `PUT` (the upload) followed by 
 
 ## One-terminal version (no server to manage)
 
-Omit `--server` and the client embeds its own:
+Pass a local file path instead of a URL and the client embeds its own server, uploads to it, and
+queries it in one shot:
 
 ```bash
-java -jar demo/client/target/vortex-demo.jar --file /tmp/trades.vortex
+java -jar demo/client/target/vortex-demo.jar /tmp/trades.vortex
 ```
 
 Good for a quick local check; the two-terminal version is more compelling live, since the

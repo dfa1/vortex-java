@@ -17,27 +17,27 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/// Demo client: uploads an existing Vortex file (e.g. one produced by
-/// `vortex-fakedata-generator`) to a `vortex-server` object store, then runs a
-/// time-range-filtered, projected [VortexHttpReader] scan against it — printing how many bytes
-/// the scan actually pulled over the wire against the object's full size.
+/// Demo client: two modes, chosen by the first argument.
+///
+/// **Upload only** — copy a local file to a `vortex-server`, no query:
+/// ```
+/// java -jar vortex-demo.jar --upload trades.vortex http://127.0.0.1:8080/
+/// ```
+///
+/// **Query** — a time-range-filtered, projected [VortexHttpReader] scan, printing how many bytes
+/// the scan actually pulled over the wire against the object's full size. Given a remote
+/// `http(s)://` URL, queries that object directly, no upload. Given a local file path, embeds its
+/// own [VortexServer], uploads the file, then queries it there:
+/// ```
+/// java -jar vortex-demo.jar http://127.0.0.1:8080/trades.vortex --filter-column price --filter-min 100 --filter-max 105
+/// java -jar vortex-demo.jar trades.vortex
+/// ```
 ///
 /// Filters by a numeric column range (`timestamp` by default) rather than an equality match on
 /// some other column: real data is written in the order it arrives, so a time-ordered column is
 /// naturally clustered by row position even without any artificial sorting -- zone-map pruning
 /// narrows a time-range query to the handful of chunks that actually overlap it, no
 /// `--sort-by`-style clustering needed.
-///
-/// Run standalone (embeds its own [VortexServer]):
-/// ```
-/// java -jar client/target/vortex-demo.jar --file trades.vortex
-/// ```
-///
-/// Or against an already-running server — e.g. `java -jar server/target/vortex-server.jar` in a
-/// separate terminal, for a two-process live demo:
-/// ```
-/// java -jar client/target/vortex-demo.jar --file trades.vortex --server http://127.0.0.1:8080/
-/// ```
 public final class HttpRangeDemo {
 
     private static final String DEFAULT_FILTER_COLUMN = "timestamp";
@@ -66,25 +66,23 @@ public final class HttpRangeDemo {
     }
 
     private static void run(String[] args) throws IOException, InterruptedException {
-        Path file = null;
-        URI serverBaseUri = null;
+        if (args.length == 0) {
+            throw new IllegalArgumentException("a local file or a remote object URL is required");
+        }
+        if (args[0].equals("--upload")) {
+            runUploadOnly(args);
+            return;
+        }
+
+        String target = args[0];
         String filterColumn = DEFAULT_FILTER_COLUMN;
         long filterMin = DEFAULT_FILTER_MIN;
         long filterMax = DEFAULT_FILTER_MAX;
         String projectColumn = DEFAULT_PROJECT_COLUMN;
-        boolean upload = true;
 
-        int i = 0;
+        int i = 1;
         while (i < args.length) {
             switch (args[i]) {
-                case "--file" -> {
-                    file = Path.of(args[++i]);
-                    i++;
-                }
-                case "--server" -> {
-                    serverBaseUri = URI.create(args[++i]);
-                    i++;
-                }
                 case "--filter-column" -> {
                     filterColumn = args[++i];
                     i++;
@@ -101,51 +99,55 @@ public final class HttpRangeDemo {
                     projectColumn = args[++i];
                     i++;
                 }
-                case "--no-upload" -> {
-                    upload = false;
-                    i++;
-                }
                 default -> throw new IllegalArgumentException("unknown argument: " + args[i]);
             }
         }
 
-        if (file == null) {
-            throw new IllegalArgumentException("--file is required");
-        }
-        long fileSize = Files.size(file);
-
-        if (serverBaseUri != null) {
-            runAgainst(serverBaseUri, file, fileSize, filterColumn, filterMin, filterMax, projectColumn, upload);
+        if (target.startsWith("http://") || target.startsWith("https://")) {
+            runQuery(HttpClient.newHttpClient(), URI.create(target), filterColumn, filterMin, filterMax, projectColumn);
         } else {
-            if (!upload) {
-                throw new IllegalArgumentException("--no-upload requires --server (an embedded server starts empty)");
-            }
+            Path file = Path.of(target);
             try (VortexServer server = VortexServer.start(Files.createTempDirectory("vortex-server"), 0)) {
                 System.out.println("Embedded vortex-server at " + server.baseUri());
-                runAgainst(server.baseUri(), file, fileSize, filterColumn, filterMin, filterMax, projectColumn, true);
+                HttpClient client = HttpClient.newHttpClient();
+                URI objectUri = server.baseUri().resolve(file.getFileName().toString());
+                System.out.println("Uploading to " + objectUri + " ...");
+                upload(client, objectUri, file);
+                runQuery(client, objectUri, filterColumn, filterMin, filterMax, projectColumn);
             }
         }
     }
 
-    private static void runAgainst(URI serverBaseUri, Path localFile, long fileSize,
-            String filterColumn, long filterMin, long filterMax, String projectColumn, boolean upload)
-            throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newHttpClient();
-        URI objectUri = serverBaseUri.resolve(localFile.getFileName().toString());
+    private static void runUploadOnly(String[] args) throws IOException, InterruptedException {
+        if (args.length < 3) {
+            throw new IllegalArgumentException("--upload requires FILE and SERVER_URL, e.g. "
+                    + "--upload trades.vortex http://127.0.0.1:8080/");
+        }
+        Path file = Path.of(args[1]);
+        URI objectUri = URI.create(args[2]).resolve(file.getFileName().toString());
+        System.out.println("Uploading to " + objectUri + " ...");
+        upload(HttpClient.newHttpClient(), objectUri, file);
+        System.out.printf("Uploaded %,d bytes.%n", Files.size(file));
+    }
 
-        if (upload) {
-            System.out.println("Uploading to " + objectUri + " ...");
-            upload(client, objectUri, localFile);
-        } else {
-            System.out.println("Skipping upload, querying existing object at " + objectUri + " ...");
+    /// Queries `objectUri` directly -- no upload, whether it's an object this run just uploaded
+    /// itself or one that was already there. Reports bytes fetched against the object's *actual*
+    /// size, read from the opened [VortexHttpReader] itself ([io.github.dfa1.vortex.reader.VortexHandle#fileSize]),
+    /// so no local file is needed for this path at all.
+    private static void runQuery(HttpClient client, URI objectUri, String filterColumn, long filterMin,
+            long filterMax, String projectColumn) throws IOException, InterruptedException {
+        URI statsUri = objectUri.resolve("/_stats");
+        long fileSize;
+        try (VortexHttpReader vf = VortexHttpReader.open(objectUri)) {
+            fileSize = vf.fileSize();
         }
 
-        long bytesServedBefore = readBytesServed(client, serverBaseUri);
+        long bytesServedBefore = readBytesServed(client, statsUri);
         System.out.printf("%nScanning for %d <= %s <= %d, projecting '%s' over HTTP...%n%n",
                 filterMin, filterColumn, filterMax, projectColumn);
-        long rows = scanWithLiveDownloadCounter(client, serverBaseUri, objectUri, bytesServedBefore, fileSize,
+        long rows = scanWithLiveDownloadCounter(client, statsUri, objectUri, bytesServedBefore, fileSize,
                 filterColumn, filterMin, filterMax, projectColumn);
-        long bytesServedAfter = readBytesServed(client, serverBaseUri);
+        long bytesServedAfter = readBytesServed(client, statsUri);
 
         long servedDuringScan = bytesServedAfter - bytesServedBefore;
         System.out.println("Matched rows: " + rows);
@@ -160,14 +162,14 @@ public final class HttpRangeDemo {
     /// on a large enough dataset that the scan takes more than a poll interval or two; on a small
     /// file the whole scan finishes before the first redraw and this degrades gracefully to
     /// printing just the final line.
-    private static long scanWithLiveDownloadCounter(HttpClient client, URI serverBaseUri, URI objectUri,
+    private static long scanWithLiveDownloadCounter(HttpClient client, URI statsUri, URI objectUri,
             long bytesServedBefore, long fileSize, String filterColumn, long filterMin, long filterMax,
             String projectColumn) throws IOException, InterruptedException {
         AtomicBoolean scanning = new AtomicBoolean(true);
         Thread poller = Thread.ofVirtual().name("download-progress").start(() -> {
             while (scanning.get()) {
                 try {
-                    long servedSoFar = readBytesServed(client, serverBaseUri) - bytesServedBefore;
+                    long servedSoFar = readBytesServed(client, statsUri) - bytesServedBefore;
                     System.err.printf("\r  Downloaded so far: %,d / %,d bytes (%.1f%%)",
                             servedSoFar, fileSize, 100.0 * servedSoFar / fileSize);
                     Thread.sleep(POLL_INTERVAL);
@@ -206,9 +208,8 @@ public final class HttpRangeDemo {
         }
     }
 
-    private static long readBytesServed(HttpClient client, URI serverBaseUri)
-            throws IOException, InterruptedException {
-        HttpRequest req = HttpRequest.newBuilder(serverBaseUri.resolve("_stats")).GET().build();
+    private static long readBytesServed(HttpClient client, URI statsUri) throws IOException, InterruptedException {
+        HttpRequest req = HttpRequest.newBuilder(statsUri).GET().build();
         HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
         Matcher m = BYTES_SERVED_LINE.matcher(response.body());
         if (!m.find()) {
@@ -236,21 +237,22 @@ public final class HttpRangeDemo {
 
     private static void printUsage() {
         System.err.println("""
-                Usage: vortex-demo --file FILE [options]
+                Usage:
+                  vortex-demo --upload FILE SERVER_URL   upload FILE to a vortex-server, no query
+                  vortex-demo URL [options]              query an existing remote object directly
+                  vortex-demo FILE [options]              embed a server, upload FILE, then query it
 
-                Options:
-                  --file FILE            local .vortex file to upload and scan (required)
-                  --server URI           base URI of an already-running vortex-server; omit to embed one
+                Options (query modes only):
                   --filter-column NAME   numeric column to range-filter on (default: timestamp)
                   --filter-min N         inclusive lower bound (default: matches the README example's
                                          row [1000000, 1050000) window)
                   --filter-max N         inclusive upper bound
                   --project NAME         column to project (default: price)
-                  --no-upload            skip the PUT, query an object already on the server
-                                         (requires --server -- an embedded server starts empty).
-                                         Useful for trying several --filter-*/--project
-                                         combinations against the same uploaded file without
-                                         re-uploading it every time.
+
+                Examples:
+                  vortex-demo --upload trades.vortex http://127.0.0.1:8080/
+                  vortex-demo http://127.0.0.1:8080/trades.vortex --filter-column price --filter-min 100 --filter-max 105
+                  vortex-demo trades.vortex
 
                 Generate a file first with vortex-fakedata-generator, e.g.:
                   vortex-fakedata-generator --rows 2000000 --out trades.vortex \\
