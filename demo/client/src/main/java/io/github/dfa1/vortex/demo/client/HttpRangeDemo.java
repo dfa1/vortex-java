@@ -57,10 +57,16 @@ public final class HttpRangeDemo {
     public static void main(String[] args) {
         try {
             run(args);
-        } catch (RuntimeException | IOException | InterruptedException e) {
+        } catch (IllegalArgumentException e) {
+            // A bad invocation (missing/unknown argument) -- usage helps here.
             System.err.println("error: " + e.getMessage());
             System.err.println();
             printUsage();
+            System.exit(1);
+        } catch (RuntimeException | IOException | InterruptedException e) {
+            // A well-formed invocation that failed at runtime (network error, malformed file,
+            // ...) -- usage wouldn't explain anything here, just the error itself.
+            System.err.println("error: " + e.getMessage());
             System.exit(1);
         }
     }
