@@ -453,4 +453,68 @@ class SequenceEncodingEncoderTest {
             assertThat(meta.multiplier().int64_value()).isEqualTo(2L);
         }
     }
+
+    /// A perfect arithmetic sequence is monotonic (or constant) end to end, so its extremes are
+    /// always the first and last element -- kept as a fast-path override (ADR 0025) instead of
+    /// relying on VortexWriter's generic fallback, which would otherwise rescan the array.
+    @Nested
+    class Stats {
+
+        @Test
+        void encode_i64_increasing_reportsFirstAsMinLastAsMax() throws java.io.IOException {
+            // Given
+            long[] data = {10L, 20L, 30L, 40L};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(40L);
+        }
+
+        @Test
+        void encode_i64_decreasing_reportsLastAsMinFirstAsMax() throws java.io.IOException {
+            // Given -- a negative multiplier means the extremes sit at the OPPOSITE endpoints
+            long[] data = {40L, 30L, 20L, 10L};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(40L);
+        }
+
+        @Test
+        void encode_f64_reportsEndpointsAsMinMax() throws java.io.IOException {
+            // Given
+            double[] data = {1.5, 3.0, 4.5, 6.0};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).f64_value()).isEqualTo(1.5);
+            assertThat(scalar(result.statsMax()).f64_value()).isEqualTo(6.0);
+        }
+
+        @Test
+        void encode_empty_statsAreNull() {
+            // Given
+            long[] data = {};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+        }
+
+        private static ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
+            MemorySegment seg = MemorySegment.ofArray(bytes);
+            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
+        }
+    }
 }
