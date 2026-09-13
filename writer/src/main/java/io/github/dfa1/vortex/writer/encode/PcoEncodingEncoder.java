@@ -102,7 +102,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int[] allBufIdxs = IntStream.range(0, buffers.size()).toArray();
             MemorySegment metaBuf = buildMetadata(chunks);
             EncodeNode node = new EncodeNode(EncodingId.VORTEX_PCO, metaBuf, new EncodeNode[0], allBufIdxs);
-            return new EncodeResult(node, buffers, null, null);
+            return EncodeResult.of(node, buffers, PrimitiveEncodingEncoder.minMaxStats(ptype, data));
         }
 
         private static ChunkResult encodeChunk(long[] latents, PType ptype, int dtypeSize, Arena arena) {
