@@ -102,7 +102,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int[] allBufIdxs = IntStream.range(0, buffers.size()).toArray();
             MemorySegment metaBuf = buildMetadata(chunks);
             EncodeNode node = new EncodeNode(EncodingId.VORTEX_PCO, metaBuf, new EncodeNode[0], allBufIdxs);
-            return EncodeResult.of(node, buffers, PrimitiveEncodingEncoder.minMaxStats(ptype, data));
+            // No stats computed here: VortexWriter#writeSegment's generic fallback
+            // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input, same cost as
+            // computing it here, but in one place instead of every encoder (ADR 0025).
+            return new EncodeResult(node, buffers, null, null);
         }
 
         private static ChunkResult encodeChunk(long[] latents, PType ptype, int dtypeSize, Arena arena) {

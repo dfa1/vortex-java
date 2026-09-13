@@ -88,10 +88,11 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{daysNode, secondsNode, subsecondsNode},
                 new int[]{});
-        // The extension's zone-map min/max is its storage primitive's, unwrapped -- here the raw
-        // i64 timestamp before it's split into days/seconds/subseconds, not any of the three parts
-        // individually (signed i64 order matches chronological order regardless of the split).
-        return EncodeResult.of(root, List.copyOf(allBuffers), PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps()));
+        // No stats computed here: DateTimePartsData implements ComparableValues, so
+        // VortexWriter#writeSegment's generic fallback (ZoneMapStatCodec#columnMinMax) already
+        // computes it from the original pre-split timestamp -- the same d.timestamps() this method
+        // would otherwise recompute from (ADR 0025).
+        return new EncodeResult(root, List.copyOf(allBuffers), null, null);
     }
 
     @Override
@@ -139,10 +140,7 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                 new ChildSlot(DType.I64, seconds, 1),
                 new ChildSlot(DType.I64, subseconds, 2));
 
-        // See #encode -- same open-children stats requirement as ExtEncodingEncoder#encodeCascade:
-        // CascadingCompressor#spliceResult takes the step's own stats verbatim, never deriving them
-        // from a resolved child, so the raw pre-split timestamp's stats must be computed here.
-        return CascadeStep.open(partialRoot, List.of(), children,
-                PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps()));
+        // No stats computed here either: see #encode above (ADR 0025).
+        return new CascadeStep(partialRoot, List.of(), children, null, null, true);
     }
 }
