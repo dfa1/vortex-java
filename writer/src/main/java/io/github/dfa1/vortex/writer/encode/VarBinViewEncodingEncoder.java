@@ -68,6 +68,9 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
         }
 
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBINVIEW, null, new EncodeNode[0], bufIndices);
-        return new EncodeResult(root, buffers, null, null);
+        // Zone-map min/max is lexicographic-string-only, matching VarBinEncodingEncoder: a
+        // Binary blob isn't usefully zone-mapped.
+        byte[][] stats = data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
+        return EncodeResult.of(root, buffers, stats);
     }
 }
