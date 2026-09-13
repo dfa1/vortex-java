@@ -117,8 +117,6 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         DType idxDtype = new DType.Primitive(idxPtype, false);
         ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0);
         ChildSlot valSlot = new ChildSlot(dtype, valArr, 1);
-        // No stats computed here: VortexWriter#writeSegment's generic fallback
-        // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
         return new CascadeStep(partialRoot, List.of(fillBuf), List.of(idxSlot, valSlot), null, null, true);
     }
 
@@ -325,8 +323,6 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_SPARSE, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{idxNode, valNode}, new int[]{0});
-        // No stats computed here: VortexWriter#writeSegment's generic fallback
-        // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
         return new EncodeResult(root, List.of(fillBuf, idxBuf, valBuf), null, null);
     }
 

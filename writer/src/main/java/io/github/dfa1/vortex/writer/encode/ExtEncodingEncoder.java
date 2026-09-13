@@ -46,10 +46,6 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
             childResult = storageEncoder.encode(storage, data, ctx);
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[]{childResult.rootNode()}, new int[0]);
-        // No stats computed here: VortexWriter#writeSegment's generic fallback
-        // (ZoneMapStatCodec#columnMinMax) already unwraps an Extension to its storage primitive
-        // from the original (dtype, data) -- the same inputs this method has -- so re-propagating
-        // the child encoder's own stats would just recompute the same thing a second time (ADR 0025).
         return new EncodeResult(root, childResult.buffers(), null, null);
     }
 
@@ -63,7 +59,6 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[1], new int[0]);
         ChildSlot slot = new ChildSlot(ext.storageDType(), data, 0);
-        // No stats computed here either: see #encode above (ADR 0025).
         return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null, true);
     }
 }

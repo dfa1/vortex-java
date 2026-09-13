@@ -88,10 +88,6 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{daysNode, secondsNode, subsecondsNode},
                 new int[]{});
-        // No stats computed here: DateTimePartsData implements ComparableValues, so
-        // VortexWriter#writeSegment's generic fallback (ZoneMapStatCodec#columnMinMax) already
-        // computes it from the original pre-split timestamp -- the same d.timestamps() this method
-        // would otherwise recompute from (ADR 0025).
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
     }
 
@@ -140,7 +136,6 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                 new ChildSlot(DType.I64, seconds, 1),
                 new ChildSlot(DType.I64, subseconds, 2));
 
-        // No stats computed here either: see #encode above (ADR 0025).
         return new CascadeStep(partialRoot, List.of(), children, null, null, true);
     }
 }

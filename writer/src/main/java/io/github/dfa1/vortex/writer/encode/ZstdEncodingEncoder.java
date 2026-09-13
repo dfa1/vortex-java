@@ -120,10 +120,6 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
     }
 
-    // No stats computed anywhere in this class: VortexWriter#writeSegment's generic fallback
-    // (ZoneMapStatCodec#columnMinMax) covers every path below from the untouched input, including
-    // nullable compaction and the Utf8-vs-Binary distinction (ADR 0025).
-
     private EncodeResult encodePrimitive(DType.Primitive dt, Object data, Arena arena) {
         int byteWidth = dt.ptype().byteSize();
         MemorySegment raw = primitiveToLeBytes(dt.ptype(), data, arena);
