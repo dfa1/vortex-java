@@ -660,8 +660,19 @@ public final class VortexWriter implements Closeable {
             bytesWritten += 4;
 
             segs.add(new SegRef(offset, bytesWritten - offset));
-            lastStatsMin = result.statsMin();
-            lastStatsMax = result.statsMax();
+            // The winning encoder's own stats win when present (a cheaper override, e.g.
+            // vortex.constant already knows its value is both extremes) -- otherwise the generic
+            // fallback computes them from the untouched input, independent of which encoder ran.
+            // This is what makes stats coverage an encoder-independent guarantee rather than a
+            // per-encoder convention every new encoder has to remember (ADR 0025).
+            if (result.hasStats()) {
+                lastStatsMin = result.statsMin();
+                lastStatsMax = result.statsMax();
+            } else {
+                byte[][] fallback = ZoneMapStatCodec.columnMinMax(dtype, data);
+                lastStatsMin = fallback != null ? fallback[0] : null;
+                lastStatsMax = fallback != null ? fallback[1] : null;
+            }
             lastStatsSum = ZoneMapStatCodec.columnSum(dtype, data);
             lastNullCount = segNullCount;
             return segIdx;

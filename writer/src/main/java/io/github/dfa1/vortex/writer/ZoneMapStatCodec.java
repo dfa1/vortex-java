@@ -1,10 +1,13 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.writer.encode.ComparableValues;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -82,6 +85,50 @@ final class ZoneMapStatCodec {
         }
         Object values = data instanceof NullableData nd ? nd.values() : data;
         return PrimitiveEncodingEncoder.sumStat(p.ptype(), values);
+    }
+
+    /// The serialized `{min, max}` pair for `data` of logical type `dtype`, or `null` when the
+    /// column has no recordable min/max ([#zoneMinMaxDtype] returns `null` for the same `dtype`
+    /// shapes). This is the generic fallback every column gets regardless of which
+    /// [io.github.dfa1.vortex.writer.encode.EncodingEncoder] wrote it — mirroring the Rust
+    /// reference, which computes stats through one generic reduction for every encoding rather
+    /// than trusting each encoding to report its own (see [ComparableValues]'s Rust-parity note).
+    /// `VortexWriter#writeSegment` (private) only calls this when the winning encoder's own
+    /// [io.github.dfa1.vortex.writer.encode.EncodeResult] didn't already supply stats -- an
+    /// encoder MAY still report a cheaper override (e.g. `vortex.constant` already knows its one
+    /// value is both the min and the max, no scan needed), but never MUST.
+    ///
+    /// Unlike [#columnSum] (sum-neutral placeholders make raw dense values safe to sum directly),
+    /// a nullable primitive column is first compacted to its valid-only elements via
+    /// [PrimitiveArrays#compact] -- an invalid slot's placeholder (commonly `0`) is not a min/max
+    /// identity the way it is a sum identity, and would otherwise corrupt the reported extremes
+    /// (the #381 bug this fix generalizes). A nullable Utf8 column needs no such compaction:
+    /// [VarBinEncodingEncoder#minMaxStats] already skips `null` array entries itself.
+    ///
+    /// @param dtype the segment's logical type
+    /// @param data  the segment's input data, possibly [NullableData]- or [ComparableValues]-wrapped
+    /// @return a `{min, max}` pair, or `null` when `dtype` has no recordable min/max
+    static byte[][] columnMinMax(DType dtype, Object data) {
+        if (data instanceof ComparableValues cv) {
+            return PrimitiveEncodingEncoder.minMaxStats(cv.ptype(), cv.values());
+        }
+        return switch (dtype) {
+            case DType.Primitive p -> PrimitiveEncodingEncoder.minMaxStats(p.ptype(), compactIfNullable(p.ptype(), data));
+            case DType.Extension ext when ext.storageDType() instanceof DType.Primitive p ->
+                    PrimitiveEncodingEncoder.minMaxStats(p.ptype(), compactIfNullable(p.ptype(), data));
+            case DType.Utf8 _ -> {
+                Object values = data instanceof NullableData nd ? nd.values() : data;
+                yield values instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
+            }
+            default -> null;
+        };
+    }
+
+    private static Object compactIfNullable(PType ptype, Object data) {
+        if (!(data instanceof NullableData nd)) {
+            return data;
+        }
+        return PrimitiveArrays.compact(ptype, nd.values(), nd.validity());
     }
 
     /// Builds the per-zone min (or max) values array for the resolved min/max `dtype`, decoding each
