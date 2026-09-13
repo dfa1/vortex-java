@@ -44,4 +44,16 @@ public record EncodeResult(
     public boolean hasStats() {
         return statsMin != null && statsMax != null;
     }
+
+    /// Convenience factory taking a `{min, max}`-or-`null` stats pair (as returned by e.g.
+    /// [PrimitiveEncodingEncoder#minMaxStats] / [VarBinEncodingEncoder#minMaxStats]) instead of two
+    /// independently-nullable arguments.
+    ///
+    /// @param rootNode the root encode node describing the encoding tree structure
+    /// @param buffers  flat list of data buffers in the order referenced by `rootNode`
+    /// @param stats    a `{min, max}` pair, or `null` when neither stat is available
+    /// @return an [EncodeResult] with `stats` unpacked into `statsMin`/`statsMax`
+    public static EncodeResult of(EncodeNode rootNode, List<MemorySegment> buffers, byte[][] stats) {
+        return new EncodeResult(rootNode, buffers, stats != null ? stats[0] : null, stats != null ? stats[1] : null);
+    }
 }
