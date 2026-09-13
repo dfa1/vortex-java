@@ -66,7 +66,18 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         }
         ProtoScalarValue baseScalar = buildIntScalar(pt, base);
         ProtoScalarValue mulScalar = buildIntScalar(pt, multiplier);
-        return buildResult(baseScalar, mulScalar);
+        // A perfect arithmetic sequence is monotonic (or constant) end to end, so its extremes are
+        // always the first and last element -- no separate scan needed.
+        boolean unsign = pt.isUnsigned();
+        byte[] statsMin = null;
+        byte[] statsMax = null;
+        if (n > 0) {
+            long last = base + (long) (n - 1) * multiplier;
+            boolean baseIsMin = unsign ? Long.compareUnsigned(base, last) <= 0 : base <= last;
+            statsMin = buildIntScalar(pt, baseIsMin ? base : last).encode();
+            statsMax = buildIntScalar(pt, baseIsMin ? last : base).encode();
+        }
+        return buildResult(baseScalar, mulScalar, statsMin, statsMax);
     }
 
     private static EncodeResult encodeF32(float[] data) {
@@ -77,7 +88,14 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
             }
         }
-        return buildResult(ProtoScalarValue.ofF32Value(base), ProtoScalarValue.ofF32Value(mul));
+        byte[] statsMin = null;
+        byte[] statsMax = null;
+        if (data.length > 0) {
+            float last = base + (data.length - 1) * mul;
+            statsMin = ProtoScalarValue.ofF32Value(Math.min(base, last)).encode();
+            statsMax = ProtoScalarValue.ofF32Value(Math.max(base, last)).encode();
+        }
+        return buildResult(ProtoScalarValue.ofF32Value(base), ProtoScalarValue.ofF32Value(mul), statsMin, statsMax);
     }
 
     private static EncodeResult encodeF64(double[] data) {
@@ -88,7 +106,14 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
             }
         }
-        return buildResult(ProtoScalarValue.ofF64Value(base), ProtoScalarValue.ofF64Value(mul));
+        byte[] statsMin = null;
+        byte[] statsMax = null;
+        if (data.length > 0) {
+            double last = base + (data.length - 1) * mul;
+            statsMin = ProtoScalarValue.ofF64Value(Math.min(base, last)).encode();
+            statsMax = ProtoScalarValue.ofF64Value(Math.max(base, last)).encode();
+        }
+        return buildResult(ProtoScalarValue.ofF64Value(base), ProtoScalarValue.ofF64Value(mul), statsMin, statsMax);
     }
 
     private static EncodeResult encodeF16(short[] data) {
@@ -102,16 +127,26 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
             }
         }
+        byte[] statsMin = null;
+        byte[] statsMax = null;
+        if (data.length > 0) {
+            float lastF = baseF + (data.length - 1) * mulF;
+            short minShort = Float.floatToFloat16(Math.min(baseF, lastF));
+            short maxShort = Float.floatToFloat16(Math.max(baseF, lastF));
+            statsMin = ProtoScalarValue.ofF16Value(Short.toUnsignedLong(minShort)).encode();
+            statsMax = ProtoScalarValue.ofF16Value(Short.toUnsignedLong(maxShort)).encode();
+        }
         return buildResult(
                 ProtoScalarValue.ofF16Value(Short.toUnsignedLong(baseShort)),
-                ProtoScalarValue.ofF16Value(Short.toUnsignedLong(mulShort)));
+                ProtoScalarValue.ofF16Value(Short.toUnsignedLong(mulShort)),
+                statsMin, statsMax);
     }
 
-    private static EncodeResult buildResult(ProtoScalarValue base, ProtoScalarValue mul) {
+    private static EncodeResult buildResult(ProtoScalarValue base, ProtoScalarValue mul, byte[] statsMin, byte[] statsMax) {
         ProtoSequenceMetadata meta = new ProtoSequenceMetadata(base, mul);
         MemorySegment metaBuf = MemorySegment.ofArray(meta.encode());
         EncodeNode node = new EncodeNode(EncodingId.VORTEX_SEQUENCE, metaBuf, new EncodeNode[0], new int[]{});
-        return new EncodeResult(node, List.of(), null, null);
+        return new EncodeResult(node, List.of(), statsMin, statsMax);
     }
 
     private static ProtoScalarValue buildIntScalar(PType pt, long value) {
