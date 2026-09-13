@@ -8,6 +8,8 @@
 - **Superseded by:** —
 - **Related:** [ADR 0005 — Vector API adoption](0005-vector-api-adoption.md),
   [ADR 0012 — Zero-copy layout decoding: lazy Chunked / Dict](0012-zero-copy-layout-decoding.md),
+  [ADR 0026 — FSST per-row lazy decode](0026-fsst-per-row-lazy-decode.md) (narrows the
+  "Fsst stays eager" exclusion below),
   [CLAUDE.md §Memory model](../CLAUDE.md)
 
 ## Context
@@ -78,6 +80,11 @@ shape differs from their input (compact compressed bytes → wider element
 array), so element-at-i requires unpacking a window. They must remain
 eager. `Dict` is a special case (lazy is trivial — `getDouble(i) =
 values[indices[i]]`) but is already O(1) per access.
+
+> **Narrowed by [ADR 0026](0026-fsst-per-row-lazy-decode.md):** `Fsst` turned out not to belong in
+> this group after all — its wire format already carries a per-row code range independent of every
+> other row, so element-at-`i` does *not* require unpacking a window the way the other three do.
+> `Bitpacked`/`Pco`/`Zstd` remain eager for the reason given above.
 
 ## Decision
 
