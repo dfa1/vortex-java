@@ -68,8 +68,6 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
         }
 
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBINVIEW, null, new EncodeNode[0], bufIndices);
-        // No stats computed here: VortexWriter#writeSegment's generic fallback
-        // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
         return new EncodeResult(root, buffers, null, null);
     }
 }

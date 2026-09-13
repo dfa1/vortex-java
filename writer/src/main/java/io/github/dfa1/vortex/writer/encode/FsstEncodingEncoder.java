@@ -79,8 +79,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{uncompLensNode, codesOffNode},
                 new int[]{0, 1, 2});
 
-        // No stats computed here: VortexWriter#writeSegment's generic fallback
-        // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
         return new EncodeResult(root,
                 List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf), null, null);
     }
@@ -110,8 +108,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(c.metaBytes()),
                 new EncodeNode[]{null, null},
                 new int[]{0, 1, 2});
-        // No stats computed here: VortexWriter#writeSegment's generic fallback
-        // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
         return new CascadeStep(partialRoot,
                 List.of(c.symBuf(), c.symLenBuf(), c.compBuf()),
                 List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0),
