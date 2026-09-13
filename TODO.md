@@ -13,17 +13,6 @@
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
 - [ ] **Vector API adoption** — see [ADR-0005](adr/0005-vector-api-adoption.md).
 
-### FSST follow-ups
-
-Out of scope for the #287 rewrite (which, together with the follow-up hot-path pass, closed the
-`vortex-jni` gap with a scalar, branch-free algorithm — encode at parity, decode ~1.16x faster on
-`JavaVsJniFsstBenchmark` — see [ADR-0022](adr/0022-fsst-module-extraction.md)):
-
-- [ ] **OptFSST** (2026 arXiv follow-up: DP-based training instead of greedy, ~4x slower training
-  for 7–17% better compression) — a documented future option, not adopted, since it moves off the
-  classic greedy-FSST speed/compression tradeoff this rewrite targets (matching what `vortex-jni`
-  itself uses).
-
 ## Security
 
 See [CLAUDE.md §Security contract](CLAUDE.md) for the invariant. Each entry below is either a

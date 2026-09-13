@@ -127,6 +127,14 @@ dependency on `core`/`reader`/`writer`:
   API (parity tests, two hot-path implementations to keep in sync) for no benefit over
   `java.lang.foreign`, which is already a zero-dependency JDK-standard API and is what every other
   module in this codebase uses for the same purpose.
+- **OptFSST (DP-based symbol-table training)** — a 2026 arXiv follow-up to the original paper,
+  replacing the greedy per-generation training this ADR ports with a dynamic-programming search:
+  ~4x slower training for 7–17% better compression. Not adopted: it moves off the classic
+  greedy-FSST speed/compression tradeoff this rewrite deliberately targets — the same tradeoff
+  `vortex-jni`'s own `spiraldb/fsst` reference makes, so adopting DP training here would trade away
+  the very parity with `vortex-jni` this rewrite was measured against. `CompressorBuilder`'s
+  training loop stays greedy; revisit only if a future benchmark shows compression ratio, not
+  training speed, is the bottleneck that matters for a real workload.
 
 ## References
 
