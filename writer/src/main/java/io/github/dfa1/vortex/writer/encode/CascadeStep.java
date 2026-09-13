@@ -46,6 +46,21 @@ public record CascadeStep(
         return new CascadeStep(null, List.of(), List.of(), null, null, false);
     }
 
+    /// Convenience: applicable step with open children, taking a `{min, max}`-or-`null` stats pair
+    /// (as returned by e.g. [PrimitiveEncodingEncoder#minMaxStats] / [VarBinEncodingEncoder#minMaxStats])
+    /// instead of two independently-nullable arguments.
+    ///
+    /// @param partialRoot  partially-assembled root encode node
+    /// @param ownedBuffers buffers owned directly by the root node
+    /// @param openChildren child slots to be filled recursively by the cascading compressor
+    /// @param stats        a `{min, max}` pair, or `null` when neither stat is available
+    /// @return an applicable [CascadeStep] with `stats` unpacked into `statsMin`/`statsMax`
+    public static CascadeStep open(EncodeNode partialRoot, List<MemorySegment> ownedBuffers,
+            List<ChildSlot> openChildren, byte[][] stats) {
+        return new CascadeStep(partialRoot, ownedBuffers, openChildren,
+                stats != null ? stats[0] : null, stats != null ? stats[1] : null, true);
+    }
+
     /// Returns `true` if this step has no open child slots.
     ///
     /// @return `true` if the step is terminal (no open children)
