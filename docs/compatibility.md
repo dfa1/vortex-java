@@ -152,7 +152,7 @@ decoder falls into one of three shapes:
 | `vortex.sequence`           | Lazy          | Lazy          | `LazySequenceXxxArray`; `base + i * multiplier` per access, no buffer, ADR 0015 |
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
 | `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinChunkedArray` (Utf8/Binary), ADR 0012 |
-| `vortex.fsst`               | Materialized  | Materialized  | symbol-table decompression                                               |
+| `vortex.fsst`               | Lazy          | Lazy          | `LazyFsstVarBinArray` — per-row code range is independent, so `getBytes(i)` decompresses only row `i`; `getByteLength`/`forEachByteLength` read the uncompressed-lengths child directly, no decompression at all, ADR 0026 |
 | `vortex.list`               | Lazy          | Lazy          | `ListArray` wraps elements + offsets children; shape inherits from child  |
 | `vortex.listview`           | Lazy          | Lazy          | `ListViewArray` wraps elements + offsets + sizes children; a validity child yields a `MaskedArray` over it |
 | `vortex.map`                | Lazy          | Lazy          | `MapArray` wraps the entries child (a `ListViewArray`, or a `MaskedArray` over one when the map is nullable) |
@@ -171,10 +171,11 @@ decoder falls into one of three shapes:
 | `vortex.variant`            | Lazy          | Lazy          | container wraps constant/chunked core (inner-typed) + optional shredded child |
 | `vortex.onpair`             | n/a           | n/a           | not ported                                                               |
 
-Decompression-style encodings (Bitpacked / Pco / Zstd / Fsst / Delta) stay Materialized by design
-— element-at-`i` requires decoding a window, so they must allocate output (ADR 0010 §"Decompression
-encodings stay eager"). Their output can itself be wrapped in a 1:1 lazy transform (e.g. ALP over
-Bitpacked produces `LazyAlp(MaterializedXxx)`).
+Decompression-style encodings (Bitpacked / Pco / Zstd / Delta) stay Materialized by design —
+element-at-`i` requires decoding a window, so they must allocate output (ADR 0010). Their output
+can itself be wrapped in a 1:1 lazy transform (e.g. ALP over Bitpacked produces
+`LazyAlp(MaterializedXxx)`). Fsst is the one exception: its per-row code range is independent of
+every other row, so it stays Lazy instead (ADR 0026).
 
 ### Unknown encodings
 

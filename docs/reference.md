@@ -379,7 +379,11 @@ The `vortex-fsst` module is the standalone FSST (Fast Static Symbol Table) strin
 algorithm, usable independently of Vortex. It depends only on the JDK (`java.lang.foreign`), never
 on `core`/`reader`/`writer`; `writer`/`reader` depend on it. The `vortex.fsst` encoding adapter is
 one caller — the module itself knows nothing of the Vortex wire format. See
-[ADR 0022](../adr/0022-fsst-module-extraction.md).
+[ADR 0022](../adr/0022-fsst-module-extraction.md). On the read side, `FsstEncodingDecoder` never
+decompresses eagerly: it returns a `LazyFsstVarBinArray` that decompresses row `i`'s code range only
+when that row is actually read, since FSST's per-row code range is independent of every other row
+(unlike `Bitpacked`/`Pco`/`Zstd`, which do need a decoded window) — see
+[ADR 0026](../adr/0026-fsst-per-row-lazy-decode.md).
 
 Compress: train a `Compressor` over a corpus, then compress rows against its table. Decompress:
 build a `Decompressor` (from the trained `Compressor`, or from raw table arrays). Hot-path methods
