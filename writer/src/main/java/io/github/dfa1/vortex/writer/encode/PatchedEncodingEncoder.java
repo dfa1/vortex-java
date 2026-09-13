@@ -78,14 +78,14 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             DType u32Dtype = DType.U32;
             DType u16Dtype = DType.U16;
 
-            return new CascadeStep(partialRoot, List.of(),
+            return CascadeStep.open(partialRoot, List.of(),
                     List.of(
                             new ChildSlot(dtype, fromLongs(pd.inner, ptype), 0),
                             new ChildSlot(u32Dtype, pd.laneOffsets, 1),
                             new ChildSlot(u16Dtype, pd.patchIndices, 2),
                             new ChildSlot(dtype, fromLongs(pd.patchValues, ptype), 3)
                     ),
-                    null, null, true);
+                    PrimitiveEncodingEncoder.minMaxStats(ptype, data));
         }
 
         static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
@@ -133,7 +133,8 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_PATCHED, MemorySegment.ofArray(metaBytes),
                     new EncodeNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{});
 
-            return new EncodeResult(root, List.of(innerBuf, laneOffsBuf, patchIdxBuf, patchValBuf), null, null);
+            return EncodeResult.of(root, List.of(innerBuf, laneOffsBuf, patchIdxBuf, patchValBuf),
+                    PrimitiveEncodingEncoder.minMaxStats(ptype, data));
         }
 
         private static PatchedData computePatchedData(long[] longs, PType ptype, int n) {
