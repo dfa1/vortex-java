@@ -19,10 +19,6 @@ Out of scope for the #287 rewrite (which, together with the follow-up hot-path p
 `vortex-jni` gap with a scalar, branch-free algorithm — encode at parity, decode ~1.16x faster on
 `JavaVsJniFsstBenchmark` — see [ADR-0022](adr/0022-fsst-module-extraction.md)):
 
-- [ ] **True per-row lazy/random-access decompression** exploiting FSST's headline random-access
-  property — today `FsstEncodingDecoder.decode()` eagerly materializes the whole column up front
-  regardless of what is queried. Connects to [ADR-0010](adr/0010-lazy-decode.md) (Lazy decode) but
-  is a separate initiative.
 - [ ] **OptFSST** (2026 arXiv follow-up: DP-based training instead of greedy, ~4x slower training
   for 7–17% better compression) — a documented future option, not adopted, since it moves off the
   classic greedy-FSST speed/compression tradeoff this rewrite targets (matching what `vortex-jni`

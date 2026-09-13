@@ -40,3 +40,4 @@ the decision shipped in (blank = not yet shipped).
 | 0023 | Adopt the Vortex editions model as a client-side write/read policy | Accepted |          |
 | 0024 | JPMS adoption for core/reader/writer          | Proposed  |          |
 | 0025 | Centralize zone-map MIN/MAX stats computation in the writer | Accepted |          |
+| 0026 | FSST per-row lazy decode                      | Accepted  |          |
