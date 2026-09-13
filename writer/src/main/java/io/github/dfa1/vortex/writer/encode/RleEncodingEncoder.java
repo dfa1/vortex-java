@@ -183,7 +183,8 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
                 new int[0]);
-        return new EncodeResult(root, List.of(valuesSeg, indicesSeg, offsetsSeg), null, null);
+        return EncodeResult.of(root, List.of(valuesSeg, indicesSeg, offsetsSeg),
+                PrimitiveEncodingEncoder.minMaxStats(ptype, data));
     }
 
     private static int rleEncode(long[] input, long[] chunkValues, short[] chunkIndices) {
