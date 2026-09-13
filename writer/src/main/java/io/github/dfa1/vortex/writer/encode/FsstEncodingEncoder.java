@@ -79,9 +79,11 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{uncompLensNode, codesOffNode},
                 new int[]{0, 1, 2});
 
-        return new EncodeResult(root,
-                List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf),
-                null, null);
+        // Zone-map min/max is lexicographic-string-only, matching VarBinEncodingEncoder: a
+        // Binary blob isn't usefully zone-mapped.
+        byte[][] stats = data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
+        return EncodeResult.of(root,
+                List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf), stats);
     }
 
     /// Cascading FSST: expose the per-row uncompressed-length and code-offset children as open
@@ -109,11 +111,12 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(c.metaBytes()),
                 new EncodeNode[]{null, null},
                 new int[]{0, 1, 2});
-        return new CascadeStep(partialRoot,
+        byte[][] stats = data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
+        return CascadeStep.open(partialRoot,
                 List.of(c.symBuf(), c.symLenBuf(), c.compBuf()),
                 List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0),
                         new ChildSlot(new DType.Primitive(c.codesOffPType(), false), codesOffsets, 1)),
-                null, null, true);
+                stats);
     }
 
     /// The FSST-specific product of compression: the symbol-table buffers, the wire code stream, the
