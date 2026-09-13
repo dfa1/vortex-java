@@ -59,6 +59,13 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[1], new int[0]);
         ChildSlot slot = new ChildSlot(ext.storageDType(), data, 0);
-        return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null, true);
+        // CascadingCompressor#spliceResult takes a step's stats verbatim -- it never derives them
+        // from a resolved open child -- so an open storage slot needs its stats computed here,
+        // independently of whatever encoding the cascade eventually picks for it (matching
+        // ZoneMapStatCodec#zoneMinMaxDtype: an Extension's zone-map min/max is its storage
+        // primitive's, unwrapped).
+        byte[][] stats = ext.storageDType() instanceof DType.Primitive p
+                ? PrimitiveEncodingEncoder.minMaxStats(p.ptype(), data) : null;
+        return CascadeStep.open(partialRoot, List.of(), List.of(slot), stats);
     }
 }
