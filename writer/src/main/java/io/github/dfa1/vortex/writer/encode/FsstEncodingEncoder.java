@@ -79,11 +79,10 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{uncompLensNode, codesOffNode},
                 new int[]{0, 1, 2});
 
-        // Zone-map min/max is lexicographic-string-only, matching VarBinEncodingEncoder: a
-        // Binary blob isn't usefully zone-mapped.
-        byte[][] stats = data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
-        return EncodeResult.of(root,
-                List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf), stats);
+        // No stats computed here: VortexWriter#writeSegment's generic fallback
+        // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
+        return new EncodeResult(root,
+                List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf), null, null);
     }
 
     /// Cascading FSST: expose the per-row uncompressed-length and code-offset children as open
@@ -111,12 +110,13 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(c.metaBytes()),
                 new EncodeNode[]{null, null},
                 new int[]{0, 1, 2});
-        byte[][] stats = data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
-        return CascadeStep.open(partialRoot,
+        // No stats computed here: VortexWriter#writeSegment's generic fallback
+        // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
+        return new CascadeStep(partialRoot,
                 List.of(c.symBuf(), c.symLenBuf(), c.compBuf()),
                 List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0),
                         new ChildSlot(new DType.Primitive(c.codesOffPType(), false), codesOffsets, 1)),
-                stats);
+                null, null, true);
     }
 
     /// The FSST-specific product of compression: the symbol-table buffers, the wire code stream, the

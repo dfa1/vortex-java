@@ -78,14 +78,16 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             DType u32Dtype = DType.U32;
             DType u16Dtype = DType.U16;
 
-            return CascadeStep.open(partialRoot, List.of(),
+            // No stats computed here: VortexWriter#writeSegment's generic fallback
+            // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
+            return new CascadeStep(partialRoot, List.of(),
                     List.of(
                             new ChildSlot(dtype, fromLongs(pd.inner, ptype), 0),
                             new ChildSlot(u32Dtype, pd.laneOffsets, 1),
                             new ChildSlot(u16Dtype, pd.patchIndices, 2),
                             new ChildSlot(dtype, fromLongs(pd.patchValues, ptype), 3)
                     ),
-                    PrimitiveEncodingEncoder.minMaxStats(ptype, data));
+                    null, null, true);
         }
 
         static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
@@ -133,8 +135,9 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_PATCHED, MemorySegment.ofArray(metaBytes),
                     new EncodeNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{});
 
-            return EncodeResult.of(root, List.of(innerBuf, laneOffsBuf, patchIdxBuf, patchValBuf),
-                    PrimitiveEncodingEncoder.minMaxStats(ptype, data));
+            // No stats computed here: VortexWriter#writeSegment's generic fallback
+            // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
+            return new EncodeResult(root, List.of(innerBuf, laneOffsBuf, patchIdxBuf, patchValBuf), null, null);
         }
 
         private static PatchedData computePatchedData(long[] longs, PType ptype, int n) {

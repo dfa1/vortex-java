@@ -183,8 +183,9 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
                 new int[0]);
-        return EncodeResult.of(root, List.of(valuesSeg, indicesSeg, offsetsSeg),
-                PrimitiveEncodingEncoder.minMaxStats(ptype, data));
+        // No stats computed here: VortexWriter#writeSegment's generic fallback
+        // (ZoneMapStatCodec#columnMinMax) covers it from the untouched input (ADR 0025).
+        return new EncodeResult(root, List.of(valuesSeg, indicesSeg, offsetsSeg), null, null);
     }
 
     private static int rleEncode(long[] input, long[] chunkValues, short[] chunkIndices) {

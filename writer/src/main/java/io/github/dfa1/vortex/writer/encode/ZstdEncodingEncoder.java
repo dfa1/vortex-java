@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoZstdFrameMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoZstdMetadata;
@@ -116,34 +115,34 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
                 throw new VortexException(EncodingId.VORTEX_ZSTD,
                         "non-nullable " + dtype + " contains null");
             }
-            // Zone-map min/max is lexicographic-string-only, matching VarBinEncodingEncoder: a
-            // Binary blob (e.g. audio bytes) isn't usefully zone-mapped.
-            byte[][] stats = data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
-            return encodeVarBin(encoded, ctx.arena(), stats);
+            return encodeVarBin(encoded, ctx.arena());
         }
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
     }
+
+    // No stats computed anywhere in this class: VortexWriter#writeSegment's generic fallback
+    // (ZoneMapStatCodec#columnMinMax) covers every path below from the untouched input, including
+    // nullable compaction and the Utf8-vs-Binary distinction (ADR 0025).
 
     private EncodeResult encodePrimitive(DType.Primitive dt, Object data, Arena arena) {
         int byteWidth = dt.ptype().byteSize();
         MemorySegment raw = primitiveToLeBytes(dt.ptype(), data, arena);
         long n = primitiveLength(dt.ptype(), data);
-        byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(dt.ptype(), data);
-        return buildResult(raw, uniformLayout(n, byteWidth), arena, stats);
+        return buildResult(raw, uniformLayout(n, byteWidth), arena);
     }
 
-    private EncodeResult encodeVarBin(byte[][] encoded, Arena arena, byte[][] stats) {
+    private EncodeResult encodeVarBin(byte[][] encoded, Arena arena) {
         MemorySegment raw = buildLengthPrefixed(encoded, arena);
-        return buildResult(raw, varBinLayout(raw, encoded.length), arena, stats);
+        return buildResult(raw, varBinLayout(raw, encoded.length), arena);
     }
 
-    private EncodeResult buildResult(MemorySegment raw, FrameLayout layout, Arena arena, byte[][] stats) {
+    private EncodeResult buildResult(MemorySegment raw, FrameLayout layout, Arena arena) {
         // Zero-copy: each frame is an arena-native slice of raw, compressed straight into another
         // arena segment. A single-value-per-array config yields one frame (the prior behavior).
         Frames frames = compressFrames(raw, layout, arena);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(frames.metadata()),
                 new EncodeNode[0], frameBufferIndices(frames.compressed().size(), 0));
-        return EncodeResult.of(root, List.copyOf(frames.compressed()), stats);
+        return new EncodeResult(root, List.copyOf(frames.compressed()), null, null);
     }
 
     private EncodeResult encodeNullablePrimitive(DType.Primitive dt, NullableData nd, EncodeContext ctx) {
@@ -154,11 +153,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         // reference). The decoder scatters them back over the validity mask carried by child[0].
         MemorySegment full = primitiveToLeBytes(dt.ptype(), nd.values(), arena);
         MemorySegment packed = packValidBytes(full, validity, byteWidth, arena);
-        // Stats must come from only the valid elements -- the dense values array carries
-        // placeholder garbage (commonly 0) at invalid positions, same as MaskedEncodingEncoder.
-        Object compacted = PrimitiveArrays.compact(dt.ptype(), nd.values(), validity);
-        byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(dt.ptype(), compacted);
-        return buildNullableResult(packed, uniformLayout(countValid(validity), byteWidth), validity, ctx, stats);
+        return buildNullableResult(packed, uniformLayout(countValid(validity), byteWidth), validity, ctx);
     }
 
     private EncodeResult encodeNullableVarBin(NullableData nd, EncodeContext ctx) {
@@ -166,13 +161,11 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         // reference). The decoder scatters them back over the validity mask carried by child[0].
         byte[][] valid = stripNulls(VarBinBytes.toRawByteArrays(nd.values()));
         MemorySegment packed = buildLengthPrefixed(valid, ctx.arena());
-        // minMaxStats already skips null entries itself, so the un-stripped values array is fine.
-        byte[][] stats = nd.values() instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
-        return buildNullableResult(packed, varBinLayout(packed, valid.length), nd.validity(), ctx, stats);
+        return buildNullableResult(packed, varBinLayout(packed, valid.length), nd.validity(), ctx);
     }
 
     private EncodeResult buildNullableResult(
-            MemorySegment raw, FrameLayout layout, boolean[] validity, EncodeContext ctx, byte[][] stats) {
+            MemorySegment raw, FrameLayout layout, boolean[] validity, EncodeContext ctx) {
         Frames frames = compressFrames(raw, layout, ctx.arena());
         int frameCount = frames.compressed().size();
 
@@ -187,7 +180,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(frames.metadata()),
                 new EncodeNode[]{validityNode}, frameBufferIndices(frameCount, 0));
-        return EncodeResult.of(root, buffers, stats);
+        return new EncodeResult(root, buffers, null, null);
     }
 
     /// Byte spans and value counts of each frame; spans sum to the payload size.
