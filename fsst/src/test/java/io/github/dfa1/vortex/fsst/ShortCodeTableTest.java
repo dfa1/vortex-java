@@ -17,8 +17,9 @@ class ShortCodeTableTest {
         long word = wordOf("ax"); // second byte irrelevant: no length-2 symbol.
 
         // When
-        int code = sut.codeFor(word);
-        int length = sut.lengthFor(word);
+        int packed = sut.packedFor(word);
+        int code = Matcher.codeOf(packed);
+        int length = Matcher.lengthOf(packed);
 
         // Then
         assertThat(code).isZero();
@@ -35,8 +36,9 @@ class ShortCodeTableTest {
         long word = wordOf("ab");
 
         // When
-        int code = sut.codeFor(word);
-        int length = sut.lengthFor(word);
+        int packed = sut.packedFor(word);
+        int code = Matcher.codeOf(packed);
+        int length = Matcher.lengthOf(packed);
 
         // Then
         assertThat(code).isEqualTo(1);
@@ -53,8 +55,9 @@ class ShortCodeTableTest {
         long word = wordOf("ax");
 
         // When
-        int code = sut.codeFor(word);
-        int length = sut.lengthFor(word);
+        int packed = sut.packedFor(word);
+        int code = Matcher.codeOf(packed);
+        int length = Matcher.lengthOf(packed);
 
         // Then
         assertThat(code).isZero();
@@ -69,8 +72,9 @@ class ShortCodeTableTest {
         long word = wordOf("zz");
 
         // When
-        int code = sut.codeFor(word);
-        int length = sut.lengthFor(word);
+        int packed = sut.packedFor(word);
+        int code = Matcher.codeOf(packed);
+        int length = Matcher.lengthOf(packed);
 
         // Then — the caller must escape this byte.
         assertThat(code).isEqualTo(ShortCodeTable.NO_CODE);
@@ -85,7 +89,7 @@ class ShortCodeTableTest {
         long word = wordOf("abc");
 
         // When
-        int length = sut.lengthFor(word);
+        int length = Matcher.lengthOf(sut.packedFor(word));
 
         // Then
         assertThat(length).isZero();

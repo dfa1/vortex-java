@@ -100,23 +100,6 @@ final class ShortCodeTable {
         return table[(int) (word & 0xFFFF)];
     }
 
-    /// Returns the code matched by the low two bytes of `word`, or [#NO_CODE] if none.
-    ///
-    /// @param word an input word; only its low 16 bits (first two input bytes) are consulted
-    /// @return the matched symbol code, or [#NO_CODE] when there is no length-1 or length-2 match
-    int codeFor(long word) {
-        return packedFor(word) >> 8;
-    }
-
-    /// Returns the length of the symbol matched by the low two bytes of `word`: 2, 1, or 0 for no
-    /// match.
-    ///
-    /// @param word an input word; only its low 16 bits (first two input bytes) are consulted
-    /// @return the matched symbol length in bytes, or 0 when there is no match
-    int lengthFor(long word) {
-        return length(packedFor(word));
-    }
-
     private static int length(int packed) {
         return packed & 0xFF;
     }
