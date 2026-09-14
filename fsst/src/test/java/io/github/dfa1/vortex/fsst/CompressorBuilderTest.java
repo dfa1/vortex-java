@@ -223,6 +223,65 @@ class CompressorBuilderTest {
         }
     }
 
+    @Nested
+    class NulByteCollision {
+
+        @Test
+        void run_currentTableAlreadyHasNulSuffixedSymbol_countsBothMatchLengthsSeparately() {
+            // Given — a current table that already contains "A\0" as a trained 2-byte symbol (as
+            // it would after an earlier generation learned it from real "A\0" occurrences). The
+            // sample repeats "AX" (a standalone 'A' the matcher can't extend into "A\0", since the
+            // next byte is 'X' not NUL) and "A\0" (which the matcher matches as one length-2
+            // symbol) equally often. Both produce a `bumpSingle` call with the *same* packed long:
+            // `{0x41}` (length 1, from "AX"'s 'A') and `{0x41, 0x00}` (length 2, from "A\0") both
+            // mask to `0x41` (issue #393 #5). A packed-only key would merge the two into one
+            // corrupted candidate; keying by `(packed, length)` must keep them distinct.
+            Compressor current = Compressor.of(List.of(new Symbol(0x41L, 2))); // "A\0", code 0
+            byte[] row = interleavedStandaloneAndNulSuffixed(2_000);
+            Sample sample = Sample.draw(new byte[][]{row}, 1L);
+
+            // When — one final generation (minCount relaxed to 1) over the whole sample.
+            List<Symbol> result =
+                    TrainingGeneration.run(current, sample, sample.chunkCount(), 128, true);
+
+            // Then — both the standalone length-1 'A' symbol and the real "A\0" length-2 symbol
+            // survive as distinct, correctly counted candidates.
+            assertThat(hasSymbol(result, 1, (byte) 'A')).isTrue();
+            assertThat(hasSymbol(result, 2, (byte) 'A', (byte) 0)).isTrue();
+        }
+
+        private byte[] interleavedStandaloneAndNulSuffixed(int repeats) {
+            byte[] row = new byte[repeats * 4];
+            int pos = 0;
+            for (int i = 0; i < repeats; i++) {
+                row[pos++] = 'A';
+                row[pos++] = 'X'; // standalone 'A': the matcher cannot extend this into "A\0"
+                row[pos++] = 'A';
+                row[pos++] = 0;   // "A\0": matches the pre-trained length-2 symbol
+            }
+            return row;
+        }
+
+        private boolean hasSymbol(List<Symbol> symbols, int length, byte... expectedBytes) {
+            for (Symbol symbol : symbols) {
+                if (symbol.length() != length) {
+                    continue;
+                }
+                boolean matches = true;
+                for (int k = 0; k < length; k++) {
+                    if (symbol.byteAt(k) != expectedBytes[k]) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
     private static byte[][] logLikeRows(int count) {
         // Real repeated substrings: a shared timestamp/level/host prefix plus a varying tail, the
         // kind of column FSST is meant to compress well.

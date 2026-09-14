@@ -68,16 +68,18 @@ final class TrainingGeneration {
         for (int c = 0; c < chunkLimit; c++) {
             int start = sample.chunkStart(c);
             int end = sample.chunkEnd(c);
-            long previous = -1L; // No previous match within this chunk yet.
+            long previousPacked = -1L; // No previous match within this chunk yet.
+            int previousLength = 0;
             int pos = start;
             while (pos < end) {
                 int matchLength = matchLengthAt(current, bytes, pos, end);
                 long packed = Compressor.loadWord(bytes, pos, pos + matchLength) & lengthMask(matchLength);
                 counts.bumpSingle(packed, matchLength);
-                if (previous >= 0) {
-                    counts.bumpPair(previous, packed);
+                if (previousPacked >= 0) {
+                    counts.bumpPair(previousPacked, previousLength, packed, matchLength);
                 }
-                previous = packed;
+                previousPacked = packed;
+                previousLength = matchLength;
                 pos += matchLength;
             }
         }
@@ -117,12 +119,11 @@ final class TrainingGeneration {
                 candidates.add(new Candidate(packed, length, gainOf(count, length)));
             }
         });
-        counts.forEachPair((first, second, count) -> {
+        counts.forEachPair((first, firstLength, second, secondLength, count) -> {
             if (count < minCount) {
                 return;
             }
-            int firstLength = counts.lengthOf(first);
-            int combinedLength = Math.min(firstLength + counts.lengthOf(second), MAX_SYMBOL_LENGTH);
+            int combinedLength = Math.min(firstLength + secondLength, MAX_SYMBOL_LENGTH);
             long combined = concatenate(first, firstLength, second);
             long packed = combined & lengthMask(combinedLength);
             candidates.add(new Candidate(packed, combinedLength, gainOf(count, combinedLength)));
@@ -215,45 +216,47 @@ final class TrainingGeneration {
     private record Candidate(long packed, int length, long gain) {
     }
 
-    /// Tallies of single-match and adjacent-pair counts during compress-count. Single matches are
-    /// keyed by packed symbol (its length is stored alongside); pairs are keyed by the ordered
-    /// `(firstPacked, secondPacked)` pair.
+    /// Tallies of single-match and adjacent-pair counts during compress-count. Both maps are keyed
+    /// by `(packed, length)`, not packed bytes alone: a length-1 symbol and a length-2 symbol whose
+    /// extra byte is `0x00` pack to the same `long` (e.g. `{0x41}` and `{0x41, 0x00}` both mask to
+    /// `0x41`), so a packed-only key would silently conflate two different candidates on any
+    /// NUL-containing (`DType.Binary`) sample.
     private static final class Counts {
 
-        private final Map<Long, long[]> singles = new HashMap<>(); // packed -> {count, length}
+        private final Map<Single, long[]> singles = new HashMap<>(); // (packed, length) -> {count}
         private final Map<Pair, Long> pairs = new HashMap<>();
 
         void bumpSingle(long packed, int length) {
-            singles.merge(packed, new long[]{1, length}, (existing, added) -> {
+            singles.merge(new Single(packed, length), new long[]{1}, (existing, added) -> {
                 existing[0]++;
                 return existing;
             });
         }
 
-        void bumpPair(long first, long second) {
-            pairs.merge(new Pair(first, second), 1L, Long::sum);
-        }
-
-        int lengthOf(long packed) {
-            return (int) singles.get(packed)[1];
+        void bumpPair(long firstPacked, int firstLength, long secondPacked, int secondLength) {
+            pairs.merge(new Pair(firstPacked, firstLength, secondPacked, secondLength), 1L, Long::sum);
         }
 
         void forEachSingle(SingleConsumer consumer) {
-            for (Map.Entry<Long, long[]> entry : singles.entrySet()) {
-                long[] value = entry.getValue();
-                consumer.accept(entry.getKey(), (int) value[1], value[0]);
+            for (Map.Entry<Single, long[]> entry : singles.entrySet()) {
+                Single key = entry.getKey();
+                consumer.accept(key.packed(), key.length(), entry.getValue()[0]);
             }
         }
 
         void forEachPair(PairConsumer consumer) {
             for (Map.Entry<Pair, Long> entry : pairs.entrySet()) {
                 Pair pair = entry.getKey();
-                consumer.accept(pair.first(), pair.second(), entry.getValue());
+                consumer.accept(pair.firstPacked(), pair.firstLength(),
+                        pair.secondPacked(), pair.secondLength(), entry.getValue());
             }
         }
     }
 
-    private record Pair(long first, long second) {
+    private record Single(long packed, int length) {
+    }
+
+    private record Pair(long firstPacked, int firstLength, long secondPacked, int secondLength) {
     }
 
     @FunctionalInterface
@@ -263,6 +266,6 @@ final class TrainingGeneration {
 
     @FunctionalInterface
     private interface PairConsumer {
-        void accept(long first, long second, long count);
+        void accept(long firstPacked, int firstLength, long secondPacked, int secondLength, long count);
     }
 }
