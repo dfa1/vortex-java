@@ -236,6 +236,64 @@ public final class Compressor {
         return outIndex;
     }
 
+    /// Compresses the byte range `[start, end)` of `input` into the `MemorySegment` `out` using
+    /// longest-match-first greedy parsing, writing the code stream starting at `outPos`.
+    ///
+    /// Mixes [#compress(byte[], int, int, byte[], long)]'s fast intrinsified `byte[]` word load
+    /// with a `MemorySegment` destination — the shape a caller writing straight into an
+    /// arena-allocated output segment from `byte[]` row data needs (e.g. `FsstEncodingEncoder`),
+    /// without wrapping the input in a `MemorySegment` first and paying `MemorySegment.get`'s
+    /// access overhead on every word load instead of the intrinsified `byte[]` `VarHandle` read.
+    ///
+    /// @param input the raw bytes to compress
+    /// @param start the index of the first byte to compress, inclusive
+    /// @param end the index one past the last byte to compress, exclusive
+    /// @param out the destination segment for the code stream
+    /// @param outPos the index in `out` at which to start writing
+    /// @return the index in `out` one past the last byte written
+    public long compress(byte[] input, int start, int end, MemorySegment out, long outPos) {
+        int pos = start;
+        long outIndex = outPos;
+        // Fast path: while 8 real input bytes remain, load the word in one intrinsified read. No
+        // over-long-match guard is needed here — a match is at most 8 bytes, so it can never reach
+        // past end while pos <= end - 8.
+        int fastEnd = end - 8;
+        while (pos <= fastEnd) {
+            long word = (long) LONG_LE_BYTES.get(input, pos);
+            int packedMatch = matcher.longestMatch(word);
+            int length = Matcher.lengthOf(packedMatch);
+            if (length > 0) {
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) Matcher.codeOf(packedMatch));
+                pos += length;
+            } else {
+                // The escaped literal is the word's low byte — already loaded, no re-read.
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) ESCAPE);
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) word);
+                pos++;
+            }
+        }
+        while (pos < end) {
+            long word = loadWord(input, pos, end);
+            int packedMatch = matcher.longestMatch(word);
+            int length = Matcher.lengthOf(packedMatch);
+            // Reject an over-long match: loadWord zero-pads bytes past end, and the branch-free
+            // Matcher has no notion of end, so a symbol whose trailing bytes are zero can spuriously
+            // satisfy the masked compare against the padding and report a match longer than the real
+            // remaining input. Trusting it would emit one code that decodes to more bytes than were
+            // compressed, silently corrupting the tail of any row (NUL-containing or binary data
+            // especially). Falling back to an escape keeps the byte count exact.
+            if (length > 0 && pos + length <= end) {
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) Matcher.codeOf(packedMatch));
+                pos += length;
+            } else {
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) ESCAPE);
+                out.set(ValueLayout.JAVA_BYTE, outIndex++, (byte) word);
+                pos++;
+            }
+        }
+        return outIndex;
+    }
+
     /// Compresses the byte range `[start, end)` of the `MemorySegment` `input` into `out` using
     /// longest-match-first greedy parsing, writing the code stream starting at `outPos`.
     ///

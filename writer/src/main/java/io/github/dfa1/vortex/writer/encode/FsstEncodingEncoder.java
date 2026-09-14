@@ -163,8 +163,10 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         long totalCompressed = 0;
         for (int i = 0; i < n; i++) {
             byte[] row = byteArrays[i];
-            totalCompressed = compressor.compress(
-                    MemorySegment.ofArray(row), 0, row.length, scratch, totalCompressed);
+            // byte[]-input overload: the intrinsified VarHandle word load is faster than wrapping
+            // each row in a MemorySegment first and paying MemorySegment.get's access overhead on
+            // every word load.
+            totalCompressed = compressor.compress(row, 0, row.length, scratch, totalCompressed);
             rowEnds[i] = Math.toIntExact(totalCompressed);
         }
 
