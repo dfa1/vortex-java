@@ -67,6 +67,27 @@ public final class Compressor {
         return new Compressor(copy, Matcher.rebuild(copy, previous.matcher));
     }
 
+    /// Returns an equivalent compressor whose codes are permuted: the symbol currently at code
+    /// `newOrder[i]` becomes code `i`. [#compress] then emits `newOrder`'s numbering directly,
+    /// letting a wire adapter that needs its own on-wire code order (e.g. length-sorted, via
+    /// [#codesSortedByLength()]) get it without a second pass remapping every emitted code byte
+    /// after compression (issue #393 #13).
+    ///
+    /// Reuses this compressor's own matcher backing arrays (the same mechanism as [#rebuild]), so
+    /// this compressor must not be used again after calling this method — read whatever you need
+    /// from it (e.g. [#packedSymbol(int)] / [#symbolLength(int)] for a symbol table) first.
+    ///
+    /// @param newOrder a permutation of `0 .. symbolCount() - 1`; `newOrder[i]` is this compressor's
+    ///                  current code that becomes code `i` in the result
+    /// @return a compressor over the same symbols, renumbered per `newOrder`
+    public Compressor withCodeOrder(int[] newOrder) {
+        List<Symbol> reordered = new ArrayList<>(newOrder.length);
+        for (int oldCode : newOrder) {
+            reordered.add(symbolsByGainDescending.get(oldCode));
+        }
+        return rebuild(reordered, this);
+    }
+
     /// Returns the branch-free matcher over this table, used by training's compress-count pass.
     ///
     /// @return the matcher built from this compressor's symbols

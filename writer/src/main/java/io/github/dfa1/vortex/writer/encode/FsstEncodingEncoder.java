@@ -35,9 +35,6 @@ import java.util.List;
 /// that length-sorted wire order (see [#encode]).
 public final class FsstEncodingEncoder implements EncodingEncoder {
 
-    /// Escape opcode: emitted as `0xFF` followed by one literal byte.
-    private static final int ESCAPE = 0xFF;
-
     /// Fixed seed for the training-sample PRNG. Encoding must be reproducible: the same input
     /// always trains the same symbol table and produces byte-identical output.
     private static final long TRAINING_SAMPLE_SEED = 0x5EEDL;
@@ -136,35 +133,31 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             maxUncompLen = Math.max(maxUncompLen, byteArrays[i].length);
         }
 
-        Compressor compressor = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED).train(byteArrays);
-        int numSymbols = compressor.symbolCount();
+        Compressor trained = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED).train(byteArrays);
+        int numSymbols = trained.symbolCount();
 
         // Wire order: the wire lists symbols in length order (multi-byte length-ascending, then
-        // length-1 last), whereas the compressor numbers its codes gain-descending. wireOrder[i] is
-        // the compressor's (internal) code that belongs at wire position i; internalToWire is its
-        // inverse, mapping every internal code emitted by compress() to its wire code. Both the
-        // symbol-table buffers and the code stream must be expressed in wire codes so the file is
-        // self-consistent.
-        int[] wireOrder = compressor.codesSortedByLength();
-        int[] internalToWire = new int[numSymbols];
-        for (int i = 0; i < numSymbols; i++) {
-            internalToWire[wireOrder[i]] = i;
-        }
+        // length-1 last), whereas training numbers its codes gain-descending. wireOrder[i] is the
+        // trained (internal) code that belongs at wire position i.
+        int[] wireOrder = trained.codesSortedByLength();
 
         MemorySegment symBuf = arena.allocate(Math.max(numSymbols * 8L, 1), 8);
         MemorySegment symLenBuf = arena.allocate(Math.max(numSymbols, 1));
         for (int i = 0; i < numSymbols; i++) {
             int internalCode = wireOrder[i];
-            symBuf.setAtIndex(VortexFormat.LE_LONG, i, compressor.packedSymbol(internalCode));
-            symLenBuf.set(ValueLayout.JAVA_BYTE, i, (byte) compressor.symbolLength(internalCode));
+            symBuf.setAtIndex(VortexFormat.LE_LONG, i, trained.packedSymbol(internalCode));
+            symLenBuf.set(ValueLayout.JAVA_BYTE, i, (byte) trained.symbolLength(internalCode));
         }
 
-        // Compress every row back-to-back directly into an arena-allocated scratch segment (a
-        // heap scratch plus a copy into the arena costs a full extra allocation and copy of the
-        // whole stream — the CLAUDE.md allocation rule this violated), then remap the code bytes
-        // (never the literal byte following an escape) to wire codes in a single pass over the
-        // whole stream. Worst case each input byte escapes to 2 output bytes, so 2 * totalInput
-        // bounds the entire stream.
+        // Renumber the trained compressor's own codes to wire order (reusing its matcher's backing
+        // arrays) so compress() emits wire codes directly — no second pass remapping every emitted
+        // code byte afterward. trained itself must not be read again past this point.
+        Compressor compressor = trained.withCodeOrder(wireOrder);
+
+        // Compress every row back-to-back directly into an arena-allocated scratch segment: a heap
+        // scratch plus a copy into the arena costs a full extra allocation and copy of the whole
+        // stream, the CLAUDE.md allocation rule this violated. Worst case each input byte escapes
+        // to 2 output bytes, so 2 * totalInput bounds the entire stream.
         MemorySegment scratch = arena.allocate(Math.max(2 * totalInput, 1));
         int[] rowEnds = new int[n];
         long totalCompressed = 0;
@@ -174,7 +167,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                     MemorySegment.ofArray(row), 0, row.length, scratch, totalCompressed);
             rowEnds[i] = Math.toIntExact(totalCompressed);
         }
-        remapCodesToWire(scratch, totalCompressed, internalToWire);
 
         // A slice, not a copy: scratch is already arena-owned, so trimming the worst-case 2x
         // allocation down to the real compressed length needs no further copy.
@@ -229,25 +221,5 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             }
             default -> vals;
         };
-    }
-
-    /// Remaps every code byte in `stream[0, length)` from the compressor's internal (gain-descending)
-    /// code to its wire (length-sorted) code, in place. The escape byte `0xFF` and the single literal
-    /// byte that follows it are copied through unchanged — the literal is raw data, not a code.
-    ///
-    /// @param stream the freshly compressed code stream, mutated in place
-    /// @param length the number of valid bytes in `stream`
-    /// @param internalToWire maps an internal code to its wire code, indexed by internal code
-    private static void remapCodesToWire(MemorySegment stream, long length, int[] internalToWire) {
-        long j = 0;
-        while (j < length) {
-            int code = Byte.toUnsignedInt(stream.get(ValueLayout.JAVA_BYTE, j));
-            if (code == ESCAPE) {
-                j += 2;
-            } else {
-                stream.set(ValueLayout.JAVA_BYTE, j, (byte) internalToWire[code]);
-                j++;
-            }
-        }
     }
 }
