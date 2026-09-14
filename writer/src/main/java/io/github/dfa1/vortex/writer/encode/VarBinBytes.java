@@ -39,9 +39,17 @@ final class VarBinBytes {
     /// @return the row bytes, with `null` entries replaced by a zero-length array
     static byte[][] toByteArrays(Object data) {
         byte[][] raw = toRawByteArrays(data);
-        byte[][] out = new byte[raw.length][];
+        // Copy-on-first-null: the common case (a non-nullable column, or a nullable one with no
+        // nulls in this chunk) has nothing to substitute, so `raw` is returned as-is — no second
+        // outer-array allocation, and no second pass past the point a null is (not) found.
+        byte[][] out = raw;
         for (int i = 0; i < raw.length; i++) {
-            out[i] = raw[i] == null ? EMPTY : raw[i];
+            if (raw[i] == null) {
+                if (out == raw) {
+                    out = raw.clone();
+                }
+                out[i] = EMPTY;
+            }
         }
         return out;
     }
