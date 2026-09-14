@@ -61,12 +61,15 @@ public final class CompressorBuilder {
         if (sample.chunkCount() == 0) {
             return compressor;
         }
+        // Reused across every generation instead of allocating fresh count arrays five times over
+        // (issue #395).
+        TrainingGeneration.Counts counts = new TrainingGeneration.Counts();
         for (int gen = 0; gen < GENERATIONS; gen++) {
             boolean finalGeneration = gen == GENERATIONS - 1;
             int chunkLimit = sample.chunkCountForGeneration(gen);
             int fractionNumerator = Sample.SAMPLE_FRACTION_NUMERATORS[gen];
             List<Symbol> symbols = TrainingGeneration.run(
-                    compressor, sample, chunkLimit, fractionNumerator, finalGeneration);
+                    compressor, sample, chunkLimit, fractionNumerator, finalGeneration, counts);
             // Reuse compressor's own (now fully consumed) matcher arrays instead of allocating a
             // fresh ~288 KB pair of tables on every one of the five generations (issue #393 #7).
             compressor = Compressor.rebuild(symbols, compressor);

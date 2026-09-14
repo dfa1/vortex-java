@@ -1,9 +1,8 @@
 package io.github.dfa1.vortex.fsst;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.BitSet;
 import java.util.List;
-import java.util.Map;
 import java.util.PriorityQueue;
 
 /// One generation of FSST bottom-up training (the FSST paper's Algorithm 3): compress-count the
@@ -19,6 +18,16 @@ import java.util.PriorityQueue;
 /// and documented at its site below: per-generation min-count pruning, the 8x single-byte gain
 /// boost, and — on the final generation only — a cost-based prune pass. The growing sample fraction
 /// (the fourth refinement) is applied by the caller via [Sample#chunkCountForGeneration(int)].
+///
+/// Counting is keyed by *code*, not by packed bytes (issue #393 #395): every match [Matcher] returns
+/// already carries a code, and every non-match (escape) reduces to one of 256 literal byte values —
+/// together a fixed, dense `[0, CODE_SPACE)` space matching the Rust reference's own
+/// (`spiraldb/fsst/src/builder.rs`'s `Counter`, `FSST_CODE_MASK`-sized `count1`/`count2`). [Counts]
+/// tallies both into flat arrays with no hashing, no boxing, and no per-generation reallocation — a
+/// [BitSet] per array tracks which slots this generation actually touched, so clearing between
+/// generations only resets the (small) touched-bit tracking, not the (large) count arrays
+/// themselves. A single [Counts] instance is meant to be reused across every generation of one
+/// [CompressorBuilder#train(byte[][])] call via [#run(Compressor, Sample, int, int, boolean, Counts)].
 final class TrainingGeneration {
 
     /// Maximum number of real symbols kept per generation (codes `0..254`; `0xFF` is the escape).
@@ -26,6 +35,18 @@ final class TrainingGeneration {
 
     /// Maximum symbol length in bytes, bounded by what fits in one `long`.
     private static final int MAX_SYMBOL_LENGTH = 8;
+
+    /// First code in the escape pseudo-code range: real trained-symbol codes are always
+    /// `< ESCAPE_BASE` (bounded by [#MAX_SYMBOLS], since a [Matcher] built from `current` can never
+    /// return a code past its own table size), so `ESCAPE_BASE + byteValue` (`byteValue` in `0..255`)
+    /// gives every possible escaped literal byte its own code with no possibility of collision.
+    private static final int ESCAPE_BASE = MAX_SYMBOLS;
+
+    /// Total dense code space: [#MAX_SYMBOLS] real-symbol slots plus 256 escape pseudo-codes, one
+    /// per literal byte value. Fixed regardless of how many symbols are actually trained so far in
+    /// any given generation, which is what lets [Counts]'s arrays stay a constant size and be reused
+    /// across generations instead of resized as the table grows.
+    private static final int CODE_SPACE = ESCAPE_BASE + 256;
 
     /// Single-byte gain multiplier. WHY: multiplying every length-1 candidate's gain by 8 before
     /// ranking deliberately over-values frequent single bytes relative to their raw `count*length`.
@@ -36,6 +57,25 @@ final class TrainingGeneration {
     private static final int SINGLE_BYTE_GAIN_BOOST = 8;
 
     private TrainingGeneration() {
+    }
+
+    /// Runs one training generation with a fresh [Counts], for callers that do not need to reuse
+    /// counting storage across generations (tests; single-generation callers).
+    ///
+    /// @param current the current generation's compressor (an empty-table compressor for generation
+    ///                0, so every position escapes and bootstraps single-byte candidates)
+    /// @param sample the fixed training sample
+    /// @param chunkLimit the number of leading sample chunks this generation replays (its growing
+    ///                   fraction), from [Sample#chunkCountForGeneration(int)]
+    /// @param sampleFractionNumerator this generation's sample-fraction numerator over
+    ///                                [Sample#SAMPLE_FRACTION_DENOMINATOR], used for the min-count
+    ///                                floor
+    /// @param finalGeneration whether this is the last generation, which relaxes the min-count floor
+    ///                        to 1 and enables the cost-based final prune
+    /// @return the next generation's symbols, gain-descending, at most [#MAX_SYMBOLS] of them
+    static List<Symbol> run(Compressor current, Sample sample, int chunkLimit,
+                            int sampleFractionNumerator, boolean finalGeneration) {
+        return run(current, sample, chunkLimit, sampleFractionNumerator, finalGeneration, new Counts());
     }
 
     /// Runs one training generation and returns the next generation's symbols in gain-descending
@@ -51,73 +91,77 @@ final class TrainingGeneration {
     ///                                floor
     /// @param finalGeneration whether this is the last generation, which relaxes the min-count floor
     ///                        to 1 and enables the cost-based final prune
+    /// @param counts reusable counting storage, cleared at the start of this call; passing the same
+    ///               instance across every generation of one `train()` call avoids reallocating its
+    ///               backing arrays five times over
     /// @return the next generation's symbols, gain-descending, at most [#MAX_SYMBOLS] of them
     static List<Symbol> run(Compressor current, Sample sample, int chunkLimit,
-                            int sampleFractionNumerator, boolean finalGeneration) {
-        Counts counts = compressCount(current, sample, chunkLimit);
-        return makeTable(counts, sampleFractionNumerator, finalGeneration);
+                            int sampleFractionNumerator, boolean finalGeneration, Counts counts) {
+        compressCount(current, sample, chunkLimit, counts);
+        return makeTable(current, counts, sampleFractionNumerator, finalGeneration);
     }
 
-    /// Compress-counts the first `chunkLimit` chunks of `sample`: greedily parses each chunk with
-    /// `current`, tallying single-match counts and adjacent-pair counts. Candidates are keyed by
-    /// packed symbol so both the parsed symbols and the input bytes they cover are captured directly
-    /// from the sample (generation 0's empty table escapes everything, seeding single bytes).
+    /// Compress-counts the first `chunkLimit` chunks of `sample` into `counts` (cleared first):
+    /// greedily parses each chunk with `current`, tallying single-match counts and adjacent-pair
+    /// counts, both keyed by code (generation 0's empty table escapes everything, seeding the escape
+    /// pseudo-codes for single bytes).
     ///
-    /// Each position loads its 8-byte input word exactly once. `word & lengthMask(matchLength)` is
-    /// the packed candidate directly — no second `loadWord(bytes, pos, pos + matchLength)` call is
-    /// needed, since masking to `matchLength` bytes gives the identical result whenever
-    /// `matchLength <= end - pos` (which [Matcher#lengthOf(int)]'s bound already guarantees). While
-    /// 8 real bytes remain, the word loads with one intrinsified `VarHandle` read (the same trick
-    /// [Compressor#compress(byte[], int, int, byte[], long)] uses); only the tail of each chunk
-    /// falls back to the byte-by-byte, zero-padding [Compressor#loadWord(byte[], int, int)].
-    private static Counts compressCount(Compressor current, Sample sample, int chunkLimit) {
-        Counts counts = new Counts();
+    /// Each position loads its 8-byte input word exactly once. While 8 real bytes remain, the word
+    /// loads with one intrinsified `VarHandle` read (the same trick [Compressor#compress(byte[],
+    /// int, int, byte[], long)] uses); only the tail of each chunk falls back to the byte-by-byte,
+    /// zero-padding [Compressor#loadWord(byte[], int, int)].
+    private static void compressCount(Compressor current, Sample sample, int chunkLimit, Counts counts) {
+        counts.clear();
         byte[] bytes = sample.bytes();
         for (int c = 0; c < chunkLimit; c++) {
             int start = sample.chunkStart(c);
             int end = sample.chunkEnd(c);
-            long previousPacked = -1L; // No previous match within this chunk yet.
-            int previousLength = 0;
+            int previousCode = -1; // No previous match within this chunk yet.
             int pos = start;
             int fastEnd = end - 8;
             while (pos < end) {
                 long word = pos <= fastEnd
                         ? (long) Compressor.LONG_LE_BYTES.get(bytes, pos)
                         : Compressor.loadWord(bytes, pos, end);
-                int matchLength = matchLengthOf(current, word, pos, end);
-                long packed = word & lengthMask(matchLength);
-                counts.bumpSingle(packed, matchLength);
-                if (previousPacked >= 0) {
-                    counts.bumpPair(previousPacked, previousLength, packed, matchLength);
+                int codeAndLength = codeAndLengthAt(current, word, pos, end);
+                int code = Matcher.codeOf(codeAndLength);
+                counts.bumpSingle(code);
+                if (previousCode >= 0) {
+                    counts.bumpPair(previousCode, code);
                 }
-                previousPacked = packed;
-                previousLength = matchLength;
-                pos += matchLength;
+                previousCode = code;
+                pos += Matcher.lengthOf(codeAndLength);
             }
         }
-        return counts;
     }
 
-    /// Returns the length of the current table's longest match against the already-loaded `word`
-    /// at `pos`, or 1 when nothing matches (an escaped single byte still advances one position and
-    /// counts as a length-1 candidate).
+    /// Returns the code and length of the current table's longest match against the already-loaded
+    /// `word` at `pos`, packed as `code << 8 | length` (the same shape [Matcher#longestMatch(long)]
+    /// itself returns). Falls back to the escape pseudo-code for the literal byte at `pos` (length 1)
+    /// when nothing matches.
     ///
     /// An over-long match is rejected the same way [Compressor#compress(byte[], int, int, byte[],
     /// long)] rejects it: `word` zero-pads past `end` when loaded via [Compressor#loadWord(byte[],
     /// int, int)], so a symbol with trailing zero bytes can spuriously match the padding beyond the
     /// chunk. Counting such a match would tally a candidate spanning bytes that are not really in
     /// the sample, and could advance `pos` past `end`.
-    private static int matchLengthOf(Compressor current, long word, int pos, int end) {
+    private static int codeAndLengthAt(Compressor current, long word, int pos, int end) {
         int packedMatch = current.matcher().longestMatch(word);
         int length = Matcher.lengthOf(packedMatch);
-        return length > 0 && pos + length <= end ? length : 1;
+        if (length > 0 && pos + length <= end) {
+            return packedMatch;
+        }
+        return (ESCAPE_BASE + (int) (word & 0xFF)) << 8 | 1;
     }
 
     /// Builds the next table from the counted candidates: proposes each single symbol and each
     /// adjacent-pair concatenation, prunes by min-count, boosts single-byte gain, ranks, applies the
     /// final cost prune on the last generation, and keeps the top [#MAX_SYMBOLS] by gain.
-    private static List<Symbol> makeTable(Counts counts, int sampleFractionNumerator,
-                                          boolean finalGeneration) {
+    ///
+    /// @param current the compressor `counts` was tallied against — real (non-escape) codes resolve
+    ///                 to their bytes/length through it
+    private static List<Symbol> makeTable(Compressor current, Counts counts,
+                                          int sampleFractionNumerator, boolean finalGeneration) {
         // Refinement 2 — per-generation min-count pruning. A candidate seen fewer times than this
         // floor is noise at this generation's sample coverage and is dropped before its gain is even
         // computed. The floor scales with the sample fraction so early, low-coverage generations
@@ -128,22 +172,40 @@ final class TrainingGeneration {
                 : Math.max(1, 5 * sampleFractionNumerator / Sample.SAMPLE_FRACTION_DENOMINATOR);
 
         List<Candidate> candidates = new ArrayList<>();
-        counts.forEachSingle((packed, length, count) -> {
+        counts.forEachSingle((code, count) -> {
             if (count >= minCount) {
+                int length = candidateLength(current, code);
+                long packed = candidateBytes(current, code);
                 candidates.add(new Candidate(packed, length, gainOf(count, length)));
             }
         });
-        counts.forEachPair((first, firstLength, second, secondLength, count) -> {
+        counts.forEachPair((firstCode, secondCode, count) -> {
             if (count < minCount) {
                 return;
             }
+            int firstLength = candidateLength(current, firstCode);
+            long firstPacked = candidateBytes(current, firstCode);
+            int secondLength = candidateLength(current, secondCode);
+            long secondPacked = candidateBytes(current, secondCode);
             int combinedLength = Math.min(firstLength + secondLength, MAX_SYMBOL_LENGTH);
-            long combined = concatenate(first, firstLength, second);
+            long combined = concatenate(firstPacked, firstLength, secondPacked);
             long packed = combined & lengthMask(combinedLength);
             candidates.add(new Candidate(packed, combinedLength, gainOf(count, combinedLength)));
         });
 
         return selectTop(candidates, finalGeneration);
+    }
+
+    /// Resolves a code's packed bytes: `current`'s trained symbol table for a real code, or the
+    /// literal byte value itself for an escape pseudo-code.
+    private static long candidateBytes(Compressor current, int code) {
+        return code < ESCAPE_BASE ? current.packedSymbol(code) : (long) (code - ESCAPE_BASE);
+    }
+
+    /// Resolves a code's byte length: `current`'s trained symbol table for a real code, or 1 for an
+    /// escape pseudo-code (every escape is a single literal byte).
+    private static int candidateLength(Compressor current, int code) {
+        return code < ESCAPE_BASE ? current.symbolLength(code) : 1;
     }
 
     /// Ranks candidates by gain-descending (length-descending on ties) and keeps the top
@@ -236,59 +298,66 @@ final class TrainingGeneration {
     private record Candidate(long packed, int length, long gain) {
     }
 
-    /// Tallies of single-match and adjacent-pair counts during compress-count. Both maps are keyed
-    /// by `(packed, length)`, not packed bytes alone: a length-1 symbol and a length-2 symbol whose
-    /// extra byte is `0x00` pack to the same `long` (e.g. `{0x41}` and `{0x41, 0x00}` both mask to
-    /// `0x41`), so a packed-only key would silently conflate two different candidates on any
-    /// NUL-containing (`DType.Binary`) sample.
-    private static final class Counts {
+    /// Tallies of single-match and adjacent-pair counts during compress-count, keyed by *code* — a
+    /// dense `[0, CODE_SPACE)` space, not packed bytes — matching the Rust reference's own
+    /// `Counter` (`spiraldb/fsst/src/builder.rs`, issue #393 #395). `counts1`/`counts2` are flat
+    /// arrays sized once and reused across every generation of a `train()` call: a code's identity
+    /// alone (not its byte content) is the key, so there is no hashing, no boxing, and — since the
+    /// code space is fixed regardless of how many symbols are actually trained in any one
+    /// generation — no resizing either.
+    ///
+    /// Between generations only [#clear()] runs, which resets the touched-bit tracking, not the
+    /// (much larger) count arrays: [#bumpSingle(int)]/[#bumpPair(int, int)] read a slot's prior value
+    /// only when its touched bit is set, so a stale value left over from an earlier generation in an
+    /// untouched slot is never read.
+    static final class Counts {
 
-        private final Map<Single, long[]> singles = new HashMap<>(); // (packed, length) -> {count}
-        private final Map<Pair, long[]> pairs = new HashMap<>(); // (first, second) -> {count}
+        private final long[] counts1 = new long[CODE_SPACE];
+        private final long[] counts2 = new long[CODE_SPACE * CODE_SPACE];
+        private final BitSet singleTouched = new BitSet(CODE_SPACE);
+        private final BitSet pairTouched = new BitSet(CODE_SPACE * CODE_SPACE);
 
-        // Map.merge evaluates its value argument eagerly, so a merge-based bump would allocate a
-        // fresh {count} array (and, for pairs, box the running sum into a new Long) on every single
-        // occurrence, not just the first. computeIfAbsent's mapping function only runs on a genuine
-        // miss, so the hot compress-count loop allocates one {count} holder per distinct candidate
-        // instead of one per input position.
-        void bumpSingle(long packed, int length) {
-            singles.computeIfAbsent(new Single(packed, length), k -> new long[1])[0]++;
+        /// Resets counting for a new generation. Only the touched-bit tracking is cleared — cheap,
+        /// proportional to how much was actually touched last generation — not the count arrays
+        /// themselves.
+        void clear() {
+            singleTouched.clear();
+            pairTouched.clear();
         }
 
-        void bumpPair(long firstPacked, int firstLength, long secondPacked, int secondLength) {
-            pairs.computeIfAbsent(
-                    new Pair(firstPacked, firstLength, secondPacked, secondLength), k -> new long[1])[0]++;
+        void bumpSingle(int code) {
+            long base = singleTouched.get(code) ? counts1[code] : 0L;
+            counts1[code] = base + 1;
+            singleTouched.set(code);
+        }
+
+        void bumpPair(int firstCode, int secondCode) {
+            int idx = firstCode * CODE_SPACE + secondCode;
+            long base = pairTouched.get(idx) ? counts2[idx] : 0L;
+            counts2[idx] = base + 1;
+            pairTouched.set(idx);
         }
 
         void forEachSingle(SingleConsumer consumer) {
-            for (Map.Entry<Single, long[]> entry : singles.entrySet()) {
-                Single key = entry.getKey();
-                consumer.accept(key.packed(), key.length(), entry.getValue()[0]);
+            for (int code = singleTouched.nextSetBit(0); code >= 0; code = singleTouched.nextSetBit(code + 1)) {
+                consumer.accept(code, counts1[code]);
             }
         }
 
         void forEachPair(PairConsumer consumer) {
-            for (Map.Entry<Pair, long[]> entry : pairs.entrySet()) {
-                Pair pair = entry.getKey();
-                consumer.accept(pair.firstPacked(), pair.firstLength(),
-                        pair.secondPacked(), pair.secondLength(), entry.getValue()[0]);
+            for (int idx = pairTouched.nextSetBit(0); idx >= 0; idx = pairTouched.nextSetBit(idx + 1)) {
+                consumer.accept(idx / CODE_SPACE, idx % CODE_SPACE, counts2[idx]);
             }
         }
     }
 
-    private record Single(long packed, int length) {
-    }
-
-    private record Pair(long firstPacked, int firstLength, long secondPacked, int secondLength) {
-    }
-
     @FunctionalInterface
     private interface SingleConsumer {
-        void accept(long packed, int length, long count);
+        void accept(int code, long count);
     }
 
     @FunctionalInterface
     private interface PairConsumer {
-        void accept(long firstPacked, int firstLength, long secondPacked, int secondLength, long count);
+        void accept(int firstCode, int secondCode, long count);
     }
 }
