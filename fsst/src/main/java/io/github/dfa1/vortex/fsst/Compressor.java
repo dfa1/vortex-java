@@ -132,23 +132,32 @@ public final class Compressor {
     /// @return an `int[]` permutation of `0 .. symbolCount() - 1` in length-sorted, single-byte-last
     ///         order
     public int[] codesSortedByLength() {
-        List<Integer> codes = new ArrayList<>(symbolCount());
-        for (int code = 0; code < symbolCount(); code++) {
-            codes.add(code);
+        // Counting sort over symbol length: lengths are bounded to 1-8 (Matcher.maxSymbolLength()),
+        // so a comparator-based sort is unnecessary work — this is O(symbolCount) with no boxing,
+        // and a single forward pass over codes 0..symbolCount()-1 (their gain-descending order) into
+        // each length's bucket is stable by construction, with no comparator needed to break ties.
+        int maxSymbolLength = Matcher.maxSymbolLength();
+        int[] countByLength = new int[maxSymbolLength + 1]; // index 1..maxSymbolLength; 0 unused
+        int n = symbolCount();
+        for (int code = 0; code < n; code++) {
+            countByLength[symbolLength(code)]++;
         }
-        codes.sort((a, b) -> {
-            int lengthA = symbolLength(a);
-            int lengthB = symbolLength(b);
-            boolean singleA = lengthA == 1;
-            boolean singleB = lengthB == 1;
-            if (singleA != singleB) {
-                return singleA ? 1 : -1;
-            }
-            return Integer.compare(lengthA, lengthB);
-        });
-        int[] result = new int[codes.size()];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = codes.get(i);
+
+        // Bucket start offsets in wire order: multi-byte lengths 2..maxSymbolLength ascending, then
+        // length-1 last.
+        int[] bucketStart = new int[maxSymbolLength + 1];
+        int offset = 0;
+        for (int length = 2; length <= maxSymbolLength; length++) {
+            bucketStart[length] = offset;
+            offset += countByLength[length];
+        }
+        bucketStart[1] = offset;
+
+        int[] result = new int[n];
+        int[] nextSlot = bucketStart.clone();
+        for (int code = 0; code < n; code++) {
+            int length = symbolLength(code);
+            result[nextSlot[length]++] = code;
         }
         return result;
     }
