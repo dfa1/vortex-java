@@ -221,7 +221,7 @@ class FsstEncodingEncoderTest {
             // When
             EncodeResult result = ENCODER.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
             long compressedBytes = result.buffers().toArray(MemorySegment[]::new)[2].byteSize();
-            byte maxSymLen = maxSymbolLength(result);
+            byte maxSymLen = observedMaxSymbolLength(result);
 
             // Then — real compression (< half raw) proves multi-byte symbols are in play, and the
             // table learns symbols well past a bigram. The paper-faithful trainer grows symbols to
@@ -251,7 +251,7 @@ class FsstEncodingEncoderTest {
             assertThat(compressedBytes).isLessThanOrEqualTo(rawBytes * 2);
         }
 
-        private static byte maxSymbolLength(EncodeResult result) {
+        private static byte observedMaxSymbolLength(EncodeResult result) {
             MemorySegment symLenBuf = result.buffers().toArray(MemorySegment[]::new)[1];
             byte max = 0;
             for (long i = 0; i < symLenBuf.byteSize(); i++) {
