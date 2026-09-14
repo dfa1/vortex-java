@@ -159,23 +159,26 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             symLenBuf.set(ValueLayout.JAVA_BYTE, i, (byte) compressor.symbolLength(internalCode));
         }
 
-        // Compress every row back-to-back into one shared scratch buffer (a per-row scratch plus a
-        // per-row exact-size copy costs two heap allocations and an extra copy per row — millions
-        // per chunk), then remap the code bytes (never the literal byte following an escape) to
-        // wire codes in a single pass over the whole stream. Worst case each input byte escapes to
-        // 2 output bytes, so 2 * totalInput bounds the entire stream.
-        byte[] scratch = new byte[Math.toIntExact(2 * totalInput)];
+        // Compress every row back-to-back directly into an arena-allocated scratch segment (a
+        // heap scratch plus a copy into the arena costs a full extra allocation and copy of the
+        // whole stream — the CLAUDE.md allocation rule this violated), then remap the code bytes
+        // (never the literal byte following an escape) to wire codes in a single pass over the
+        // whole stream. Worst case each input byte escapes to 2 output bytes, so 2 * totalInput
+        // bounds the entire stream.
+        MemorySegment scratch = arena.allocate(Math.max(2 * totalInput, 1));
         int[] rowEnds = new int[n];
-        int totalCompressed = 0;
+        long totalCompressed = 0;
         for (int i = 0; i < n; i++) {
             byte[] row = byteArrays[i];
-            totalCompressed = (int) compressor.compress(row, 0, row.length, scratch, totalCompressed);
-            rowEnds[i] = totalCompressed;
+            totalCompressed = compressor.compress(
+                    MemorySegment.ofArray(row), 0, row.length, scratch, totalCompressed);
+            rowEnds[i] = Math.toIntExact(totalCompressed);
         }
         remapCodesToWire(scratch, totalCompressed, internalToWire);
 
-        MemorySegment compBuf = arena.allocate(Math.max(totalCompressed, 1));
-        MemorySegment.copy(scratch, 0, compBuf, ValueLayout.JAVA_BYTE, 0, totalCompressed);
+        // A slice, not a copy: scratch is already arena-owned, so trimming the worst-case 2x
+        // allocation down to the real compressed length needs no further copy.
+        MemorySegment compBuf = scratch.asSlice(0, totalCompressed).asReadOnly();
 
         // Narrowest ptype that fits every value: row lengths and cumulative offsets are
         // typically far below the 4-byte ceiling this always used to pay (e.g. a 6-byte string
@@ -228,21 +231,21 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    /// Remaps every code byte in `stream[0..length)` from the compressor's internal (gain-descending)
+    /// Remaps every code byte in `stream[0, length)` from the compressor's internal (gain-descending)
     /// code to its wire (length-sorted) code, in place. The escape byte `0xFF` and the single literal
     /// byte that follows it are copied through unchanged — the literal is raw data, not a code.
     ///
     /// @param stream the freshly compressed code stream, mutated in place
     /// @param length the number of valid bytes in `stream`
     /// @param internalToWire maps an internal code to its wire code, indexed by internal code
-    private static void remapCodesToWire(byte[] stream, int length, int[] internalToWire) {
-        int j = 0;
+    private static void remapCodesToWire(MemorySegment stream, long length, int[] internalToWire) {
+        long j = 0;
         while (j < length) {
-            int code = stream[j] & 0xFF;
+            int code = Byte.toUnsignedInt(stream.get(ValueLayout.JAVA_BYTE, j));
             if (code == ESCAPE) {
                 j += 2;
             } else {
-                stream[j] = (byte) internalToWire[code];
+                stream.set(ValueLayout.JAVA_BYTE, j, (byte) internalToWire[code]);
                 j++;
             }
         }
