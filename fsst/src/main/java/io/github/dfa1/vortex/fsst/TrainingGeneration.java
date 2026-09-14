@@ -224,17 +224,20 @@ final class TrainingGeneration {
     private static final class Counts {
 
         private final Map<Single, long[]> singles = new HashMap<>(); // (packed, length) -> {count}
-        private final Map<Pair, Long> pairs = new HashMap<>();
+        private final Map<Pair, long[]> pairs = new HashMap<>(); // (first, second) -> {count}
 
+        // Map.merge evaluates its value argument eagerly, so a merge-based bump would allocate a
+        // fresh {count} array (and, for pairs, box the running sum into a new Long) on every single
+        // occurrence, not just the first. computeIfAbsent's mapping function only runs on a genuine
+        // miss, so the hot compress-count loop allocates one {count} holder per distinct candidate
+        // instead of one per input position.
         void bumpSingle(long packed, int length) {
-            singles.merge(new Single(packed, length), new long[]{1}, (existing, added) -> {
-                existing[0]++;
-                return existing;
-            });
+            singles.computeIfAbsent(new Single(packed, length), k -> new long[1])[0]++;
         }
 
         void bumpPair(long firstPacked, int firstLength, long secondPacked, int secondLength) {
-            pairs.merge(new Pair(firstPacked, firstLength, secondPacked, secondLength), 1L, Long::sum);
+            pairs.computeIfAbsent(
+                    new Pair(firstPacked, firstLength, secondPacked, secondLength), k -> new long[1])[0]++;
         }
 
         void forEachSingle(SingleConsumer consumer) {
@@ -245,10 +248,10 @@ final class TrainingGeneration {
         }
 
         void forEachPair(PairConsumer consumer) {
-            for (Map.Entry<Pair, Long> entry : pairs.entrySet()) {
+            for (Map.Entry<Pair, long[]> entry : pairs.entrySet()) {
                 Pair pair = entry.getKey();
                 consumer.accept(pair.firstPacked(), pair.firstLength(),
-                        pair.secondPacked(), pair.secondLength(), entry.getValue());
+                        pair.secondPacked(), pair.secondLength(), entry.getValue()[0]);
             }
         }
     }
