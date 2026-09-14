@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.fsst;
 
+import java.util.Arrays;
 import java.util.List;
 
 /// Lossy perfect hash table resolving 3-8 byte FSST matches from the first three bytes of an input
@@ -67,7 +68,26 @@ final class LossyPerfectHashTable {
     /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
     /// @return a hash table resolving 3-8 byte matches with first-writer-wins on collision
     static LossyPerfectHashTable of(List<Symbol> symbolsByGainDescending) {
-        long[] table = new long[2 * SLOTS];
+        return of(symbolsByGainDescending, null);
+    }
+
+    /// Same as [#of(List)], but re-seeds `reuse` in place instead of allocating a fresh backing
+    /// array, avoiding a repeated 32 KB allocation when many tables are built in a tight sequence
+    /// (training rebuilds one per generation). Passing a previous table's own array (via
+    /// [#rawTable()]) is only safe once that table is never read again — see
+    /// [Matcher#rebuild(List, Matcher)].
+    ///
+    /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
+    /// @param reuse a `2 * SLOTS`-length array to re-seed in place, or `null` to allocate fresh
+    /// @return a hash table resolving 3-8 byte matches with first-writer-wins on collision
+    static LossyPerfectHashTable of(List<Symbol> symbolsByGainDescending, long[] reuse) {
+        long[] table = reuse != null ? reuse : new long[2 * SLOTS];
+        if (reuse != null) {
+            // A reused array carries the previous generation's stale slots; a fresh array is
+            // already all-zero (the JVM's own array allocation guarantee), so only the reuse path
+            // needs this explicit clear.
+            Arrays.fill(table, 0L);
+        }
         for (int code = 0; code < symbolsByGainDescending.size(); code++) {
             Symbol symbol = symbolsByGainDescending.get(code);
             if (symbol.length() < 3) {
@@ -102,6 +122,15 @@ final class LossyPerfectHashTable {
         long symbol = table[slot];
         long meta = table[slot + 1];
         return (word & (~0L >>> (int) (meta >>> 16))) == symbol ? (int) (meta & 0xFFFF) : 0;
+    }
+
+    /// Exposes this table's backing array so a caller finished with this table can hand it to a
+    /// later [#of(List, long[])] call for reuse instead of leaving it for garbage collection.
+    ///
+    /// @return this table's backing array; the caller must not read or write it once handed back
+    ///         for reuse
+    long[] rawTable() {
+        return table;
     }
 
     /// Computes the slot index a word hashes to, keyed on its first three bytes. Package-visible so

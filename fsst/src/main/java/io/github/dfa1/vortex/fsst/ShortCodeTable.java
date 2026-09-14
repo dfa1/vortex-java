@@ -51,7 +51,20 @@ final class ShortCodeTable {
     /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
     /// @return a table resolving 0/1/2-byte matches for any two-byte input prefix
     static ShortCodeTable of(List<Symbol> symbolsByGainDescending) {
-        int[] table = new int[SLOTS];
+        return of(symbolsByGainDescending, null);
+    }
+
+    /// Same as [#of(List)], but re-seeds `reuse` in place instead of allocating a fresh backing
+    /// array, avoiding a repeated 256 KB allocation when many tables are built in a tight sequence
+    /// (training rebuilds one per generation). Passing a previous table's own array (via
+    /// [#rawTable()]) is only safe once that table is never read again — see
+    /// [Matcher#rebuild(List, Matcher)].
+    ///
+    /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
+    /// @param reuse a [#SLOTS]-length array to re-seed in place, or `null` to allocate fresh
+    /// @return a table resolving 0/1/2-byte matches for any two-byte input prefix
+    static ShortCodeTable of(List<Symbol> symbolsByGainDescending, int[] reuse) {
+        int[] table = reuse != null ? reuse : new int[SLOTS];
         Arrays.fill(table, NO_MATCH);
         for (int code = 0; code < symbolsByGainDescending.size(); code++) {
             Symbol symbol = symbolsByGainDescending.get(code);
@@ -106,5 +119,14 @@ final class ShortCodeTable {
 
     private static int length(int packed) {
         return packed & 0xFF;
+    }
+
+    /// Exposes this table's backing array so a caller finished with this table can hand it to a
+    /// later [#of(List, int[])] call for reuse instead of leaving it for garbage collection.
+    ///
+    /// @return this table's backing array; the caller must not read or write it once handed back
+    ///         for reuse
+    int[] rawTable() {
+        return table;
     }
 }

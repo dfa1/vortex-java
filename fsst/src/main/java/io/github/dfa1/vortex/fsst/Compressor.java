@@ -54,6 +54,19 @@ public final class Compressor {
         return new Compressor(copy, Matcher.of(copy));
     }
 
+    /// Rebuilds a compressor from new symbols, reusing `previous`'s [Matcher] backing arrays instead
+    /// of allocating fresh ones (issue #393 #7). Safe only once `previous` is discarded — see
+    /// [Matcher#rebuild(List, Matcher)].
+    ///
+    /// @param symbolsByGainDescending the newly trained symbols, code = list index, gain-descending
+    /// @param previous the compressor whose matcher this rebuild re-seeds in place
+    /// @return a compressor bound to the given table, backed by `previous`'s (now overwritten)
+    ///         matcher arrays
+    static Compressor rebuild(List<Symbol> symbolsByGainDescending, Compressor previous) {
+        List<Symbol> copy = List.copyOf(symbolsByGainDescending);
+        return new Compressor(copy, Matcher.rebuild(copy, previous.matcher));
+    }
+
     /// Returns the branch-free matcher over this table, used by training's compress-count pass.
     ///
     /// @return the matcher built from this compressor's symbols

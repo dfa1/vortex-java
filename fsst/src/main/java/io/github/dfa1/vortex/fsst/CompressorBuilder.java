@@ -67,7 +67,9 @@ public final class CompressorBuilder {
             int fractionNumerator = Sample.SAMPLE_FRACTION_NUMERATORS[gen];
             List<Symbol> symbols = TrainingGeneration.run(
                     compressor, sample, chunkLimit, fractionNumerator, finalGeneration);
-            compressor = Compressor.of(symbols);
+            // Reuse compressor's own (now fully consumed) matcher arrays instead of allocating a
+            // fresh ~288 KB pair of tables on every one of the five generations (issue #393 #7).
+            compressor = Compressor.rebuild(symbols, compressor);
         }
         return compressor;
     }

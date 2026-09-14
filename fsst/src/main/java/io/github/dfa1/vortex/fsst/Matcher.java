@@ -43,6 +43,27 @@ public final class Matcher {
                 ShortCodeTable.of(symbolsByGainDescending));
     }
 
+    /// Rebuilds a matcher from new symbols, re-seeding `previous`'s backing arrays in place instead
+    /// of allocating fresh ~288 KB tables. Training's per-generation loop calls this six times per
+    /// [CompressorBuilder#train(byte[][])]; without reuse each call allocates and zero-fills a fresh
+    /// [LossyPerfectHashTable] and [ShortCodeTable] that the very next call immediately discards
+    /// (issue #393 #7).
+    ///
+    /// Safe only once `previous` is never read again: the caller must discard `previous` (and any
+    /// [Compressor] built from it) before this call returns, since its backing arrays now hold the
+    /// new symbols' data. Training's loop satisfies this — `TrainingGeneration.run` fully finishes
+    /// reading the old table before this rebuild replaces it.
+    ///
+    /// @param symbolsByGainDescending the newly trained symbols, code = list index, gain-descending
+    /// @param previous the matcher whose backing arrays this rebuild re-seeds in place
+    /// @return a matcher over `symbolsByGainDescending`, backed by `previous`'s (now overwritten)
+    ///         arrays
+    static Matcher rebuild(List<Symbol> symbolsByGainDescending, Matcher previous) {
+        return new Matcher(
+                LossyPerfectHashTable.of(symbolsByGainDescending, previous.hashTable.rawTable()),
+                ShortCodeTable.of(symbolsByGainDescending, previous.shortCodes.rawTable()));
+    }
+
     /// Returns the longest match at the current input position packed as `code << 8 | length`.
     ///
     /// The hash table is consulted first for a 3-8 byte candidate; on a real hit that candidate is
