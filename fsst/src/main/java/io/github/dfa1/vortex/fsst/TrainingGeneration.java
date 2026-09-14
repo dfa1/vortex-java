@@ -150,12 +150,29 @@ final class TrainingGeneration {
     /// [#MAX_SYMBOLS], applying the final cost prune on the last generation. Uses a bounded min-heap
     /// so a large candidate set is not fully sorted — only the surviving 255 are.
     private static List<Symbol> selectTop(List<Candidate> candidates, boolean finalGeneration) {
+        // Refinement 4 — final cost-based prune, applied BEFORE top-K selection. Only on the last
+        // generation, a symbol earns its code slot only if its real (un-boosted) gain exceeds
+        // length+1: it must save at least that many bytes over escaping every occurrence, otherwise
+        // the slot is better left for a candidate that does. Pruning after the heap (as opposed to
+        // before) would leave a disqualified survivor's slot empty even when a qualifying candidate
+        // sat just below the top-255 cut, so the 255 slots would not all be filled with symbols that
+        // earn them. Provisional earlier generations skip this so their symbols stay available to be
+        // re-evaluated next pass.
+        List<Candidate> eligible = candidates;
+        if (finalGeneration) {
+            eligible = new ArrayList<>(candidates.size());
+            for (Candidate candidate : candidates) {
+                if (realGain(candidate) > candidate.length() + 1L) {
+                    eligible.add(candidate);
+                }
+            }
+        }
+
         // A bounded min-heap of size MAX_SYMBOLS: the weakest survivor sits at the head, so a new
         // candidate either loses to it (discarded) or evicts it. This is top-K in O(n log K) rather
         // than an O(n log n) full sort of every candidate.
-        // Min-heap on ranking gain: the weakest survivor sits at the head.
         PriorityQueue<Candidate> heap = new PriorityQueue<>(TrainingGeneration::compareGain);
-        for (Candidate candidate : candidates) {
+        for (Candidate candidate : eligible) {
             if (heap.size() < MAX_SYMBOLS) {
                 heap.add(candidate);
             } else if (compareGain(candidate, heap.peek()) > 0) {
@@ -170,17 +187,6 @@ final class TrainingGeneration {
 
         List<Symbol> result = new ArrayList<>(survivors.size());
         for (Candidate candidate : survivors) {
-            if (result.size() >= MAX_SYMBOLS) {
-                break;
-            }
-            // Refinement 4 — final cost-based prune. Only on the last generation, a symbol earns its
-            // code slot only if its real (un-boosted) gain exceeds length+1: it must save at least
-            // that many bytes over escaping every occurrence, otherwise the slot is better left for a
-            // candidate that does. Provisional earlier generations skip this so their symbols stay
-            // available to be re-evaluated next pass.
-            if (finalGeneration && realGain(candidate) <= candidate.length() + 1L) {
-                continue;
-            }
             result.add(new Symbol(candidate.packed(), candidate.length()));
         }
         return result;
