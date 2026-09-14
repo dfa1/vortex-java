@@ -96,6 +96,9 @@ public non-sealed interface VarBinArray extends Array {
         if (src instanceof VarBinOffsetArray om) {
             return om;
         }
+        if (src instanceof LazyFsstVarBinArray fsst) {
+            return fsst.toOffsetModeBulk(arena);
+        }
         long n = src.length();
         long totalBytes = 0;
         for (long i = 0; i < n; i++) {

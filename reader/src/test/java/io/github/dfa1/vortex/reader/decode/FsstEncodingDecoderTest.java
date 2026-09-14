@@ -302,18 +302,19 @@ class FsstEncodingDecoderTest {
         }
 
         @Test
-        void getBytes_codeRangeImpliesLengthBeyondIntMax_throwsWithoutAllocating() {
-            // Given — a single row whose code range is exactly large enough that the FSST 8-bytes-
-            // per-compressed-byte bound crosses Integer.MAX_VALUE - 7. The guard must reject this
-            // BEFORE sizing a scratch array, or the (int) cast would silently wrap into a negative
-            // size instead of a clean VortexException.
-            long codeLen = 256L * 1024 * 1024;                // 256 MiB of code bytes => 2 GiB max output
+        void getBytes_claimedLengthBeyondIntMax_throwsWithoutAllocating() {
+            // Given — a single row whose claimed uncompressed length is exactly Integer.MAX_VALUE + 1
+            // (still within the code range's own 8-bytes-per-compressed-byte bound, so it clears the
+            // maxLen cross-check and reaches the Integer.MAX_VALUE guard). getBytes must reject this
+            // BEFORE sizing `new byte[(int) claimedLen]`, or the (int) cast would silently wrap into a
+            // negative size instead of a clean VortexException.
+            long codeLen = 256L * 1024 * 1024;                // 256 MiB of code bytes => 2^31 max output
             long[] symbols = {};
             byte[] symbolLengths = {};
-            long[] uncompLengths = {0};                       // irrelevant: the bound check fires first
+            long[] uncompLengths = {1L << 31};                // == maxLen, one past Integer.MAX_VALUE
             long[] codeOffsets = {0, codeLen};
             VarBinArray result = decodeFsstWithHugeCompressedBuffer(codeLen, symbols, symbolLengths,
-                    PType.U8, uncompLengths, PType.I64, codeOffsets);
+                    PType.I64, uncompLengths, PType.I64, codeOffsets);
 
             // When / Then
             assertThatExceptionOfType(VortexException.class)

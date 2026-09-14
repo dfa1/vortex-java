@@ -109,4 +109,44 @@ public final class Decompressor {
         }
         return outIndex;
     }
+
+    /// Decodes the compressed byte range `[start, end)` of the `MemorySegment` `compressed` into
+    /// the `byte[]` `out`, writing the decoded bytes starting at `outPos`.
+    ///
+    /// This targets a destination sized to the row's *exact* decoded length (no trailing slack),
+    /// unlike the `MemorySegment` overload above which requires 7 bytes of caller-provided slack.
+    /// It keeps the same unconditional-8-byte-store trick while there is room for a full 8-byte
+    /// store (`outIndex + 8 <= out.length`), and falls back to a byte-at-a-time store only for the
+    /// final symbol when there is not — at most one row per call, so the fallback branch is taken
+    /// on a small, predictable tail rather than every element.
+    ///
+    /// @param compressed the compressed code stream
+    /// @param start the index of the first code to decode, inclusive
+    /// @param end the index one past the last code to decode, exclusive
+    /// @param out the destination array for decoded bytes, sized to exactly fit the decoded output
+    /// @param outPos the index in `out` at which to start writing
+    /// @return the index in `out` one past the last byte written
+    public long decompress(MemorySegment compressed, long start, long end, byte[] out, int outPos) {
+        long pos = start;
+        int outIndex = outPos;
+        while (pos < end) {
+            int code = Byte.toUnsignedInt(compressed.get(ValueLayout.JAVA_BYTE, pos++));
+            if (code == ESCAPE) {
+                out[outIndex++] = compressed.get(ValueLayout.JAVA_BYTE, pos++);
+            } else {
+                long packed = packedSymbols[code];
+                int length = lengths[code];
+                if (outIndex + 8 <= out.length) {
+                    Compressor.LONG_LE_BYTES.set(out, outIndex, packed);
+                    outIndex += length;
+                } else {
+                    for (int k = 0; k < length; k++) {
+                        out[outIndex + k] = (byte) (packed >>> (k * 8));
+                    }
+                    outIndex += length;
+                }
+            }
+        }
+        return outIndex;
+    }
 }

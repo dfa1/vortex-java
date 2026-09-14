@@ -28,10 +28,12 @@ public final class Compressor {
     static final ValueLayout.OfLong LE_LONG =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-    /// Little-endian unaligned `long` view over a `byte[]`, the JIT-intrinsified way to load an
-    /// 8-byte input word in one instruction on the `byte[]` compress fast path (the byte-by-byte
+    /// Little-endian unaligned `long` view over a `byte[]`, the JIT-intrinsified way to load or
+    /// store an 8-byte word in one instruction on the `byte[]` compress fast path (the byte-by-byte
     /// [#loadWord(byte[], int, int)] assembly is 8 loads + shifts and is kept for the tail only).
-    private static final VarHandle LONG_LE_BYTES =
+    /// Package-private: [Decompressor] reuses this for its own `byte[]`-output store fast path,
+    /// same convention as [Decompressor]'s [#LE_LONG] reuse for `MemorySegment` access.
+    static final VarHandle LONG_LE_BYTES =
             MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
 
     private final List<Symbol> symbolsByGainDescending;

@@ -9,9 +9,9 @@ import io.github.dfa1.vortex.fsst.Decompressor;
 import io.github.dfa1.vortex.reader.decode.SegmentBroadcast;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.IntConsumer;
@@ -78,17 +78,25 @@ public record LazyFsstVarBinArray(
         Objects.checkIndex(i, length);
         CodeRange range = codeRange(i);
         long maxLen = range.maxDecodedLength();
-        if (maxLen > Integer.MAX_VALUE - 7) {
+        long claimedLen = uncompressedLength(i);
+        if (claimedLen < 0 || claimedLen > maxLen) {
             throw new VortexException(EncodingId.VORTEX_FSST, "decoded length too large: row " + i
-                    + " code range implies up to " + maxLen + " bytes");
+                    + " claims " + claimedLen + " bytes but code range implies at most " + maxLen);
         }
-        // 7 bytes of trailing slack for the decompressor's unconditional 8-byte-store trick
-        // (see Decompressor); sliced off below so the caller sees an exactly-sized array.
-        byte[] scratch = new byte[(int) maxLen + 7];
+        // claimedLen <= maxLen and maxLen was already range-checked against Integer.MAX_VALUE - 7
+        // in getByteLength's callers historically; re-check directly since this path no longer
+        // routes through getByteLength.
+        if (claimedLen > Integer.MAX_VALUE) {
+            throw new VortexException(EncodingId.VORTEX_FSST, "decoded length too large: row " + i
+                    + " claims " + claimedLen + " bytes");
+        }
+        // Exactly-sized destination: no slack, no copy. Decompressor's byte[] overload falls back
+        // to a per-byte store only for the final symbol, where an 8-byte store would overrun this
+        // array.
+        byte[] out = new byte[(int) claimedLen];
         long decodedLen;
         try {
-            decodedLen = decompressor.decompress(compressedBytes, range.start(), range.end(),
-                    MemorySegment.ofArray(scratch), 0);
+            decodedLen = decompressor.decompress(compressedBytes, range.start(), range.end(), out, 0);
         } catch (IndexOutOfBoundsException e) {
             // Two adversarial shapes land here: a trailing escape code with no literal byte after
             // it (reads one byte past the row's own code range, potentially past compressedBytes
@@ -100,12 +108,11 @@ public record LazyFsstVarBinArray(
                     "row " + i + " code range [" + range.start() + ", " + range.end()
                             + ") decodes past its bounds or references an unknown symbol code", e);
         }
-        long claimedLen = uncompressedLength(i);
         if (decodedLen != claimedLen) {
             throw new VortexException(EncodingId.VORTEX_FSST, "row " + i + " decoded " + decodedLen
                     + " bytes but uncompressed lengths claim " + claimedLen);
         }
-        return Arrays.copyOf(scratch, (int) decodedLen);
+        return out;
     }
 
     @Override
@@ -164,6 +171,58 @@ public record LazyFsstVarBinArray(
         }
         return new LazyFsstVarBinArray(dtype, rows, decompressor, compressedBytes,
                 uncompressedLengths, uncompressedLengthsPType, codesOffsets, codesOffsetsPType);
+    }
+
+    /// Bulk fast path for [VarBinArray#toOffsetMode(VarBinArray, SegmentAllocator)]: decodes the
+    /// entire column's code stream in one [Decompressor#decompress(MemorySegment, long, long,
+    /// MemorySegment, long)] call instead of walking rows one at a time through [#getBytes(long)]
+    /// (each of which pays its own allocation) — the single largest win identified for FSST
+    /// materialization, since row code ranges are contiguous and monotonic in the code stream.
+    ///
+    /// Row offsets come from a prefix sum over the claimed uncompressed lengths — the same values
+    /// [#forEachByteLength(IntConsumer)] already trusts without a per-row cross-check against the
+    /// code range. The `decodedLen != totalBytes` check below is this method's equivalent of that
+    /// convention: it catches a wrong aggregate total but, like `forEachByteLength`, cannot catch
+    /// one row's claim being wrong while another's absorbs the difference. Per-row callers that
+    /// need the full per-row cross-check still get it through [#getBytes(long)].
+    ///
+    /// @param arena allocator for the materialized bytes and offsets segments
+    /// @return a [VarBinOffsetArray] view over the same logical content
+    VarBinOffsetArray toOffsetModeBulk(SegmentAllocator arena) {
+        long n = length;
+        MemorySegment outOffsets = arena.allocate((n + 1) * Long.BYTES, Long.BYTES);
+        outOffsets.setAtIndex(VortexFormat.LE_LONG, 0, 0L);
+        long[] runningTotal = {0L};
+        long[] nextIndex = {1L};
+        forEachByteLength(len -> {
+            runningTotal[0] += len;
+            outOffsets.setAtIndex(VortexFormat.LE_LONG, nextIndex[0]++, runningTotal[0]);
+        });
+        long totalBytes = runningTotal[0];
+
+        long start = codeOffset(0);
+        long end = codeOffset(n);
+        if (start < 0 || end < start || end > compressedBytes.byteSize()) {
+            throw new VortexException(EncodingId.VORTEX_FSST, "invalid code offsets [" + start
+                    + ", " + end + ") of " + compressedBytes.byteSize());
+        }
+        // 7 bytes of trailing slack for the decompressor's unconditional 8-byte-store trick;
+        // sliced off below so the caller sees an exactly-sized bytes segment.
+        MemorySegment scratch = arena.allocate(totalBytes + 7);
+        long decodedLen;
+        try {
+            decodedLen = decompressor.decompress(compressedBytes, start, end, scratch, 0);
+        } catch (IndexOutOfBoundsException e) {
+            throw new VortexException(EncodingId.VORTEX_FSST,
+                    "code range [" + start + ", " + end
+                            + ") decodes past its bounds or references an unknown symbol code", e);
+        }
+        if (decodedLen != totalBytes) {
+            throw new VortexException(EncodingId.VORTEX_FSST, "column decoded " + decodedLen
+                    + " bytes but uncompressed lengths claim " + totalBytes);
+        }
+        MemorySegment outBytes = scratch.asSlice(0, totalBytes).asReadOnly();
+        return new VarBinOffsetArray(dtype, n, outBytes, outOffsets, PType.I64);
     }
 
     /// Fast path of [#forEachByteLength(IntConsumer)] when the uncompressed-lengths child holds at
