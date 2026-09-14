@@ -62,6 +62,14 @@ final class TrainingGeneration {
     /// `current`, tallying single-match counts and adjacent-pair counts. Candidates are keyed by
     /// packed symbol so both the parsed symbols and the input bytes they cover are captured directly
     /// from the sample (generation 0's empty table escapes everything, seeding single bytes).
+    ///
+    /// Each position loads its 8-byte input word exactly once. `word & lengthMask(matchLength)` is
+    /// the packed candidate directly — no second `loadWord(bytes, pos, pos + matchLength)` call is
+    /// needed, since masking to `matchLength` bytes gives the identical result whenever
+    /// `matchLength <= end - pos` (which [Matcher#lengthOf(int)]'s bound already guarantees). While
+    /// 8 real bytes remain, the word loads with one intrinsified `VarHandle` read (the same trick
+    /// [Compressor#compress(byte[], int, int, byte[], long)] uses); only the tail of each chunk
+    /// falls back to the byte-by-byte, zero-padding [Compressor#loadWord(byte[], int, int)].
     private static Counts compressCount(Compressor current, Sample sample, int chunkLimit) {
         Counts counts = new Counts();
         byte[] bytes = sample.bytes();
@@ -71,9 +79,13 @@ final class TrainingGeneration {
             long previousPacked = -1L; // No previous match within this chunk yet.
             int previousLength = 0;
             int pos = start;
+            int fastEnd = end - 8;
             while (pos < end) {
-                int matchLength = matchLengthAt(current, bytes, pos, end);
-                long packed = Compressor.loadWord(bytes, pos, pos + matchLength) & lengthMask(matchLength);
+                long word = pos <= fastEnd
+                        ? (long) Compressor.LONG_LE_BYTES.get(bytes, pos)
+                        : Compressor.loadWord(bytes, pos, end);
+                int matchLength = matchLengthOf(current, word, pos, end);
+                long packed = word & lengthMask(matchLength);
                 counts.bumpSingle(packed, matchLength);
                 if (previousPacked >= 0) {
                     counts.bumpPair(previousPacked, previousLength, packed, matchLength);
@@ -86,15 +98,17 @@ final class TrainingGeneration {
         return counts;
     }
 
-    /// Returns the length of the current table's longest match at `pos`, or 1 when nothing matches
-    /// (an escaped single byte still advances one position and counts as a length-1 candidate).
+    /// Returns the length of the current table's longest match against the already-loaded `word`
+    /// at `pos`, or 1 when nothing matches (an escaped single byte still advances one position and
+    /// counts as a length-1 candidate).
     ///
     /// An over-long match is rejected the same way [Compressor#compress(byte[], int, int, byte[],
-    /// long)] rejects it: loadWord zero-pads past `end`, so a symbol with trailing zero bytes can
-    /// spuriously match the padding beyond the chunk. Counting such a match would tally a candidate
-    /// spanning bytes that are not really in the sample, and could advance `pos` past `end`.
-    private static int matchLengthAt(Compressor current, byte[] bytes, int pos, int end) {
-        int packedMatch = current.matcher().longestMatch(Compressor.loadWord(bytes, pos, end));
+    /// long)] rejects it: `word` zero-pads past `end` when loaded via [Compressor#loadWord(byte[],
+    /// int, int)], so a symbol with trailing zero bytes can spuriously match the padding beyond the
+    /// chunk. Counting such a match would tally a candidate spanning bytes that are not really in
+    /// the sample, and could advance `pos` past `end`.
+    private static int matchLengthOf(Compressor current, long word, int pos, int end) {
+        int packedMatch = current.matcher().longestMatch(word);
         int length = Matcher.lengthOf(packedMatch);
         return length > 0 && pos + length <= end ? length : 1;
     }
