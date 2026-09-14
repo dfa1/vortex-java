@@ -1,7 +1,5 @@
 package io.github.dfa1.vortex.fsst;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 /// A fixed, byte-size-bounded training sample drawn deterministically from a corpus of rows.
@@ -45,13 +43,20 @@ final class Sample {
     static final int[] SAMPLE_FRACTION_NUMERATORS = {8, 38, 68, 98, 128};
 
     private final byte[] bytes;
-    private final int[] chunkStarts;
-    private final int[] chunkEnds;
 
-    private Sample(byte[] bytes, int[] chunkStarts, int[] chunkEnds) {
+    /// Chunk boundaries as one array of `chunkCount + 1` cumulative offsets: chunk `i` spans
+    /// `[chunkBoundaries[i], chunkBoundaries[i + 1])`. Chunks are written back-to-back in
+    /// [#draw(byte[][], long)], so a chunk's end always equals the next chunk's start — a separate
+    /// ends array would just duplicate `chunkBoundaries[1..]`. The array may be over-allocated
+    /// (sized for the worst case of every chunk being 1 byte); only indices `0 .. chunkCount` are
+    /// valid, so `chunkCount` is tracked separately rather than trimming the array to size.
+    private final int[] chunkBoundaries;
+    private final int chunkCount;
+
+    private Sample(byte[] bytes, int[] chunkBoundaries, int chunkCount) {
         this.bytes = bytes;
-        this.chunkStarts = chunkStarts;
-        this.chunkEnds = chunkEnds;
+        this.chunkBoundaries = chunkBoundaries;
+        this.chunkCount = chunkCount;
     }
 
     /// Draws a deterministic byte-size-bounded sample from `rows`.
@@ -69,43 +74,47 @@ final class Sample {
                                     // reproducible across builds. No security boundary here.
     static Sample draw(byte[][] rows, long seed) {
         long totalBytes = 0;
+        // Pre-filter non-empty row indices once, up front: drawing then picks uniformly among only
+        // these `nonEmptyRows` candidates, an O(1) selection per chunk. The alternative — drawing a
+        // row index from the full `rows.length` range and re-drawing on an empty hit — is an
+        // unbounded rejection sampler whose expected draw count is quadratic in the corpus's
+        // sparsity (e.g. a 1M-row, 0.01%-non-empty corpus), not the bounded skip a prior version of
+        // this comment claimed.
+        int[] nonEmptyRowIndices = new int[rows.length];
         int nonEmptyRows = 0;
-        for (byte[] row : rows) {
-            totalBytes += row.length;
-            if (row.length > 0) {
-                nonEmptyRows++;
+        for (int i = 0; i < rows.length; i++) {
+            int len = rows[i].length;
+            totalBytes += len;
+            if (len > 0) {
+                nonEmptyRowIndices[nonEmptyRows++] = i;
             }
         }
         if (nonEmptyRows == 0) {
-            return new Sample(new byte[0], new int[0], new int[0]);
+            return new Sample(new byte[0], new int[]{0}, 0);
         }
 
         int target = (int) Math.min(TARGET_SAMPLE_BYTES, totalBytes);
         byte[] out = new byte[target];
-        List<Integer> starts = new ArrayList<>();
-        List<Integer> ends = new ArrayList<>();
+        // Every chunk is at least 1 byte, so `target` chunks is the worst-case count (plus one for
+        // the leading 0 boundary); no growable, boxing list needed.
+        int[] boundaries = new int[target + 1];
+        int chunkCount = 0;
         Random rng = new Random(seed);
         int outPos = 0;
 
-        // Bound the number of empty-row skips so an all-but-one-empty corpus cannot spin forever;
-        // once we have drawn from the one non-empty row enough times to fill the target, we stop.
         while (outPos < target) {
-            int row = rng.nextInt(rows.length);
-            byte[] source = rows[row];
-            if (source.length == 0) {
-                continue;
-            }
+            byte[] source = rows[nonEmptyRowIndices[rng.nextInt(nonEmptyRows)]];
             int remaining = target - outPos;
             int chunkLen = Math.min(Math.min(MAX_CHUNK_BYTES, source.length), remaining);
             int maxStart = source.length - chunkLen;
             int start = maxStart == 0 ? 0 : rng.nextInt(maxStart + 1);
             System.arraycopy(source, start, out, outPos, chunkLen);
-            starts.add(outPos);
-            ends.add(outPos + chunkLen);
             outPos += chunkLen;
+            chunkCount++;
+            boundaries[chunkCount] = outPos;
         }
 
-        return new Sample(out, toIntArray(starts), toIntArray(ends));
+        return new Sample(out, boundaries, chunkCount);
     }
 
     /// Returns the concatenated sample bytes. Chunk boundaries in [#chunkStart(int)] /
@@ -121,7 +130,7 @@ final class Sample {
     ///
     /// @return the total chunk count
     int chunkCount() {
-        return chunkStarts.length;
+        return chunkCount;
     }
 
     /// Returns the start offset (inclusive) of chunk `i` within [#bytes()].
@@ -129,7 +138,7 @@ final class Sample {
     /// @param i the chunk index, in `0 .. chunkCount() - 1`
     /// @return the chunk's start offset into the sample bytes
     int chunkStart(int i) {
-        return chunkStarts[i];
+        return chunkBoundaries[i];
     }
 
     /// Returns the end offset (exclusive) of chunk `i` within [#bytes()].
@@ -137,7 +146,7 @@ final class Sample {
     /// @param i the chunk index, in `0 .. chunkCount() - 1`
     /// @return the chunk's end offset into the sample bytes
     int chunkEnd(int i) {
-        return chunkEnds[i];
+        return chunkBoundaries[i + 1];
     }
 
     /// Returns how many leading chunks generation `gen` (0-based) should replay, applying that
@@ -154,13 +163,5 @@ final class Sample {
         }
         long scaled = (long) total * SAMPLE_FRACTION_NUMERATORS[gen] / SAMPLE_FRACTION_DENOMINATOR;
         return (int) Math.max(1, Math.min(total, scaled));
-    }
-
-    private static int[] toIntArray(List<Integer> values) {
-        int[] array = new int[values.size()];
-        for (int i = 0; i < array.length; i++) {
-            array[i] = values.get(i);
-        }
-        return array;
     }
 }
