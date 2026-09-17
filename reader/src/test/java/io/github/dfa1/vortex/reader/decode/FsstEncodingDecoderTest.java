@@ -11,6 +11,9 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -18,6 +21,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -181,6 +185,67 @@ class FsstEncodingDecoderTest {
 
             // Then
             assertThat(lengths).containsExactly(2, 3);
+        }
+
+        @Test
+        void forEachByteLength_emptyChildWithNonZeroRows_throwsFromBulkPath() {
+            // Given — n > 0 but the uncompressed-lengths child has zero physical elements,
+            // exercised through the bulk forEachByteLength entry point rather than
+            // Guards#emptyUncompressedLengthsChild_throws's single-row getByteLength call.
+            long[] symbols = {};
+            byte[] symbolLengths = {};
+            byte[] compressed = {};
+            long[] uncompLengths = {};
+            long[] codeOffsets = {0};
+            VarBinArray sut = decodeFsst(1, symbols, symbolLengths, compressed,
+                    PType.U8, uncompLengths, PType.U8, codeOffsets);
+
+            // When / Then
+            assertThatExceptionOfType(VortexException.class)
+                    .isThrownBy(() -> sut.forEachByteLength(len -> { }))
+                    .withMessageContaining("empty");
+        }
+
+        @Test
+        void forEachByteLength_broadcastCapacityBetweenOneAndRowCount_readsWithModulo() {
+            // Given — cap (2) is neither 0 nor >= n (5), so only the per-row modulo path can
+            // produce the result; existing broadcast fixtures elsewhere use capacity 1 or
+            // capacity == n, neither of which reaches this branch.
+            long[] symbols = {};
+            byte[] symbolLengths = {};
+            byte[] compressed = {};
+            long[] uncompLengths = {5, 7};
+            long[] codeOffsets = {0};
+            VarBinArray sut = decodeFsst(5, symbols, symbolLengths, compressed,
+                    PType.U8, uncompLengths, PType.U8, codeOffsets);
+
+            // When
+            List<Integer> lengths = new ArrayList<>();
+            sut.forEachByteLength(lengths::add);
+
+            // Then
+            assertThat(lengths).containsExactly(5, 7, 5, 7, 5);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("io.github.dfa1.vortex.reader.decode.FsstEncodingDecoderTest#bulkPathLengthPtypes")
+        void forEachByteLength_bulkPathSupportsEveryLengthsPtype(PType ptype, long[] values) {
+            // Given — cap == n forces the fast bulk path (forEachClaimedLength), which switches
+            // on uncompressedLengthsPType independently of readAt's similar-looking switch; only
+            // U8 is exercised through this path elsewhere.
+            long[] symbols = {};
+            byte[] symbolLengths = {};
+            byte[] compressed = {};
+            long[] codeOffsets = {0};
+            VarBinArray sut = decodeFsst(values.length, symbols, symbolLengths, compressed,
+                    ptype, values, PType.U8, codeOffsets);
+
+            // When
+            List<Integer> lengths = new ArrayList<>();
+            sut.forEachByteLength(lengths::add);
+
+            // Then
+            assertThat(lengths).containsExactly(10, 20);
         }
     }
 
@@ -537,9 +602,53 @@ class FsstEncodingDecoderTest {
                     .isThrownBy(() -> result.getByteLength(0))
                     .withMessageContaining("decoded length too large");
         }
+
+        @Test
+        void forEachByteLength_unsupportedLengthsPtype_throwsFromBulkPath() {
+            // Given — F32 is not one of forEachClaimedLength's supported cases; cap == n forces
+            // the fast bulk path (not the per-row modulo path, which throws from readAt instead),
+            // exercising forEachClaimedLength's own default branch.
+            long[] symbols = {};
+            byte[] symbolLengths = {};
+            byte[] compressed = {};
+            long[] codeOffsets = {0};
+            VarBinArray result = decodeFsst(1, symbols, symbolLengths, compressed,
+                    PType.F32, new long[]{0}, PType.U8, codeOffsets);
+
+            // When / Then
+            assertThatExceptionOfType(VortexException.class)
+                    .isThrownBy(() -> result.forEachByteLength(len -> { }))
+                    .withMessageContaining("unsupported ptype");
+        }
+
+        @Test
+        void getByteLength_unsupportedLengthsPtype_throwsFromReadAt() {
+            // Given — getByteLength reads a single row's length via uncompressedLength()/readAt,
+            // a different code path from forEachClaimedLength's own default branch above.
+            long[] symbols = {};
+            byte[] symbolLengths = {};
+            byte[] compressed = {};
+            long[] codeOffsets = {0, 0};
+            VarBinArray result = decodeFsst(1, symbols, symbolLengths, compressed,
+                    PType.F32, new long[]{0}, PType.U8, codeOffsets);
+
+            // When / Then
+            assertThatExceptionOfType(VortexException.class)
+                    .isThrownBy(() -> result.getByteLength(0))
+                    .withMessageContaining("unsupported ptype");
+        }
     }
 
     // ── decode harness ─────────────────────────────────────────────────────────
+
+    /// Length/value pairs used to exercise every ptype [LazyFsstVarBinArray]'s bulk
+    /// `forEachClaimedLength` path supports beyond U8 (already covered elsewhere).
+    static Stream<Arguments> bulkPathLengthPtypes() {
+        return Stream.of(
+                Arguments.of(PType.U16, new long[]{10, 20}),
+                Arguments.of(PType.U32, new long[]{10, 20}),
+                Arguments.of(PType.I64, new long[]{10, 20}));
+    }
 
     /// Builds and decodes a `vortex.fsst` node from the raw component arrays.
     ///
@@ -621,10 +730,13 @@ class FsstEncodingDecoderTest {
         return seg;
     }
 
-    /// Writes `values` into a segment at the stride of `ptype`. Only the ptypes the FSST children
-    /// can carry (U8, I32, I64) are needed by these tests. An empty `values` yields a zero-length
-    /// segment (not a 1-byte floor) so the child decodes with capacity 0 — the shape the
-    /// empty-child guards inspect.
+    /// Writes `values` into a segment at the stride of `ptype`. Every ptype [LazyFsstVarBinArray]
+    /// itself supports (U8, U16, U32, I32, I64, U64) is written faithfully; any other ptype (e.g.
+    /// F32, used to drive LazyFsstVarBinArray's "unsupported ptype" guards) is left zero-filled —
+    /// those tests only need a segment of the right size, never its content, since the guard
+    /// throws before any value is read. An empty `values` yields a zero-length segment (not a
+    /// 1-byte floor) so the child decodes with capacity 0 — the shape the empty-child guards
+    /// inspect.
     private static MemorySegment typedSegment(PType ptype, long[] values) {
         long stride = ptype.byteSize();
         if (values.length == 0) {
@@ -637,7 +749,7 @@ class FsstEncodingDecoderTest {
                 case U16, I16 -> seg.set(VortexFormat.LE_SHORT, i * 2, (short) values[i]);
                 case U32, I32 -> seg.setAtIndex(VortexFormat.LE_INT, i, (int) values[i]);
                 case I64, U64 -> seg.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
-                default -> throw new IllegalArgumentException("unsupported ptype: " + ptype);
+                default -> { /* unsupported-ptype guard tests: content is never read */ }
             }
         }
         return seg;
