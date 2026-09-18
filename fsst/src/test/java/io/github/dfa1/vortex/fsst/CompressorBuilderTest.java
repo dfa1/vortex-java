@@ -302,6 +302,86 @@ class CompressorBuilderTest {
         return false;
     }
 
+    @Nested
+    class ContiguousRowsParity {
+
+        /// Both `train` overloads must produce a byte-identical table: encoding is required to be
+        /// reproducible for a given input, so the contiguous-rows overload cannot be allowed to
+        /// drift from the `byte[][]` one — a divergence here would silently change written files
+        /// depending on which shape the caller happened to have.
+        @Test
+        void train_contiguousRows_matchesPerRowTableExactly() {
+            // Given — log-like rows with real repeated substrings, plus empty rows interleaved
+            // (empty rows are skipped when drawing the sample, so they exercise the index
+            // pre-filtering both overloads do independently).
+            byte[][] rows = new byte[600][];
+            var rng = new Random(7);
+            for (int i = 0; i < rows.length; i++) {
+                rows[i] = i % 17 == 0
+                                  ? new byte[0]
+                                  : utf8("2026-09-18 ERROR GET /api/v1/users/" + rng.nextInt(10_000)
+                                                 + " -> 500 Internal Server Error");
+            }
+
+            // When
+            Compressor perRow = new CompressorBuilder().seed(99L).train(rows);
+            Compressor result = new CompressorBuilder().seed(99L)
+                                        .train(flatten(rows), offsetsOf(rows), rows.length);
+
+            // Then
+            assertThat(result.symbolCount()).isEqualTo(perRow.symbolCount());
+            for (int code = 0; code < perRow.symbolCount(); code++) {
+                assertThat(result.packedSymbol(code)).isEqualTo(perRow.packedSymbol(code));
+                assertThat(result.symbolLength(code)).isEqualTo(perRow.symbolLength(code));
+            }
+        }
+
+        @Test
+        void train_contiguousAllEmptyRows_producesEmptyTable() {
+            // Given — every row empty, so there is nothing to learn and no chunk can be drawn.
+            byte[][] rows = {new byte[0], new byte[0], new byte[0]};
+
+            // When
+            Compressor result = new CompressorBuilder()
+                                        .train(flatten(rows), offsetsOf(rows), rows.length);
+
+            // Then
+            assertThat(result.symbolCount()).isZero();
+        }
+
+        @Test
+        void train_contiguousNoRows_producesEmptyTable() {
+            // Given — a zero-row corpus, the degenerate shape an empty chunk produces.
+            // When
+            Compressor result = new CompressorBuilder().train(new byte[0], new int[]{0}, 0);
+
+            // Then
+            assertThat(result.symbolCount()).isZero();
+        }
+
+        private byte[] flatten(byte[][] rows) {
+            int total = 0;
+            for (byte[] row : rows) {
+                total += row.length;
+            }
+            byte[] out = new byte[total];
+            int pos = 0;
+            for (byte[] row : rows) {
+                System.arraycopy(row, 0, out, pos, row.length);
+                pos += row.length;
+            }
+            return out;
+        }
+
+        private int[] offsetsOf(byte[][] rows) {
+            int[] offsets = new int[rows.length + 1];
+            for (int i = 0; i < rows.length; i++) {
+                offsets[i + 1] = offsets[i] + rows[i].length;
+            }
+            return offsets;
+        }
+    }
+
     private static boolean hasSingleByteSymbol(Compressor compressor, byte value) {
         for (int code = 0; code < compressor.symbolCount(); code++) {
             if (compressor.symbolLength(code) == 1 && (byte) compressor.packedSymbol(code) == value) {

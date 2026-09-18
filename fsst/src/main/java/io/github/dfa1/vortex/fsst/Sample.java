@@ -117,6 +117,59 @@ final class Sample {
         return new Sample(out, boundaries, chunkCount);
     }
 
+    /// Draws a deterministic byte-size-bounded sample from rows held contiguously, where row `i`
+    /// spans `rowBytes[rowOffsets[i], rowOffsets[i + 1])`.
+    ///
+    /// Behaves exactly like [#draw(byte[][], long)] — same selection order, same chunk lengths,
+    /// same bytes for the same seed — but reads its rows out of one shared array instead of one
+    /// `byte[]` object per row, so a caller holding its corpus contiguously never has to explode it
+    /// into per-row arrays just to train.
+    ///
+    /// @param rowBytes   all rows' bytes concatenated
+    /// @param rowOffsets `rowCount + 1` cumulative offsets into `rowBytes`
+    /// @param rowCount   the number of rows
+    /// @param seed       the PRNG seed; the same rows and seed yield a byte-identical sample
+    /// @return a sample of up to [#TARGET_SAMPLE_BYTES] bytes split into per-row chunks
+    @SuppressWarnings("java:S2245") // Deterministic PRNG is the contract, as in the byte[][] overload.
+    static Sample draw(byte[] rowBytes, int[] rowOffsets, int rowCount, long seed) {
+        long totalBytes = 0;
+        int[] nonEmptyRowIndices = new int[rowCount];
+        int nonEmptyRows = 0;
+        for (int i = 0; i < rowCount; i++) {
+            int len = rowOffsets[i + 1] - rowOffsets[i];
+            totalBytes += len;
+            if (len > 0) {
+                nonEmptyRowIndices[nonEmptyRows++] = i;
+            }
+        }
+        if (nonEmptyRows == 0) {
+            return new Sample(new byte[0], new int[]{0}, 0);
+        }
+
+        int target = (int) Math.min(TARGET_SAMPLE_BYTES, totalBytes);
+        byte[] out = new byte[target];
+        int[] boundaries = new int[target + 1];
+        int chunkCount = 0;
+        Random rng = new Random(seed);
+        int outPos = 0;
+
+        while (outPos < target) {
+            int row = nonEmptyRowIndices[rng.nextInt(nonEmptyRows)];
+            int rowStart = rowOffsets[row];
+            int rowLen = rowOffsets[row + 1] - rowStart;
+            int remaining = target - outPos;
+            int chunkLen = Math.min(Math.min(MAX_CHUNK_BYTES, rowLen), remaining);
+            int maxStart = rowLen - chunkLen;
+            int start = maxStart == 0 ? 0 : rng.nextInt(maxStart + 1);
+            System.arraycopy(rowBytes, rowStart + start, out, outPos, chunkLen);
+            outPos += chunkLen;
+            chunkCount++;
+            boundaries[chunkCount] = outPos;
+        }
+
+        return new Sample(out, boundaries, chunkCount);
+    }
+
     /// Returns the concatenated sample bytes. Chunk boundaries in [#chunkStart(int)] /
     /// [#chunkEnd(int)] delimit the parts that came from distinct rows.
     ///

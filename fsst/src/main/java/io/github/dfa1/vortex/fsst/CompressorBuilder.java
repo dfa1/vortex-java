@@ -56,7 +56,25 @@ public final class CompressorBuilder {
     ///             empty)
     /// @return the trained compressor
     public Compressor train(byte[][] rows) {
-        Sample sample = Sample.draw(rows, seed);
+        return trainOn(Sample.draw(rows, seed));
+    }
+
+    /// Trains a compressor over rows held contiguously, where row `i` spans
+    /// `rowBytes[rowOffsets[i], rowOffsets[i + 1])`.
+    ///
+    /// Equivalent to [#train(byte[][])] — same sample, same resulting table for the same seed —
+    /// but takes the corpus in the contiguous shape a varbin column already has, so the caller
+    /// need not materialize one `byte[]` per row just to train.
+    ///
+    /// @param rowBytes   all rows' bytes concatenated
+    /// @param rowOffsets `rowCount + 1` cumulative offsets into `rowBytes`
+    /// @param rowCount   the number of rows
+    /// @return the trained compressor
+    public Compressor train(byte[] rowBytes, int[] rowOffsets, int rowCount) {
+        return trainOn(Sample.draw(rowBytes, rowOffsets, rowCount, seed));
+    }
+
+    private Compressor trainOn(Sample sample) {
         Compressor compressor = Compressor.of(List.of());
         if (sample.chunkCount() == 0) {
             return compressor;
