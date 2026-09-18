@@ -4,8 +4,6 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
-import java.util.HashMap;
-
 /// Read-only stats over a primitive array, computed in a single scan and shared across
 /// all encoders that requested a given stat via [StatsOptions]. Replaces the per-encoder
 /// sample-encoding probe that biases on leading rows.
@@ -43,24 +41,96 @@ public record ArrayStats(
         if (options == StatsOptions.NONE) {
             return new ArrayStats(n, -1, 0, 0);
         }
-        HashMap<Long, int[]> counts = options.countDistinct() || options.trackMostFrequent()
-                                              ? HashMap.newHashMap(Math.min(n, 1 << 16))
-                                              : null;
+        LongCounts counts = options.countDistinct() || options.trackMostFrequent()
+                                    ? new LongCounts(Math.min(n, 1 << 16))
+                                    : null;
         long topFreqBits = 0;
         int topFreq = 0;
         for (int i = 0; i < n; i++) {
             long bits = readBits(ptype, data, i);
             if (counts != null) {
-                int[] cell = counts.computeIfAbsent(bits, _ -> new int[1]);
-                cell[0]++;
-                if (cell[0] > topFreq) {
-                    topFreq = cell[0];
+                int newCount = counts.increment(bits);
+                if (newCount > topFreq) {
+                    topFreq = newCount;
                     topFreqBits = bits;
                 }
             }
         }
         long distinct = options.countDistinct() ? counts.size() : -1L;
         return new ArrayStats(n, distinct, topFreqBits, topFreq);
+    }
+
+    /// Open-addressing `long -> count` map used by [#compute] to track distinct values and their
+    /// occurrence counts without boxing every scanned bit pattern into a `Long` key (a
+    /// `HashMap<Long, int[]>`'s per-entry `Node` object plus the boxed key was the largest single
+    /// allocation source profiled in a stats-heavy cascade competition — every candidate primitive
+    /// column pays this on every chunk). Occupancy is tracked by `counts[slot] != 0` rather than a
+    /// separate flags array: a slot is only ever written once occupied, so a stored 0 always means
+    /// empty, even for a genuinely-zero data value. Capacity is always a power of two so probing
+    /// masks instead of taking a modulo (CLAUDE.md hot-loop rule).
+    private static final class LongCounts {
+
+        private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
+
+        private long[] keys;
+        private int[] counts;
+        private int mask;
+        private int size;
+
+        LongCounts(int expectedDistinct) {
+            int capacity = nextPowerOfTwo(Math.max(16, expectedDistinct * 2));
+            keys = new long[capacity];
+            counts = new int[capacity];
+            mask = capacity - 1;
+        }
+
+        /// Increments `key`'s count (inserting a fresh entry first if unseen) and returns the
+        /// updated count.
+        int increment(long key) {
+            if (size * 2 >= keys.length) {
+                grow();
+            }
+            int slot = slotFor(key, mask);
+            while (counts[slot] != 0 && keys[slot] != key) {
+                slot = (slot + 1) & mask;
+            }
+            if (counts[slot] == 0) {
+                keys[slot] = key;
+                size++;
+            }
+            return ++counts[slot];
+        }
+
+        int size() {
+            return size;
+        }
+
+        private void grow() {
+            long[] oldKeys = keys;
+            int[] oldCounts = counts;
+            keys = new long[oldKeys.length * 2];
+            counts = new int[oldCounts.length * 2];
+            mask = keys.length - 1;
+            for (int i = 0; i < oldKeys.length; i++) {
+                if (oldCounts[i] != 0) {
+                    int slot = slotFor(oldKeys[i], mask);
+                    while (counts[slot] != 0) {
+                        slot = (slot + 1) & mask;
+                    }
+                    keys[slot] = oldKeys[i];
+                    counts[slot] = oldCounts[i];
+                }
+            }
+        }
+
+        private static int slotFor(long key, int mask) {
+            long mixed = key * HASH_MULTIPLIER;
+            return (int) (mixed >>> 32) & mask;
+        }
+
+        private static int nextPowerOfTwo(int x) {
+            return x <= 1 ? 1 : Integer.highestOneBit(x - 1) << 1;
+        }
     }
 
     private static int arrayLength(PType ptype, Object data) {
