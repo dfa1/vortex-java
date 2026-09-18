@@ -114,9 +114,21 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     /// @param ctx     encoding context supplying the arena
     /// @return a cascade step whose values child (index 1) is left open for compression
     private static CascadeStep encodeUtf8Cascade(String[] strings, EncodeContext ctx) {
+        int n = strings.length;
         var valueMap = new LinkedHashMap<String, Integer>();
         for (String s : strings) {
             valueMap.computeIfAbsent(s, _ -> valueMap.size());
+            // Distinct count only grows as the scan proceeds, so once it alone already exceeds
+            // n/2 the final count is guaranteed to too — the same "dict can't win" rule
+            // DictEncodingEncoder#expectedRatio applies to Primitive via stats, mirrored here
+            // since Utf8 has no shared-stats pre-pass (#395-style: don't finish building
+            // structure the competition is already guaranteed to discard). Bailing via
+            // CascadeStep.notApplicable() is safe both when this call is measuring a sample
+            // (never wins) and, per spliceResult's applicable() check, if it were ever re-run
+            // as a winner on full data.
+            if (valueMap.size() * 2 > n) {
+                return CascadeStep.notApplicable();
+            }
         }
         int dictSize = valueMap.size();
         PType codePType = codePType(dictSize);
