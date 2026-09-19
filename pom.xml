@@ -61,7 +61,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- production -->
-        <zstd.version>0.12</zstd.version>
+        <zstd.version>0.13</zstd.version>
 
 
         <fastcsv.version>4.4.0</fastcsv.version>
