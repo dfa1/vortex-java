@@ -169,7 +169,10 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         // stream, the CLAUDE.md allocation rule this violated. Worst case each input byte escapes
         // to 2 output bytes, so 2 * totalInput bounds the entire stream.
         MemorySegment scratch = arena.allocate(Math.max(2 * totalInput, 1));
-        int[] rowEnds = new int[n];
+        // Written directly at wire position: codesOffsets[0] stays its default 0, and each row's
+        // end lands at codesOffsets[i + 1] as it compresses, so no separate rowEnds array (and no
+        // copy into a codesOffsets array afterward) is needed.
+        int[] codesOffsets = new int[n + 1];
         long totalCompressed = 0;
         for (int i = 0; i < n; i++) {
             // byte[]-input overload over the shared row buffer: the intrinsified VarHandle word
@@ -177,7 +180,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             // addressed as a range of the contiguous array rather than an array of its own.
             totalCompressed = compressor.compress(
                     rowBytes, rowOffsets[i], rowOffsets[i + 1], scratch, totalCompressed);
-            rowEnds[i] = Math.toIntExact(totalCompressed);
+            codesOffsets[i + 1] = Math.toIntExact(totalCompressed);
         }
 
         // A slice, not a copy: scratch is already arena-owned, so trimming the worst-case 2x
@@ -194,10 +197,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         int[] uncompLens = new int[n];
         for (int i = 0; i < n; i++) {
             uncompLens[i] = rowOffsets[i + 1] - rowOffsets[i];
-        }
-        int[] codesOffsets = new int[n + 1];
-        for (int i = 0; i < n; i++) {
-            codesOffsets[i + 1] = rowEnds[i];
         }
 
         byte[] metaBytes = new ProtoFSSTMetadata(
@@ -218,9 +217,9 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
         long totalInput = 0;
         int maxUncompLen = 0;
-        for (int i = 0; i < n; i++) {
-            totalInput += byteArrays[i].length;
-            maxUncompLen = Math.max(maxUncompLen, byteArrays[i].length);
+        for (byte[] row : byteArrays) {
+            totalInput += row.length;
+            maxUncompLen = Math.max(maxUncompLen, row.length);
         }
 
         Compressor trained = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED).train(byteArrays);
@@ -238,12 +237,14 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         Compressor compressor = trained.withCodeOrder(wireOrder);
 
         MemorySegment scratch = arena.allocate(Math.max(2 * totalInput, 1));
-        int[] rowEnds = new int[n];
+        // codesOffsets[0] stays its default 0; each row's end is written directly at
+        // codesOffsets[i + 1] as it compresses (see compress()'s equivalent loop).
+        int[] codesOffsets = new int[n + 1];
         long totalCompressed = 0;
         for (int i = 0; i < n; i++) {
             byte[] row = byteArrays[i];
             totalCompressed = compressor.compress(row, 0, row.length, scratch, totalCompressed);
-            rowEnds[i] = Math.toIntExact(totalCompressed);
+            codesOffsets[i + 1] = Math.toIntExact(totalCompressed);
         }
 
         MemorySegment compBuf = scratch.asSlice(0, totalCompressed).asReadOnly();
@@ -254,10 +255,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         int[] uncompLens = new int[n];
         for (int i = 0; i < n; i++) {
             uncompLens[i] = byteArrays[i].length;
-        }
-        int[] codesOffsets = new int[n + 1];
-        for (int i = 0; i < n; i++) {
-            codesOffsets[i + 1] = rowEnds[i];
         }
 
         byte[] metaBytes = new ProtoFSSTMetadata(
