@@ -5,6 +5,15 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- FSST now trains and compresses from contiguous row bytes rather than exploding each chunk into one `byte[]` per row, cutting the collector's live set during a write. ([997ecfe](https://github.com/dfa1/vortex-java/commit/997ecfef))
+- FSST's matcher skips the symbol hash-table probe at input positions where no multi-byte symbol can start, instead of probing it at every position. ([60c3a5a](https://github.com/dfa1/vortex-java/commit/60c3a5a2))
+- `DictEncodingEncoder` abandons its `Utf8` dictionary scan as soon as the distinct count proves dict cannot win, instead of always building the full dictionary first. ([fa28198](https://github.com/dfa1/vortex-java/commit/fa281986))
+- `ArrayStats` counts distinct and most-frequent values through an open-addressing `long` map instead of a boxing `HashMap<Long, int[]>`. ([75506bb](https://github.com/dfa1/vortex-java/commit/75506bb9))
+
 ## [0.14.2] — 2026-09-13
 
 ### Fixed
