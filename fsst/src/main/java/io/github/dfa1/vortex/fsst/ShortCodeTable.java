@@ -12,7 +12,9 @@ import java.util.List;
 /// code and its length in one array read — no hashing, no probing.
 ///
 /// Only length-1 and length-2 symbols populate the table; longer symbols are the
-/// [LossyPerfectHashTable]'s job. Each 16-bit key `hi:lo` is seeded so that, absent a longer match,
+/// [LossyPerfectHashTable]'s job — though this class also records, per two-byte key, whether such a
+/// longer symbol exists at all, so [Matcher] can skip that table's probe when none can match (see
+/// [#mayHaveLongerMatch(long)]). Each 16-bit key `hi:lo` is seeded so that, absent a longer match,
 /// it resolves to the length-1 symbol for its low byte `lo` (if any). A length-2 symbol then
 /// overwrites the specific `hi:lo` slot for its exact two bytes, taking precedence over the
 /// length-1 fallback. A key whose low byte has no length-1 symbol and no length-2 symbol resolves
@@ -34,8 +36,25 @@ final class ShortCodeTable {
     /// Packed `code << 8 | length` per 16-bit key. A zero length marks "no match" ([#NO_MATCH]).
     private final int[] table;
 
-    private ShortCodeTable(int[] table) {
+    /// One bit per 16-bit key: set when some symbol of length 3-8 starts with those two bytes, i.e.
+    /// when a [LossyPerfectHashTable] probe at this position could possibly match. This is the
+    /// Rust reference's `has_suffix_code` predicate — it reaches the same decision through a code
+    /// renumbering (`2(no-suffix) | 2(suffix) | 3..8 | 1`, so one integer compare answers it),
+    /// which this implementation cannot reuse because its codes are numbered by training gain and
+    /// then permuted into wire order independently.
+    ///
+    /// A 3-8 byte symbol can only match at a position whose first two bytes equal the symbol's
+    /// own, so a clear bit proves no hash-table entry can match and the probe is pure waste. The
+    /// converse is not required: the bit may be set while the probe still misses (the hash table
+    /// is lossy and drops symbols on collision), which costs a wasted probe, never a wrong answer.
+    ///
+    /// 65536 bits = 8 KB, so this stays L1-resident next to a 256 KB [#table] whose probe it
+    /// avoids.
+    private final long[] longerPrefix;
+
+    private ShortCodeTable(int[] table, long[] longerPrefix) {
         this.table = table;
+        this.longerPrefix = longerPrefix;
     }
 
     /// Builds the table from symbols in descending-gain order, keeping only the length-1 and
@@ -51,21 +70,32 @@ final class ShortCodeTable {
     /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
     /// @return a table resolving 0/1/2-byte matches for any two-byte input prefix
     static ShortCodeTable of(List<Symbol> symbolsByGainDescending) {
-        return of(symbolsByGainDescending, null);
+        return of(symbolsByGainDescending, (ShortCodeTable) null);
     }
 
-    /// Same as [#of(List)], but re-seeds `reuse` in place instead of allocating a fresh backing
-    /// array, avoiding a repeated 256 KB allocation when many tables are built in a tight sequence
-    /// (training rebuilds one per generation). Passing a previous table's own array (via
-    /// [#rawTable()]) is only safe once that table is never read again — see
-    /// [Matcher#rebuild(List, Matcher)].
+    /// Same as [#of(List)], but re-seeds `reuse`'s backing arrays in place instead of allocating
+    /// fresh ones, avoiding a repeated 256 KB + 8 KB allocation when many tables are built in a
+    /// tight sequence (training rebuilds one per generation). Taking the previous table rather than
+    /// its raw array keeps both arrays reused together — an earlier version handed over only the
+    /// `int[]` and silently re-allocated the prefix bitset on every generation. Safe only once
+    /// `reuse` is never read again — see [Matcher#rebuild(List, Matcher)].
     ///
     /// @param symbolsByGainDescending the trained symbols, code = list index, gain-descending
-    /// @param reuse a [#SLOTS]-length array to re-seed in place, or `null` to allocate fresh
+    /// @param reuse a table whose arrays this call overwrites, or `null` to allocate fresh
     /// @return a table resolving 0/1/2-byte matches for any two-byte input prefix
-    static ShortCodeTable of(List<Symbol> symbolsByGainDescending, int[] reuse) {
-        int[] table = reuse != null ? reuse : new int[SLOTS];
+    static ShortCodeTable of(List<Symbol> symbolsByGainDescending, ShortCodeTable reuse) {
+        int[] table = reuse != null ? reuse.table : new int[SLOTS];
         Arrays.fill(table, NO_MATCH);
+        long[] longerPrefix = reuse != null ? reuse.longerPrefix : new long[SLOTS / Long.SIZE];
+        // Stale bits would only ever cause a redundant probe, never a wrong match, but they
+        // accumulate across generations and would erode the skip back to always probing.
+        Arrays.fill(longerPrefix, 0L);
+        for (Symbol symbol : symbolsByGainDescending) {
+            if (symbol.length() >= 3) {
+                int key = (int) (symbol.packedBytes() & 0xFFFF);
+                longerPrefix[key >>> 6] |= 1L << key;
+            }
+        }
         for (int code = 0; code < symbolsByGainDescending.size(); code++) {
             Symbol symbol = symbolsByGainDescending.get(code);
             if (symbol.length() == 1) {
@@ -86,7 +116,20 @@ final class ShortCodeTable {
                 table[key] = code << 8 | 2;
             }
         }
-        return new ShortCodeTable(table);
+        return new ShortCodeTable(table, longerPrefix);
+    }
+
+    /// Returns whether any stored 3-8 byte symbol starts with `word`'s first two bytes, i.e.
+    /// whether a [LossyPerfectHashTable] probe here could match at all.
+    ///
+    /// `false` is a proof of absence: the caller may skip the probe entirely. `true` is only a
+    /// possibility, so the caller must still probe and handle a miss.
+    ///
+    /// @param word an input word; only its low 16 bits (first two input bytes) are consulted
+    /// @return `false` when no 3-8 byte symbol can match at this position
+    boolean mayHaveLongerMatch(long word) {
+        int key = (int) (word & 0xFFFF);
+        return (longerPrefix[key >>> 6] >>> key & 1L) != 0;
     }
 
     /// Returns the match for the low two bytes of `word` as `code << 8 | length`, or
@@ -104,12 +147,4 @@ final class ShortCodeTable {
         return packed & 0xFF;
     }
 
-    /// Exposes this table's backing array so a caller finished with this table can hand it to a
-    /// later [#of(List, int[])] call for reuse instead of leaving it for garbage collection.
-    ///
-    /// @return this table's backing array; the caller must not read or write it once handed back
-    ///         for reuse
-    int[] rawTable() {
-        return table;
-    }
 }

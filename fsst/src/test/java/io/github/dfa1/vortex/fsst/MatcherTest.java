@@ -85,6 +85,36 @@ class MatcherTest {
         assertThat(Matcher.codeOf(result)).isEqualTo(ShortCodeTable.NO_CODE);
     }
 
+    @Test
+    void longestMatch_longSymbolSharingAShortSymbolsPrefix_isStillFound() {
+        // Given — "ab" (2 bytes) and "abc" (3 bytes) share a two-byte prefix, so the hash-probe
+        // skip must NOT fire for that prefix. This is the case the skip could silently break:
+        // returning "ab" for input "abc" stays a *valid* encoding (just worse), so only an
+        // explicit longest-match assertion catches it, never a round-trip test.
+        Matcher sut = Matcher.of(SYMBOLS);
+
+        // When
+        int result = sut.longestMatch(wordOf("abcx"));
+
+        // Then — the 3-byte symbol wins over the 2-byte one sharing its prefix.
+        assertThat(Matcher.codeOf(result)).isEqualTo(1);
+        assertThat(Matcher.lengthOf(result)).isEqualTo(3);
+    }
+
+    @Test
+    void longestMatch_prefixWithNoLongSymbol_fallsBackToShortCode() {
+        // Given — no 3+ byte symbol starts with "ab" other than "abc"; for input "abz" the hash
+        // probe runs (the prefix bit is set by "abc") but misses, and the 2-byte symbol must win.
+        Matcher sut = Matcher.of(SYMBOLS);
+
+        // When
+        int result = sut.longestMatch(wordOf("abzz"));
+
+        // Then
+        assertThat(Matcher.codeOf(result)).isEqualTo(2);
+        assertThat(Matcher.lengthOf(result)).isEqualTo(2);
+    }
+
     /// Packs the low bytes of `s` LSB-first into an 8-byte word, matching the reader's
     /// little-endian interpretation of the input at a match position.
     private static long wordOf(String s) {

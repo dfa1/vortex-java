@@ -2,16 +2,21 @@ package io.github.dfa1.vortex.fsst;
 
 import java.util.List;
 
-/// Branch-free longest-match matcher composing a [LossyPerfectHashTable] (3-8 byte candidates) with
-/// a [ShortCodeTable] (0/1/2 byte candidates), the FSST paper's Algorithm 4.
+/// Longest-match matcher composing a [LossyPerfectHashTable] (3-8 byte candidates) with a
+/// [ShortCodeTable] (0/1/2 byte candidates), the FSST paper's Algorithm 4.
 ///
 /// This replaces the old encoder's `longestMatch`, which probed symbol lengths 8 down to 1 in a
-/// per-position loop (up to eight sequential hash lookups per input byte). Here a single hash-table
-/// lookup plus one masked compare yields the 3-8 byte candidate, a single array read yields the
-/// 0/1/2 byte candidate, and one conditional select picks the longer — no loop over candidate
-/// lengths, no per-length branch. That uniform body is exactly what the hot-loop rule (no
-/// modulo/division/variable-target branch per element) needs to stay JIT-vectorizable, which the
-/// old eight-iteration loop could not deliver.
+/// per-position loop (up to eight sequential hash lookups per input byte). Here one array read
+/// yields the 0/1/2 byte candidate, and at most one hash lookup plus a masked compare yields the
+/// 3-8 byte candidate — no loop over candidate lengths, no per-length branch.
+///
+/// "At most one": the hash lookup is skipped entirely when [ShortCodeTable] reports that no stored
+/// 3-8 byte symbol even begins with the current position's two bytes, since no hash entry could
+/// then match. An earlier version instead probed both tables unconditionally so the select could
+/// lower to a conditional move rather than a data-dependent branch; predicating the probe away
+/// measured faster, because the skipped work is a cache-line read of a 32 KB table and the
+/// predicate itself is one bit out of an 8 KB bitset. This mirrors the Rust reference, which
+/// reaches the same decision through its `has_suffix_code` code renumbering.
 public final class Matcher {
 
     /// Longest symbol length that can be resolved, in bytes.
@@ -61,13 +66,14 @@ public final class Matcher {
     static Matcher rebuild(List<Symbol> symbolsByGainDescending, Matcher previous) {
         return new Matcher(
                 LossyPerfectHashTable.of(symbolsByGainDescending, previous.hashTable.rawTable()),
-                ShortCodeTable.of(symbolsByGainDescending, previous.shortCodes.rawTable()));
+                ShortCodeTable.of(symbolsByGainDescending, previous.shortCodes));
     }
 
     /// Returns the longest match at the current input position packed as `code << 8 | length`.
     ///
-    /// The hash table is consulted first for a 3-8 byte candidate; on a real hit that candidate is
-    /// returned, otherwise the result falls back to the short-code table's 0/1/2 byte answer. A
+    /// The short-code table is read first, both for its 0/1/2 byte candidate and for whether any
+    /// 3-8 byte symbol can start here at all; the hash table is consulted only when one can, and on
+    /// a real hit its longer candidate wins. Otherwise the short-code answer stands. A
     /// length of 0 (and code [ShortCodeTable#NO_CODE]) means no symbol matched and the caller must
     /// escape the current byte. Callers that want the parts separately can use
     /// [#codeOf(int)] and [#lengthOf(int)].
@@ -76,12 +82,17 @@ public final class Matcher {
     ///             any bytes past the remaining input already zero-padded by the caller
     /// @return the longest match as `code << 8 | length`; length 0 signals "no match, escape"
     public int longestMatch(long word) {
-        // Both tables are read unconditionally so the select below has no side to skip — the JIT
-        // can lower it to a conditional move instead of a data-dependent branch, which matters
-        // because hash hit/miss alternates unpredictably across input positions. The extra
-        // short-code read on a hash hit is one L1 load into a 256 KB table.
-        int hashMatch = hashTable.lookup(word);
         int shortMatch = shortCodes.packedFor(word);
+        // Skip the hash probe when no 3-8 byte symbol even starts with these two bytes — then no
+        // hash entry can match and the short-code answer is already the longest one. This is the
+        // Rust reference's predicated `has_suffix_code` skip; it replaces this method's earlier
+        // "probe both tables unconditionally so the select is a conditional move" shape, which
+        // paid the 32 KB hash table's cache-line read at every input position, including the many
+        // positions where a match was structurally impossible.
+        if (!shortCodes.mayHaveLongerMatch(word)) {
+            return shortMatch;
+        }
+        int hashMatch = hashTable.lookup(word);
         return hashMatch != 0 ? hashMatch : shortMatch;
     }
 
