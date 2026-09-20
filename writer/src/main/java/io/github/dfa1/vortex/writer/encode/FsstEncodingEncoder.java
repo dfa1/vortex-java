@@ -138,12 +138,64 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
         long totalInput = rowOffsets[n];
         int maxUncompLen = 0;
+        int[] uncompLens = new int[n];
         for (int i = 0; i < n; i++) {
-            maxUncompLen = Math.max(maxUncompLen, rowOffsets[i + 1] - rowOffsets[i]);
+            uncompLens[i] = rowOffsets[i + 1] - rowOffsets[i];
+            maxUncompLen = Math.max(maxUncompLen, uncompLens[i]);
         }
 
         Compressor trained = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED)
                                      .train(rowBytes, rowOffsets, n);
+
+        // byte[]-input overload over the shared row buffer: the intrinsified VarHandle word load
+        // is faster than wrapping each row in a MemorySegment first, and the row is addressed as
+        // a range of the contiguous array rather than an array of its own.
+        return finishCompress(trained, n, totalInput, maxUncompLen, uncompLens, arena,
+                (compressor, i, scratch, destOffset) -> compressor.compress(
+                        rowBytes, rowOffsets[i], rowOffsets[i + 1], scratch, destOffset));
+    }
+
+    /// Per-row fallback for corpora whose bytes exceed a single `byte[]` (over 2 GB in one chunk),
+    /// where [VarBinBytes#toContiguous] cannot produce a shared buffer. Identical in output to the
+    /// contiguous path — same sample, same table, same code stream — just addressing each row as
+    /// its own array.
+    private static Fsst compressPerRow(byte[][] byteArrays, Arena arena) {
+        int n = byteArrays.length;
+
+        long totalInput = 0;
+        int maxUncompLen = 0;
+        int[] uncompLens = new int[n];
+        for (int i = 0; i < n; i++) {
+            uncompLens[i] = byteArrays[i].length;
+            totalInput += uncompLens[i];
+            maxUncompLen = Math.max(maxUncompLen, uncompLens[i]);
+        }
+
+        Compressor trained = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED).train(byteArrays);
+
+        return finishCompress(trained, n, totalInput, maxUncompLen, uncompLens, arena,
+                (compressor, i, scratch, destOffset) -> {
+                    byte[] row = byteArrays[i];
+                    return compressor.compress(row, 0, row.length, scratch, destOffset);
+                });
+    }
+
+    /// Shared tail of `compress`/`compressPerRow`: renumbers the trained symbol table to wire
+    /// order, lays out the symbol buffers, then drives `rowCompressor` over every row into one
+    /// arena scratch segment. Identical for both row-storage shapes — only how a row's bytes are
+    /// located differs, which `rowCompressor` encapsulates.
+    ///
+    /// @param trained       the compressor after training, not yet renumbered to wire order
+    /// @param n             the row count
+    /// @param totalInput    total input bytes across all rows, bounding the compressed scratch size
+    /// @param maxUncompLen  the longest row's uncompressed length, for choosing `uncompLenPType`
+    /// @param uncompLens    each row's uncompressed length, already computed by the caller
+    /// @param arena         arena backing the symbol/compressed buffers
+    /// @param rowCompressor compresses row `i` into `scratch` starting at `destOffset`, returning
+    ///                      the new total compressed length
+    /// @return the FSST compression product ready for wire layout
+    private static Fsst finishCompress(Compressor trained, int n, long totalInput, int maxUncompLen,
+            int[] uncompLens, Arena arena, RowCompressor rowCompressor) {
         int numSymbols = trained.symbolCount();
 
         // Wire order: the wire lists symbols in length order (multi-byte length-ascending, then
@@ -160,7 +212,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         }
 
         // Renumber the trained compressor's own codes to wire order (reusing its matcher's backing
-        // arrays) so compress() emits wire codes directly — no second pass remapping every emitted
+        // arrays) so compression emits wire codes directly — no second pass remapping every emitted
         // code byte afterward. trained itself must not be read again past this point.
         Compressor compressor = trained.withCodeOrder(wireOrder);
 
@@ -175,11 +227,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         int[] codesOffsets = new int[n + 1];
         long totalCompressed = 0;
         for (int i = 0; i < n; i++) {
-            // byte[]-input overload over the shared row buffer: the intrinsified VarHandle word
-            // load is faster than wrapping each row in a MemorySegment first, and the row is
-            // addressed as a range of the contiguous array rather than an array of its own.
-            totalCompressed = compressor.compress(
-                    rowBytes, rowOffsets[i], rowOffsets[i + 1], scratch, totalCompressed);
+            totalCompressed = rowCompressor.compress(compressor, i, scratch, totalCompressed);
             codesOffsets[i + 1] = Math.toIntExact(totalCompressed);
         }
 
@@ -194,11 +242,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         PType uncompLenPType = PType.narrowestUnsigned(maxUncompLen);
         PType codesOffPType = PType.narrowestUnsigned(totalCompressed);
 
-        int[] uncompLens = new int[n];
-        for (int i = 0; i < n; i++) {
-            uncompLens[i] = rowOffsets[i + 1] - rowOffsets[i];
-        }
-
         byte[] metaBytes = new ProtoFSSTMetadata(
                 io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(uncompLenPType.ordinal()),
                 io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(codesOffPType.ordinal())
@@ -208,62 +251,11 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 uncompLenPType, codesOffPType, n);
     }
 
-    /// Per-row fallback for corpora whose bytes exceed a single `byte[]` (over 2 GB in one chunk),
-    /// where [VarBinBytes#toContiguous] cannot produce a shared buffer. Identical in output to the
-    /// contiguous path — same sample, same table, same code stream — just addressing each row as
-    /// its own array.
-    private static Fsst compressPerRow(byte[][] byteArrays, Arena arena) {
-        int n = byteArrays.length;
-
-        long totalInput = 0;
-        int maxUncompLen = 0;
-        for (byte[] row : byteArrays) {
-            totalInput += row.length;
-            maxUncompLen = Math.max(maxUncompLen, row.length);
-        }
-
-        Compressor trained = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED).train(byteArrays);
-        int numSymbols = trained.symbolCount();
-        int[] wireOrder = trained.codesSortedByLength();
-
-        MemorySegment symBuf = arena.allocate(Math.max(numSymbols * 8L, 1), 8);
-        MemorySegment symLenBuf = arena.allocate(Math.max(numSymbols, 1));
-        for (int i = 0; i < numSymbols; i++) {
-            int internalCode = wireOrder[i];
-            symBuf.setAtIndex(VortexFormat.LE_LONG, i, trained.packedSymbol(internalCode));
-            symLenBuf.set(ValueLayout.JAVA_BYTE, i, (byte) trained.symbolLength(internalCode));
-        }
-
-        Compressor compressor = trained.withCodeOrder(wireOrder);
-
-        MemorySegment scratch = arena.allocate(Math.max(2 * totalInput, 1));
-        // codesOffsets[0] stays its default 0; each row's end is written directly at
-        // codesOffsets[i + 1] as it compresses (see compress()'s equivalent loop).
-        int[] codesOffsets = new int[n + 1];
-        long totalCompressed = 0;
-        for (int i = 0; i < n; i++) {
-            byte[] row = byteArrays[i];
-            totalCompressed = compressor.compress(row, 0, row.length, scratch, totalCompressed);
-            codesOffsets[i + 1] = Math.toIntExact(totalCompressed);
-        }
-
-        MemorySegment compBuf = scratch.asSlice(0, totalCompressed).asReadOnly();
-
-        PType uncompLenPType = PType.narrowestUnsigned(maxUncompLen);
-        PType codesOffPType = PType.narrowestUnsigned(totalCompressed);
-
-        int[] uncompLens = new int[n];
-        for (int i = 0; i < n; i++) {
-            uncompLens[i] = byteArrays[i].length;
-        }
-
-        byte[] metaBytes = new ProtoFSSTMetadata(
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(uncompLenPType.ordinal()),
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(codesOffPType.ordinal())
-        ).encode();
-
-        return new Fsst(symBuf, symLenBuf, compBuf, metaBytes, uncompLens, codesOffsets,
-                uncompLenPType, codesOffPType, n);
+    /// Compresses one row into `scratch` starting at `destOffset`, returning the new total
+    /// compressed length — abstracts over how `compress`/`compressPerRow` locate a row's bytes.
+    @FunctionalInterface
+    private interface RowCompressor {
+        long compress(Compressor compressor, int rowIndex, MemorySegment scratch, long destOffset);
     }
 
     /// Copies unsigned values into the narrowest Java array matching `ptype` (U8→`byte[]`,
