@@ -47,6 +47,7 @@ class SampleTest {
         // Then
         assertThat(result.chunkCount()).isZero();
         assertThat(result.bytes()).isEmpty();
+        assertThat(result.chunkCountForGeneration(0)).isZero();
     }
 
     @Test

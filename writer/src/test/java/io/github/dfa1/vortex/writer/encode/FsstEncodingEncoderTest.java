@@ -262,6 +262,35 @@ class FsstEncodingEncoderTest {
             }
             return max;
         }
+
+        @Test
+        void compressPerRow_thenDecode_roundtrips() {
+            // Given — the per-row fallback that VarBinBytes#toContiguous hands off to once a
+            // corpus exceeds 2 GB in one shared array; that threshold can't be reached in a unit
+            // test, so this drives the fallback directly (package-private for this reason) with
+            // ordinary small rows. Its output must decode identically to the contiguous path's.
+            byte[][] rows = {
+                    "hello".getBytes(StandardCharsets.UTF_8),
+                    "hello world".getBytes(StandardCharsets.UTF_8),
+                    {},
+                    "hello again".getBytes(StandardCharsets.UTF_8)
+            };
+            Arena arena = Arena.ofAuto();
+
+            // When
+            var fsst = FsstEncodingEncoder.compressPerRow(rows, arena);
+            EncodeResult result = FsstEncodingEncoder.toEncodeResult(fsst, arena);
+            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            ArrayNode node = toArrayNode(result.rootNode());
+            DecodeContext ctx = new DecodeContext(node, DTypes.BINARY, rows.length, bufs, REGISTRY, arena);
+            var decoded = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(rows.length);
+            for (int i = 0; i < rows.length; i++) {
+                assertThat(decoded.getBytes(i)).as("index %d", i).isEqualTo(rows[i]);
+            }
+        }
     }
 
     @Nested
@@ -471,6 +500,22 @@ class FsstEncodingEncoderTest {
             assertThat(result.openChildren()).extracting(ChildSlot::parentChildIdx).containsExactly(0, 1);
             assertThat(result.openChildren())
                     .allSatisfy(slot -> assertThat(slot.childDtype()).isInstanceOf(DType.Primitive.class));
+        }
+
+        @Test
+        void encodeCascade_uncompLenPastU16Range_exposesIntChild() {
+            // Given — a single row past 65535 bytes pushes uncompLenPType to U32, the one tier
+            // typedUnsigned's switch doesn't special-case (it falls to the `default -> vals`
+            // branch and hands back the int[] as-is).
+            var ctx = EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.loadAll());
+            String[] data = {"a".repeat(70_000)};
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DTypes.UTF8, data, ctx);
+
+            // Then — the open uncompressed-length child (index 0) carries a plain int[], not the
+            // byte[]/short[] the U8/U16 tiers would produce.
+            assertThat(result.openChildren().get(0).childData()).isInstanceOf(int[].class);
         }
 
         @Test

@@ -52,11 +52,22 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         Arena arena = ctx.arena();
-        Fsst c = compress(data, arena);
+        return toEncodeResult(compress(data, arena), arena);
+    }
 
-        // Terminal layout: the per-row length and cumulative-offset children are raw primitive
-        // segments (buffers 3 and 4). The cascading path (encodeCascade) instead exposes them as
-        // open child slots so they can be bitpacked/constant-folded.
+    /// Lays out a compression product in the terminal `vortex.fsst` wire format: the per-row
+    /// length and cumulative-offset children as raw primitive segments (buffers 3 and 4). The
+    /// cascading path ([#encodeCascade]) instead exposes them as open child slots so they can be
+    /// bitpacked/constant-folded.
+    ///
+    /// Package-private so tests can drive it directly off a [#compressPerRow] result — the
+    /// fallback path only [VarBinBytes#toContiguous] can trigger, at a >2 GB corpus no unit test
+    /// can afford to allocate.
+    ///
+    /// @param c     the compression product to lay out
+    /// @param arena arena backing the length/offset buffers
+    /// @return the terminal `vortex.fsst` encode result
+    static EncodeResult toEncodeResult(Fsst c, Arena arena) {
         long uncompLenBytes = c.uncompLenPType().byteSize();
         MemorySegment uncompLenBuf = arena.allocate(Math.max((long) c.n() * uncompLenBytes, 1));
         for (int i = 0; i < c.n(); i++) {
@@ -116,7 +127,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// [ProtoFSSTMetadata] bytes, and the per-row uncompressed lengths / cumulative code offsets as
     /// plain `int[]` (the two offset children, in narrowest-unsigned ptypes).
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-    private record Fsst(
+    record Fsst(
             MemorySegment symBuf, MemorySegment symLenBuf, MemorySegment compBuf,
             byte[] metaBytes, int[] uncompLens, int[] codesOffsets,
             PType uncompLenPType, PType codesOffPType, int n) {
@@ -158,8 +169,9 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// Per-row fallback for corpora whose bytes exceed a single `byte[]` (over 2 GB in one chunk),
     /// where [VarBinBytes#toContiguous] cannot produce a shared buffer. Identical in output to the
     /// contiguous path — same sample, same table, same code stream — just addressing each row as
-    /// its own array.
-    private static Fsst compressPerRow(byte[][] byteArrays, Arena arena) {
+    /// its own array. Package-private (rather than `private`) so a test can drive this path
+    /// directly — the public path only reaches it past a >2 GB corpus.
+    static Fsst compressPerRow(byte[][] byteArrays, Arena arena) {
         int n = byteArrays.length;
 
         long totalInput = 0;
