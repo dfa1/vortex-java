@@ -7,6 +7,8 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoListViewMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ListViewArray;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
@@ -37,18 +39,23 @@ class ListViewEncodingDecoderTest {
     }
 
     @Test
-    void decode_validityChildOnNonNullableDtype_throws() {
-        // Given a four-child node — i.e. one carrying validity — under a dtype the file itself
-        // declares non-nullable. Decoding it would hand back an array reporting nullable=true
-        // while the column's declared dtype says otherwise, so a consumer trusting that dtype
-        // would read the null rows' placeholder slots as real values: a silent wrong answer.
+    void decode_validityChildOnNonNullableDtype_ignoresIt() {
+        // Given a four-child node — i.e. one carrying a validity slot — under a dtype the file
+        // itself declares non-nullable. The Rust reference's own contract is that a non-nullable
+        // array's validity hook is never consulted (`ValidityVTable`: "non-nullable arrays bypass
+        // this hook"), and its explicit-normalization writer (0.86+) emits a structurally uniform
+        // four-child node regardless of nullability — so the fourth child here is not a
+        // contradiction to reject, just unused. Confirmed against the real vortex-compat-fixtures
+        // `map.vortex` fixture (v0.86.1), whose non-nullable map columns hit exactly this shape.
         DecodeContext ctx = TestDecodeContexts.of(nodeWithChildren(4), LIST_I32)
                                               .rowCount(2).registry(registry).build();
 
-        // When / Then
-        assertThatThrownBy(() -> sut.decode(ctx))
-                .isInstanceOf(VortexException.class)
-                .hasMessageContaining("validity child present but the declared dtype is non-nullable");
+        // When
+        Array result = sut.decode(ctx);
+
+        // Then — a plain, non-masked ListViewArray; the validity child is never even decoded
+        assertThat(result).isInstanceOf(ListViewArray.class);
+        assertThat(result.dtype()).isEqualTo(LIST_I32);
     }
 
     @Test

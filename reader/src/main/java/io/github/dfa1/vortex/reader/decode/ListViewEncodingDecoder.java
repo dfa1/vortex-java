@@ -55,23 +55,18 @@ public final class ListViewEncodingDecoder implements EncodingDecoder {
         Array offsets = ctx.decodeChild(1, offsetsDtype, outerLen);
         Array sizes = ctx.decodeChild(2, sizesDtype, outerLen);
 
-        if (nchildren == 3) {
-            return new ListViewArray(listDtype, outerLen, elements, offsets, sizes);
-        }
-
         // A list-view carries its own validity in a fourth child slot rather than under a
         // vortex.masked wrapper — that is how the Rust reference stores a nullable list, and
         // vortex.map relies on it because it requires its entries child to be a bare list-view.
         //
-        // A validity slot under a dtype the file itself declares non-nullable is a
-        // contradiction, and one that cannot be resolved silently: the decoded array would
-        // report nullable=true while the column's declared dtype (what Chunk.Column hands
-        // downstream) says nullable=false, so a consumer trusting the declared dtype would read
-        // the null rows' placeholder slots as real values. Fail loudly instead — a crafted file
-        // must never produce a wrong answer.
-        if (!listDtype.nullable()) {
-            throw new VortexException(EncodingId.VORTEX_LISTVIEW,
-                    "validity child present but the declared dtype is non-nullable: " + listDtype);
+        // The declared dtype's nullability is authoritative, not the fourth child's mere
+        // presence: the Rust reference's own `ValidityVTable` contract is that "non-nullable
+        // arrays bypass this hook" entirely, and its explicit-normalization writer (0.86+) may
+        // emit a structurally uniform four-child node even for a non-nullable list-view. So a
+        // fourth child under a non-nullable dtype is not a contradiction to reject — it is simply
+        // not consulted.
+        if (nchildren == 3 || !listDtype.nullable()) {
+            return new ListViewArray(listDtype, outerLen, elements, offsets, sizes);
         }
         Array validityArray = ctx.decodeChild(3, DType.BOOL, outerLen);
         BoolArray validity = MaskedArray.requireBoolArray(validityArray, EncodingId.VORTEX_LISTVIEW, "validity child");
