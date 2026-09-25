@@ -3,9 +3,11 @@ package io.github.dfa1.vortex.calcite;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -32,6 +34,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     private final AtomicLong chunksScannedLastQuery;
     private final String[] names;
     private final DType[] types;
+    private final RowFilter exactFilter;
     private final VortexReader reader;
     private final ScanIterator scan;
     private Chunk chunk;
@@ -46,12 +49,18 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     /// @param options                the scan options (projection plus any pushed [io.github.dfa1.vortex.reader.RowFilter])
     /// @param names                  output column names, in emission order
     /// @param types                  output column dtypes, parallel to `names`
+    /// @param exactFilter            a predicate [VortexTable#scan(DataContext, java.util.List, int[])]
+    ///                               removed from Calcite's own re-check list, enforced here row-by-row
+    ///                               via [Compute#matches(Chunk, RowFilter, long)] so the result stays
+    ///                               exact — or `null` when every pushed predicate is still Calcite's to
+    ///                               re-check
     VortexEnumerator(Path file, AtomicLong chunksScannedLastQuery, ScanOptions options,
-                      String[] names, DType[] types) {
+                      String[] names, DType[] types, RowFilter exactFilter) {
         this.file = file;
         this.chunksScannedLastQuery = chunksScannedLastQuery;
         this.names = names;
         this.types = types;
+        this.exactFilter = exactFilter;
         chunksScannedLastQuery.set(0);
         VortexReader openedReader = null;
         try {
@@ -82,6 +91,10 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     public boolean moveNext() {
         while (true) {
             if (chunk != null && rowInChunk < chunkRows) {
+                if (exactFilter != null && !Compute.matches(chunk, exactFilter, rowInChunk)) {
+                    rowInChunk++;
+                    continue;
+                }
                 Object[] row = new Object[names.length];
                 for (int c = 0; c < names.length; c++) {
                     row[c] = value(columns[c], types[c], rowInChunk);

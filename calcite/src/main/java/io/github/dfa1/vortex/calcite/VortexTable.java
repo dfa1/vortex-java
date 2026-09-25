@@ -40,11 +40,15 @@ import java.util.concurrent.atomic.AtomicLong;
 /// zone-map filter push-down.
 ///
 /// Projection (`projects`) is honored exactly — only the requested columns are decoded and
-/// returned. Filters (`filters`) that translate to a [RowFilter] are pushed into the scan for
-/// *chunk skipping* via zone-map statistics, but are **left in Calcite's list** rather than
-/// consumed: zone-map pruning is approximate (it drops whole chunks that cannot match, not
-/// individual rows), so Calcite must still apply the predicate row-by-row for exactness. The
-/// win is decoding far fewer chunks when the filter is selective on a clustered column.
+/// returned. Every filter (`filters`) that translates to a [RowFilter] is pushed into the scan for
+/// *chunk skipping* via zone-map statistics (approximate — it drops whole chunks that cannot
+/// match, not individual rows). A filter captured *in full* by the translation, and over no
+/// floating column, is additionally enforced row-by-row in the returned enumerator and removed
+/// from Calcite's own `filters` list, so Calcite does not also re-check it; a filter the
+/// translation only partially captures, or one over a floating column (whose NaN ordering this
+/// module's comparator gets wrong), is left in `filters` for Calcite's own row check. The win is
+/// decoding far fewer chunks when the filter is selective on a clustered column, and — for a
+/// fully captured filter — not re-evaluating it a second time over the chunks that are decoded.
 public final class VortexTable extends AbstractTable implements ProjectableFilterableTable, TranslatableTable {
 
     private final Path file;
@@ -615,6 +619,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters, int[] projects) {
         DType.Struct struct = struct();
         List<String> allNames = struct.fieldNames().stream().map(ColumnName::value).toList();
+        List<DType> allTypes = struct.fieldTypes();
 
         // Projection: the columns to decode and emit, in the order Calcite asked for. A null
         // projects array means "all columns".
@@ -623,33 +628,69 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         DType[] outTypes = new DType[cols.length];
         for (int i = 0; i < cols.length; i++) {
             outNames[i] = allNames.get(cols[i]);
-            outTypes[i] = struct.fieldTypes().get(cols[i]);
+            outTypes[i] = allTypes.get(cols[i]);
         }
 
-        // Filter push-down: build a RowFilter from the predicates we understand (for chunk skip).
-        // Do NOT remove anything from `filters` — pruning is approximate, Calcite re-checks rows.
-        Optional<RowFilter> pushed = RexFilterTranslator.toRowFilter(filters, allNames, struct.fieldTypes());
+        // Filter push-down for chunk-skip: every predicate we understand, applied leniently (an
+        // untranslatable conjunct is just dropped rather than abandoning the whole rewrite).
+        Optional<RowFilter> pushed = RexFilterTranslator.toRowFilter(filters, allNames, allTypes);
 
-        // The scan must include any column the filter prunes on, even when it is not projected —
-        // chunk pruning reads that column's zone-map stats. Output still emits only outNames.
+        // Exact push-down: a top-level predicate captured *in full* is enforced row-by-row below
+        // (via Compute#matches) and removed from Calcite's own re-check list, so Calcite stops
+        // redundantly re-evaluating rows this scan has already excluded — Calcite's
+        // TableScanNode#createProjectableFilterable wraps a `.where()` residual check around
+        // whatever is still left in `filters` after this call returns. Skipped for any predicate
+        // over a floating column: enforcing it here would share Compare's Double.compare
+        // NaN-as-maximum ordering, which disagrees with SQL's NaN-is-never-true comparisons — the
+        // same reason [#filteredFold(RowFilter, String)] excludes floating filter columns. Left in
+        // `filters`, such a predicate is still applied correctly by Calcite's own NaN-correct check.
+        List<RowFilter> exactParts = new ArrayList<>();
+        java.util.Iterator<RexNode> it = filters.iterator();
+        while (it.hasNext()) {
+            RexNode node = it.next();
+            Optional<RowFilter> exact = RexFilterTranslator.translateStrict(List.of(node), allNames, allTypes);
+            if (exact.isPresent() && !referencesFloating(exact.get(), struct)) {
+                exactParts.add(exact.get());
+                it.remove();
+            }
+        }
+        RowFilter exactFilter = exactParts.isEmpty() ? null
+                : exactParts.size() == 1 ? exactParts.getFirst()
+                : RowFilter.and(exactParts.toArray(RowFilter[]::new));
+
+        // The scan must decode any column a filter needs — pruning or exact enforcement — even
+        // when it is not projected. Output still emits only outNames.
         java.util.LinkedHashSet<String> scanColumns = new java.util.LinkedHashSet<>(List.of(outNames));
-        ScanOptions options;
+        pushed.ifPresent(f -> RexFilterTranslator.collectColumns(f, scanColumns));
+        if (exactFilter != null) {
+            RexFilterTranslator.collectColumns(exactFilter, scanColumns);
+        }
+        ScanOptions options = ScanOptions.columns(scanColumns.toArray(String[]::new));
         if (pushed.isPresent()) {
-            RexFilterTranslator.collectColumns(pushed.get(), scanColumns);
-            options = ScanOptions.columns(scanColumns.toArray(String[]::new)).withFilter(pushed.get());
-        } else {
-            options = ScanOptions.columns(outNames);
+            options = options.withFilter(pushed.get());
         }
 
         // Stream rows lazily: decode one chunk at a time and yield a fresh row, so rows die young
         // (in G1's young gen) instead of piling a whole-result List<Object[]> into the old gen — the
         // dominant cost an async-profiler run showed for the full-scan path (~72% in GC).
         ScanOptions scanOptions = options;
+        RowFilter enumeratorFilter = exactFilter;
         return new AbstractEnumerable<>() {
             @Override
             public Enumerator<Object[]> enumerator() {
-                return new VortexEnumerator(file, chunksScannedLastQuery, scanOptions, outNames, outTypes);
+                return new VortexEnumerator(file, chunksScannedLastQuery, scanOptions, outNames, outTypes,
+                        enumeratorFilter);
             }
+        };
+    }
+
+    /// Whether `filter` references any floating-point column — the guard behind the row-by-row
+    /// exact push-down in [#scan(DataContext, List, int[])], for the same NaN-ordering reason as
+    /// [#isFloating(DType.Struct, String)]'s use in [#filteredFold(RowFilter, String)].
+    private static boolean referencesFloating(RowFilter filter, DType.Struct struct) {
+        return switch (filter) {
+            case RowFilter.And(var parts) -> parts.stream().anyMatch(p -> referencesFloating(p, struct));
+            case RowFilter.Column(var col, var _) -> isFloating(struct, col.value());
         };
     }
 

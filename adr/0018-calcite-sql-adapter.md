@@ -107,9 +107,13 @@ Phases 0–2 are implemented and tested:
 
 - **Phase 1 landed.** `VortexTable` is a `ProjectableFilterableTable`: projection prunes columns;
   `=, <>, <, <=, >, >=, AND, BETWEEN, IN` translate to a reader `RowFilter` for zone-map chunk
-  skipping. Filters are pushed but **not consumed** (whole-chunk pruning is approximate, so
-  Calcite still row-filters). Demo: a `date` range over 1M rows decodes **1 of 100 chunks** (99%
-  pruned), exact result, and `EXPLAIN` shows `filters`/`projects` folded into `BindableTableScan`.
+  skipping. A predicate captured *in full* (and over no floating column — see below) is also
+  enforced row-by-row in the enumerator via `Compute#matches` and removed from Calcite's own
+  filters list, so Calcite does not wrap a redundant `.where()` re-check around it; a predicate
+  the translation only partially captures, or one over a floating column, is left in the list for
+  Calcite's own (NaN-correct) row check. Demo: a `date` range over 1M rows decodes **1 of 100
+  chunks** (99% pruned), exact result, and `EXPLAIN` shows `filters`/`projects` folded into
+  `BindableTableScan`.
 - **Phase 2 landed (MIN/MAX/COUNT/SUM/AVG).** `VortexAggregatePushDownRule` rewrites a whole-table
   `MIN`/`MAX`/`COUNT`/`SUM` (no `GROUP BY`, numeric columns) into a single-row `LogicalValues` from
   the stats — the optimized plan has **no scan and no aggregate**. `SUM` folds the per-zone `SUM`

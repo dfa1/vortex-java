@@ -6,11 +6,20 @@ import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
 import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
+import org.apache.calcite.linq4j.Enumerator;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rex.RexBuilder;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.math.BigDecimal;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -18,6 +27,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -100,5 +111,60 @@ class FilterPushDownTest {
             // Then the row count is exact regardless of whether the predicate was pushed
             assertThat(rows).isEqualTo(expected);
         }
+    }
+
+    // Issue #406 "double-filtering": a predicate VortexTable captures *in full* must be removed
+    // from Calcite's own filters list, not just used for zone-map pruning — otherwise
+    // TableScanNode#createProjectableFilterable wraps a redundant `.where()` re-check around it,
+    // so nothing is actually saved for the rows that do get decoded. These two drive
+    // VortexTable#scan directly with a raw, mutable RexNode list (as Calcite's interpreter does)
+    // to assert on that list's contents after the call, which the JDBC-level tests above cannot
+    // observe.
+
+    @Test
+    void fullyCapturedPredicateIsRemovedFromCalcitesRecheckList() throws Exception {
+        // Given a comparison over a non-floating column (i64, field 0)
+        RexBuilder rexBuilder = new RexBuilder(new JavaTypeFactoryImpl());
+        RelDataType bigint = rexBuilder.getTypeFactory().createSqlType(SqlTypeName.BIGINT);
+        RexNode predicate = rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+                rexBuilder.makeInputRef(bigint, 0), rexBuilder.makeExactLiteral(BigDecimal.valueOf(1000L), bigint));
+        List<RexNode> filters = new ArrayList<>(List.of(predicate));
+
+        // When
+        List<Object[]> rows = new ArrayList<>();
+        try (Enumerator<Object[]> en = new VortexTable(file).scan(null, filters, null).enumerator()) {
+            while (en.moveNext()) {
+                rows.add(en.current());
+            }
+        }
+
+        // Then VortexTable enforced the predicate itself (rows stay exact) and told Calcite it no
+        // longer needs to: the fix is exactly this list ending up empty.
+        assertThat(filters).isEmpty();
+        assertThat(rows).hasSize(1);
+    }
+
+    @Test
+    void floatingColumnPredicateIsLeftForCalciteToRecheck() throws Exception {
+        // Given a comparison over a floating column (f64, field 2): Compare's Double.compare
+        // orders NaN as the maximum, disagreeing with SQL's NaN-is-never-true comparisons, so
+        // VortexTable must not enforce this one itself (see VortexTable#referencesFloating).
+        RexBuilder rexBuilder = new RexBuilder(new JavaTypeFactoryImpl());
+        RelDataType doubleType = rexBuilder.getTypeFactory().createSqlType(SqlTypeName.DOUBLE);
+        RexNode predicate = rexBuilder.makeCall(SqlStdOperatorTable.GREATER_THAN,
+                rexBuilder.makeInputRef(doubleType, 2), rexBuilder.makeApproxLiteral(BigDecimal.valueOf(3.0), doubleType));
+        List<RexNode> filters = new ArrayList<>(List.of(predicate));
+
+        // When
+        List<Object[]> rows = new ArrayList<>();
+        try (Enumerator<Object[]> en = new VortexTable(file).scan(null, filters, null).enumerator()) {
+            while (en.moveNext()) {
+                rows.add(en.current());
+            }
+        }
+
+        // Then the predicate stays in Calcite's list — still applied, just not by VortexTable
+        assertThat(filters).hasSize(1);
+        assertThat(rows).hasSize(3); // zone-map pruning still applies, so the boundary chunk is decoded whole
     }
 }

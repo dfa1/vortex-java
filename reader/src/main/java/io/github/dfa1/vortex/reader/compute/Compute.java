@@ -18,6 +18,9 @@ import java.util.Objects;
 /// [#filteredSum(Array, Predicate, Array)] filters one column and totals a second; the multi-column
 /// [#filteredAggregate(Chunk, RowFilter, String)] evaluates a whole [RowFilter] and folds an
 /// aggregate column's `SUM` / `MIN` / `MAX` / non-null count over the rows it selects.
+/// [#matches(Chunk, RowFilter, long)] is the un-fused, per-row counterpart of the two: a plain
+/// boolean test with no aggregate at all, for a caller that needs to select rows rather than reduce
+/// them.
 ///
 /// Null handling follows the Rust reference: a filter excludes null positions (a null value makes a
 /// value predicate false), and the reduce skips them — `SUM` and `COUNT` over zero selected non-null
@@ -70,5 +73,40 @@ public final class Compute {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(filter, "filter");
         return FusedFilterAggregate.aggregate(chunk, filter, aggColumn);
+    }
+
+    /// Evaluates `filter` against a single row of `chunk`'s already-decoded columns, the un-fused
+    /// counterpart of [#filteredAggregate(Chunk, RowFilter, String)] for a caller that needs one
+    /// row's yes/no answer rather than a folded aggregate — for example, a downstream adapter that
+    /// decodes a chunk once and streams only the rows a pushed filter selects, instead of returning
+    /// every row for its caller to re-check row-by-row.
+    ///
+    /// Each column-bound leaf tests through the per-element [PredicateEvaluator], so a row is
+    /// selected only when every leaf accepts it under the same three-valued logic (a null value
+    /// never satisfies a value predicate) as the fused kernels.
+    ///
+    /// @param chunk  the decoded chunk holding every column `filter` references
+    /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
+    /// @param row    the zero-based row to test
+    /// @return `true` if `row` satisfies `filter`
+    public static boolean matches(Chunk chunk, RowFilter filter, long row) {
+        Objects.requireNonNull(chunk, "chunk");
+        Objects.requireNonNull(filter, "filter");
+        return evaluate(chunk, filter, row);
+    }
+
+    private static boolean evaluate(Chunk chunk, RowFilter filter, long row) {
+        return switch (filter) {
+            case RowFilter.And(var parts) -> {
+                for (RowFilter part : parts) {
+                    if (!evaluate(chunk, part, row)) {
+                        yield false;
+                    }
+                }
+                yield true;
+            }
+            case RowFilter.Column(var col, var predicate) ->
+                    PredicateEvaluator.evaluate(chunk.column(col), row, predicate);
+        };
     }
 }
