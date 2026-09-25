@@ -7,7 +7,6 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyDateTimePartsLongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 
@@ -63,15 +62,11 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
         // Validity delegates to the `days` child only; seconds and subseconds are
         // non-nullable per spec (#251). PR #225/#235: unwrap any MaskedArray from
         // days and re-wrap the reassembled result with its validity.
-        BoolArray validity = null;
-        if (days instanceof MaskedArray masked) {
-            validity = masked.validity();
-            days = masked.inner();
-        }
+        MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(days);
 
         Array reassembled = new LazyDateTimePartsLongArray(ctx.dtype(), ctx.rowCount(),
-                days, seconds, subseconds, unitsPerDay, unitsPerSecond);
-        return validity != null ? new MaskedArray(reassembled, validity) : reassembled;
+                unwrapped.inner(), seconds, subseconds, unitsPerDay, unitsPerSecond);
+        return MaskedArray.wrapIfPresent(reassembled, unwrapped.validity());
     }
 
     /// Returns `TimeUnit.divisor()` for the extension's declared time unit, or

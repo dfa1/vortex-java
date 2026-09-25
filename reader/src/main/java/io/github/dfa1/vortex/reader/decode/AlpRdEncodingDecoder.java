@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpRdDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpRdFloatArray;
@@ -57,36 +56,27 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         // left_parts surfaces its MaskedArray; capture the mask and re-wrap the decoded
         // result rather than flattening it (which silently dropped nulls — #234).
         Array leftRaw = ctx.decodeChild(0, DType.U16, n);
-        BoolArray validity = null;
-        Array leftInner = leftRaw;
-        if (leftRaw instanceof MaskedArray masked) {
-            leftInner = masked.inner();
-            validity = masked.validity();
-        }
-        ShortArray leftArr = (ShortArray) leftInner;
+        MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(leftRaw);
+        ShortArray leftArr = (ShortArray) unwrapped.inner();
 
         Patches patches = decodePatches(ctx, meta.patches());
 
         Array decoded = switch (ptype) {
             case F64 -> {
                 Array rightRaw = ctx.decodeChild(1, DType.U64, n);
-                LongArray rightArr = (LongArray) unwrap(rightRaw);
+                LongArray rightArr = (LongArray) MaskedArray.innerOrSelf(rightRaw);
                 yield new LazyAlpRdDoubleArray(ctx.dtype(), n, dict, rightBitWidth,
                         leftArr, rightArr, patches.indices, patches.leftValues, patches.offset);
             }
             case F32 -> {
                 Array rightRaw = ctx.decodeChild(1, DType.U32, n);
-                IntArray rightArr = (IntArray) unwrap(rightRaw);
+                IntArray rightArr = (IntArray) MaskedArray.innerOrSelf(rightRaw);
                 yield new LazyAlpRdFloatArray(ctx.dtype(), n, dict, rightBitWidth,
                         leftArr, rightArr, patches.indices, patches.leftValues, patches.offset);
             }
             default -> throw new VortexException(EncodingId.VORTEX_ALPRD, "unsupported dtype " + ptype);
         };
-        return validity != null ? new MaskedArray(decoded, validity) : decoded;
-    }
-
-    private static Array unwrap(Array arr) {
-        return arr instanceof MaskedArray m ? m.inner() : arr;
+        return MaskedArray.wrapIfPresent(decoded, unwrapped.validity());
     }
 
     /// Decoded patches: sorted absolute indices (as a typed Array for in-place lookup)
@@ -106,7 +96,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         DType idxDtype = new DType.Primitive(idxPtype, false);
 
         Array idxArr = ctx.decodeChild(2, idxDtype, numPatches);
-        Array idxData = idxArr instanceof MaskedArray m ? m.inner() : idxArr;
+        Array idxData = MaskedArray.innerOrSelf(idxArr);
 
         // Pull the small left-values table into a short[] so lookups don't pay an
         // Array-dispatch per patch hit. Patches are typically <1% of rows.

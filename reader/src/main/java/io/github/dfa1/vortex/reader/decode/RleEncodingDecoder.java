@@ -77,13 +77,9 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         DType offsetsDtype = new DType.Primitive(offsetsPtype, false);
 
         Array indicesRaw = ctx.decodeChild(1, indicesDtype, indicesLen);
-
-        BoolArray indicesValidity = null;
-        Array indicesArr = indicesRaw;
-        if (indicesRaw instanceof MaskedArray masked) {
-            indicesArr = masked.inner();
-            indicesValidity = masked.validity();
-        }
+        MaskedArray.Unwrapped unwrappedIndices = MaskedArray.unwrap(indicesRaw);
+        Array indicesArr = unwrappedIndices.inner();
+        BoolArray indicesValidity = unwrappedIndices.validity();
 
         boolean wideIndices = switch (indicesPtype) {
             case U8 -> false;
@@ -106,7 +102,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
 
         if (ctx.dtype() instanceof DType.Bool) {
             Array valuesArr = ctx.decodeChild(0, DType.BOOL, valuesLen);
-            Array valuesData = valuesArr instanceof MaskedArray m ? m.inner() : valuesArr;
+            Array valuesData = MaskedArray.innerOrSelf(valuesArr);
             Array boolResult = new LazyRleBoolArray(ctx.dtype(), rowCount, (BoolArray) valuesData,
                     indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
             if (indicesValidity == null) {

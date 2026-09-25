@@ -123,19 +123,14 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         // be propagated per row, not flattened away (#210).
         DType codesDtype = new DType.Primitive(codePType, ctx.dtype().nullable());
         Array codesArr = ctx.decodeChild(0, codesDtype, rowCount);
-        BoolArray codesValidity = null;
-        Array rawCodes = codesArr;
-        if (codesArr instanceof MaskedArray masked) {
-            rawCodes = masked.inner();
-            codesValidity = masked.validity();
-        }
+        MaskedArray.Unwrapped unwrappedCodes = MaskedArray.unwrap(codesArr);
+        Array rawCodes = unwrappedCodes.inner();
+        BoolArray codesValidity = unwrappedCodes.validity();
+
         Array valuesArr = ctx.decodeChild(1, ctx.dtype(), valuesLen);
-        BoolArray poolValidity = null;
-        Array rawValues = valuesArr;
-        if (valuesArr instanceof MaskedArray masked) {
-            rawValues = masked.inner();
-            poolValidity = masked.validity();
-        }
+        MaskedArray.Unwrapped unwrappedValues = MaskedArray.unwrap(valuesArr);
+        Array rawValues = unwrappedValues.inner();
+        BoolArray poolValidity = unwrappedValues.validity();
 
         rejectEmptyChildren(rowCount, physicalBytes(rawCodes), codePType.byteSize(),
                 physicalBytes(rawValues), valPType.byteSize());
@@ -372,21 +367,15 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         // validity and/or an invalid pool slot referenced by null rows.
         DType codesDtype = new DType.Primitive(codePType, ctx.dtype().nullable());
         Array codesArr = ctx.decodeChild(0, codesDtype, n);
-        BoolArray codesValidity = null;
-        Array rawCodes = codesArr;
-        if (codesArr instanceof MaskedArray masked) {
-            rawCodes = masked.inner();
-            codesValidity = masked.validity();
-        }
+        MaskedArray.Unwrapped unwrappedCodes = MaskedArray.unwrap(codesArr);
+        Array rawCodes = unwrappedCodes.inner();
+        BoolArray codesValidity = unwrappedCodes.validity();
         MemorySegment codesBuf = ctx.materialize(rawCodes);
 
         Array valuesDecoded = ctx.decodeChild(1, ctx.dtype(), dictSize);
-        BoolArray poolValidity = null;
-        if (valuesDecoded instanceof MaskedArray masked) {
-            valuesDecoded = masked.inner();
-            poolValidity = masked.validity();
-        }
-        VarBinArray valuesArr = (VarBinArray) valuesDecoded;
+        MaskedArray.Unwrapped unwrappedValues = MaskedArray.unwrap(valuesDecoded);
+        BoolArray poolValidity = unwrappedValues.validity();
+        VarBinArray valuesArr = (VarBinArray) unwrappedValues.inner();
         VarBinOffsetArray dictValues = VarBinArray.toOffsetMode(valuesArr, ctx.arena());
 
         BoolArray rowValidity = rowValidity(ctx, codesBuf, codePType, codesValidity, poolValidity, n);

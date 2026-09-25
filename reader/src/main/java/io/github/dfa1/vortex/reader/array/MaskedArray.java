@@ -59,6 +59,49 @@ public final class MaskedArray implements Array {
         return validity == null || validity.getBoolean(i);
     }
 
+    /// Result of [#unwrap(Array)]: a payload and the validity bitmap it carried.
+    ///
+    /// @param inner    the non-nullable payload
+    /// @param validity the validity bitmap, or `null` if all positions are valid
+    public record Unwrapped(Array inner, BoolArray validity) {
+    }
+
+    /// Splits `a` into its non-nullable payload and validity bitmap. Many decoders receive a
+    /// child whose own validity they must mirror (RunEnd, ALP, ALP-RD, ZigZag,
+    /// FrameOfReference, DateTimeParts, Dict, RLE, Sparse) by decoding it as an `Array` rather
+    /// than a raw segment, so a nullable child surfaces here as a `MaskedArray` instead of
+    /// being silently flattened with its nulls dropped; this is the shared unwrap step every
+    /// one of those decode paths needs before working with the payload directly.
+    ///
+    /// @param a the array to split, typically a freshly decoded child
+    /// @return `a`'s payload and validity, or `(a, null)` if `a` was not a `MaskedArray`
+    public static Unwrapped unwrap(Array a) {
+        return a instanceof MaskedArray masked
+                ? new Unwrapped(masked.child, masked.validity)
+                : new Unwrapped(a, null);
+    }
+
+    /// Returns just the non-nullable payload of `a`, discarding validity. Shorthand for
+    /// [#unwrap(Array)]`.inner()` at call sites that don't need the validity bit — e.g. an
+    /// indices/positions child that is itself never nullable.
+    ///
+    /// @param a the array to unwrap
+    /// @return `a`'s payload, or `a` itself if it was not a `MaskedArray`
+    public static Array innerOrSelf(Array a) {
+        return a instanceof MaskedArray masked ? masked.child : a;
+    }
+
+    /// Rewraps `inner` in a `MaskedArray` carrying `validity`, or returns `inner` unchanged
+    /// when `validity` is `null` — the common "re-wrap the decoded result with the validity
+    /// borrowed via [#unwrap(Array)]" tail of a decode() method.
+    ///
+    /// @param inner    the decoded result to wrap
+    /// @param validity validity bitmap to carry, or `null` to skip wrapping
+    /// @return `inner`, optionally wrapped in a `MaskedArray`
+    public static Array wrapIfPresent(Array inner, BoolArray validity) {
+        return validity != null ? new MaskedArray(inner, validity) : inner;
+    }
+
     @Override
     public Array limited(long rows) {
         Array truncChild = Array.limited(child, rows);

@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
@@ -64,20 +63,15 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         DType.Primitive encodedDtype = new DType.Primitive(
                 ptype == PType.F64 ? PType.I64 : PType.I32, p.nullable());
         Array encoded = ctx.decodeChild(0, encodedDtype, n);
-        BoolArray validity = null;
-        Array rawEncoded = encoded;
-        if (encoded instanceof MaskedArray masked) {
-            rawEncoded = masked.inner();
-            validity = masked.validity();
-        }
-        MemorySegment src = ctx.materialize(rawEncoded);
+        MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(encoded);
+        MemorySegment src = ctx.materialize(unwrapped.inner());
 
         Array result = switch (ptype) {
             case F64 -> decodeF64(ctx, meta, expE, expF, n, src);
             case F32 -> decodeF32(ctx, meta, expE, expF, n, src);
             default -> throw new VortexException(EncodingId.VORTEX_ALP, "unsupported dtype " + ptype);
         };
-        return validity != null ? new MaskedArray(result, validity) : result;
+        return MaskedArray.wrapIfPresent(result, unwrapped.validity());
     }
 
     private static Array decodeF64(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n,

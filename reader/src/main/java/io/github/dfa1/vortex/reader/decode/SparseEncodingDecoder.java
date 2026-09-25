@@ -118,13 +118,10 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
             Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
             Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
-            Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
-            BoolArray patchValidity = null;
-            Array valData = patchValues;
-            if (patchValues instanceof MaskedArray m) {
-                valData = m.inner();
-                patchValidity = m.validity();
-            }
+            Array idxData = MaskedArray.innerOrSelf(patchIndices);
+            MaskedArray.Unwrapped unwrappedValues = MaskedArray.unwrap(patchValues);
+            Array valData = unwrappedValues.inner();
+            BoolArray patchValidity = unwrappedValues.validity();
             checkPatchChild(idxData, numPatches, ROLE_INDICES);
             checkPatchChild(valData, numPatches, ROLE_VALUES);
             boolean fillValue = Boolean.TRUE.equals(fillScalar.bool_value());
@@ -145,13 +142,10 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         DType indicesDtype = new DType.Primitive(indicesPtype, false);
         Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
         Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
-        Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
-        BoolArray patchValidity = null;
-        Array valData = patchValues;
-        if (patchValues instanceof MaskedArray m) {
-            valData = m.inner();
-            patchValidity = m.validity();
-        }
+        Array idxData = MaskedArray.innerOrSelf(patchIndices);
+        MaskedArray.Unwrapped unwrappedValues = MaskedArray.unwrap(patchValues);
+        Array valData = unwrappedValues.inner();
+        BoolArray patchValidity = unwrappedValues.validity();
         checkPatchChild(idxData, numPatches, ROLE_INDICES);
         checkPatchChild(valData, numPatches, ROLE_VALUES);
 
@@ -280,7 +274,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         // row-validity helper can index them lazily, exactly like the primitive path.
         DType indicesDtype = new DType.Primitive(indicesPtype, false);
         Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
-        Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
+        Array idxData = MaskedArray.innerOrSelf(patchIndices);
         checkPatchChild(idxData, numPatches, ROLE_INDICES);
         byte[] fill = fillBytes(fillScalar, fillValid);
 
@@ -294,12 +288,9 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         // A nullable patch child arrives wrapped in `vortex.masked`; unwrap it to reach the
         // raw VarBin values and carry the per-patch validity bits into the row validity (#232).
         Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
-        BoolArray patchValidity = null;
-        Array valData = patchValues;
-        if (patchValues instanceof MaskedArray m) {
-            valData = m.inner();
-            patchValidity = m.validity();
-        }
+        MaskedArray.Unwrapped unwrappedValues = MaskedArray.unwrap(patchValues);
+        Array valData = unwrappedValues.inner();
+        BoolArray patchValidity = unwrappedValues.validity();
         VarBinArray values = checkedCast(valData, VarBinArray.class, ROLE_VALUES);
         Array result = new VarBinSparseArray(ctx.dtype(), n, fill, values, idxData, offset);
         return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);

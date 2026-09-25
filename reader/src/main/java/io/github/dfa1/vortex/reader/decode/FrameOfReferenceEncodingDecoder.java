@@ -37,13 +37,9 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
         }
 
         Array encoded = ctx.decodeChild(0);
-
-        BoolArray validity = null;
-        Array rawEncoded = encoded;
-        if (encoded instanceof MaskedArray masked) {
-            rawEncoded = masked.inner();
-            validity = masked.validity();
-        }
+        MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(encoded);
+        Array rawEncoded = unwrapped.inner();
+        BoolArray validity = unwrapped.validity();
 
         if (!(ctx.dtype() instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + ctx.dtype());
@@ -51,7 +47,7 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
         long ref = referenceValue(scalar);
         if (ref == 0L) {
-            return validity != null ? new MaskedArray(rawEncoded, validity) : rawEncoded;
+            return MaskedArray.wrapIfPresent(rawEncoded, validity);
         }
 
         MemorySegment src = ctx.materialize(rawEncoded);
@@ -63,7 +59,7 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
             case I8, U8 -> new LazyForByteArray(ctx.dtype(), n, src, (byte) ref);
             default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
         };
-        return validity != null ? new MaskedArray(result, validity) : result;
+        return MaskedArray.wrapIfPresent(result, validity);
     }
 
     private static long referenceValue(ProtoScalarValue scalar) {
