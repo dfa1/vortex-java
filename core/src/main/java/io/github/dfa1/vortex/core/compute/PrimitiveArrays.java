@@ -87,6 +87,114 @@ public final class PrimitiveArrays {
         };
     }
 
+    /// Throws unless `ptype` is one of the four unsigned integer types. Several wire fields (run
+    /// ends, patch indices, chunk offsets) are untrusted `ptype` values read straight off proto
+    /// metadata and are contractually unsigned; this is the single place that enforces it, so a
+    /// crafted file naming a signed ptype there fails loudly instead of being silently
+    /// misinterpreted as two's-complement.
+    ///
+    /// @param ptype    the ptype to check
+    /// @param encoding the encoding requesting the check, used for error attribution
+    /// @throws VortexException if `ptype` is not U8/U16/U32/U64
+    public static void requireUnsigned(PType ptype, EncodingId encoding) {
+        if (ptype != PType.U8 && ptype != PType.U16 && ptype != PType.U32 && ptype != PType.U64) {
+            throw new VortexException(encoding, "expected an unsigned ptype, got " + ptype);
+        }
+    }
+
+    /// Reads one integer element at a raw byte offset in `seg`, widened to `long` (zero-extending
+    /// unsigned ptypes, sign-extending signed ones).
+    ///
+    /// @param seg        the source segment
+    /// @param byteOffset byte offset of the element within `seg`
+    /// @param ptype      the element's physical type
+    /// @param encoding   the encoding requesting the read, used for error attribution
+    /// @return the element widened to 64 bits
+    /// @throws VortexException if `ptype` is not an integer ptype
+    public static long readLong(MemorySegment seg, long byteOffset, PType ptype, EncodingId encoding) {
+        return switch (ptype) {
+            case I8 -> seg.get(ValueLayout.JAVA_BYTE, byteOffset);
+            case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, byteOffset));
+            case I16 -> seg.get(VortexFormat.LE_SHORT, byteOffset);
+            case U16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, byteOffset));
+            case I32 -> seg.get(VortexFormat.LE_INT, byteOffset);
+            case U32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, byteOffset));
+            case I64, U64 -> seg.get(VortexFormat.LE_LONG, byteOffset);
+            default -> throw new VortexException(encoding, "unsupported ptype: " + ptype);
+        };
+    }
+
+    /// Widens `count` contiguous integer elements starting at element index `fromElement` in `seg`
+    /// to `long[]`. Allocating sibling of [#toLongsInto(MemorySegment, long, int, PType,
+    /// EncodingId, long[])] for call sites that don't already hold reusable scratch.
+    ///
+    /// @param seg         the source segment
+    /// @param fromElement starting element index (not byte offset) within `seg`
+    /// @param count       number of elements to read
+    /// @param ptype       the elements' physical type
+    /// @param encoding    the encoding requesting the read, used for error attribution
+    /// @return a new `long[]` of length `count`
+    /// @throws VortexException if `ptype` is not an integer ptype
+    public static long[] toLongs(MemorySegment seg, long fromElement, int count, PType ptype, EncodingId encoding) {
+        long[] out = new long[count];
+        toLongsInto(seg, fromElement, count, ptype, encoding, out);
+        return out;
+    }
+
+    /// Widens `count` contiguous integer elements starting at element index `fromElement` in `seg`
+    /// into caller-supplied `out`, so a per-chunk hot loop can reuse one scratch array across calls
+    /// instead of allocating on every chunk. The `ptype` switch is hoisted out of the loop — one
+    /// specialized body per width rather than a per-element switch (CLAUDE.md hot-loop rule).
+    ///
+    /// @param seg         the source segment
+    /// @param fromElement starting element index (not byte offset) within `seg`
+    /// @param count       number of elements to read
+    /// @param ptype       the elements' physical type
+    /// @param encoding    the encoding requesting the read, used for error attribution
+    /// @param out         destination array, filled at indices `[0, count)`
+    /// @throws VortexException if `ptype` is not an integer ptype
+    public static void toLongsInto(MemorySegment seg, long fromElement, int count, PType ptype,
+            EncodingId encoding, long[] out) {
+        switch (ptype) {
+            case I8 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = seg.get(ValueLayout.JAVA_BYTE, fromElement + i);
+                }
+            }
+            case U8 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, fromElement + i));
+                }
+            }
+            case I16 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = seg.getAtIndex(VortexFormat.LE_SHORT, fromElement + i);
+                }
+            }
+            case U16 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = Short.toUnsignedLong(seg.getAtIndex(VortexFormat.LE_SHORT, fromElement + i));
+                }
+            }
+            case I32 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = seg.getAtIndex(VortexFormat.LE_INT, fromElement + i);
+                }
+            }
+            case U32 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = Integer.toUnsignedLong(seg.getAtIndex(VortexFormat.LE_INT, fromElement + i));
+                }
+            }
+            case I64, U64 -> {
+                for (int i = 0; i < count; i++) {
+                    out[i] = seg.getAtIndex(VortexFormat.LE_LONG, fromElement + i);
+                }
+            }
+            default -> throw new VortexException(encoding, "unsupported ptype: " + ptype);
+        }
+    }
+
     /// Writes a `long[]` to a freshly allocated little-endian off-heap segment whose element width
     /// is that of `ptype`, narrowing each element to the low bytes. Inverse of
     /// [#toLongs(Object, PType, EncodingId)]. The I64/U64 case bulk-copies; narrower widths write

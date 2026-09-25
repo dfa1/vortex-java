@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -210,7 +211,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
     private static void readElements(MemorySegment buf, PType ptype, long cap, long firstIdx,
             int count, long[] out) {
         if (firstIdx + count <= cap) {
-            readContiguous(buf, ptype, firstIdx, count, out);
+            PrimitiveArrays.toLongsInto(buf, firstIdx, count, ptype, EncodingId.FASTLANES_DELTA, out);
             return;
         }
         if (cap == 0) {
@@ -220,69 +221,13 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         readBroadcast(buf, ptype, cap, firstIdx, count, out);
     }
 
-    private static void readContiguous(MemorySegment buf, PType ptype, long from, int count, long[] out) {
-        switch (ptype) {
-            case I8 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = buf.get(ValueLayout.JAVA_BYTE, from + i);
-                }
-            }
-            case U8 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, from + i));
-                }
-            }
-            case I16 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = buf.getAtIndex(VortexFormat.LE_SHORT, from + i);
-                }
-            }
-            case U16 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Short.toUnsignedLong(buf.getAtIndex(VortexFormat.LE_SHORT, from + i));
-                }
-            }
-            case I32 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = buf.getAtIndex(VortexFormat.LE_INT, from + i);
-                }
-            }
-            case U32 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Integer.toUnsignedLong(buf.getAtIndex(VortexFormat.LE_INT, from + i));
-                }
-            }
-            case I64, U64 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = buf.getAtIndex(VortexFormat.LE_LONG, from + i);
-                }
-            }
-            default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
-        }
-    }
-
     /// Cold path of [#readElements]: the child holds fewer elements than the range asks for,
     /// which only a `vortex.constant` child does, so this wraps around it one element at a time.
     private static void readBroadcast(MemorySegment buf, PType ptype, long cap, long firstIdx,
             int count, long[] out) {
         int elemBytes = ptype.byteSize();
         for (int i = 0; i < count; i++) {
-            out[i] = readOne(buf, ptype, ((firstIdx + i) % cap) * elemBytes);
+            out[i] = PrimitiveArrays.readLong(buf, ((firstIdx + i) % cap) * elemBytes, ptype, EncodingId.FASTLANES_DELTA);
         }
     }
-
-    private static long readOne(MemorySegment buf, PType ptype, long off) {
-        return switch (ptype) {
-            case I8 -> buf.get(ValueLayout.JAVA_BYTE, off);
-            case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
-            case I16 -> buf.get(VortexFormat.LE_SHORT, off);
-            case U16 -> Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, off));
-            case I32 -> buf.get(VortexFormat.LE_INT, off);
-            case U32 -> Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, off));
-            case I64, U64 -> buf.get(VortexFormat.LE_LONG, off);
-            default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
-        };
-    }
-
-
 }

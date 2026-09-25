@@ -165,7 +165,7 @@ class AlpEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(node, F64, 2, segs, REGISTRY, Arena.ofAuto());
 
         // When / Then
-        assertThatThrownBy(() -> SUT.decode(ctx)).hasMessageContaining("non-unsigned patch index ptype");
+        assertThatThrownBy(() -> SUT.decode(ctx)).hasMessageContaining("expected an unsigned ptype");
     }
 
     /// Adversarial metadata from an untrusted file (TODO.md §Security, per-encoding

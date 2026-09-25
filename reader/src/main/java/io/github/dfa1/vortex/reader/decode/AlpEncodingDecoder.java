@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
@@ -19,7 +20,6 @@ import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.alp`.
 public final class AlpEncodingDecoder implements EncodingDecoder {
@@ -187,6 +187,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         }
         long offset = pm.offset();
         PType idxPtype = PType.fromOrdinal(pm.indices_ptype().value());
+        PrimitiveArrays.requireUnsigned(idxPtype, EncodingId.VORTEX_ALP);
         int idxBytes = idxPtype.byteSize();
         long n = out.byteSize() / elemBytes;
 
@@ -202,13 +203,13 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         }
         if (idxCap >= numPatches && valCap >= numPatches) {
             for (long i = 0; i < numPatches; i++) {
-                long absIdx = readUnsigned(idxSeg, i * idxBytes, idxPtype) - offset;
+                long absIdx = PrimitiveArrays.readLong(idxSeg, i * idxBytes, idxPtype, EncodingId.VORTEX_ALP) - offset;
                 checkPatchIndex(absIdx, n);
                 MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
             }
         } else {
             for (long i = 0; i < numPatches; i++) {
-                long absIdx = readUnsigned(idxSeg, (i % idxCap) * idxBytes, idxPtype) - offset;
+                long absIdx = PrimitiveArrays.readLong(idxSeg, (i % idxCap) * idxBytes, idxPtype, EncodingId.VORTEX_ALP) - offset;
                 checkPatchIndex(absIdx, n);
                 MemorySegment.copy(valSeg, (i % valCap) * elemBytes, out, absIdx * elemBytes, elemBytes);
             }
@@ -228,15 +229,5 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_ALP,
                     "patch index " + absIdx + " out of range [0," + n + ")");
         }
-    }
-
-    private static long readUnsigned(MemorySegment seg, long off, PType ptype) {
-        return switch (ptype) {
-            case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
-            case U16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, off));
-            case U32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, off));
-            case U64 -> seg.get(VortexFormat.LE_LONG, off);
-            default -> throw new VortexException(EncodingId.VORTEX_ALP, "non-unsigned patch index ptype " + ptype);
-        };
     }
 }
