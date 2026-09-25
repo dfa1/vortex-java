@@ -195,6 +195,29 @@ public class JavaVsJniFsstBenchmark {
         return sum[0];
     }
 
+    /// Java read: scan the FSST column, materialize every row's bytes via [VarBinArray#getBytes].
+    /// Unlike [#javaFsstDecode] (which reads only the lengths child), this forces
+    /// [io.github.dfa1.vortex.reader.array.LazyFsstVarBinArray] to actually decompress every row —
+    /// the full-column access pattern ADR 0026 flagged as unbenchmarked when it moved FSST from
+    /// batch to per-row decode.
+    @Benchmark
+    public long javaFsstDecodeStrings() throws IOException {
+        long[] sum = {0L};
+        try (VortexReader vf = VortexReader.open(javaReadFile, registry);
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("line"))) {
+            while (iter.hasNext()) {
+                try (Chunk c = iter.next()) {
+                    VarBinArray line = c.column("line");
+                    long rows = c.rowCount();
+                    for (long i = 0; i < rows; i++) {
+                        sum[0] += line.getBytes(i).length;
+                    }
+                }
+            }
+        }
+        return sum[0];
+    }
+
     /// JNI read: scan the FSST column, sum decoded byte lengths.
     @Benchmark
     public long jniFsstDecode() throws IOException {

@@ -113,6 +113,12 @@ bounds the codes-offsets child's own `n + 1`-element decode (`ctx.decodeChildSeg
   FSST throughput benchmark, `javaFsstDecode`, uses `forEachByteLength`, which never decompresses in
   either the old or new design). A future benchmark that does full-column FSST string materialization
   should be added before relying on this path's throughput.
+
+  **Measured (added as `javaFsstDecodeStrings`):** 17.3 ops/s materializing all 1M rows via
+  `getBytes`, vs. `jniFsstDecode` (which also materializes every row) at 34.0 ops/s — Java at ~0.51x
+  JNI. Slower than JNI, but not the multi-order-of-magnitude regression an unamortized OSR
+  reintroduction would produce; per-row calls are not currently a full-scan bottleneck worth
+  revisiting.
 - **Two heap allocations per accessed row** (`getBytes`'s scratch array plus the trimmed copy) where
   the old path allocated once for the whole batch. Acceptable for the row-at-a-time access pattern
   this ADR targets; would need revisiting if profiling shows it dominates a hot path.
