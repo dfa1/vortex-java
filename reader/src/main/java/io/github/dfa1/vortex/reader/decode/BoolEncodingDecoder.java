@@ -41,10 +41,7 @@ public final class BoolEncodingDecoder implements EncodingDecoder {
         Array values = new MaterializedBoolArray(ctx.dtype(), n, bits);
         if (ctx.node().children().length == 1) {
             Array va = ctx.decodeChild(0, DType.BOOL, n);
-            if (!(va instanceof BoolArray validity)) {
-                throw new VortexException(EncodingId.VORTEX_BOOL,
-                        "validity child decoded to unexpected type: " + va.getClass().getSimpleName());
-            }
+            BoolArray validity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_BOOL, "validity child");
             return new MaskedArray(values, validity);
         }
         return values;

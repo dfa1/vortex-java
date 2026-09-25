@@ -74,10 +74,7 @@ public final class ListViewEncodingDecoder implements EncodingDecoder {
                     "validity child present but the declared dtype is non-nullable: " + listDtype);
         }
         Array validityArray = ctx.decodeChild(3, DType.BOOL, outerLen);
-        if (!(validityArray instanceof BoolArray validity)) {
-            throw new VortexException(EncodingId.VORTEX_LISTVIEW,
-                    "validity child decoded to unexpected type: " + validityArray.getClass().getSimpleName());
-        }
+        BoolArray validity = MaskedArray.requireBoolArray(validityArray, EncodingId.VORTEX_LISTVIEW, "validity child");
         DType.List innerDtype = (DType.List) listDtype.withNullable(false);
         return new MaskedArray(new ListViewArray(innerDtype, outerLen, elements, offsets, sizes), validity);
     }
