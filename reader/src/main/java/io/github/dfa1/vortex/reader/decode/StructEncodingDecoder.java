@@ -39,11 +39,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
                 var validityCtx = new DecodeContext(validityNode, DType.BOOL,
                         ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
                 Array va = ctx.registry().decode(validityCtx);
-                if (!(va instanceof BoolArray ba)) {
-                    throw new VortexException(EncodingId.VORTEX_STRUCT,
-                            "struct validity decoded to unexpected type: " + va.getClass().getSimpleName());
-                }
-                structValidity = ba;
+                structValidity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_STRUCT, "struct validity");
             }
 
             if (nfields == 1) {
@@ -78,10 +74,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             var validityCtx = new DecodeContext(validityNode, DType.BOOL,
                     ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
             Array va = ctx.registry().decode(validityCtx);
-            if (!(va instanceof BoolArray validity)) {
-                throw new VortexException(EncodingId.VORTEX_STRUCT,
-                        "scalar wrapper validity decoded to unexpected type: " + va.getClass().getSimpleName());
-            }
+            BoolArray validity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_STRUCT, "scalar wrapper validity");
             ArrayNode valuesNode = ctx.node().children()[1];
             var valuesCtx = new DecodeContext(
                     valuesNode, ctx.dtype().withNullable(false), ctx.rowCount(),

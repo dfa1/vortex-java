@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.error.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -100,6 +102,22 @@ public final class MaskedArray implements Array {
     /// @return `inner`, optionally wrapped in a `MaskedArray`
     public static Array wrapIfPresent(Array inner, BoolArray validity) {
         return validity != null ? new MaskedArray(inner, validity) : inner;
+    }
+
+    /// Casts `va` to `BoolArray`, failing loudly with `role` in the message when the decoded
+    /// child was not a bool array — e.g. a crafted file naming a non-bool encoding for a
+    /// validity bitmap. A raw `ClassCastException` here would violate ADR 0003.
+    ///
+    /// @param va       the decoded array expected to be a validity bitmap
+    /// @param encoding the encoding requesting the check, used for error attribution
+    /// @param role     short description of what `va` represents, used in the failure message
+    /// @return `va` cast to `BoolArray`
+    /// @throws VortexException if `va` is not a `BoolArray`
+    public static BoolArray requireBoolArray(Array va, EncodingId encoding, String role) {
+        if (!(va instanceof BoolArray validity)) {
+            throw new VortexException(encoding, role + " decoded to unexpected type: " + va.getClass().getSimpleName());
+        }
+        return validity;
     }
 
     @Override

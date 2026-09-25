@@ -121,10 +121,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
                     "expected " + validityIdx + " or " + (validityIdx + 1) + " children, got " + childCount);
         }
         Array va = ctx.decodeChild(validityIdx, DType.BOOL, rowCount);
-        if (!(va instanceof BoolArray validity)) {
-            throw new VortexException(EncodingId.FASTLANES_BITPACKED,
-                    "validity child decoded to unexpected type: " + va.getClass().getSimpleName());
-        }
+        BoolArray validity = MaskedArray.requireBoolArray(va, EncodingId.FASTLANES_BITPACKED, "validity child");
         return new MaskedArray(values, validity);
     }
 
