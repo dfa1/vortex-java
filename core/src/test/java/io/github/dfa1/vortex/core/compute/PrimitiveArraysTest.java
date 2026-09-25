@@ -14,6 +14,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PrimitiveArraysTest {
@@ -158,6 +159,100 @@ class PrimitiveArraysTest {
             // Then only the low byte survives
             assertThat(seg.byteSize()).isEqualTo(1L);
             assertThat(seg.get(ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) 0x78);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"U8", "U16", "U32", "U64"})
+    void requireUnsigned_unsignedPtype_doesNotThrow(PType ptype) {
+        // Given/When/Then
+        assertThatCode(() -> PrimitiveArrays.requireUnsigned(ptype, EncodingId.VORTEX_RUNEND))
+                .doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "I16", "I32", "I64", "F16", "F32", "F64"})
+    void requireUnsigned_notUnsignedPtype_throws(PType ptype) {
+        // Given/When/Then a signed or floating ptype is rejected, attributed to the caller's encoding
+        assertThatThrownBy(() -> PrimitiveArrays.requireUnsigned(ptype, EncodingId.VORTEX_RUNEND))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("vortex.runend")
+                .hasMessageContaining("expected an unsigned ptype, got " + ptype);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void readLong_roundTripsThroughFromLongs(PType ptype) {
+        // Given a segment written via fromLongs (already covers little-endian width per ptype)
+        long[] original = {0L, 1L, 42L};
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = PrimitiveArrays.fromLongs(original, ptype, arena);
+
+            // When reading each element back at its byte offset
+            for (int i = 0; i < original.length; i++) {
+                long result = PrimitiveArrays.readLong(seg, (long) i * ptype.byteSize(), ptype, EncodingId.FASTLANES_DELTA);
+
+                // Then
+                assertThat(result).isEqualTo(original[i]);
+            }
+        }
+    }
+
+    @Test
+    void readLong_u8_zeroExtendsHighBit() {
+        // Given a byte whose high bit is set
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = arena.allocate(1);
+            seg.set(ValueLayout.JAVA_BYTE, 0, (byte) -1);
+
+            // When
+            long result = PrimitiveArrays.readLong(seg, 0, PType.U8, EncodingId.FASTLANES_DELTA);
+
+            // Then zero-extended, not sign-extended
+            assertThat(result).isEqualTo(255L);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
+    void readLong_floatingPtypes_throw(PType ptype) {
+        // Given/When/Then
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = arena.allocate(8);
+            assertThatThrownBy(() -> PrimitiveArrays.readLong(seg, 0, ptype, EncodingId.FASTLANES_DELTA))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("unsupported ptype: " + ptype);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void toLongs_segment_readsContiguousElementsFromOffset(PType ptype) {
+        // Given a segment holding five elements, only elements [2, 5) requested
+        long[] all = {0L, 1L, 2L, 3L, 4L};
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = PrimitiveArrays.fromLongs(all, ptype, arena);
+
+            // When
+            long[] result = PrimitiveArrays.toLongs(seg, 2, 3, ptype, EncodingId.FASTLANES_DELTA);
+
+            // Then
+            assertThat(result).containsExactly(2L, 3L, 4L);
+        }
+    }
+
+    @Test
+    void toLongsInto_writesIntoCallerSuppliedArrayWithoutAllocatingANewOne() {
+        // Given a pre-sized scratch array a hot per-chunk loop reuses across calls
+        long[] scratch = new long[3];
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = PrimitiveArrays.fromLongs(new long[]{5L, 6L, 7L}, PType.I32, arena);
+
+            // When
+            PrimitiveArrays.toLongsInto(seg, 0, 3, PType.I32, EncodingId.FASTLANES_DELTA, scratch);
+
+            // Then the caller's array is filled in place
+            assertThat(scratch).containsExactly(5L, 6L, 7L);
         }
     }
 

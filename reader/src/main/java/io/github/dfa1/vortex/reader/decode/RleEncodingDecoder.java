@@ -4,8 +4,8 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.IoBounds;
-import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -28,7 +28,6 @@ import io.github.dfa1.vortex.reader.array.OffsetBoolArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `fastlanes.rle`.
 public final class RleEncodingDecoder implements EncodingDecoder {
@@ -55,6 +54,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         PType indicesPtype = PType.fromOrdinal(meta.indices_ptype().value());
         long offsetsLen = meta.values_idx_offsets_len();
         PType offsetsPtype = PType.fromOrdinal(meta.values_idx_offsets_ptype().value());
+        PrimitiveArrays.requireUnsigned(offsetsPtype, EncodingId.FASTLANES_RLE);
         int offset = (int) meta.offset();
 
         long rowCount = ctx.rowCount();
@@ -97,10 +97,10 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         // Only one offset per chunk is ever read, so a bogus values_idx_offsets_len cannot size
         // the array beyond that — the chunk count is already bounded by the indices length above.
         int offsetsCount = IoBounds.checkCount(Math.min(offsetsLen, numChunks + 1L));
-        long[] valuesIdxOffsets = readUnsignedLongs(
+        long[] valuesIdxOffsets = PrimitiveArrays.toLongs(
                 fitElements(ctx.arena(), ctx.decodeChildSegment(2, offsetsDtype, offsetsLen),
                         offsetsCount, offsetsPtype.byteSize()),
-                offsetsCount, offsetsPtype);
+                0, offsetsCount, offsetsPtype, EncodingId.FASTLANES_RLE);
         long firstOffset = valuesLen > 0 && valuesIdxOffsets.length > 0 ? valuesIdxOffsets[0] : 0L;
         checkChunkOffsets(valuesIdxOffsets, firstOffset, valuesLen, numChunks);
 
@@ -227,43 +227,5 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             }
             previous = start;
         }
-    }
-
-    /// Widens `count` unsigned offsets out of an exact-length segment.
-    ///
-    /// The ptype test is hoisted out of the loop — one specialized body per width rather than a
-    /// per-element switch (CLAUDE.md hot-loop rule).
-    ///
-    /// @param buf   offsets segment, already sized to `count` elements by [#fitElements]
-    /// @param count number of offsets to read
-    /// @param ptype unsigned physical type of the offsets
-    /// @return the widened offsets
-    /// @throws VortexException if `ptype` is not an unsigned integer type
-    private static long[] readUnsignedLongs(MemorySegment buf, int count, PType ptype) {
-        long[] out = new long[count];
-        switch (ptype) {
-            case U8 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, i));
-                }
-            }
-            case U16 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Short.toUnsignedLong(buf.getAtIndex(VortexFormat.LE_SHORT, i));
-                }
-            }
-            case U32 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Integer.toUnsignedLong(buf.getAtIndex(VortexFormat.LE_INT, i));
-                }
-            }
-            case U64 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = buf.getAtIndex(VortexFormat.LE_LONG, i);
-                }
-            }
-            default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported offsets ptype: " + ptype);
-        }
-        return out;
     }
 }

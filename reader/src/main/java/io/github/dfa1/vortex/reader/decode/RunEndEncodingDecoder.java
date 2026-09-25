@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.proto.ProtoRunEndMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -23,7 +23,6 @@ import io.github.dfa1.vortex.reader.array.VarBinRunEndArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.runend`.
 public final class RunEndEncodingDecoder implements EncodingDecoder {
@@ -148,18 +147,20 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
     /// last run's value past where the data actually ends, or (for `ends[0] < offset`) resolved a
     /// negative index.
     private static void validateEnds(MemorySegment endsSeg, PType endsPtype, long numRuns, long offset, long n) {
-        long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
+        PrimitiveArrays.requireUnsigned(endsPtype, EncodingId.VORTEX_RUNEND);
+        int endsBytes = endsPtype.byteSize();
+        long endsCap = SegmentBroadcast.capacity(endsSeg, endsBytes);
         if (endsCap <= 0) {
             throw new VortexException(EncodingId.VORTEX_RUNEND,
                     "runend: empty ends buffer for " + numRuns + " run(s)");
         }
-        long prev = readUnsigned(endsSeg, 0, endsPtype);
+        long prev = PrimitiveArrays.readLong(endsSeg, 0, endsPtype, EncodingId.VORTEX_RUNEND);
         if (offset != 0 && prev < offset) {
             throw new VortexException(EncodingId.VORTEX_RUNEND,
                     "runend: ends[0]=" + prev + " < offset " + offset);
         }
         for (long i = 1; i < numRuns; i++) {
-            long end = readUnsigned(endsSeg, i % endsCap, endsPtype);
+            long end = PrimitiveArrays.readLong(endsSeg, (i % endsCap) * endsBytes, endsPtype, EncodingId.VORTEX_RUNEND);
             if (end <= prev) {
                 throw new VortexException(EncodingId.VORTEX_RUNEND,
                         "runend: ends not strictly increasing at run " + i + " (" + end + " <= " + prev + ")");
@@ -170,15 +171,5 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_RUNEND,
                     "runend: last end " + prev + " does not cover offset+n=" + (offset + n));
         }
-    }
-
-    private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
-        return switch (ptype) {
-            case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-            case U16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, i * 2));
-            case U32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, i * 4));
-            case U64 -> seg.get(VortexFormat.LE_LONG, i * 8);
-            default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "non-unsigned ends ptype " + ptype);
-        };
     }
 }
