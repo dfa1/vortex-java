@@ -371,6 +371,7 @@ class RustJavaReaderComparisonIntegrationTest {
             "fixed_size_list.vortex",
             "for.vortex",
             "fsst.vortex",
+            "map.vortex",
             "null.vortex",
             "primitives.vortex",
             "rle.vortex",

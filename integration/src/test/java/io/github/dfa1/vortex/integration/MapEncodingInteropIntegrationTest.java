@@ -57,11 +57,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// Cross-language ground truth for `vortex.map` (issue #351), in both directions.
 ///
-/// No `map.vortex` S3 compat fixture is published (checked through v0.84.0), so vortex-jni is used
-/// directly as the oracle: Java writes and Rust reads, then Rust writes and Java reads. The column
-/// shape is `map<utf8, i64?>` — non-nullable string keys, nullable long values — plus a nullable
-/// map column, because a null map row is represented by a null `entries` row rather than by
-/// anything on the map node itself.
+/// A `map.vortex` S3 compat fixture was published starting v0.86.1 (row-count-only smoke test in
+/// [RustJavaReaderComparisonIntegrationTest]), but this class remains the detailed oracle: vortex-jni
+/// used directly, exercising both directions, nullability, and `keys_sorted` — coverage the generic
+/// fixture comparison doesn't reach. The column shape is `map<utf8, i64?>` — non-nullable string
+/// keys, nullable long values — plus a nullable map column, because a null map row is represented by
+/// a null `entries` row rather than by anything on the map node itself.
 class MapEncodingInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();

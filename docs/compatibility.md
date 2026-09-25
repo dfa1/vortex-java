@@ -283,16 +283,16 @@ For unsupported extension ids the inspector falls back to a placeholder cell
 correctly via the primitive accessors, callers just have to format the value
 themselves.
 
-## S3 Fixture Status (v0.85.0)
+## S3 Fixture Status (v0.86.1)
 
-> **Note:** the oracle round-trip suite is pinned to `v0.85.0/` (current Rust
+> **Note:** the oracle round-trip suite is pinned to `v0.86.1/` (current Rust
 > release). The bucket reuses identical fixture file names across versions but
 > rewrites the bytes, so the local cache is version-keyed; bump the
 > `RustFixtures.VERSION` constant in the integration tests and refresh this section
 > when a newer set is published.
 
 Cross-language round-trips tested against Rust-written fixture files hosted at
-`s3://vortex-compat-fixtures/v0.85.0/arrays/`.
+`s3://vortex-compat-fixtures/v0.86.1/arrays/`.
 
 | Fixture                             | Status |
 |-------------------------------------|--------|
@@ -331,7 +331,7 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `pco.vortex`                        | ✅      |
 | `clickbench_hits_5k.compact.vortex` | ✅      |
 | `clickbench_hits_5k.regular.vortex` | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
-| `masked.vortex`                     | ❓      | No fixture through v0.85.0 |
-| `patched.vortex`                    | ❓      | No fixture through v0.85.0 |
-| `variant.vortex`                    | ❓      | No fixture through v0.85.0 |
-| `map.vortex`                        | ❓      | No fixture through v0.85.0; `vortex.map` decode/encode is covered by the vortex-jni oracle instead (issue #351) |
+| `masked.vortex`                     | ❓      | No fixture through v0.86.1 |
+| `patched.vortex`                    | ❓      | No fixture through v0.86.1 |
+| `variant.vortex`                    | ❓      | No fixture through v0.86.1 |
+| `map.vortex`                        | ✅      | New in v0.86.1; also covered directly (both directions, nullable) by the vortex-jni oracle (issue #351) |
