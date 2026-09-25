@@ -17,7 +17,7 @@ final class RustFixtures {
     /// `vortex-jni.version` in the root POM: a skew between the two means the live JNI
     /// writer/reader and the static Rust fixtures are exercising different wire formats, so a
     /// wire-format change in between would go uncaught by the fixture-based tests.
-    static final String VERSION = "v0.85.0";
+    static final String VERSION = "v0.86.1";
 
     private static final String BUCKET_HOST = "https://vortex-compat-fixtures.s3.amazonaws.com";
     private static final String ARRAYS_BASE = BUCKET_HOST + "/" + VERSION + "/arrays/";
