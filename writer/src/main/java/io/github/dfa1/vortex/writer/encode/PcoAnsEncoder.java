@@ -14,15 +14,13 @@ final class PcoAnsEncoder {
     record Step(int newState, int bits, int numBits) {
     }
 
-    private final int sizeLog;
     private final int tableSize;
     private final int[] minRenormBits;
     private final int[] renormBitCutoff;
     private final int[][] nextStates; // nextStates[sym][k] = Rust state for k-th occurrence
 
-    private PcoAnsEncoder(int sizeLog, int tableSize,
+    private PcoAnsEncoder(int tableSize,
             int[] minRenormBits, int[] renormBitCutoff, int[][] nextStates) {
-        this.sizeLog = sizeLog;
         this.tableSize = tableSize;
         this.minRenormBits = minRenormBits;
         this.renormBitCutoff = renormBitCutoff;
@@ -61,7 +59,7 @@ final class PcoAnsEncoder {
             symbolXs[sym]++;
         }
 
-        return new PcoAnsEncoder(sizeLog, tableSize, minR, cutoff, nextSt);
+        return new PcoAnsEncoder(tableSize, minR, cutoff, nextSt);
     }
 
     /// Encode one symbol. Caller writes the low [Step#numBits()] bits of

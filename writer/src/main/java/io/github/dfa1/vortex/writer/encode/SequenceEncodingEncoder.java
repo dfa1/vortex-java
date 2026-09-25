@@ -72,7 +72,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         byte[] statsMin = null;
         byte[] statsMax = null;
         if (n > 0) {
-            long last = base + (long) (n - 1) * multiplier;
+            long last = base + (n - 1) * multiplier;
             boolean baseIsMin = unsign ? Long.compareUnsigned(base, last) <= 0 : base <= last;
             statsMin = buildIntScalar(pt, baseIsMin ? base : last).encode();
             statsMax = buildIntScalar(pt, baseIsMin ? last : base).encode();

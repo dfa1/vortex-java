@@ -255,7 +255,7 @@ final class FilterCommand {
         if (v >= 0) {
             return v;
         }
-        return ((double) (v >>> 1)) * 2.0 + (v & 1L);
+        return (v >>> 1) * 2.0 + (v & 1L);
     }
 
     private static int compareDouble(double colVal, Comparable<?> value) {

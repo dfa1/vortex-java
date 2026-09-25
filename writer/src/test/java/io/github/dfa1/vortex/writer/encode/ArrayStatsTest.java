@@ -85,7 +85,7 @@ class ArrayStatsTest {
 
         // Then
         assertThat(result.distinctCount()).isEqualTo(1);
-        assertThat(result.mostFrequentBits()).isEqualTo(0);
+        assertThat(result.mostFrequentBits()).isZero();
         assertThat(result.topFrequency()).isEqualTo(1000);
     }
 
