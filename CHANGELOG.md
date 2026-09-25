@@ -5,6 +5,12 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.4] — 2026-09-25
+
+### Fixed
+
+- `vortex.listview` no longer rejects a validity child under a non-nullable dtype — the Rust reference (vortex-jni 0.86+) always emits one regardless of nullability. ([390fbb9](https://github.com/dfa1/vortex-java/commit/390fbb99))
+
 ## [0.14.3] — 2026-09-19
 
 ### Changed
