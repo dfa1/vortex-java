@@ -65,7 +65,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         }
         DType endsDtype = new DType.Primitive(endsPtype, false);
         Array endsArr = ctx.decodeChild(0, endsDtype, numRuns);
-        Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
+        Array endsData = MaskedArray.innerOrSelf(endsArr);
         MemorySegment endsSeg = ctx.materialize(endsData);
         validateEnds(endsSeg, endsPtype, numRuns, offset, n);
 
@@ -77,12 +77,9 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         // surfaces as a MaskedArray; dropping its mask expanded null runs to a filler
         // value (e.g. u16? null rows emitting the FoR base) — #225.
         Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
-        BoolArray valuesValidity = null;
-        Array valuesData = valuesArr;
-        if (valuesArr instanceof MaskedArray m) {
-            valuesData = m.inner();
-            valuesValidity = m.validity();
-        }
+        MaskedArray.Unwrapped unwrappedValues = MaskedArray.unwrap(valuesArr);
+        Array valuesData = unwrappedValues.inner();
+        BoolArray valuesValidity = unwrappedValues.validity();
 
         if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
             // The values child is untrusted: an all-null run column decodes to NullArray, and a

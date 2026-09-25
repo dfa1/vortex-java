@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
@@ -41,18 +40,13 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
         // validity IS its encoded child's, and the child dtype inherits the nullability.
         // Decode as an Array so a masked child is split rather than flattened (#210).
         Array encoded = ctx.decodeChild(0, new DType.Primitive(unsigned, p.nullable()), n);
-        BoolArray validity = null;
-        Array rawEncoded = encoded;
-        if (encoded instanceof MaskedArray masked) {
-            rawEncoded = masked.inner();
-            validity = masked.validity();
-        }
-        MemorySegment src = ctx.materialize(rawEncoded);
+        MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(encoded);
+        MemorySegment src = ctx.materialize(unwrapped.inner());
         int elemBytes = signed.byteSize();
         long srcCap = SegmentBroadcast.capacity(src, elemBytes);
 
         Array result = decodeUnwrapped(ctx, signed, n, src, srcCap);
-        return validity != null ? new MaskedArray(result, validity) : result;
+        return MaskedArray.wrapIfPresent(result, unwrapped.validity());
     }
 
     private static Array decodeUnwrapped(DecodeContext ctx, PType signed, long n, MemorySegment src, long srcCap) {
