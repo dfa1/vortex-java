@@ -56,12 +56,10 @@ sealed interface ColumnBuilder {
 /// [PqStruct] values (or `null`), one per row/element.
 final class StructColumnBuilder implements ColumnBuilder {
 
-    private final DType.Struct dtype;
     private final List<ColumnBuilder> fieldBuilders;
     private final List<Boolean> validity;
 
     StructColumnBuilder(DType.Struct dtype) {
-        this.dtype = dtype;
         this.fieldBuilders = new ArrayList<>(dtype.fieldTypes().size());
         for (DType fieldType : dtype.fieldTypes()) {
             fieldBuilders.add(ColumnBuilder.forType(fieldType));
@@ -106,14 +104,12 @@ final class StructColumnBuilder implements ColumnBuilder {
 /// into one child [ColumnBuilder], offset-delimited per the `vortex.list` wire shape.
 final class ListColumnBuilder implements ColumnBuilder {
 
-    private final DType.List dtype;
     private final ColumnBuilder elementBuilder;
     private final List<Long> offsets = new ArrayList<>();
     private final List<Boolean> validity;
     private long runningCount;
 
     ListColumnBuilder(DType.List dtype) {
-        this.dtype = dtype;
         this.elementBuilder = ColumnBuilder.forType(dtype.elementType());
         this.validity = dtype.nullable() ? new ArrayList<>() : null;
         offsets.add(0L);

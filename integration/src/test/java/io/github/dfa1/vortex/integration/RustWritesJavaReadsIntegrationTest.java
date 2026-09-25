@@ -154,7 +154,7 @@ class RustWritesJavaReadsIntegrationTest {
         try (var vf = VortexReader.open(file, ReadRegistry.empty())) {
             if (vf.dtype() instanceof DType.Struct struct) {
                 for (int i = 0; i < struct.fieldNames().size(); i++) {
-                    if (struct.fieldTypes().get(i) instanceof DType.Primitive(PType pt, boolean _) && pt == PType.I64) {
+                    if (struct.fieldTypes().get(i) instanceof DType.Primitive(PType pt, _) && pt == PType.I64) {
                         return struct.fieldNames().get(i).value();
                     }
                 }

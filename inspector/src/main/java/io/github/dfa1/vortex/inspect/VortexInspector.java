@@ -190,7 +190,7 @@ public final class VortexInspector {
             case DType.Map(var key, var value, var keysSorted, var nullable) ->
                     "map<" + formatDType(key) + ", " + formatDType(value)
                             + ", keys_sorted=" + keysSorted + ">" + (nullable ? "?" : "");
-            case DType.Extension(var id, var _, var _, var nullable) ->
+            case DType.Extension(var id, _, _, var nullable) ->
                     "ext<" + id + ">" + (nullable ? "?" : "");
             case DType.Variant(var nullable) -> "variant" + (nullable ? "?" : "");
         };

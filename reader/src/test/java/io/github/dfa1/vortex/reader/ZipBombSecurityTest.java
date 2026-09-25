@@ -39,9 +39,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class ZipBombSecurityTest {
 
-    // ~130-byte file claims 1 billion I64 rows; used for both attack vectors.
-    private static final long BOMB = 1_000_000_000L;
-
     // ── Attack 1: ConstantEncoding + inflated flat row_count ──────────────────
     //
     // A tiny ~130-byte file claims many rows encoded as a constant. Before the fix,

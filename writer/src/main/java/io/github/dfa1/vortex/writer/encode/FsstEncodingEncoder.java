@@ -69,12 +69,12 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// @return the terminal `vortex.fsst` encode result
     static EncodeResult toEncodeResult(Fsst c, Arena arena) {
         long uncompLenBytes = c.uncompLenPType().byteSize();
-        MemorySegment uncompLenBuf = arena.allocate(Math.max((long) c.n() * uncompLenBytes, 1));
+        MemorySegment uncompLenBuf = arena.allocate(Math.max(c.n() * uncompLenBytes, 1));
         for (int i = 0; i < c.n(); i++) {
             PTypeIO.set(uncompLenBuf, i * uncompLenBytes, c.uncompLenPType(), c.uncompLens()[i]);
         }
         long codesOffBytes = c.codesOffPType().byteSize();
-        MemorySegment codesOffBuf = arena.allocate((long) (c.n() + 1) * codesOffBytes);
+        MemorySegment codesOffBuf = arena.allocate((c.n() + 1) * codesOffBytes);
         for (int i = 0; i <= c.n(); i++) {
             PTypeIO.set(codesOffBuf, i * codesOffBytes, c.codesOffPType(), c.codesOffsets()[i]);
         }
