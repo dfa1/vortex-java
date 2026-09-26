@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `vortex.dict` on a primitive column now writes the `DictMetadata` protobuf and `[codes, values]` child order the Rust reader expects, instead of a legacy 1-byte metadata the Rust reader rejected outright. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - Floating-point `WHERE` filters no longer let a `NaN` value satisfy an ordering comparison it should always fail. ([#406](https://github.com/dfa1/vortex-java/issues/406))
 
 ## [0.14.4] — 2026-09-25

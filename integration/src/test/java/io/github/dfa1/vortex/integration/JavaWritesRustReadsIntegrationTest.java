@@ -1414,6 +1414,35 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_primitiveDictEncoding_i64(@TempDir Path tmp) throws IOException {
+        // Given — the `vortex.dict` ENCODING on a primitive column, which is a different path from
+        // the global-dict LAYOUT exercised by javaWriter_rustReader_globalDict_i64 below. Global
+        // dict is off so the cascade competition picks the encoding itself, and the values are few
+        // but far apart so dict beats FoR + bitpacking (a narrow range would let bitpacking win and
+        // silently stop testing dict at all).
+        //
+        // This path used to write a 1-byte metadata holding only the code ptype, with children
+        // ordered [values, codes]. Our own reader still accepts that shape, so every Java-only
+        // round-trip passed while the Rust reader rejected the file outright with
+        // "failed to decode Protobuf message: invalid tag value: 0".
+        Path file = tmp.resolve("java_dict_encoding_i64.vtx");
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
+        long[] pool = {-8_000_000_000_000L, 77L, 4_100_000_000_000L, -3L, 9_000_000_000_000L, 12345L, -7_777_777_777L};
+        long[] data = new long[4096];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = pool[i % pool.length];
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3).withGlobalDict(false))) {
+            // When
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
+        }
+
+        // Then
+        assertThat(readLongColumn(file, "v")).containsExactly(data);
+    }
+
+    @Test
     void javaWriter_rustReader_globalDict_i64(@TempDir Path tmp) throws IOException {
         // Given — low-cardinality I64 column triggers global dict across two chunks
         Path file = tmp.resolve("java_globaldict_i64.vtx");

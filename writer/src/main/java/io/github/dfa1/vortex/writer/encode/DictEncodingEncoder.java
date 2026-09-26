@@ -70,12 +70,18 @@ public final class DictEncodingEncoder implements EncodingEncoder {
             writeCodeToSeg(codesBuf, codePType, i, readCodeFromArr(d.codesArr(), codePType, i));
         }
 
-        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) codePType.ordinal()});
+        // Wire shape must match the Rust reference: DictMetadata proto, children [codes, values]
+        // (`DictArray::new_unchecked(codes, values)`). This path used to emit a 1-byte metadata
+        // holding just the code ptype with children [values, codes]; our own reader still accepts
+        // that (DictEncodingDecoder#decodeLegacyJava) but the Rust reader rejected the file with
+        // "failed to decode Protobuf message: invalid tag value: 0" — any primitive column where
+        // dict won the cascade was unreadable by vortex-jni.
+        MemorySegment meta = MemorySegment.ofArray(dictMetadata(d));
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode rootNode = new EncodeNode(
                 EncodingId.VORTEX_DICT, meta,
-                new EncodeNode[]{valuesNode, codesNode},
+                new EncodeNode[]{codesNode, valuesNode},
                 new int[0]);
 
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
@@ -91,15 +97,16 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         DictData d = buildDictData(dtype, data);
         PType codePType = d.codePType();
 
-        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) codePType.ordinal()});
+        // Same [codes, values] wire shape as the terminal path above.
+        MemorySegment meta = MemorySegment.ofArray(dictMetadata(d));
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_DICT, meta,
-                new EncodeNode[]{valuesNode, null},
+                new EncodeNode[]{null, valuesNode},
                 new int[0]);
 
         DType codesDtype = new DType.Primitive(codePType, false);
-        ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 1);
+        ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 0);
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
         return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
@@ -300,7 +307,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
             }
             default -> codes;
         };
-        return new DictData(valuesBuf, codesArr, codePType, len);
+        return new DictData(valuesBuf, codesArr, codePType, len, dictSize);
     }
 
     private static PType codePType(int dictSize) {
@@ -405,6 +412,17 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private record DictData(MemorySegment valuesBuf, Object codesArr, PType codePType, int len) {
+    /// The `vortex.encodings.DictMetadata` protobuf for a primitive dictionary, matching what the
+    /// Rust reader expects and what the Utf8 path already emitted.
+    private static byte[] dictMetadata(DictData d) {
+        return new ProtoDictMetadata(
+                d.dictSize(),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(d.codePType().ordinal()),
+                null,
+                null
+        ).encode();
+    }
+
+    private record DictData(MemorySegment valuesBuf, Object codesArr, PType codePType, int len, int dictSize) {
     }
 }
