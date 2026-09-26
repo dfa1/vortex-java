@@ -46,19 +46,21 @@ public record ArrayStats(
         if (options == StatsOptions.NONE) {
             return new ArrayStats(n, -1, 0, 0, false);
         }
-        // Sized for the low-cardinality case and grown by doubling from there, NOT for `n`:
-        // pre-sizing to min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call
-        // even for a 500-distinct column, and that pair was the single largest allocation source
-        // in a cascade competition (the arrays are thrown away when compute() returns).
-        // Sized for the low-cardinality case and grown by doubling from there, NOT for `n`:
-        // pre-sizing to min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call
-        // even for a 500-distinct column, and that pair was the single largest allocation source
-        // in a cascade competition (the arrays are thrown away when compute() returns).
+        // Sized for the low-cardinality case and grown from there, NOT for `n`: pre-sizing to
+        // min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call even for a
+        // 500-distinct column, and that pair was the single largest allocation source in a
+        // cascade competition. The growth factor, not this floor, is what keeps a
+        // high-cardinality column from rehashing its way up — see LongCounts#grow.
+        // Sized for the low-cardinality case and grown from there, NOT for `n`: pre-sizing to
+        // min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call even for a
+        // 500-distinct column, and that pair was the single largest allocation source in a
+        // cascade competition. The growth factor, not this floor, is what keeps a
+        // high-cardinality column from rehashing its way up — see LongCounts#grow.
         if (!options.countDistinct() && !options.trackMostFrequent()) {
             // Nothing to accumulate — the scan below would read every element and discard it.
             return new ArrayStats(n, -1, 0, 0, false);
         }
-        LongCounts counts = new LongCounts(Math.min(n, 512));
+        LongCounts counts = new LongCounts(Math.min(n, 2048));
 
         // Stop once the distinct count passes half the rows: past that point every consumer's
         // verdict is already determined, so the remaining probes cannot change any decision.
@@ -237,11 +239,17 @@ public record ArrayStats(
             return size;
         }
 
+        /// Quadruples rather than doubles. Starting small keeps the common low-cardinality
+        /// column cheap, but doubling made a high-cardinality one rehash six times on the way up
+        /// and `grow()` alone measured 10.5% of a cascading write. Growing by 4x halves the
+        /// rehashes without charging low-cardinality columns for capacity they never use —
+        /// raising the starting floor instead won on high-cardinality corpora but cost 3.9% on a
+        /// low-cardinality one, which is the common case.
         private void grow() {
             long[] oldKeys = keys;
             int[] oldCounts = counts;
-            keys = new long[oldKeys.length * 2];
-            counts = new int[oldCounts.length * 2];
+            keys = new long[oldKeys.length * 4];
+            counts = new int[oldCounts.length * 4];
             mask = keys.length - 1;
             for (int i = 0; i < oldKeys.length; i++) {
                 if (oldCounts[i] != 0) {
