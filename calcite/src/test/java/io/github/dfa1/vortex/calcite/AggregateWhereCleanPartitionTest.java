@@ -275,6 +275,71 @@ class AggregateWhereCleanPartitionTest {
     }
 
     @Test
+    void floatingColumnFullyOutOfRangeFoldsFromStats() throws Exception {
+        // Given a clustered F64 key whose values never reach the threshold below (issue #406 gap 3):
+        // before PredicateEvaluator/PrimitiveFilter became NaN-correct, ANY floating filter column
+        // abandoned the fold outright, even in a case with no NaN in play at all and every zone
+        // provably excluded — a correct, decode-free empty answer the fold can now recognize.
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("price"), ColumnName.of("vol")),
+                List.of(new DType.Primitive(PType.F64, false), new DType.Primitive(PType.I64, false)),
+                false);
+        Path f = tmp.resolve("floating-out.vortex");
+        writeChunks(f, schema,
+                Map.of(ColumnName.of("price"), new double[]{1.0, 2.0, 3.0, 4.0},
+                        ColumnName.of("vol"), new long[]{10, 20, 30, 40}),
+                Map.of(ColumnName.of("price"), new double[]{5.0, 6.0, 7.0, 8.0},
+                        ColumnName.of("vol"), new long[]{50, 60, 70, 80}));
+
+        try (Connection conn = connect(f)) {
+            // When price >= 1000 excludes every row in every zone — no boundary, so the fold is
+            // still worth it even though a floating column can never contribute an IN zone
+            String sql = "select sum(vol) s, count(*) c from vtx.t where price >= 1000";
+            assertThat(explain(conn, sql)).containsIgnoringCase("Values").doesNotContain("TableScan");
+
+            // And the answer is the correct empty aggregate: SUM over zero rows is SQL NULL
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                assertThat(rs.getObject("s")).isNull();
+                assertThat(rs.getLong("c")).isEqualTo(0);
+            }
+        }
+    }
+
+    @Test
+    void nanRowNeverMatchesAFloatingWhereFilterEvenAfterAbandoningToScan() throws Exception {
+        // Given a NaN price alongside ordinary values that would all otherwise satisfy the filter
+        // below. A mix like this makes every zone at best a BOUNDARY under the floating column's
+        // classify (never IN), so the fold abandons to a full scan — this test proves that scan
+        // path (VortexEnumerator -> Compute#matches -> PredicateEvaluator) is NaN-correct too, not
+        // just the fold's own classify.
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("price"), ColumnName.of("vol")),
+                List.of(new DType.Primitive(PType.F64, false), new DType.Primitive(PType.I64, false)),
+                false);
+        Path f = tmp.resolve("floating-nan.vortex");
+        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        try (var ch = FileChannel.open(f, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("price"), new double[]{1.0, Double.NaN, 3.0, 4.0},
+                    ColumnName.of("vol"), new long[]{10, 999, 30, 40}));
+        }
+
+        try (Connection conn = connect(f)) {
+            // When summing vol over rows where price >= 0 — every ordinary row matches, the NaN
+            // row must not
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("select sum(vol) s, count(*) c from vtx.t where price >= 0")) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(80); // 10 + 30 + 40, NOT + 999
+                assertThat(rs.getLong("c")).isEqualTo(3);
+            }
+        }
+    }
+
+    @Test
     void isNullFoldsFromStatsOnCleanPartition() throws Exception {
         // Given a nullable val whose null-ness partitions the zones cleanly: chunk 0 is entirely
         // NULL, chunk 1 entirely non-null. `val IS NULL` then selects chunk 0 whole and excludes

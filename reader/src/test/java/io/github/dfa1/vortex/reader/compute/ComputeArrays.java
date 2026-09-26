@@ -69,6 +69,16 @@ final class ComputeArrays {
         return new MaskedArray(longArray(arena, values), boolArray(arena, valid));
     }
 
+    /// Wraps an `f64` child with a validity bitmap.
+    ///
+    /// @param arena  the allocator for the off-heap buffers
+    /// @param values the element values (the value at a null position is ignored by the kernels)
+    /// @param valid  per-position validity, parallel to `values`
+    /// @return a [MaskedArray] over an [DType#F64] child
+    static MaskedArray maskedDoubleArray(Arena arena, double[] values, boolean[] valid) {
+        return new MaskedArray(doubleArray(arena, values), boolArray(arena, valid));
+    }
+
     /// Builds a dictionary-encoded `i64` array: a pool of distinct values indexed by per-row `u8`
     /// codes. Decodes to `pool[codes[i]]` at each row.
     ///

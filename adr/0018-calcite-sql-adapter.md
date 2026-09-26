@@ -107,13 +107,13 @@ Phases 0–2 are implemented and tested:
 
 - **Phase 1 landed.** `VortexTable` is a `ProjectableFilterableTable`: projection prunes columns;
   `=, <>, <, <=, >, >=, AND, BETWEEN, IN` translate to a reader `RowFilter` for zone-map chunk
-  skipping. A predicate captured *in full* (and over no floating column — see below) is also
-  enforced row-by-row in the enumerator via `Compute#matches` and removed from Calcite's own
-  filters list, so Calcite does not wrap a redundant `.where()` re-check around it; a predicate
-  the translation only partially captures, or one over a floating column, is left in the list for
-  Calcite's own (NaN-correct) row check. Demo: a `date` range over 1M rows decodes **1 of 100
-  chunks** (99% pruned), exact result, and `EXPLAIN` shows `filters`/`projects` folded into
-  `BindableTableScan`.
+  skipping. A predicate captured *in full* is also enforced row-by-row in the enumerator via
+  `Compute#matches` (which routes through the reader's `NaN`-correct `PredicateEvaluator` /
+  `PrimitiveFilter`, floating columns included) and removed from Calcite's own filters list, so
+  Calcite does not wrap a redundant `.where()` re-check around it; a predicate the translation
+  only partially captures is left in the list for Calcite's own row check. Demo: a `date` range
+  over 1M rows decodes **1 of 100 chunks** (99% pruned), exact result, and `EXPLAIN` shows
+  `filters`/`projects` folded into `BindableTableScan`.
 - **Phase 2 landed (MIN/MAX/COUNT/SUM/AVG).** `VortexAggregatePushDownRule` rewrites a whole-table
   `MIN`/`MAX`/`COUNT`/`SUM` (no `GROUP BY`, numeric columns) into a single-row `LogicalValues` from
   the stats — the optimized plan has **no scan and no aggregate**. `SUM` folds the per-zone `SUM`
@@ -169,10 +169,15 @@ selects are decoded and reduced under a row-level filter mask. The enabling read
 as `VortexReader.decodeChunk(chunkIndex, columns)` (decode a chosen subset of chunks so the
 fully-covered zones are not decoded); the row-level predicate evaluation runs through the ADR 0013
 compute kernels (`Compute.filter` → `Mask`, then `Compute.sum/count/min/max`). A boundary-bearing
-filter now decodes only its one or two straddling chunks instead of every surviving chunk. The fold
-abandons to the (correct, zone-map-pruned) scan when it cannot be trusted: a `U64` column (no wider
-box to zero-extend its zone-map stat into) or a floating-point filter column (NaN ordering), a
-non-numeric `SUM`, or a missing/misaligned zone map.
+filter now decodes only its one or two straddling chunks instead of every surviving chunk. The
+reader's `PredicateEvaluator` / `PrimitiveFilter` are `NaN`-correct (a `NaN` value never satisfies
+an ordering comparison), so a floating filter column's boundary decode is trustworthy — but its
+zone-map stats (min/max/null count) can never prove a zone fully `IN` (a hidden `NaN` isn't
+`null`, so the null count can't rule it out), so such a zone is always classified at best
+`BOUNDARY`. The fold still abandons to the (correct, zone-map-pruned) scan when it cannot be
+trusted: a `U64` column (no wider box to zero-extend its zone-map stat into), a zone with at least
+one `BOUNDARY` but no `IN` (no fold win over a scan — inherent for any floating filter column
+outside the all-`OUT` case), a non-numeric `SUM`, or a missing/misaligned zone map.
 
 **Two doors, chosen by query shape.** Calcite is the right tool for *reducing* queries (filter
 / aggregate / group-by), where push-down shrinks the result and the `Object[]` boundary

@@ -43,13 +43,13 @@ import java.util.concurrent.atomic.AtomicLong;
 /// Projection (`projects`) is honored exactly — only the requested columns are decoded and
 /// returned. Every filter (`filters`) that translates to a [RowFilter] is pushed into the scan for
 /// *chunk skipping* via zone-map statistics (approximate — it drops whole chunks that cannot
-/// match, not individual rows). A filter captured *in full* by the translation, and over no
-/// floating column, is additionally enforced row-by-row in the returned enumerator and removed
-/// from Calcite's own `filters` list, so Calcite does not also re-check it; a filter the
-/// translation only partially captures, or one over a floating column (whose NaN ordering this
-/// module's comparator gets wrong), is left in `filters` for Calcite's own row check. The win is
-/// decoding far fewer chunks when the filter is selective on a clustered column, and — for a
-/// fully captured filter — not re-evaluating it a second time over the chunks that are decoded.
+/// match, not individual rows). A filter captured *in full* by the translation is additionally
+/// enforced row-by-row in the returned enumerator (via the `NaN`-correct
+/// [Compute#matches(io.github.dfa1.vortex.reader.Chunk, RowFilter, long)]) and removed from
+/// Calcite's own `filters` list, so Calcite does not also re-check it; a filter the translation
+/// only partially captures is left in `filters` for Calcite's own row check. The win is decoding
+/// far fewer chunks when the filter is selective on a clustered column, and — for a fully captured
+/// filter — not re-evaluating it a second time over the chunks that are decoded.
 public final class VortexTable extends AbstractTable implements ProjectableFilterableTable, TranslatableTable {
 
     private final Path file;
@@ -224,22 +224,6 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                     return Optional.empty();
                 }
             }
-            // A boundary zone's row mask evaluates the filter through the compute kernel, whose
-            // Compare.values uses Double.compare — where NaN sorts as the maximum. So a predicate
-            // like `f >= v` (lowered to Eq OR Gt) would SELECT a NaN row, but SQL (and Calcite's own
-            // row filter) treats `NaN >= v` as false. Since the boundary fold REPLACES the scan (it
-            // is the final answer, with no per-row recheck), a NaN in a partially-selected float
-            // filter column would be a silent wrong answer. Conservatively abandon the push-down for
-            // any floating-point FILTER column and let the scan (NaN-correct) compute it. Scoped to
-            // the mask columns: a floating-point AGG column is fine (NaN data sums to NaN, exactly as
-            // a scan would). The proper follow-up is a SQL-NaN-correct compare in the kernel, but
-            // Compare.values is shared with the tier-1 classify and copied from ScanIterator — out
-            // of scope here.
-            for (String column : filterColumns) {
-                if (isFloating(struct, column)) {
-                    return Optional.empty();
-                }
-            }
             long[] rowCounts = scan.chunkRowCounts();
             int zones = rowCounts.length;
             java.util.Map<String, List<ArrayStats>> zoneStats = new java.util.HashMap<>();
@@ -262,7 +246,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             int inZones = 0;
             int boundaryZones = 0;
             for (int zone = 0; zone < zones; zone++) {
-                Match match = classify(filter, zone, zoneStats, rowCounts[zone]);
+                Match match = classify(filter, zone, zoneStats, rowCounts[zone], struct);
                 matches[zone] = match;
                 if (match == Match.IN) {
                     inZones++;
@@ -427,12 +411,13 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// three-valued logic: a row that is `NULL` in a compared column does not match a comparison,
     /// so a zone is [Match#IN] for a comparison only when it also provably carries no nulls.
     private static Match classify(RowFilter filter, int zone,
-                                  java.util.Map<String, List<ArrayStats>> zoneStats, long rowCount) {
+                                  java.util.Map<String, List<ArrayStats>> zoneStats, long rowCount,
+                                  DType.Struct struct) {
         return switch (filter) {
             case RowFilter.And(var parts) -> {
                 boolean allIn = true;
                 for (RowFilter part : parts) {
-                    Match m = classify(part, zone, zoneStats, rowCount);
+                    Match m = classify(part, zone, zoneStats, rowCount, struct);
                     if (m == Match.OUT) {
                         yield Match.OUT; // one conjunct excludes the whole zone
                     }
@@ -442,13 +427,32 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield allIn ? Match.IN : Match.BOUNDARY;
             }
-            case RowFilter.Column(var col, var predicate) ->
-                    classifyColumn(predicate, zoneStats.get(col.value()).get(zone), rowCount);
+            case RowFilter.Column(var col, var predicate) -> classifyColumn(predicate,
+                    zoneStats.get(col.value()).get(zone), rowCount, isFloating(struct, col.value()));
         };
     }
 
-    /// Classifies one zone against a column-bound [Predicate] from the zone's statistics `s`. The
-    /// comparison ops carry the same three-valued-logic semantics as before the [RowFilter] /
+    /// Classifies one zone against a column-bound [Predicate] from the zone's statistics `s`,
+    /// downgrading an otherwise-[Match#IN] result to [Match#BOUNDARY] for a `floating` column: the
+    /// zone-map stats (min/max/null count) cannot reveal a hidden `NaN` value — `NaN` is not `null`,
+    /// so it never shows up in the null count — and a `NaN` row must never satisfy a value
+    /// comparison (IEEE 754), so an "every row matches" verdict drawn from stats alone cannot be
+    /// trusted for such a column. Downgrading to [Match#BOUNDARY] routes it through the boundary
+    /// tier's row-level mask instead, which — via [PredicateEvaluator] / [PrimitiveFilter] — is
+    /// `NaN`-correct. [Match#OUT] stays trustworthy either way: it already requires stats that
+    /// disprove a match outright, which a hidden `NaN` cannot undermine (see [#classifyColumnRaw]).
+    ///
+    /// @param predicate the column-bound value-test
+    /// @param s         the zone's statistics for that column
+    /// @param rowCount  the zone's row count
+    /// @param floating  whether the column is a floating-point primitive
+    /// @return how the zone relates to the predicate
+    private static Match classifyColumn(Predicate predicate, ArrayStats s, long rowCount, boolean floating) {
+        Match match = classifyColumnRaw(predicate, s, rowCount);
+        return floating && match == Match.IN ? Match.BOUNDARY : match;
+    }
+
+    /// The comparison ops carry the same three-valued-logic semantics as before the [RowFilter] /
     /// [Predicate] unification: an unrecognized stat shape or a partially-overlapping zone is
     /// [Match#BOUNDARY], a zone provably outside the predicate is [Match#OUT], and a zone every row
     /// of which matches (which, for a value comparison, also requires the zone to carry no nulls) is
@@ -460,8 +464,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param predicate the column-bound value-test
     /// @param s         the zone's statistics for that column
     /// @param rowCount  the zone's row count
-    /// @return how the zone relates to the predicate
-    private static Match classifyColumn(Predicate predicate, ArrayStats s, long rowCount) {
+    /// @return how the zone relates to the predicate, before the floating-column IN downgrade
+    private static Match classifyColumnRaw(Predicate predicate, ArrayStats s, long rowCount) {
         return switch (predicate) {
             case Predicate.Eq(var value) -> {
                 if (uncomparable(s, value)) {
@@ -550,9 +554,10 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype() == PType.U64;
     }
 
-    /// Whether `column` is a floating-point primitive, whose compute-kernel compare
-    /// ([Compare#values(Object, Object, DType)]) sorts NaN as the maximum and so cannot soundly fold a
-    /// boundary partition (the fold abandons such a filter column to the NaN-correct scan).
+    /// Whether `column` is a floating-point primitive — used by [#classifyColumn(Predicate,
+    /// ArrayStats, long, boolean)] to downgrade an otherwise-[Match#IN] zone to [Match#BOUNDARY]:
+    /// zone-map stats cannot reveal a hidden `NaN` (it is not `null`, so the null count misses it
+    /// too), and a `NaN` row must never satisfy a value comparison.
     private static boolean isFloating(DType.Struct struct, String column) {
         int idx = struct.fieldNames().indexOf(ColumnName.of(column));
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isFloating();
@@ -649,20 +654,17 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         Optional<RowFilter> pushed = RexFilterTranslator.toRowFilter(filters, allNames, allTypes);
 
         // Exact push-down: a top-level predicate captured *in full* is enforced row-by-row below
-        // (via Compute#matches) and removed from Calcite's own re-check list, so Calcite stops
+        // (via Compute#matches, which routes through the NaN-correct PredicateEvaluator /
+        // PrimitiveFilter) and removed from Calcite's own re-check list, so Calcite stops
         // redundantly re-evaluating rows this scan has already excluded — Calcite's
         // TableScanNode#createProjectableFilterable wraps a `.where()` residual check around
-        // whatever is still left in `filters` after this call returns. Skipped for any predicate
-        // over a floating column: enforcing it here would share Compare's Double.compare
-        // NaN-as-maximum ordering, which disagrees with SQL's NaN-is-never-true comparisons — the
-        // same reason [#filteredFold(RowFilter, String)] excludes floating filter columns. Left in
-        // `filters`, such a predicate is still applied correctly by Calcite's own NaN-correct check.
+        // whatever is still left in `filters` after this call returns.
         List<RowFilter> exactParts = new ArrayList<>();
         java.util.Iterator<RexNode> it = filters.iterator();
         while (it.hasNext()) {
             RexNode node = it.next();
             Optional<RowFilter> exact = RexFilterTranslator.translateStrict(List.of(node), allNames, allTypes);
-            if (exact.isPresent() && !referencesFloating(exact.get(), struct)) {
+            if (exact.isPresent()) {
                 exactParts.add(exact.get());
                 it.remove();
             }
@@ -694,16 +696,6 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 return new VortexEnumerator(file, chunksScannedLastQuery, scanOptions, outNames, outTypes,
                         enumeratorFilter);
             }
-        };
-    }
-
-    /// Whether `filter` references any floating-point column — the guard behind the row-by-row
-    /// exact push-down in [#scan(DataContext, List, int[])], for the same NaN-ordering reason as
-    /// [#isFloating(DType.Struct, String)]'s use in [#filteredFold(RowFilter, String)].
-    private static boolean referencesFloating(RowFilter filter, DType.Struct struct) {
-        return switch (filter) {
-            case RowFilter.And(var parts) -> parts.stream().anyMatch(p -> referencesFloating(p, struct));
-            case RowFilter.Column(var col, var _) -> isFloating(struct, col.value());
         };
     }
 

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 
 /// The generic, per-element [Predicate] evaluator: it tests one [Predicate] against a single position
@@ -25,39 +26,49 @@ final class PredicateEvaluator {
     /// @return `true` if the value at `i` satisfies `predicate`
     static boolean evaluate(Array array, long i, Predicate predicate) {
         return switch (predicate) {
-            case Predicate.Eq(var value) -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) == 0;
-            case Predicate.Neq(var value) -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) != 0;
-            case Predicate.Lt(var value) -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) < 0;
-            case Predicate.Gt(var value) -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) > 0;
-            case Predicate.Lte(var value) -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) <= 0;
-            case Predicate.Gte(var value) -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) >= 0;
-            case Predicate.Between between -> evaluateBetween(array, i, between);
             case Predicate.IsNull _ -> Values.isNullAt(array, i);
             case Predicate.IsNotNull _ -> !Values.isNullAt(array, i);
             case Predicate.And(var left, var right) -> evaluate(array, i, left) && evaluate(array, i, right);
             case Predicate.Or(var left, var right) -> evaluate(array, i, left) || evaluate(array, i, right);
+            default -> !Values.isNullAt(array, i) && matchesValue(array, i, predicate);
         };
     }
 
-    /// Tests the inclusive `[lo, hi]` range, reading the value once so the two bound compares share a
-    /// single decode.
+    /// Tests a non-null value at position `i` against a value-comparison leaf (`Eq` / `Neq` / `Lt` /
+    /// `Gt` / `Lte` / `Gte` / `Between`).
     ///
-    /// @param array   the array under test
-    /// @param i       the zero-based position
-    /// @param between the range predicate
-    /// @return `true` if the value at `i` lies within `[lo, hi]`
-    private static boolean evaluateBetween(Array array, long i, Predicate.Between between) {
-        if (Values.isNullAt(array, i)) {
-            return false;
+    /// A floating column dispatches through [PrimitiveFilter#lowerDouble(Predicate)] /
+    /// [PrimitiveFilter#matchDouble(double, PrimitiveFilter.DoubleOp, double, double)] — native
+    /// `<`/`>`/`==`/… double comparisons, IEEE-correct: a `NaN` value never satisfies an ordering
+    /// test. This is deliberately *not* routed through [Compare#values(Object, Object, DType)]: that
+    /// method reports a single three-way result, and no such result can make every derived
+    /// `<,>,<=,>=,==` comparison come out false at once the way IEEE's unordered `NaN` comparisons
+    /// require — [Compare#values(Object, Object, DType)]'s `Double.compare` ordering is correct for
+    /// `MIN`/`MAX`/sort (where a total order is required) but not for testing whether a value
+    /// satisfies a predicate. Every other column type keeps the existing width-agnostic
+    /// [Compare#values(Object, Object, DType)] dispatch.
+    ///
+    /// @param array     the array under test
+    /// @param i         the zero-based, non-null position
+    /// @param predicate the value-comparison leaf to test
+    /// @return `true` if the value at `i` satisfies `predicate`
+    private static boolean matchesValue(Array array, long i, Predicate predicate) {
+        if (array.dtype() instanceof DType.Primitive p && p.ptype().isFloating()) {
+            double v = ((Number) Values.valueAt(array, i)).doubleValue();
+            PrimitiveFilter.DoubleBound bound = PrimitiveFilter.lowerDouble(predicate);
+            return PrimitiveFilter.matchDouble(v, bound.op(), bound.lo(), bound.hi());
         }
-        Object value = Values.valueAt(array, i);
-        return Compare.values(value, between.lo(), array.dtype()) >= 0
-                && Compare.values(value, between.hi(), array.dtype()) <= 0;
+        Object at = Values.valueAt(array, i);
+        return switch (predicate) {
+            case Predicate.Eq(var value) -> Compare.values(at, value, array.dtype()) == 0;
+            case Predicate.Neq(var value) -> Compare.values(at, value, array.dtype()) != 0;
+            case Predicate.Lt(var value) -> Compare.values(at, value, array.dtype()) < 0;
+            case Predicate.Gt(var value) -> Compare.values(at, value, array.dtype()) > 0;
+            case Predicate.Lte(var value) -> Compare.values(at, value, array.dtype()) <= 0;
+            case Predicate.Gte(var value) -> Compare.values(at, value, array.dtype()) >= 0;
+            case Predicate.Between(var lo, var hi) ->
+                    Compare.values(at, lo, array.dtype()) >= 0 && Compare.values(at, hi, array.dtype()) <= 0;
+            default -> throw new IllegalStateException("unreachable non-value predicate: " + predicate);
+        };
     }
 }

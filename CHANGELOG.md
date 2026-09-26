@@ -5,6 +5,12 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Floating-point `WHERE` filters no longer let a `NaN` value satisfy an ordering comparison it should always fail. ([#406](https://github.com/dfa1/vortex-java/issues/406))
+
 ## [0.14.4] — 2026-09-25
 
 ### Fixed

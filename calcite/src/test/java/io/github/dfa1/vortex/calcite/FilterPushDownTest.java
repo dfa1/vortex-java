@@ -145,10 +145,10 @@ class FilterPushDownTest {
     }
 
     @Test
-    void floatingColumnPredicateIsLeftForCalciteToRecheck() throws Exception {
-        // Given a comparison over a floating column (f64, field 2): Compare's Double.compare
-        // orders NaN as the maximum, disagreeing with SQL's NaN-is-never-true comparisons, so
-        // VortexTable must not enforce this one itself (see VortexTable#referencesFloating).
+    void floatingColumnPredicateIsAlsoRemovedFromCalcitesRecheckList() throws Exception {
+        // Given a comparison over a floating column (f64, field 2): PredicateEvaluator /
+        // PrimitiveFilter are NaN-correct (issue #406 gap 3), so VortexTable can now enforce this
+        // one itself too, exactly like the non-floating case above.
         RexBuilder rexBuilder = new RexBuilder(new JavaTypeFactoryImpl());
         RelDataType doubleType = rexBuilder.getTypeFactory().createSqlType(SqlTypeName.DOUBLE);
         RexNode predicate = rexBuilder.makeCall(SqlStdOperatorTable.GREATER_THAN,
@@ -163,8 +163,47 @@ class FilterPushDownTest {
             }
         }
 
-        // Then the predicate stays in Calcite's list — still applied, just not by VortexTable
-        assertThat(filters).hasSize(1);
-        assertThat(rows).hasSize(3); // zone-map pruning still applies, so the boundary chunk is decoded whole
+        // Then the predicate was fully captured and removed from Calcite's list, and the rows it
+        // enforced itself are exact
+        assertThat(filters).isEmpty();
+        assertThat(rows).hasSize(3); // f64 > 3.0 matches 4.0, 5.0, 6.0
+    }
+
+    @Test
+    void nanRowNeverMatchesAFloatingPredicateVortexTableEnforcesItself(@TempDir Path localTmp) throws Exception {
+        // Given a file whose floating column has a NaN row alongside ordinary values that would
+        // all otherwise satisfy the predicate below
+        Path nanFile = localTmp.resolve("nan-filter.vortex");
+        try (var ch = FileChannel.open(nanFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var w = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+            w.writeChunk(Map.of(
+                    ColumnName.of("i64"), new long[]{1L, 2L, 3L},
+                    ColumnName.of("i32"), new int[]{1, 2, 3},
+                    ColumnName.of("f64"), new double[]{1.0, Double.NaN, 10.0},
+                    ColumnName.of("s"), new String[]{"a", "b", "c"},
+                    ColumnName.of("b"), new boolean[]{true, false, true}));
+        }
+
+        // And a fully-capturable predicate over that column, driven directly as Calcite's
+        // interpreter would (a raw, mutable RexNode list)
+        RexBuilder rexBuilder = new RexBuilder(new JavaTypeFactoryImpl());
+        RelDataType doubleType = rexBuilder.getTypeFactory().createSqlType(SqlTypeName.DOUBLE);
+        RexNode predicate = rexBuilder.makeCall(SqlStdOperatorTable.GREATER_THAN_OR_EQUAL,
+                rexBuilder.makeInputRef(doubleType, 2), rexBuilder.makeApproxLiteral(BigDecimal.ZERO, doubleType));
+        List<RexNode> filters = new ArrayList<>(List.of(predicate));
+
+        // When VortexTable enforces the predicate itself (removed from Calcite's re-check list)
+        List<Object[]> rows = new ArrayList<>();
+        try (Enumerator<Object[]> en = new VortexTable(nanFile).scan(null, filters, null).enumerator()) {
+            while (en.moveNext()) {
+                rows.add(en.current());
+            }
+        }
+
+        // Then the predicate was captured in full ...
+        assertThat(filters).isEmpty();
+        // ... and the NaN row (i64 = 2) never matched "f64 >= 0.0", even though every ordinary
+        // value here does
+        assertThat(rows).extracting(r -> r[0]).containsExactlyInAnyOrder(1L, 3L);
     }
 }
