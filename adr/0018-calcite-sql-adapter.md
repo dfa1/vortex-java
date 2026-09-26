@@ -115,9 +115,13 @@ Phases 0–2 are implemented and tested:
   over 1M rows decodes **1 of 100 chunks** (99% pruned), exact result, and `EXPLAIN` shows
   `filters`/`projects` folded into `BindableTableScan`.
 - **Phase 2 landed (MIN/MAX/COUNT/SUM/AVG).** `VortexAggregatePushDownRule` rewrites a whole-table
-  `MIN`/`MAX`/`COUNT`/`SUM` (no `GROUP BY`, numeric columns) into a single-row `LogicalValues` from
-  the stats — the optimized plan has **no scan and no aggregate**. `SUM` folds the per-zone `SUM`
-  rows and answers an all-null column as SQL `NULL`; `AVG` reduces to `SUM`/`COUNT`
+  `MIN`/`MAX`/`COUNT`/`SUM` (no `GROUP BY`; `SUM` numeric-only, `MIN`/`MAX` numeric or
+  `VARCHAR`/`CHAR` — issue #406 gap 4) into a single-row `LogicalValues` from the stats — the
+  optimized plan has **no scan and no aggregate**. A `VARCHAR` `MIN`/`MAX` wraps the writer's
+  full-string zone-map stat as an `NlsString` literal; `VortexTable`'s classify/compareStat already
+  had no numeric assumption, so this was purely a Rex-literal-construction gap, not a stats one.
+  `SUM` folds the per-zone `SUM` rows and answers an all-null column as SQL `NULL`; `AVG` reduces
+  to `SUM`/`COUNT`
   (`AggregateReduceFunctionsRule`) and rides the same path. The rule **auto-registers**: a
   `VortexTable` translates to a `VortexTableScan` whose `register()` installs the rules when the
   planner first sees the node, so a plain `jdbc:calcite:` connection rewrites these aggregates with

@@ -21,6 +21,8 @@ import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.util.NlsString;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -32,13 +34,13 @@ import java.util.Optional;
 /// without decoding a single data segment (ADR 0013 §6, ADR 0018 Phase 2).
 ///
 /// Fires only when it can answer *every* aggregate from statistics: no `GROUP BY`, and each call
-/// is `COUNT(*)`, `COUNT(col)`, `MIN(col)`, `MAX(col)`, or `SUM(col)` over a numeric column. `SUM`
-/// folds the per-zone `SUM` rows via [VortexTable#zoneSum(String)]; it emits the SQL `NULL` of an
-/// all-null (or empty) column, and abandons (falling back to the scan) for a column whose zone-map
-/// table cannot answer it — no zone map, an overflowed zone, or a zero fold whose null count is
-/// unknown (a genuine zero is indistinguishable from all-null). Anything else (a grouped aggregate,
-/// `MIN` on a non-numeric column, `AVG` that was not reduced to `SUM`/`COUNT`) leaves the plan
-/// untouched for the normal scan path.
+/// is `COUNT(*)`, `COUNT(col)`, `MIN(col)`, `MAX(col)` (numeric or `VARCHAR`/`CHAR`), or `SUM(col)`
+/// over a numeric column. `SUM` folds the per-zone `SUM` rows via [VortexTable#zoneSum(String)]; it
+/// emits the SQL `NULL` of an all-null (or empty) column, and abandons (falling back to the scan)
+/// for a column whose zone-map table cannot answer it — no zone map, an overflowed zone, or a zero
+/// fold whose null count is unknown (a genuine zero is indistinguishable from all-null). Anything
+/// else (a grouped aggregate, `SUM` on a non-numeric column, `AVG` that was not reduced to
+/// `SUM`/`COUNT`) leaves the plan untouched for the normal scan path.
 // Calcite 1.40 removed RelRule.Config.EMPTY; the modern RelRule.Config path requires the
 // Immutables annotation processor. The classic operand() constructor is deprecated but fully
 // supported and far lighter for a single adapter rule — suppression is localized and justified.
@@ -204,7 +206,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                             || (fold.nullCount() != null && fold.nullCount() == fold.rows());
                     yield provablyNoValues ? rexBuilder.makeNullLiteral(outType) : null;
                 }
-                yield numericLiteral(rexBuilder, value, outType);
+                yield minMaxLiteral(rexBuilder, value, outType);
             }
             case SUM -> {
                 if (agg.getArgList().size() != 1) {
@@ -300,8 +302,24 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         return rexBuilder.makeExactLiteral(BigDecimal.valueOf(value), type);
     }
 
-    /// Builds a literal for a non-null `MIN`/`MAX` value, supporting only numeric output types
-    /// (exact and approximate). A non-numeric value yields `null` so the rule abandons the rewrite.
+    /// Builds a literal for a non-null `MIN`/`MAX` value: a [String] zone-map stat (a `Utf8` column,
+    /// whose min/max the writer records as the full string, not a numeric summary) against a
+    /// `CHAR`/`VARCHAR` output type, wrapped as an [NlsString] — [RexBuilder#makeLiteral(Object,
+    /// RelDataType)] asserts a `CHAR`-family value already comes in that form, populating charset
+    /// and collation from `type` when the wrapper doesn't carry them. Anything else falls to
+    /// [#numericLiteral(RexBuilder, Object, RelDataType)].
+    private static RexLiteral minMaxLiteral(RexBuilder rexBuilder, Object value, RelDataType type) {
+        if (value instanceof String s
+                && (type.getSqlTypeName() == SqlTypeName.VARCHAR || type.getSqlTypeName() == SqlTypeName.CHAR)) {
+            return rexBuilder.makeLiteral(new NlsString(s, null, null), type);
+        }
+        return numericLiteral(rexBuilder, value, type);
+    }
+
+    /// Builds a literal for a non-null numeric value, supporting only numeric output types (exact
+    /// and approximate). A non-numeric value yields `null` so the rule abandons the rewrite — the
+    /// only caller for a non-numeric value is [#minMaxLiteral(RexBuilder, Object, RelDataType)],
+    /// which has already handled the `String`/`CHAR`-family case before falling here.
     private static RexLiteral numericLiteral(RexBuilder rexBuilder, Object value, RelDataType type) {
         if (!(value instanceof Number number)) {
             return null;

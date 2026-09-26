@@ -234,11 +234,13 @@ class AggregateWhereBoundaryTest {
     }
 
     @Test
-    void nonNumericMinAcrossBoundaryAbandonsButScanIsCorrect() throws Exception {
-        // Given a Utf8 column whose MIN the rule's literal builder cannot represent (it only emits
-        // numeric literals): even though the boundary fold can compute the string minimum, the
-        // rewrite must abandon so the scan returns the value. chunk 0 id 0..3 / name {"a".."d"},
-        // chunk 1 id 10..13 / name {"e".."h"}; `id > 0 AND id < 100` cuts chunk 0 (keeps b,c,d).
+    void nonNumericMinAcrossBoundaryNowFoldsFromStats() throws Exception {
+        // Given a Utf8 column's MIN across a WHERE-filtered boundary (issue #406 gap 4:
+        // minMaxLiteral now wraps a String stat as an NlsString literal instead of abandoning) —
+        // the boundary fold already computed the string minimum correctly ([VortexTable]'s
+        // classify/compareStat have no numeric assumption; only the Rex-literal builder did).
+        // chunk 0 id 0..3 / name {"a".."d"}, chunk 1 id 10..13 / name {"e".."h"};
+        // `id > 0 AND id < 100` cuts chunk 0 (keeps b,c,d).
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("name")),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Utf8(false)),
@@ -249,12 +251,12 @@ class AggregateWhereBoundaryTest {
                 Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13}, ColumnName.of("name"), new String[]{"e", "f", "g", "h"}));
 
         try (Connection conn = connect(f)) {
-            // When MIN over the string column is taken across the boundary — the rewrite abandons, so
-            // a scan remains in the plan
+            // When MIN over the string column is taken across the boundary — folded from stats, no
+            // scan left in the plan
             String sql = "select min(name) mn from vtx.t where id > 0 and id < 100";
-            assertThat(explain(conn, sql)).contains("TableScan");
+            assertThat(explain(conn, sql)).containsIgnoringCase("Values").doesNotContain("TableScan");
 
-            // And the scan still produces the correct minimum over the selected names {b,c,d,e,f,g,h}
+            // And the folded answer is the correct minimum over the selected names {b,c,d,e,f,g,h}
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery(sql)) {
                 rs.next();

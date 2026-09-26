@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `MIN`/`MAX` over a `VARCHAR` column now push down to a zone-map-stats-only `LogicalValues`, matching the existing numeric push-down. ([#406](https://github.com/dfa1/vortex-java/issues/406))
+
 ### Fixed
 
 - Floating-point `WHERE` filters no longer let a `NaN` value satisfy an ordering comparison it should always fail. ([#406](https://github.com/dfa1/vortex-java/issues/406))

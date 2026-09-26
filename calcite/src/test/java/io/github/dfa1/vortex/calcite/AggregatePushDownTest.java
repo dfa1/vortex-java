@@ -1,6 +1,11 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.writer.VortexWriter;
+import io.github.dfa1.vortex.writer.WriteOptions;
 
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.plan.RelOptUtil;
@@ -19,7 +24,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -90,6 +97,53 @@ class AggregatePushDownTest {
             assertThat(ohlcRow.get(1).getValueAs(Double.class)).isEqualTo(((Number) high.max()).doubleValue());
             assertThat(ohlcRow.get(2).getValueAs(Long.class)).isEqualTo((long) ROWS);
         }
+    }
+
+    @Test
+    void minMaxOnVarcharColumnRewritesToValuesFromStats(@TempDir Path localTmp) throws Exception {
+        // Given a whole-table MIN/MAX over a VARCHAR "symbol" column (issue #406 gap 4: string
+        // MIN/MAX push-down) — the writer records the full string as the zone-map min/max, not a
+        // numeric summary. A dedicated file, not the shared OHLC fixture: OHLC's "symbol" writes
+        // with globalDict=true, which — a separate, pre-existing gap — carries no zone-map min/max
+        // at all, so it would abandon regardless of this fix.
+        Path stringsFile = localTmp.resolve("strings.vortex");
+        DType.Struct stringsSchema = DType.structBuilder().field("symbol", DType.UTF8).build();
+        WriteOptions stringsOpts = new WriteOptions(4, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        try (var ch = FileChannel.open(stringsFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = VortexWriter.create(ch, stringsSchema, stringsOpts)) {
+            writer.writeChunk(Map.of(ColumnName.of("symbol"), new String[]{"AAPL", "MSFT", "NVDA", "TSLA"}));
+        }
+
+        SchemaPlus root = Frameworks.createRootSchema(true);
+        SchemaPlus vtx = root.add("vtx", new VortexSchema(Map.of("strings", stringsFile)));
+        FrameworkConfig config = Frameworks.newConfigBuilder()
+                .defaultSchema(vtx)
+                .parserConfig(org.apache.calcite.sql.parser.SqlParser.config()
+                        .withUnquotedCasing(org.apache.calcite.avatica.util.Casing.UNCHANGED))
+                .build();
+        Planner planner = Frameworks.getPlanner(config);
+        SqlNode parsed = planner.parse("select min(symbol), max(symbol) from strings");
+        RelNode logical = planner.rel(planner.validate(parsed)).rel;
+
+        // When the aggregate push-down rule runs
+        HepProgram program = new HepProgramBuilder()
+                .addRuleCollection(VortexAggregatePushDownRule.RULES)
+                .build();
+        HepPlanner hep = new HepPlanner(program);
+        hep.setRoot(logical);
+        RelNode optimized = hep.findBestExp();
+
+        // Then the plan is a single-row Values with no scan or aggregate left
+        String plan = RelOptUtil.toString(optimized);
+        assertThat(plan).contains("LogicalValues").doesNotContain("TableScan").doesNotContain("Aggregate");
+
+        Values values = findValues(optimized);
+        assertThat(values).isNotNull();
+        List<RexLiteral> symbolRow = values.getTuples().getFirst();
+
+        // And the literal values are the lexicographic min/max of the written symbols
+        assertThat(symbolRow.get(0).getValueAs(String.class)).isEqualTo("AAPL");
+        assertThat(symbolRow.get(1).getValueAs(String.class)).isEqualTo("TSLA");
     }
 
     @Test

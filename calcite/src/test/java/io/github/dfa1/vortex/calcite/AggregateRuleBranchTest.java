@@ -1,5 +1,11 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.MemorySize;
+import io.github.dfa1.vortex.writer.VortexWriter;
+import io.github.dfa1.vortex.writer.WriteOptions;
+
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.hep.HepPlanner;
@@ -16,7 +22,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,8 +45,19 @@ class AggregateRuleBranchTest {
     static void writeFile() throws Exception {
         Path file = tmp.resolve("ohlc.vortex");
         OhlcGenerator.write(file, ROWS, CHUNK);
+        // A second, dedicated file for the VARCHAR MIN/MAX test below: the shared OHLC fixture's
+        // "symbol" column writes with globalDict=true, which — a separate, pre-existing gap this
+        // test must not depend on — carries no zone-map min/max at all, so a globalDict-encoded
+        // Utf8 column always abandons regardless of the Calcite-side fix. `strings` disables it.
+        Path stringsFile = tmp.resolve("strings.vortex");
+        DType.Struct stringsSchema = DType.structBuilder().field("symbol", DType.UTF8).build();
+        WriteOptions stringsOpts = new WriteOptions(4, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        try (var ch = FileChannel.open(stringsFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = VortexWriter.create(ch, stringsSchema, stringsOpts)) {
+            writer.writeChunk(Map.of(ColumnName.of("symbol"), new String[]{"AAPL", "MSFT", "NVDA", "TSLA"}));
+        }
         SchemaPlus root = Frameworks.createRootSchema(true);
-        schema = root.add("vtx", new VortexSchema(Map.of("ohlc", file)));
+        schema = root.add("vtx", new VortexSchema(Map.of("ohlc", file, "strings", stringsFile)));
     }
 
     @Test
@@ -72,11 +91,22 @@ class AggregateRuleBranchTest {
     }
 
     @Test
-    void minOnNonNumericColumn_abandonsRewrite() {
-        // Given MIN(symbol) over a VARCHAR column — the stat value is non-numeric, numericLiteral
-        // returns null, the rewrite is abandoned
+    void minMaxOnVarcharColumn_rewritesToValues() {
+        // Given MIN/MAX(symbol) over a VARCHAR column with a real zone-map min/max (issue #406
+        // gap 4) — minMaxLiteral wraps the String stat as an NlsString literal instead of abandoning
         // When / Then
-        assertThat(optimize("select min(symbol) from ohlc")).contains("Aggregate");
+        assertThat(optimize("select min(symbol), max(symbol) from strings"))
+                .contains("LogicalValues").doesNotContain("Aggregate");
+    }
+
+    @Test
+    void minOnDateColumn_abandonsRewrite() {
+        // Given MIN("date") over a DATE column ("date" is a reserved word, needs quoting here since
+        // this planner isn't wired with the Babel parser) — the stat value IS a Number (days since
+        // epoch), but DATE isn't in minMaxLiteral's/numericLiteral's supported SqlTypeName sets
+        // (neither the CHAR family nor the exact/approximate numeric families), so it still abandons
+        // When / Then
+        assertThat(optimize("select min(\"date\") from ohlc")).contains("Aggregate");
     }
 
     @Test
