@@ -133,9 +133,11 @@ Phases 0–2 are implemented and tested:
   the common selective-range case (one or two boundary chunks) still scans for now; see below.
   Comparisons widen across boxed stat widths (the zone-map boxes at the column's own width — an
   `I32` stat is an `Integer`, not the `Long` the filter literal coerces to), so narrow signed
-  columns fold too. Unsigned columns are excluded: their stats box signed, and a signed order
-  disagrees with the unsigned value order past the high bit, so the fold abandons them to the
-  scan, whose comparator is unsigned-aware.
+  columns fold too. `U8`/`U16`/`U32` fold as well: their zone-map stats zero-extend into a
+  non-negative `Long` on read, matching the filter literal's own boxing, so the width-agnostic
+  compare orders them correctly. Only `U64` is excluded — it has no wider box to zero-extend into,
+  so its stat stays the raw 64-bit pattern and a value past 2^63 would compare wrong; the fold
+  abandons such columns to the scan, whose comparator is unsigned-aware over the real row data.
 
 Gotchas found and recorded for the production adapter:
 
@@ -168,8 +170,9 @@ as `VortexReader.decodeChunk(chunkIndex, columns)` (decode a chosen subset of ch
 fully-covered zones are not decoded); the row-level predicate evaluation runs through the ADR 0013
 compute kernels (`Compute.filter` → `Mask`, then `Compute.sum/count/min/max`). A boundary-bearing
 filter now decodes only its one or two straddling chunks instead of every surviving chunk. The fold
-abandons to the (correct, zone-map-pruned) scan when it cannot be trusted: an unsigned or
-floating-point filter column (NaN ordering), a non-numeric `SUM`, or a missing/misaligned zone map.
+abandons to the (correct, zone-map-pruned) scan when it cannot be trusted: a `U64` column (no wider
+box to zero-extend its zone-map stat into) or a floating-point filter column (NaN ordering), a
+non-numeric `SUM`, or a missing/misaligned zone map.
 
 **Two doors, chosen by query shape.** Calcite is the right tool for *reducing* queries (filter
 / aggregate / group-by), where push-down shrinks the result and the `Object[]` boundary

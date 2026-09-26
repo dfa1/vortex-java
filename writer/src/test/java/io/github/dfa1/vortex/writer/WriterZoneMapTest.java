@@ -11,6 +11,9 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.layout.Layout;
+import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -473,6 +476,32 @@ class WriterZoneMapTest {
                 assertThat(readStat(min, ptype, 1)).as("min zone 1").isEqualTo(2.0);
                 assertThat(readStat(max, ptype, 1)).as("max zone 1").isEqualTo(3.0);
             }
+        }
+    }
+
+    @Test
+    void unsignedZoneStats_zeroExtendHighBitValues(@TempDir Path tmp) throws IOException {
+        // Given a U32 column whose second zone's values have the int32 sign bit set — a plain
+        // getInt() sign-extends those to a negative long, which a filter literal (always the true,
+        // zero-extended magnitude) would then compare against backwards.
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.U32, false)), false);
+        WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        Path file = tmp.resolve("unsigned-zone-stats.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, opts)) {
+            sut.writeChunk(Map.of(ColumnName.of("v"), new int[]{5, 6}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new int[]{(int) 3_000_000_000L, (int) 3_000_000_001L}));
+        }
+
+        // When reading the zone-map table's boxed stats back through the reader's public API
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(ScanOptions.all())) {
+            List<ArrayStats> zones = scan.columnZoneStats("v");
+
+            // Then each zone's max is the true unsigned magnitude, not the sign-extended bit pattern
+            assertThat(zones.get(0).max()).isEqualTo(6L);
+            assertThat(zones.get(1).max()).isEqualTo(3_000_000_001L);
         }
     }
 

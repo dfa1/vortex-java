@@ -243,6 +243,38 @@ class AggregateWhereCleanPartitionTest {
     }
 
     @Test
+    void unsignedU32KeyColumnFoldsFromStats() throws Exception {
+        // Given a clustered U32 key whose second chunk's values have the int32 sign bit set
+        // (issue #406): before ScanIterator#boxedScalar zero-extended U8/U16/U32 zone-map stats,
+        // this zone's max sign-extended to a negative long and the fold abandoned every unsigned
+        // column wholesale, not just U64 (which still abandons — see unsignedKeyColumnAbandonsToScan).
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("val")),
+                List.of(new DType.Primitive(PType.U32, false), new DType.Primitive(PType.I64, false)),
+                false);
+        Path f = tmp.resolve("u32.vortex");
+        writeChunks(f, schema,
+                Map.of(ColumnName.of("id"), new int[]{0, 1, 2, 3}, ColumnName.of("val"), new long[]{0, 1, 2, 3}),
+                Map.of(ColumnName.of("id"), new int[]{
+                                (int) 3_000_000_000L, (int) 3_000_000_001L, (int) 3_000_000_002L, (int) 3_000_000_003L},
+                        ColumnName.of("val"), new long[]{10, 11, 12, 13}));
+
+        try (Connection conn = connect(f)) {
+            // When id >= 3_000_000_000 cleanly selects the second chunk alone — answered from stats
+            String sql = "select sum(val) s, count(*) c from vtx.t where id >= 3000000000";
+            assertThat(explain(conn, sql)).containsIgnoringCase("Values").doesNotContain("TableScan");
+
+            // And the fold's answer matches the full-scan ground truth
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(46); // 10 + 11 + 12 + 13
+                assertThat(rs.getLong("c")).isEqualTo(4);
+            }
+        }
+    }
+
+    @Test
     void isNullFoldsFromStatsOnCleanPartition() throws Exception {
         // Given a nullable val whose null-ness partitions the zones cleanly: chunk 0 is entirely
         // NULL, chunk 1 entirely non-null. `val IS NULL` then selects chunk 0 whole and excludes

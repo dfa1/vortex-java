@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
@@ -181,9 +182,10 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     ///
     /// `aggColumn` is the column whose values are reduced over the selected rows (`null` for
     /// `COUNT(*)`, which needs only the selected row count). The result is empty — abandoning to a
-    /// full scan, which is always correctness-safe — when the fold cannot be trusted: an unsigned
-    /// column involved (whose signed stat order [#isUnsigned] cannot classify), a zone-map zone count
-    /// that does not align 1:1 with the chunks, or a boundary zone whose mask cannot be built.
+    /// full scan, which is always correctness-safe — when the fold cannot be trusted: a `U64`
+    /// column involved (whose stat order [#isU64] cannot classify — see the guard below), a
+    /// zone-map zone count that does not align 1:1 with the chunks, or a boundary zone whose mask
+    /// cannot be built.
     ///
     /// The fold also abandons for performance, not correctness, when there is at least one boundary
     /// zone but no fully-selected (IN) zone: the only win the fold has over a scan is folding IN zones
@@ -205,16 +207,20 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(ScanOptions.columns(columns.toArray(String[]::new)))) {
-            // Unsigned columns store stats whose boxed (signed) order disagrees with the unsigned
-            // value order past the high bit, so a signed compare here could fold the wrong zones —
-            // a wrong answer. Abandon the fold for any unsigned column involved and let the scan
-            // (whose comparator is unsigned-aware) compute it. The boundary tier inherits this guard:
-            // it never decodes an unsigned column, so its compute compare stays correct too.
+            // U8/U16/U32 zone-map stats zero-extend into a non-negative Long when read
+            // (ScanIterator#boxedScalar), so compareStat's width-agnostic long compare already
+            // orders them correctly against a filter literal (also a zero-extended Long) — no
+            // guard needed. U64 has no wider box to zero-extend into: its stat is the raw 64-bit
+            // pattern, and a value past 2^63 compares wrong under compareStat's plain (non
+            // unsigned-aware) long compare. Abandon the fold for any U64 column involved and let
+            // the scan (whose comparator is unsigned-aware over the real row data) compute it. The
+            // boundary tier's own row-level compute already handles every unsigned width correctly
+            // (FusedFilterAggregate's sign-flip range compare), independent of this guard.
             if (!(reader.dtype() instanceof DType.Struct struct)) {
                 return Optional.empty();
             }
             for (String column : columns) {
-                if (isUnsigned(struct, column)) {
+                if (isU64(struct, column)) {
                     return Optional.empty();
                 }
             }
@@ -534,11 +540,14 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return Match.BOUNDARY;
     }
 
-    /// Whether `column` is an unsigned primitive, whose signed stat ordering [#compareStat] cannot
-    /// safely classify (the fold abandons such columns to the scan).
-    private static boolean isUnsigned(DType.Struct struct, String column) {
+    /// Whether `column` is `U64` — the one unsigned width with no wider box to zero-extend into, so
+    /// its zone-map stat stays the raw 64-bit pattern and [#compareStat] cannot safely classify it
+    /// (the fold abandons such columns to the scan). `U8`/`U16`/`U32` zero-extend into a
+    /// non-negative `Long` when read ([ScanIterator#columnZoneStats(String)]) and classify
+    /// correctly, so they are not included here.
+    private static boolean isU64(DType.Struct struct, String column) {
         int idx = struct.fieldNames().indexOf(ColumnName.of(column));
-        return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isUnsigned();
+        return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype() == PType.U64;
     }
 
     /// Whether `column` is a floating-point primitive, whose compute-kernel compare
@@ -563,17 +572,21 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// Compares two scalar stat/filter values by their natural order, widening across boxed widths:
-    /// the zone-map stats box at the column's own width ([Integer] for an `I32` column, [Short] for
-    /// `I16`, …) while a filter literal arrives as [Long]/[Double], so a same-type comparison would
-    /// reject narrower columns. Signed-integer widening is exact; unsigned columns are excluded
-    /// upstream ([#isUnsigned]). Strings compare lexicographically.
+    /// the zone-map stats box at the column's own width ([Integer] for a signed `I32` column,
+    /// [Short] for `I16`, a zero-extended [Long] for any `U8`/`U16`/`U32` column, …) while a filter
+    /// literal arrives as [Long]/[Double], so a same-type comparison would reject narrower columns.
+    /// Signed-integer widening is exact; `U8`/`U16`/`U32` are already zero-extended non-negative
+    /// `Long`s, so a plain long compare against the (also zero-extended) filter literal is exact
+    /// too. `U64` is excluded upstream ([#isU64]) since it has no wider box to zero-extend into.
+    /// Strings compare lexicographically.
     ///
     /// Delegates to the reader's [Compare#values(Object, Object, DType)] — the single scalar
     /// comparator shared with zone-map pruning and the compute kernels — passing a `null` column so it
     /// takes the width-agnostic, operand-keyed branch that is byte-for-byte this method's former body.
-    /// That branch is signed-only, which is exactly right here: every unsigned column is rejected
-    /// upstream ([#isUnsigned], [#filteredFold]) before any [#classify] / [#pickExtreme] call reaches
-    /// this helper, so no unsigned value is ever ordered through it.
+    /// That branch is signed-only, which is exactly right here: `U64` is rejected upstream
+    /// ([#isU64], [#filteredFold]) before any [#classify] / [#pickExtreme] call reaches this helper,
+    /// and every other value already arrives in a representation a plain signed compare orders
+    /// correctly.
     private static int compareStat(Object a, Object b) {
         return Compare.values(a, b, null);
     }

@@ -568,6 +568,13 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     /// Reads the boxed scalar at index `i` from a (possibly nullable) stats column, or `null`
     /// when the array is absent or the position is invalid.
+    ///
+    /// A `U8`/`U16`/`U32` array zero-extends into a non-negative [Long], mirroring
+    /// [io.github.dfa1.vortex.reader.compute.Values#valueAt(Array, long)]'s widening for row data —
+    /// the narrow signed accessors (`getInt`/`getShort`/`getByte`) sign-extend, so an unsigned value
+    /// with its high bit set would otherwise box as a negative number a plain (or even
+    /// unsigned-aware) `long` compare against a zero-extended filter literal gets backwards. `U64`
+    /// is already at full width (no wider box to zero-extend into) and boxes unchanged.
     private static Object boxedScalar(Array array, long i) {
         if (array == null) {
             return null;
@@ -578,13 +585,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
             return boxedScalar(masked.inner(), i);
         }
+        boolean unsigned = array.dtype().isUnsigned();
         return switch (array) {
             case LongArray a -> a.getLong(i);
-            case IntArray a -> a.getInt(i);
+            case IntArray a -> unsigned ? Integer.toUnsignedLong(a.getInt(i)) : (Object) a.getInt(i);
             case DoubleArray a -> a.getDouble(i);
             case FloatArray a -> a.getFloat(i);
-            case ShortArray a -> a.getShort(i);
-            case ByteArray a -> a.getByte(i);
+            case ShortArray a -> unsigned ? a.getShort(i) & 0xFFFFL : (Object) a.getShort(i);
+            case ByteArray a -> unsigned ? a.getByte(i) & 0xFFL : (Object) a.getByte(i);
             case BoolArray a -> a.getBoolean(i);
             case VarBinArray a -> a.getString(i);
             default -> null;
