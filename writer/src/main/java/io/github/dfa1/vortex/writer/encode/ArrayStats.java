@@ -41,8 +41,12 @@ public record ArrayStats(
         if (options == StatsOptions.NONE) {
             return new ArrayStats(n, -1, 0, 0);
         }
+        // Sized for the low-cardinality case and grown by doubling from there, NOT for `n`:
+        // pre-sizing to min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call
+        // even for a 500-distinct column, and that pair was the single largest allocation source
+        // in a cascade competition (the arrays are thrown away when compute() returns).
         LongCounts counts = options.countDistinct() || options.trackMostFrequent()
-                                    ? new LongCounts(Math.min(n, 1 << 16))
+                                    ? new LongCounts(Math.min(n, 512))
                                     : null;
         long topFreqBits = 0;
         int topFreq = 0;

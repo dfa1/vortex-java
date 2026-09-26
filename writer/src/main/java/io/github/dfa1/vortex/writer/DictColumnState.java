@@ -33,14 +33,27 @@ final class DictColumnState {
     static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
     static final int GLOBAL_DICT_MAX_CARDINALITY_UTF8 = 32_768;
 
+    private static final int INDEX_MIN_CAPACITY = 64;
+    private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
+
     private final DType dtype;
     private final boolean utf8;
     private final PType ptype;
     private final boolean nullable;
     // First-seen value -> code map (keys are boxed primitives or String, matching readPrimitiveElement).
     private final Map<Object, Integer> valueToCode = new LinkedHashMap<>();
-    // Occurrence count per code, indexed by code; grows in lockstep with valueToCode.
-    private final List<Long> codeCounts = new ArrayList<>();
+    // Hot-path side index for the primitive path: raw value bits -> code + 1 (0 == empty), open
+    // addressing with a power-of-two capacity so probing masks instead of taking a modulo (CLAUDE.md
+    // hot-loop rule). valueToCode stays the authoritative store — it carries first-seen order, the
+    // Utf8 keys, and everything the demotion and flush paths read — but probing it needs a boxed key,
+    // and one Long per row of every candidate column profiled as the writer's hottest single frame.
+    private long[] bitsKeys = new long[INDEX_MIN_CAPACITY];
+    private int[] bitsCodes = new int[INDEX_MIN_CAPACITY];
+    private int bitsMask = INDEX_MIN_CAPACITY - 1;
+    // Occurrence count per code, indexed by code; grows in lockstep with valueToCode. A primitive
+    // array, not a List<Long>: this is incremented once per row, and boxing there cost one Long
+    // allocation per row of every global-dict candidate column.
+    private long[] codeCounts = new long[16];
     // One code array per ingested chunk (null slots hold code 0).
     private final List<short[]> chunkCodes = new ArrayList<>();
     private final List<boolean[]> chunkValidity = new ArrayList<>();
@@ -143,46 +156,72 @@ final class DictColumnState {
         boolean[] validity = nullableData ? ((NullableData) data).validity() : null;
         int len = utf8 ? ((String[]) values).length : primitiveArrayLen(values, ptype);
         int cap = dictMaxCardinality(utf8);
+        int startSize = valueToCode.size();
+        String[] strings = utf8 ? (String[]) values : null;
 
-        // First pass: would this chunk's fresh distinct values push the map past the cap? Count them
-        // without mutating so the whole chunk is either ingested or rejected atomically — a partial
-        // ingest would corrupt the dictionary when the caller demotes on rejection.
-        var pendingNew = HashSet.newHashSet(Math.min(cap, len));
-        for (int i = 0; i < len; i++) {
-            if (validity != null && !validity[i]) {
-                continue;
+        // One pass: insert new values and build the per-chunk code array. Ingest stays
+        // all-or-nothing — a chunk that would breach the cap rolls back the entries it added (the
+        // map's tail, codes >= startSize) — so the demoting caller still sees untouched state. The
+        // earlier shape ran a non-mutating counting pass first to get that atomicity, which cost a
+        // second boxed map probe for every row in the file.
+        short[] codes = new short[len];
+        if (strings != null) {
+            for (int i = 0; i < len; i++) {
+                if (validity != null && !validity[i]) {
+                    continue;
+                }
+                // Nullable Utf8 keeps a real null at invalid positions (ChunkImpl.adaptUtf8); treat
+                // it as a null slot (code 0), never as a dictionary entry.
+                String v = strings[i];
+                if (v == null) {
+                    continue;
+                }
+                Integer code = valueToCode.get(v);
+                if (code == null) {
+                    if (valueToCode.size() == cap) {
+                        rollbackTo(startSize);
+                        return false;
+                    }
+                    code = valueToCode.size();
+                    valueToCode.put(v, code);
+                }
+                codes[i] = code.shortValue();
             }
-            Object v = utf8 ? ((String[]) values)[i] : readPrimitiveElement(values, ptype, i);
-            if (v == null) {
-                // Nullable Utf8 keeps a real null at invalid positions (ChunkImpl.adaptUtf8); treat it
-                // as a null slot (code 0), never as a dictionary entry. Primitive placeholders never
-                // reach here because their slots are guarded by validity above.
-                continue;
-            }
-            if (!valueToCode.containsKey(v) && pendingNew.add(v)
-                    && valueToCode.size() + pendingNew.size() > cap) {
-                return false;
+        } else {
+            // Primitive path: probe the unboxed bits index and box only when inserting a value the
+            // dictionary has not seen before (at most `cap` times for the whole file). The boxed
+            // key itself still comes from the source array, so I32 vs I64 and NaN/-0.0 keying stay
+            // exactly what a Double/Long-keyed map gave.
+            long[] bits = rawBits(values, ptype, len);
+            for (int i = 0; i < len; i++) {
+                if (validity != null && !validity[i]) {
+                    continue;
+                }
+                int code = bitsLookup(bits[i]);
+                if (code < 0) {
+                    if (valueToCode.size() == cap) {
+                        rollbackTo(startSize);
+                        return false;
+                    }
+                    code = valueToCode.size();
+                    valueToCode.put(readPrimitiveElement(values, ptype, i), code);
+                    bitsPut(bits[i], code);
+                }
+                codes[i] = (short) code;
             }
         }
 
-        // Second pass: commit — insert new values and build the per-chunk code array.
-        short[] codes = new short[len];
+        // Counts are applied only once the chunk is committed, which keeps the rollback above to
+        // the map alone and the hot loop above to a single probe per row.
+        int size = valueToCode.size();
+        if (size > codeCounts.length) {
+            codeCounts = java.util.Arrays.copyOf(codeCounts, Math.max(size, codeCounts.length * 2));
+        }
         for (int i = 0; i < len; i++) {
-            if (validity != null && !validity[i]) {
+            if ((validity != null && !validity[i]) || (strings != null && strings[i] == null)) {
                 continue;
             }
-            Object v = utf8 ? ((String[]) values)[i] : readPrimitiveElement(values, ptype, i);
-            if (v == null) {
-                continue;
-            }
-            Integer code = valueToCode.get(v);
-            if (code == null) {
-                code = valueToCode.size();
-                valueToCode.put(v, code);
-                codeCounts.add(0L);
-            }
-            codes[i] = code.shortValue();
-            codeCounts.set(code, codeCounts.get(code) + 1L);
+            codeCounts[codes[i] & 0xFFFF]++;
         }
 
         chunkCodes.add(codes);
@@ -202,6 +241,102 @@ final class DictColumnState {
         }
         codeArrayBytes += 2L * len;
         return true;
+    }
+
+    /// Drops every dictionary entry added since the map held `startSize` values, restoring the
+    /// state a rejected chunk found — the demoting caller replays the already-buffered chunks
+    /// through [#buildInverseMap] and [#reconstructChunk], which must not see this chunk's values.
+    private void rollbackTo(int startSize) {
+        valueToCode.values().removeIf(code -> code >= startSize);
+        if (utf8) {
+            return;
+        }
+        bitsKeys = new long[INDEX_MIN_CAPACITY];
+        bitsCodes = new int[INDEX_MIN_CAPACITY];
+        bitsMask = INDEX_MIN_CAPACITY - 1;
+        for (Map.Entry<Object, Integer> e : valueToCode.entrySet()) {
+            bitsPut(valueBits(ptype, e.getKey()), e.getValue());
+        }
+    }
+
+    /// The code assigned to `bits`, or `-1` when the dictionary has not seen that value.
+    private int bitsLookup(long bits) {
+        int slot = slotFor(bits, bitsMask);
+        while (bitsCodes[slot] != 0) {
+            if (bitsKeys[slot] == bits) {
+                return bitsCodes[slot] - 1;
+            }
+            slot = (slot + 1) & bitsMask;
+        }
+        return -1;
+    }
+
+    private void bitsPut(long bits, int code) {
+        if ((code + 1) * 2 >= bitsKeys.length) {
+            long[] oldKeys = bitsKeys;
+            int[] oldCodes = bitsCodes;
+            bitsKeys = new long[oldKeys.length * 2];
+            bitsCodes = new int[oldCodes.length * 2];
+            bitsMask = bitsKeys.length - 1;
+            for (int i = 0; i < oldKeys.length; i++) {
+                if (oldCodes[i] != 0) {
+                    bitsInsert(oldKeys[i], oldCodes[i]);
+                }
+            }
+        }
+        bitsInsert(bits, code + 1);
+    }
+
+    private void bitsInsert(long bits, int codePlusOne) {
+        int slot = slotFor(bits, bitsMask);
+        while (bitsCodes[slot] != 0) {
+            slot = (slot + 1) & bitsMask;
+        }
+        bitsKeys[slot] = bits;
+        bitsCodes[slot] = codePlusOne;
+    }
+
+    private static int slotFor(long bits, int mask) {
+        return (int) ((bits * HASH_MULTIPLIER) >>> 32) & mask;
+    }
+
+    /// The chunk's values as raw bit patterns, keyed so that two rows share a pattern exactly when
+    /// their boxed values are `equals` (hence `doubleToLongBits`, which folds every NaN together
+    /// and keeps `-0.0` apart from `0.0`, just like `Double.equals`). I64/U64 arrays are used in
+    /// place; only the narrower carriers pay for a widened copy.
+    private static long[] rawBits(Object values, PType ptype, int len) {
+        switch (ptype) {
+            case I64, U64 -> {
+                return (long[]) values;
+            }
+            case I32, U32 -> {
+                int[] src = (int[]) values;
+                long[] out = new long[len];
+                for (int i = 0; i < len; i++) {
+                    out[i] = src[i];
+                }
+                return out;
+            }
+            case F64 -> {
+                double[] src = (double[]) values;
+                long[] out = new long[len];
+                for (int i = 0; i < len; i++) {
+                    out[i] = Double.doubleToLongBits(src[i]);
+                }
+                return out;
+            }
+            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
+        }
+    }
+
+    /// Inverse of [#rawBits] for a single already-boxed dictionary key.
+    private static long valueBits(PType ptype, Object value) {
+        return switch (ptype) {
+            case I32, U32 -> (Integer) value;
+            case I64, U64 -> (Long) value;
+            case F64 -> Double.doubleToLongBits((Double) value);
+            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
+        };
     }
 
     /// Inverse of this column's first-seen value-to-code map: `inverse[code]` is the value with that
@@ -282,7 +417,7 @@ final class DictColumnState {
             order[i] = i;
         }
         // Stable sort by count descending; equal counts preserve first-seen (ascending index) order.
-        java.util.Arrays.sort(order, (a, b) -> Long.compare(codeCounts.get(b), codeCounts.get(a)));
+        java.util.Arrays.sort(order, (a, b) -> Long.compare(codeCounts[b], codeCounts[a]));
         int[] remap = new int[n];
         for (int rank = 0; rank < n; rank++) {
             remap[order[rank]] = rank;

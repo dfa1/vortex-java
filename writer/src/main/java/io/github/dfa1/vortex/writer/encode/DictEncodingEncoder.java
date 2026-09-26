@@ -61,7 +61,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         if (dtype instanceof DType.Utf8) {
             return encodeUtf8((String[]) data, ctx);
         }
-        DictData d = buildDictData(dtype, data, ctx);
+        DictData d = buildDictData(dtype, data);
         PType codePType = d.codePType();
         int codeBytes = codePType.byteSize();
 
@@ -88,7 +88,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         if (dtype instanceof DType.Utf8) {
             return encodeUtf8Cascade((String[]) data, ctx);
         }
-        DictData d = buildDictData(dtype, data, ctx);
+        DictData d = buildDictData(dtype, data);
         PType codePType = d.codePType();
 
         MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) codePType.ordinal()});
@@ -259,51 +259,46 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), statsMin, statsMax);
     }
 
-    private static DictData buildDictData(DType dtype, Object data, EncodeContext ctx) {
+    private static DictData buildDictData(DType dtype, Object data) {
         PType ptype = ((DType.Primitive) dtype).ptype();
         var valueMap = new LinkedHashMap<Object, Integer>();
         int len = arrayLength(data, ptype);
+        // One pass, and `get`/`put` rather than `computeIfAbsent`: the mapping lambda captures
+        // `valueMap`, so it was allocated fresh on every row, and the second pass re-probed the
+        // map for a code this pass already knows.
+        int[] codes = new int[len];
         for (int i = 0; i < len; i++) {
             Object v = readElement(data, ptype, i);
-            valueMap.computeIfAbsent(v, _ -> valueMap.size());
+            Integer code = valueMap.get(v);
+            if (code == null) {
+                code = valueMap.size();
+                valueMap.put(v, code);
+            }
+            codes[i] = code;
         }
 
         int dictSize = valueMap.size();
         PType codePType = codePType(dictSize);
-        int codeBytes = codePType.byteSize();
 
         Object uniqueArray = buildUniqueArray(ptype, valueMap.keySet(), dictSize);
         MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
-
-        MemorySegment codesBuf = ctx.arena().allocate((long) len * codeBytes);
-        for (int i = 0; i < len; i++) {
-            Object v = readElement(data, ptype, i);
-            int code = valueMap.get(v);
-            writeCodeToSeg(codesBuf, codePType, i, code);
-        }
 
         Object codesArr = switch (codePType) {
             case U8 -> {
                 byte[] a = new byte[len];
                 for (int i = 0; i < len; i++) {
-                    a[i] = codesBuf.get(ValueLayout.JAVA_BYTE, i);
+                    a[i] = (byte) codes[i];
                 }
                 yield a;
             }
             case U16 -> {
                 short[] a = new short[len];
                 for (int i = 0; i < len; i++) {
-                    a[i] = codesBuf.get(VortexFormat.LE_SHORT, (long) i * 2);
+                    a[i] = (short) codes[i];
                 }
                 yield a;
             }
-            default -> {
-                int[] a = new int[len];
-                for (int i = 0; i < len; i++) {
-                    a[i] = codesBuf.get(VortexFormat.LE_INT, (long) i * 4);
-                }
-                yield a;
-            }
+            default -> codes;
         };
         return new DictData(valuesBuf, codesArr, codePType, len);
     }

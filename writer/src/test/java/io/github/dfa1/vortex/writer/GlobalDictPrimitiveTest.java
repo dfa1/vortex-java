@@ -390,6 +390,45 @@ class GlobalDictPrimitiveTest {
     }
 
     @Test
+    void f64DictKeys_foldEveryNaNTogether_butKeepNegativeZeroApart(@TempDir Path tmp) throws IOException {
+        // Given — the primitive dict dedups on raw value bits, so the exact bit transform decides
+        // which rows share a dictionary entry. `Double.doubleToLongBits` is the only one that
+        // matches the boxed-key semantics this path used to have: every NaN payload collapses to
+        // one entry, while -0.0 stays a separate entry from 0.0. `doubleToRawLongBits` would split
+        // the NaNs, and comparing as `double` would merge -0.0 into 0.0 and lose the sign on read.
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.F64), false);
+        double otherNaN = Double.longBitsToDouble(0x7FF8_0000_0000_0001L);
+        double[] pattern = {0.0, -0.0, Double.NaN, otherNaN, 1.5};
+        double[] data = new double[1000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = pattern[i % pattern.length];
+        }
+        Path file = tmp.resolve("f64_nan_zero.vortex");
+
+        // When
+        double[] result;
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
+        }
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            result = readAllDoubles(vf, "v");
+        }
+
+        // Then
+        assertThat(result).hasSameSizeAs(data);
+        for (int i = 0; i < data.length; i++) {
+            if (Double.isNaN(data[i])) {
+                assertThat(result[i]).isNaN();
+            } else {
+                assertThat(Double.doubleToRawLongBits(result[i]))
+                        .as("row %d", i)
+                        .isEqualTo(Double.doubleToRawLongBits(data[i]));
+            }
+        }
+    }
+
+    @Test
     void lowCardinality_nullableI64_acrossChunks_usesGlobalDict(@TempDir Path tmp) throws IOException {
         // Given — a NULLABLE low-cardinality I64 column (4 distinct valid values) with ~10% nulls
         // scattered per chunk. The fix admits nullable numeric columns to the global dict: one shared

@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `MIN`/`MAX` over a `VARCHAR` column now push down to a zone-map-stats-only `LogicalValues`, matching the existing numeric push-down. ([#406](https://github.com/dfa1/vortex-java/issues/406))
 
+### Changed
+
+- Writes of a global-dictionary candidate column dedup each chunk in one pass through an unboxed bit index, instead of two passes probing a `HashMap` with a boxed key per row. ([#408](https://github.com/dfa1/vortex-java/issues/408))
+- `ArrayStats` sizes its distinct-value map for the low-cardinality case and grows it, instead of allocating a 1.5 MB array pair on every call. ([#408](https://github.com/dfa1/vortex-java/issues/408))
+- `DictEncodingEncoder` builds a chunk's codes in one pass, dropping a per-row mapping lambda and a throwaway codes segment. ([#408](https://github.com/dfa1/vortex-java/issues/408))
+
 ### Fixed
 
 - Floating-point `WHERE` filters no longer let a `NaN` value satisfy an ordering comparison it should always fail. ([#406](https://github.com/dfa1/vortex-java/issues/406))
