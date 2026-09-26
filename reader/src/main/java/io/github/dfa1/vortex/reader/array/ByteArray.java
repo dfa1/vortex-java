@@ -57,19 +57,20 @@ public non-sealed interface ByteArray extends Array {
         return new OffsetByteArray(dtype(), rows, this, 0);
     }
 
-    /// Scalar fallback: decodes every element through [#getByte(long)] into a fresh
-    /// one-byte-per-element segment. Buffer-backed ([MaterializedByteArray]) overrides
-    /// with a zero-copy path.
+    /// Scalar fallback: decodes every element into a fresh segment, walking through the
+    /// sequential [#forEachByte] hook rather than by index. Lazy arrays that resolve a
+    /// position by search — run-end (binary search per run) and chunked (binary search per
+    /// chunk) — then pay that search once for the whole walk instead of once per element.
+    /// Buffer-backed ([MaterializedByteArray]) overrides with a zero-copy path.
     ///
     /// @param arena allocator for the output segment
-    /// @return a segment of `length()` bytes
+    /// @return a `u8` segment of `length()` elements
     @Override
     default MemorySegment materialize(SegmentAllocator arena) {
         long n = length();
         MemorySegment dst = arena.allocate(n);
-        for (long i = 0; i < n; i++) {
-            dst.set(ValueLayout.JAVA_BYTE, i, getByte(i));
-        }
+        long[] at = {0};
+        forEachByte(v -> dst.set(ValueLayout.JAVA_BYTE, at[0]++, v));
         return dst;
     }
 }

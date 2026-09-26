@@ -62,59 +62,26 @@ public record DictLongArray(DType dtype, long length, LongArray values, Array co
     public MemorySegment materialize(SegmentAllocator arena) {
         long n = length;
         MemorySegment dst = arena.allocate(n * 8L, 8);
-        LongArray vals = values;
-        switch (codes) {
-            case ByteArray ba -> {
-                for (long i = 0; i < n; i++) {
-                    dst.setAtIndex(VortexFormat.LE_LONG, i, vals.getLong(Byte.toUnsignedLong(ba.getByte(i))));
-                }
-            }
-            case ShortArray sa -> {
-                for (long i = 0; i < n; i++) {
-                    dst.setAtIndex(VortexFormat.LE_LONG, i, vals.getLong(Short.toUnsignedLong(sa.getShort(i))));
-                }
-            }
-            case IntArray ia -> {
-                for (long i = 0; i < n; i++) {
-                    dst.setAtIndex(VortexFormat.LE_LONG, i, vals.getLong(Integer.toUnsignedLong(ia.getInt(i))));
-                }
-            }
-            case LongArray la -> {
-                for (long i = 0; i < n; i++) {
-                    dst.setAtIndex(VortexFormat.LE_LONG, i, vals.getLong(la.getLong(i)));
-                }
-            }
-            default -> throw new VortexException("DictLongArray: invalid codes type: "
-                    + codes.getClass().getSimpleName());
-        }
+        long[] at = {0};
+        forEachLong(v -> dst.setAtIndex(VortexFormat.LE_LONG, at[0]++, v));
         return dst.asReadOnly();
     }
 
+    /// Walks the codes child sequentially through its own typed `forEach` rather than by index.
+    /// Indexed access re-resolves each position from scratch, which for a chunked run-end codes
+    /// child meant two binary searches per row (chunk lookup, then run lookup) — the dominant cost
+    /// of scanning a dict column. `DictArrays#validateCodes` guarantees `codes.length() == length`,
+    /// so a full sequential walk emits exactly the rows an indexed loop would.
+    ///
+    /// @param cons consumer that receives each decoded long value
     @Override
     public void forEachLong(LongConsumer cons) {
-        long n = length;
         LongArray vals = values;
         switch (codes) {
-            case ByteArray ba -> {
-                for (long i = 0; i < n; i++) {
-                    cons.accept(vals.getLong(Byte.toUnsignedLong(ba.getByte(i))));
-                }
-            }
-            case ShortArray sa -> {
-                for (long i = 0; i < n; i++) {
-                    cons.accept(vals.getLong(Short.toUnsignedLong(sa.getShort(i))));
-                }
-            }
-            case IntArray ia -> {
-                for (long i = 0; i < n; i++) {
-                    cons.accept(vals.getLong(Integer.toUnsignedLong(ia.getInt(i))));
-                }
-            }
-            case LongArray la -> {
-                for (long i = 0; i < n; i++) {
-                    cons.accept(vals.getLong(la.getLong(i)));
-                }
-            }
+            case ByteArray ba -> ba.forEachByte(c -> cons.accept(vals.getLong(Byte.toUnsignedLong(c))));
+            case ShortArray sa -> sa.forEachShort(c -> cons.accept(vals.getLong(Short.toUnsignedLong(c))));
+            case IntArray ia -> ia.forEachInt(c -> cons.accept(vals.getLong(Integer.toUnsignedLong(c))));
+            case LongArray la -> la.forEachLong(c -> cons.accept(vals.getLong(c)));
             default -> throw new VortexException("DictLongArray: invalid codes type: "
                     + codes.getClass().getSimpleName());
         }
@@ -122,33 +89,8 @@ public record DictLongArray(DType dtype, long length, LongArray values, Array co
 
     @Override
     public long fold(long identity, LongBinaryOperator op) {
-        long n = length;
-        LongArray vals = values;
-        long result = identity;
-        switch (codes) {
-            case ByteArray ba -> {
-                for (long i = 0; i < n; i++) {
-                    result = op.applyAsLong(result, vals.getLong(Byte.toUnsignedLong(ba.getByte(i))));
-                }
-            }
-            case ShortArray sa -> {
-                for (long i = 0; i < n; i++) {
-                    result = op.applyAsLong(result, vals.getLong(Short.toUnsignedLong(sa.getShort(i))));
-                }
-            }
-            case IntArray ia -> {
-                for (long i = 0; i < n; i++) {
-                    result = op.applyAsLong(result, vals.getLong(Integer.toUnsignedLong(ia.getInt(i))));
-                }
-            }
-            case LongArray la -> {
-                for (long i = 0; i < n; i++) {
-                    result = op.applyAsLong(result, vals.getLong(la.getLong(i)));
-                }
-            }
-            default -> throw new VortexException("DictLongArray: invalid codes type: "
-                    + codes.getClass().getSimpleName());
-        }
-        return result;
+        long[] acc = {identity};
+        forEachLong(v -> acc[0] = op.applyAsLong(acc[0], v));
+        return acc[0];
     }
 }

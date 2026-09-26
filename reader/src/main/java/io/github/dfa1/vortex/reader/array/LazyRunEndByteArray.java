@@ -25,6 +25,20 @@ public record LazyRunEndByteArray(DType dtype, long length, ByteArray values, Ar
         return RunEndArrays.runInt(runEnds, values.length(), i + offset, values::getInt);
     }
 
+    /// Emits each run's value `count` times instead of binary-searching per element. See
+    /// [LazyRunEndShortArray#forEachShort] — same gap, same fix.
+    ///
+    /// @param c consumer that receives each byte element
+    @Override
+    public void forEachByte(ByteConsumer c) {
+        RunEndArrays.walkRuns(runEnds, values.length(), offset, offset + length, (run, count) -> {
+            byte v = values.getByte(run);
+            for (long r = 0; r < count; r++) {
+                c.accept(v);
+            }
+        });
+    }
+
     @Override
     public long fold(long identity, LongBinaryOperator op) {
         return RunEndArrays.foldInt(runEnds, values.length(), offset, length, values::getInt, identity, op);

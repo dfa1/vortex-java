@@ -55,10 +55,11 @@ public non-sealed interface IntArray extends Array {
         return new OffsetIntArray(dtype(), rows, this, 0);
     }
 
-    /// Scalar fallback: decodes every element through [#getInt(long)] into a fresh
-    /// little-endian segment. Buffer-backed ([MaterializedIntArray]) and lazy
-    /// formula-based variants ([LazyForIntArray], [LazyZigZagIntArray], …) override
-    /// with a zero-copy or vectorized path.
+    /// Scalar fallback: decodes every element into a fresh segment, walking through the
+    /// sequential [#forEachInt] hook rather than by index. Lazy arrays that resolve a
+    /// position by search — run-end (binary search per run) and chunked (binary search per
+    /// chunk) — then pay that search once for the whole walk instead of once per element.
+    /// Buffer-backed ([MaterializedIntArray]) overrides with a zero-copy path.
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `i32` segment of `length()` elements
@@ -66,9 +67,8 @@ public non-sealed interface IntArray extends Array {
     default MemorySegment materialize(SegmentAllocator arena) {
         long n = length();
         MemorySegment dst = arena.allocate(n * 4L, 4);
-        for (long i = 0; i < n; i++) {
-            dst.setAtIndex(VortexFormat.LE_INT, i, getInt(i));
-        }
+        long[] at = {0};
+        forEachInt(v -> dst.setAtIndex(VortexFormat.LE_INT, at[0]++, v));
         return dst;
     }
 }

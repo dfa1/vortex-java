@@ -57,9 +57,11 @@ public non-sealed interface ShortArray extends Array {
         return new OffsetShortArray(dtype(), rows, this, 0);
     }
 
-    /// Scalar fallback: decodes every element through [#getShort(long)] into a fresh
-    /// little-endian segment. Buffer-backed ([MaterializedShortArray]) overrides with
-    /// a zero-copy path.
+    /// Scalar fallback: decodes every element into a fresh segment, walking through the
+    /// sequential [#forEachShort] hook rather than by index. Lazy arrays that resolve a
+    /// position by search — run-end (binary search per run) and chunked (binary search per
+    /// chunk) — then pay that search once for the whole walk instead of once per element.
+    /// Buffer-backed ([MaterializedShortArray]) overrides with a zero-copy path.
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `i16` segment of `length()` elements
@@ -67,9 +69,8 @@ public non-sealed interface ShortArray extends Array {
     default MemorySegment materialize(SegmentAllocator arena) {
         long n = length();
         MemorySegment dst = arena.allocate(n * 2L, 2);
-        for (long i = 0; i < n; i++) {
-            dst.setAtIndex(VortexFormat.LE_SHORT, i, getShort(i));
-        }
+        long[] at = {0};
+        forEachShort(v -> dst.setAtIndex(VortexFormat.LE_SHORT, at[0]++, v));
         return dst;
     }
 }

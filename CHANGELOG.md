@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Scanning a run-end column walks runs instead of binary-searching per row: `LazyRunEndShortArray`/`LazyRunEndByteArray` gained the typed `forEach` their Int/Long/Bool siblings already had, `DictLongArray` traverses its codes child sequentially, and the primitive `materialize` defaults route through those hooks. ([#408](https://github.com/dfa1/vortex-java/issues/408))
 - Writes of a global-dictionary candidate column dedup each chunk in one pass through an unboxed bit index, instead of two passes probing a `HashMap` with a boxed key per row. ([#408](https://github.com/dfa1/vortex-java/issues/408))
 - `ArrayStats` sizes its distinct-value map for the low-cardinality case and grows it, instead of allocating a 1.5 MB array pair on every call. ([#408](https://github.com/dfa1/vortex-java/issues/408))
 - `DictEncodingEncoder` builds a chunk's codes in one pass, dropping a per-row mapping lambda and a throwaway codes segment. ([#408](https://github.com/dfa1/vortex-java/issues/408))
