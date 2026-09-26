@@ -34,6 +34,13 @@ chunk-level computation — filter by two columns, fold three aggregates — wit
 kernel entry point per combination or falling back to per-row accessor loops, which the dict-lane
 numbers show cost 30× on encoded columns.
 
+Issue #406 is the concrete evidence this keeps happening: of its five push-down gaps, the three
+that fit the *existing* bespoke-static-method shape (double-filtering, unsigned/floating zone-fold,
+`VARCHAR` `MIN`/`MAX`) were fixed directly against `VortexTable`/`VortexAggregatePushDownRule` with
+no new composition needed — but `GROUP BY` (Phase 3) is blocked precisely because it does not fit
+that shape: it needs the composable multi-column, multi-aggregate pipeline this ADR describes, not
+another hand-wired special case. It is the first concrete consumer waiting on this decision.
+
 The goal is an ergonomic public compute API that composes, while preserving both hard-won execution
 properties: single-pass fusion and encoding-aware lane dispatch. Explicitly **not** a goal: a query
 engine. Join, sort, expression trees, and query planning belong to Calcite; this façade only makes
@@ -150,5 +157,8 @@ façade as an API/composition decision with a modest measured win, not a large p
   measured dict code-scan results this façade must preserve.
 - [ADR 0018](0018-calcite-sql-adapter.md) — the aggregate push-down boundary tier, the first
   consumer.
+- Issue #406 — Calcite push-down gaps (closed: 3 of its 5 items resolved directly; the remaining
+  two — `GROUP BY` push-down and "no composable pushdown framework" — are exactly this ADR, so
+  they live here now rather than on a reopened issue).
 - `reader.compute.DictFilter` — the encoding-aware lane whose dispatch model the stage-as-data rule
   protects.
