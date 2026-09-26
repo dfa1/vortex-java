@@ -73,7 +73,7 @@
         <junit.version>6.1.3</junit.version>
         <jazzer.version>0.30.0</jazzer.version>
         <assertj.version>3.27.7</assertj.version>
-        <mockito.version>5.23.0</mockito.version>
+        <mockito.version>5.24.0</mockito.version>
         <vortex-jni.version>0.86.1</vortex-jni.version>
         <arrow.version>19.0.0</arrow.version>
         <slf4j.version>2.0.19</slf4j.version>
