@@ -473,6 +473,11 @@ writer.close()
   └─ write 8-byte trailer           → version · postscriptLen · magic (VTXF)
 ```
 
+`CascadingCompressor`'s philosophy — chain multiple lightweight, random-access-preserving
+encodings and re-evaluate each child array independently, rather than picking one heavyweight
+codec up front — follows [BtrBlocks](https://vortex.dev/blog/btrblocks-compressor), the design
+the Rust reference's own compressor is built on.
+
 ### How `ReadRegistry` resolves encodings
 
 `ReadRegistry.loadAll()` registers all built-in `EncodingDecoder` implementations. Each
