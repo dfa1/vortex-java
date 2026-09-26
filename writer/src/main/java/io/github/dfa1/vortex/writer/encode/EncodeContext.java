@@ -41,6 +41,17 @@ public record EncodeContext(
         double sampleFraction
 ) {
 
+    /// Smallest sample the cost competition will measure on, matching the Rust reference's
+    /// `SAMPLE_SIZE * SAMPLE_COUNT` (64 x 16). Kept a multiple of 1024 for the reason the
+    /// reference gives: a sample that is not makes fastlanes bitpacking pad the sampled vector,
+    /// which distorts the very size comparison the sample exists to make.
+    private static final int MIN_SAMPLE_SIZE = 1024;
+
+    /// Fraction of a large array to sample, matching the reference's "approximately 1%". Every
+    /// candidate encoding is run over the sample and all but the winner's result is thrown away,
+    /// so this fraction sets the cost of the competition itself.
+    private static final double SAMPLE_FRACTION = 0.01;
+
     /// Creates a non-cascading context (depth 0, no exclusions, default sampling).
     ///
     /// @param arena    the arena to allocate encode output buffers from
@@ -58,7 +69,7 @@ public record EncodeContext(
     /// @param initialExcluded encoding ids excluded from consideration from the start
     /// @return a new [EncodeContext] ready for non-cascading encoding
     public static EncodeContext of(Arena arena, WriteRegistry registry, Set<EncodingId> initialExcluded) {
-        return new EncodeContext(arena, registry, 0, Set.copyOf(initialExcluded), 42L, 4096, 0.05);
+        return new EncodeContext(arena, registry, 0, Set.copyOf(initialExcluded), 42L, MIN_SAMPLE_SIZE, SAMPLE_FRACTION);
     }
 
     /// Creates a cascading context with the given depth and default sampling parameters.
@@ -85,7 +96,7 @@ public record EncodeContext(
     /// @param initialExcluded encoding ids excluded from consideration from the start
     /// @return a new [EncodeContext] ready for cascading compression
     public static EncodeContext ofDepth(int depth, Arena arena, WriteRegistry registry, Set<EncodingId> initialExcluded) {
-        return new EncodeContext(arena, registry, depth, Set.copyOf(initialExcluded), 42L, 4096, 0.05);
+        return new EncodeContext(arena, registry, depth, Set.copyOf(initialExcluded), 42L, MIN_SAMPLE_SIZE, SAMPLE_FRACTION);
     }
 
     /// Returns a copy of this context with the cascade depth decremented by one.
