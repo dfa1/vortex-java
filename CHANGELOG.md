@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `RunEndEncodingEncoder` counts runs and writes them straight into the output segments instead of accumulating boxed `Integer`/`Long` lists, cutting write garbage by 26% on data with no runs to find. ([#407](https://github.com/dfa1/vortex-java/issues/407))
 - `ArrayStats` and `RunEndEncodingEncoder` hoist their per-element ptype switch out of the scan, and `ArrayStats` skips the scan entirely when no stat was requested. ([#408](https://github.com/dfa1/vortex-java/issues/408))
 - Scanning a run-end column walks runs instead of binary-searching per row: `LazyRunEndShortArray`/`LazyRunEndByteArray` gained the typed `forEach` their Int/Long/Bool siblings already had, `DictLongArray` traverses its codes child sequentially, and the primitive `materialize` defaults route through those hooks. ([#408](https://github.com/dfa1/vortex-java/issues/408))
 - Writes of a global-dictionary candidate column dedup each chunk in one pass through an unboxed bit index, instead of two passes probing a `HashMap` with a boxed key per row. ([#408](https://github.com/dfa1/vortex-java/issues/408))

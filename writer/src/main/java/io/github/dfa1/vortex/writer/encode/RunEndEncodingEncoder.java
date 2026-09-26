@@ -112,19 +112,33 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         int n = arrayLength(data, ptype);
         boolean unsign = ptype.isUnsigned();
 
-        List<Integer> ends = new ArrayList<>();
-        List<Long> values = new ArrayList<>();
+        int elemBytes = ptype.byteSize();
         long minVal = 0L;
         long maxVal = 0L;
-        if (n > 0) {
-            // A per-element ptype switch and the signedness ternary used to sit inside this
-            // loop, making the body non-uniform for every row in the column (CLAUDE.md hot-loop
-            // rule); this frame was 13.6% of write CPU. Widen once through a typed scan, then run
-            // one uniform loop over `long`s.
+        int numRuns = 0;
+        MemorySegment endsBuf;
+        MemorySegment valuesBuf;
+
+        if (n == 0) {
+            endsBuf = ctx.arena().allocate(0, 4);
+            valuesBuf = ctx.arena().allocate(0, elemBytes);
+        } else {
+            // A per-element ptype switch and the signedness ternary used to sit inside the scan,
+            // making the body non-uniform for every row (CLAUDE.md hot-loop rule). Widen once,
+            // then run uniform loops over `long`s.
+            //
+            // Two passes — count the runs, then fill — rather than one pass appending to
+            // `List<Integer>`/`List<Long>`. Those lists boxed an Integer and a Long per RUN, and
+            // on data with no runs to find (random values) that is a boxed pair per row. This
+            // encoder is a cascade candidate, encoded on every competition and discarded when it
+            // loses, so that cost fell on columns run-end never wins: it was the hottest frame
+            // (11.6%) while profiling the BITPACKED benchmark. Counting first also sizes both
+            // segments exactly and writes straight into them, so run data never touches the heap.
             long[] widened = widen(data, ptype, n);
             long runVal = widened[0];
             minVal = runVal;
             maxVal = runVal;
+            numRuns = 1;
             if (unsign) {
                 for (int i = 1; i < n; i++) {
                     long cur = widened[i];
@@ -135,8 +149,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
                         maxVal = cur;
                     }
                     if (cur != runVal) {
-                        ends.add(i);
-                        values.add(runVal);
+                        numRuns++;
                         runVal = cur;
                     }
                 }
@@ -150,27 +163,27 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
                         maxVal = cur;
                     }
                     if (cur != runVal) {
-                        ends.add(i);
-                        values.add(runVal);
+                        numRuns++;
                         runVal = cur;
                     }
                 }
             }
-            ends.add(n);
-            values.add(runVal);
-        }
 
-        int numRuns = ends.size();
-
-        MemorySegment endsBuf = ctx.arena().allocate((long) numRuns * 4, 4);
-        for (int i = 0; i < numRuns; i++) {
-            endsBuf.setAtIndex(VortexFormat.LE_INT, i, ends.get(i));
-        }
-
-        int elemBytes = ptype.byteSize();
-        MemorySegment valuesBuf = ctx.arena().allocate((long) numRuns * elemBytes, elemBytes);
-        for (int i = 0; i < numRuns; i++) {
-            PTypeIO.set(valuesBuf, (long) i * elemBytes, ptype, values.get(i));
+            endsBuf = ctx.arena().allocate((long) numRuns * 4, 4);
+            valuesBuf = ctx.arena().allocate((long) numRuns * elemBytes, elemBytes);
+            int k = 0;
+            runVal = widened[0];
+            for (int i = 1; i < n; i++) {
+                long cur = widened[i];
+                if (cur != runVal) {
+                    endsBuf.setAtIndex(VortexFormat.LE_INT, k, i);
+                    PTypeIO.set(valuesBuf, (long) k * elemBytes, ptype, runVal);
+                    k++;
+                    runVal = cur;
+                }
+            }
+            endsBuf.setAtIndex(VortexFormat.LE_INT, k, n);
+            PTypeIO.set(valuesBuf, (long) k * elemBytes, ptype, runVal);
         }
 
         byte[] metaBytes = new ProtoRunEndMetadata(
