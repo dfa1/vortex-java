@@ -268,26 +268,40 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     private static DictData buildDictData(DType dtype, Object data) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        var valueMap = new LinkedHashMap<Object, Integer>();
         int len = arrayLength(data, ptype);
-        // One pass, and `get`/`put` rather than `computeIfAbsent`: the mapping lambda captures
-        // `valueMap`, so it was allocated fresh on every row, and the second pass re-probed the
-        // map for a code this pass already knows.
+
+        // Dedup on raw value bits rather than boxed keys. This probed a
+        // LinkedHashMap<Object, Integer>, boxing a value per ROW just to look it up - the same
+        // cost already removed from DictColumnState#ingestDictChunk. Keys are compared as longs
+        // and nothing is boxed: `firstSeenRaw` records each distinct value in first-seen order
+        // for the pool, so the map is gone entirely.
+        //
+        // Float keying stays exactly what a boxed Float/Double map gave: dedup on
+        // `floatToIntBits`/`doubleToLongBits` (canonical, so every NaN payload collapses to one
+        // entry and -0.0 stays distinct from 0.0, matching Float.equals/Double.equals), while the
+        // pool keeps the RAW bits of the first occurrence so the emitted value is unchanged.
+        BitsToCode index = new BitsToCode();
         int[] codes = new int[len];
+        long[] firstSeenRaw = new long[16];
+        int dictSize = 0;
         for (int i = 0; i < len; i++) {
-            Object v = readElement(data, ptype, i);
-            Integer code = valueMap.get(v);
-            if (code == null) {
-                code = valueMap.size();
-                valueMap.put(v, code);
+            long raw = rawBits(data, ptype, i);
+            int code = index.lookup(canonicalBits(raw, ptype));
+            if (code < 0) {
+                code = dictSize;
+                index.put(canonicalBits(raw, ptype), code);
+                if (dictSize == firstSeenRaw.length) {
+                    firstSeenRaw = java.util.Arrays.copyOf(firstSeenRaw, dictSize * 2);
+                }
+                firstSeenRaw[dictSize] = raw;
+                dictSize++;
             }
             codes[i] = code;
         }
 
-        int dictSize = valueMap.size();
         PType codePType = codePType(dictSize);
 
-        Object uniqueArray = buildUniqueArray(ptype, valueMap.keySet(), dictSize);
+        Object uniqueArray = buildUniqueArray(ptype, firstSeenRaw, dictSize);
         MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
 
         Object codesArr = switch (codePType) {
@@ -331,68 +345,140 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static Object readElement(Object data, PType ptype, int i) {
-        return switch (ptype) {
-            case I8, U8 -> ((byte[]) data)[i];
-            case I16, U16, F16 -> ((short[]) data)[i];
-            case I32, U32 -> ((int[]) data)[i];
-            case I64, U64 -> ((long[]) data)[i];
-            case F32 -> ((float[]) data)[i];
-            case F64 -> ((double[]) data)[i];
-        };
-    }
-
-    private static Object buildUniqueArray(PType ptype, Iterable<Object> uniques, int dictSize) {
+    /// Builds the dictionary pool from the first-seen raw bit patterns, in order.
+    ///
+    /// @param ptype    the column's primitive type
+    /// @param raw      first-seen raw bits, indexed by code
+    /// @param dictSize number of distinct values
+    /// @return a typed primitive array of the distinct values in first-seen order
+    private static Object buildUniqueArray(PType ptype, long[] raw, int dictSize) {
         return switch (ptype) {
             case I8, U8 -> {
                 byte[] a = new byte[dictSize];
-                int i = 0;
-                for (Object v : uniques) {
-                    a[i++] = (Byte) v;
+                for (int i = 0; i < dictSize; i++) {
+                    a[i] = (byte) raw[i];
                 }
                 yield a;
             }
             case I16, U16, F16 -> {
                 short[] a = new short[dictSize];
-                int i = 0;
-                for (Object v : uniques) {
-                    a[i++] = (Short) v;
+                for (int i = 0; i < dictSize; i++) {
+                    a[i] = (short) raw[i];
                 }
                 yield a;
             }
             case I32, U32 -> {
                 int[] a = new int[dictSize];
-                int i = 0;
-                for (Object v : uniques) {
-                    a[i++] = (Integer) v;
+                for (int i = 0; i < dictSize; i++) {
+                    a[i] = (int) raw[i];
                 }
                 yield a;
             }
             case I64, U64 -> {
                 long[] a = new long[dictSize];
-                int i = 0;
-                for (Object v : uniques) {
-                    a[i++] = (Long) v;
-                }
+                System.arraycopy(raw, 0, a, 0, dictSize);
                 yield a;
             }
             case F32 -> {
                 float[] a = new float[dictSize];
-                int i = 0;
-                for (Object v : uniques) {
-                    a[i++] = (Float) v;
+                for (int i = 0; i < dictSize; i++) {
+                    a[i] = Float.intBitsToFloat((int) raw[i]);
                 }
                 yield a;
             }
             case F64 -> {
                 double[] a = new double[dictSize];
-                int i = 0;
-                for (Object v : uniques) {
-                    a[i++] = (Double) v;
+                for (int i = 0; i < dictSize; i++) {
+                    a[i] = Double.longBitsToDouble(raw[i]);
                 }
                 yield a;
             }
         };
+    }
+
+    /// Raw bits of element `i`, with no boxing. Floats keep their exact payload here; see
+    /// [#canonicalBits] for the form used to compare them.
+    ///
+    /// @param data  the column's typed primitive array
+    /// @param ptype the column's primitive type
+    /// @param i     element index
+    /// @return the element's raw bit pattern
+    private static long rawBits(Object data, PType ptype, int i) {
+        return switch (ptype) {
+            case I8, U8 -> ((byte[]) data)[i];
+            case I16, U16, F16 -> ((short[]) data)[i];
+            case I32, U32 -> ((int[]) data)[i];
+            case I64, U64 -> ((long[]) data)[i];
+            case F32 -> Float.floatToRawIntBits(((float[]) data)[i]) & 0xFFFFFFFFL;
+            case F64 -> Double.doubleToRawLongBits(((double[]) data)[i]);
+        };
+    }
+
+    /// The comparison form of [#rawBits]: identical for integers, and for floats the canonical
+    /// bits, so two values dedup exactly when the boxed keys this replaced were `equals`.
+    ///
+    /// @param raw   a raw bit pattern from [#rawBits]
+    /// @param ptype the column's primitive type
+    /// @return the bits to compare and hash on
+    private static long canonicalBits(long raw, PType ptype) {
+        return switch (ptype) {
+            case F32 -> Float.floatToIntBits(Float.intBitsToFloat((int) raw)) & 0xFFFFFFFFL;
+            case F64 -> Double.doubleToLongBits(Double.longBitsToDouble(raw));
+            default -> raw;
+        };
+    }
+
+    /// Open-addressing `bits -> code + 1` map (0 means empty), power-of-two capacity so probing
+    /// masks instead of taking a modulo (CLAUDE.md hot-loop rule).
+    private static final class BitsToCode {
+
+        private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
+
+        private long[] keys = new long[64];
+        private int[] codes = new int[64];
+        private int mask = 63;
+        private int size;
+
+        int lookup(long bits) {
+            int slot = slotFor(bits, mask);
+            while (codes[slot] != 0) {
+                if (keys[slot] == bits) {
+                    return codes[slot] - 1;
+                }
+                slot = (slot + 1) & mask;
+            }
+            return -1;
+        }
+
+        void put(long bits, int code) {
+            if ((size + 1) * 2 >= keys.length) {
+                long[] oldKeys = keys;
+                int[] oldCodes = codes;
+                keys = new long[oldKeys.length * 2];
+                codes = new int[oldCodes.length * 2];
+                mask = keys.length - 1;
+                for (int i = 0; i < oldKeys.length; i++) {
+                    if (oldCodes[i] != 0) {
+                        insert(oldKeys[i], oldCodes[i]);
+                    }
+                }
+            }
+            insert(bits, code + 1);
+            size++;
+        }
+
+        private void insert(long bits, int codePlusOne) {
+            int slot = slotFor(bits, mask);
+            while (codes[slot] != 0) {
+                slot = (slot + 1) & mask;
+            }
+            keys[slot] = bits;
+            codes[slot] = codePlusOne;
+        }
+
+        private static int slotFor(long bits, int mask) {
+            return (int) ((bits * HASH_MULTIPLIER) >>> 32) & mask;
+        }
     }
 
     private static void writeCodeToSeg(MemorySegment seg, PType codePType, int idx, int code) {
