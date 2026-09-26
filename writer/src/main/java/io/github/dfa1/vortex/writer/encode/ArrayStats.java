@@ -16,15 +16,20 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 /// @param distinctCount     distinct value count, or `-1` if not requested
 /// @param mostFrequentBits  raw bits of the most-frequent value, or `0` if not requested
 /// @param topFrequency      occurrence count of the most-frequent value, or `0` if not requested
+/// @param distinctCapped    `true` when the scan stopped early because the distinct count passed
+///                          `valueCount / 2 + 1`. [#distinctCount()] is then a lower bound and
+///                          [#mostFrequentBits()] / [#topFrequency()] are partial — see
+///                          [#distinctCapped()] for why every consumer can still decide
 public record ArrayStats(
         long valueCount,
         long distinctCount,
         long mostFrequentBits,
-        long topFrequency
+        long topFrequency,
+        boolean distinctCapped
 ) {
 
     /// Sentinel stats for empty arrays.
-    public static final ArrayStats EMPTY = new ArrayStats(0, 0, 0, 0);
+    public static final ArrayStats EMPTY = new ArrayStats(0, 0, 0, 0, false);
 
     /// Compute stats over `data` according to `options`.
     ///
@@ -39,7 +44,7 @@ public record ArrayStats(
             return EMPTY;
         }
         if (options == StatsOptions.NONE) {
-            return new ArrayStats(n, -1, 0, 0);
+            return new ArrayStats(n, -1, 0, 0, false);
         }
         // Sized for the low-cardinality case and grown by doubling from there, NOT for `n`:
         // pre-sizing to min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call
@@ -51,9 +56,23 @@ public record ArrayStats(
         // in a cascade competition (the arrays are thrown away when compute() returns).
         if (!options.countDistinct() && !options.trackMostFrequent()) {
             // Nothing to accumulate — the scan below would read every element and discard it.
-            return new ArrayStats(n, -1, 0, 0);
+            return new ArrayStats(n, -1, 0, 0, false);
         }
         LongCounts counts = new LongCounts(Math.min(n, 512));
+
+        // Stop once the distinct count passes half the rows: past that point every consumer's
+        // verdict is already determined, so the remaining probes cannot change any decision.
+        // Dict skips (distinct * 2 >= n), Constant skips (distinct != 1), and Sparse skips by
+        // pigeonhole — if a value occurred n/2 times, the other n/2 rows could hold at most
+        // n/2 + 1 distinct values in total, so passing that bound proves no value reaches the
+        // frequency Sparse needs. RunEnd is the one consumer whose rule (distinct >= n) is not
+        // settled, so it defers to the sample-encoded path instead.
+        //
+        // Worth ~50% of the hashed rows on high-cardinality columns (measured on all-distinct and
+        // random-2^40 corpora) and nothing at all on low-cardinality ones, which exit the scan
+        // having never reached the cap.
+        long cap = n / 2L + 1L;
+        boolean capped = false;
 
         // The ptype switch is hoisted out of the scan: reading it per element made the loop body
         // non-uniform and put `readBits` alone at 9% of write CPU (CLAUDE.md hot-loop rule).
@@ -63,61 +82,97 @@ public record ArrayStats(
                 byte[] a = (byte[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(a[i]);
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
             case U8 -> {
                 byte[] a = (byte[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(Byte.toUnsignedLong(a[i]));
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
             case I16 -> {
                 short[] a = (short[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(a[i]);
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
             case U16, F16 -> {
                 short[] a = (short[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(Short.toUnsignedLong(a[i]));
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
             case I32 -> {
                 int[] a = (int[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(a[i]);
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
             case U32 -> {
                 int[] a = (int[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(Integer.toUnsignedLong(a[i]));
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
             case I64, U64 -> {
                 long[] a = (long[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(a[i]);
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
             case F32 -> {
                 float[] a = (float[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(Float.floatToRawIntBits(a[i]));
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
             case F64 -> {
                 double[] a = (double[]) data;
                 for (int i = 0; i < n; i++) {
                     counts.increment(Double.doubleToRawLongBits(a[i]));
+                    if (counts.size() > cap) {
+                        capped = true;
+                        break;
+                    }
                 }
             }
         }
         long topFreqBits = counts.topBits();
         int topFreq = counts.topCount();
         long distinct = options.countDistinct() ? counts.size() : -1L;
-        return new ArrayStats(n, distinct, topFreqBits, topFreq);
+        return new ArrayStats(n, distinct, topFreqBits, topFreq, capped);
     }
 
     /// Open-addressing `long -> count` map used by [#compute] to track distinct values and their
@@ -221,6 +276,19 @@ public record ArrayStats(
         };
     }
 
+
+    /// Whether the scan stopped early at `valueCount / 2 + 1` distinct values.
+    ///
+    /// When true, [#distinctCount()] is a lower bound and [#mostFrequentBits()] /
+    /// [#topFrequency()] reflect only the rows scanned. Every consumer can still decide: the
+    /// distinct count is already high enough for Dict and Constant to skip, and high enough to
+    /// prove by pigeonhole that no value reaches the frequency Sparse needs. Only RunEnd's rule
+    /// (`distinct >= n`) remains undetermined, so it defers to sampling.
+    ///
+    /// @return whether the distinct scan hit the cap
+    public boolean distinctCapped() {
+        return distinctCapped;
+    }
 
     /// @return whether [#distinctCount()] was computed during this scan
     public boolean hasDistinctCount() {

@@ -48,6 +48,12 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         if (!(dtype instanceof DType.Primitive) || !stats.hasMostFrequent()) {
             return Estimate.COMPLETE;
         }
+        // Capped scan: more than n/2 + 1 distinct values means no value can occur n/2 times
+        // (the rows outside such a value could not supply that many distinct ones), so the
+        // dominant-value test below cannot pass however the partial counts came out.
+        if (stats.distinctCapped()) {
+            return Estimate.SKIP;
+        }
         long n = stats.valueCount();
         // Sparse stores fill scalar (hardcoded 0) + n - topFreq patches. Skip unless the
         // dominant value's bit pattern is zero AND it covers more than half the array —

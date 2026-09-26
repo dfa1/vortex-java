@@ -41,6 +41,12 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         if (n == 0) {
             return Estimate.SKIP;
         }
+        // The only consumer the capped scan does not settle: `distinct >= n` needs the exact
+        // count, and a capped scan only proves distinct > n/2 + 1. Defer to the sample instead
+        // of guessing — a 1024-row sample encode is far cheaper than the probes the cap saved.
+        if (stats.distinctCapped()) {
+            return Estimate.COMPLETE;
+        }
         // Skip rule: if every value is distinct, each row is its own run — pure overhead.
         // Defer to the sample-encoded path otherwise; RunEnd's actual compression depends
         // on run-length distribution which is not summarized by distinct count alone.

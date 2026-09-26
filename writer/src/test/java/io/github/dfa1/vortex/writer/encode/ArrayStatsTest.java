@@ -57,9 +57,12 @@ class ArrayStatsTest {
     }
 
     @Test
-    void compute_allDistinctMonotonicSequence_distinctCountEqualsLength() {
+    void compute_allDistinctSequence_stopsAtTheCapAndSaysSo() {
         // Given: mirrors FSST's codesOffsets child (a strictly-increasing prefix sum), the
-        // real-world shape that first motivated de-boxing this counter.
+        // real-world shape that first motivated de-boxing this counter — and the shape the
+        // distinct-count cap exists for. Every value is distinct, so the scan passes n/2 + 1
+        // distinct values halfway through and stops: continuing cannot change any encoder's
+        // verdict, and on this shape that halves the hashed rows.
         int n = 5_000;
         long[] data = new long[n];
         for (int i = 0; i < n; i++) {
@@ -69,9 +72,31 @@ class ArrayStatsTest {
         // When
         ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.DISTINCT_AND_TOP);
 
+        // Then — the count is a lower bound past the cap, never the exact n
+        assertThat(result.distinctCapped()).isTrue();
+        assertThat(result.distinctCount()).isGreaterThan(n / 2L).isLessThan(n);
+        // Dict and Constant still decide correctly from the capped count
+        assertThat(result.distinctCount() * 2).isGreaterThanOrEqualTo(n);
+        assertThat(result.distinctCount()).isNotEqualTo(1L);
+    }
+
+    @Test
+    void compute_lowCardinality_neverHitsTheCap() {
+        // Given: 10 distinct values over 5000 rows — nowhere near n/2, so the scan must run to
+        // completion and report exact stats. This is the case the cap must not disturb.
+        int n = 5_000;
+        long[] data = new long[n];
+        for (int i = 0; i < n; i++) {
+            data[i] = i % 10;
+        }
+
+        // When
+        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.DISTINCT_AND_TOP);
+
         // Then
-        assertThat(result.distinctCount()).isEqualTo(n);
-        assertThat(result.topFrequency()).isEqualTo(1);
+        assertThat(result.distinctCapped()).isFalse();
+        assertThat(result.distinctCount()).isEqualTo(10L);
+        assertThat(result.topFrequency()).isEqualTo(500L);
     }
 
     @Test
