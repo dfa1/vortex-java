@@ -45,21 +45,77 @@ public record ArrayStats(
         // pre-sizing to min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call
         // even for a 500-distinct column, and that pair was the single largest allocation source
         // in a cascade competition (the arrays are thrown away when compute() returns).
-        LongCounts counts = options.countDistinct() || options.trackMostFrequent()
-                                    ? new LongCounts(Math.min(n, 512))
-                                    : null;
-        long topFreqBits = 0;
-        int topFreq = 0;
-        for (int i = 0; i < n; i++) {
-            long bits = readBits(ptype, data, i);
-            if (counts != null) {
-                int newCount = counts.increment(bits);
-                if (newCount > topFreq) {
-                    topFreq = newCount;
-                    topFreqBits = bits;
+        // Sized for the low-cardinality case and grown by doubling from there, NOT for `n`:
+        // pre-sizing to min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call
+        // even for a 500-distinct column, and that pair was the single largest allocation source
+        // in a cascade competition (the arrays are thrown away when compute() returns).
+        if (!options.countDistinct() && !options.trackMostFrequent()) {
+            // Nothing to accumulate — the scan below would read every element and discard it.
+            return new ArrayStats(n, -1, 0, 0);
+        }
+        LongCounts counts = new LongCounts(Math.min(n, 512));
+
+        // The ptype switch is hoisted out of the scan: reading it per element made the loop body
+        // non-uniform and put `readBits` alone at 9% of write CPU (CLAUDE.md hot-loop rule).
+        // Most-frequent tracking moved into LongCounts#increment so each body is a single call.
+        switch (ptype) {
+            case I8 -> {
+                byte[] a = (byte[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(a[i]);
+                }
+            }
+            case U8 -> {
+                byte[] a = (byte[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(Byte.toUnsignedLong(a[i]));
+                }
+            }
+            case I16 -> {
+                short[] a = (short[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(a[i]);
+                }
+            }
+            case U16, F16 -> {
+                short[] a = (short[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(Short.toUnsignedLong(a[i]));
+                }
+            }
+            case I32 -> {
+                int[] a = (int[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(a[i]);
+                }
+            }
+            case U32 -> {
+                int[] a = (int[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(Integer.toUnsignedLong(a[i]));
+                }
+            }
+            case I64, U64 -> {
+                long[] a = (long[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(a[i]);
+                }
+            }
+            case F32 -> {
+                float[] a = (float[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(Float.floatToRawIntBits(a[i]));
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) data;
+                for (int i = 0; i < n; i++) {
+                    counts.increment(Double.doubleToRawLongBits(a[i]));
                 }
             }
         }
+        long topFreqBits = counts.topBits();
+        int topFreq = counts.topCount();
         long distinct = options.countDistinct() ? counts.size() : -1L;
         return new ArrayStats(n, distinct, topFreqBits, topFreq);
     }
@@ -80,6 +136,8 @@ public record ArrayStats(
         private int[] counts;
         private int mask;
         private int size;
+        private long topBits;
+        private int topCount;
 
         LongCounts(int expectedDistinct) {
             int capacity = nextPowerOfTwo(Math.max(16, expectedDistinct * 2));
@@ -88,8 +146,8 @@ public record ArrayStats(
             mask = capacity - 1;
         }
 
-        /// Increments `key`'s count (inserting a fresh entry first if unseen) and returns the
-        /// updated count.
+        /// Increments `key`'s count (inserting a fresh entry first if unseen), updates the
+        /// running most-frequent value, and returns the updated count.
         int increment(long key) {
             if (size * 2 >= keys.length) {
                 grow();
@@ -102,7 +160,22 @@ public record ArrayStats(
                 keys[slot] = key;
                 size++;
             }
-            return ++counts[slot];
+            int updated = ++counts[slot];
+            if (updated > topCount) {
+                topCount = updated;
+                topBits = key;
+            }
+            return updated;
+        }
+
+        /// The bit pattern of the most frequently seen value.
+        long topBits() {
+            return topBits;
+        }
+
+        /// How many times the most frequently seen value occurred.
+        int topCount() {
+            return topCount;
         }
 
         int size() {
@@ -148,19 +221,6 @@ public record ArrayStats(
         };
     }
 
-    private static long readBits(PType ptype, Object data, int i) {
-        return switch (ptype) {
-            case I8 -> ((byte[]) data)[i];
-            case U8 -> Byte.toUnsignedLong(((byte[]) data)[i]);
-            case I16 -> ((short[]) data)[i];
-            case U16, F16 -> Short.toUnsignedLong(((short[]) data)[i]);
-            case I32 -> ((int[]) data)[i];
-            case U32 -> Integer.toUnsignedLong(((int[]) data)[i]);
-            case I64, U64 -> ((long[]) data)[i];
-            case F32 -> Float.floatToRawIntBits(((float[]) data)[i]);
-            case F64 -> Double.doubleToRawLongBits(((double[]) data)[i]);
-        };
-    }
 
     /// @return whether [#distinctCount()] was computed during this scan
     public boolean hasDistinctCount() {

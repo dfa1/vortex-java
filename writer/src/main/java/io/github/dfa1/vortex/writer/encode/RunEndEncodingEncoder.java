@@ -117,21 +117,43 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         long minVal = 0L;
         long maxVal = 0L;
         if (n > 0) {
-            long runVal = readLong(data, ptype, 0);
+            // A per-element ptype switch and the signedness ternary used to sit inside this
+            // loop, making the body non-uniform for every row in the column (CLAUDE.md hot-loop
+            // rule); this frame was 13.6% of write CPU. Widen once through a typed scan, then run
+            // one uniform loop over `long`s.
+            long[] widened = widen(data, ptype, n);
+            long runVal = widened[0];
             minVal = runVal;
             maxVal = runVal;
-            for (int i = 1; i < n; i++) {
-                long cur = readLong(data, ptype, i);
-                if (unsign ? Long.compareUnsigned(cur, minVal) < 0 : cur < minVal) {
-                    minVal = cur;
+            if (unsign) {
+                for (int i = 1; i < n; i++) {
+                    long cur = widened[i];
+                    if (Long.compareUnsigned(cur, minVal) < 0) {
+                        minVal = cur;
+                    }
+                    if (Long.compareUnsigned(cur, maxVal) > 0) {
+                        maxVal = cur;
+                    }
+                    if (cur != runVal) {
+                        ends.add(i);
+                        values.add(runVal);
+                        runVal = cur;
+                    }
                 }
-                if (unsign ? Long.compareUnsigned(cur, maxVal) > 0 : cur > maxVal) {
-                    maxVal = cur;
-                }
-                if (cur != runVal) {
-                    ends.add(i);
-                    values.add(runVal);
-                    runVal = cur;
+            } else {
+                for (int i = 1; i < n; i++) {
+                    long cur = widened[i];
+                    if (cur < minVal) {
+                        minVal = cur;
+                    }
+                    if (cur > maxVal) {
+                        maxVal = cur;
+                    }
+                    if (cur != runVal) {
+                        ends.add(i);
+                        values.add(runVal);
+                        runVal = cur;
+                    }
                 }
             }
             ends.add(n);
@@ -183,16 +205,68 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static long readLong(Object data, PType ptype, int i) {
-        return switch (ptype) {
-            case I8 -> ((byte[]) data)[i];
-            case U8 -> Byte.toUnsignedLong(((byte[]) data)[i]);
-            case I16 -> ((short[]) data)[i];
-            case U16 -> Short.toUnsignedLong(((short[]) data)[i]);
-            case I32 -> ((int[]) data)[i];
-            case U32 -> Integer.toUnsignedLong(((int[]) data)[i]);
-            case I64, U64 -> ((long[]) data)[i];
+    /// Widens a chunk to `long`s with one switch for the whole array rather than one per element.
+    /// I64/U64 input is returned in place; only the narrower carriers pay for a copy.
+    ///
+    /// @param data  the chunk's typed primitive array
+    /// @param ptype the column's primitive type
+    /// @param n     element count
+    /// @return the values as `long`s, sign- or zero-extended to match `ptype`
+    private static long[] widen(Object data, PType ptype, int n) {
+        switch (ptype) {
+            case I64, U64 -> {
+                return (long[]) data;
+            }
+            case I8 -> {
+                byte[] a = (byte[]) data;
+                long[] out = new long[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = a[i];
+                }
+                return out;
+            }
+            case U8 -> {
+                byte[] a = (byte[]) data;
+                long[] out = new long[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = Byte.toUnsignedLong(a[i]);
+                }
+                return out;
+            }
+            case I16 -> {
+                short[] a = (short[]) data;
+                long[] out = new long[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = a[i];
+                }
+                return out;
+            }
+            case U16 -> {
+                short[] a = (short[]) data;
+                long[] out = new long[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = Short.toUnsignedLong(a[i]);
+                }
+                return out;
+            }
+            case I32 -> {
+                int[] a = (int[]) data;
+                long[] out = new long[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = a[i];
+                }
+                return out;
+            }
+            case U32 -> {
+                int[] a = (int[]) data;
+                long[] out = new long[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = Integer.toUnsignedLong(a[i]);
+                }
+                return out;
+            }
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype: " + ptype);
-        };
+        }
     }
+
 }
