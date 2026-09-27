@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The cascade's distinct-value counter grows 4x at a time from a 2048-entry floor, so a high-cardinality column no longer rehashes its way up through six resizes. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - The cascade's distinct-value scan stops once the count passes half the rows, where no encoder's verdict can change any more — a high-cardinality column now costs about half the hash probes it did. ([#410](https://github.com/dfa1/vortex-java/issues/410))
+- The global-dictionary candidate check counts distinct values on raw bits instead of boxing every row of the probe chunk into a `HashSet`. ([#407](https://github.com/dfa1/vortex-java/issues/407))
 - `DictEncodingEncoder` dedups on raw value bits through an open-addressing index instead of probing a `LinkedHashMap` with a boxed key per row. ([#407](https://github.com/dfa1/vortex-java/issues/407))
 - The cascade cost competition samples ~1% of a chunk with a 1024-row floor, matching the Rust reference, instead of 5% with a 4096-row floor — same encoding choices and byte-identical output, roughly a third less write time. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - `RunEndEncodingEncoder` counts runs and writes them straight into the output segments instead of accumulating boxed `Integer`/`Long` lists, cutting write garbage by 26% on data with no runs to find. ([#407](https://github.com/dfa1/vortex-java/issues/407))
