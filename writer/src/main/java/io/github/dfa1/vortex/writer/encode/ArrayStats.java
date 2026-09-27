@@ -46,16 +46,10 @@ public record ArrayStats(
         if (options == StatsOptions.NONE) {
             return new ArrayStats(n, -1, 0, 0, false);
         }
-        // Sized for the low-cardinality case and grown from there, NOT for `n`: pre-sizing to
-        // min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call even for a
-        // 500-distinct column, and that pair was the single largest allocation source in a
-        // cascade competition. The growth factor, not this floor, is what keeps a
-        // high-cardinality column from rehashing its way up — see LongIntMap.
         if (!options.countDistinct() && !options.trackMostFrequent()) {
             // Nothing to accumulate — the scan below would read every element and discard it.
             return new ArrayStats(n, -1, 0, 0, false);
         }
-        LongIntMap counts = new LongIntMap(Math.min(n, 2048));
 
         // Stop once the distinct count passes half the rows: past that point every consumer's
         // verdict is already determined, so the remaining probes cannot change any decision.
@@ -69,6 +63,12 @@ public record ArrayStats(
         // random-2^40 corpora) and nothing at all on low-cardinality ones, which exit the scan
         // having never reached the cap.
         long cap = n / 2L + 1L;
+        // Sized for the low-cardinality case and grown from there, NOT for the cap. Pre-sizing
+        // to the cap (what the reference does, `array.len() / 2`) removes every resize but
+        // allocates a table proportional to the chunk on every call: measured here it raised
+        // write garbage by 64-96% with no throughput gain, so the growth factor carries the
+        // high-cardinality case instead — see LongIntMap#grow.
+        LongIntMap counts = new LongIntMap(Math.min(n, 2048));
 
         // The ptype switch is hoisted out of the scan: reading it per element made the loop body
         // non-uniform and put `readBits` alone at 9% of write CPU (CLAUDE.md hot-loop rule). Each

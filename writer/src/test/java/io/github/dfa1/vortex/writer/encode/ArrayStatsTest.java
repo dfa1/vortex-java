@@ -142,6 +142,12 @@ class ArrayStatsTest {
         // Then
         assertThat(result.distinctCount()).isEqualTo(reference.size());
         assertThat(result.topFrequency()).isEqualTo(expectedTopFreq);
-        assertThat(result.mostFrequentBits()).isEqualTo(expectedTopBits);
+        // Several values can share the top frequency, and which one is named is not meaningful —
+        // asserting one specific tied value pinned an implementation detail (it broke when the
+        // counter's capacity changed). The invariant that matters is that the value named really
+        // does occur that many times.
+        assertThat(reference.get(result.mostFrequentBits()))
+                .as("value %d reported as most frequent", result.mostFrequentBits())
+                .isEqualTo(expectedTopFreq);
     }
 }

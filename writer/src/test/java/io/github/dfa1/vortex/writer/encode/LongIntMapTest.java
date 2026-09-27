@@ -109,6 +109,31 @@ class LongIntMapTest {
         }
 
         @Test
+        void maxEntry_breaksTiesOnTheSmallerKey_whateverTheCapacity() {
+            // Given — the same two equally-frequent keys in maps sized differently, so they land
+            // in different slots. Slot order must not decide the winner: the compressor picks an
+            // encoding from this, and that choice has to be reproducible for the same input.
+            LongIntMap small = new LongIntMap(4);
+            LongIntMap large = new LongIntMap(4096);
+            for (LongIntMap sut : new LongIntMap[]{small, large}) {
+                sut.increment(77L);
+                sut.increment(77L);
+                sut.increment(1234L);
+                sut.increment(1234L);
+            }
+
+            // When
+            LongIntMap.Entry fromSmall = small.maxEntry();
+            LongIntMap.Entry fromLarge = large.maxEntry();
+
+            // Then
+            assertThat(fromSmall).isNotNull();
+            assertThat(fromSmall.key()).isEqualTo(77L);
+            assertThat(fromSmall.value()).isEqualTo(2);
+            assertThat(fromLarge).isEqualTo(fromSmall);
+        }
+
+        @Test
         void maxEntry_isNull_whenNothingStored() {
             // Given
             LongIntMap sut = new LongIntMap(16);

@@ -151,15 +151,21 @@ public final class LongIntMap {
     ///
     /// Found by one pass over the table rather than tracked on every [#increment], which keeps
     /// the per-row loop to a single probe. The table holds at most twice the distinct count, so
-    /// this pass is bounded by cardinality, not by row count.
+    /// this pass is bounded by cardinality, not by row count. Ties break on the smaller key so
+    /// the answer does not depend on the table's capacity.
     ///
     /// @return the highest-valued entry, or `null` if nothing has been stored
     public Entry maxEntry() {
         long bestKey = 0;
         int bestRaw = 0;
         for (int i = 0; i < values.length; i++) {
-            if (values[i] > bestRaw) {
-                bestRaw = values[i];
+            int raw = values[i];
+            // Ties break on the smaller key, never on slot order: slot order depends on the
+            // table's capacity, so without this the winner among equally-frequent values changes
+            // when the map happens to be sized differently — and the compressor's choice of
+            // encoding would stop being reproducible for the same input.
+            if (raw > bestRaw || (raw == bestRaw && raw != 0 && keys[i] < bestKey)) {
+                bestRaw = raw;
                 bestKey = keys[i];
             }
         }
