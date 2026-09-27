@@ -50,12 +50,12 @@ public record ArrayStats(
         // min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call even for a
         // 500-distinct column, and that pair was the single largest allocation source in a
         // cascade competition. The growth factor, not this floor, is what keeps a
-        // high-cardinality column from rehashing its way up — see LongCounts#grow.
+        // high-cardinality column from rehashing its way up — see LongIntMap.
         if (!options.countDistinct() && !options.trackMostFrequent()) {
             // Nothing to accumulate — the scan below would read every element and discard it.
             return new ArrayStats(n, -1, 0, 0, false);
         }
-        LongCounts counts = new LongCounts(Math.min(n, 2048));
+        LongIntMap counts = new LongIntMap(Math.min(n, 2048));
 
         // Stop once the distinct count passes half the rows: past that point every consumer's
         // verdict is already determined, so the remaining probes cannot change any decision.
@@ -76,109 +76,15 @@ public record ArrayStats(
         // rather than inlining nine of them. One method PER SIGNEDNESS, never a shared body with
         // an `unsigned` flag: that flag is a branch inside the per-element loop, which measured
         // 3-8% slower — the same non-uniform body the hoisting exists to avoid.
-        // Most-frequent tracking lives in LongCounts#increment so each body is a single call.
+        // Most-frequent tracking is a single pass over the map at the end (LongIntMap#maxEntry),
+        // not a compare per element, so each body is a single call.
         boolean capped = scanInto(ptype, data, n, counts, cap);
 
-        long topFreqBits = counts.topBits();
-        int topFreq = counts.topCount();
+        LongIntMap.Entry top = counts.maxEntry();
+        long topFreqBits = top == null ? 0L : top.key();
+        int topFreq = top == null ? 0 : top.value();
         long distinct = options.countDistinct() ? counts.size() : -1L;
         return new ArrayStats(n, distinct, topFreqBits, topFreq, capped);
-    }
-
-    /// Open-addressing `long -> count` map used by [#compute] to track distinct values and their
-    /// occurrence counts without boxing every scanned bit pattern into a `Long` key (a
-    /// `HashMap<Long, int[]>`'s per-entry `Node` object plus the boxed key was the largest single
-    /// allocation source profiled in a stats-heavy cascade competition — every candidate primitive
-    /// column pays this on every chunk). Occupancy is tracked by `counts[slot] != 0` rather than a
-    /// separate flags array: a slot is only ever written once occupied, so a stored 0 always means
-    /// empty, even for a genuinely-zero data value. Capacity is always a power of two so probing
-    /// masks instead of taking a modulo (CLAUDE.md hot-loop rule).
-    private static final class LongCounts {
-
-        private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
-
-        private long[] keys;
-        private int[] counts;
-        private int mask;
-        private int size;
-        private long topBits;
-        private int topCount;
-
-        LongCounts(int expectedDistinct) {
-            int capacity = nextPowerOfTwo(Math.max(16, expectedDistinct * 2));
-            keys = new long[capacity];
-            counts = new int[capacity];
-            mask = capacity - 1;
-        }
-
-        /// Increments `key`'s count (inserting a fresh entry first if unseen), updates the
-        /// running most-frequent value, and returns the updated count.
-        int increment(long key) {
-            if (size * 2 >= keys.length) {
-                grow();
-            }
-            int slot = slotFor(key, mask);
-            while (counts[slot] != 0 && keys[slot] != key) {
-                slot = (slot + 1) & mask;
-            }
-            if (counts[slot] == 0) {
-                keys[slot] = key;
-                size++;
-            }
-            int updated = ++counts[slot];
-            if (updated > topCount) {
-                topCount = updated;
-                topBits = key;
-            }
-            return updated;
-        }
-
-        /// The bit pattern of the most frequently seen value.
-        long topBits() {
-            return topBits;
-        }
-
-        /// How many times the most frequently seen value occurred.
-        int topCount() {
-            return topCount;
-        }
-
-        int size() {
-            return size;
-        }
-
-        /// Quadruples rather than doubles. Starting small keeps the common low-cardinality
-        /// column cheap, but doubling made a high-cardinality one rehash six times on the way up
-        /// and `grow()` alone measured 10.5% of a cascading write. Growing by 4x halves the
-        /// rehashes without charging low-cardinality columns for capacity they never use —
-        /// raising the starting floor instead won on high-cardinality corpora but cost 3.9% on a
-        /// low-cardinality one, which is the common case.
-        private void grow() {
-            long[] oldKeys = keys;
-            int[] oldCounts = counts;
-            keys = new long[oldKeys.length * 4];
-            counts = new int[oldCounts.length * 4];
-            mask = keys.length - 1;
-            for (int i = 0; i < oldKeys.length; i++) {
-                if (oldCounts[i] != 0) {
-                    int slot = slotFor(oldKeys[i], mask);
-                    while (counts[slot] != 0) {
-                        slot = (slot + 1) & mask;
-                    }
-                    keys[slot] = oldKeys[i];
-                    counts[slot] = oldCounts[i];
-                }
-            }
-        }
-
-        private static int slotFor(long key, int mask) {
-            long mixed = key * HASH_MULTIPLIER;
-            return (int) (mixed >>> 32) & mask;
-        }
-
-        private static int nextPowerOfTwo(int x) {
-            return x <= 1 ? 1 : Integer.highestOneBit(x - 1) << 1;
-        }
     }
 
     /// Feeds every element of `data` into `counts`, stopping early once the distinct count
@@ -190,7 +96,7 @@ public record ArrayStats(
     /// @param counts the distinct/most-frequent accumulator
     /// @param cap    distinct count past which the scan may stop
     /// @return `true` if the scan stopped early at the cap
-    private static boolean scanInto(PType ptype, Object data, int n, LongCounts counts, long cap) {
+    private static boolean scanInto(PType ptype, Object data, int n, LongIntMap counts, long cap) {
         return switch (ptype) {
             case I8 -> scanI8((byte[]) data, n, counts, cap);
             case U8 -> scanU8((byte[]) data, n, counts, cap);
@@ -204,7 +110,7 @@ public record ArrayStats(
         };
     }
 
-    private static boolean scanI8(byte[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanI8(byte[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(a[i]);
             if (counts.size() > cap) {
@@ -214,7 +120,7 @@ public record ArrayStats(
         return false;
     }
 
-    private static boolean scanU8(byte[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanU8(byte[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(Byte.toUnsignedLong(a[i]));
             if (counts.size() > cap) {
@@ -224,7 +130,7 @@ public record ArrayStats(
         return false;
     }
 
-    private static boolean scanI16(short[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanI16(short[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(a[i]);
             if (counts.size() > cap) {
@@ -234,7 +140,7 @@ public record ArrayStats(
         return false;
     }
 
-    private static boolean scanU16(short[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanU16(short[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(Short.toUnsignedLong(a[i]));
             if (counts.size() > cap) {
@@ -244,7 +150,7 @@ public record ArrayStats(
         return false;
     }
 
-    private static boolean scanI32(int[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanI32(int[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(a[i]);
             if (counts.size() > cap) {
@@ -254,7 +160,7 @@ public record ArrayStats(
         return false;
     }
 
-    private static boolean scanU32(int[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanU32(int[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(Integer.toUnsignedLong(a[i]));
             if (counts.size() > cap) {
@@ -264,7 +170,7 @@ public record ArrayStats(
         return false;
     }
 
-    private static boolean scanI64(long[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanI64(long[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(a[i]);
             if (counts.size() > cap) {
@@ -274,7 +180,7 @@ public record ArrayStats(
         return false;
     }
 
-    private static boolean scanF32(float[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanF32(float[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(Float.floatToRawIntBits(a[i]));
             if (counts.size() > cap) {
@@ -284,7 +190,7 @@ public record ArrayStats(
         return false;
     }
 
-    private static boolean scanF64(double[] a, int n, LongCounts counts, long cap) {
+    private static boolean scanF64(double[] a, int n, LongIntMap counts, long cap) {
         for (int i = 0; i < n; i++) {
             counts.increment(Double.doubleToRawLongBits(a[i]));
             if (counts.size() > cap) {

@@ -280,13 +280,13 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         // `floatToIntBits`/`doubleToLongBits` (canonical, so every NaN payload collapses to one
         // entry and -0.0 stays distinct from 0.0, matching Float.equals/Double.equals), while the
         // pool keeps the RAW bits of the first occurrence so the emitted value is unchanged.
-        BitsToCode index = new BitsToCode();
+        LongIntMap index = new LongIntMap(64);
         int[] codes = new int[len];
         long[] firstSeenRaw = new long[16];
         int dictSize = 0;
         for (int i = 0; i < len; i++) {
             long raw = rawBits(data, ptype, i);
-            int code = index.lookup(canonicalBits(raw, ptype));
+            int code = index.get(canonicalBits(raw, ptype));
             if (code < 0) {
                 code = dictSize;
                 index.put(canonicalBits(raw, ptype), code);
@@ -428,58 +428,6 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    /// Open-addressing `bits -> code + 1` map (0 means empty), power-of-two capacity so probing
-    /// masks instead of taking a modulo (CLAUDE.md hot-loop rule).
-    private static final class BitsToCode {
-
-        private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
-
-        private long[] keys = new long[64];
-        private int[] codes = new int[64];
-        private int mask = 63;
-        private int size;
-
-        int lookup(long bits) {
-            int slot = slotFor(bits, mask);
-            while (codes[slot] != 0) {
-                if (keys[slot] == bits) {
-                    return codes[slot] - 1;
-                }
-                slot = (slot + 1) & mask;
-            }
-            return -1;
-        }
-
-        void put(long bits, int code) {
-            if ((size + 1) * 2 >= keys.length) {
-                long[] oldKeys = keys;
-                int[] oldCodes = codes;
-                keys = new long[oldKeys.length * 2];
-                codes = new int[oldCodes.length * 2];
-                mask = keys.length - 1;
-                for (int i = 0; i < oldKeys.length; i++) {
-                    if (oldCodes[i] != 0) {
-                        insert(oldKeys[i], oldCodes[i]);
-                    }
-                }
-            }
-            insert(bits, code + 1);
-            size++;
-        }
-
-        private void insert(long bits, int codePlusOne) {
-            int slot = slotFor(bits, mask);
-            while (codes[slot] != 0) {
-                slot = (slot + 1) & mask;
-            }
-            keys[slot] = bits;
-            codes[slot] = codePlusOne;
-        }
-
-        private static int slotFor(long bits, int mask) {
-            return (int) ((bits * HASH_MULTIPLIER) >>> 32) & mask;
-        }
-    }
 
     private static void writeCodeToSeg(MemorySegment seg, PType codePType, int idx, int code) {
         switch (codePType) {

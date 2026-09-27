@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.writer.encode.LongIntMap;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
@@ -34,7 +35,6 @@ final class DictColumnState {
     static final int GLOBAL_DICT_MAX_CARDINALITY_UTF8 = 32_768;
 
     private static final int INDEX_MIN_CAPACITY = 64;
-    private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
 
     private final DType dtype;
     private final boolean utf8;
@@ -47,9 +47,7 @@ final class DictColumnState {
     // hot-loop rule). valueToCode stays the authoritative store — it carries first-seen order, the
     // Utf8 keys, and everything the demotion and flush paths read — but probing it needs a boxed key,
     // and one Long per row of every candidate column profiled as the writer's hottest single frame.
-    private long[] bitsKeys = new long[INDEX_MIN_CAPACITY];
-    private int[] bitsCodes = new int[INDEX_MIN_CAPACITY];
-    private int bitsMask = INDEX_MIN_CAPACITY - 1;
+    private LongIntMap bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
     // Occurrence count per code, indexed by code; grows in lockstep with valueToCode. A primitive
     // array, not a List<Long>: this is incremented once per row, and boxing there cost one Long
     // allocation per row of every global-dict candidate column.
@@ -197,7 +195,7 @@ final class DictColumnState {
                 if (validity != null && !validity[i]) {
                     continue;
                 }
-                int code = bitsLookup(bits[i]);
+                int code = bitsIndex.get(bits[i]);
                 if (code < 0) {
                     if (valueToCode.size() == cap) {
                         rollbackTo(startSize);
@@ -205,7 +203,7 @@ final class DictColumnState {
                     }
                     code = valueToCode.size();
                     valueToCode.put(readPrimitiveElement(values, ptype, i), code);
-                    bitsPut(bits[i], code);
+                    bitsIndex.put(bits[i], code);
                 }
                 codes[i] = (short) code;
             }
@@ -251,54 +249,15 @@ final class DictColumnState {
         if (utf8) {
             return;
         }
-        bitsKeys = new long[INDEX_MIN_CAPACITY];
-        bitsCodes = new int[INDEX_MIN_CAPACITY];
-        bitsMask = INDEX_MIN_CAPACITY - 1;
+        bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
         for (Map.Entry<Object, Integer> e : valueToCode.entrySet()) {
-            bitsPut(valueBits(ptype, e.getKey()), e.getValue());
+            bitsIndex.put(valueBits(ptype, e.getKey()), e.getValue());
         }
     }
 
-    /// The code assigned to `bits`, or `-1` when the dictionary has not seen that value.
-    private int bitsLookup(long bits) {
-        int slot = slotFor(bits, bitsMask);
-        while (bitsCodes[slot] != 0) {
-            if (bitsKeys[slot] == bits) {
-                return bitsCodes[slot] - 1;
-            }
-            slot = (slot + 1) & bitsMask;
-        }
-        return -1;
-    }
 
-    private void bitsPut(long bits, int code) {
-        if ((code + 1) * 2 >= bitsKeys.length) {
-            long[] oldKeys = bitsKeys;
-            int[] oldCodes = bitsCodes;
-            bitsKeys = new long[oldKeys.length * 2];
-            bitsCodes = new int[oldCodes.length * 2];
-            bitsMask = bitsKeys.length - 1;
-            for (int i = 0; i < oldKeys.length; i++) {
-                if (oldCodes[i] != 0) {
-                    bitsInsert(oldKeys[i], oldCodes[i]);
-                }
-            }
-        }
-        bitsInsert(bits, code + 1);
-    }
 
-    private void bitsInsert(long bits, int codePlusOne) {
-        int slot = slotFor(bits, bitsMask);
-        while (bitsCodes[slot] != 0) {
-            slot = (slot + 1) & bitsMask;
-        }
-        bitsKeys[slot] = bits;
-        bitsCodes[slot] = codePlusOne;
-    }
 
-    private static int slotFor(long bits, int mask) {
-        return (int) ((bits * HASH_MULTIPLIER) >>> 32) & mask;
-    }
 
     /// The chunk's values as raw bit patterns, keyed so that two rows share a pattern exactly when
     /// their boxed values are `equals` (hence `doubleToLongBits`, which folds every NaN together
@@ -620,23 +579,13 @@ final class DictColumnState {
     /// @param validity per-row validity, or `null` when every row is valid
     /// @return the distinct count, or [#GLOBAL_DICT_MAX_CARDINALITY] + 1 if the cap was exceeded
     private static int countDistinctCapped(long[] bits, int n, boolean[] validity) {
-        int capacity = Integer.highestOneBit((GLOBAL_DICT_MAX_CARDINALITY + 1) * 4 - 1) << 1;
-        int slotMask = capacity - 1;
-        long[] seenKeys = new long[capacity];
-        boolean[] occupied = new boolean[capacity];
+        LongIntMap seen = new LongIntMap(GLOBAL_DICT_MAX_CARDINALITY + 1);
         int distinct = 0;
         for (int i = 0; i < n; i++) {
             if (validity != null && !validity[i]) {
                 continue;
             }
-            long b = bits[i];
-            int slot = slotFor(b, slotMask);
-            while (occupied[slot] && seenKeys[slot] != b) {
-                slot = (slot + 1) & slotMask;
-            }
-            if (!occupied[slot]) {
-                occupied[slot] = true;
-                seenKeys[slot] = b;
+            if (seen.add(bits[i])) {
                 distinct++;
                 if (distinct > GLOBAL_DICT_MAX_CARDINALITY) {
                     return distinct;
