@@ -55,12 +55,8 @@ public final class LongIntMap {
     /// @param key the raw bit pattern to look up
     /// @return the stored value, or `-1` if absent
     public int get(long key) {
-        int slot = slotFor(key, mask);
-        int v = values[slot];
-        if (v == 0 || keys[slot] == key) {
-            return v - 1;
-        }
-        return probe(key, slot);
+        int slot = slotOf(key);
+        return keys[slot] == key ? values[slot] - 1 : probe(key);
     }
 
     /// Collision path for [#getOrDefault], kept out of line deliberately.
@@ -71,11 +67,14 @@ public final class LongIntMap {
     /// Splitting the first probe out leaves a fast path small enough to inline unconditionally;
     /// with the table at most half full, that path resolves the large majority of lookups.
     ///
-    /// @param key  the raw bit pattern
-    /// @param from the slot already checked and found occupied by a different key
+    /// Recomputes the slot rather than taking it, so the fast path's call site pushes one
+    /// fewer argument — which is what brings [#get] under `MaxInlineSize`. This is the collision
+    /// path, so the extra multiply is free.
+    ///
+    /// @param key the raw bit pattern
     /// @return the stored value, or `-1` if absent
-    private int probe(long key, int from) {
-        int slot = (from + 1) & mask;
+    private int probe(long key) {
+        int slot = slotOf(key);
         while (values[slot] != 0) {
             if (keys[slot] == key) {
                 return values[slot] - 1;
@@ -90,7 +89,7 @@ public final class LongIntMap {
     /// @param key   the raw bit pattern
     /// @param value the value to store; must not be negative
     public void put(long key, int value) {
-        int slot = slotFor(key, mask);
+        int slot = slotOf(key);
         while (values[slot] != 0 && keys[slot] != key) {
             slot = (slot + 1) & mask;
         }
@@ -109,7 +108,7 @@ public final class LongIntMap {
     /// @return `true` if `key` was not already present
     public boolean add(long key) {
         int before = size;
-        int slot = slotFor(key, mask);
+        int slot = slotOf(key);
         while (values[slot] != 0 && keys[slot] != key) {
             slot = (slot + 1) & mask;
         }
@@ -130,7 +129,7 @@ public final class LongIntMap {
     /// @param key the raw bit pattern to count
     /// @return the updated count for `key`
     public int increment(long key) {
-        int slot = slotFor(key, mask);
+        int slot = slotOf(key);
         while (values[slot] != 0 && keys[slot] != key) {
             slot = (slot + 1) & mask;
         }
@@ -195,7 +194,7 @@ public final class LongIntMap {
         growAt = capacity / 2;
         for (int i = 0; i < oldKeys.length; i++) {
             if (oldValues[i] != 0) {
-                int slot = slotFor(oldKeys[i], mask);
+                int slot = slotOf(oldKeys[i]);
                 while (values[slot] != 0) {
                     slot = (slot + 1) & mask;
                 }
@@ -205,7 +204,13 @@ public final class LongIntMap {
         }
     }
 
-    private static int slotFor(long key, int mask) {
+    /// An instance method, not a static taking `mask`: every call site would otherwise push a
+    /// `getfield` for the mask, and that single load is what kept [#get] over C2's
+    /// `MaxInlineSize` of 35.
+    ///
+    /// @param key the raw bit pattern
+    /// @return the starting slot for `key`
+    private int slotOf(long key) {
         return (int) ((key * HASH_MULTIPLIER) >>> 32) & mask;
     }
 
