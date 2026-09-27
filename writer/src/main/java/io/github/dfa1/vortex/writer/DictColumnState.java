@@ -575,33 +575,9 @@ final class DictColumnState {
         }
         // Counts distinct values on raw bits rather than into a HashSet<Object>, which boxed one
         // value per row of the probe chunk — the same cost already removed from ingestDictChunk
-        // and DictEncodingEncoder, and 8.2% of a bitpacked write. The set never grows: it is
-        // sized once for the cardinality cap, and exceeding the cap returns immediately.
-        long[] bits = rawBits(data, ptype, n);
-        int capacity = Integer.highestOneBit((GLOBAL_DICT_MAX_CARDINALITY + 1) * 4 - 1) << 1;
-        int slotMask = capacity - 1;
-        long[] seenKeys = new long[capacity];
-        boolean[] occupied = new boolean[capacity];
-        int distinct = 0;
-        for (int i = 0; i < n; i++) {
-            if (validity != null && !validity[i]) {
-                continue;
-            }
-            long b = bits[i];
-            int slot = slotFor(b, slotMask);
-            while (occupied[slot] && seenKeys[slot] != b) {
-                slot = (slot + 1) & slotMask;
-            }
-            if (!occupied[slot]) {
-                occupied[slot] = true;
-                seenKeys[slot] = b;
-                distinct++;
-                if (distinct > GLOBAL_DICT_MAX_CARDINALITY) {
-                    return false;
-                }
-            }
-        }
-        if (distinct == 0) {
+        // and DictEncodingEncoder, and 8.2% of a bitpacked write.
+        int distinct = countDistinctCapped(rawBits(data, ptype, n), n, validity);
+        if (distinct > GLOBAL_DICT_MAX_CARDINALITY || distinct == 0) {
             return false;
         }
         // Single-value columns fit vortex.constant better than dict (zero dict overhead).
@@ -633,6 +609,41 @@ final class DictColumnState {
             case F64 -> ((double[]) data)[i];
             default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
         };
+    }
+
+    /// Counts distinct raw bit patterns, abandoning as soon as the count exceeds
+    /// [#GLOBAL_DICT_MAX_CARDINALITY] — past that the column is not a dictionary candidate, so the
+    /// exact count is never needed. The set never grows: it is sized once for the cap.
+    ///
+    /// @param bits     the chunk's values as raw bit patterns
+    /// @param n        element count
+    /// @param validity per-row validity, or `null` when every row is valid
+    /// @return the distinct count, or [#GLOBAL_DICT_MAX_CARDINALITY] + 1 if the cap was exceeded
+    private static int countDistinctCapped(long[] bits, int n, boolean[] validity) {
+        int capacity = Integer.highestOneBit((GLOBAL_DICT_MAX_CARDINALITY + 1) * 4 - 1) << 1;
+        int slotMask = capacity - 1;
+        long[] seenKeys = new long[capacity];
+        boolean[] occupied = new boolean[capacity];
+        int distinct = 0;
+        for (int i = 0; i < n; i++) {
+            if (validity != null && !validity[i]) {
+                continue;
+            }
+            long b = bits[i];
+            int slot = slotFor(b, slotMask);
+            while (occupied[slot] && seenKeys[slot] != b) {
+                slot = (slot + 1) & slotMask;
+            }
+            if (!occupied[slot]) {
+                occupied[slot] = true;
+                seenKeys[slot] = b;
+                distinct++;
+                if (distinct > GLOBAL_DICT_MAX_CARDINALITY) {
+                    return distinct;
+                }
+            }
+        }
+        return distinct;
     }
 
     static PType codePTypeForSize(int dictSize) {

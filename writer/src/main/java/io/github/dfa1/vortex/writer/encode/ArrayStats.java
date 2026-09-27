@@ -51,11 +51,6 @@ public record ArrayStats(
         // 500-distinct column, and that pair was the single largest allocation source in a
         // cascade competition. The growth factor, not this floor, is what keeps a
         // high-cardinality column from rehashing its way up — see LongCounts#grow.
-        // Sized for the low-cardinality case and grown from there, NOT for `n`: pre-sizing to
-        // min(n, 1<<16) allocated a 1 MB long[] plus a 512 kB int[] on every call even for a
-        // 500-distinct column, and that pair was the single largest allocation source in a
-        // cascade competition. The growth factor, not this floor, is what keeps a
-        // high-cardinality column from rehashing its way up — see LongCounts#grow.
         if (!options.countDistinct() && !options.trackMostFrequent()) {
             // Nothing to accumulate — the scan below would read every element and discard it.
             return new ArrayStats(n, -1, 0, 0, false);
@@ -74,103 +69,16 @@ public record ArrayStats(
         // random-2^40 corpora) and nothing at all on low-cardinality ones, which exit the scan
         // having never reached the cap.
         long cap = n / 2L + 1L;
-        boolean capped = false;
 
         // The ptype switch is hoisted out of the scan: reading it per element made the loop body
-        // non-uniform and put `readBits` alone at 9% of write CPU (CLAUDE.md hot-loop rule).
-        // Most-frequent tracking moved into LongCounts#increment so each body is a single call.
-        switch (ptype) {
-            case I8 -> {
-                byte[] a = (byte[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(a[i]);
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-            case U8 -> {
-                byte[] a = (byte[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(Byte.toUnsignedLong(a[i]));
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-            case I16 -> {
-                short[] a = (short[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(a[i]);
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-            case U16, F16 -> {
-                short[] a = (short[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(Short.toUnsignedLong(a[i]));
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-            case I32 -> {
-                int[] a = (int[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(a[i]);
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-            case U32 -> {
-                int[] a = (int[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(Integer.toUnsignedLong(a[i]));
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-            case I64, U64 -> {
-                long[] a = (long[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(a[i]);
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-            case F32 -> {
-                float[] a = (float[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(Float.floatToRawIntBits(a[i]));
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-            case F64 -> {
-                double[] a = (double[]) data;
-                for (int i = 0; i < n; i++) {
-                    counts.increment(Double.doubleToRawLongBits(a[i]));
-                    if (counts.size() > cap) {
-                        capped = true;
-                        break;
-                    }
-                }
-            }
-        }
+        // non-uniform and put `readBits` alone at 9% of write CPU (CLAUDE.md hot-loop rule). Each
+        // carrier therefore gets one loop of its own, extracted below so this method dispatches
+        // rather than inlining nine of them. One method PER SIGNEDNESS, never a shared body with
+        // an `unsigned` flag: that flag is a branch inside the per-element loop, which measured
+        // 3-8% slower — the same non-uniform body the hoisting exists to avoid.
+        // Most-frequent tracking lives in LongCounts#increment so each body is a single call.
+        boolean capped = scanInto(ptype, data, n, counts, cap);
+
         long topFreqBits = counts.topBits();
         int topFreq = counts.topCount();
         long distinct = options.countDistinct() ? counts.size() : -1L;
@@ -273,6 +181,119 @@ public record ArrayStats(
         }
     }
 
+    /// Feeds every element of `data` into `counts`, stopping early once the distinct count
+    /// passes `cap`.
+    ///
+    /// @param ptype  the primitive type of `data`
+    /// @param data   the input array
+    /// @param n      element count
+    /// @param counts the distinct/most-frequent accumulator
+    /// @param cap    distinct count past which the scan may stop
+    /// @return `true` if the scan stopped early at the cap
+    private static boolean scanInto(PType ptype, Object data, int n, LongCounts counts, long cap) {
+        return switch (ptype) {
+            case I8 -> scanI8((byte[]) data, n, counts, cap);
+            case U8 -> scanU8((byte[]) data, n, counts, cap);
+            case I16 -> scanI16((short[]) data, n, counts, cap);
+            case U16, F16 -> scanU16((short[]) data, n, counts, cap);
+            case I32 -> scanI32((int[]) data, n, counts, cap);
+            case U32 -> scanU32((int[]) data, n, counts, cap);
+            case I64, U64 -> scanI64((long[]) data, n, counts, cap);
+            case F32 -> scanF32((float[]) data, n, counts, cap);
+            case F64 -> scanF64((double[]) data, n, counts, cap);
+        };
+    }
+
+    private static boolean scanI8(byte[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(a[i]);
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanU8(byte[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(Byte.toUnsignedLong(a[i]));
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanI16(short[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(a[i]);
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanU16(short[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(Short.toUnsignedLong(a[i]));
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanI32(int[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(a[i]);
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanU32(int[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(Integer.toUnsignedLong(a[i]));
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanI64(long[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(a[i]);
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanF32(float[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(Float.floatToRawIntBits(a[i]));
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean scanF64(double[] a, int n, LongCounts counts, long cap) {
+        for (int i = 0; i < n; i++) {
+            counts.increment(Double.doubleToRawLongBits(a[i]));
+            if (counts.size() > cap) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static int arrayLength(PType ptype, Object data) {
         return switch (ptype) {
             case I8, U8 -> ((byte[]) data).length;
@@ -284,19 +305,6 @@ public record ArrayStats(
         };
     }
 
-
-    /// Whether the scan stopped early at `valueCount / 2 + 1` distinct values.
-    ///
-    /// When true, [#distinctCount()] is a lower bound and [#mostFrequentBits()] /
-    /// [#topFrequency()] reflect only the rows scanned. Every consumer can still decide: the
-    /// distinct count is already high enough for Dict and Constant to skip, and high enough to
-    /// prove by pigeonhole that no value reaches the frequency Sparse needs. Only RunEnd's rule
-    /// (`distinct >= n`) remains undetermined, so it defers to sampling.
-    ///
-    /// @return whether the distinct scan hit the cap
-    public boolean distinctCapped() {
-        return distinctCapped;
-    }
 
     /// @return whether [#distinctCount()] was computed during this scan
     public boolean hasDistinctCount() {
