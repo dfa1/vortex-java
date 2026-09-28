@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -25,6 +26,9 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.stream.Stream;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
+
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DictEncodingEncoderTest {
@@ -247,6 +251,38 @@ class DictEncodingEncoderTest {
         // Then
         assertThat(scalar(result.statsMin()).uint64_value()).isEqualTo(100L);
         assertThat(scalar(result.statsMax()).uint64_value()).isEqualTo(300L);
+    }
+
+    @Test
+    void encodeCascade_primitive_codesSlot_barsDictAndSequence() {
+        // Given — cardinality 3 over 6 rows, so the dict gate admits the column
+        int[] data = {10, 20, 30, 10, 20, 30};
+
+        // When
+        CascadeStep result = ENCODER.encodeCascade(DTypes.I32, data, EncodeTestHelper.testCtx());
+
+        // Then — the codes child carries its own policy: no dictionary of codes, and no sequence
+        // over them either (codes are dictionary positions, so an arithmetic description of them
+        // adds a level without compressing anything — issue #410)
+        assertThat(result.openChildren()).singleElement()
+                .extracting(ChildSlot::excluded, as(InstanceOfAssertFactories.iterable(EncodingId.class)))
+                .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
+    }
+
+    @Test
+    void encodeCascade_utf8_codesAndValuesSlots_carryDifferentPolicies() {
+        // Given — 2 distinct strings over 6 rows
+        String[] data = {"a", "b", "a", "b", "a", "b"};
+
+        // When
+        CascadeStep result = ENCODER.encodeCascade(DType.UTF8, data, EncodeTestHelper.testCtx());
+
+        // Then — codes bar sequence as above, while the values pool only bars a second dict: the
+        // per-slot exclusion exists precisely because two children of one encoding differ here
+        assertThat(result.openChildren().get(0).excluded())
+                .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
+        assertThat(result.openChildren().get(1).excluded())
+                .containsExactly(EncodingId.VORTEX_DICT);
     }
 
     private static ProtoScalarValue scalar(byte[] bytes) throws IOException {

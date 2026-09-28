@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.fsst.CompressorBuilder;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.Set;
 import java.util.List;
 
 /// Write-only encoder for `vortex.fsst`.
@@ -34,6 +35,10 @@ import java.util.List;
 /// its codes in gain-descending order, so this adapter remaps every code the compressor emits into
 /// that length-sorted wire order (see [#encode]).
 public final class FsstEncodingEncoder implements EncodingEncoder {
+
+    /// This encoding, barred from its own children: the lengths and code offsets are primitive
+    /// arrays FSST cannot compress anyway, and the slots exist for bitpacking/constant folding.
+    private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_FSST);
 
     /// Fixed seed for the training-sample PRNG. Encoding must be reproducible: the same input
     /// always trains the same symbol table and produces byte-identical output.
@@ -118,8 +123,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 new int[]{0, 1, 2});
         return new CascadeStep(partialRoot,
                 List.of(c.symBuf(), c.symLenBuf(), c.compBuf()),
-                List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0),
-                        new ChildSlot(new DType.Primitive(c.codesOffPType(), false), codesOffsets, 1)),
+                List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0, SELF),
+                        new ChildSlot(new DType.Primitive(c.codesOffPType(), false), codesOffsets, 1, SELF)),
                 null, null, true);
     }
 

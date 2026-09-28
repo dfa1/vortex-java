@@ -14,11 +14,19 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 
 /// Write-only encoder for `vortex.dict`.
 public final class DictEncodingEncoder implements EncodingEncoder {
+
+    /// Barred from a dict's codes child: `vortex.dict` because a dictionary of codes is just
+    /// another indirection the reader would have to unwrap, and `vortex.sequence` because codes are
+    /// dictionary positions — describing them as an arithmetic sequence adds a level without
+    /// compressing anything (issue #410).
+    private static final Set<EncodingId> CODES_EXCLUDED =
+            Set.of(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
 
     @Override
     public EncodingId encodingId() {
@@ -106,7 +114,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 new int[0]);
 
         DType codesDtype = new DType.Primitive(codePType, false);
-        ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 0);
+        ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 0, CODES_EXCLUDED);
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
         return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
@@ -167,8 +175,8 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         byte[] statsMax = maxStr != null ? ProtoScalarValue.ofStringValue(maxStr).encode() : null;
 
         return new CascadeStep(partialRoot, List.of(),
-                List.of(new ChildSlot(new DType.Primitive(codePType, false), codesArr, 0),
-                        new ChildSlot(DType.UTF8, distinct, 1)),
+                List.of(new ChildSlot(new DType.Primitive(codePType, false), codesArr, 0, CODES_EXCLUDED),
+                        new ChildSlot(DType.UTF8, distinct, 1, Set.of(EncodingId.VORTEX_DICT))),
                 statsMin, statsMax, true);
     }
 

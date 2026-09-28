@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A cascading encoder's `ChildSlot` now declares which encodings may not compete for that child, replacing the compressor's generic "exclude the parent encoding" rule — exclusions can differ between two children of the same encoding, and a dict's codes child now also rules out `vortex.sequence`. Custom encoders that construct a `ChildSlot` must pass the exclusion set. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - The cascade's distinct-value counter grows 4x at a time from a 2048-entry floor, so a high-cardinality column no longer rehashes its way up through six resizes. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - The cascade's distinct-value scan stops once the count passes half the rows, where no encoder's verdict can change any more — a high-cardinality column now costs about half the hash probes it did. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - The encode path's four private open-addressing maps are replaced by one shared `LongIntMap`, removing ~200 lines of duplicated probe logic. ([#410](https://github.com/dfa1/vortex-java/issues/410))

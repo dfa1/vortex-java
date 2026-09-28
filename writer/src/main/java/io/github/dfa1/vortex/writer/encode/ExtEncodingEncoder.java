@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
+import java.util.Set;
 import java.util.List;
 
 /// Write-only encoder for `vortex.ext` — wraps a storage-array encode in an ext node.
@@ -58,7 +59,7 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
             return CascadeStep.terminal(encode(dtype, data, ctx));
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[1], new int[0]);
-        ChildSlot slot = new ChildSlot(ext.storageDType(), data, 0);
+        ChildSlot slot = new ChildSlot(ext.storageDType(), data, 0, Set.of(EncodingId.VORTEX_EXT));
         return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null, true);
     }
 }

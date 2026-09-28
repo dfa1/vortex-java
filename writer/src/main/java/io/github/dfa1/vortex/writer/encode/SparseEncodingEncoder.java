@@ -10,11 +10,16 @@ import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.proto.ProtoSparseMetadata;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 
 /// Write-only encoder for `vortex.sparse`.
 public final class SparseEncodingEncoder implements EncodingEncoder {
+
+    /// This encoding, barred from its own children: the values child keeps the input dtype, so
+    /// without this the cascade could sparse-encode the sparse values.
+    private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_SPARSE);
 
     /// Candidates for compressing a boolean mask's patch-index array ([#encodeBool]) — a sorted,
     /// often-regular sequence (e.g. a periodic null pattern), so `vortex.sequence`/`fastlanes.delta`
@@ -121,8 +126,8 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{null, null}, new int[]{0});
         DType idxDtype = new DType.Primitive(idxPtype, false);
-        ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0);
-        ChildSlot valSlot = new ChildSlot(dtype, valArr, 1);
+        ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0, SELF);
+        ChildSlot valSlot = new ChildSlot(dtype, valArr, 1, SELF);
         return new CascadeStep(partialRoot, List.of(fillBuf), List.of(idxSlot, valSlot), null, null, true);
     }
 

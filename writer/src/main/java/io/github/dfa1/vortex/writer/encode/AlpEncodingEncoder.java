@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -238,7 +239,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[1], new int[0]);
-            ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0);
+            ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
             return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
         }
 
@@ -257,7 +258,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
             MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
-        ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0);
+        ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
         return new CascadeStep(partialRoot, List.of(idxBuf, valBuf), List.of(slot), d.statsMin(), d.statsMax(), true);
     }
 

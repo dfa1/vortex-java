@@ -8,11 +8,16 @@ import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 
 /// Write-only encoder for `vortex.datetimeparts`.
 public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
+
+    /// This encoding, barred from its own children: a part array is days/seconds/subseconds, never
+    /// another timestamp to split again.
+    private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_DATETIMEPARTS);
 
     private static final long SECONDS_PER_DAY = 86_400L;
     private static final io.github.dfa1.vortex.core.proto.ProtoPType I64_PROTO =
@@ -132,9 +137,9 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
 
         DType daysDtype = d.nullable() ? DType.I64.asNullable() : DType.I64;
         List<ChildSlot> children = List.of(
-                new ChildSlot(daysDtype, days, 0),
-                new ChildSlot(DType.I64, seconds, 1),
-                new ChildSlot(DType.I64, subseconds, 2));
+                new ChildSlot(daysDtype, days, 0, SELF),
+                new ChildSlot(DType.I64, seconds, 1, SELF),
+                new ChildSlot(DType.I64, subseconds, 2, SELF));
 
         return new CascadeStep(partialRoot, List.of(), children, null, null, true);
     }

@@ -278,11 +278,17 @@ public final class CascadingCompressor {
         return spliceResult(winner, dtype, data, ctx);
     }
 
+    /// Derives the context a child slot is filled under: one cascade level deeper, with the slot's
+    /// own exclusions unioned in. Both the sample measurement and the real encode go through here,
+    /// so a child can never be measured under one exclusion policy and encoded under another.
+    private static EncodeContext childContext(EncodeContext ctx, ChildSlot slot) {
+        return ctx.withDecrementedDepth().withExcluded(slot.excluded());
+    }
+
     private long measureStep(EncodingEncoder enc, CascadeStep step, EncodeContext ctx) {
         long total = step.ownedBytes();
         for (ChildSlot slot : step.openChildren()) {
-            EncodeContext childCtx = ctx.withDecrementedDepth().withExcluded(enc.encodingId());
-            total += measureBestChild(slot.childDtype(), slot.childData(), childCtx);
+            total += measureBestChild(slot.childDtype(), slot.childData(), childContext(ctx, slot));
         }
         return total;
     }
@@ -323,8 +329,7 @@ public final class CascadingCompressor {
         EncodeNode[] children = step.partialRoot().children().clone();
 
         for (ChildSlot slot : step.openChildren()) {
-            EncodeContext childCtx = ctx.withDecrementedDepth().withExcluded(winner.encodingId());
-            EncodeResult childResult = encodeWithCtx(slot.childDtype(), slot.childData(), childCtx);
+            EncodeResult childResult = encodeWithCtx(slot.childDtype(), slot.childData(), childContext(ctx, slot));
 
             int bufOffset = allBuffers.size();
             children[slot.parentChildIdx()] = EncodeNode.remapBufferIndices(childResult.rootNode(), bufOffset);

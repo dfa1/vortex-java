@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoPatchedMetadata;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Set;
 import java.util.List;
 
 /// Write-only encoder for `vortex.patched`.
@@ -24,6 +25,10 @@ import java.util.List;
 /// Skips when no bit-width improvement is possible, or when more than 5% of values
 /// are outliers (too many patches to be worthwhile).
 public final class PatchedEncodingEncoder implements EncodingEncoder {
+
+    /// This encoding, barred from its own children: the inner array and the patch values keep the
+    /// input dtype, so without this the cascade could patch the patches.
+    private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_PATCHED);
 
     @Override
     public EncodingId encodingId() {
@@ -80,10 +85,10 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
 
             return new CascadeStep(partialRoot, List.of(),
                     List.of(
-                            new ChildSlot(dtype, fromLongs(pd.inner, ptype), 0),
-                            new ChildSlot(u32Dtype, pd.laneOffsets, 1),
-                            new ChildSlot(u16Dtype, pd.patchIndices, 2),
-                            new ChildSlot(dtype, fromLongs(pd.patchValues, ptype), 3)
+                            new ChildSlot(dtype, fromLongs(pd.inner, ptype), 0, SELF),
+                            new ChildSlot(u32Dtype, pd.laneOffsets, 1, SELF),
+                            new ChildSlot(u16Dtype, pd.patchIndices, 2, SELF),
+                            new ChildSlot(dtype, fromLongs(pd.patchValues, ptype), 3, SELF)
                     ),
                     null, null, true);
         }

@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Set;
 import java.util.List;
 
 /// Write-only encoder for `fastlanes.for` (Frame of Reference).
@@ -63,7 +64,8 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         MemorySegment meta = buildForMeta(ref, ptype);
 
         EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_FOR, meta, new EncodeNode[1], new int[0]);
-        ChildSlot slot = new ChildSlot(dtype, residualsAsNativeArray(longs, ref, ptype), 0);
+        ChildSlot slot = new ChildSlot(dtype, residualsAsNativeArray(longs, ref, ptype), 0,
+                Set.of(EncodingId.FASTLANES_FOR));
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(ptype, data);
         return new CascadeStep(partialRoot, List.of(), List.of(slot),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);

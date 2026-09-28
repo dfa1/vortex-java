@@ -22,7 +22,7 @@ import java.util.Set;
 /// default to depth 0 with no exclusions.
 /// In cascading paths, use [#ofDepth(int, Arena, WriteRegistry)] and let
 /// [CascadingCompressor] derive child contexts via [#withDecrementedDepth()]
-/// and [#withExcluded(EncodingId)].
+/// and [#withExcluded(Set)].
 ///
 /// @param arena            the arena to allocate encode output buffers from
 /// @param registry         write registry supplying encoder and extension lookup
@@ -111,8 +111,20 @@ public record EncodeContext(
     /// @param id the encoding id to exclude from consideration at this recursion level
     /// @return a new [EncodeContext] with `id` added to the excluded set
     public EncodeContext withExcluded(EncodingId id) {
+        return withExcluded(Set.of(id));
+    }
+
+    /// Returns a copy of this context with `ids` added to the excluded set. Additive by design: a
+    /// child's own exclusions ([ChildSlot#excluded()]) never drop what an ancestor already excluded.
+    ///
+    /// @param ids the encoding ids to exclude from consideration at this recursion level
+    /// @return a new [EncodeContext] with `ids` added to the excluded set, or `this` if `ids` is empty
+    public EncodeContext withExcluded(Set<EncodingId> ids) {
+        if (excluded.containsAll(ids)) {
+            return this;
+        }
         Set<EncodingId> next = new HashSet<>(excluded);
-        next.add(id);
+        next.addAll(ids);
         return new EncodeContext(arena, registry, allowedCascading, Collections.unmodifiableSet(next), sampleSeed, minSampleSize, sampleFraction);
     }
 
