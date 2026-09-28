@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader;
 
-import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
@@ -12,11 +11,9 @@ import io.github.dfa1.vortex.reader.layout.LayoutRegistry;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,21 +112,6 @@ public final class VortexReader implements VortexHandle {
                 parsed.footer(), parsed.dtype(), parsed.layout(),
                 registry, layoutRegistry
         );
-    }
-
-    private static void collectFlats(Layout layout, List<Layout> out) {
-        if (layout.isFlat() || layout.isDict()) {
-            out.add(layout);
-        } else if (layout.isZoned() && !layout.children().isEmpty()) {
-            collectFlats(layout.children().getFirst(), out);
-        } else if (layout.isChunked()) {
-            int start = (layout.metadata() != null
-                                 && layout.metadata().byteSize() > 0
-                                 && layout.metadata().get(ValueLayout.JAVA_BYTE, 0) == 1) ? 1 : 0;
-            for (int i = start; i < layout.children().size(); i++) {
-                collectFlats(layout.children().get(i), out);
-            }
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -242,30 +224,31 @@ public final class VortexReader implements VortexHandle {
     /// Aggregated per-column statistics (global min/max across all chunks).
     /// Returns an empty map if the root layout is not a struct.
     /// Columns with no embedded stats return [ArrayStats#empty()].
+    ///
+    /// Folds the column's per-zone statistics ([ScanIterator#columnZoneStats(String)]), which for a
+    /// global-dictionary column is the only place its values' min/max live — the flat nodes under
+    /// the zone map hold dictionary codes, whose own min/max describe the codes, not the values.
     public Map<ColumnName, ArrayStats> columnStats() {
         if (!layout.isStruct() || !(dtype instanceof DType.Struct schema)) {
             return Map.of();
         }
-        List<ColumnName> names = schema.fieldNames();
-        List<Layout> colLayouts = layout.children();
         Map<ColumnName, ArrayStats> result = new LinkedHashMap<>();
-        for (int i = 0; i < names.size() && i < colLayouts.size(); i++) {
-            List<Layout> flats = new ArrayList<>();
-            collectFlats(colLayouts.get(i), flats);
-            result.put(names.get(i), aggregateStats(flats));
+        try (ScanIterator iter = new ScanIterator(this, ScanOptions.all())) {
+            for (ColumnName name : schema.fieldNames()) {
+                result.put(name, aggregateStats(iter.columnZoneStats(name.value())));
+            }
         }
         return Map.copyOf(result);
     }
 
-    private ArrayStats aggregateStats(List<Layout> flats) {
+    private ArrayStats aggregateStats(List<ArrayStats> zones) {
         Object globalMin = null;
         Object globalMax = null;
         // Null count is meaningful only when every chunk carries it; one missing makes the column
         // total unknown (null), so don't report a partial count.
         long totalNullCount = 0L;
-        boolean allHaveNullCount = !flats.isEmpty();
-        for (Layout flat : flats) {
-            ArrayStats s = readFlatStats(flat);
+        boolean allHaveNullCount = !zones.isEmpty();
+        for (ArrayStats s : zones) {
             if (s.min() != null) {
                 globalMin = globalMin == null ? s.min() : minOf(globalMin, s.min());
             }
@@ -285,36 +268,6 @@ public final class VortexReader implements VortexHandle {
         // Sum is left null at the file level: it lives in the per-zone stats table, surfaced by
         // ScanIterator.columnZoneStats rather than folded here.
         return new ArrayStats(globalMin, globalMax, null, null, nullCount, null, null);
-    }
-
-    private ArrayStats readFlatStats(Layout flat) {
-        if (flat.segments().isEmpty()) {
-            return ArrayStats.empty();
-        }
-        int segIdx = flat.segments().getFirst();
-        if (segIdx < 0 || segIdx >= footer.segmentSpecs().size()) {
-            return ArrayStats.empty();
-        }
-        SegmentSpec spec = footer.segmentSpecs().get(segIdx);
-        long segLen = spec.length();
-        // Need at least 4 bytes for the trailing little-endian fbLen.
-        if (segLen < 4) {
-            return ArrayStats.empty();
-        }
-        MemorySegment seg = IoBounds.slice(fileSegment, spec.offset(), segLen);
-        int fbLen = seg.get(LE_INT, segLen - 4);
-        // Reject negative fbLen (signed int from untrusted bytes) or any value that would push
-        // fbStart below 0 → asSlice(negative, ...) throws IndexOutOfBoundsException without this guard.
-        if (fbLen < 0 || fbLen > segLen - 4) {
-            return ArrayStats.empty();
-        }
-        long fbStart = segLen - 4L - fbLen;
-        var fbArray = io.github.dfa1.vortex.core.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
-        var root = fbArray.root();
-        if (root == null) {
-            return ArrayStats.empty();
-        }
-        return ArrayStats.fromFbs(root.stats());
     }
 
     @Override

@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `VortexReader#columnStats()` folds a column's zone-map table instead of the flat nodes beneath it, so a global-dictionary column (Utf8 or numeric) reports its real `MIN`/`MAX`/null count instead of nothing, and the whole-table aggregate push-down no longer abandons to a full scan for such a column. ([#409](https://github.com/dfa1/vortex-java/issues/409))
 - `vortex.dict` on a primitive column now writes the `DictMetadata` protobuf and `[codes, values]` child order the Rust reader expects, instead of a legacy 1-byte metadata the Rust reader rejected outright. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - Floating-point `WHERE` filters no longer let a `NaN` value satisfy an ordering comparison it should always fail. ([#406](https://github.com/dfa1/vortex-java/issues/406))
 

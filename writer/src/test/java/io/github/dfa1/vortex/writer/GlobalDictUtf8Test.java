@@ -195,6 +195,35 @@ class GlobalDictUtf8Test {
     }
 
     @Test
+    void globalDict_utf8_reportsColumnStats(@TempDir Path tmp) throws IOException {
+        // Given — a global-dict Utf8 column. Its values' min/max live only in the zone-map table:
+        // the flat nodes under it hold dictionary codes, so a stats walk over those nodes reports
+        // nothing and the whole-table MIN/MAX push-down abandons to a full scan (issue #409).
+        Path file = tmp.resolve("status_stats.vortex");
+        String[] dict = {"open", "closed", "delivered"};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
+            for (int c = 0; c < 3; c++) {
+                String[] data = new String[1_000];
+                for (int i = 0; i < data.length; i++) {
+                    data[i] = dict[(c + i) % dict.length];
+                }
+                sut.writeChunk(Map.of(ColumnName.of("status"), data));
+            }
+        }
+
+        // When
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            var result = vf.columnStats().get(ColumnName.of("status"));
+
+            // Then — lexicographic bounds over the three values, not over the codes
+            assertThat(result.min()).isEqualTo("closed");
+            assertThat(result.max()).isEqualTo("open");
+            assertThat(result.nullCount()).isZero();
+        }
+    }
+
+    @Test
     void utf8_globalDict_disabled_byOptions(@TempDir Path tmp) throws IOException {
         // Given — globalDict() off, low-cardinality column → falls back to per-chunk DictEncoding.
         // Both paths round-trip correctly; this test guards the opt-out.

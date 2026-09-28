@@ -482,6 +482,31 @@ class GlobalDictPrimitiveTest {
         assertThat(result).containsExactly(data);
     }
 
+    @Test
+    void globalDict_i64_reportsColumnStats(@TempDir Path tmp) throws IOException {
+        // Given — the numeric counterpart of the Utf8 gap in issue #409: a global-dict column's
+        // min/max live in the zone-map table, while the flat nodes beneath it hold dictionary codes.
+        long[] dict = {100L, 200L, 300L, 400L};
+        long[][] chunks = new long[3][1_000];
+        for (int c = 0; c < chunks.length; c++) {
+            for (int i = 0; i < chunks[c].length; i++) {
+                chunks[c][i] = dict[(c + i) % dict.length];
+            }
+        }
+        Path file = tmp.resolve("stats_i64.vortex");
+        writeI64(file, chunks, WriteOptions.cascading(3));
+
+        // When
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            var result = vf.columnStats().get(ColumnName.of("v"));
+
+            // Then — the dictionary's value bounds, not the code bounds (which would be 0..3)
+            assertThat(result.min()).isEqualTo(100L);
+            assertThat(result.max()).isEqualTo(400L);
+            assertThat(result.nullCount()).isZero();
+        }
+    }
+
     /// Reads a nullable I64 column, mapping invalid rows to `null` so null positions are asserted
     /// alongside values. A nullable dict column decodes to a [MaskedArray] over the long payload.
     private static List<Long> readNullableLongs(VortexReader vf, String col) {

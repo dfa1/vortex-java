@@ -45,10 +45,9 @@ class AggregateRuleBranchTest {
     static void writeFile() throws Exception {
         Path file = tmp.resolve("ohlc.vortex");
         OhlcGenerator.write(file, ROWS, CHUNK);
-        // A second, dedicated file for the VARCHAR MIN/MAX test below: the shared OHLC fixture's
-        // "symbol" column writes with globalDict=true, which — a separate, pre-existing gap this
-        // test must not depend on — carries no zone-map min/max at all, so a globalDict-encoded
-        // Utf8 column always abandons regardless of the Calcite-side fix. `strings` disables it.
+        // A second, dedicated file for the VARCHAR MIN/MAX test below: a single 4-row chunk with
+        // globalDict disabled, so the test covers the plain per-chunk Utf8 shape. The shared OHLC
+        // fixture's globalDict "symbol" column covers the other shape in the same test (issue #409).
         Path stringsFile = tmp.resolve("strings.vortex");
         DType.Struct stringsSchema = DType.structBuilder().field("symbol", DType.UTF8).build();
         WriteOptions stringsOpts = new WriteOptions(4, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
@@ -97,16 +96,21 @@ class AggregateRuleBranchTest {
         // When / Then
         assertThat(optimize("select min(symbol), max(symbol) from strings"))
                 .contains("LogicalValues").doesNotContain("Aggregate");
+        // And the same holds for a globalDict-encoded Utf8 column, whose min/max the reader folds
+        // from the zone-map table rather than from the dictionary-code flats below it (issue #409)
+        assertThat(optimize("select min(symbol), max(symbol) from ohlc"))
+                .contains("LogicalValues").doesNotContain("Aggregate");
     }
 
     @Test
-    void minOnDateColumn_abandonsRewrite() {
-        // Given MIN("date") over a DATE column ("date" is a reserved word, needs quoting here since
-        // this planner isn't wired with the Babel parser) — the stat value IS a Number (days since
-        // epoch), but DATE isn't in minMaxLiteral's/numericLiteral's supported SqlTypeName sets
-        // (neither the CHAR family nor the exact/approximate numeric families), so it still abandons
-        // When / Then
-        assertThat(optimize("select min(\"date\") from ohlc")).contains("Aggregate");
+    void minOnEpochDayColumn_rewritesToValues() {
+        // Given MIN("date") — the column is an I32 epoch day, which toSqlType maps to INTEGER, not
+        // DATE ("date" is a reserved word, so it needs quoting here: this planner isn't wired with
+        // the Babel parser). This asserted an abandon until issue #409: the reason was never the
+        // output type but a missing stat, the column carrying no folded min/max at all.
+        // When / Then — an ordinary numeric min/max push-down, answered as epoch days
+        assertThat(optimize("select min(\"date\") from ohlc"))
+                .contains("LogicalValues(tuples=[[{ 18263 }]])").doesNotContain("Aggregate");
     }
 
     @Test
