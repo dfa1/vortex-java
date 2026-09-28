@@ -127,6 +127,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         this.options = options;
     }
 
+    /// Index of a chunked layout's first data child: `metadata[0] == 1` means `children[0]` is the
+    /// per-chunk stats layout rather than a row chunk.
+    private static int chunkedDataStart(Layout chunked) {
+        boolean statsChild = chunked.metadata() != null
+                && chunked.metadata().byteSize() > 0
+                && chunked.metadata().get(ValueLayout.JAVA_BYTE, 0) == 1;
+        return statsChild ? 1 : 0;
+    }
+
     private static void collectFlats(Layout layout, List<Layout> out) {
         if (layout.isFlat()) {
             out.add(layout);
@@ -139,11 +148,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 collectFlats(layout.children().getFirst(), out);
             }
         } else if (layout.isChunked()) {
-            // metadata[0] == 1 means children[0] is the per-chunk stats layout; skip it
-            int start = (layout.metadata() != null
-                                 && layout.metadata().byteSize() > 0
-                                 && layout.metadata().get(ValueLayout.JAVA_BYTE, 0) == 1) ? 1 : 0;
-            for (int i = start; i < layout.children().size(); i++) {
+            for (int i = chunkedDataStart(layout); i < layout.children().size(); i++) {
                 collectFlats(layout.children().get(i), out);
             }
         } else if (layout.isStruct()) {
@@ -898,14 +903,81 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (zoned == null) {
             return null;
         }
-        Integer zoneIdx = zoned.layoutId() == LayoutId.ZONED
-                ? zoneIndexByLength(chunk, col, chunkRowCount, zoned.metadata())
-                : zoneIndexByOrdinal(chunk, col);
+        long[] dictStarts = dictCodeChunkStarts(zoned);
+        Integer zoneIdx;
+        if (dictStarts != null) {
+            zoneIdx = zoneIndexByDictCodeChunk(chunk, col, dictStarts);
+        } else if (zoned.layoutId() == LayoutId.ZONED) {
+            zoneIdx = zoneIndexByLength(chunk, col, chunkRowCount, zoned.metadata());
+        } else {
+            zoneIdx = zoneIndexByOrdinal(chunk, col);
+        }
         if (zoneIdx == null) {
             return null;
         }
         List<ArrayStats> zones = zoneStatsFor(col);
         return zones == null || zoneIdx >= zones.size() ? null : zones.get(zoneIdx);
+    }
+
+    /// Cumulative row starts of a dictionary column's per-chunk code arrays (the final entry is the
+    /// column's total row count), or `null` when `zoned` does not wrap a dict whose codes are
+    /// chunked — the only shape this applies to.
+    ///
+    /// A dict column's data layout is `Dict(values, Chunked[codes ...])`: the codes carry the row
+    /// chunks, but the dict node above them is decoded as a unit, so chunk planning records the
+    /// column as one full-range chunk ([#collectFlats]). Its zone-map table still has one zone per
+    /// code chunk, so neither of the other two lookups can index it — [#zoneIndexByOrdinal]'s
+    /// chunk-count match fails (1 flat vs N zones) and [#zoneIndexByLength] needs a uniform stride
+    /// this layout does not declare. Without this, a predicate on a globalDict column pruned nothing
+    /// while the same predicate on the per-chunk shape of the same data pruned normally.
+    private static long[] dictCodeChunkStarts(Layout zoned) {
+        if (zoned.children().isEmpty()) {
+            return null;
+        }
+        Layout data = zoned.children().getFirst();
+        // child[0] = values, child[1] = codes — the order DictLayoutDecoder decodes.
+        if (!data.isDict() || data.children().size() < 2) {
+            return null;
+        }
+        Layout codes = data.children().get(1);
+        if (!codes.isChunked()) {
+            return null;
+        }
+        int first = chunkedDataStart(codes);
+        long[] starts = new long[codes.children().size() - first + 1];
+        long acc = 0;
+        for (int i = first; i < codes.children().size(); i++) {
+            starts[i - first] = acc;
+            acc += codes.children().get(i).rowCount();
+        }
+        starts[starts.length - 1] = acc;
+        return starts;
+    }
+
+    /// Locates the zone covering a window of a dictionary column, by the window's absolute row range
+    /// against the code chunks' boundaries in `starts`. The dict layout spans the whole column, so
+    /// the window's own start row indexes straight into that grid — unlike the other two lookups,
+    /// which locate the window's *covering chunk* first.
+    ///
+    /// Conservative like [#zoneIndexByLength]: a window straddling two code chunks has no single
+    /// zone describing all its rows, so it yields `null` (no pruning) rather than a partial answer.
+    ///
+    /// One prune stays unavailable for this shape: [#canPrune] is handed the covering layout's row
+    /// count, which for a dict column is the whole column, so its `IS NOT NULL` branch
+    /// (`nullCount == rowCount`, an all-null chunk) can never fire. Value-range pruning — the
+    /// reason zone maps exist — is unaffected.
+    private Integer zoneIndexByDictCodeChunk(ChunkSpec chunk, ColumnName col, long[] starts) {
+        List<ArrayStats> zones = zoneStatsFor(col);
+        if (zones == null || zones.size() != starts.length - 1) {
+            return null;
+        }
+        long windowStart = chunk.windowStart();
+        for (int i = 0; i + 1 < starts.length; i++) {
+            if (windowStart >= starts[i] && windowStart < starts[i + 1]) {
+                return windowStart + chunk.rowCount() <= starts[i + 1] ? i : null;
+            }
+        }
+        return null;
     }
 
     /// Locates the zone covering a chunk under this writer's legacy `vortex.stats` layout, where

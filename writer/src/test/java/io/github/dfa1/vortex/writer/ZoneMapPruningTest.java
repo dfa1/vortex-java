@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -527,6 +528,79 @@ class ZoneMapPruningTest {
                 }
             }
             assertThat(scanRowCounts(file, filter)).containsExactlyElementsOf(expected);
+        }
+    }
+
+    /// A global-dictionary column's per-chunk codes sit under a `vortex.dict` layout node, which
+    /// chunk planning records as one full-range chunk — so its zone index has to come from the code
+    /// chunks' own boundaries. Without that, a predicate on such a column pruned nothing while the
+    /// same predicate over the same data written per chunk pruned normally (issue #409).
+    @Nested
+    class GlobalDictColumn {
+
+        private static final DType.Struct DICT_SCHEMA = new DType.Struct(
+                List.of(ColumnName.of("s"), ColumnName.of("n")),
+                List.of(DType.UTF8, DType.I64),
+                false);
+
+        /// Four chunks, each holding a single distinct symbol, so a predicate on one symbol must
+        /// leave exactly one chunk. The `n` column is there to make the shape realistic: it supplies
+        /// the per-chunk window boundaries any multi-column file already has.
+        private Path writeFourChunks(Path tmp, boolean globalDict) throws IOException {
+            Path file = tmp.resolve("dict_" + globalDict + ".vtx");
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = VortexWriter.create(ch, DICT_SCHEMA, WriteOptions.defaults().withGlobalDict(globalDict))) {
+                for (int c = 0; c < 4; c++) {
+                    String[] symbols = new String[1_000];
+                    Arrays.fill(symbols, "sym" + c);
+                    sut.writeChunk(Map.of(ColumnName.of("s"), symbols, ColumnName.of("n"), range(c * 1_000L, c * 1_000L + 999L)));
+                }
+            }
+            return file;
+        }
+
+        @Test
+        void prunesLikeThePerChunkShapeOfTheSameData(@TempDir Path tmp) throws IOException {
+            // Given the same four chunks written both ways
+            Path withDict = writeFourChunks(tmp, true);
+            Path withoutDict = writeFourChunks(tmp, false);
+
+            // When filtering on the value only the third chunk holds
+            List<Long> result = scanRowCounts(withDict, RowFilter.eq("s", "sym2"));
+
+            // Then one chunk survives, exactly as for the non-dict shape
+            assertThat(result).containsExactly(1_000L);
+            assertThat(result).isEqualTo(scanRowCounts(withoutDict, RowFilter.eq("s", "sym2")));
+        }
+
+        @Test
+        void prunedScanStillReturnsEveryMatchingRow(@TempDir Path tmp) throws IOException {
+            // Given — pruning must never drop a matching row, so assert values, not just counts
+            Path file = writeFourChunks(tmp, true);
+
+            // When
+            List<String> result = new ArrayList<>();
+            try (var vf = VortexReader.open(file, registry());
+                 var iter = vf.scan(new ScanOptions(List.of(), RowFilter.eq("s", "sym2"), ScanOptions.NO_LIMIT))) {
+                iter.forEachRemaining(c -> {
+                    VarBinArray values = (VarBinArray) c.column("s");
+                    for (long i = 0; i < values.length(); i++) {
+                        result.add(values.getString(i));
+                    }
+                });
+            }
+
+            // Then
+            assertThat(result).hasSize(1_000).containsOnly("sym2");
+        }
+
+        @Test
+        void filterOnAnAbsentValue_prunesEveryChunk(@TempDir Path tmp) throws IOException {
+            // Given
+            Path file = writeFourChunks(tmp, true);
+
+            // When / Then — no chunk's zone can hold "nope", so nothing is decoded at all
+            assertThat(scanRowCounts(file, RowFilter.eq("s", "nope"))).isEmpty();
         }
     }
 }
