@@ -159,7 +159,10 @@ class RaincloudConformanceIntegrationTest {
             // Propagate in priority order: decode gap > oracle abort > mismatch.
             // Oracle abort ranks above mismatch because a spurious AssertionError("oracle ended
             // before vortex output") is produced whenever the oracle aborts before writing all
-            // rows — that is an oracle limitation, not a conformance failure.
+            // rows — that is an oracle limitation, not a conformance failure. EVERY oracle error
+            // ranks there, not just an already-aborted one: a parquet the oracle cannot read
+            // leaves it with zero rows written, and reporting that as this slug's conformance
+            // mismatch blames vortex-java for a gap in the reader used to check it.
             Throwable oe = oracleError.get();
             Throwable ve = vortexError.get();
             if (ve instanceof VortexException e) {
@@ -171,11 +174,11 @@ class RaincloudConformanceIntegrationTest {
             if (oe instanceof TestAbortedException e) {
                 throw e;
             }
-            if (mainError instanceof AssertionError e) {
-                throw e;
-            }
             if (oe != null) {
                 throw new TestAbortedException("oracle cannot read the parquet sibling: " + oe);
+            }
+            if (mainError instanceof AssertionError e) {
+                throw e;
             }
             if (ve instanceof IOException e) {
                 throw e;

@@ -5,6 +5,10 @@
 #         untriaged    — not yet run; the test executes it and reports the outcome as an
 #                        aborted (skipped) test instead of failing the build — flip to ok/gap
 #                        as hydration coverage grows
+#                        An `ok` slug can still report as aborted (skipped) rather than passing:
+#                        the oracle is hardwood reading the parquet sibling, and a parquet it
+#                        cannot read is an oracle limitation, not a vortex-java gap. A
+#                        `#`-comment above the line names the limitation where one is known.
 #         missing_auth — can't even hydrate: the source (Kaggle, gated HuggingFace, …) needs
 #                        credentials this environment doesn't have. Distinguishes "blocked on
 #                        a credential" from plain untriaged ("just hasn't been attempted yet")
@@ -83,6 +87,10 @@ building-permit-applications-data,missing_auth
 c4-en-validation,ok
 california-housing-prices,ok
 cardiovascular-diseases-risk-prediction-dataset,ok
+# oracle blocked: hardwood 1.1.0.Beta1 cannot read the `moves` column — its PGN move lists are
+# ~1 KB, so the page-header statistics exceed hardwood's 1024-byte peek window and it reports the
+# file as malformed ("binary value declares N bytes but only 1003 remain"). Reads fine on
+# hardwood 1.0.0.Final, but vortex-parquet's ParquetExporter needs 1.1.0's dev.hardwood.writer.
 chess,ok
 clickbench-hits,untriaged
 cnn-dailymail,ok
