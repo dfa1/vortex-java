@@ -87,10 +87,13 @@ building-permit-applications-data,missing_auth
 c4-en-validation,ok
 california-housing-prices,ok
 cardiovascular-diseases-risk-prediction-dataset,ok
-# oracle blocked: hardwood 1.1.0.Beta1 cannot read the `moves` column — its PGN move lists are
+# oracle blocked in hardwood 1.1.0.Beta1: it cannot read the `moves` column — PGN move lists are
 # ~1 KB, so the page-header statistics exceed hardwood's 1024-byte peek window and it reports the
-# file as malformed ("binary value declares N bytes but only 1003 remain"). Reads fine on
-# hardwood 1.0.0.Final, but vortex-parquet's ParquetExporter needs 1.1.0's dev.hardwood.writer.
+# file as malformed ("binary value declares N bytes but only 1003 remain"). Downgrading is not an
+# option: vortex-parquet's ParquetExporter needs 1.1.0's dev.hardwood.writer, absent in 1.0.0.Final.
+# Fixed upstream on main (hardwood-hq/hardwood#1104, milestone 1.1.0.Beta2; our reproducer landed
+# as their regression test in #1381), so the bump to Beta2 should make this slug assert for real
+# again — drop this comment then, and if it still aborts, the blocker is a new one.
 chess,ok
 clickbench-hits,untriaged
 cnn-dailymail,ok
