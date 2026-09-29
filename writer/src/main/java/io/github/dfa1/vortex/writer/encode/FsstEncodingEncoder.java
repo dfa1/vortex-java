@@ -57,7 +57,20 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         Arena arena = ctx.arena();
-        return toEncodeResult(compress(data, arena), arena);
+        return toEncodeResult(compress(data, arena), arena, zoneMapStats(data));
+    }
+
+    /// Zone-map min/max for the rows being encoded, or `null` when there is nothing useful to
+    /// record. Utf8 rows go through [VarBinEncodingEncoder#minMaxStats(String[])] so an
+    /// FSST-compressed column reports the same lexicographic bounds a plain `vortex.varbin` one
+    /// would - without this, choosing FSST for a column silently costs it zone-map pruning and
+    /// `MIN`/`MAX` push-down. Binary rows are skipped for the same reason [VarBinEncodingEncoder]
+    /// skips them: a zone map over arbitrary blobs prunes nothing.
+    ///
+    /// @param data the Utf8 (`String[]`) or Binary (`byte[][]`) values being encoded
+    /// @return a two-element `{min, max}` array of encoded scalars, or `null`
+    private static byte[][] zoneMapStats(Object data) {
+        return data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
     }
 
     /// Lays out a compression product in the terminal `vortex.fsst` wire format: the per-row
@@ -71,8 +84,9 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     ///
     /// @param c     the compression product to lay out
     /// @param arena arena backing the length/offset buffers
+    /// @param stats the `{min, max}` zone-map scalars from [#zoneMapStats(Object)], or `null`
     /// @return the terminal `vortex.fsst` encode result
-    static EncodeResult toEncodeResult(Fsst c, Arena arena) {
+    static EncodeResult toEncodeResult(Fsst c, Arena arena, byte[][] stats) {
         long uncompLenBytes = c.uncompLenPType().byteSize();
         MemorySegment uncompLenBuf = arena.allocate(Math.max(c.n() * uncompLenBytes, 1));
         for (int i = 0; i < c.n(); i++) {
@@ -93,7 +107,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 new int[]{0, 1, 2});
 
         return new EncodeResult(root,
-                List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf), null, null);
+                List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf),
+                stats != null ? stats[0] : null, stats != null ? stats[1] : null);
     }
 
     /// Cascading FSST: expose the per-row uncompressed-length and code-offset children as open
@@ -114,6 +129,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             return CascadeStep.terminal(encode(dtype, data, ctx));
         }
         Fsst c = compress(data, ctx.arena());
+        byte[][] stats = zoneMapStats(data);
         Object uncompLens = typedUnsigned(c.uncompLenPType(), c.uncompLens());
         Object codesOffsets = typedUnsigned(c.codesOffPType(), c.codesOffsets());
         EncodeNode partialRoot = new EncodeNode(
@@ -125,7 +141,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 List.of(c.symBuf(), c.symLenBuf(), c.compBuf()),
                 List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0, SELF),
                         new ChildSlot(new DType.Primitive(c.codesOffPType(), false), codesOffsets, 1, SELF)),
-                null, null, true);
+                stats != null ? stats[0] : null, stats != null ? stats[1] : null, true);
     }
 
     /// The FSST-specific product of compression: the symbol-table buffers, the wire code stream, the

@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.FsstEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -36,6 +37,97 @@ class FsstEncodingEncoderTest {
     private static final FsstEncodingEncoder ENCODER = new FsstEncodingEncoder();
     private static final FsstEncodingDecoder DECODER = new FsstEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder());
+
+    @Nested
+    class ZoneMapStats {
+
+        // An FSST column used to report no min/max at all, so choosing FSST for a column silently
+        // cost it zone-map pruning and MIN/MAX push-down. Only low-cardinality strings were spared,
+        // because vortex.dict wraps them and computes its own stats -- which is why a 200-value
+        // sensor id had bounds and a 400k-value timestamp string did not.
+
+        @Test
+        void encode_utf8_reportsLexicographicMinMax() throws Exception {
+            // Given — not in sorted order, so the encoder has to actually compare
+            String[] data = {"pear", "apple", "quince", "banana"};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.hasStats()).isTrue();
+            assertThat(scalar(result.statsMin()).string_value()).isEqualTo("apple");
+            assertThat(scalar(result.statsMax()).string_value()).isEqualTo("quince");
+        }
+
+        @Test
+        void encode_utf8_matchesWhatVarBinWouldReport() throws Exception {
+            // Given — the same column encoded either way must zone-map identically, otherwise the
+            // bounds a reader prunes on depend on which encoding the compressor happened to pick
+            String[] data = {"2024-03-10T11:00:00", "2024-01-01T00:00:00", "2024-12-31T23:59:59"};
+
+            // When
+            EncodeResult fsst = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            EncodeResult varbin = new VarBinEncodingEncoder()
+                    .encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(fsst.statsMin()).string_value())
+                    .isEqualTo(scalar(varbin.statsMin()).string_value());
+            assertThat(scalar(fsst.statsMax()).string_value())
+                    .isEqualTo(scalar(varbin.statsMax()).string_value());
+        }
+
+        @Test
+        void encodeCascade_utf8_carriesTheSameStats() throws Exception {
+            // Given — the cascading path builds its own CascadeStep rather than going through
+            // encode(), so it needs the stats wired separately
+            String[] data = {"pear", "apple", "quince"};
+
+            // When — depth > 0, so the real cascading branch runs rather than the terminal
+            // fall-through, which would get its stats from encode() instead
+            CascadeStep result = ENCODER.encodeCascade(DTypes.UTF8, data,
+                    EncodeContext.ofDepth(2, Arena.ofAuto(), WriteRegistry.loadAll()));
+
+            // Then
+            assertThat(result.openChildren()).isNotEmpty();
+            assertThat(scalar(result.statsMin()).string_value()).isEqualTo("apple");
+            assertThat(scalar(result.statsMax()).string_value()).isEqualTo("quince");
+        }
+
+        @Test
+        void encode_binary_hasNoStats() {
+            // Given — arbitrary blobs; a lexicographic zone map over them prunes nothing, so the
+            // varbin encoder skips stats for binary and this one matches it
+            byte[][] data = {{0x01, (byte) 0xFF}, {0x02}};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.BINARY, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.hasStats()).isFalse();
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+        }
+
+        @Test
+        void encode_allNullRows_hasNoStats() {
+            // Given — this encoder is the values child of a masked layout, where every row can be
+            // null; there is no bound to report
+            String[] data = {null, null};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.hasStats()).isFalse();
+        }
+
+        private ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
+            MemorySegment seg = MemorySegment.ofArray(bytes);
+            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
+        }
+    }
 
     @Nested
     class Encode {
@@ -279,7 +371,7 @@ class FsstEncodingEncoderTest {
 
             // When
             var fsst = FsstEncodingEncoder.compressPerRow(rows, arena);
-            EncodeResult result = FsstEncodingEncoder.toEncodeResult(fsst, arena);
+            EncodeResult result = FsstEncodingEncoder.toEncodeResult(fsst, arena, null);
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             ArrayNode node = toArrayNode(result.rootNode());
             DecodeContext ctx = new DecodeContext(node, DTypes.BINARY, rows.length, bufs, REGISTRY, arena);

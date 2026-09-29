@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `vortex.fsst` now writes MIN/MAX zone-map stats. A high-cardinality string column gets no dictionary wrapper, so FSST was the only encoder in its chain and the column ended up with no bounds at all - no zone-map pruning and no `MIN`/`MAX` push-down. Low-cardinality strings were unaffected, because `vortex.dict` computes its own.
 - `vortex.dict` on a primitive column now writes the `DictMetadata` protobuf and `[codes, values]` child order the Rust reader expects, instead of a legacy 1-byte metadata the Rust reader rejected outright. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - `VortexReader#columnStats()` folds a column's zone-map table instead of the flat nodes beneath it, so a global-dictionary column (Utf8 or numeric) reports its real `MIN`/`MAX`/null count instead of nothing, and the whole-table aggregate push-down no longer abandons to a full scan for such a column. ([#409](https://github.com/dfa1/vortex-java/issues/409))
 - Zone-map chunk pruning now works for a global-dictionary column, whose per-chunk codes sit under a `vortex.dict` layout node that chunk planning records as one full-range chunk: the zone index now comes from the code chunks' own boundaries. A `WHERE` on such a column used to decode every chunk. ([#409](https://github.com/dfa1/vortex-java/issues/409))
