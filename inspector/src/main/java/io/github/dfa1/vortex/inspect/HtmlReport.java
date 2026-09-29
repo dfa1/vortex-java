@@ -71,7 +71,6 @@ public final class HtmlReport {
     // ---------------------------------------------------------------- sections
 
     private static void appendHeader(StringBuilder sb, InspectorTree tree, List<ColumnView> columns, String title) {
-        long metadataBytes = tree.fileSize() - tree.totalSegmentBytes();
         sb.append("<section class=\"card\">\n<h1><code>").append(escape(title))
                 .append("</code> <span class=\"muted\">Vortex v").append(tree.version())
                 .append("</span></h1>\n<dl class=\"stats\">\n");
@@ -80,7 +79,7 @@ public final class HtmlReport {
         stat(sb, "Columns", count(columns.size()));
         stat(sb, "Chunks", count(chunkCount(columns)));
         stat(sb, "Segments", count(tree.segmentCount()));
-        stat(sb, "Metadata", ByteSize.format(Math.max(0, metadataBytes)));
+        stat(sb, "Metadata", ByteSize.format(metadataBytes(tree)));
         sb.append("</dl>\n<div class=\"badges\">\n");
         badge(sb, "Zone maps", anyLayout(tree.root(), Layout::isZoned));
         badge(sb, "Chunked", anyLayout(tree.root(), Layout::isChunked));
@@ -91,28 +90,43 @@ public final class HtmlReport {
     }
 
     private static void appendStrip(StringBuilder sb, InspectorTree tree, List<ColumnView> columns) {
+        List<SegmentSpec> specs = tree.segmentSpecs();
+        long dataEnd = dataEnd(tree);
+        long metadata = metadataBytes(tree);
+
         sb.append("<section class=\"card\">\n<div class=\"panelhead\">File")
                 .append("<span class=\"muted\">").append(count(tree.segmentCount()))
                 .append(" segments, byte-accurate</span><span class=\"right\">")
-                .append(ByteSize.format(tree.fileSize())).append("</span></div>\n<div class=\"strip\">\n");
+                .append(ByteSize.format(tree.fileSize())).append("</span></div>\n")
+                .append("<div class=\"strips\">\n<div class=\"strip\">\n");
+        // The data strip is scaled to the last segment's end rather than the file size: metadata
+        // is a rounding error next to the columns (a few KB against megabytes), so sharing one
+        // scale collapses it to a sliver. It gets its own strip below, at its own scale.
         int[] owner = segmentOwners(tree, columns);
-        List<SegmentSpec> specs = tree.segmentSpecs();
         int stride = Math.max(1, (specs.size() + MAX_STRIP_BLOCKS - 1) / MAX_STRIP_BLOCKS);
         for (int i = 0; i < specs.size(); i += stride) {
             int last = Math.min(i + stride, specs.size()) - 1;
-            long start = specs.get(i).offset();
+            long begin = specs.get(i).offset();
             long end = specs.get(last).offset() + specs.get(last).length();
             String label = stride == 1 ? "segment " + i : "segments " + i + "-" + last;
             String name = owner[i] < 0 ? "shared" : columns.get(owner[i]).name();
-            block(sb, tree.fileSize(), start, end - start, fill(owner[i]),
-                    label + " · " + name + " · off " + count(start) + " · "
-                            + ByteSize.format(end - start) + " · " + specs.get(i).compression().name());
+            block(sb, dataEnd, begin, end - begin, fill(owner[i]),
+                    label + " \u00b7 " + name + " \u00b7 off " + count(begin) + " \u00b7 "
+                            + ByteSize.format(end - begin) + " \u00b7 " + specs.get(i).compression().name());
         }
-        long tail = specs.stream().mapToLong(spec -> spec.offset() + spec.length()).max().orElse(0L);
-        if (tail < tree.fileSize()) {
-            block(sb, tree.fileSize(), tail, tree.fileSize() - tail, "var(--other)",
-                    "metadata · footer, dtype, layout, postscript, trailer · "
-                            + ByteSize.format(tree.fileSize() - tail));
+        sb.append("</div>\n");
+        if (metadata > 0) {
+            sb.append("<div class=\"strip meta\">\n");
+            block(sb, metadata, 0, metadata, "var(--meta)",
+                    "metadata \u00b7 footer, dtype, layout, postscript, trailer \u00b7 off "
+                            + count(dataEnd) + " \u00b7 " + ByteSize.format(metadata));
+            sb.append("</div>\n");
+        }
+        sb.append("</div>\n<div class=\"strips caps\">\n<span class=\"cap\">")
+                .append(ByteSize.format(dataEnd)).append(" of column data</span>\n");
+        if (metadata > 0) {
+            sb.append("<span class=\"cap\">").append(ByteSize.format(metadata))
+                    .append(" metadata, magnified</span>\n");
         }
         sb.append("</div>\n<div class=\"legend\">\n");
         for (ColumnView column : columns) {
@@ -127,8 +141,11 @@ public final class HtmlReport {
             sb.append("<span class=\"key\"><i style=\"background:var(--other)\"></i>other (")
                     .append(count(folded)).append(" columns)</span>\n");
         }
-        sb.append("<span class=\"key\"><i style=\"background:var(--other)\"></i>metadata</span>\n")
-                .append("</div>\n<p class=\"hint\">Hover a block for its segment, column and byte range.")
+        if (metadata > 0) {
+            sb.append("<span class=\"key\"><i style=\"background:var(--meta)\"></i>metadata ")
+                    .append(ByteSize.format(metadata)).append("</span>\n");
+        }
+        sb.append("</div>\n<p class=\"hint\">Hover a block for its segment, column and byte range.")
                 .append(" Gaps are alignment padding.</p>\n</section>\n");
     }
 
@@ -246,6 +263,25 @@ public final class HtmlReport {
                     chunks(node, tree.segmentSpecs())));
         }
         return columns;
+    }
+
+    /// Byte offset one past the last segment - where the file's trailing metadata begins.
+    ///
+    /// @param tree inspector tree
+    /// @return the end of the data region, or `0` for a file with no segments
+    private static long dataEnd(InspectorTree tree) {
+        return tree.segmentSpecs().stream().mapToLong(spec -> spec.offset() + spec.length()).max().orElse(0L);
+    }
+
+    /// Bytes after the last segment: the footer, dtype and layout blobs, the postscript and the
+    /// trailer. Measured from the last segment's end rather than from the sum of segment lengths,
+    /// because the difference between those two is inter-segment alignment padding - real bytes,
+    /// but not metadata.
+    ///
+    /// @param tree inspector tree
+    /// @return size of the trailing metadata region in bytes
+    private static long metadataBytes(InspectorTree tree) {
+        return Math.max(0, tree.fileSize() - dataEnd(tree));
     }
 
     private static List<InspectorTree.Node> topLevel(InspectorTree tree) {
@@ -457,6 +493,7 @@ public final class HtmlReport {
               --text-muted: #8b8a82;
               --track: #ecebe7;
               --other: #b6b5ae;
+              --meta: #52514e;
               %s
             }
             @media (prefers-color-scheme: dark) {
@@ -470,6 +507,7 @@ public final class HtmlReport {
                 --text-muted: #8d8c82;
                 --track: #2a2926;
                 --other: #6b6a63;
+                --meta: #9a998f;
                 %s
               }
             }
@@ -496,6 +534,10 @@ public final class HtmlReport {
             .panelhead { display: flex; align-items: baseline; gap: 10px; font-weight: 600; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
             .panelhead .muted { font-size: 12px; font-weight: 400; }
             .panelhead .right { margin-left: auto; color: var(--text-muted); font-weight: 400; font-size: 12px; }
+            .strips { display: flex; gap: 10px; align-items: stretch; }
+            .strips > * { flex: 1 1 auto; min-width: 0; }
+            .strips > .meta, .strips > .cap:last-child:not(:only-child) { flex: 0 0 104px; }
+            .caps { margin-top: 6px; font-size: 11px; color: var(--text-muted); }
             .strip { position: relative; height: 46px; background: var(--track); border-radius: 5px; overflow: hidden; }
             .strip i { position: absolute; top: 0; bottom: 0; min-width: 2px; border-right: 1px solid var(--surface-1); }
             .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12px; color: var(--text-secondary); }

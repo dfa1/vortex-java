@@ -286,6 +286,80 @@ class HtmlReportTest {
                 .contains("width:25.0000%");
     }
 
+    @Test
+    void render_metadata_getsItsOwnStripAtItsOwnScale() {
+        // Given — 2 KB of segments in a 4 KB file. Sharing one scale with the data would be fine
+        // here, but on a real file metadata is a few KB against megabytes and collapses to a
+        // sliver, so it is always drawn full-width in a strip of its own.
+        InspectorTree sut = twoColumnTree();
+
+        // When
+        String result = HtmlReport.render(sut, "data.vortex");
+
+        // Then
+        assertThat(result)
+                .contains("<div class=\"strip meta\">")
+                .contains("var(--meta)")
+                .contains("2.0 KB metadata, magnified")
+                .contains("2.0 KB of column data");
+    }
+
+    @Test
+    void render_noMetadataTail_omitsTheMagnifiedStrip() {
+        // Given — segments run to the last byte, so there is no trailing metadata to show
+        Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
+        Layout root = new Layout(LayoutId.parse("vortex.struct"), 10, null, List.of(leaf), List.of());
+        InspectorTree.Node leafNode = new InspectorTree.Node(leaf, Optional.of("id"), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of(leafNode));
+        InspectorTree sut = new InspectorTree(1, 256L,
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I32), false),
+                List.of("vortex.flat"), Set.of(),
+                List.of(new SegmentSpec(0, 256, (byte) 0, CompressionScheme.NONE)),
+                10L, rootNode);
+
+        // When
+        String result = HtmlReport.render(sut, "full.vortex");
+
+        // Then
+        assertThat(result)
+                .doesNotContain("strip meta")
+                .doesNotContain("magnified");
+    }
+
+    @Test
+    void render_metadataFigure_excludesInterSegmentPadding() {
+        // Given — 2 KB of segments but a 1 KB gap between them, in a 4 KB file. Measuring
+        // metadata as "file minus the sum of segment lengths" would call the padding metadata and
+        // report 2 KB in the header while the strip, measuring from the last segment's end,
+        // showed 1 KB. One page, two numbers, same label.
+        Layout a = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
+        Layout b = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(1));
+        Layout root = new Layout(LayoutId.parse("vortex.struct"), 10, null, List.of(a, b), List.of());
+        InspectorTree.Node an = new InspectorTree.Node(a, Optional.of("x"), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node bn = new InspectorTree.Node(b, Optional.of("y"), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of(an, bn));
+        InspectorTree sut = new InspectorTree(1, 4096L,
+                new DType.Struct(List.of(ColumnName.of("x"), ColumnName.of("y")),
+                        List.of(DType.I32, DType.I32), false),
+                List.of("vortex.flat"), Set.of(),
+                List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
+                        new SegmentSpec(2048, 1024, (byte) 0, CompressionScheme.NONE)),
+                10L, rootNode);
+
+        // When
+        String result = HtmlReport.render(sut, "padded.vortex");
+
+        // Then — 4096 - 3072 = 1 KB, in both places
+        assertThat(result)
+                .contains("<dt>Metadata</dt><dd>1.0 KB</dd>")
+                .contains("1.0 KB metadata, magnified");
+    }
+
     private static InspectorTree twoColumnTree() {
         Layout idLeaf = new Layout(LayoutId.parse("vortex.flat"), 1000, null, List.of(), List.of(0));
         Layout valLeaf = new Layout(LayoutId.parse("vortex.flat"), 1000, null, List.of(), List.of(1));
