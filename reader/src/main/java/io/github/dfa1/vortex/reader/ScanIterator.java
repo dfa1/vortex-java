@@ -873,11 +873,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 if (flat == null) {
                     yield false;
                 }
-                ArrayStats stats = zoneStats(chunk, col, flat.rowCount());
-                if (stats == null) {
-                    stats = readFlatStats(flat);
-                }
-                yield canPrune(predicate, stats, flat.rowCount(), columnDType(col));
+                // The row count handed to canPrune must be the span the stats describe, not the
+                // covering chunk's: a zone can be wider than the chunk (Rust's vortex.zoned) or
+                // narrower than the layout (a dict column's code chunk), and the IS NOT NULL test
+                // compares nullCount against it.
+                ZoneWindow zone = zoneStats(chunk, col, flat.rowCount());
+                ArrayStats stats = zone == null ? readFlatStats(flat) : zone.stats();
+                long statsRows = zone == null ? flat.rowCount() : zone.rows();
+                yield canPrune(predicate, stats, statsRows, columnDType(col));
             }
         };
     }
@@ -898,25 +901,48 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// relationship to chunk boundaries at all; a chunk's row range must fit entirely inside a single
     /// zone for that zone's stats to safely describe it — never a partial overlap, or rows the chunk
     /// covers would be invisible to the stats used to judge it.
-    private ArrayStats zoneStats(ChunkSpec chunk, ColumnName col, long chunkRowCount) {
+    private ZoneWindow zoneStats(ChunkSpec chunk, ColumnName col, long chunkRowCount) {
         Layout zoned = findZonedLayout(file.layout(), col);
         if (zoned == null) {
             return null;
         }
         long[] dictStarts = dictCodeChunkStarts(zoned);
         Integer zoneIdx;
+        long zoneRows;
         if (dictStarts != null) {
             zoneIdx = zoneIndexByDictCodeChunk(chunk, col, dictStarts);
+            zoneRows = zoneIdx == null ? 0L : dictStarts[zoneIdx + 1] - dictStarts[zoneIdx];
         } else if (zoned.layoutId() == LayoutId.ZONED) {
             zoneIdx = zoneIndexByLength(chunk, col, chunkRowCount, zoned.metadata());
+            // Uniform stride, except the last zone, which stops at the column's row count.
+            long zoneLen = ZonedStatsSchema.aggregateZoneLength(zoned.metadata());
+            zoneRows = zoneIdx == null ? 0L : Math.min(zoneLen, zoned.rowCount() - zoneIdx * zoneLen);
         } else {
+            // Legacy vortex.stats: exactly one zone per physical chunk, so the chunk's rows ARE
+            // the zone's rows.
             zoneIdx = zoneIndexByOrdinal(chunk, col);
+            zoneRows = chunkRowCount;
         }
         if (zoneIdx == null) {
             return null;
         }
+        // zoneRows is derived from untrusted layout fields (a declared zone length, a child's row
+        // count). A non-positive span would make canPrune's `nullCount == rowCount` test fire on a
+        // null-free zone (0 == 0) and prune chunks that all match IS NOT NULL, so treat it as an
+        // unusable zone map and fall back to the chunk's embedded stats.
+        if (zoneRows <= 0) {
+            return null;
+        }
         List<ArrayStats> zones = zoneStatsFor(col);
-        return zones == null || zoneIdx >= zones.size() ? null : zones.get(zoneIdx);
+        return zones == null || zoneIdx >= zones.size() ? null : new ZoneWindow(zones.get(zoneIdx), zoneRows);
+    }
+
+    /// A zone's statistics together with the number of rows they describe — which is not always the
+    /// covering chunk's row count, so the two travel together to whatever judges a predicate.
+    ///
+    /// @param stats the zone's statistics
+    /// @param rows  how many rows those statistics summarize
+    private record ZoneWindow(ArrayStats stats, long rows) {
     }
 
     /// Cumulative row starts of a dictionary column's per-chunk code arrays (the final entry is the
@@ -961,11 +987,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     ///
     /// Conservative like [#zoneIndexByLength]: a window straddling two code chunks has no single
     /// zone describing all its rows, so it yields `null` (no pruning) rather than a partial answer.
-    ///
-    /// One prune stays unavailable for this shape: [#canPrune] is handed the covering layout's row
-    /// count, which for a dict column is the whole column, so its `IS NOT NULL` branch
-    /// (`nullCount == rowCount`, an all-null chunk) can never fire. Value-range pruning — the
-    /// reason zone maps exist — is unaffected.
     private Integer zoneIndexByDictCodeChunk(ChunkSpec chunk, ColumnName col, long[] starts) {
         List<ArrayStats> zones = zoneStatsFor(col);
         if (zones == null || zones.size() != starts.length - 1) {

@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Zone-map chunk pruning judges a predicate against the row count the statistics actually describe, instead of the covering chunk's. A zone wider than the chunk (Rust's `vortex.zoned`) could make `IS NOT NULL` prune a chunk whose own rows were non-null; a zone narrower than the layout (a dict column's code chunk) could never prune an all-null chunk at all. ([#409](https://github.com/dfa1/vortex-java/issues/409))
 - Zone-map chunk pruning now works for a global-dictionary column: its per-chunk codes sit under a `vortex.dict` layout node that chunk planning records as one full-range chunk, so the zone index is taken from the code chunks' own boundaries instead of the column's chunk ordinal. A `WHERE` on such a column used to decode every chunk. ([#409](https://github.com/dfa1/vortex-java/issues/409))
 - `VortexReader#columnStats()` folds a column's zone-map table instead of the flat nodes beneath it, so a global-dictionary column (Utf8 or numeric) reports its real `MIN`/`MAX`/null count instead of nothing, and the whole-table aggregate push-down no longer abandons to a full scan for such a column. ([#409](https://github.com/dfa1/vortex-java/issues/409))
 - `vortex.dict` on a primitive column now writes the `DictMetadata` protobuf and `[codes, values]` child order the Rust reader expects, instead of a legacy 1-byte metadata the Rust reader rejected outright. ([#410](https://github.com/dfa1/vortex-java/issues/410))

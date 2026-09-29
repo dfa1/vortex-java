@@ -594,6 +594,50 @@ class ZoneMapPruningTest {
             assertThat(result).hasSize(1_000).containsOnly("sym2");
         }
 
+        /// Nullable variant of [#writeFourChunks]: chunk 2 is entirely null, the others hold one
+        /// distinct symbol each.
+        private Path writeFourChunksWithANullChunk(Path tmp, boolean globalDict) throws IOException {
+            DType.Struct schema = new DType.Struct(
+                    List.of(ColumnName.of("s"), ColumnName.of("n")),
+                    List.of(new DType.Utf8(true), DType.I64),
+                    false);
+            Path file = tmp.resolve("dict_nulls_" + globalDict + ".vtx");
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = VortexWriter.create(ch, schema, WriteOptions.defaults().withGlobalDict(globalDict))) {
+                for (int c = 0; c < 4; c++) {
+                    String[] symbols = new String[1_000];
+                    Arrays.fill(symbols, c == 2 ? null : "sym" + c);
+                    sut.writeChunk(Map.of(ColumnName.of("s"), symbols, ColumnName.of("n"), range(c * 1_000L, c * 1_000L + 999L)));
+                }
+            }
+            return file;
+        }
+
+        @Test
+        void isNotNull_prunesTheAllNullChunk(@TempDir Path tmp) throws IOException {
+            // Given — the zone's nullCount has to be compared against the ZONE's row count. A dict
+            // column's covering layout spans the whole column, so judging against that count could
+            // never see an all-null chunk and every chunk was decoded.
+            Path withDict = writeFourChunksWithANullChunk(tmp, true);
+            Path withoutDict = writeFourChunksWithANullChunk(tmp, false);
+
+            // When
+            List<Long> result = scanRowCounts(withDict, RowFilter.isNotNull("s"));
+
+            // Then — the all-null chunk is skipped, exactly as for the non-dict shape
+            assertThat(result).containsExactly(1_000L, 1_000L, 1_000L);
+            assertThat(result).isEqualTo(scanRowCounts(withoutDict, RowFilter.isNotNull("s")));
+        }
+
+        @Test
+        void isNull_prunesTheNullFreeChunks(@TempDir Path tmp) throws IOException {
+            // Given
+            Path file = writeFourChunksWithANullChunk(tmp, true);
+
+            // When / Then — only the all-null chunk can hold a null
+            assertThat(scanRowCounts(file, RowFilter.isNull("s"))).containsExactly(1_000L);
+        }
+
         @Test
         void filterOnAnAbsentValue_prunesEveryChunk(@TempDir Path tmp) throws IOException {
             // Given
