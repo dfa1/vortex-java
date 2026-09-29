@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `inspect --html` takes its column list from the file's dtype rather than its layout. A struct stored under a single flat layout node - the shape the Rust writer produces - was reported as one column named `col0` carrying the first field's type, with every other field dropped. Such a file now lists all its columns and says plainly that their bytes are shared rather than inventing a per-column size.
 - `vortex.fsst` now writes MIN/MAX zone-map stats. A high-cardinality string column gets no dictionary wrapper, so FSST was the only encoder in its chain and the column ended up with no bounds at all - no zone-map pruning and no `MIN`/`MAX` push-down. Low-cardinality strings were unaffected, because `vortex.dict` computes its own.
 - `vortex.dict` on a primitive column now writes the `DictMetadata` protobuf and `[codes, values]` child order the Rust reader expects, instead of a legacy 1-byte metadata the Rust reader rejected outright. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - `VortexReader#columnStats()` folds a column's zone-map table instead of the flat nodes beneath it, so a global-dictionary column (Utf8 or numeric) reports its real `MIN`/`MAX`/null count instead of nothing, and the whole-table aggregate push-down no longer abandons to a full scan for such a column. ([#409](https://github.com/dfa1/vortex-java/issues/409))

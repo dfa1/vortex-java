@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.SegmentSpec;
@@ -63,7 +64,9 @@ public final class HtmlReport {
         appendStrip(sb, tree, columns);
         sb.append("<div class=\"panels\">\n");
         appendSchema(sb, tree, columns);
-        appendChunks(sb, columns);
+        appendChunks(sb, columns.stream().anyMatch(ColumnView::attributed)
+                ? columns
+                : List.of(wholeFile(tree)));
         sb.append("</div>\n</main>\n</body>\n</html>\n");
         return sb.toString();
     }
@@ -77,7 +80,7 @@ public final class HtmlReport {
         stat(sb, "Size", ByteSize.format(tree.fileSize()));
         stat(sb, "Rows", count(tree.totalRowCount()));
         stat(sb, "Columns", count(columns.size()));
-        stat(sb, "Chunks", count(chunkCount(columns)));
+        stat(sb, "Chunks", count(Math.max(chunkCount(columns), chunks(tree.root(), tree.segmentSpecs()).size())));
         stat(sb, "Segments", count(tree.segmentCount()));
         stat(sb, "Metadata", ByteSize.format(metadataBytes(tree)));
         sb.append("</dl>\n<div class=\"badges\">\n");
@@ -165,10 +168,19 @@ public final class HtmlReport {
                 .append(fill(column.index())).append("\"></i><code class=\"name\">")
                 .append(escape(column.name())).append("</code><code class=\"dtype\">")
                 .append(escape(column.dtype())).append("</code>");
-        bar(sb, column.bytes(), widest, fill(column.index()));
-        sb.append("<span class=\"size\">").append(ByteSize.format(column.bytes()))
-                .append("</span></summary>\n<div class=\"detail\">\n<p class=\"meta\">")
-                .append(ByteSize.format(column.bytes())).append(" (")
+        if (column.attributed()) {
+            bar(sb, column.bytes(), widest, fill(column.index()));
+        }
+        sb.append("<span class=\"size\">")
+                .append(column.attributed() ? ByteSize.format(column.bytes()) : "shared")
+                .append("</span></summary>\n<div class=\"detail\">\n<p class=\"meta\">");
+        if (!column.attributed()) {
+            sb.append("This file keeps every column in one layout node, so its bytes cannot be")
+                    .append(" attributed to a single column. See the chunks panel for the file as a whole.")
+                    .append("</p>\n</div>\n</details>\n");
+            return;
+        }
+        sb.append(ByteSize.format(column.bytes())).append(" (")
                 .append(percent(column.bytes(), tree.fileSize())).append(" of file), ")
                 .append(count(column.chunks().size())).append(" chunks");
         if (!column.encodings().isEmpty()) {
@@ -237,7 +249,7 @@ public final class HtmlReport {
 
     /// One top-level column: its slot in the palette, name, rendered dtype, bytes on disk,
     /// encodings seen anywhere in its subtree, and its chunks left to right.
-    private record ColumnView(int index, String name, String dtype, long bytes,
+    private record ColumnView(int index, String name, String dtype, long bytes, boolean attributed,
             Set<String> encodings, List<ChunkView> chunks) {
     }
 
@@ -245,24 +257,44 @@ public final class HtmlReport {
     private record ChunkView(long firstRow, long rows, long bytes, ArrayStats stats) {
     }
 
+    /// Builds one view per column *of the schema*. Names and types always come from the dtype,
+    /// which is authoritative; the layout is consulted only for physical facts (bytes, chunks),
+    /// and only when its top level lines up one-for-one with the schema's fields.
     private static List<ColumnView> columns(InspectorTree tree) {
-        List<InspectorTree.Node> nodes = topLevel(tree);
+        List<String> names = fieldNames(tree);
         List<DType> types = tree.dtype() instanceof DType.Struct struct
                 ? struct.fieldTypes()
                 : List.of(tree.dtype());
-        List<ColumnView> columns = new ArrayList<>(nodes.size());
-        for (int i = 0; i < nodes.size(); i++) {
-            InspectorTree.Node node = nodes.get(i);
+        List<InspectorTree.Node> nodes = topLevel(tree);
+        boolean attributed = nodes.size() == names.size();
+        List<ColumnView> columns = new ArrayList<>(names.size());
+        for (int i = 0; i < names.size(); i++) {
+            InspectorTree.Node node = attributed ? nodes.get(i) : null;
             String dtype = i < types.size() ? VortexInspector.formatDType(types.get(i)) : "?";
             columns.add(new ColumnView(
                     i,
-                    node.fieldName().orElse("col" + i),
+                    names.get(i),
                     dtype,
-                    subtreeBytes(node, tree.segmentSpecs()),
-                    node.usedEncodings(),
-                    chunks(node, tree.segmentSpecs())));
+                    node == null ? 0L : subtreeBytes(node, tree.segmentSpecs()),
+                    node != null,
+                    node == null ? Set.<String>of() : node.usedEncodings(),
+                    node == null ? List.<ChunkView>of() : chunks(node, tree.segmentSpecs())));
         }
         return columns;
+    }
+
+    private static List<String> fieldNames(InspectorTree tree) {
+        if (tree.dtype() instanceof DType.Struct struct) {
+            return struct.fieldNames().stream().map(ColumnName::value).toList();
+        }
+        return List.of(tree.root().fieldName().orElse("value"));
+    }
+
+    /// One pseudo-column standing for the whole file, used to drive the chunks panel when the
+    /// layout does not break the file down per column.
+    private static ColumnView wholeFile(InspectorTree tree) {
+        return new ColumnView(-1, "all columns", "", subtreeBytes(tree.root(), tree.segmentSpecs()),
+                true, tree.root().usedEncodings(), chunks(tree.root(), tree.segmentSpecs()));
     }
 
     /// Byte offset one past the last segment - where the file's trailing metadata begins.
@@ -284,8 +316,15 @@ public final class HtmlReport {
         return Math.max(0, tree.fileSize() - dataEnd(tree));
     }
 
+    /// The layout nodes that correspond one-for-one to the schema's top-level fields, or an empty
+    /// list when the layout does not break the file down that way. A struct dtype stored under a
+    /// single flat layout node - which is what the Rust writer produces - keeps every column's
+    /// bytes in one segment, so no column owns any of them.
     private static List<InspectorTree.Node> topLevel(InspectorTree tree) {
-        return tree.root().layout().isStruct() ? tree.root().children() : List.of(tree.root());
+        if (tree.root().layout().isStruct()) {
+            return tree.root().children();
+        }
+        return tree.dtype() instanceof DType.Struct ? List.of() : List.of(tree.root());
     }
 
     /// Descends from a column to the chunked node underneath and turns its children into chunks.
@@ -345,8 +384,10 @@ public final class HtmlReport {
         int[] owner = new int[tree.segmentSpecs().size()];
         Arrays.fill(owner, -1);
         List<InspectorTree.Node> nodes = topLevel(tree);
-        for (int i = 0; i < nodes.size() && i < columns.size(); i++) {
-            claim(nodes.get(i), i, owner);
+        if (nodes.size() == columns.size()) {
+            for (int i = 0; i < nodes.size(); i++) {
+                claim(nodes.get(i), i, owner);
+            }
         }
         return owner;
     }

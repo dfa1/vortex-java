@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.inspect;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.LayoutId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.reader.SegmentSpec;
@@ -358,6 +359,68 @@ class HtmlReportTest {
         assertThat(result)
                 .contains("<dt>Metadata</dt><dd>1.0 KB</dd>")
                 .contains("1.0 KB metadata, magnified");
+    }
+
+    @Test
+    void render_structDtypeUnderFlatLayout_listsEveryFieldAndClaimsNoSizes() {
+        // Given — the shape every Rust-written fixture has: a two-field struct dtype stored in ONE
+        // flat layout node. Deriving the column list from the layout instead of the schema reported
+        // a single column called "col0" typed with the FIRST field's type, silently dropping the
+        // second field and mislabelling the first.
+        Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 1750, null, List.of(), List.of(0));
+        InspectorTree.Node root = new InspectorTree.Node(leaf, Optional.empty(), Set.of("vortex.struct"),
+                ArrayStats.empty(), List.of());
+        InspectorTree sut = new InspectorTree(1, 24576L,
+                new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("nullable_val")),
+                        List.of(DType.U32, new DType.Primitive(PType.I64, true)), false),
+                List.of("vortex.flat"), Set.of(),
+                List.of(new SegmentSpec(0, 20480, (byte) 0, CompressionScheme.NONE)),
+                1750L, root);
+
+        // When
+        String result = HtmlReport.render(sut, "chunked.vortex");
+
+        // Then — both fields, both real types, and no invented per-column sizes
+        assertThat(result)
+                .contains("<dt>Columns</dt><dd>2</dd>")
+                .contains(">id</code>")
+                .contains(">nullable_val</code>")
+                .contains("U32")
+                .contains("I64?")
+                .doesNotContain("col0")
+                .contains("shared")
+                .contains("cannot be attributed to a single column");
+    }
+
+    @Test
+    void render_structDtypeUnderFlatLayout_stillReportsFileLevelChunks() {
+        // Given — no column owns bytes, but the file is still chunked at the root; the chunks panel
+        // falls back to the file as a whole rather than going blank
+        Layout c0 = new Layout(LayoutId.parse("vortex.flat"), 500, null, List.of(), List.of(0));
+        Layout c1 = new Layout(LayoutId.parse("vortex.flat"), 500, null, List.of(), List.of(1));
+        Layout chunked = new Layout(LayoutId.parse("vortex.chunked"), 1000, null, List.of(c0, c1), List.of());
+        InspectorTree.Node n0 = new InspectorTree.Node(c0, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node n1 = new InspectorTree.Node(c1, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node root = new InspectorTree.Node(chunked, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of(n0, n1));
+        InspectorTree sut = new InspectorTree(1, 4096L,
+                new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("c")),
+                        List.of(DType.I32, DType.I32, DType.I32), false),
+                List.of("vortex.flat"), Set.of(),
+                List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
+                        new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE)),
+                1000L, root);
+
+        // When
+        String result = HtmlReport.render(sut, "shared.vortex");
+
+        // Then
+        assertThat(result)
+                .contains("<dt>Columns</dt><dd>3</dd>")
+                .contains("<dt>Chunks</dt><dd>2</dd>")
+                .contains("all columns");
     }
 
     private static InspectorTree twoColumnTree() {
