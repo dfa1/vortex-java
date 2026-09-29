@@ -49,6 +49,38 @@ class InspectCommandTest {
     }
 
     @Test
+    void htmlFlag_printsSelfContainedHtmlReport(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = writeSmallVortex(tmp, "inspect.vortex");
+
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                InspectCommand.run(new String[]{"inspect", "--html", file.toString()}));
+
+        // Then — a complete document the user can redirect straight into a .html file
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout())
+                .startsWith("<!doctype html>")
+                .contains("<style>")
+                .contains("Vortex inspector")
+                .doesNotContain("<script");
+    }
+
+    @Test
+    void unknownFlag_returnsUsageError(@TempDir Path tmp) throws IOException {
+        // Given — only --html is accepted in the flag position
+        Path file = writeSmallVortex(tmp, "inspect.vortex");
+
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                InspectCommand.run(new String[]{"inspect", "--xml", file.toString()}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("usage:");
+    }
+
+    @Test
     void validFile_printsInspectorReport(@TempDir Path tmp) throws IOException {
         // Given
         Path file = writeSmallVortex(tmp, "inspect.vortex");

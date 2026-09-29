@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.inspect.HtmlReport;
+import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexHandle;
 
@@ -12,15 +14,19 @@ final class InspectCommand {
     }
 
     static int run(String[] args) {
-        if (args.length != 2) {
-            System.err.println("usage: inspect <file.vortex | http(s)://url>");
+        boolean html = args.length == 3 && "--html".equals(args[1]);
+        if (args.length != 2 && !html) {
+            System.err.println("usage: inspect [--html] <file.vortex | http(s)://url>");
             return ExitStatus.USAGE_ERROR;
         }
-        try (VortexHandle handle = CliHandles.openTarget(args[1])) {
+        String target = args[args.length - 1];
+        try (VortexHandle handle = CliHandles.openTarget(target)) {
             if (handle == null) {
                 return ExitStatus.FILE_NOT_FOUND;
             }
-            System.out.print(VortexInspector.inspect(handle));
+            System.out.print(html
+                    ? HtmlReport.render(InspectorTree.build(handle), target)
+                    : VortexInspector.inspect(handle));
             return ExitStatus.OK;
         } catch (IOException | RuntimeException e) {
             System.err.println("error: " + CliHandles.describe(e));

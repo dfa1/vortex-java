@@ -66,6 +66,25 @@ java -jar cli/target/vortex-cli-*-all.jar stats data.vortex
 
 ---
 
+## Inspect as a web page
+
+`inspect --html` writes a single self-contained HTML page to stdout — no scripts, no CDN,
+nothing to install. It shows where each column's bytes physically sit in the file, what
+share of the file each column costs, and the per-chunk row ranges, min/max and sizes
+behind those totals.
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar inspect --html data.vortex > report.html
+open report.html
+```
+
+Columns are colored in a fixed palette order that is validated for color-vision
+deficiency in both light and dark mode; past the eighth column the strip falls back to a
+neutral fill and the schema table names every column regardless. Click a column or a
+chunk to expand its detail table.
+
+---
+
 ## Inspect interactively (TUI)
 
 For files where the static `inspect` output is too dense, the `tui` subcommand opens

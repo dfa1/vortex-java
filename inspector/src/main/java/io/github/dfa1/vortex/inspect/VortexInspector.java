@@ -91,7 +91,7 @@ public final class VortexInspector {
         }
     }
 
-    private static ArrayStats aggregateStats(InspectorTree.Node node) {
+    static ArrayStats aggregateStats(InspectorTree.Node node) {
         Object min = node.stats().min();
         Object max = node.stats().max();
         for (InspectorTree.Node child : node.children()) {
@@ -173,7 +173,7 @@ public final class VortexInspector {
         }
     }
 
-    private static String formatDType(DType dtype) {
+    static String formatDType(DType dtype) {
         return switch (dtype) {
             case DType.Primitive(var pt, var nullable) -> pt.name() + (nullable ? "?" : "");
             case DType.Utf8(var nullable) -> "utf8" + (nullable ? "?" : "");

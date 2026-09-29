@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `inspect --html` writes a self-contained HTML report of a file: a byte-accurate map of where every column's bytes sit, per-column size share, and per-chunk row ranges, min/max and sizes.
 - `MIN`/`MAX` over a `VARCHAR` column now push down to a zone-map-stats-only `LogicalValues`, matching the existing numeric push-down. ([#406](https://github.com/dfa1/vortex-java/issues/406))
 
 ### Changed

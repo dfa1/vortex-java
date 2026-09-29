@@ -44,7 +44,7 @@ public final class VortexCli {
 
     static void printUsage(PrintStream out) {
         out.println("Usage: java -jar vortex-cli-<version>-all.jar <subcommand> [args]");
-        out.println("  inspect <file|url>                  print file structure; url is http(s)://");
+        out.println("  inspect [--html] <file|url>         print file structure; --html writes an HTML report");
         out.println("  tui     <file|url>                  open interactive inspector; url is http(s)://");
         out.println("  view    <file|url>                  open scrollable data grid; url is http(s)://");
         out.println("  export  <file.vortex> [out.csv|out.parquet|-]  write CSV or Parquet; default is <name>.csv, `-` for stdout");
