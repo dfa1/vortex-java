@@ -96,18 +96,21 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         requireBinding(ZSTD_BINDING_PRESENT);
+        // Compression does not reorder anything, so the column's bounds are the input's bounds.
+        // Computed once here rather than in each of the four shape-specific paths below.
+        byte[][] stats = ZoneMapStats.of(dtype, data);
         if (data instanceof NullableData nd) {
             if (dtype instanceof DType.Primitive dt) {
-                return encodeNullablePrimitive(dt, nd, ctx);
+                return encodeNullablePrimitive(dt, nd, ctx).withStats(stats);
             }
             if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-                return encodeNullableVarBin(nd, ctx);
+                return encodeNullableVarBin(nd, ctx).withStats(stats);
             }
             throw new VortexException(EncodingId.VORTEX_ZSTD,
                     "NullableData is unsupported for dtype: " + dtype);
         }
         if (dtype instanceof DType.Primitive dt) {
-            return encodePrimitive(dt, data, ctx.arena());
+            return encodePrimitive(dt, data, ctx.arena()).withStats(stats);
         }
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
             byte[][] encoded = VarBinBytes.toRawByteArrays(data);
@@ -115,7 +118,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
                 throw new VortexException(EncodingId.VORTEX_ZSTD,
                         "non-nullable " + dtype + " contains null");
             }
-            return encodeVarBin(encoded, ctx.arena());
+            return encodeVarBin(encoded, ctx.arena()).withStats(stats);
         }
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
     }

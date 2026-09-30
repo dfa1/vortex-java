@@ -68,6 +68,8 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
         }
 
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBINVIEW, null, new EncodeNode[0], bufIndices);
-        return new EncodeResult(root, buffers, null, null);
+        // Same lexicographic bounds vortex.varbin reports for the same column: which of the two
+        // string layouts the compressor picks must not decide whether the column can be pruned.
+        return new EncodeResult(root, buffers, null, null).withStats(ZoneMapStats.of(dtype, data));
     }
 }

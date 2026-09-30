@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -83,14 +82,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// @param validity    per-row validity, aligned with `values`
     /// @return a two-element `{min, max}` array of encoded scalars, or `null` when no row is valid
     private static byte[][] maskedMinMaxStats(DType nonNullable, Object values, boolean[] validity) {
-        if (nonNullable instanceof DType.Primitive p) {
-            Object compacted = PrimitiveArrays.compact(p.ptype(), values, validity);
-            return PrimitiveEncodingEncoder.minMaxStats(p.ptype(), compacted);
-        }
-        if (values instanceof String[] strings) {
-            return VarBinEncodingEncoder.minMaxStats(strings);
-        }
-        return null;
+        return ZoneMapStats.of(nonNullable, new NullableData(values, validity));
     }
 
     /// Encodes the non-null values of a masked column.

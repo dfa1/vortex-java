@@ -125,6 +125,9 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         if (n == 0) {
             return encodeEmpty(ctx);
         }
+        // Run-length encoding preserves the value set, so the runs bound the column exactly as the
+        // raw values do.
+        byte[][] stats = ZoneMapStats.of(dtype, data);
 
         int numChunks = (n + FL_CHUNK_SIZE - 1) / FL_CHUNK_SIZE;
         int paddedLen = numChunks * FL_CHUNK_SIZE;
@@ -183,7 +186,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
                 new int[0]);
-        return new EncodeResult(root, List.of(valuesSeg, indicesSeg, offsetsSeg), null, null);
+        return new EncodeResult(root, List.of(valuesSeg, indicesSeg, offsetsSeg), null, null).withStats(stats);
     }
 
     private static int rleEncode(long[] input, long[] chunkValues, short[] chunkIndices) {

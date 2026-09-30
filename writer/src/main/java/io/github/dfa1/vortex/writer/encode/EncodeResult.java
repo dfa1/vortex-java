@@ -38,6 +38,20 @@ public record EncodeResult(
         return simple(encodingId, data, null, null);
     }
 
+    /// This result with zone-map bounds attached, for an encoder that computes them at its entry
+    /// point but assembles the result deeper down. Saves threading two nullable `byte[]` through
+    /// every private helper on the way, which is how several encodings ended up shipping with no
+    /// bounds at all.
+    ///
+    /// @param stats a `{min, max}` pair as returned by the encoders' `minMaxStats` helpers, or
+    ///              `null` when the input carried nothing to bound
+    /// @return a copy of this result carrying `stats`
+    public EncodeResult withStats(byte[][] stats) {
+        return stats == null
+                ? this
+                : new EncodeResult(rootNode, buffers, stats[0], stats[1]);
+    }
+
     /// Returns `true` if both `statsMin` and `statsMax` are present.
     ///
     /// @return `true` if zone-map statistics are available for this result
