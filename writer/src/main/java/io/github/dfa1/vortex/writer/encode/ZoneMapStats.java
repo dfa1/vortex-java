@@ -2,6 +2,10 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 
 /// Computes the `{min, max}` zone-map bounds for whatever shape an encoder was handed.
 ///
@@ -47,6 +51,91 @@ final class ZoneMapStats {
             return PrimitiveEncodingEncoder.minMaxStats(p.ptype(), data);
         }
         return null;
+    }
+
+    /// Bounds for a decimal column whose values are packed little-endian at a fixed width.
+    ///
+    /// `ScalarValue` has no decimal variant, in our schema or upstream's. The Rust reference
+    /// encodes a decimal scalar as `bytes_value` holding the unscaled integer little-endian at the
+    /// column's storage width - `DecimalValue::I8..I256 => v.to_le_bytes()` in
+    /// `vortex-array/src/scalar/proto.rs` - so that is what is written here.
+    ///
+    /// Comparison is two's-complement over the whole width, so it is correct for I128 and I256 as
+    /// well without widening anything into a `BigInteger` per value.
+    ///
+    /// @param values    the packed values
+    /// @param byteWidth bytes per value, 1/2/4/8/16/32
+    /// @return a two-element `{min, max}` array of encoded scalars, or `null` when empty
+    static byte[][] ofDecimal(MemorySegment values, int byteWidth) {
+        long n = values.byteSize() / byteWidth;
+        if (n == 0) {
+            return null;
+        }
+        long minOff = 0;
+        long maxOff = 0;
+        for (long i = 1; i < n; i++) {
+            long off = i * byteWidth;
+            if (compareTwosComplement(values, off, minOff, byteWidth) < 0) {
+                minOff = off;
+            }
+            if (compareTwosComplement(values, off, maxOff, byteWidth) > 0) {
+                maxOff = off;
+            }
+        }
+        return new byte[][]{decimalScalar(values, minOff, byteWidth), decimalScalar(values, maxOff, byteWidth)};
+    }
+
+    /// Bounds for a decimal column already widened into `long` values, encoded at the same
+    /// eight-byte width Rust uses for `DecimalValue::I64`.
+    ///
+    /// @param values the unscaled values
+    /// @return a two-element `{min, max}` array of encoded scalars, or `null` when empty
+    static byte[][] ofDecimal(long[] values) {
+        if (values.length == 0) {
+            return null;
+        }
+        long min = values[0];
+        long max = values[0];
+        for (long v : values) {
+            if (v < min) {
+                min = v;
+            }
+            if (v > max) {
+                max = v;
+            }
+        }
+        return new byte[][]{decimalScalar(min), decimalScalar(max)};
+    }
+
+    /// Compares two equal-width little-endian two's-complement values in place: the most
+    /// significant byte decides as signed, the rest as unsigned.
+    private static int compareTwosComplement(MemorySegment values, long a, long b, int byteWidth) {
+        byte topA = values.get(ValueLayout.JAVA_BYTE, a + byteWidth - 1);
+        byte topB = values.get(ValueLayout.JAVA_BYTE, b + byteWidth - 1);
+        if (topA != topB) {
+            return Byte.compare(topA, topB);
+        }
+        for (int i = byteWidth - 2; i >= 0; i--) {
+            int x = values.get(ValueLayout.JAVA_BYTE, a + i) & 0xff;
+            int y = values.get(ValueLayout.JAVA_BYTE, b + i) & 0xff;
+            if (x != y) {
+                return Integer.compare(x, y);
+            }
+        }
+        return 0;
+    }
+
+    private static byte[] decimalScalar(MemorySegment values, long offset, int byteWidth) {
+        return ProtoScalarValue.ofBytesValue(
+                values.asSlice(offset, byteWidth).toArray(ValueLayout.JAVA_BYTE)).encode();
+    }
+
+    private static byte[] decimalScalar(long value) {
+        byte[] le = new byte[Long.BYTES];
+        for (int i = 0; i < Long.BYTES; i++) {
+            le[i] = (byte) (value >>> (8 * i));
+        }
+        return ProtoScalarValue.ofBytesValue(le).encode();
     }
 
     /// The min half of an [#of(DType, Object)] result, or `null`.

@@ -36,6 +36,10 @@ public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
         EncodeNode mspNode = EncodeNode.remapBufferIndices(mspResult.rootNode(), 0);
         EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_DECIMAL_BYTE_PARTS, metaBuf, new EncodeNode[]{mspNode}, new int[]{});
-        return new EncodeResult(root, List.copyOf(mspResult.buffers()), null, null);
+        // The metadata above declares zero low parts, so each i64 most-significant part is the
+        // whole unscaled value and bounds it exactly. A build that starts emitting low parts must
+        // fold them in here rather than keep reporting the msp alone.
+        return new EncodeResult(root, List.copyOf(mspResult.buffers()), null, null)
+                .withStats(ZoneMapStats.ofDecimal(longs));
     }
 }

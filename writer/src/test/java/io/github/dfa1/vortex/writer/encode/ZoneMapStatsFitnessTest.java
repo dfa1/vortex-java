@@ -37,10 +37,10 @@ class ZoneMapStatsFitnessTest {
         /// Need not: a container, a validity/offset child, or a column with no scalar ordering.
         /// Rust's `Stat::dtype` returns null for these too.
         EXEMPT,
-        /// Owes bounds and does not report them yet. Recorded rather than classified EXEMPT,
-        /// because calling a real gap "exempt" is exactly the quiet default this test exists to
-        /// stop. Tracked in issue #417; the list may shrink, and
-        /// [#knownGaps_haveNotGrown()] fails if it grows.
+        /// Owes bounds and does not report them yet. No encoding currently holds this verdict and
+        /// [#noEncodingOwesBoundsItDoesNotReport()] asserts that. It exists so a genuine gap has
+        /// somewhere honest to be recorded: classifying one EXEMPT instead would be the quiet
+        /// default this whole test exists to stop.
         KNOWN_GAP
     }
 
@@ -83,13 +83,13 @@ class ZoneMapStatsFitnessTest {
         m.put(EncodingId.VORTEX_VARIANT, Verdict.EXEMPT);
         m.put(EncodingId.VORTEX_NULL, Verdict.EXEMPT);
         m.put(EncodingId.VORTEX_BYTEBOOL, Verdict.EXEMPT);
-        // Orderable, but no scalar encoding exists for the bounds: ProtoScalarValue has no
-        // decimal variant, so a decimal min/max cannot be serialized at all. Needs the scalar
-        // representation settled against the Rust reference first — see issue #417.
         m.put(EncodingId.VORTEX_SPARSE, Verdict.BOUNDS);
         m.put(EncodingId.VORTEX_PATCHED, Verdict.BOUNDS);
-        m.put(EncodingId.VORTEX_DECIMAL, Verdict.KNOWN_GAP);
-        m.put(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, Verdict.KNOWN_GAP);
+        // A decimal bound is encoded as bytes_value holding the unscaled integer little-endian at
+        // the column's storage width, which is what the Rust reference writes — ScalarValue has no
+        // decimal variant in either schema.
+        m.put(EncodingId.VORTEX_DECIMAL, Verdict.BOUNDS);
+        m.put(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, Verdict.BOUNDS);
         return Map.copyOf(m);
     }
 
@@ -119,11 +119,9 @@ class ZoneMapStatsFitnessTest {
     }
 
     @Test
-    void knownGaps_haveNotGrown() {
-        // Given — the encodings that owe bounds and do not yet report them (issue #417)
-        Set<EncodingId> expected = Set.of(
-                EncodingId.VORTEX_DECIMAL,
-                EncodingId.VORTEX_DECIMAL_BYTE_PARTS);
+    void noEncodingOwesBoundsItDoesNotReport() {
+        // Given — nothing is outstanding: every encoding that owes bounds now reports them
+        Set<EncodingId> expected = Set.of();
 
         // When
         Set<EncodingId> actual = CLASSIFICATION.entrySet().stream()
@@ -131,9 +129,9 @@ class ZoneMapStatsFitnessTest {
                 .map(Map.Entry::getKey)
                 .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
 
-        // Then — fixing one means deleting it from both lists; adding one is not allowed
+        // Then — the list is empty and must stay that way; a new gap fails here (issue #417)
         assertThat(actual)
-                .as("a new zone-map gap was introduced, or a fixed one was left listed (issue #417)")
+                .as("a new zone-map gap was introduced (issue #417)")
                 .isEqualTo(expected);
     }
 
@@ -161,6 +159,9 @@ class ZoneMapStatsFitnessTest {
         // Mostly the zero fill value sparse encodes around, with a couple of real values: the
         // bounds must cover the patches, not just the fill.
         long[] sparse = {0L, 0L, 0L, 7L, 0L, 0L, 99L, 0L};
+        // Precision 9 packs into i32; a negative value proves the two's-complement comparison.
+        java.lang.foreign.MemorySegment decimals =
+                java.lang.foreign.MemorySegment.ofArray(new int[]{500, -250, 1234, 7});
         return Stream.of(
                 Arguments.of(EncodingId.VORTEX_PRIMITIVE, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_VARBIN, DTypes.UTF8, words),
@@ -173,6 +174,10 @@ class ZoneMapStatsFitnessTest {
                 Arguments.of(EncodingId.VORTEX_EXT,
                         new DType.Extension("vortex.timestamp", DType.I64, null, false), ascending),
                 Arguments.of(EncodingId.VORTEX_SPARSE, DTypes.I64, sparse),
-                Arguments.of(EncodingId.VORTEX_PATCHED, DTypes.I64, ascending));
+                Arguments.of(EncodingId.VORTEX_PATCHED, DTypes.I64, ascending),
+                Arguments.of(EncodingId.VORTEX_DECIMAL, new DType.Decimal((byte) 9, (byte) 2, false),
+                        decimals),
+                Arguments.of(EncodingId.VORTEX_DECIMAL_BYTE_PARTS,
+                        new DType.Decimal((byte) 18, (byte) 2, false), ascending));
     }
 }

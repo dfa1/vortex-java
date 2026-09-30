@@ -33,7 +33,7 @@ public final class DecimalEncodingEncoder implements EncodingEncoder {
         }
         MemorySegment metaBuf = MemorySegment.ofArray(new ProtoDecimalMetadata(valuesType).encode());
         EncodeNode node = new EncodeNode(EncodingId.VORTEX_DECIMAL, metaBuf, new EncodeNode[0], new int[]{0});
-        return new EncodeResult(node, List.of(seg), null, null);
+        return new EncodeResult(node, List.of(seg), null, null).withStats(ZoneMapStats.ofDecimal(seg, bw));
     }
 
     private static int valuesType(byte precision) {
