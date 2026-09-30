@@ -7,9 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-09-30
+
+### Highlights
+
+- **See inside a file.** `vortex inspect --html data.vortex > report.html` writes a single
+  self-contained page: where every column's bytes physically sit, what each column costs, which
+  encoding it uses, and the per-chunk row ranges and min/max behind it. No scripts, no CDN.
+- **Timestamps get a lot smaller.** A `vortex.timestamp` column now competes as
+  `vortex.datetimeparts` the way the Rust reference does. On a 400k-row sensor table that column
+  went 1.4 MB to 835 KB, and the file 3.3 MB to 2.8 MB, at no measurable write cost.
+- **Zone maps work whatever encoding wins.** Eight encodings silently wrote no MIN/MAX, so a column
+  lost pruning and `MIN`/`MAX` push-down purely because the compressor happened to pick one of
+  them. All fixed, and a new test fails the build if a future encoding forgets.
+- **Dictionary columns prune again.** A `WHERE` on a global-dictionary column used to decode every
+  chunk, and whole-table `MIN`/`MAX` fell back to a full scan.
+- **Writes are faster.** Cascade sampling now matches the Rust reference and the encode path stops
+  boxing its hot loops — roughly a third less write time on the same output.
+- **One breaking change**, for custom encodings only: a cascading encoder's `ChildSlot` now declares
+  its own exclusions. See the `Changed` section.
+
 ### Added
 
-- Each column in the `inspect --html` schema panel now names the encoding a reader dispatches on for it, and fixed-width columns show how much smaller they are on disk than unencoded (`400,000 rows of I64` is 3.1 MB raw against 781 KB stored, so `4.0x`). Variable-width columns claim no ratio, since the footer does not record what they would occupy unencoded.
+- Each column in the `inspect --html` schema panel now names the encoding a reader dispatches on for it, and fixed-width columns show how much smaller they are on disk than unencoded (`400,000 rows of I64` is 3.1 MB raw against 781 KB stored, so `4.0x`). Variable-width columns claim no ratio, since the footer does not record what they would occupy unencoded. ([2ee03bc](https://github.com/dfa1/vortex-java/commit/2ee03bc6))
 - `inspect --html` writes a self-contained HTML report of a file: a byte-accurate map of where every column's bytes sit, per-column size share, and per-chunk row ranges, min/max and sizes. The trailing metadata region gets its own magnified strip, since a few KB of footer next to megabytes of columns is otherwise invisible. ([d62af4f](https://github.com/dfa1/vortex-java/commit/d62af4f9))
 - `MIN`/`MAX` over a `VARCHAR` column now push down to a zone-map-stats-only `LogicalValues`, matching the existing numeric push-down. ([#406](https://github.com/dfa1/vortex-java/issues/406))
 
@@ -24,13 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `inspect --html` takes its column list from the file's dtype rather than its layout. A struct stored under a single flat layout node - the shape the Rust writer produces - was reported as one column named `col0` carrying the first field's type, with every other field dropped. Such a file now lists all its columns and says plainly that their bytes are shared rather than inventing a per-column size.
+- `inspect --html` takes its column list from the file's dtype rather than its layout. A struct stored under a single flat layout node - the shape the Rust writer produces - was reported as one column named `col0` carrying the first field's type, with every other field dropped. Such a file now lists all its columns and says plainly that their bytes are shared rather than inventing a per-column size. ([0b3f84f](https://github.com/dfa1/vortex-java/commit/0b3f84fa))
 - `vortex.varbinview`, `vortex.zstd`, `fastlanes.rle`, `vortex.pco`, `vortex.sparse` and `vortex.patched` now write MIN/MAX zone-map stats. Each dropped them, so a column lost zone-map pruning and `MIN`/`MAX` push-down whenever the compressor happened to pick that encoding. `vortex.decimal` and `vortex.decimal_byte_parts` encode theirs as the unscaled integer little-endian, which is what the Rust reference writes - `ScalarValue` has no decimal variant in either schema. Every encoding that owes bounds now reports them, and a fitness test fails the build if a new one does not. ([#417](https://github.com/dfa1/vortex-java/issues/417))
 - `vortex.datetimeparts` now writes MIN/MAX zone-map stats, taken from the undivided timestamps: none of its days/seconds/subseconds children orders the column, so without this the encoding traded a column's zone map for its size. ([#417](https://github.com/dfa1/vortex-java/issues/417))
-- `vortex.ext` now writes MIN/MAX zone-map stats, in storage space. An extension column - a timestamp, a date - carried no zone map at all: the terminal path discarded the bounds its storage encode had already computed, and the cascading path never computed any. The reader already resolves an extension column's MIN/MAX against its storage dtype, mirroring Rust.
-- `inspect --html` renders a `vortex.timestamp` or `vortex.date` column's zone-map bounds as instants and dates rather than the raw epoch integers they are stored as.
-- `inspect --html` compares an extension column against its storage width, so a `vortex.timestamp` column now reports an unencoded size and ratio instead of none.
-- `vortex.fsst` now writes MIN/MAX zone-map stats. A high-cardinality string column gets no dictionary wrapper, so FSST was the only encoder in its chain and the column ended up with no bounds at all - no zone-map pruning and no `MIN`/`MAX` push-down. Low-cardinality strings were unaffected, because `vortex.dict` computes its own.
+- `vortex.ext` now writes MIN/MAX zone-map stats, in storage space. An extension column - a timestamp, a date - carried no zone map at all: the terminal path discarded the bounds its storage encode had already computed, and the cascading path never computed any. The reader already resolves an extension column's MIN/MAX against its storage dtype, mirroring Rust. ([#417](https://github.com/dfa1/vortex-java/issues/417))
+- `inspect --html` renders a `vortex.timestamp` or `vortex.date` column's zone-map bounds as instants and dates rather than the raw epoch integers they are stored as. ([c949ec7](https://github.com/dfa1/vortex-java/commit/c949ec7f))
+- `inspect --html` compares an extension column against its storage width, so a `vortex.timestamp` column now reports an unencoded size and ratio instead of none. ([efe4f22](https://github.com/dfa1/vortex-java/commit/efe4f22c))
+- `vortex.fsst` now writes MIN/MAX zone-map stats. A high-cardinality string column gets no dictionary wrapper, so FSST was the only encoder in its chain and the column ended up with no bounds at all - no zone-map pruning and no `MIN`/`MAX` push-down. Low-cardinality strings were unaffected, because `vortex.dict` computes its own. ([#417](https://github.com/dfa1/vortex-java/issues/417))
 - `vortex.dict` on a primitive column now writes the `DictMetadata` protobuf and `[codes, values]` child order the Rust reader expects, instead of a legacy 1-byte metadata the Rust reader rejected outright. ([#410](https://github.com/dfa1/vortex-java/issues/410))
 - `VortexReader#columnStats()` folds a column's zone-map table instead of the flat nodes beneath it, so a global-dictionary column (Utf8 or numeric) reports its real `MIN`/`MAX`/null count instead of nothing, and the whole-table aggregate push-down no longer abandons to a full scan for such a column. ([#409](https://github.com/dfa1/vortex-java/issues/409))
 - Zone-map chunk pruning now works for a global-dictionary column, whose per-chunk codes sit under a `vortex.dict` layout node that chunk planning records as one full-range chunk: the zone index now comes from the code chunks' own boundaries. A `WHERE` on such a column used to decode every chunk. ([#409](https://github.com/dfa1/vortex-java/issues/409))
