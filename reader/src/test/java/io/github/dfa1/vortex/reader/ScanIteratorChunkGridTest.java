@@ -85,26 +85,6 @@ class ScanIteratorChunkGridTest {
     }
 
     @Test
-    void chunkOrdinalsTrackPositionWithinEachColumnsOwnChunkList() {
-        // Given the same 1-vs-N shape: one full-column flat [8] (A, a single physical chunk) beside
-        // a chunked column [4, 4] (B, two physical chunks).
-        var columnFlats = flats(A, new long[]{8}, B, new long[]{4, 4});
-
-        // When
-        List<ChunkSpec> result = ScanIterator.buildChunks(columnFlats);
-
-        // Then A's ordinal stays 0 in both windows — its one physical chunk spans both, so the
-        // ordinal must not increment per window — while B's ordinal advances to its second chunk.
-        // This is the invariant this writer's own zone-map pruning fast path (#380) relies on: for
-        // the legacy vortex.stats layout, zone order always matches physical chunk order 1:1, so a
-        // window's chunk ordinal directly indexes the decoded zone table.
-        assertThat(result.get(0).chunkOrdinalFor(A)).isZero();
-        assertThat(result.get(0).chunkOrdinalFor(B)).isZero();
-        assertThat(result.get(1).chunkOrdinalFor(A)).isZero();
-        assertThat(result.get(1).chunkOrdinalFor(B)).isEqualTo(1);
-    }
-
-    @Test
     void nestedBoundariesSliceTheCoarseColumnAtTheFineGrid() {
         // Given the emotions-dataset-for-nlp shape scaled down: a coarse column [8, 8, 8, 4] (like
         // `label`'s [131072 ×3, 23593]) beside a fine column of 2-row chunks (like `text`'s 16384

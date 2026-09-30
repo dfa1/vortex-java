@@ -106,7 +106,7 @@ public final class VortexInspector {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Object pickMin(Object a, Object b) {
+    static Object pickMin(Object a, Object b) {
         if (a == null) {
             return b;
         }
@@ -120,7 +120,7 @@ public final class VortexInspector {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Object pickMax(Object a, Object b) {
+    static Object pickMax(Object a, Object b) {
         if (a == null) {
             return b;
         }
