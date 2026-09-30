@@ -2,11 +2,14 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.SegmentSpec;
+import io.github.dfa1.vortex.reader.extension.ExtensionStorage;
 import io.github.dfa1.vortex.reader.layout.Layout;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -208,8 +211,8 @@ public final class HtmlReport {
             ChunkView chunk = column.chunks().get(i);
             Long nulls = chunk.stats().nullCount();
             sb.append("<tr><td>").append(i).append("</td><td class=\"num\">")
-                    .append(rowRange(chunk)).append("</td><td>").append(value(chunk.stats().min()))
-                    .append("</td><td>").append(value(chunk.stats().max())).append("</td><td class=\"num\">")
+                    .append(rowRange(chunk)).append("</td><td>").append(value(chunk.stats().min(), column.type()))
+                    .append("</td><td>").append(value(chunk.stats().max(), column.type())).append("</td><td class=\"num\">")
                     .append(nulls == null ? "<span class=\"muted\">-</span>" : count(nulls))
                     .append("</td><td class=\"num sized\">");
             bar(sb, chunk.bytes(), widestChunk, fill(column.index()));
@@ -251,8 +254,8 @@ public final class HtmlReport {
                 ChunkView chunk = column.chunks().get(index);
                 sb.append("<tr><td><i class=\"dot\" style=\"background:").append(fill(column.index()))
                         .append("\"></i><code>").append(escape(column.name())).append("</code></td><td>")
-                        .append(value(chunk.stats().min())).append("</td><td>")
-                        .append(value(chunk.stats().max())).append("</td><td class=\"num sized\">");
+                        .append(value(chunk.stats().min(), column.type())).append("</td><td>")
+                        .append(value(chunk.stats().max(), column.type())).append("</td><td class=\"num sized\">");
                 bar(sb, chunk.bytes(), bytes, fill(column.index()));
                 sb.append(ByteSize.format(chunk.bytes())).append("</td></tr>\n");
             }
@@ -264,9 +267,9 @@ public final class HtmlReport {
 
     /// One top-level column: its slot in the palette, name, rendered dtype, bytes on disk,
     /// encodings seen anywhere in its subtree, and its chunks left to right.
-    private record ColumnView(int index, String name, String dtype, String storageType, long bytes,
-            boolean attributed, long rawBytes, Set<String> encodings, Set<String> dispatchEncodings,
-            List<ChunkView> chunks) {
+    private record ColumnView(int index, String name, DType type, String dtype, String storageType,
+            long bytes, boolean attributed, long rawBytes, Set<String> encodings,
+            Set<String> dispatchEncodings, List<ChunkView> chunks) {
     }
 
     /// One chunk of one column.
@@ -294,6 +297,7 @@ public final class HtmlReport {
             columns.add(new ColumnView(
                     i,
                     names.get(i),
+                    type,
                     dtype,
                     storageType(type),
                     node == null ? 0L : subtreeBytes(node, tree.segmentSpecs()),
@@ -352,7 +356,7 @@ public final class HtmlReport {
     /// layout does not break the file down per column.
     private static ColumnView wholeFile(InspectorTree tree) {
         List<ChunkView> chunks = chunks(tree.root(), tree.segmentSpecs(), tree.segmentEncodings());
-        return new ColumnView(-1, "all columns", "", "", subtreeBytes(tree.root(), tree.segmentSpecs()),
+        return new ColumnView(-1, "all columns", null, "", "", subtreeBytes(tree.root(), tree.segmentSpecs()),
                 true, 0L, tree.root().usedEncodings(), dispatchEncodings(chunks), chunks);
     }
 
@@ -560,15 +564,36 @@ public final class HtmlReport {
         return count(chunk.firstRow()) + "-" + count(chunk.firstRow() + chunk.rows() - 1);
     }
 
-    private static String value(Object raw) {
+    private static String value(Object raw, DType type) {
         if (raw == null) {
             return "<span class=\"muted\">-</span>";
         }
-        String text = raw.toString();
+        String text = String.valueOf(readable(raw, type));
         if (text.length() > MAX_VALUE_CHARS) {
             text = text.substring(0, MAX_VALUE_CHARS - 1) + "…";
         }
         return "<code>" + escape(text) + "</code>";
+    }
+
+    /// Renders a zone-map scalar the way the column reads rather than the way it is stored. An
+    /// extension column records its bounds in storage space, so a `vortex.timestamp` min/max
+    /// arrives as a bare epoch integer; showing `1704067200000` where the same column stored as
+    /// utf8 showed `2024-01-01T00:00:00` would make the better-typed file the harder one to read.
+    /// Anything unrecognized, and any metadata this cannot parse - the bytes come from an
+    /// untrusted file - falls back to the raw value rather than failing the render.
+    private static Object readable(Object raw, DType type) {
+        if (!(type instanceof DType.Extension ext) || !(raw instanceof Long epoch)) {
+            return raw;
+        }
+        try {
+            return switch (ExtensionId.parse(ext.extensionId()).orElse(null)) {
+                case VORTEX_TIMESTAMP -> ExtensionStorage.instantFromRaw(epoch, ExtensionStorage.readUnit(ext));
+                case VORTEX_DATE -> LocalDate.ofEpochDay(epoch);
+                case null, default -> raw;
+            };
+        } catch (RuntimeException e) {
+            return raw;
+        }
     }
 
     /// Escapes text for interpolation into element content or a double-quoted attribute.

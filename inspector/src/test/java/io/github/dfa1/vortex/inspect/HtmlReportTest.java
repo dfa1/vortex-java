@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.reader.SegmentSpec;
@@ -486,6 +487,59 @@ class HtmlReportTest {
 
         // Then
         assertThat(result).doesNotContain("unencoded");
+    }
+
+    @Test
+    void render_timestampColumn_showsBoundsAsInstantsNotEpochIntegers() {
+        // Given — an extension column records its zone map in storage space, so a timestamp's
+        // min/max arrive as bare epoch millis. Printing 1704067200000 where the same data stored as
+        // utf8 printed 2024-01-01T00:00:00 would make the better-typed file the harder one to read.
+        DType.Extension ts = TimestampDtype.of(false);
+        Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 2, null, List.of(), List.of(0));
+        Layout root = new Layout(LayoutId.parse("vortex.struct"), 2, null, List.of(leaf), List.of());
+        InspectorTree.Node leafNode = new InspectorTree.Node(leaf, Optional.of("ts"), Set.of(),
+                new ArrayStats(1_704_067_200_000L, 1_706_867_193_000L, null, null, null, null, null),
+                List.of());
+        InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of(leafNode));
+        InspectorTree sut = new InspectorTree(1, 1024L,
+                new DType.Struct(List.of(ColumnName.of("ts")), List.of(ts), false),
+                List.of("vortex.ext"), Set.of(),
+                List.of(new SegmentSpec(0, 512, (byte) 0, CompressionScheme.NONE)),
+                2L, Map.of(), rootNode);
+
+        // When
+        String result = HtmlReport.render(sut, "ts.vortex");
+
+        // Then
+        assertThat(result)
+                .contains("2024-01-01T00:00:00Z")
+                .contains("2024-02-02T09:46:33Z")
+                .doesNotContain("1704067200000");
+    }
+
+    @Test
+    void render_timestampColumn_comparesAgainstItsStorageWidth() {
+        // Given — the ratio must look through the extension to the i64 underneath, or a timestamp
+        // column reports no unencoded size at all
+        DType.Extension ts = TimestampDtype.of(false);
+        Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 1000, null, List.of(), List.of(0));
+        Layout root = new Layout(LayoutId.parse("vortex.struct"), 1000, null, List.of(leaf), List.of());
+        InspectorTree.Node leafNode = new InspectorTree.Node(leaf, Optional.of("ts"), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of(leafNode));
+        InspectorTree sut = new InspectorTree(1, 4096L,
+                new DType.Struct(List.of(ColumnName.of("ts")), List.of(ts), false),
+                List.of("vortex.ext"), Set.of(),
+                List.of(new SegmentSpec(0, 2048, (byte) 0, CompressionScheme.NONE)),
+                1000L, Map.of(), rootNode);
+
+        // When
+        String result = HtmlReport.render(sut, "ts.vortex");
+
+        // Then — 1000 rows of i64 is 7.8 KB unencoded against 2.0 KB stored
+        assertThat(result).contains("7.8 KB unencoded (1,000 rows of I64)").contains("3.9x");
     }
 
     private static InspectorTree twoColumnTree() {
