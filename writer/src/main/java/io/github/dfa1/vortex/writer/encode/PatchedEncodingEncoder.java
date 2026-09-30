@@ -48,12 +48,14 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        return Encoder.encode(dtype, data, ctx);
+        // `data` is the whole logical column; the inner values and the patched exceptions are both
+        // derived from it, so the column's bounds are its bounds.
+        return Encoder.encode(dtype, data, ctx).withStats(ZoneMapStats.of(dtype, data));
     }
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
-        return Encoder.encodeCascade(dtype, data);
+        return Encoder.encodeCascade(dtype, data).withStats(ZoneMapStats.of(dtype, data));
     }
 
     private static final class Encoder {

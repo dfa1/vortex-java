@@ -30,6 +30,19 @@ public record CascadeStep(
         byte[] statsMax,
         boolean applicable
 ) {
+    /// This step with zone-map bounds attached, for an encoder whose entry point knows the
+    /// column's values but whose step is assembled deeper down. A step that is not applicable is
+    /// returned unchanged: it carries no node for the bounds to belong to.
+    ///
+    /// @param stats a `{min, max}` pair from [ZoneMapStats#of(io.github.dfa1.vortex.core.model.DType, Object)],
+    ///              or `null` when the input carried nothing to bound
+    /// @return a copy of this step carrying `stats`
+    public CascadeStep withStats(byte[][] stats) {
+        return stats == null || !applicable
+                ? this
+                : new CascadeStep(partialRoot, ownedBuffers, openChildren, stats[0], stats[1], applicable);
+    }
+
     /// Convenience: terminal step — no open children, result is final.
     ///
     /// @param result the fully-resolved encode result to wrap

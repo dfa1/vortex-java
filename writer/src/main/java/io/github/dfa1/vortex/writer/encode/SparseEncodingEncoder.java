@@ -77,6 +77,9 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     /// Airport_fee / congestion_surcharge.
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        // `data` is the whole logical column -- the fill value and patch positions are derived
+        // from it below -- so the column's bounds are just its bounds, patches included.
+        byte[][] stats = ZoneMapStats.of(dtype, data);
         if (!(dtype instanceof DType.Primitive p)) {
             return CascadeStep.notApplicable();
         }
@@ -128,7 +131,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         DType idxDtype = new DType.Primitive(idxPtype, false);
         ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0, SELF);
         ChildSlot valSlot = new ChildSlot(dtype, valArr, 1, SELF);
-        return new CascadeStep(partialRoot, List.of(fillBuf), List.of(idxSlot, valSlot), null, null, true);
+        return new CascadeStep(partialRoot, List.of(fillBuf), List.of(idxSlot, valSlot), ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }
 
     private static Object idxArr(List<Integer> patchIdx, PType idxPtype) {
@@ -334,7 +337,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_SPARSE, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{idxNode, valNode}, new int[]{0});
-        return new EncodeResult(root, List.of(fillBuf, idxBuf, valBuf), null, null);
+        return new EncodeResult(root, List.of(fillBuf, idxBuf, valBuf), null, null).withStats(ZoneMapStats.of(dtype, data));
     }
 
     private static int arrayLength(Object data, PType ptype) {

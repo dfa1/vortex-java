@@ -83,9 +83,11 @@ class ZoneMapStatsFitnessTest {
         m.put(EncodingId.VORTEX_VARIANT, Verdict.EXEMPT);
         m.put(EncodingId.VORTEX_NULL, Verdict.EXEMPT);
         m.put(EncodingId.VORTEX_BYTEBOOL, Verdict.EXEMPT);
-        // Orderable, but not reporting bounds yet — see issue #417.
-        m.put(EncodingId.VORTEX_SPARSE, Verdict.KNOWN_GAP);
-        m.put(EncodingId.VORTEX_PATCHED, Verdict.KNOWN_GAP);
+        // Orderable, but no scalar encoding exists for the bounds: ProtoScalarValue has no
+        // decimal variant, so a decimal min/max cannot be serialized at all. Needs the scalar
+        // representation settled against the Rust reference first — see issue #417.
+        m.put(EncodingId.VORTEX_SPARSE, Verdict.BOUNDS);
+        m.put(EncodingId.VORTEX_PATCHED, Verdict.BOUNDS);
         m.put(EncodingId.VORTEX_DECIMAL, Verdict.KNOWN_GAP);
         m.put(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, Verdict.KNOWN_GAP);
         return Map.copyOf(m);
@@ -120,8 +122,6 @@ class ZoneMapStatsFitnessTest {
     void knownGaps_haveNotGrown() {
         // Given — the encodings that owe bounds and do not yet report them (issue #417)
         Set<EncodingId> expected = Set.of(
-                EncodingId.VORTEX_SPARSE,
-                EncodingId.VORTEX_PATCHED,
                 EncodingId.VORTEX_DECIMAL,
                 EncodingId.VORTEX_DECIMAL_BYTE_PARTS);
 
@@ -158,6 +158,9 @@ class ZoneMapStatsFitnessTest {
     private static Stream<Arguments> boundsOwingSamples() {
         long[] ascending = {10L, 20L, 30L, 40L, 50L, 60L, 70L, 80L};
         String[] words = {"pear", "apple", "quince", "banana"};
+        // Mostly the zero fill value sparse encodes around, with a couple of real values: the
+        // bounds must cover the patches, not just the fill.
+        long[] sparse = {0L, 0L, 0L, 7L, 0L, 0L, 99L, 0L};
         return Stream.of(
                 Arguments.of(EncodingId.VORTEX_PRIMITIVE, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_VARBIN, DTypes.UTF8, words),
@@ -168,6 +171,8 @@ class ZoneMapStatsFitnessTest {
                 Arguments.of(EncodingId.VORTEX_PCO, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_ZIGZAG, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_EXT,
-                        new DType.Extension("vortex.timestamp", DType.I64, null, false), ascending));
+                        new DType.Extension("vortex.timestamp", DType.I64, null, false), ascending),
+                Arguments.of(EncodingId.VORTEX_SPARSE, DTypes.I64, sparse),
+                Arguments.of(EncodingId.VORTEX_PATCHED, DTypes.I64, ascending));
     }
 }
