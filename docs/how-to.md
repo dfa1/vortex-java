@@ -78,6 +78,12 @@ java -jar cli/target/vortex-cli-*-all.jar inspect --html data.vortex > report.ht
 open report.html
 ```
 
+Each schema row names the encoding a reader dispatches on for that column
+(`fastlanes.for`, `vortex.fsst`, `vortex.dict`, …) and, for fixed-width columns, how much
+smaller it is on disk than unencoded — `400,000 rows of I64` is 3.1 MB raw against 781 KB
+stored, so `4.0x`. Variable-width columns claim no ratio: what a utf8 column would occupy
+unencoded depends on its contents, which the footer does not record.
+
 Columns are colored in a fixed palette order that is validated for color-vision
 deficiency in both light and dark mode; past the eighth column the strip falls back to a
 neutral fill and the schema table names every column regardless. Click a column or a

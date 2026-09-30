@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Each column in the `inspect --html` schema panel now names the encoding a reader dispatches on for it, and fixed-width columns show how much smaller they are on disk than unencoded (`400,000 rows of I64` is 3.1 MB raw against 781 KB stored, so `4.0x`). Variable-width columns claim no ratio, since the footer does not record what they would occupy unencoded.
 - `inspect --html` writes a self-contained HTML report of a file: a byte-accurate map of where every column's bytes sit, per-column size share, and per-chunk row ranges, min/max and sizes. The trailing metadata region gets its own magnified strip, since a few KB of footer next to megabytes of columns is otherwise invisible. ([d62af4f](https://github.com/dfa1/vortex-java/commit/d62af4f9))
 - `MIN`/`MAX` over a `VARCHAR` column now push down to a zone-map-stats-only `LogicalValues`, matching the existing numeric push-down. ([#406](https://github.com/dfa1/vortex-java/issues/406))
 

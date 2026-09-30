@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.SegmentSpec;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -76,7 +77,7 @@ class VortexInspectorTest {
                 DType.I32,
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 256, (byte) 0, CompressionScheme.NONE)),
-                100L, root);
+                100L, Map.of(), root);
 
         // When
         String result = VortexInspector.render(sut);
@@ -116,7 +117,7 @@ class VortexInspectorTest {
                 1, 1024L,
                 new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I32), false),
                 List.of("vortex.flat"), Set.of(),
-                List.of(), 1000L, rootN);
+                List.of(), 1000L, Map.of(), rootN);
 
         // When
         String result = VortexInspector.render(sut);
@@ -144,7 +145,7 @@ class VortexInspectorTest {
 
         InspectorTree sut = new InspectorTree(1, 1024L,
                 new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false),
-                List.of("vortex.flat"), Set.of(), List.of(), 1000L, rootN);
+                List.of("vortex.flat"), Set.of(), List.of(), 1000L, Map.of(), rootN);
 
         // When
         String result = VortexInspector.render(sut);
@@ -197,6 +198,6 @@ class VortexInspectorTest {
 
         return new InspectorTree(version, fileSize, dtype,
                 List.of("vortex.flat", "fastlanes.bitpacked", "vortex.constant"),
-                usedById, specs, 1000L, rootNode);
+                usedById, specs, 1000L, Map.of(), rootNode);
     }
 }

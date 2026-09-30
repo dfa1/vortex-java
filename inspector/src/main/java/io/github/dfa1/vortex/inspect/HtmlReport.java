@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.layout.Layout;
@@ -9,6 +10,7 @@ import io.github.dfa1.vortex.reader.layout.Layout;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -80,7 +82,8 @@ public final class HtmlReport {
         stat(sb, "Size", ByteSize.format(tree.fileSize()));
         stat(sb, "Rows", count(tree.totalRowCount()));
         stat(sb, "Columns", count(columns.size()));
-        stat(sb, "Chunks", count(Math.max(chunkCount(columns), chunks(tree.root(), tree.segmentSpecs()).size())));
+        stat(sb, "Chunks", count(Math.max(chunkCount(columns),
+                chunks(tree.root(), tree.segmentSpecs(), tree.segmentEncodings()).size())));
         stat(sb, "Segments", count(tree.segmentCount()));
         stat(sb, "Metadata", ByteSize.format(metadataBytes(tree)));
         sb.append("</dl>\n<div class=\"badges\">\n");
@@ -168,25 +171,37 @@ public final class HtmlReport {
                 .append(fill(column.index())).append("\"></i><code class=\"name\">")
                 .append(escape(column.name())).append("</code><code class=\"dtype\">")
                 .append(escape(column.dtype())).append("</code>");
+        if (!column.dispatchEncodings().isEmpty()) {
+            sb.append("<code class=\"enc\">")
+                    .append(escape(String.join(" + ", column.dispatchEncodings()))).append("</code>");
+        }
         if (column.attributed()) {
             bar(sb, column.bytes(), widest, fill(column.index()));
         }
         sb.append("<span class=\"size\">")
                 .append(column.attributed() ? ByteSize.format(column.bytes()) : "shared")
-                .append("</span></summary>\n<div class=\"detail\">\n<p class=\"meta\">");
+                .append("</span><span class=\"ratio\">").append(ratio(column)).append("</span>")
+                .append("</summary>\n<div class=\"detail\">\n<p class=\"meta\">");
         if (!column.attributed()) {
             sb.append("This file keeps every column in one layout node, so its bytes cannot be")
                     .append(" attributed to a single column. See the chunks panel for the file as a whole.")
                     .append("</p>\n</div>\n</details>\n");
             return;
         }
-        sb.append(ByteSize.format(column.bytes())).append(" (")
-                .append(percent(column.bytes(), tree.fileSize())).append(" of file), ")
+        sb.append(ByteSize.format(column.bytes())).append(" \u00b7 ")
+                .append(percent(column.bytes(), tree.fileSize())).append(" of file \u00b7 ")
                 .append(count(column.chunks().size())).append(" chunks");
-        if (!column.encodings().isEmpty()) {
-            sb.append(", ").append(escape(String.join(", ", column.encodings())));
+        if (column.rawBytes() > 0) {
+            sb.append(" \u00b7 ").append(ByteSize.format(column.rawBytes())).append(" unencoded (")
+                    .append(count(tree.totalRowCount())).append(" rows of ")
+                    .append(escape(column.dtype())).append(")");
         }
-        sb.append("</p>\n<table>\n<thead><tr><th>chunk</th><th>rows</th><th>min</th><th>max</th>")
+        sb.append("</p>\n");
+        if (!column.encodings().isEmpty()) {
+            sb.append("<p class=\"meta\">everything in the encoding tree: ")
+                    .append(escape(String.join(", ", column.encodings()))).append("</p>\n");
+        }
+        sb.append("<table>\n<thead><tr><th>chunk</th><th>rows</th><th>min</th><th>max</th>")
                 .append("<th>nulls</th><th>size</th></tr></thead>\n<tbody>\n");
         long widestChunk = column.chunks().stream().mapToLong(ChunkView::bytes).max().orElse(1L);
         for (int i = 0; i < column.chunks().size(); i++) {
@@ -250,11 +265,11 @@ public final class HtmlReport {
     /// One top-level column: its slot in the palette, name, rendered dtype, bytes on disk,
     /// encodings seen anywhere in its subtree, and its chunks left to right.
     private record ColumnView(int index, String name, String dtype, long bytes, boolean attributed,
-            Set<String> encodings, List<ChunkView> chunks) {
+            long rawBytes, Set<String> encodings, Set<String> dispatchEncodings, List<ChunkView> chunks) {
     }
 
     /// One chunk of one column.
-    private record ChunkView(long firstRow, long rows, long bytes, ArrayStats stats) {
+    private record ChunkView(long firstRow, long rows, long bytes, ArrayStats stats, String encoding) {
     }
 
     /// Builds one view per column *of the schema*. Names and types always come from the dtype,
@@ -271,16 +286,43 @@ public final class HtmlReport {
         for (int i = 0; i < names.size(); i++) {
             InspectorTree.Node node = attributed ? nodes.get(i) : null;
             String dtype = i < types.size() ? VortexInspector.formatDType(types.get(i)) : "?";
+            List<ChunkView> chunks = node == null
+                    ? List.<ChunkView>of()
+                    : chunks(node, tree.segmentSpecs(), tree.segmentEncodings());
             columns.add(new ColumnView(
                     i,
                     names.get(i),
                     dtype,
                     node == null ? 0L : subtreeBytes(node, tree.segmentSpecs()),
                     node != null,
+                    rawBytes(i < types.size() ? types.get(i) : null, tree.totalRowCount()),
                     node == null ? Set.<String>of() : node.usedEncodings(),
-                    node == null ? List.<ChunkView>of() : chunks(node, tree.segmentSpecs())));
+                    dispatchEncodings(chunks),
+                    chunks));
         }
         return columns;
+    }
+
+    /// The distinct encodings a reader dispatches on across this column's chunks. Distinct from
+    /// [InspectorTree.Node#usedEncodings()], which is every id anywhere below - including the
+    /// primitive and bool scaffolding every column carries, which says nothing about how the
+    /// column is stored.
+    private static Set<String> dispatchEncodings(List<ChunkView> chunks) {
+        Set<String> found = new LinkedHashSet<>();
+        for (ChunkView chunk : chunks) {
+            if (chunk.encoding() != null) {
+                found.add(chunk.encoding());
+            }
+        }
+        return found;
+    }
+
+    /// What this column would occupy unencoded, or `0` when that is not a fixed number. Only
+    /// fixed-width primitives have an unambiguous answer (`rows` times the element width); the
+    /// size of a utf8, binary or list column depends on its contents, which the footer does not
+    /// record, so no ratio is claimed for those rather than a made-up one.
+    private static long rawBytes(DType dtype, long rows) {
+        return dtype instanceof DType.Primitive(PType ptype, boolean ignored) ? rows * ptype.byteSize() : 0L;
     }
 
     private static List<String> fieldNames(InspectorTree tree) {
@@ -293,8 +335,9 @@ public final class HtmlReport {
     /// One pseudo-column standing for the whole file, used to drive the chunks panel when the
     /// layout does not break the file down per column.
     private static ColumnView wholeFile(InspectorTree tree) {
+        List<ChunkView> chunks = chunks(tree.root(), tree.segmentSpecs(), tree.segmentEncodings());
         return new ColumnView(-1, "all columns", "", subtreeBytes(tree.root(), tree.segmentSpecs()),
-                true, tree.root().usedEncodings(), chunks(tree.root(), tree.segmentSpecs()));
+                true, 0L, tree.root().usedEncodings(), dispatchEncodings(chunks), chunks);
     }
 
     /// Byte offset one past the last segment - where the file's trailing metadata begins.
@@ -329,7 +372,8 @@ public final class HtmlReport {
 
     /// Descends from a column to the chunked node underneath and turns its children into chunks.
     /// A column with no chunked node below it has exactly one chunk.
-    private static List<ChunkView> chunks(InspectorTree.Node column, List<SegmentSpec> specs) {
+    private static List<ChunkView> chunks(InspectorTree.Node column, List<SegmentSpec> specs,
+            java.util.Map<Integer, String> segmentEncodings) {
         InspectorTree.Node node = column;
         InspectorTree.Node next = dataChild(node);
         while (!node.layout().isChunked() && next != null) {
@@ -342,7 +386,7 @@ public final class HtmlReport {
         for (InspectorTree.Node part : parts) {
             long rows = part.layout().rowCount();
             chunks.add(new ChunkView(firstRow, rows, subtreeBytes(part, specs),
-                    VortexInspector.aggregateStats(part)));
+                    VortexInspector.aggregateStats(part), chunkEncoding(part, segmentEncodings)));
             firstRow += rows;
         }
         return chunks;
@@ -362,6 +406,17 @@ public final class HtmlReport {
             return children.get(1);
         }
         return children.size() == 1 ? children.getFirst() : null;
+    }
+
+    /// The encoding at the root of this chunk's own segment - what a reader dispatches on to
+    /// decode it. Deliberately this node's segment only: walking the column's whole subtree would
+    /// also pick up the zone-map table hanging off the zoned node, whose array is a struct of
+    /// min/max columns and has nothing to do with how the column itself is stored.
+    private static String chunkEncoding(InspectorTree.Node node, java.util.Map<Integer, String> encodings) {
+        if (node.layout().isFlat() && !node.layout().segments().isEmpty()) {
+            return encodings.get(node.layout().segments().getFirst());
+        }
+        return null;
     }
 
     private static long subtreeBytes(InspectorTree.Node node, List<SegmentSpec> specs) {
@@ -451,6 +506,16 @@ public final class HtmlReport {
     private static void bar(StringBuilder sb, long value, long max, String fill) {
         sb.append("<span class=\"bar\"><i style=\"width:").append(width(value, max))
                 .append(";background:").append(fill).append("\"></i></span>");
+    }
+
+    /// How much smaller the column is on disk than unencoded, e.g. `4.0x`. Empty when the column
+    /// has no fixed unencoded size to compare against, or when encoding did not shrink it.
+    private static String ratio(ColumnView column) {
+        if (!column.attributed() || column.rawBytes() <= 0 || column.bytes() <= 0) {
+            return "";
+        }
+        double factor = (double) column.rawBytes() / column.bytes();
+        return factor < 1.05 ? "" : String.format(Locale.ROOT, "%.1fx", factor);
     }
 
     private static String fill(int column) {
@@ -599,6 +664,8 @@ public final class HtmlReport {
             .bar { margin-left: auto; width: 34%%; height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; display: flex; flex: none; }
             .bar i { display: block; height: 100%%; border-radius: 0 4px 4px 0; }
             .bar.stack i { border-radius: 0; border-right: 1px solid var(--surface-1); }
+            .enc { color: var(--text-muted); font-size: 11px; }
+            .ratio { width: 44px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
             .size { width: 74px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
             .detail { padding: 4px 4px 16px 26px; }
             .meta { margin: 0 0 10px; font-size: 12px; color: var(--text-muted); }

@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.reader.layout.Layout;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -78,7 +79,7 @@ class HtmlReportTest {
 
         // Then — each column is half the file, and the widest bar is full width
         assertThat(result)
-                .contains("1.0 KB (25.0% of file)")
+                .contains("1.0 KB \u00b7 25.0% of file")
                 .contains("width:100.0000%");
     }
 
@@ -117,7 +118,7 @@ class HtmlReportTest {
         Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of());
         InspectorTree.Node root = new InspectorTree.Node(leaf, Optional.empty(), Set.of(),
                 ArrayStats.empty(), List.of());
-        InspectorTree sut = new InspectorTree(1, 0L, DType.I32, List.of(), Set.of(), List.of(), 0L, root);
+        InspectorTree sut = new InspectorTree(1, 0L, DType.I32, List.of(), Set.of(), List.of(), 0L, Map.of(), root);
 
         // When
         String result = HtmlReport.render(sut, "empty.vortex");
@@ -143,7 +144,7 @@ class HtmlReportTest {
                 new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I32), false),
                 List.of(), Set.of(),
                 List.of(new SegmentSpec(0, 64, (byte) 0, CompressionScheme.NONE)),
-                10L, root);
+                10L, Map.of(), root);
 
         // When
         String result = HtmlReport.render(sut, "bad.vortex");
@@ -199,7 +200,7 @@ class HtmlReportTest {
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(2048, 64, (byte) 0, CompressionScheme.NONE)),
-                1000L, rootNode);
+                1000L, Map.of(), rootNode);
 
         // When
         String result = HtmlReport.render(sut, "zoned.vortex");
@@ -241,7 +242,7 @@ class HtmlReportTest {
                 List.of(new SegmentSpec(0, 64, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(64, 512, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(576, 512, (byte) 0, CompressionScheme.NONE)),
-                600L, rootNode);
+                600L, Map.of(), rootNode);
 
         // When
         String result = HtmlReport.render(sut, "dict.vortex");
@@ -276,7 +277,7 @@ class HtmlReportTest {
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 4096, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(4096, 1024, (byte) 0, CompressionScheme.NONE)),
-                1000L, rootNode);
+                1000L, Map.of(), rootNode);
 
         // When
         String result = HtmlReport.render(sut, "uneven.vortex");
@@ -318,7 +319,7 @@ class HtmlReportTest {
                 new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I32), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 256, (byte) 0, CompressionScheme.NONE)),
-                10L, rootNode);
+                10L, Map.of(), rootNode);
 
         // When
         String result = HtmlReport.render(sut, "full.vortex");
@@ -350,7 +351,7 @@ class HtmlReportTest {
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(2048, 1024, (byte) 0, CompressionScheme.NONE)),
-                10L, rootNode);
+                10L, Map.of(), rootNode);
 
         // When
         String result = HtmlReport.render(sut, "padded.vortex");
@@ -375,7 +376,7 @@ class HtmlReportTest {
                         List.of(DType.U32, new DType.Primitive(PType.I64, true)), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 20480, (byte) 0, CompressionScheme.NONE)),
-                1750L, root);
+                1750L, Map.of(), root);
 
         // When
         String result = HtmlReport.render(sut, "chunked.vortex");
@@ -411,7 +412,7 @@ class HtmlReportTest {
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE)),
-                1000L, root);
+                1000L, Map.of(), root);
 
         // When
         String result = HtmlReport.render(sut, "shared.vortex");
@@ -421,6 +422,70 @@ class HtmlReportTest {
                 .contains("<dt>Columns</dt><dd>3</dd>")
                 .contains("<dt>Chunks</dt><dd>2</dd>")
                 .contains("all columns");
+    }
+
+    @Test
+    void render_showsTheEncodingEachColumnIsDispatchedOn() {
+        // Given — segment 0 holds the column's data, segment 2 the zone-map table hanging off the
+        // zoned node. Folding the whole subtree would advertise the table's own vortex.struct as
+        // one of the column's encodings, which says nothing about how the column is stored.
+        Layout data = new Layout(LayoutId.parse("vortex.flat"), 1000, null, List.of(), List.of(0));
+        Layout zoneTable = new Layout(LayoutId.parse("vortex.flat"), 2, null, List.of(), List.of(2));
+        Layout zoned = new Layout(LayoutId.parse("vortex.stats"), 1000, null,
+                List.of(data, zoneTable), List.of());
+        Layout root = new Layout(LayoutId.parse("vortex.struct"), 1000, null, List.of(zoned), List.of());
+
+        InspectorTree.Node dataNode = new InspectorTree.Node(data, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node tableNode = new InspectorTree.Node(zoneTable, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node col = new InspectorTree.Node(zoned, Optional.of("id"),
+                Set.of("vortex.fsst", "vortex.struct", "vortex.primitive"),
+                ArrayStats.empty(), List.of(dataNode, tableNode));
+        InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of(col));
+
+        InspectorTree sut = new InspectorTree(2, 4096L,
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(new DType.Utf8(false)), false),
+                List.of("vortex.flat"), Set.of(),
+                List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
+                        new SegmentSpec(1024, 512, (byte) 0, CompressionScheme.NONE),
+                        new SegmentSpec(1536, 64, (byte) 0, CompressionScheme.NONE)),
+                1000L, Map.of(0, "vortex.fsst", 2, "vortex.struct"), rootNode);
+
+        // When
+        String result = HtmlReport.render(sut, "enc.vortex");
+
+        // Then
+        assertThat(result).contains("<code class=\"enc\">vortex.fsst</code>");
+        assertThat(result).doesNotContain("<code class=\"enc\">vortex.fsst + vortex.struct</code>");
+    }
+
+    @Test
+    void render_fixedWidthColumn_comparesStoredSizeAgainstUnencoded() {
+        // Given — 1000 rows of I64 is 8000 bytes unencoded; the column stores 2 KB of segments
+        InspectorTree sut = twoColumnTree();
+
+        // When
+        String result = HtmlReport.render(sut, "data.vortex");
+
+        // Then — 8000 / 1024 = 7.8 KB against 1.0 KB stored
+        assertThat(result)
+                .contains("7.8 KB unencoded (1,000 rows of I64)")
+                .contains("7.8x");
+    }
+
+    @Test
+    void render_variableWidthColumn_claimsNoUnencodedSize() {
+        // Given — what a utf8 column would occupy unencoded depends on its contents, which the
+        // footer does not record, so no ratio is invented for it
+        InspectorTree sut = singleColumnNamed("text");
+
+        // When
+        String result = HtmlReport.render(sut, "text.vortex");
+
+        // Then
+        assertThat(result).doesNotContain("unencoded");
     }
 
     private static InspectorTree twoColumnTree() {
@@ -441,7 +506,7 @@ class HtmlReportTest {
                 List.of("vortex.flat"), Set.of("fastlanes.bitpacked"),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE)),
-                1000L, rootNode);
+                1000L, Map.of(), rootNode);
     }
 
     private static InspectorTree chunkedTree() {
@@ -464,7 +529,7 @@ class HtmlReportTest {
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE)),
-                1000L, rootNode);
+                1000L, Map.of(), rootNode);
     }
 
     private static InspectorTree singleColumnNamed(String name) {
@@ -485,6 +550,6 @@ class HtmlReportTest {
                 new DType.Struct(List.of(ColumnName.of(name)), List.of(new DType.Utf8(false)), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 128, (byte) 0, CompressionScheme.NONE)),
-                10L, rootNode);
+                10L, Map.of(), rootNode);
     }
 }

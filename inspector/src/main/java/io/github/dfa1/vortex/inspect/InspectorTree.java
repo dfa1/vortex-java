@@ -16,8 +16,10 @@ import io.github.dfa1.vortex.reader.VortexHandle;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -33,6 +35,10 @@ import java.util.Set;
 /// @param usedEncodings    encoding IDs actually referenced by Flat layout segments
 /// @param segmentSpecs     all on-disk segments referenced by the footer, in index order
 /// @param totalRowCount    total logical rows in the file (root layout's row count)
+/// @param segmentEncodings  segment index to the encoding id at the root of the array stored there -
+///                          the encoding a reader dispatches on for that segment, as opposed to
+///                          [#usedEncodings()], which is every id anywhere in the tree. Empty for a
+///                          tree built by [#buildShallow(VortexHandle)], which peeks nothing.
 /// @param root             root layout node
 public record InspectorTree(
         int version,
@@ -42,6 +48,7 @@ public record InspectorTree(
         Set<String> usedEncodings,
         List<SegmentSpec> segmentSpecs,
         long totalRowCount,
+        Map<Integer, String> segmentEncodings,
         Node root) {
 
     /// Number of on-disk segments referenced by the footer.
@@ -120,6 +127,7 @@ public record InspectorTree(
                 Set.of(),
                 footer.segmentSpecs(),
                 layout.rowCount(),
+                Map.of(),
                 root);
     }
 
@@ -173,8 +181,9 @@ public record InspectorTree(
         List<String> colNames = (dtype instanceof DType.Struct s)
                 ? s.fieldNames().stream().map(ColumnName::value).toList() : List.of();
         Set<String> overallUsed = new LinkedHashSet<>();
+        Map<Integer, String> segmentEncodings = new LinkedHashMap<>();
         Node root = buildNode(layout, Optional.empty(), handle, footer.arraySpecs(),
-                overallUsed, progress, counter, total);
+                overallUsed, segmentEncodings, progress, counter, total);
         if (layout.isStruct()) {
             List<Node> namedChildren = new ArrayList<>(root.children().size());
             for (int i = 0; i < root.children().size(); i++) {
@@ -195,11 +204,12 @@ public record InspectorTree(
                 Set.copyOf(overallUsed),
                 footer.segmentSpecs(),
                 layout.rowCount(),
+                Map.copyOf(segmentEncodings),
                 root);
     }
 
     private static Node buildNode(Layout layout, Optional<String> fieldName, VortexHandle handle,
-            List<EncodingId> arraySpecs, Set<String> overallUsed,
+            List<EncodingId> arraySpecs, Set<String> overallUsed, Map<Integer, String> segmentEncodings,
             Progress progress, int[] counter, int total) {
         Set<String> localUsed = new LinkedHashSet<>();
         ArrayStats stats = ArrayStats.empty();
@@ -212,6 +222,7 @@ public record InspectorTree(
                 if (peek.encoding() != null) {
                     localUsed.addAll(peek.nestedEncodings());
                     overallUsed.addAll(peek.nestedEncodings());
+                    segmentEncodings.put(segIdx, peek.encoding());
                 }
                 stats = peek.stats();
                 counter[0]++;
@@ -221,7 +232,7 @@ public record InspectorTree(
         List<Node> children = new ArrayList<>(layout.children().size());
         for (Layout child : layout.children()) {
             Node n = buildNode(child, Optional.empty(), handle, arraySpecs, overallUsed,
-                    progress, counter, total);
+                    segmentEncodings, progress, counter, total);
             localUsed.addAll(n.usedEncodings());
             children.add(n);
         }
