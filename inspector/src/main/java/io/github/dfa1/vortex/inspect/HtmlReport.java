@@ -194,7 +194,7 @@ public final class HtmlReport {
         if (column.rawBytes() > 0) {
             sb.append(" \u00b7 ").append(ByteSize.format(column.rawBytes())).append(" unencoded (")
                     .append(count(tree.totalRowCount())).append(" rows of ")
-                    .append(escape(column.dtype())).append(")");
+                    .append(escape(column.storageType())).append(")");
         }
         sb.append("</p>\n");
         if (!column.encodings().isEmpty()) {
@@ -264,8 +264,9 @@ public final class HtmlReport {
 
     /// One top-level column: its slot in the palette, name, rendered dtype, bytes on disk,
     /// encodings seen anywhere in its subtree, and its chunks left to right.
-    private record ColumnView(int index, String name, String dtype, long bytes, boolean attributed,
-            long rawBytes, Set<String> encodings, Set<String> dispatchEncodings, List<ChunkView> chunks) {
+    private record ColumnView(int index, String name, String dtype, String storageType, long bytes,
+            boolean attributed, long rawBytes, Set<String> encodings, Set<String> dispatchEncodings,
+            List<ChunkView> chunks) {
     }
 
     /// One chunk of one column.
@@ -289,13 +290,15 @@ public final class HtmlReport {
             List<ChunkView> chunks = node == null
                     ? List.<ChunkView>of()
                     : chunks(node, tree.segmentSpecs(), tree.segmentEncodings());
+            DType type = i < types.size() ? types.get(i) : null;
             columns.add(new ColumnView(
                     i,
                     names.get(i),
                     dtype,
+                    storageType(type),
                     node == null ? 0L : subtreeBytes(node, tree.segmentSpecs()),
                     node != null,
-                    rawBytes(i < types.size() ? types.get(i) : null, tree.totalRowCount()),
+                    rawBytes(type, tree.totalRowCount()),
                     node == null ? Set.<String>of() : node.usedEncodings(),
                     dispatchEncodings(chunks),
                     chunks));
@@ -322,7 +325,20 @@ public final class HtmlReport {
     /// size of a utf8, binary or list column depends on its contents, which the footer does not
     /// record, so no ratio is claimed for those rather than a made-up one.
     private static long rawBytes(DType dtype, long rows) {
-        return dtype instanceof DType.Primitive(PType ptype, boolean ignored) ? rows * ptype.byteSize() : 0L;
+        // An extension's storage dtype is what occupies the bytes, so a timestamp column compares
+        // against its i64 storage width rather than reporting no ratio at all.
+        DType effective = dtype instanceof DType.Extension ext ? ext.storageDType() : dtype;
+        return effective instanceof DType.Primitive(PType ptype, boolean ignored) ? rows * ptype.byteSize() : 0L;
+    }
+
+    /// The dtype that actually occupies the bytes: an extension's storage dtype, or the column's
+    /// own dtype otherwise. Named in the unencoded-size line, where saying `ext&lt;vortex.timestamp&gt;`
+    /// would not explain where the width came from.
+    private static String storageType(DType dtype) {
+        if (dtype == null) {
+            return "?";
+        }
+        return VortexInspector.formatDType(dtype instanceof DType.Extension ext ? ext.storageDType() : dtype);
     }
 
     private static List<String> fieldNames(InspectorTree tree) {
@@ -336,7 +352,7 @@ public final class HtmlReport {
     /// layout does not break the file down per column.
     private static ColumnView wholeFile(InspectorTree tree) {
         List<ChunkView> chunks = chunks(tree.root(), tree.segmentSpecs(), tree.segmentEncodings());
-        return new ColumnView(-1, "all columns", "", subtreeBytes(tree.root(), tree.segmentSpecs()),
+        return new ColumnView(-1, "all columns", "", "", subtreeBytes(tree.root(), tree.segmentSpecs()),
                 true, 0L, tree.root().usedEncodings(), dispatchEncodings(chunks), chunks);
     }
 

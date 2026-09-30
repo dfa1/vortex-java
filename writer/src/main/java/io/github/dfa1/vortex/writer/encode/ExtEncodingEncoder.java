@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 
 import java.util.Set;
 import java.util.List;
@@ -47,7 +48,11 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
             childResult = storageEncoder.encode(storage, data, ctx);
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[]{childResult.rootNode()}, new int[0]);
-        return new EncodeResult(root, childResult.buffers(), null, null);
+        // The storage encode already computed the column's bounds; dropping them left every
+        // extension column (timestamps, dates) with no zone map at all. The reader resolves a
+        // MIN/MAX stat for an extension column against its storage dtype, mirroring Rust's
+        // stats_table_dtype fallback, so storage-space bounds are exactly what it expects.
+        return new EncodeResult(root, childResult.buffers(), childResult.statsMin(), childResult.statsMax());
     }
 
     @Override
@@ -60,6 +65,23 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[1], new int[0]);
         ChildSlot slot = new ChildSlot(ext.storageDType(), data, 0, Set.of(EncodingId.VORTEX_EXT));
-        return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null, true);
+        // The cascade reads stats off the step, not off the children it later resolves, so the
+        // bounds have to be computed here rather than inherited from the storage slot.
+        byte[][] stats = storageStats(ext.storageDType(), data);
+        return new CascadeStep(partialRoot, List.of(), List.of(slot),
+                PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
+    }
+
+    /// Zone-map min/max for an extension column, in storage space. Only a fixed-width primitive
+    /// storage dtype has bounds worth recording; anything else (a fixed-size-list storage, say)
+    /// reports none rather than a meaningless comparison.
+    ///
+    /// @param storage the extension's storage dtype
+    /// @param data    the storage-shaped values being encoded
+    /// @return a two-element `{min, max}` array of encoded scalars, or `null`
+    private static byte[][] storageStats(DType storage, Object data) {
+        return storage instanceof DType.Primitive(PType ptype, boolean ignored)
+                ? PrimitiveEncodingEncoder.minMaxStats(ptype, data)
+                : null;
     }
 }

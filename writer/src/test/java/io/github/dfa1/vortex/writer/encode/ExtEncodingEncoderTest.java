@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.writer.WriteRegistry;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.testing.TestSegments;
@@ -24,6 +26,63 @@ class ExtEncodingEncoderTest {
     private static final ExtEncodingEncoder ENCODER = new ExtEncodingEncoder();
     private static final ExtEncodingDecoder DECODER = new ExtEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(new PrimitiveEncodingDecoder(), DECODER);
+
+    @Nested
+    class ZoneMapStats {
+
+        // An extension column carried no zone map at all: the terminal path discarded the bounds
+        // its storage encode had already computed, and the cascading path -- the one a default
+        // write actually takes -- never computed any. A timestamp column therefore lost zone-map
+        // pruning and MIN/MAX push-down purely for being a timestamp rather than a bare i64.
+
+        private static final DType.Extension TIMESTAMP =
+                new DType.Extension("vortex.timestamp", DType.I64, null, false);
+
+        @Test
+        void encode_extensionColumn_reportsStorageSpaceBounds() throws Exception {
+            // Given — epoch millis, not in order
+            long[] data = {1_700_000_000_000L, 1_600_000_000_000L, 1_800_000_000_000L};
+
+            // When
+            EncodeResult result = ENCODER.encode(TIMESTAMP, data, EncodeTestHelper.testCtx());
+
+            // Then — the reader resolves an extension column's MIN/MAX against its storage dtype
+            assertThat(result.hasStats()).isTrue();
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(1_600_000_000_000L);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(1_800_000_000_000L);
+        }
+
+        @Test
+        void encodeCascade_extensionColumn_reportsTheSameBounds() throws Exception {
+            // Given — the cascade reads stats off the step rather than off the children it later
+            // resolves, so a step that reports none leaves the column unstatted however its
+            // storage child is eventually encoded
+            long[] data = {1_700_000_000_000L, 1_600_000_000_000L, 1_800_000_000_000L};
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(TIMESTAMP, data,
+                    EncodeContext.ofDepth(2, Arena.ofAuto(), WriteRegistry.loadAll()));
+
+            // Then
+            assertThat(result.openChildren()).isNotEmpty();
+            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(1_600_000_000_000L);
+            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(1_800_000_000_000L);
+        }
+
+        @Test
+        void encode_emptyColumn_hasNoStats() {
+            // Given / When — no rows, so no bounds
+            EncodeResult result = ENCODER.encode(TIMESTAMP, new long[0], EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.hasStats()).isFalse();
+        }
+
+        private ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
+            MemorySegment seg = MemorySegment.ofArray(bytes);
+            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
+        }
+    }
 
     @Nested
     class Encode {
