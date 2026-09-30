@@ -4,7 +4,12 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.inspect.HtmlReport;
+import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.apache.arrow.c.ArrowArray;
@@ -22,6 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+import java.util.Map;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Random;
@@ -87,5 +95,76 @@ class VortexInspectorIntegrationTest {
                 .contains("Registered encodings:")
                 .contains("Used encodings:")
                 .contains("Layout:");
+    }
+
+    @Test
+    void inspect_reportsMinMaxFromZoneMapTable(@TempDir Path tmp) throws IOException {
+        // Given — the Rust writer puts bounds only in the vortex.zoned stats table, never in the
+        // flat segments' array-level stats; the inspector used to read only the latter and
+        // printed no min/max for any Rust-written file (#416). ids are 0..rows-1, so the
+        // expected bounds are exact.
+        Path file = tmp.resolve("zoned.vtx");
+        writeJni(file, 50_000);
+
+        // When
+        String result;
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            result = VortexInspector.inspect(vf);
+        }
+
+        // Then
+        assertThat(result).containsPattern("id: .*min=0 max=49999");
+    }
+
+    @Test
+    void htmlReport_reportsChunkMinMaxFromZoneMapTable(@TempDir Path tmp) throws IOException {
+        // Given — same #416 gap in the HTML report: its per-chunk table read only array-level
+        // stats, so a Rust-written single-chunk column showed empty min/max cells.
+        Path file = tmp.resolve("zoned.vtx");
+        writeJni(file, 50_000);
+
+        // When
+        String result;
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            result = HtmlReport.render(InspectorTree.build(vf), "zoned.vtx");
+        }
+
+        // Then
+        assertThat(result).contains("<td><code>0</code></td><td><code>49999</code></td>");
+    }
+
+    @Test
+    void htmlReport_globalDictColumn_chunkMinMaxAreValuesNotCodes(@TempDir Path tmp) throws IOException {
+        // Given — a global-dictionary column stores per-chunk *codes* under its zone map; their
+        // array-level min/max are code numbers (0, 1, ...), not values. Chunk 0 holds only
+        // "apple"/"banana" and chunk 1 only "cherry"/"date", so each chunk row must show its own
+        // value range, which only the zone-map table carries.
+        Path file = tmp.resolve("dict.vtx");
+        ColumnName fruit = ColumnName.of("fruit");
+        var schema = new DType.Struct(List.of(fruit), List.of(DType.UTF8), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            writer.writeChunk(Map.of(fruit, repeat(1_000, "apple", "banana")));
+            writer.writeChunk(Map.of(fruit, repeat(1_000, "cherry", "date")));
+        }
+
+        // When
+        String result;
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            result = HtmlReport.render(InspectorTree.build(vf), "dict.vtx");
+        }
+
+        // Then
+        assertThat(result)
+                .contains("<td><code>apple</code></td><td><code>banana</code></td>")
+                .contains("<td><code>cherry</code></td><td><code>date</code></td>");
+    }
+
+    private static String[] repeat(int rows, String a, String b) {
+        String[] out = new String[rows];
+        for (int i = 0; i < rows; i++) {
+            out[i] = i % 2 == 0 ? a : b;
+        }
+        return out;
     }
 }

@@ -390,17 +390,10 @@ public final class HtmlReport {
         return tree.dtype() instanceof DType.Struct ? List.of() : List.of(tree.root());
     }
 
-    /// Descends from a column to the chunked node underneath and turns its children into chunks.
-    /// A column with no chunked node below it has exactly one chunk.
+    /// Turns a column's chunks ([InspectorTree#chunkParts(InspectorTree.Node)]) into views.
     private static List<ChunkView> chunks(InspectorTree.Node column, List<SegmentSpec> specs,
             java.util.Map<Integer, String> segmentEncodings) {
-        InspectorTree.Node node = column;
-        InspectorTree.Node next = dataChild(node);
-        while (!node.layout().isChunked() && next != null) {
-            node = next;
-            next = dataChild(node);
-        }
-        List<InspectorTree.Node> parts = node.layout().isChunked() ? node.children() : List.of(node);
+        List<InspectorTree.Node> parts = InspectorTree.chunkParts(column);
         List<ChunkView> chunks = new ArrayList<>(parts.size());
         long firstRow = 0;
         for (InspectorTree.Node part : parts) {
@@ -410,22 +403,6 @@ public final class HtmlReport {
             firstRow += rows;
         }
         return chunks;
-    }
-
-    /// The child carrying this node's rows, or `null` when the node is a leaf or a shape whose
-    /// rows do not live in one child. Mirrors the reader's own layout decoders: a [Layout#isZoned()]
-    /// node wraps its data as `child[0]` and its zone-map table as `child[1]`, while a
-    /// [Layout#isDict()] node stores `(values, codes)` and the codes are what carries the rows.
-    /// Counting children alone gets both wrong.
-    private static InspectorTree.Node dataChild(InspectorTree.Node node) {
-        List<InspectorTree.Node> children = node.children();
-        if (node.layout().isZoned() && !children.isEmpty()) {
-            return children.getFirst();
-        }
-        if (node.layout().isDict() && children.size() >= 2) {
-            return children.get(1);
-        }
-        return children.size() == 1 ? children.getFirst() : null;
     }
 
     /// The encoding at the root of this chunk's own segment - what a reader dispatches on to

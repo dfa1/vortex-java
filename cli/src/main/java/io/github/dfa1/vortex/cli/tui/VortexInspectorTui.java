@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ColumnName;
-import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.cli.tui.term.Ansi;
 import io.github.dfa1.vortex.cli.tui.term.Key;
@@ -683,11 +682,7 @@ public final class VortexInspectorTui {
                     statsCache.put(anchor, new DataState.Failed("no column dtype"));
                     return;
                 }
-                // `vortex.zoned` (Rust >= 0.76) carries aggregate-spec metadata; the legacy
-                // `vortex.stats` alias carries a Stat bitset — reconstruct the schema accordingly.
-                DType.Struct statsDtype = anchorLayout.layoutId() == LayoutId.ZONED
-                        ? ZonedStatsSchema.aggregateStatsTableDtype(columnDtype, anchorLayout.metadata())
-                        : ZonedStatsSchema.statsTableDtype(columnDtype, anchorLayout.metadata());
+                DType.Struct statsDtype = ZonedStatsSchema.tableDtype(anchorLayout, columnDtype);
                 if (statsDtype == null || statsDtype.fieldNames().isEmpty()) {
                     statsCache.put(anchor, new DataState.Failed("no stats present in metadata"));
                     return;

@@ -9,10 +9,13 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.layout.Layout;
+import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.core.fbs.FbsArray;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.reader.VortexHandle;
+import io.github.dfa1.vortex.reader.Zone;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -74,7 +77,9 @@ public record InspectorTree(
     /// @param layout         underlying [Layout] from the file footer
     /// @param fieldName      column name when this node is a direct child of a top-level struct
     /// @param usedEncodings  encoding IDs referenced by this subtree
-    /// @param stats          per-array statistics decoded from the segment's FlatBuffer
+    /// @param stats          per-array statistics decoded from the segment's FlatBuffer; for a
+    ///                       zoned top-level column and the chunks its zones tile, the min/max
+    ///                       folded from its zone-map table
     /// @param children       child nodes
     public record Node(
             Layout layout,
@@ -189,8 +194,10 @@ public record InspectorTree(
             for (int i = 0; i < root.children().size(); i++) {
                 Node child = root.children().get(i);
                 String name = i < colNames.size() ? colNames.get(i) : "col" + i;
-                namedChildren.add(new Node(child.layout(), Optional.of(name),
-                        child.usedEncodings(), child.stats(), child.children()));
+                Node named = new Node(child.layout(), Optional.of(name),
+                        child.usedEncodings(), child.stats(), child.children());
+                namedChildren.add(i < colNames.size() && child.layout().isZoned()
+                        ? withZoneStats(named, columnZones(handle, name)) : named);
             }
             root = new Node(root.layout(), Optional.empty(), root.usedEncodings(),
                     root.stats(), List.copyOf(namedChildren));
@@ -206,6 +213,114 @@ public record InspectorTree(
                 layout.rowCount(),
                 Map.copyOf(segmentEncodings),
                 root);
+    }
+
+    private static List<Zone> columnZones(VortexHandle handle, String column) {
+        try (ScanIterator scan = handle.scan(ScanOptions.all())) {
+            return scan.columnZones(column);
+        }
+    }
+
+    /// Takes a column's min/max from its zone-map table instead of its segments' array-level stats:
+    /// the Rust writer records bounds only there (#416), and a dictionary column's segments hold
+    /// codes, whose array-level min/max describe the codes rather than the values. The column gets
+    /// the fold of every zone; each chunk gets the fold of the zones that exactly tile its rows, and
+    /// keeps its array-level stats when zone boundaries cut through it.
+    private static Node withZoneStats(Node column, List<Zone> zones) {
+        if (zones.isEmpty()) {
+            return column;
+        }
+        Node withChunks = withChunkZoneStats(column, zones);
+        return new Node(withChunks.layout(), withChunks.fieldName(), withChunks.usedEncodings(),
+                fold(zones), withChunks.children());
+    }
+
+    private static Node withChunkZoneStats(Node node, List<Zone> zones) {
+        int data = dataChildIndex(node);
+        if (!node.layout().isChunked() && data >= 0) {
+            List<Node> children = new ArrayList<>(node.children());
+            children.set(data, withChunkZoneStats(children.get(data), zones));
+            return new Node(node.layout(), node.fieldName(), node.usedEncodings(), node.stats(),
+                    List.copyOf(children));
+        }
+        List<Node> parts = node.layout().isChunked() ? node.children() : List.of(node);
+        List<Node> updated = withTilingZones(parts, zones);
+        if (!node.layout().isChunked()) {
+            return updated.getFirst();
+        }
+        return new Node(node.layout(), node.fieldName(), node.usedEncodings(), node.stats(), updated);
+    }
+
+    /// Each part with its stats replaced by the fold of the zones exactly covering its rows, or
+    /// unchanged when zone boundaries cut through it. Parts and zones are both in row order, so one
+    /// cursor walks the zones once.
+    private static List<Node> withTilingZones(List<Node> parts, List<Zone> zones) {
+        List<Node> out = new ArrayList<>(parts.size());
+        int z = 0;
+        long firstRow = 0;
+        for (Node part : parts) {
+            long end = firstRow + part.layout().rowCount();
+            while (z < zones.size() && zones.get(z).firstRow() < firstRow) {
+                z++;
+            }
+            int from = z;
+            while (z < zones.size() && zoneEnd(zones.get(z)) <= end) {
+                z++;
+            }
+            boolean tiles = z > from && zones.get(from).firstRow() == firstRow && zoneEnd(zones.get(z - 1)) == end;
+            out.add(tiles
+                    ? new Node(part.layout(), part.fieldName(), part.usedEncodings(),
+                            fold(zones.subList(from, z)), part.children())
+                    : part);
+            firstRow = end;
+        }
+        return List.copyOf(out);
+    }
+
+    private static long zoneEnd(Zone zone) {
+        return zone.firstRow() + zone.rowCount();
+    }
+
+    private static ArrayStats fold(List<Zone> zones) {
+        Object min = null;
+        Object max = null;
+        for (Zone zone : zones) {
+            min = VortexInspector.pickMin(min, zone.stats().min());
+            max = VortexInspector.pickMax(max, zone.stats().max());
+        }
+        if (min == null && max == null) {
+            return ArrayStats.empty();
+        }
+        return new ArrayStats(min, max, null, null, null, null, null);
+    }
+
+    /// The chunks of a column: the children of the first chunked node on its data path, or the
+    /// end of that path when nothing below it is chunked.
+    ///
+    /// @param column a top-level column node
+    /// @return the column's chunks in row order
+    static List<Node> chunkParts(Node column) {
+        Node node = column;
+        while (!node.layout().isChunked() && dataChildIndex(node) >= 0) {
+            node = node.children().get(dataChildIndex(node));
+        }
+        return node.layout().isChunked() ? node.children() : List.of(node);
+    }
+
+    /// Index of the child carrying this node's rows, or `-1` when the node is a leaf or a shape
+    /// whose rows do not live in one child. Mirrors the reader's own layout decoders: a
+    /// [Layout#isZoned()] node wraps its data as `child[0]` and its zone-map table as `child[1]`,
+    /// while a [Layout#isDict()] node stores `(values, codes)` and the codes are what carries the
+    /// rows. Counting children alone gets both wrong.
+    private static int dataChildIndex(Node node) {
+        int children = node.children().size();
+        if (node.layout().isZoned() && children > 0) {
+            return 0;
+        }
+        if (node.layout().isDict() && children >= 2) {
+            return 1;
+        }
+        return children == 1 ? 0 : -1;
     }
 
     private static Node buildNode(Layout layout, Optional<String> fieldName, VortexHandle handle,

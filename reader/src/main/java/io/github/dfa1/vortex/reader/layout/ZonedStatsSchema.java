@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.layout;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.LayoutId;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
@@ -168,6 +169,20 @@ public final class ZonedStatsSchema {
     /// @return reconstructed non-nullable struct dtype, or empty struct when nothing is present
     public static DType.Struct statsTableDtype(DType columnDtype, MemorySegment metadata) {
         return statsTableDtype(columnDtype, presentStats(metadata));
+    }
+
+    /// Reconstructs the stats-table dtype of a zoned layout, dispatching on its layout id: the
+    /// canonical `vortex.zoned` id (Rust >= 0.76) stores aggregate-spec metadata
+    /// ([#aggregateStatsTableDtype(DType, MemorySegment)]), the legacy `vortex.stats` alias (what
+    /// vortex-java writes) a [Stat] bitset ([#statsTableDtype(DType, MemorySegment)]).
+    ///
+    /// @param zoned       the zoned layout node
+    /// @param columnDtype the column's logical dtype (the `data` child's dtype)
+    /// @return reconstructed non-nullable struct dtype, or `null` when it cannot be reconstructed
+    public static DType.Struct tableDtype(Layout zoned, DType columnDtype) {
+        return zoned.layoutId() == LayoutId.ZONED
+                ? aggregateStatsTableDtype(columnDtype, zoned.metadata())
+                : statsTableDtype(columnDtype, zoned.metadata());
     }
 
     /// Reconstructs the per-zone stats-table dtype for a newer `vortex.zoned` layout, whose

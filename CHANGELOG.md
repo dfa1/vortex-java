@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `vortex inspect` (text and `--html`) shows min/max for Rust-written files: bounds are now read from the zone-map table, not only array-level stats ([#416](https://github.com/dfa1/vortex-java/issues/416)).
+- `vortex inspect --html` per-chunk min/max for dictionary columns showed the dictionary-code range instead of the value range ([#416](https://github.com/dfa1/vortex-java/issues/416)).
+
+### Added
+
+- `ScanIterator#columnZones(String)`: each zone-map row with the column rows it covers ([#416](https://github.com/dfa1/vortex-java/issues/416)).
+
 ## [0.15.0] — 2026-09-30
 
 ### Highlights

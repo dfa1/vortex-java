@@ -231,6 +231,40 @@ class RustWritesJavaReadsIntegrationTest {
     }
 
     @Test
+    void jniWriter_columnZones_tileTheColumnAtTheDeclaredStride(@TempDir Path tmp) throws IOException {
+        // Given — Rust's vortex.zoned declares a uniform zone length independent of chunk
+        // boundaries; the zones must tile [0, n) contiguously, each describing exactly its rows
+        // (ids equal row numbers, so a zone's min/max must be its own first/last row).
+        int n = 200_000;
+        long[] ids = new long[n];
+        double[] vals = new double[n];
+        for (int i = 0; i < n; i++) {
+            ids[i] = i;
+            vals[i] = i;
+        }
+        Path file = tmp.resolve("jni_zone_ranges.vtx");
+        writeJni(file, ids, vals);
+
+        // When
+        List<io.github.dfa1.vortex.reader.Zone> result;
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+            result = iter.columnZones("id");
+        }
+
+        // Then
+        assertThat(result).hasSizeGreaterThan(1);
+        long next = 0;
+        for (var zone : result) {
+            assertThat(zone.firstRow()).isEqualTo(next);
+            assertThat(zone.stats().min()).isEqualTo(zone.firstRow());
+            assertThat(zone.stats().max()).isEqualTo(zone.firstRow() + zone.rowCount() - 1);
+            next += zone.rowCount();
+        }
+        assertThat(next).isEqualTo(n);
+    }
+
+    @Test
     void jniWriter_noPerZoneSum_zoneReducerSignalsFallbackAndDecodeStillCorrect(@TempDir Path tmp)
             throws IOException {
         // Given — a Rust-written file large enough that the JNI writer emits a multi-zone column.

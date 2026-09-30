@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.Zone;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -129,5 +130,42 @@ class ColumnZoneStatsTest {
 
         // Then — aligned with chunk count, no stats
         assertThat(result).hasSize(3).allSatisfy(s -> assertThat(s).isEqualTo(ArrayStats.empty()));
+    }
+
+    @Test
+    void columnZones_legacyLayout_placesOneZonePerChunkOnItsRows(@TempDir Path tmp) throws IOException {
+        // Given — this writer's vortex.stats layout: one zone per physical chunk, so each zone's
+        // row range must be exactly its chunk's (the inspector's per-chunk min/max and the scan's
+        // pruning both read these ranges).
+        Path file = writeThreeChunks(tmp);
+
+        // When
+        List<Zone> result;
+        try (VortexReader vf = VortexReader.open(file, registry());
+             var iter = vf.scan(ScanOptions.all())) {
+            result = iter.columnZones("id");
+        }
+
+        // Then
+        assertThat(result).extracting(Zone::firstRow).containsExactly(0L, 50L, 100L);
+        assertThat(result).extracting(Zone::rowCount).containsExactly(50L, 50L, 50L);
+        assertThat(result).extracting(z -> z.stats().min()).containsExactly(1L, 51L, 101L);
+    }
+
+    @Test
+    void columnZones_unknownColumn_isEmpty(@TempDir Path tmp) throws IOException {
+        // Given — unlike columnZoneStats, columnZones has no per-chunk fallback, so a column with
+        // no zone map must come back empty rather than as fabricated zones.
+        Path file = writeThreeChunks(tmp);
+
+        // When
+        List<Zone> result;
+        try (VortexReader vf = VortexReader.open(file, registry());
+             var iter = vf.scan(ScanOptions.all())) {
+            result = iter.columnZones("missing");
+        }
+
+        // Then
+        assertThat(result).isEmpty();
     }
 }

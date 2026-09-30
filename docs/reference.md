@@ -232,6 +232,8 @@ Implements `Iterator<Chunk>` and `AutoCloseable`. Drives one scan.
 | `next()`               | Returns a fresh `Chunk` whose arena the caller closes. Throws `IllegalStateException` if a prior `Chunk` is still open, or `NoSuchElementException` if exhausted. |
 | `forEachRemaining(Consumer)` | Overridden to wrap each `next()` in try-with-resources so chunks auto-close.   |
 | `close()`              | Releases iterator state and closes any chunk still open.                             |
+| `columnZoneStats(String)` | One `ArrayStats` per zone-map row; falls back to per-chunk stats when the column has no zone map. |
+| `columnZones(String)`  | One `Zone(firstRow, rowCount, stats)` per zone-map row, placed on the column's rows; empty when there is no usable zone map. |
 
 ### `Chunk` (`io.github.dfa1.vortex.reader.Chunk`)
 
