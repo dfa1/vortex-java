@@ -615,7 +615,7 @@ class JavaWritesRustReadsIntegrationTest {
         // zone-map with one zone per chunk. The Rust reader must parse that layout and still
         // return every value (zones are a transparent pruning aux).
         Path file = tmp.resolve("java_zoned.vtx");
-        WriteOptions zoneMapped = new WriteOptions(4, true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions zoneMapped = new WriteOptions(true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
         long[] ids = new long[20];
         double[] vals = new double[20];
         for (int i = 0; i < 20; i++) {
@@ -649,7 +649,7 @@ class JavaWritesRustReadsIntegrationTest {
         // of it (an i64 zone field sliced at row 2 is byte 16), aborting the whole JVM. Chunks are
         // full-size here so zones line up with the stride Rust assumes and only alignment is tested.
         Path file = tmp.resolve("java_zoned_filtered.vtx");
-        WriteOptions zoneMapped = new WriteOptions(4, true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions zoneMapped = new WriteOptions(true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, zoneMapped)) {
             long next = 0;
@@ -724,7 +724,7 @@ class JavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_zoned_null_chunk.vtx");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.I64, true)), false);
-        WriteOptions zoneMapped = new WriteOptions(4, true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions zoneMapped = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
         Long[] data = {
                 0L, 1L, 2L, 3L,
                 null, null, null, null,
