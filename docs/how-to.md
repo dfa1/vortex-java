@@ -591,6 +591,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
 import io.github.dfa1.vortex.writer.encode.EncodeResult;
+import io.github.dfa1.vortex.writer.encode.EncodedBuffer;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
 import io.github.dfa1.vortex.writer.WriteRegistry;
 
@@ -617,7 +618,8 @@ final class XorI64EncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(VortexFormat.LE_LONG, i, values[i] ^ KEY);
         }
-        return EncodeResult.simple(ID, seg, null, null);
+        // Each buffer declares its element type's alignment — 8 bytes for i64 here
+        return EncodeResult.simple(ID, EncodedBuffer.of(seg, PType.I64), null, null);
     }
 }
 
@@ -632,6 +634,11 @@ try (var ch = FileChannel.open(Path.of("data.vortex"), StandardOpenOption.CREATE
     writer.writeChunk(chunk -> chunk.put(ColumnName.of("id"), new long[]{1, 2, 3}));
 }
 ```
+
+Every buffer an encoder emits is an `EncodedBuffer` carrying its element alignment —
+`EncodedBuffer.of(seg, ptype)` for typed values, `EncodedBuffer.bytes(seg)` for bitmaps, strings
+and opaque payloads. The Rust reader holds a buffer to exactly that alignment: less fails array
+construction, more aborts any row-range read that slices the buffer.
 
 To mix a custom encoder into the normal cascade competition instead of a single-encoder registry,
 start from `WriteRegistry.builder().registerDefaults()` and override `EncodingEncoder#expectedRatio`

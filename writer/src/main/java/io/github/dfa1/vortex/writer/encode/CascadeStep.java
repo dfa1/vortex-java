@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import java.lang.foreign.MemorySegment;
 import java.util.List;
 
 /// One step in cascade-aware encoding: a partially-assembled node tree plus open child slots.
@@ -24,7 +23,7 @@ import java.util.List;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record CascadeStep(
         EncodeNode partialRoot,
-        List<MemorySegment> ownedBuffers,
+        List<EncodedBuffer> ownedBuffers,
         List<ChildSlot> openChildren,
         byte[] statsMin,
         byte[] statsMax,
@@ -48,7 +47,7 @@ public record CascadeStep(
     /// @param result the fully-resolved encode result to wrap
     /// @return a terminal [CascadeStep] backed by `result`
     public static CascadeStep terminal(EncodeResult result) {
-        return new CascadeStep(result.rootNode(), result.buffers(), List.of(),
+        return new CascadeStep(result.rootNode(), result.encodedBuffers(), List.of(),
                 result.statsMin(), result.statsMax(), true);
     }
 
@@ -75,8 +74,8 @@ public record CascadeStep(
             return Long.MAX_VALUE / 2;
         }
         long total = 0;
-        for (MemorySegment seg : ownedBuffers) {
-            total += seg.byteSize();
+        for (EncodedBuffer buffer : ownedBuffers) {
+            total += buffer.data().byteSize();
         }
         return total;
     }

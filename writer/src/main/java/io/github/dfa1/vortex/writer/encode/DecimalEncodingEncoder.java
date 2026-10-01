@@ -33,7 +33,8 @@ public final class DecimalEncodingEncoder implements EncodingEncoder {
         }
         MemorySegment metaBuf = MemorySegment.ofArray(new ProtoDecimalMetadata(valuesType).encode());
         EncodeNode node = new EncodeNode(EncodingId.VORTEX_DECIMAL, metaBuf, new EncodeNode[0], new int[]{0});
-        return new EncodeResult(node, List.of(seg), null, null).withStats(ZoneMapStats.ofDecimal(seg, bw));
+        // Rust's i256 is two 128-bit halves, so no decimal width aligns past 16 bytes.
+        return new EncodeResult(node, List.of(new EncodedBuffer(seg, Math.min(bw, 16))), null, null).withStats(ZoneMapStats.ofDecimal(seg, bw));
     }
 
     private static int valuesType(byte precision) {

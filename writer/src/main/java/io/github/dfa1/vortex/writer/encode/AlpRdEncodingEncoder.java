@@ -264,9 +264,9 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         EncodeResult leftResult = bp.encode(DType.U16, leftCodes, ctx);
         EncodeResult rightResult = bp.encode(rightDtype, rightPartsData, ctx);
 
-        List<MemorySegment> allBuffers = new ArrayList<>(leftResult.buffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>(leftResult.encodedBuffers());
         int leftBufCount = allBuffers.size();
-        allBuffers.addAll(rightResult.buffers());
+        allBuffers.addAll(rightResult.encodedBuffers());
 
         EncodeNode leftNode = EncodeNode.remapBufferIndices(leftResult.rootNode(), 0);
         EncodeNode rightNode = EncodeNode.remapBufferIndices(rightResult.rootNode(), leftBufCount);
@@ -291,9 +291,9 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             EncodeResult valResult = bp.encode(DType.U16, excValsArr, ctx);
 
             int idxOffset = allBuffers.size();
-            allBuffers.addAll(idxResult.buffers());
+            allBuffers.addAll(idxResult.encodedBuffers());
             int idxBufCount = idxResult.buffers().size();
-            allBuffers.addAll(valResult.buffers());
+            allBuffers.addAll(valResult.encodedBuffers());
 
             EncodeNode idxNode = EncodeNode.remapBufferIndices(idxResult.rootNode(), idxOffset);
             EncodeNode valNode = EncodeNode.remapBufferIndices(valResult.rootNode(), idxOffset + idxBufCount);
@@ -332,9 +332,9 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         EncodeResult rightResult = bp.encode(rightDtype,
             rightDtype.equals(DType.U32) ? new int[0] : new long[0], ctx);
 
-        List<MemorySegment> allBuffers = new ArrayList<>(leftResult.buffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>(leftResult.encodedBuffers());
         int leftBufCount = allBuffers.size();
-        allBuffers.addAll(rightResult.buffers());
+        allBuffers.addAll(rightResult.encodedBuffers());
 
         EncodeNode leftNode = EncodeNode.remapBufferIndices(leftResult.rootNode(), 0);
         EncodeNode rightNode = EncodeNode.remapBufferIndices(rightResult.rootNode(), leftBufCount);

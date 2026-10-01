@@ -173,9 +173,9 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         // shift its buffer indices past them.
         EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), frameCount);
 
-        List<MemorySegment> buffers = new ArrayList<>(frameCount + validityResult.buffers().size());
+        List<EncodedBuffer> buffers = new ArrayList<>(frameCount + validityResult.buffers().size());
         buffers.addAll(frames.compressed());
-        buffers.addAll(validityResult.buffers());
+        buffers.addAll(validityResult.encodedBuffers());
 
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(frames.metadata()),
                 new EncodeNode[]{validityNode}, frameBufferIndices(frameCount, 0));
@@ -203,10 +203,10 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     }
 
     /// Compressed frame payloads paired with the encoded `ZstdMetadata` describing them.
-    private record Frames(List<MemorySegment> compressed, byte[] metadata) {
+    private record Frames(List<EncodedBuffer> compressed, byte[] metadata) {
         @Override
         public boolean equals(Object o) {
-            return o instanceof Frames(List<MemorySegment> c, byte[] m)
+            return o instanceof Frames(List<EncodedBuffer> c, byte[] m)
                     && Objects.equals(compressed, c) && Arrays.equals(metadata, m);
         }
 
@@ -275,13 +275,13 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     private static Frames compressFrames(MemorySegment raw, FrameLayout layout, Arena arena) {
         int frameCount = layout.byteLengths().length;
-        List<MemorySegment> compressed = new ArrayList<>(frameCount);
+        List<EncodedBuffer> compressed = new ArrayList<>(frameCount);
         List<ProtoZstdFrameMetadata> metas = new ArrayList<>(frameCount);
         long offset = 0;
         try (ZstdCompressContext cctx = new ZstdCompressContext()) {
             for (int f = 0; f < frameCount; f++) {
                 long len = layout.byteLengths()[f];
-                compressed.add(cctx.compress(arena, raw.asSlice(offset, len)));
+                compressed.add(EncodedBuffer.bytes(cctx.compress(arena, raw.asSlice(offset, len))));
                 metas.add(new ProtoZstdFrameMetadata(len, layout.valueCounts()[f]));
                 offset += len;
             }

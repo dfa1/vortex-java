@@ -101,9 +101,9 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, indicesBufIdx);
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, indicesBufIdx + 1);
 
-        List<MemorySegment> buffers = new ArrayList<>(valuesResult.buffers());
-        buffers.add(indicesSeg);
-        buffers.add(offsetsSeg);
+        List<EncodedBuffer> buffers = new ArrayList<>(valuesResult.encodedBuffers());
+        buffers.add(EncodedBuffer.of(indicesSeg, indicesPtype));
+        buffers.add(EncodedBuffer.of(offsetsSeg, offsetsPtype));
 
         EncodeNode root = new EncodeNode(
                 EncodingId.FASTLANES_RLE,
@@ -186,7 +186,8 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
                 new int[0]);
-        return new EncodeResult(root, List.of(valuesSeg, indicesSeg, offsetsSeg), null, null).withStats(stats);
+        return new EncodeResult(root, List.of(EncodedBuffer.of(valuesSeg, ptype), EncodedBuffer.of(indicesSeg, indicesPtype),
+                EncodedBuffer.of(offsetsSeg, offsetsPtype)), null, null).withStats(stats);
     }
 
     private static int rleEncode(long[] input, long[] chunkValues, short[] chunkIndices) {
@@ -229,7 +230,10 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
                 new int[0]);
-        return new EncodeResult(root, List.of(empty, empty, empty), null, null);
+        // The values ptype is unknown here; 8 bytes covers every primitive, and an empty buffer is never
+        // sliced, so declaring more than the element needs cannot trip the Rust reader.
+        return new EncodeResult(root, List.of(new EncodedBuffer(empty, Long.BYTES), EncodedBuffer.of(empty, indicesPtype),
+                EncodedBuffer.of(empty, offsetsPtype)), null, null);
     }
 
     private static long[] toLongs(Object data, PType ptype) {

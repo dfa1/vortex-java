@@ -62,7 +62,7 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBIN, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{offsetsNode}, new int[]{0});
-        return new EncodeResult(root, List.of(bytesBuf, offsetsBuf), statsMin, statsMax);
+        return new EncodeResult(root, List.of(EncodedBuffer.bytes(bytesBuf), EncodedBuffer.of(offsetsBuf, PType.I64)), statsMin, statsMax);
     }
 
     /// Computes the serialized min/max string [ProtoScalarValue] pair for a string array, skipping

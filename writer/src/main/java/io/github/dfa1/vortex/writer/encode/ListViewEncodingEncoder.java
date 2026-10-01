@@ -54,7 +54,7 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
                         : findEncoding(elementType);
         EncodeResult elemResult = elemEncoding.encode(elementType, lvd.elements(), ctx);
 
-        List<MemorySegment> allBuffers = new ArrayList<>(elemResult.buffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>(elemResult.encodedBuffers());
         int elemBufCount = allBuffers.size();
         EncodeNode elemNode = EncodeNode.remapBufferIndices(elemResult.rootNode(), 0);
 
@@ -64,14 +64,14 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < n; i++) {
             offsetsBuf.setAtIndex(VortexFormat.LE_INT, i, lvd.offsets()[i]);
         }
-        allBuffers.add(offsetsBuf);
+        allBuffers.add(EncodedBuffer.of(offsetsBuf, PType.I32));
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);
 
         MemorySegment sizesBuf = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
         for (int i = 0; i < n; i++) {
             sizesBuf.setAtIndex(VortexFormat.LE_INT, i, lvd.sizes()[i]);
         }
-        allBuffers.add(sizesBuf);
+        allBuffers.add(EncodedBuffer.of(sizesBuf, PType.I32));
         EncodeNode sizesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount + 1);
 
         long elementsLen = elementCount(lvd.elements());
@@ -88,7 +88,7 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
             EncodeResult validityResult = new BoolEncodingEncoder()
                     .encode(DType.BOOL, outerNullable.validity(), ctx);
             EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), allBuffers.size());
-            allBuffers.addAll(validityResult.buffers());
+            allBuffers.addAll(validityResult.encodedBuffers());
             children = new EncodeNode[]{elemNode, offsetsNode, sizesNode, validityNode};
         }
 

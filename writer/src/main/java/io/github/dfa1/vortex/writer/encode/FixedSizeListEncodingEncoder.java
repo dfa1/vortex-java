@@ -34,7 +34,7 @@ public final class FixedSizeListEncodingEncoder implements EncodingEncoder {
 
         EncodeResult elemResult = inner.encode(elementType, fsd.elements(), ctx);
 
-        List<MemorySegment> allBuffers = new ArrayList<>(elemResult.buffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>(elemResult.encodedBuffers());
         EncodeNode elemNode = EncodeNode.remapBufferIndices(elemResult.rootNode(), 0);
 
         EncodeNode root = new EncodeNode(

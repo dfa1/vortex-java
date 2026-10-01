@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `vortex inspect` (text and `--html`) shows min/max for Rust-written files: bounds are now read from the zone-map table, not only array-level stats ([#416](https://github.com/dfa1/vortex-java/issues/416)).
 - `vortex inspect --html` per-chunk min/max for dictionary columns showed the dictionary-code range instead of the value range ([#416](https://github.com/dfa1/vortex-java/issues/416)).
+- vortex-jni no longer aborts the JVM on a filtered or row-range read of a vortex-java file: every array buffer declared 64-byte alignment, and Rust refuses to slice a buffer off a multiple of its declared alignment ([#418](https://github.com/dfa1/vortex-java/issues/418)).
+
+### Changed
+
+- **Breaking (custom encoders):** `EncodeResult` buffers are now `EncodedBuffer`s carrying their element alignment; `EncodeResult.simple` takes an `EncodedBuffer` (`EncodedBuffer.of(seg, ptype)` / `EncodedBuffer.bytes(seg)`) ([#418](https://github.com/dfa1/vortex-java/issues/418)).
 
 ### Added
 

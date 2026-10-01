@@ -100,9 +100,9 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         EncodeNode endsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode valuesNode = EncodeNode.remapBufferIndices(valuesResult.rootNode(), 1);
 
-        List<MemorySegment> buffers = new ArrayList<>();
-        buffers.add(endsBuf);
-        buffers.addAll(valuesResult.buffers());
+        List<EncodedBuffer> buffers = new ArrayList<>();
+        buffers.add(EncodedBuffer.of(endsBuf, PType.U32));
+        buffers.addAll(valuesResult.encodedBuffers());
 
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_RUNEND, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{endsNode, valuesNode}, new int[0]);
@@ -204,7 +204,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{endsNode, valuesNode}, new int[0]);
         byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
         byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
-        return new EncodeResult(root, List.of(endsBuf, valuesBuf), statsMin, statsMax);
+        return new EncodeResult(root, List.of(EncodedBuffer.of(endsBuf, PType.U32), EncodedBuffer.of(valuesBuf, ptype)), statsMin, statsMax);
     }
 
     private static byte[] statsBytes(PType ptype, long value) {

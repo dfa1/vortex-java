@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
-import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -325,7 +324,7 @@ public final class CascadingCompressor {
             return new EncodeResult(step.partialRoot(), step.ownedBuffers(), step.statsMin(), step.statsMax());
         }
 
-        List<MemorySegment> allBuffers = new ArrayList<>(step.ownedBuffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>(step.ownedBuffers());
         EncodeNode[] children = step.partialRoot().children().clone();
 
         for (ChildSlot slot : step.openChildren()) {
@@ -333,7 +332,7 @@ public final class CascadingCompressor {
 
             int bufOffset = allBuffers.size();
             children[slot.parentChildIdx()] = EncodeNode.remapBufferIndices(childResult.rootNode(), bufOffset);
-            allBuffers.addAll(childResult.buffers());
+            allBuffers.addAll(childResult.encodedBuffers());
         }
 
         EncodeNode root = new EncodeNode(
@@ -347,7 +346,7 @@ public final class CascadingCompressor {
     private EncodeResult encodeStruct(DType.Struct dtype, StructData data, EncodeContext ctx) {
         List<Object> fields = data.fieldArrays();
         List<DType> fieldTypes = dtype.fieldTypes();
-        List<MemorySegment> allBuffers = new ArrayList<>();
+        List<EncodedBuffer> allBuffers = new ArrayList<>();
         EncodeNode[] children = new EncodeNode[fields.size()];
         for (int i = 0; i < fields.size(); i++) {
             DType fieldDtype = fieldTypes.get(i);
@@ -360,7 +359,7 @@ public final class CascadingCompressor {
                     : encodeWithCtx(fieldDtype, fieldData, ctx);
             int bufOffset = allBuffers.size();
             children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
-            allBuffers.addAll(fieldResult.buffers());
+            allBuffers.addAll(fieldResult.encodedBuffers());
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_STRUCT, null, children, new int[0]);
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);

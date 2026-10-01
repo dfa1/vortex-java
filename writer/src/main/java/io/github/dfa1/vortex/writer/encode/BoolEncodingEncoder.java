@@ -60,6 +60,6 @@ public final class BoolEncodingEncoder implements EncodingEncoder {
         byte[] statsMax = bools.length > 0
                                   ? ProtoScalarValue.ofBoolValue(hasTrue).encode()
                                   : null;
-        return EncodeResult.simple(encodingId(), encodeBool(bools, ctx.arena()), statsMin, statsMax);
+        return EncodeResult.simple(encodingId(), EncodedBuffer.bytes(encodeBool(bools, ctx.arena())), statsMin, statsMax);
     }
 }

@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import java.lang.foreign.MemorySegment;
 import io.github.dfa1.vortex.core.proto.ProtoDecimalBytePartsMetadata;
 
-import java.util.List;
 
 /// Write-only encoder for `vortex.decimal_byte_parts`.
 public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
@@ -39,7 +38,7 @@ public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
         // The metadata above declares zero low parts, so each i64 most-significant part is the
         // whole unscaled value and bounds it exactly. A build that starts emitting low parts must
         // fold them in here rather than keep reporting the msp alone.
-        return new EncodeResult(root, List.copyOf(mspResult.buffers()), null, null)
+        return new EncodeResult(root, mspResult.encodedBuffers(), null, null)
                 .withStats(ZoneMapStats.ofDecimal(longs));
     }
 }

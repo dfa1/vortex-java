@@ -33,6 +33,6 @@ public final class MapEncodingEncoder implements EncodingEncoder {
                 null,
                 new EncodeNode[]{entriesResult.rootNode()},
                 new int[0]);
-        return new EncodeResult(root, entriesResult.buffers(), null, null);
+        return new EncodeResult(root, entriesResult.encodedBuffers(), null, null);
     }
 }

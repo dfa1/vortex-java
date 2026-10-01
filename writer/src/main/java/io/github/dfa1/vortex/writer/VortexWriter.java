@@ -18,6 +18,7 @@ import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
 import io.github.dfa1.vortex.writer.encode.EncodeNode;
 import io.github.dfa1.vortex.writer.encode.EncodeResult;
+import io.github.dfa1.vortex.writer.encode.EncodedBuffer;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
 import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
@@ -646,12 +647,17 @@ public final class VortexWriter implements Closeable {
             long offset = bytesWritten;
 
             long segNullCount = data instanceof NullableData nd ? countNulls(nd.validity()) : 0L;
-            ByteBuffer fbBuf = buildArrayFlatBuffer(result, segNullCount);
+            List<EncodedBuffer> buffers = result.encodedBuffers();
+            int[] paddings = bufferPaddings(buffers);
+            ByteBuffer fbBuf = buildArrayFlatBuffer(result, paddings, segNullCount);
 
-            // Segment format: [buffer data...] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
+            // Segment format: [padding, buffer]... [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
             int fbLen = fbBuf.remaining();
-            for (MemorySegment seg : result.buffers()) {
-                write(seg);
+            for (int i = 0; i < buffers.size(); i++) {
+                if (paddings[i] > 0) {
+                    writePadding(paddings[i]);
+                }
+                write(buffers.get(i).data());
             }
             write(fbBuf);
             var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
@@ -757,7 +763,21 @@ public final class VortexWriter implements Closeable {
         bytesWritten += n;
     }
 
-    private ByteBuffer buildArrayFlatBuffer(EncodeResult result, long nullCount) {
+    /// Zero bytes to write before each buffer so it starts on a multiple of its own alignment. The
+    /// segment starts 64-byte aligned (more than any element needs), so offsets relative to the
+    /// segment start are enough.
+    private static int[] bufferPaddings(List<EncodedBuffer> buffers) {
+        int[] paddings = new int[buffers.size()];
+        long position = 0;
+        for (int i = 0; i < buffers.size(); i++) {
+            int alignment = buffers.get(i).alignment();
+            paddings[i] = (int) ((alignment - position % alignment) % alignment);
+            position += paddings[i] + buffers.get(i).data().byteSize();
+        }
+        return paddings;
+    }
+
+    private ByteBuffer buildArrayFlatBuffer(EncodeResult result, int[] paddings, long nullCount) {
         var fbb = new FbsBuilder(256);
 
         // Stats for the root node only (build vectors before the ArrayStats table). null_count is
@@ -787,14 +807,18 @@ public final class VortexWriter implements Closeable {
         // Buffer struct vector — one entry per buffer in result.
         // FbsLayout (LE): padding(u16) | alignment_exponent(u8) | compression(u8) | length(u32)
         // FlatBuffers builds backward: iterate in reverse.
-        var bufs = result.buffers();
+        // alignment_exponent is the element's own alignment, as Rust declares it: the Rust reader
+        // keeps it on the buffer, failing array construction when it is less than the element needs
+        // and aborting on any row slice off a multiple of it when it is more (this writer used to
+        // declare 64 for every buffer, which crashed filtered vortex-jni scans of zone-mapped files).
+        var bufs = result.encodedBuffers();
         io.github.dfa1.vortex.core.fbs.FbsArray.startBuffersVector(fbb, bufs.size());
         for (int i = bufs.size() - 1; i >= 0; i--) {
             fbb.prep(4, 8);
-            fbb.putInt((int) bufs.get(i).byteSize());
+            fbb.putInt((int) bufs.get(i).data().byteSize());
             fbb.putByte((byte) 0);   // compression = None
-            fbb.putByte((byte) 6);   // alignment_exponent = 6 (64-byte alignment)
-            fbb.putShort((short) 0); // padding = 0
+            fbb.putByte((byte) Integer.numberOfTrailingZeros(bufs.get(i).alignment()));
+            fbb.putShort((short) paddings[i]);
         }
         int bufVec = fbb.endVector();
 

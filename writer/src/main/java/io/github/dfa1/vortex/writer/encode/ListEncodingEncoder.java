@@ -47,7 +47,7 @@ public final class ListEncodingEncoder implements EncodingEncoder {
                 : findEncoding(elementType);
         EncodeResult elemResult = elemEncoding.encode(elementType, elements, ctx);
 
-        List<MemorySegment> allBuffers = new ArrayList<>(elemResult.buffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>(elemResult.encodedBuffers());
         int elemBufCount = allBuffers.size();
         EncodeNode elemNode = EncodeNode.remapBufferIndices(elemResult.rootNode(), 0);
 
@@ -56,7 +56,7 @@ public final class ListEncodingEncoder implements EncodingEncoder {
         for (long i = 0; i < nOffsets; i++) {
             offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i, ld.offsets()[(int) i]);
         }
-        allBuffers.add(offsetsBuf);
+        allBuffers.add(EncodedBuffer.of(offsetsBuf, PType.I64));
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);
 
         long elementsLen = ld.offsets()[(int) ld.outerLen()];

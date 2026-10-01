@@ -41,7 +41,7 @@ class MaskedEncodingEncoderTest {
         DType i32 = DType.I32;
         EncodeResult childResult = PRIM_ENCODER.encode(i32, values, EncodeTestHelper.testCtx());
 
-        List<MemorySegment> allBuffers = new ArrayList<>(childResult.buffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>(childResult.encodedBuffers());
         EncodeNode[] children;
 
         if (validity == null) {
@@ -51,7 +51,7 @@ class MaskedEncodingEncoderTest {
             EncodeResult validityResult = BOOL_ENCODER.encode(boolDtype, validity, EncodeTestHelper.testCtx());
             EncodeNode remapped = EncodeNode.remapBufferIndices(
                     validityResult.rootNode(), childResult.buffers().size());
-            allBuffers.addAll(validityResult.buffers());
+            allBuffers.addAll(validityResult.encodedBuffers());
             children = new EncodeNode[]{childResult.rootNode(), remapped};
         }
 
@@ -137,7 +137,7 @@ class MaskedEncodingEncoderTest {
                 EncodingId.VORTEX_MASKED, null,
                 new EncodeNode[]{childNode}, new int[]{1});
         MemorySegment dummyBuf = Arena.ofAuto().allocate(4);
-        EncodeResult result = new EncodeResult(maskedNode, List.of(dummyBuf, dummyBuf), null, null);
+        EncodeResult result = new EncodeResult(maskedNode, List.of(EncodedBuffer.bytes(dummyBuf), EncodedBuffer.bytes(dummyBuf)), null, null);
         DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY);
 
         // When
@@ -175,7 +175,7 @@ class MaskedEncodingEncoderTest {
         EncodeNode maskedNode = new EncodeNode(
                 EncodingId.VORTEX_MASKED, null,
                 new EncodeNode[]{childNode, childNode, childNode}, new int[]{});
-        List<MemorySegment> bufs = new ArrayList<>(childResult.buffers());
+        List<EncodedBuffer> bufs = new ArrayList<>(childResult.encodedBuffers());
         EncodeResult result = new EncodeResult(maskedNode, bufs, null, null);
         DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY);
 

@@ -81,7 +81,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
             byte[] wideMax = statsBytes(ptype, signedMax);
             EncodeNode wideRoot = new EncodeNode(EncodingId.FASTLANES_BITPACKED,
                     MemorySegment.ofArray(wideMeta), new EncodeNode[0], new int[]{0});
-            return new EncodeResult(wideRoot, List.of(widePacked), wideMin, wideMax);
+            return new EncodeResult(wideRoot, List.of(EncodedBuffer.of(widePacked, ptype)), wideMin, wideMax);
         }
 
         int bitWidth = bestBitWidth(bitWidthFreq, ptype.byteSize() + 4, n);
@@ -96,7 +96,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
             byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, null).encode();
             EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, MemorySegment.ofArray(metaBytes),
                     new EncodeNode[0], new int[]{0});
-            return new EncodeResult(root, List.of(packed), statsMin, statsMax);
+            return new EncodeResult(root, List.of(EncodedBuffer.of(packed, ptype)), statsMin, statsMax);
         }
 
         long packCap = 1L << bitWidth;
@@ -114,7 +114,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
             byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, null).encode();
             EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, MemorySegment.ofArray(metaBytes),
                     new EncodeNode[0], new int[]{0});
-            return new EncodeResult(root, List.of(packed), statsMin, statsMax);
+            return new EncodeResult(root, List.of(EncodedBuffer.of(packed, ptype)), statsMin, statsMax);
         }
 
         int numPatches = patchIdx.size();
@@ -132,7 +132,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{idxNode, valNode}, new int[]{0});
-        return new EncodeResult(root, List.of(packed, idxBuf, valBuf), statsMin, statsMax);
+        return new EncodeResult(root, List.of(EncodedBuffer.of(packed, ptype), EncodedBuffer.of(idxBuf, idxPtype),
+                EncodedBuffer.of(valBuf, ptype)), statsMin, statsMax);
     }
 
     /// Picks the bit-width that minimizes `packed_bytes + exceptions_bytes`.

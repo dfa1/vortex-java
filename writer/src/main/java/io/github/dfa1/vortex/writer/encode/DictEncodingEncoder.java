@@ -93,7 +93,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 new int[0]);
 
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
-        return new EncodeResult(rootNode, List.of(d.valuesBuf(), codesBuf),
+        return new EncodeResult(rootNode, List.of(EncodedBuffer.of(d.valuesBuf(), ((DType.Primitive) dtype).ptype()), EncodedBuffer.of(codesBuf, codePType)),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats));
     }
 
@@ -116,7 +116,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         DType codesDtype = new DType.Primitive(codePType, false);
         ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 0, CODES_EXCLUDED);
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
-        return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot),
+        return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(d.valuesBuf(), ((DType.Primitive) dtype).ptype())), List.of(slot),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
     }
 
@@ -271,7 +271,8 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         String maxStr = valueMap.keySet().stream().max(String::compareTo).orElse(null);
         byte[] statsMin = minStr != null ? ProtoScalarValue.ofStringValue(minStr).encode() : null;
         byte[] statsMax = maxStr != null ? ProtoScalarValue.ofStringValue(maxStr).encode() : null;
-        return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), statsMin, statsMax);
+        return new EncodeResult(root, List.of(EncodedBuffer.bytes(dictBytesBuf), EncodedBuffer.of(dictOffsetsBuf, PType.I64),
+                EncodedBuffer.of(codesBuf, codePType)), statsMin, statsMax);
     }
 
     private static DictData buildDictData(DType dtype, Object data) {
