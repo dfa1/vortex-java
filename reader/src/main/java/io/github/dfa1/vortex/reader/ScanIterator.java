@@ -16,6 +16,11 @@ import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.ListArray;
+import io.github.dfa1.vortex.reader.array.MapArray;
+import io.github.dfa1.vortex.reader.array.ListViewArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
@@ -793,7 +798,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
     }
 
-    private static Array sliceArray(Array full, long offset, long length, DType dtype) {
+    static Array sliceArray(Array full, long offset, long length, DType dtype) {
         return switch (full) {
             case MaskedArray m -> {
                 Array innerSlice = sliceArray(m.inner(), offset, length, dtype);
@@ -840,6 +845,23 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 Array elementsSlice = sliceArray(a.elements(), offset * fixedSize, length *fixedSize, fd.elementType());
                 yield new FixedSizeListArray(fd, length, elementsSlice);
             }
+            // Decimals: rebuild each representation over the window - a byte-parts array slices its
+            // mantissa child, a buffer-backed one its buffer (zero-copy), a constant just its length.
+            case LazyDecimalBytePartsArray a -> new LazyDecimalBytePartsArray(dtype, length,
+                    sliceArray(a.msp(), offset, length, a.msp().dtype()));
+            case LazyDecimalArray a -> new LazyDecimalArray(dtype, length,
+                    a.buf().asSlice(offset * a.byteWidth(), length * a.byteWidth()), a.byteWidth());
+            case LazyConstantDecimalArray a -> new LazyConstantDecimalArray(dtype, length, a.value(), a.byteWidth());
+            case ListViewArray a -> {
+                // Like ListArray: offsets and sizes address the shared elements absolutely, so only
+                // the per-row offsets and sizes are sliced.
+                yield new ListViewArray((DType.List) dtype, length, a.elements(),
+                        sliceArray(a.offsets(), offset, length, a.offsets().dtype()),
+                        sliceArray(a.sizes(), offset, length, a.sizes().dtype()));
+            }
+            case MapArray a -> new MapArray((DType.Map) dtype, length,
+                    sliceArray(a.entries(), offset, length, a.entries().dtype()));
+            // Float16, Generic, Variant and Unknown arrays have no slice yet; they fail loudly here.
             default -> throw new VortexException(
                     "scan: cannot slice shared array of type " + full.getClass().getSimpleName());
         };

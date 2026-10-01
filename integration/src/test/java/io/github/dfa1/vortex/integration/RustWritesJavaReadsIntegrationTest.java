@@ -34,9 +34,11 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.lang.foreign.Arena;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
@@ -571,6 +573,46 @@ class RustWritesJavaReadsIntegrationTest {
         Arrays.sort(jni);
         Arrays.sort(java);
         assertThat(java).containsExactly(jni);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({
+        "tpch_lineitem.regular.vortex, l_extendedprice",
+        "tpch_lineitem.compact.vortex, l_extendedprice",
+        "tpch_orders.compact.vortex,   o_totalprice"
+        // tpch_orders.regular also uses vortex.onpair, an unstable-edition encoding with no decoder yet
+    })
+    void s3_fullScan_decimalColumnMatchesJni(String fixture, String decimalColumn, @TempDir Path tmp)
+            throws Exception {
+        // Given — a full scan (every column, unlike the single-column test above) of a TPC-H fixture
+        // whose columns are chunked differently, so the scan plans windows narrower than some
+        // column's chunk and slices that chunk per window. Slicing had no case for decimal arrays,
+        // so the scan threw "cannot slice shared array of type LazyDecimalBytePartsArray" and none
+        // of the TPC-H fixtures could be read.
+        RustFixtures.assumeNetworkAvailable();
+        Path file = RustFixtures.downloadArray(tmp, fixture);
+        var jni = new ArrayList<BigDecimal>();
+        forEachArrowBatch(file, ScanOptions.of(), root -> {
+            var vec = root.getVector(decimalColumn);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                jni.add((BigDecimal) vec.getObject(i));
+            }
+        });
+
+        // When
+        var result = new ArrayList<BigDecimal>();
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                io.github.dfa1.vortex.reader.array.DecimalArray arr = c.column(decimalColumn);
+                for (long i = 0; i < arr.length(); i++) {
+                    result.add(arr.getDecimal(i));
+                }
+            });
+        }
+
+        // Then — same values (vortex-jni may return partitions in a different order)
+        assertThat(result).hasSize(jni.size()).containsExactlyInAnyOrderElementsOf(jni);
     }
 
     @Test
