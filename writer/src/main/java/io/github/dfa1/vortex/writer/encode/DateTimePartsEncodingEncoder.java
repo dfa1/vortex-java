@@ -59,10 +59,10 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         EncodeResult secondsResult = primEnc.encode(DType.I64, seconds, ctx);
         EncodeResult subsecondsResult = primEnc.encode(DType.I64, subseconds, ctx);
 
-        List<MemorySegment> allBuffers = new ArrayList<>();
-        allBuffers.addAll(daysResult.buffers());
-        allBuffers.addAll(secondsResult.buffers());
-        allBuffers.addAll(subsecondsResult.buffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>();
+        allBuffers.addAll(daysResult.encodedBuffers());
+        allBuffers.addAll(secondsResult.encodedBuffers());
+        allBuffers.addAll(subsecondsResult.encodedBuffers());
 
         int off1 = daysResult.buffers().size();
         int off2 = off1 + secondsResult.buffers().size();

@@ -358,7 +358,7 @@ class ConstantEncodingEncoderTest {
             // Given — scalar proto with only null_value tag set (Rust-written null constant)
             ProtoScalarValue nullScalar = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE);
             EncodeResult encoded = EncodeResult.simple(
-                    EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(nullScalar.encode()));
+                    EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(nullScalar.encode())));
             long rowCount = 1_000L;
 
             // When

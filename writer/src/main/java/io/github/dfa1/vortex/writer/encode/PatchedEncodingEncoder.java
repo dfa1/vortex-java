@@ -140,7 +140,8 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_PATCHED, MemorySegment.ofArray(metaBytes),
                     new EncodeNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{});
 
-            return new EncodeResult(root, List.of(innerBuf, laneOffsBuf, patchIdxBuf, patchValBuf), null, null);
+            return new EncodeResult(root, List.of(EncodedBuffer.of(innerBuf, ptype), EncodedBuffer.of(laneOffsBuf, PType.U32),
+                    EncodedBuffer.of(patchIdxBuf, PType.U16), EncodedBuffer.of(patchValBuf, ptype)), null, null);
         }
 
         private static PatchedData computePatchedData(long[] longs, PType ptype, int n) {

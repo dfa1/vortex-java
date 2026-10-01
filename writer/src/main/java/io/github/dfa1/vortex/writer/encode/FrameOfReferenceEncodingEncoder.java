@@ -41,7 +41,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode root = new EncodeNode(EncodingId.FASTLANES_FOR, meta, new EncodeNode[]{child}, new int[0]);
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(ptype, data);
-        return new EncodeResult(root, List.of(residuals),
+        return new EncodeResult(root, List.of(EncodedBuffer.of(residuals, ptype)),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats));
     }
 

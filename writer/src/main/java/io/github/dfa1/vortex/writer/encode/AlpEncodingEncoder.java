@@ -210,7 +210,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
-            return new EncodeResult(root, List.of(encodedBuf), d.statsMin(), d.statsMax());
+            return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I64)), d.statsMin(), d.statsMax());
         }
 
         int numPatches = d.patchIndices().size();
@@ -230,7 +230,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             MemorySegment.ofArray(metaBytes),
             new EncodeNode[]{encodedNode, idxNode, valNode},
             new int[0]);
-        return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), d.statsMin(), d.statsMax());
+        return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I64), EncodedBuffer.of(idxBuf, PType.U32),
+                EncodedBuffer.of(valBuf, PType.F64)), d.statsMin(), d.statsMax());
     }
 
     private static CascadeStep encodeCascadeF64(double[] values, EncodeContext ctx) {
@@ -259,7 +260,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
             MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
         ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
-        return new CascadeStep(partialRoot, List.of(idxBuf, valBuf), List.of(slot), d.statsMin(), d.statsMax(), true);
+        return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(idxBuf, PType.U32), EncodedBuffer.of(valBuf, PType.F64)),
+                List.of(slot), d.statsMin(), d.statsMax(), true);
     }
 
     /// Size-based exponent search for F32. See [#findExponentsF64(double[])] for cost model.
@@ -384,7 +386,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             byte[] metaBytes = new ProtoALPMetadata(expE, expF, null).encode();
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
-            return new EncodeResult(root, List.of(encodedBuf), statsMin, statsMax);
+            return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I32)), statsMin, statsMax);
         }
 
         int numPatches = patchIndices.size();
@@ -408,7 +410,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             MemorySegment.ofArray(metaBytes),
             new EncodeNode[]{encodedNode, idxNode, valNode},
             new int[0]);
-        return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), statsMin, statsMax);
+        return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I32), EncodedBuffer.of(idxBuf, PType.U32),
+                EncodedBuffer.of(valBuf, PType.F32)), statsMin, statsMax);
     }
 
     private static ProtoPatchesMetadata buildPatchesMeta(int numPatches) {

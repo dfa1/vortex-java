@@ -131,7 +131,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         DType idxDtype = new DType.Primitive(idxPtype, false);
         ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0, SELF);
         ChildSlot valSlot = new ChildSlot(dtype, valArr, 1, SELF);
-        return new CascadeStep(partialRoot, List.of(fillBuf), List.of(idxSlot, valSlot), ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
+        return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(fillBuf)), List.of(idxSlot, valSlot), ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }
 
     private static Object idxArr(List<Integer> patchIdx, PType idxPtype) {
@@ -253,11 +253,11 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         EncodeResult idxResult = new CascadingCompressor(INDEX_CASCADE_CANDIDATES).encode(idxDtype, idxArr, ctx);
         EncodeResult valResult = new BoolEncodingEncoder().encode(DType.BOOL, patchVals, ctx);
 
-        List<MemorySegment> buffers = new ArrayList<>();
-        buffers.add(fillBuf);
-        buffers.addAll(idxResult.buffers());
+        List<EncodedBuffer> buffers = new ArrayList<>();
+        buffers.add(EncodedBuffer.bytes(fillBuf));
+        buffers.addAll(idxResult.encodedBuffers());
         int valOffset = 1 + idxResult.buffers().size();
-        buffers.addAll(valResult.buffers());
+        buffers.addAll(valResult.encodedBuffers());
 
         EncodeNode idxNode = EncodeNode.remapBufferIndices(idxResult.rootNode(), 1);
         EncodeNode valNode = EncodeNode.remapBufferIndices(valResult.rootNode(), valOffset);
@@ -337,7 +337,8 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_SPARSE, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{idxNode, valNode}, new int[]{0});
-        return new EncodeResult(root, List.of(fillBuf, idxBuf, valBuf), null, null).withStats(ZoneMapStats.of(dtype, data));
+        return new EncodeResult(root, List.of(EncodedBuffer.bytes(fillBuf), EncodedBuffer.of(idxBuf, idxPtype),
+                EncodedBuffer.of(valBuf, ptype)), null, null).withStats(ZoneMapStats.of(dtype, data));
     }
 
     private static int arrayLength(Object data, PType ptype) {

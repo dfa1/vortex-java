@@ -33,7 +33,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
             min = stats[0];
             max = stats[1];
         }
-        return EncodeResult.simple(EncodingId.VORTEX_PRIMITIVE, seg, min, max);
+        return EncodeResult.simple(EncodingId.VORTEX_PRIMITIVE, EncodedBuffer.of(seg, ptype), min, max);
     }
 
     private static MemorySegment encodePrimitive(PType ptype, Object data, Arena arena) {

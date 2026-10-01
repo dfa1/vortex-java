@@ -50,9 +50,9 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         int valuesBufCount = valuesResult.buffers().size();
         EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), valuesBufCount);
 
-        List<MemorySegment> buffers = new ArrayList<>(valuesBufCount + validityResult.buffers().size());
-        buffers.addAll(valuesResult.buffers());
-        buffers.addAll(validityResult.buffers());
+        List<EncodedBuffer> buffers = new ArrayList<>(valuesBufCount + validityResult.buffers().size());
+        buffers.addAll(valuesResult.encodedBuffers());
+        buffers.addAll(validityResult.encodedBuffers());
 
         EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_MASKED,

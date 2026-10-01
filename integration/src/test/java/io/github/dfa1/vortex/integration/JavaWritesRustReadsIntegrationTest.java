@@ -174,6 +174,30 @@ class JavaWritesRustReadsIntegrationTest {
         return longs.stream().mapToLong(Long::longValue).toArray();
     }
 
+    private static long[] readLongColumnFiltered(Path file, String column, Expression filter) throws IOException {
+        String uri = file.toAbsolutePath().toUri().toString();
+        ScanOptions opts = ScanOptions.builder()
+                                   .projection(Expression.select(new String[]{column}, Expression.root()))
+                                   .filter(filter)
+                                   .build();
+        var longs = new ArrayList<Long>();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(opts);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    BigIntVector vec = (BigIntVector) root.getVector(column);
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        longs.add(vec.get(i));
+                    }
+                }
+            }
+        }
+        return longs.stream().mapToLong(Long::longValue).toArray();
+    }
+
     private static double[] readDoubleColumn(Path file, String column) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         ScanOptions opts = ScanOptions.builder()
@@ -466,6 +490,86 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(closes).containsExactlyInAnyOrder(expectedCloses);
     }
 
+    @Test
+    void javaWriter_jniReader_cascading_ohlc_rowRangeSlicesEveryColumn(@TempDir Path tmp) throws IOException {
+        // Given — the cascading compressor spreads these columns over its encodings (ALP, FoR,
+        // bit-packing, dictionary, FSST, ...), and a row range starting and ending mid-chunk makes
+        // vortex-jni slice every one of their buffers at a row offset. Rust keeps each buffer's
+        // declared alignment and aborts on a slice off a multiple of it, so a buffer declared wider
+        // than its element (as all were, at 64 bytes) crashes here; one declared narrower fails
+        // array construction instead.
+        Path file = tmp.resolve("java_cascade_ohlc_range.vtx");
+        List<OhlcData.Batch> batches = OhlcData.generate(10_000, 1_000);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
+            for (OhlcData.Batch b : batches) {
+                sut.writeChunk(Map.of(
+                        ColumnName.of("date"), b.date(),
+                        ColumnName.of("symbol"), b.symbol(),
+                        ColumnName.of("open"), b.open(),
+                        ColumnName.of("high"), b.high(),
+                        ColumnName.of("low"), b.low(),
+                        ColumnName.of("close"), b.close(),
+                        ColumnName.of("volume"), b.volume()));
+            }
+        }
+        int begin = 1_501;
+        int end = 7_333;
+
+        // When
+        java.util.Map<String, List<Object>> result = new java.util.HashMap<>();
+        for (String column : List.of("date", "symbol", "open", "high", "low", "close", "volume")) {
+            result.put(column, readRowRange(file, column, begin, end));
+        }
+
+        // Then
+        assertThat(result.get("date")).containsExactlyInAnyOrderElementsOf(
+                slice(batches.stream().flatMapToInt(b -> Arrays.stream(b.date())).boxed(), begin, end));
+        assertThat(result.get("symbol")).containsExactlyInAnyOrderElementsOf(
+                slice(batches.stream().flatMap(b -> Arrays.stream(b.symbol())), begin, end));
+        for (String column : List.of("open", "high", "low", "close")) {
+            List<Object> expected = slice(batches.stream().flatMapToDouble(b -> Arrays.stream(switch (column) {
+                case "open" -> b.open();
+                case "high" -> b.high();
+                case "low" -> b.low();
+                default -> b.close();
+            })).boxed(), begin, end);
+            assertThat(result.get(column)).as(column).containsExactlyInAnyOrderElementsOf(expected);
+        }
+        assertThat(result.get("volume")).containsExactlyInAnyOrderElementsOf(
+                slice(batches.stream().flatMapToLong(b -> Arrays.stream(b.volume())).boxed(), begin, end));
+    }
+
+    private static List<Object> slice(java.util.stream.Stream<?> values, int begin, int end) {
+        return values.skip(begin).limit((long) end - begin).map(Object.class::cast).toList();
+    }
+
+    private static List<Object> readRowRange(Path file, String column, long begin, long end) throws IOException {
+        String uri = file.toAbsolutePath().toUri().toString();
+        ScanOptions opts = ScanOptions.builder()
+                                   .projection(Expression.select(new String[]{column}, Expression.root()))
+                                   .rowRangeBegin(begin)
+                                   .rowRangeEnd(end)
+                                   .build();
+        var values = new ArrayList<Object>();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(opts);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    var vector = root.getVector(column);
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        Object v = vector.getObject(i);
+                        values.add(v instanceof org.apache.arrow.vector.util.Text t ? t.toString() : v);
+                    }
+                }
+            }
+        }
+        return values;
+    }
+
     // ── Parameterized random-data tests ─────────────────────────────────────
 
     @Test
@@ -534,6 +638,37 @@ class JavaWritesRustReadsIntegrationTest {
         // Then — all rows survive the Java zone-map -> Rust read round-trip
         assertThat(decodedIds).containsExactly(ids);
         assertThat(decodedVals).containsExactly(vals);
+    }
+
+    @Test
+    void javaWriter_jniReader_zoneMapped_filteredScan_doesNotAbortAndKeepsEveryMatch(@TempDir Path tmp)
+            throws IOException {
+        // Given — a zone-mapped file read with a filter, so vortex-jni prunes against the zone-map
+        // table and slices it by row. The writer used to declare 64-byte alignment on every array
+        // buffer; Rust keeps a buffer's declared alignment and panics on any slice off a multiple
+        // of it (an i64 zone field sliced at row 2 is byte 16), aborting the whole JVM. Chunks are
+        // full-size here so zones line up with the stride Rust assumes and only alignment is tested.
+        Path file = tmp.resolve("java_zoned_filtered.vtx");
+        WriteOptions zoneMapped = new WriteOptions(4, true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, zoneMapped)) {
+            long next = 0;
+            for (int size : new int[]{4, 4, 4, 2}) {
+                long[] ids = new long[size];
+                double[] vals = new double[size];
+                for (int i = 0; i < size; i++) {
+                    ids[i] = next++;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("id"), ids, ColumnName.of("value"), vals));
+            }
+        }
+
+        // When
+        long[] result = readLongColumnFiltered(file, "id", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(10L)));
+
+        // Then
+        assertThat(result).containsExactly(10L, 11L, 12L, 13L);
     }
 
     @Test

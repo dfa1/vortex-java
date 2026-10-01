@@ -119,7 +119,7 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZIGZAG, null, new EncodeNode[]{child}, new int[0]);
         byte[] statsMin = n > 0 ? ProtoScalarValue.ofInt64Value(minMax[0]).encode() : null;
         byte[] statsMax = n > 0 ? ProtoScalarValue.ofInt64Value(minMax[1]).encode() : null;
-        return new EncodeResult(root, List.of(seg), statsMin, statsMax);
+        return new EncodeResult(root, List.of(EncodedBuffer.of(seg, signed)), statsMin, statsMax);
     }
 
     private static int arrayLength(Object data, PType ptype) {

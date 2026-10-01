@@ -52,7 +52,7 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
         // extension column (timestamps, dates) with no zone map at all. The reader resolves a
         // MIN/MAX stat for an extension column against its storage dtype, mirroring Rust's
         // stats_table_dtype fallback, so storage-space bounds are exactly what it expects.
-        return new EncodeResult(root, childResult.buffers(), childResult.statsMin(), childResult.statsMax());
+        return new EncodeResult(root, childResult.encodedBuffers(), childResult.statsMin(), childResult.statsMax());
     }
 
     @Override

@@ -58,7 +58,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         // A constant array's min and max are both the one repeated value, by construction -- no
         // scan needed. Empty arrays report no stats, matching every other encoder's convention.
         byte[] stats = arrayLength(data, ptype) > 0 ? scalarBytes : null;
-        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalarBytes), stats, stats);
+        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)), stats, stats);
     }
 
     @Override
@@ -81,7 +81,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         }
         boolean value = data.length == 0 || data[0];
         ProtoScalarValue scalar = ProtoScalarValue.ofBoolValue(value);
-        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.encode()));
+        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalar.encode())));
     }
 
     private static boolean isConstantBool(boolean[] data) {

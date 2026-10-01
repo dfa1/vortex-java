@@ -107,7 +107,9 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 new int[]{0, 1, 2});
 
         return new EncodeResult(root,
-                List.of(c.symBuf(), c.symLenBuf(), c.compBuf(), uncompLenBuf, codesOffBuf),
+                List.of(EncodedBuffer.of(c.symBuf(), PType.U64), EncodedBuffer.bytes(c.symLenBuf()),
+                        EncodedBuffer.bytes(c.compBuf()), EncodedBuffer.of(uncompLenBuf, c.uncompLenPType()),
+                        EncodedBuffer.of(codesOffBuf, c.codesOffPType())),
                 stats != null ? stats[0] : null, stats != null ? stats[1] : null);
     }
 
@@ -138,7 +140,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{null, null},
                 new int[]{0, 1, 2});
         return new CascadeStep(partialRoot,
-                List.of(c.symBuf(), c.symLenBuf(), c.compBuf()),
+                List.of(EncodedBuffer.of(c.symBuf(), PType.U64), EncodedBuffer.bytes(c.symLenBuf()),
+                        EncodedBuffer.bytes(c.compBuf())),
                 List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0, SELF),
                         new ChildSlot(new DType.Primitive(c.codesOffPType(), false), codesOffsets, 1, SELF)),
                 stats != null ? stats[0] : null, stats != null ? stats[1] : null, true);

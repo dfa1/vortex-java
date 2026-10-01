@@ -58,13 +58,15 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
         }
 
         int[] bufIndices;
-        List<MemorySegment> buffers;
+        List<EncodedBuffer> buffers;
+        // Views are Rust's `#[repr(C, align(16))] BinaryView`; the data buffers are plain bytes.
+        EncodedBuffer views = new EncodedBuffer(viewsBuf, VIEW_SIZE);
         if (hasDataBuf) {
             bufIndices = new int[]{0, 1};
-            buffers = List.of(dataBuf, viewsBuf);
+            buffers = List.of(EncodedBuffer.bytes(dataBuf), views);
         } else {
             bufIndices = new int[]{0};
-            buffers = List.of(viewsBuf);
+            buffers = List.of(views);
         }
 
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBINVIEW, null, new EncodeNode[0], bufIndices);

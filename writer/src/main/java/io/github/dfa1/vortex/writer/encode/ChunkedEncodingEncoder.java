@@ -50,7 +50,7 @@ public final class ChunkedEncodingEncoder implements EncodingEncoder {
         DType u64 = DType.U64;
         EncodeResult offsetsResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(u64, offsets, ctx);
 
-        List<MemorySegment> allBuffers = new ArrayList<>(offsetsResult.buffers());
+        List<EncodedBuffer> allBuffers = new ArrayList<>(offsetsResult.encodedBuffers());
         EncodeNode[] children = new EncodeNode[nchunks + 1];
         children[0] = offsetsResult.rootNode();
 
@@ -59,7 +59,7 @@ public final class ChunkedEncodingEncoder implements EncodingEncoder {
             EncodeResult chunkResult = inner.encode(dtype, chunks.get(i), ctx);
             int bufOffset = allBuffers.size();
             children[i + 1] = EncodeNode.remapBufferIndices(chunkResult.rootNode(), bufOffset);
-            allBuffers.addAll(chunkResult.buffers());
+            allBuffers.addAll(chunkResult.encodedBuffers());
         }
 
         EncodeNode root = new EncodeNode(

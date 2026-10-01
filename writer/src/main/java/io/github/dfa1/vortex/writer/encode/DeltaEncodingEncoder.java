@@ -98,7 +98,7 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
         EncodeNode deltasNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode root = new EncodeNode(EncodingId.FASTLANES_DELTA, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{basesNode, deltasNode}, new int[0]);
-        return new EncodeResult(root, List.of(basesSeg, deltasSeg), statsMin, statsMax);
+        return new EncodeResult(root, List.of(EncodedBuffer.of(basesSeg, ptype), EncodedBuffer.of(deltasSeg, ptype)), statsMin, statsMax);
     }
 
     private static void deltaChunk(long[] transposed, long[] bases, int lanes, int typeBits, long mask, long[] out) {

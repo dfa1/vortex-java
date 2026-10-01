@@ -85,8 +85,8 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 return encodeEmpty();
             }
 
-            List<MemorySegment> chunkMetas = new ArrayList<>();
-            List<MemorySegment> pages = new ArrayList<>();
+            List<EncodedBuffer> chunkMetas = new ArrayList<>();
+            List<EncodedBuffer> pages = new ArrayList<>();
             List<ProtoPcoChunkInfo> chunks = new ArrayList<>();
 
             int chunkStart = 0;
@@ -94,13 +94,13 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 int chunkEnd = Math.min(chunkStart + CHUNK_SIZE, n);
                 long[] chunkLatents = Arrays.copyOfRange(allLatents, chunkStart, chunkEnd);
                 ChunkResult result = encodeChunk(chunkLatents, ptype, dtypeSize, ctx.arena());
-                chunkMetas.add(result.chunkMeta());
-                pages.add(result.page());
+                chunkMetas.add(EncodedBuffer.bytes(result.chunkMeta()));
+                pages.add(EncodedBuffer.bytes(result.page()));
                 chunks.add(new ProtoPcoChunkInfo(List.of(new ProtoPcoPageInfo(result.pageN()))));
                 chunkStart = chunkEnd;
             }
 
-            List<MemorySegment> buffers = new ArrayList<>(chunkMetas);
+            List<EncodedBuffer> buffers = new ArrayList<>(chunkMetas);
             buffers.addAll(pages);
             int[] allBufIdxs = IntStream.range(0, buffers.size()).toArray();
             MemorySegment metaBuf = buildMetadata(chunks);

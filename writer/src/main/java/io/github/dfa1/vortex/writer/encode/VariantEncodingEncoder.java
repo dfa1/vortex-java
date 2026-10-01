@@ -52,7 +52,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
         List<Long> runLengths = new ArrayList<>();
         coalesceRuns(values, runValues, runLengths);
 
-        List<MemorySegment> buffers = new ArrayList<>();
+        List<EncodedBuffer> buffers = new ArrayList<>();
         EncodeNode coreStorage = runValues.size() == 1
                 ? constantChild(runValues.get(0), buffers)
                 : chunkedConstants(runValues, runLengths, ctx, buffers);
@@ -78,7 +78,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
 
     /// Encodes the shredded typed column as a child node, appending its buffers (remapped
     /// to follow the core-storage buffers already in `buffers`).
-    private static EncodeNode encodeShredded(VariantData data, EncodeContext ctx, List<MemorySegment> buffers) {
+    private static EncodeNode encodeShredded(VariantData data, EncodeContext ctx, List<EncodedBuffer> buffers) {
         EncodingEncoder enc = null;
         for (EncodingEncoder e : SHREDDED_FALLBACK) {
             if (e.accepts(data.shreddedDtype())) {
@@ -92,7 +92,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
         }
         EncodeResult shredded = enc.encode(data.shreddedDtype(), data.shreddedData(), ctx);
         EncodeNode child = EncodeNode.remapBufferIndices(shredded.rootNode(), buffers.size());
-        buffers.addAll(shredded.buffers());
+        buffers.addAll(shredded.encodedBuffers());
         return child;
     }
 
@@ -135,17 +135,17 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
 
     /// Builds a buffer-backed `vortex.constant` child for one variant scalar, appending
     /// its serialized scalar to `buffers`.
-    private static EncodeNode constantChild(ProtoScalar value, List<MemorySegment> buffers) {
+    private static EncodeNode constantChild(ProtoScalar value, List<EncodedBuffer> buffers) {
         ProtoScalarValue scalar = ProtoScalarValue.ofVariantValue(value);
         int bufIdx = buffers.size();
-        buffers.add(MemorySegment.ofArray(scalar.encode()));
+        buffers.add(EncodedBuffer.bytes(MemorySegment.ofArray(scalar.encode())));
         return EncodeNode.leaf(EncodingId.VORTEX_CONSTANT, bufIdx);
     }
 
     /// Builds a `vortex.chunked` node: child 0 is the cumulative `u64` run offsets, the
     /// rest are one constant child per run. Appends all buffers to `buffers`.
     private static EncodeNode chunkedConstants(List<ProtoScalar> runValues, List<Long> runLengths,
-            EncodeContext ctx, List<MemorySegment> buffers) {
+            EncodeContext ctx, List<EncodedBuffer> buffers) {
         int nruns = runValues.size();
         long[] offsets = new long[nruns + 1];
         for (int i = 0; i < nruns; i++) {
@@ -153,7 +153,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
         }
 
         EncodeResult offsetsResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(DType.U64, offsets, ctx);
-        buffers.addAll(offsetsResult.buffers());
+        buffers.addAll(offsetsResult.encodedBuffers());
 
         EncodeNode[] children = new EncodeNode[nruns + 1];
         children[0] = offsetsResult.rootNode();

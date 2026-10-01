@@ -26,6 +26,6 @@ public final class ByteBoolEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < bools.length; i++) {
             seg.set(ValueLayout.JAVA_BYTE, i, bools[i] ? (byte) 1 : (byte) 0);
         }
-        return EncodeResult.simple(encodingId(), seg);
+        return EncodeResult.simple(encodingId(), EncodedBuffer.bytes(seg));
     }
 }

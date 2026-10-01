@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
 
-import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,7 +35,7 @@ public final class StructEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.VORTEX_STRUCT,
                     "fieldArrays length %d != fieldTypes length %d".formatted(fields.size(), fieldTypes.size()));
         }
-        List<MemorySegment> allBuffers = new ArrayList<>();
+        List<EncodedBuffer> allBuffers = new ArrayList<>();
         EncodeNode[] children = new EncodeNode[fields.size()];
         for (int i = 0; i < fields.size(); i++) {
             DType fieldDtype = fieldTypes.get(i);
@@ -51,7 +50,7 @@ public final class StructEncodingEncoder implements EncodingEncoder {
             EncodeResult fieldResult = fieldEncoder.encode(fieldDtype, fieldData, ctx);
             int bufOffset = allBuffers.size();
             children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
-            allBuffers.addAll(fieldResult.buffers());
+            allBuffers.addAll(fieldResult.encodedBuffers());
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_STRUCT, null, children, new int[0]);
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
