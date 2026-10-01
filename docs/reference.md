@@ -177,7 +177,7 @@ Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshol
 
 | Method | Notes |
 |--------|-------|
-| `withZoneMaps(boolean)` | Toggle per-chunk min/max/sum statistics |
+| `withZoneMaps(boolean)` | Toggle per-chunk min/max/sum statistics. One zone per `writeChunk` batch; Rust readers (vortex-jni) prune on them only when every batch but the last has the same row count, and otherwise read the column unpruned |
 | `withGlobalDict(boolean)` | Toggle the shared cross-chunk dictionary |
 | `withZstd(boolean)` | Add Zstandard to the cascade codec competition. Requires `allowedCascading > 0` — Zstd only competes inside the cascade, so `withZstd(true)` throws `IllegalArgumentException` at depth 0; combine with `cascading(depth)` |
 | `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |

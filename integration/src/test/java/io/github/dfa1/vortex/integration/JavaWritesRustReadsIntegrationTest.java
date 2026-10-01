@@ -671,6 +671,46 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(result).containsExactly(10L, 11L, 12L, 13L);
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("zoneMappedChunkShapes")
+    void javaWriter_jniReader_zoneMapped_filterKeepsEveryMatch(String shape, int[] chunkSizes, long threshold,
+            @TempDir Path tmp) throws IOException {
+        // Given — one zone per chunk, but Rust reads the declared zone length as a uniform stride
+        // (row r in zone r / len) and rejects a zone count other than ceil(rows / len). The writer
+        // used to declare WriteOptions#chunkSize() however long the chunks really were, so a
+        // filtered vortex-jni read pruned on the wrong zone's stats and dropped matching rows
+        // (#418). Values equal their row number, so every row >= threshold must come back.
+        Path file = tmp.resolve("java_zone_shape.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+            long next = 0;
+            for (int size : chunkSizes) {
+                long[] ids = new long[size];
+                for (int i = 0; i < size; i++) {
+                    ids[i] = next++;
+                }
+                sut.writeChunk(Map.of(ColumnName.of("id"), ids, ColumnName.of("value"), new double[size]));
+            }
+        }
+        long rows = Arrays.stream(chunkSizes).sum();
+
+        // When
+        long[] result = readLongColumnFiltered(file, "id", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(threshold)));
+
+        // Then
+        assertThat(result).containsExactlyInAnyOrder(java.util.stream.LongStream.range(threshold, rows).toArray());
+    }
+
+    static Stream<Arguments> zoneMappedChunkShapes() {
+        return Stream.of(
+                // a short chunk mid-file: no stride fits, so Rust must not prune at all
+                Arguments.of("short middle chunk", new int[]{4, 4, 2, 4}, 10L),
+                // fixed batches far below chunkSize (65 536): the stride is the batch length
+                Arguments.of("fixed batches, short tail", new int[]{5, 5, 5, 3}, 7L),
+                Arguments.of("one chunk", new int[]{9}, 4L));
+    }
+
     @Test
     void javaWriter_jniReader_zoneMapped_allNullChunkStillRoundTrips(@TempDir Path tmp) throws IOException {
         // Given — #378 regression: a nullable I64 column across 3 zone-mapped chunks where the

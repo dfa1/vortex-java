@@ -30,6 +30,36 @@ final class ZoneMapStatCodec {
     private ZoneMapStatCodec() {
     }
 
+    /// The zone length to declare for a one-zone-per-chunk zone map over chunks of `rowCounts`
+    /// rows: the shared chunk length when every chunk but the last has it (and the last is not
+    /// empty and no longer), else `0`.
+    ///
+    /// Rust reads the declared length as a uniform stride - row `r` belongs to zone
+    /// `r / zoneLen`, and the zone count must equal `ceil(rows / zoneLen)` - so any other value
+    /// misplaces zones once one chunk differs: a filtered vortex-jni read then prunes on the wrong
+    /// zone's stats and silently drops matching rows, or rejects the column. `0` is Rust's "no
+    /// stride": it reads the data unpruned. vortex-java's reader never uses this length for the
+    /// legacy layout; it places zones on the physical chunks.
+    ///
+    /// @param rowCounts row count of each chunk, in order
+    /// @return the uniform chunk length, or `0` when chunks are not uniform
+    static long uniformZoneLength(long[] rowCounts) {
+        if (rowCounts.length == 0) {
+            return 0;
+        }
+        long length = rowCounts[0];
+        long last = rowCounts[rowCounts.length - 1];
+        if (length <= 0 || length > 0xFFFF_FFFFL || last <= 0 || last > length) {
+            return 0;
+        }
+        for (int i = 1; i < rowCounts.length - 1; i++) {
+            if (rowCounts[i] != length) {
+                return 0;
+            }
+        }
+        return length;
+    }
+
     /// `vortex.stats` metadata: `u32` zone length (LE) + a 1-byte stat bitset (LSB-first) with the
     /// NULL_COUNT bit always set and the MAX/MIN and SUM bits set when present, matching
     /// [io.github.dfa1.vortex.reader] `ZonedStatsSchema`.

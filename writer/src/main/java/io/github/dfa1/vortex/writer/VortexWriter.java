@@ -877,7 +877,7 @@ public final class VortexWriter implements Closeable {
                     chunks.stream().map(ChunkRef::statsMin).toList(),
                     chunks.stream().map(ChunkRef::statsMax).toList(),
                     sumDtype, chunks.stream().map(ChunkRef::statsSum).toList(),
-                    nullCounts);
+                    nullCounts, chunks.stream().mapToLong(ChunkRef::rowCount).toArray());
         }
         // Dict-encoded columns (one zone per code chunk). MIN/MAX/SUM come from each chunk's logical
         // values (computed at dict-build time); NULL_COUNT always. Matches Rust, whose zone-map
@@ -889,7 +889,8 @@ public final class VortexWriter implements Closeable {
             long[] nullCounts = ref.chunkNullCounts().stream().mapToLong(Long::longValue).toArray();
             emitZoneMap(e.getKey(), minMaxDtype,
                     ref.chunkStatsMin(), ref.chunkStatsMax(),
-                    ZoneMapStatCodec.zoneSumDtype(colDtype), ref.chunkStatsSum(), nullCounts);
+                    ZoneMapStatCodec.zoneSumDtype(colDtype), ref.chunkStatsSum(), nullCounts,
+                    ref.chunkRowCounts().stream().mapToLong(Long::longValue).toArray());
         }
     }
 
@@ -906,7 +907,8 @@ public final class VortexWriter implements Closeable {
     /// zone, matching Rust. Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), SUM(5),
     /// NULL_COUNT(6).
     private void emitZoneMap(ColumnName colName, DType minMaxDtype, List<byte[]> minBytes, List<byte[]> maxBytes,
-                             DType sumDtype, List<byte[]> sumBytes, long[] nullCounts) throws IOException {
+                             DType sumDtype, List<byte[]> sumBytes, long[] nullCounts,
+                             long[] rowCounts) throws IOException {
         int nZones = nullCounts.length;
         boolean[] allValid = new boolean[nZones];
         java.util.Arrays.fill(allValid, true);
@@ -948,7 +950,8 @@ public final class VortexWriter implements Closeable {
                 names.stream().map(ColumnName::of).toList(), List.copyOf(types), false);
         int zonesSegIdx = writeSegment(statsDtype, new StructData(fields), new StructEncodingEncoder());
         zoneMaps.put(colName,
-                new ZoneMapRef(zonesSegIdx, nZones, options.chunkSize(), minMaxDtype != null, sumDtype != null));
+                new ZoneMapRef(zonesSegIdx, nZones, ZoneMapStatCodec.uniformZoneLength(rowCounts),
+                        minMaxDtype != null, sumDtype != null));
     }
 
     /// Wraps a column's data layout in a `vortex.stats` (zoned) layout when a zone-map was
