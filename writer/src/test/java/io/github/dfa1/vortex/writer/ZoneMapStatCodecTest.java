@@ -8,6 +8,9 @@ import io.github.dfa1.vortex.writer.encode.ComparableValues;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -22,6 +25,38 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// coverage over every dtype shape it dispatches on, independent of which specific encoder a
 /// cascade might pick for any of them.
 class ZoneMapStatCodecTest {
+
+    @Nested
+    class UniformZoneLength {
+
+        // Rust places row r in zone r / zoneLen, so a declared length is only safe when it is the
+        // length of every zone but the last; anything else must fall back to 0 ("no stride").
+        @ParameterizedTest(name = "{0} -> {1}")
+        @MethodSource("uniformZoneLengthCases")
+        void declaresSharedChunkLengthOrZero(long[] rowCounts, long expected) {
+            // Given rowCounts
+
+            // When
+            long result = ZoneMapStatCodec.uniformZoneLength(rowCounts);
+
+            // Then
+            assertThat(result).isEqualTo(expected);
+        }
+
+        static java.util.stream.Stream<Arguments> uniformZoneLengthCases() {
+            return java.util.stream.Stream.of(
+                    Arguments.of(new long[]{5, 5, 5, 3}, 5L),        // fixed batches, short tail
+                    Arguments.of(new long[]{5, 5, 5}, 5L),           // all equal
+                    Arguments.of(new long[]{7}, 7L),                 // single chunk
+                    Arguments.of(new long[]{4, 4, 2, 4}, 0L),        // short chunk mid-file: stride would misplace rows
+                    Arguments.of(new long[]{4, 6}, 0L),              // tail longer than the stride
+                    Arguments.of(new long[]{4, 4, 0}, 0L),           // empty tail: zone count would exceed ceil(rows / len)
+                    Arguments.of(new long[]{0}, 0L),                 // no rows
+                    Arguments.of(new long[]{}, 0L),                  // no chunks
+                    Arguments.of(new long[]{1L << 32, 1}, 0L));      // does not fit the u32 metadata field
+        }
+    }
+
 
     @Nested
     class Primitive {
