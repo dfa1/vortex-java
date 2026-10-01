@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `vortex inspect --html` lines schema and chunk rows up on a shared grid: long dtype or encoding names no longer push sizes out of the card, and phone-width reports no longer clip sizes and ratios ([#423](https://github.com/dfa1/vortex-java/pull/423)).
+
 ## [0.15.1] — 2026-10-01
 
 ### Highlights

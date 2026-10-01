@@ -159,7 +159,7 @@ public final class HtmlReport {
     }
 
     private static void appendSchema(StringBuilder sb, InspectorTree tree, List<ColumnView> columns) {
-        sb.append("<section class=\"card\">\n<div class=\"panelhead\">Schema<span class=\"muted\">")
+        sb.append("<section class=\"card schema\">\n<div class=\"panelhead\">Schema<span class=\"muted\">")
                 .append(count(columns.size())).append(" columns, size on disk</span></div>\n");
         long widest = columns.stream().mapToLong(ColumnView::bytes).max().orElse(1L);
         for (ColumnView column : columns) {
@@ -170,7 +170,7 @@ public final class HtmlReport {
 
     private static void appendColumn(StringBuilder sb, InspectorTree tree, ColumnView column, long widest) {
         sb.append("<details class=\"row\">\n<summary><span class=\"ord\">")
-                .append(column.index() + 1).append("</span><i class=\"dot\" style=\"background:")
+                .append(column.index() + 1).append("</span><span class=\"label\"><i class=\"dot\" style=\"background:")
                 .append(fill(column.index())).append("\"></i><code class=\"name\">")
                 .append(escape(column.name())).append("</code><code class=\"dtype\">")
                 .append(escape(column.dtype())).append("</code>");
@@ -178,8 +178,12 @@ public final class HtmlReport {
             sb.append("<code class=\"enc\">")
                     .append(escape(String.join(" + ", column.dispatchEncodings()))).append("</code>");
         }
+        sb.append("</span>");
         if (column.attributed()) {
             bar(sb, column.bytes(), widest, fill(column.index()));
+        } else {
+            // Keep the grid's bar track occupied so size and ratio stay in their columns.
+            sb.append("<span></span>");
         }
         sb.append("<span class=\"size\">")
                 .append(column.attributed() ? ByteSize.format(column.bytes()) : "shared")
@@ -223,7 +227,7 @@ public final class HtmlReport {
 
     private static void appendChunks(StringBuilder sb, List<ColumnView> columns) {
         int chunks = chunkCount(columns);
-        sb.append("<section class=\"card\">\n<div class=\"panelhead\">Chunks<span class=\"muted\">")
+        sb.append("<section class=\"card chunklist\">\n<div class=\"panelhead\">Chunks<span class=\"muted\">")
                 .append(count(chunks)).append(", column mix per chunk</span></div>\n");
         long widest = 1L;
         for (int i = 0; i < chunks; i++) {
@@ -668,23 +672,33 @@ public final class HtmlReport {
             .key { display: inline-flex; align-items: center; gap: 6px; }
             .key i, .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
             .dot { margin-right: 7px; vertical-align: -1px; }
+            .label .dot { margin-right: 0; align-self: center; }
             .hint { margin: 10px 0 0; font-size: 12px; color: var(--text-muted); }
             .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
             @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
             .row { border-bottom: 1px solid var(--border); }
             .row:last-of-type { border-bottom: 0; }
-            .row > summary { display: flex; align-items: center; gap: 10px; padding: 7px 4px; cursor: pointer; list-style: none; }
+            .row > summary { display: grid; align-items: center; column-gap: 10px; padding: 7px 4px; cursor: pointer; list-style: none; }
+            .schema .row > summary { grid-template-columns: 22px minmax(0, 1fr) minmax(40px, 30%%) 72px 40px; }
+            .chunklist .row > summary { grid-template-columns: 22px minmax(0, 1fr) minmax(40px, 45%%) 72px; }
+            .label { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; min-width: 0; }
+            .label code { overflow-wrap: anywhere; }
+            @media (max-width: 600px) {
+                .schema .row > summary { grid-template-columns: 22px minmax(0, 1fr) 72px 40px; row-gap: 6px; }
+                .chunklist .row > summary { grid-template-columns: 22px minmax(0, 1fr) 72px; row-gap: 6px; }
+                .row > summary > :nth-child(3) { grid-row: 2; grid-column: 2 / -1; }
+            }
             .row > summary::-webkit-details-marker { display: none; }
             .row > summary:hover, .row[open] > summary { background: var(--surface-0); }
             .ord { width: 22px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
             .name { font-weight: 600; }
             .dtype, .rows { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
-            .bar { margin-left: auto; width: 34%%; height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; display: flex; flex: none; }
+            .bar { width: 100%%; height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; display: flex; }
             .bar i { display: block; height: 100%%; border-radius: 0 4px 4px 0; }
             .bar.stack i { border-radius: 0; border-right: 1px solid var(--surface-1); }
             .enc { color: var(--text-muted); font-size: 11px; }
-            .ratio { width: 44px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
-            .size { width: 74px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+            .ratio { text-align: right; white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+            .size { text-align: right; white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
             .detail { padding: 4px 4px 16px 26px; }
             .meta { margin: 0 0 10px; font-size: 12px; color: var(--text-muted); }
             table { width: 100%%; border-collapse: collapse; font-size: 12px; }
