@@ -324,13 +324,13 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `listview.vortex`                   | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
 | `fixed_size_list.vortex`            | ✅      |
 | `zstd.vortex`                       | ✅      |
-| `tpch_lineitem.compact.vortex`      | ✅      |
-| `tpch_lineitem.regular.vortex`      | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
-| `tpch_orders.compact.vortex`        | ✅      |
-| `tpch_orders.regular.vortex`        | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
+| `tpch_lineitem.compact.vortex`      | ✅      | Full scan of every column compared against vortex-jni |
+| `tpch_lineitem.regular.vortex`      | ✅      | Full scan of every column compared against vortex-jni |
+| `tpch_orders.compact.vortex`        | ✅      | Full scan of every column compared against vortex-jni |
+| `tpch_orders.regular.vortex`        | ❌      | Uses `vortex.onpair` (unstable edition), which has no decoder yet |
 | `pco.vortex`                        | ✅      |
 | `clickbench_hits_5k.compact.vortex` | ✅      |
-| `clickbench_hits_5k.regular.vortex` | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
+| `clickbench_hits_5k.regular.vortex` | ❌      | Uses `vortex.onpair` (unstable edition), which has no decoder yet |
 | `masked.vortex`                     | ❓      | No fixture through v0.86.1 |
 | `patched.vortex`                    | ❓      | No fixture through v0.86.1 |
 | `variant.vortex`                    | ❓      | No fixture through v0.86.1 |
