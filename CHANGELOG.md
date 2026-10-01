@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] — 2026-10-01
+
+### Highlights
+
+- **No more crashes or missing rows when vortex-jni reads vortex-java files.** A filtered or row-range vortex-jni read
+  of a file written by vortex-java aborted the JVM, and once that was fixed, filtered reads of
+  zone-mapped files still returned too few rows, often none. Both are fixed. Files written by
+  0.15.0 or earlier still trigger them against vortex-jni: rewrite them with 0.15.1.
+- **The inspector reads zone maps the way the reader does**, so Rust-written files show their
+  min/max and dictionary columns show values rather than codes.
+- **Two small breaking changes** for an API nobody should be depending on yet: custom encoders
+  build buffers as `EncodedBuffer`, and the no-op `WriteOptions#chunkSize` is gone. See `Changed`.
+
 ### Fixed
 
 - `vortex inspect` (text and `--html`) shows min/max for Rust-written files: bounds are now read from the zone-map table, not only array-level stats ([#416](https://github.com/dfa1/vortex-java/issues/416)).
