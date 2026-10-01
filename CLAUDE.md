@@ -33,7 +33,7 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
           core.error    VortexException
           core.compute  FastLanes, PrimitiveArrays
           core.fbs / core.proto — generated wire codecs + their runtimes
-reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats,
+reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats, Zone,
           ScanOptions, RowFilter; file internals (Footer, Trailer, PostscriptParser, …)
           reader.array  — Array + all subtypes (decode outputs)
           reader.decode — EncodingDecoder, DecodeContext, ArrayNode + *EncodingDecoder impls
@@ -41,7 +41,8 @@ reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, A
           reader.layout — Layout, LayoutDecoder, LayoutDecodeContext, LayoutRegistry
           + built-in *LayoutDecoder impls, ZonedStatsSchema
 writer  — VortexWriter, WriteRegistry, WriteOptions, ExtensionEncoder
-          writer.encode — EncodingEncoder, EncodeContext, NullableData + *EncodingEncoder impls,
+          writer.encode — EncodingEncoder, EncodeContext, EncodeResult, EncodedBuffer, NullableData
+          + *EncodingEncoder impls,
           extension encoders
 ```
 
@@ -50,8 +51,9 @@ Dependency rule: `writer → core`, `reader → core`. **Writer never depends on
 
 ## Branching
 
-Trunk-based. PRs fine but always squash or rebase — no merge commits. Keep commits small,
-`main` always green.
+Trunk-based, `main` always green, small commits. The repo allows **rebase merges only** (squash
+and merge commits are disabled): squash a PR's commits locally into one, force-push, then
+`gh pr merge --rebase`.
 
 ## Commands
 
@@ -62,9 +64,9 @@ Trunk-based. PRs fine but always squash or rebase — no merge commits. Keep com
 ./mvnw verify                              # build all
 ./mvnw verify -DskipTests                  # build, no tests
 ./mvnw test                                # unit only (excludes *IntegrationTest)
-./mvnw test -pl reader                     # one module
-./mvnw test -pl reader -Dtest=MyTest       # one class
-./mvnw test -pl reader -Dtest=MyTest#m     # one method
+./mvnw test -pl reader -am                 # one module (-am: sibling jars are never installed)
+./mvnw test -pl reader -am -Dtest=MyTest -Dsurefire.failIfNoSpecifiedTests=false     # one class
+./mvnw test -pl reader -am -Dtest=MyTest#m -Dsurefire.failIfNoSpecifiedTests=false  # one method
 ./mvnw verify -pl integration -am          # integration (failsafe, NOT surefire)
 ./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#method"
 ./bench JavaVsJniReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
@@ -74,22 +76,12 @@ scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conforma
 JAZZER_FUZZ=1 ./mvnw test -pl fuzz -am -Dvortex.fuzz.excludedGroups=  # actually fuzz (unbounded)
 ```
 
-The Raincloud corpus tests (`RaincloudConformanceIntegrationTest`,
-`RaincloudSizeComparisonIntegrationTest`) are `@Tag("raincloud")` and excluded from a routine
-`./mvnw verify` (failsafe `excludedGroups`, default `raincloud`) so a plain build never runs the
-real corpus — even on a machine that has hydrated it locally. Opt in with
-`-Dvortex.it.excludedGroups=` (clears the exclusion); this is required *in addition to* `-Dit.test`,
-since the tag filter applies even to an explicitly named class.
-
-The Jazzer `@FuzzTest` targets live in their own `fuzz` module (currently one,
-`VortexReaderFuzzTest`) and are `@Tag("fuzz")`, excluded from a routine `./mvnw test`/`verify`
-(surefire `excludedGroups`, default `fuzz`) the same way — a plain build never fuzzes. Opt in with
-`-Dvortex.fuzz.excludedGroups=`; no `-Dtest=` is needed since the module holds nothing else (and
-`-Dtest=` plus the `-am` this module requires would need `-Dsurefire.failIfNoSpecifiedTests=false`,
-because the upstream modules `-am` builds have no matching test).
-Without `JAZZER_FUZZ=1` a fuzz target just replays its saved corpus once (regression mode); with
-it, Jazzer explores new inputs continuously until stopped — never run that mode as part of an
-unattended/CI build. See [ADR 0020](adr/0020-jazzer-fuzz-infrastructure.md).
+Two opt-in suites are tag-excluded from a routine build, even when named with `-Dit.test`/`-Dtest`:
+- **Raincloud corpus** (`@Tag("raincloud")`, failsafe): clear the exclusion with
+  `-Dvortex.it.excludedGroups=` as shown above.
+- **Jazzer fuzz** (`@Tag("fuzz")`, own `fuzz` module): clear it with `-Dvortex.fuzz.excludedGroups=`.
+  Without `JAZZER_FUZZ=1` it only replays the saved corpus; with it, it fuzzes until stopped —
+  never in CI or unattended. See [ADR 0020](adr/0020-jazzer-fuzz-infrastructure.md).
 
 Regenerate after editing `.fbs`/`.proto` (both generators are in-house, no external tools):
 
@@ -148,7 +140,10 @@ DType (FlatBuffer), and Layout (FlatBuffer) blobs elsewhere in the file.
 
 Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
 - **Flat** single encoded segment · **Chunked** sequence of Flats · **Struct** one child/column
-- **Zoned** (`vortex.stats`; reads also accept the newer Rust alias `vortex.zoned`) wraps a child with per-chunk min/max for zone-map pruning
+- **Zoned** (`vortex.stats`; reads also accept the newer Rust alias `vortex.zoned`) wraps a child with per-chunk min/max for zone-map pruning.
+  The writer emits one zone per `writeChunk` batch. Rust reads the declared zone length as a
+  uniform stride (row `r` → zone `r / len`), so it must be the shared batch length, or `0`
+  ("no stride") when batches differ — never a configured value (#418)
 
 Encoding IDs are strings (`"vortex.primitive"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs →
 `EncodingDecoder`; immutable after construction, built-in decoders are registered explicitly by
@@ -161,7 +156,11 @@ Add an `EncodingId.WellKnown` constant `VORTEX_FOO("vortex.foo")` (re-exported o
 - **Decode:** `FooEncodingDecoder implements EncodingDecoder` in `reader.decode` + a
   `.register(new FooEncodingDecoder())` call in `ReadRegistry.Builder#registerDefaults()`
 - **Encode:** `FooEncodingEncoder implements EncodingEncoder` in `writer.encode` + a
-  `.register(new FooEncodingEncoder())` call in `WriteRegistry.Builder#registerDefaults()`
+  `.register(new FooEncodingEncoder())` call in `WriteRegistry.Builder#registerDefaults()`.
+  Every buffer is an `EncodedBuffer` declaring its **element** alignment
+  (`EncodedBuffer.of(seg, ptype)`, `EncodedBuffer.bytes(seg)` for bitmaps/strings/opaque bytes).
+  Rust holds a buffer to exactly that: less fails array construction, more aborts the JVM on the
+  first row-range slice.
 
 ### Adding an extension type
 
@@ -300,10 +299,9 @@ and `./mvnw verify` enforces it. Two enforcement levels:
   the class of rot that actually accumulates — a refactor renames something and the docs keep
   pointing at the old name.
 - **`core` and `fsst` only: `failOnWarnings`.** Both are warning-free; their POMs raise the bar
-  to keep them there. The other modules carry 313 pre-existing warnings (missing `@param`,
-  undocumented default constructors) — concentrated in `performance`, `reader`, `writer`,
-  `fbs-gen`, `csv` — so warnings stay non-fatal there until someone clears a module and adds
-  the same override to its POM.
+  to keep them there. The other modules carry pre-existing warnings (missing `@param`,
+  undocumented default constructors), so warnings stay non-fatal there until someone clears a
+  module and adds the same override to its POM.
 
 Style rules (aspirational in the un-ratcheted modules, enforced in `core`/`fsst`):
 
@@ -344,9 +342,9 @@ put their logic straight in the class body — no inner helper class.
 `ctx.metadata()` (not `ctx.buffer(n)`):
 
 ```java
-EncodeNode node = new EncodeNode(encodingId, ByteBuffer.wrap(meta.encode()), new EncodeNode[0], new int[]{});
+EncodeNode node = new EncodeNode(encodingId, MemorySegment.ofArray(meta.encode()), new EncodeNode[0], new int[]{});
 // decode:
-MemorySegment metaSeg = MemorySegment.ofBuffer(ctx.metadata().duplicate());
+MemorySegment metaSeg = ctx.metadata();
 FooMetadata meta = FooMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 ```
 
@@ -359,7 +357,9 @@ Generated proto records live in `io.github.dfa1.vortex.core.proto`; the runtime 
 - Cover happy path, negative cases (invalid input / errors), and corners (empty, zero, max,
   boundaries). Unit tests must be fast — no file I/O, network, or sleep; mock or use in-memory data.
 - **Integration tests are ground truth** (no formal spec): interop with the Rust reference. Write
-  one for every encoding round-trip and file-format boundary.
+  one for every encoding round-trip and file-format boundary. Include **filtered and row-range**
+  vortex-jni reads, not just full scans: a full scan never prunes or slices, which hid a JVM abort
+  (buffer alignment) and silently empty filtered results (zone stride) until 0.15.x.
 - JUnit 5 + Mockito (BDDMockito) + AssertJ. Class under test named `sut`. Every test has
   `// Given` / `// When` / `// Then`. BDDMockito only: `given(mock.m()).willReturn(v)` /
   `then(...)` (static-import only `given`/`then`, never `willReturn`/`willThrow`).
