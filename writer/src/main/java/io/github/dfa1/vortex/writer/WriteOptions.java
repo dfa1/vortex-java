@@ -10,7 +10,6 @@ import java.util.Map;
 
 /// Tuning knobs for the Vortex writer.
 ///
-/// @param chunkSize                 target row count per chunk (default 65 536)
 /// @param enableZoneMaps            write per-chunk min/max statistics for zone-map pruning
 /// @param compressionRatioThreshold minimum compression ratio for an encoding to be accepted (0–1)
 /// @param allowedCascading          maximum recursive cascade depth; 0 = no cascading
@@ -49,7 +48,6 @@ import java.util.Map;
 ///                                  `unstable`-family encoding is reached by enabling its edition explicitly
 ///                                  via [#withEdition(Edition)], not by opting out of the guard altogether.
 public record WriteOptions(
-        int chunkSize,
         boolean enableZoneMaps,
         double compressionRatioThreshold,
         int allowedCascading,
@@ -94,7 +92,7 @@ public record WriteOptions(
     ///
     /// @return default `WriteOptions`
     public static WriteOptions defaults() {
-        return new WriteOptions(65_536, true, 0.90, 0, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
+        return new WriteOptions(true, 0.90, 0, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
                 DEFAULT_EDITIONS);
     }
 
@@ -104,7 +102,7 @@ public record WriteOptions(
     /// @param depth maximum cascade depth
     /// @return `WriteOptions` with cascading enabled at the given depth
     public static WriteOptions cascading(int depth) {
-        return new WriteOptions(65_536, true, 0.90, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
+        return new WriteOptions(true, 0.90, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
                 DEFAULT_EDITIONS);
     }
 
@@ -113,7 +111,7 @@ public record WriteOptions(
     /// @param enabled `true` to write per-chunk min/max/sum statistics for zone-map pruning
     /// @return a new `WriteOptions` with the zone-map flag updated
     public WriteOptions withZoneMaps(boolean enabled) {
-        return new WriteOptions(chunkSize, enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
+        return new WriteOptions(enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
                 globalDictMaxRetainedBytes, editions);
     }
 
@@ -122,7 +120,7 @@ public record WriteOptions(
     /// @param enabled `true` to enable global dictionary encoding across chunks
     /// @return a new `WriteOptions` with the global dict flag updated
     public WriteOptions withGlobalDict(boolean enabled) {
-        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, enableZstd,
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, enableZstd,
                 globalDictMaxRetainedBytes, editions);
     }
 
@@ -143,7 +141,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the Zstd flag updated
     /// @throws IllegalArgumentException if `enabled` is `true` and `allowedCascading()` is `0`
     public WriteOptions withZstd(boolean enabled) {
-        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled,
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled,
                 globalDictMaxRetainedBytes, editions);
     }
 
@@ -158,7 +156,7 @@ public record WriteOptions(
     /// @param budget aggregate retention budget for buffered global-dict candidate columns
     /// @return a new `WriteOptions` with the global-dict retention budget updated
     public WriteOptions withGlobalDictMaxRetainedBytes(MemorySize budget) {
-        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
                 enableZstd, budget, editions);
     }
 
@@ -177,7 +175,7 @@ public record WriteOptions(
     public WriteOptions withEdition(Edition edition) {
         Map<EditionFamily, Edition> updated = new HashMap<>(editions);
         updated.put(edition.id().family(), edition);
-        return new WriteOptions(chunkSize, enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
                 enableZstd, globalDictMaxRetainedBytes, updated);
     }
 }

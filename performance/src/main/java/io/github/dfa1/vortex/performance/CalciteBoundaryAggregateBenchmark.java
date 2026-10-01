@@ -195,7 +195,7 @@ public class CalciteBoundaryAggregateBenchmark {
                 .field("val", DType.I64)
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the interior-zone fold reads.
-        WriteOptions opts = new WriteOptions(CHUNK_SIZE, true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
         java.util.Random rng = new java.util.Random(SEED);
         try (FileChannel ch = FileChannel.open(file,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
