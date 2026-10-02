@@ -295,7 +295,7 @@ us-airbnb-open-data,missing_auth
 us-drought-meteorological-data,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
 walmart-dataset,missing_auth
-# upstream rot (raincloud v0.2.1): google/WaxalNLP dag_asr/test-*.parquet matches 0 files, so the build fails
+# fails to hydrate on raincloud v0.2.1 (HF moved dag_asr/test-*.parquet to data/ASR/dag/); fixed in raincloud v0.3.0
 waxal-dagbani-asr-test,untriaged
 wdi,ok
 websight-v01,untriaged
