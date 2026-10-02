@@ -72,9 +72,9 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
 
         // Read the wire symbol table into parallel code-indexed arrays once per chunk (there are at
         // most 255 symbols), then hand them to the decompressor. symbolsBuf carries one LSB-first
-        // long per symbol, so its size divided by 8 is the symbol count: an empty table is written
-        // as a 1-byte placeholder buffer (allocations are floored at 1 byte), which floors to 0
-        // symbols here — an all-escape column decodes without touching the symbol table.
+        // long per symbol, so its size divided by 8 is the symbol count. An empty table is a 0-byte
+        // buffer; vortex-java up to 0.15.1 wrote it as a 1-byte placeholder, which still floors to
+        // 0 symbols here — an all-escape column decodes without touching the symbol table.
         int numSymbols = (int) (symbolsBuf.byteSize() / 8);
         long[] packedSymbols = new long[numSymbols];
         int[] symbolLengths = new int[numSymbols];

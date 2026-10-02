@@ -239,8 +239,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         // trained (internal) code that belongs at wire position i.
         int[] wireOrder = trained.codesSortedByLength();
 
-        MemorySegment symBuf = arena.allocate(Math.max(numSymbols * 8L, 1), 8);
-        MemorySegment symLenBuf = arena.allocate(Math.max(numSymbols, 1));
+        MemorySegment symBuf = arena.allocate(numSymbols * 8L, 8);
+        MemorySegment symLenBuf = arena.allocate(numSymbols);
         for (int i = 0; i < numSymbols; i++) {
             int internalCode = wireOrder[i];
             symBuf.setAtIndex(VortexFormat.LE_LONG, i, trained.packedSymbol(internalCode));
