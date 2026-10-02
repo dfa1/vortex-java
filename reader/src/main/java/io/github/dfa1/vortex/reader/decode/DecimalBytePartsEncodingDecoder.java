@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoDecimalBytePartsMetadata;
 
@@ -47,6 +48,13 @@ public final class DecimalBytePartsEncodingDecoder implements EncodingDecoder {
                 mspNode, mspDtype, ctx.rowCount(),
                 ctx.segmentBuffers(), ctx.registry(), ctx.arena());
         Array mspArray = ctx.registry().decode(mspCtx);
+        // A nullable column carries its validity on the mantissa child. Hoist it to the outside, like
+        // every other nullable array, so consumers see null rows (MaskedArray) instead of calling
+        // getDecimal on them and hitting "null cell".
+        if (mspArray instanceof MaskedArray masked) {
+            return new MaskedArray(
+                    new LazyDecimalBytePartsArray(ctx.dtype(), ctx.rowCount(), masked.inner()), masked.validity());
+        }
         return new LazyDecimalBytePartsArray(ctx.dtype(), ctx.rowCount(), mspArray);
     }
 }
