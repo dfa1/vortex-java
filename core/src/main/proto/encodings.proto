@@ -142,3 +142,12 @@ message PatchedMetadata {
 message VariantMetadata {
   optional vortex.dtype.DType shredded_dtype = 1;
 }
+
+message OnPairMetadata {
+  vortex.dtype.PType uncompressed_lengths_ptype = 1;
+  uint32 dict_size = 3;
+  uint64 codes_len = 4;
+  vortex.dtype.PType dict_offsets_ptype = 5;
+  vortex.dtype.PType codes_ptype = 6;
+  vortex.dtype.PType codes_offsets_ptype = 7;
+}

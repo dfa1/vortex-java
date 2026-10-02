@@ -37,7 +37,7 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 | Item | Introduced | Java status |
 |------|------------|-------------|
 | `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
-| `vortex.onpair` experimental string encoding | Rust 0.74.0 | ❌ Not registered. Files using it fail to decode unless `ReadRegistry.builder().allowUnknown()` is enabled. |
+| `vortex.onpair` experimental string encoding | Rust 0.74.0 | ✅ Read and written. The writer emits it only when `WriteOptions.withEdition(Editions.UNSTABLE_2026_06_0)` is set; the trained dictionary is valid for Rust but not byte-identical to Rust's (Rust's sampling RNG is not portable). |
 | `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). |
 | Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested against the currently pinned v0.85.0 fixtures; #8125 not yet re-verified. |
 | `vortex.dict` **layout** over a values pool that is neither VarBin- nor primitive-shaped (e.g. a dict-encoded `vortex.uuid`, whose storage is `FixedSizeList(U8, 16)`) | Rust's dict layout accepts any dtype | ❌ No lazy dict carrier exists for that pool shape, so decode throws `VortexException("unsupported dict values shape: …")`. The `vortex.dict` *encoding* is unaffected. |
@@ -116,7 +116,7 @@ integer width is wire-legal, mirroring `VarBinArray`), and `ScanIterator` could 
 | `fastlanes.rle`             | `RleEncodingDecoder`             | `RleEncodingEncoder`             | ✅      | ✅      | Chunk-based RLE                                                       |
 | `vortex.patched`            | `PatchedEncodingDecoder`         | `PatchedEncodingEncoder`         | ✅      | ✅      | Primitive PTypes; base + chunked patches (1024-elem blocks)            |
 | `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ✅      | Canonical container; constant / chunked-of-constants core + optional shredded child. Typed-scalar values only — nested objects need `parquet.variant` (ADR 0014) |
-| `vortex.onpair`             | _none_                           | _none_                           | ❌      | ❌      | Experimental in Rust 0.74.0; not yet ported                            |
+| `vortex.onpair`             | `OnPairEncodingDecoder`          | `OnPairEncodingEncoder`          | ✅      | ✅      | Utf8, Binary; unstable edition, cascade candidate only when `UNSTABLE_2026_06_0` is enabled |
 
 ### Decode shape
 
@@ -169,7 +169,7 @@ decoder falls into one of three shapes:
 | `fastlanes.rle`             | Lazy          | Lazy          | `LazyRleXxxArray` reads run values and the index table straight from their mmapped segments; validity → `OffsetBoolArray`; empty → `LazyConstantXxxArray`, ADR 0015 |
 | `vortex.patched`            | Materialized  | Materialized  | inner is full base + chunked patches (1024-elem blocks, lane-window-sorted); per-row access requires 2 laneOffsets reads + binary search inside the chunk window, so eager scatter wins for full scans |
 | `vortex.variant`            | Lazy          | Lazy          | container wraps constant/chunked core (inner-typed) + optional shredded child |
-| `vortex.onpair`             | n/a           | n/a           | not ported                                                               |
+| `vortex.onpair`             | Materialized  | Materialized  | codes walked in order into one `VarBinOffsetArray`                       |
 
 Decompression-style encodings (Bitpacked / Pco / Zstd / Delta) stay Materialized by design —
 element-at-`i` requires decoding a window, so they must allocate output (ADR 0010). Their output
@@ -211,7 +211,7 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `unstable2025.05.0` | `unstable` | `fastlanes.delta` ✅ implemented |
 | `unstable2026.02.0` | `unstable` | `vortex.zstd_buffers` ❌ not implemented |
 | `unstable2026.04.0` | `unstable` | `vortex.parquet.variant` ❌, `vortex.patched` ✅, `vortex.tensor.*` (4 ids) ❌ |
-| `unstable2026.06.0` | `unstable` | `vortex.onpair` ❌ not implemented |
+| `unstable2026.06.0` | `unstable` | `vortex.onpair` ✅ implemented |
 
 `core` editions are frozen with a forever read-compatibility guarantee; `unstable` editions are
 drafts with none. (Upstream additionally records each frozen `core` edition's minimum *Rust*
@@ -327,10 +327,10 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `tpch_lineitem.compact.vortex`      | ✅      | Full scan of every column compared against vortex-jni |
 | `tpch_lineitem.regular.vortex`      | ✅      | Full scan of every column compared against vortex-jni |
 | `tpch_orders.compact.vortex`        | ✅      | Full scan of every column compared against vortex-jni |
-| `tpch_orders.regular.vortex`        | ❌      | Uses `vortex.onpair` (unstable edition), which has no decoder yet |
+| `tpch_orders.regular.vortex`        | ✅      | Full scan compared against vortex-jni, including its `vortex.onpair` string columns |
 | `pco.vortex`                        | ✅      |
 | `clickbench_hits_5k.compact.vortex` | ✅      |
-| `clickbench_hits_5k.regular.vortex` | ❌      | Uses `vortex.onpair` (unstable edition), which has no decoder yet |
+| `clickbench_hits_5k.regular.vortex` | ✅      | Full scan of every Utf8 column (`vortex.onpair`) compared against vortex-jni |
 | `masked.vortex`                     | ❓      | No fixture through v0.86.1 |
 | `patched.vortex`                    | ❓      | No fixture through v0.86.1 |
 | `variant.vortex`                    | ❓      | No fixture through v0.86.1 |

@@ -14,6 +14,8 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -579,8 +581,8 @@ class RustWritesJavaReadsIntegrationTest {
     @CsvSource({
         "tpch_lineitem.regular.vortex, l_extendedprice",
         "tpch_lineitem.compact.vortex, l_extendedprice",
-        "tpch_orders.compact.vortex,   o_totalprice"
-        // tpch_orders.regular also uses vortex.onpair, an unstable-edition encoding with no decoder yet
+        "tpch_orders.compact.vortex,   o_totalprice",
+        "tpch_orders.regular.vortex,   o_totalprice"
     })
     void s3_fullScan_decimalColumnMatchesJni(String fixture, String decimalColumn, @TempDir Path tmp)
             throws Exception {
@@ -613,6 +615,52 @@ class RustWritesJavaReadsIntegrationTest {
 
         // Then — same values (vortex-jni may return partitions in a different order)
         assertThat(result).hasSize(jni.size()).containsExactlyInAnyOrderElementsOf(jni);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"tpch_orders.regular.vortex", "clickbench_hits_5k.regular.vortex"})
+    void s3_fullScan_onPairUtf8ColumnsMatchJni(String fixture, @TempDir Path tmp) throws Exception {
+        // Given — the two v0.86.1 fixtures whose string columns Rust compressed with vortex.onpair
+        // (unstable edition); before #425 the Java scan failed with "no decoder registered". Every
+        // Utf8 column is compared, so the OnPair ones are covered whichever columns they are.
+        RustFixtures.assumeNetworkAvailable();
+        Path file = RustFixtures.downloadArray(tmp, fixture);
+        var jni = new LinkedHashMap<String, List<String>>();
+        forEachArrowBatch(file, ScanOptions.of(), root -> {
+            for (var vec : root.getFieldVectors()) {
+                ArrowType.ArrowTypeID type = vec.getField().getType().getTypeID();
+                if (type == ArrowType.ArrowTypeID.Utf8 || type == ArrowType.ArrowTypeID.Utf8View) {
+                    var col = jni.computeIfAbsent(vec.getName(), k -> new ArrayList<>());
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        Object v = vec.getObject(i);
+                        col.add(v == null ? null : v.toString());
+                    }
+                }
+            }
+        });
+
+        // When
+        var result = new LinkedHashMap<String, List<String>>();
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                for (String name : jni.keySet()) {
+                    Array arr = c.column(name);
+                    var col = result.computeIfAbsent(name, k -> new ArrayList<>());
+                    for (long i = 0; i < arr.length(); i++) {
+                        col.add(arr instanceof MaskedArray m
+                                ? (m.isValid(i) ? ((VarBinArray) m.inner()).getString(i) : null)
+                                : ((VarBinArray) arr).getString(i));
+                    }
+                }
+            });
+        }
+
+        // Then — same values per column (vortex-jni may return partitions in a different order)
+        assertThat(jni).isNotEmpty();
+        assertThat(result).containsOnlyKeys(jni.keySet());
+        jni.forEach((name, expected) ->
+                assertThat(result.get(name)).as(name).containsExactlyInAnyOrderElementsOf(expected));
     }
 
     @Test

@@ -20,9 +20,9 @@ import java.util.Set;
 ///
 /// vortex-java implements every `core`-family encoding through `core2026.08.0`, referenced below
 /// by their [EncodingId.WellKnown] constants — including `vortex.map`, the canonical encoding for
-/// the [DType.Map] logical type. Of `unstable`, it implements only `fastlanes.delta` and
-/// `vortex.patched` — the remaining ids
-/// (`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family, `vortex.onpair`)
+/// the [DType.Map] logical type. Of `unstable`, it implements `fastlanes.delta`,
+/// `vortex.patched` and `vortex.onpair` — the remaining ids
+/// (`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family)
 /// have no `WellKnown` constant yet, so they are named as [EncodingId.Custom] instead; the catalog
 /// stores both uniformly and mirrors upstream faithfully rather than being truncated to what is
 /// implemented today.
@@ -86,7 +86,7 @@ public final class Editions {
     /// The June 2026 draft edition of the `unstable` family.
     public static final Edition UNSTABLE_2026_06_0 = new Edition(
             new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 6), 0),
-            Set.of(new EncodingId.Custom("vortex.onpair")));
+            Set.of(EncodingId.VORTEX_ONPAIR));
 
     /// Every declared edition, in the order above. Order matters: [#owningEdition(EncodingId)]
     /// returns the first entry whose `added` set contains the queried id.

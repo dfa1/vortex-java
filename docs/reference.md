@@ -343,17 +343,19 @@ the wire format** — nothing about a targeted edition is ever persisted into a 
 
 vortex-java implements every `core`-family encoding through `core2026.08.0`, including
 `vortex.map` (`EncodingId.VORTEX_MAP`, the canonical encoding for the `DType.Map` logical type). Of
-`unstable`, only `fastlanes.delta` and `vortex.patched` have an `EncodingId.WellKnown` constant;
-the rest (`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family,
-`vortex.onpair`) resolve to `EncodingId.Custom` and are stored in the catalog anyway, mirroring
+`unstable`, only `fastlanes.delta`, `vortex.patched` and `vortex.onpair` have an
+`EncodingId.WellKnown` constant; the rest (`vortex.zstd_buffers`, `vortex.parquet.variant`, the
+`vortex.tensor.*` family) resolve to `EncodingId.Custom` and are stored in the catalog anyway, mirroring
 upstream faithfully.
 
 ### Writer integration (`WriteOptions#editions()`)
 
 `WriteOptions.defaults()`/`cascading(depth)` enable the latest frozen `core` edition
-(`Editions.CORE_2026_08_0`) by default — verified safe: the default cascade candidate list never
-includes `DeltaEncodingEncoder`/`PatchedEncodingEncoder` (the only two `unstable`-family encoders
-implemented), so no default write can emit an `unstable` encoding. If a write would emit an
+(`Editions.CORE_2026_08_0`) by default — verified safe: the cascade candidate list never includes
+`DeltaEncodingEncoder`/`PatchedEncodingEncoder`, and adds `OnPairEncodingEncoder` (the third
+`unstable`-family encoder) only when an enabled `unstable` edition contains `vortex.onpair`, e.g.
+`WriteOptions.cascading(3).withEdition(Editions.UNSTABLE_2026_06_0)` — so no default write can emit
+an `unstable` encoding. If a write would emit an
 encoding outside the union of every enabled edition's cumulative members, `VortexWriter` fails
 the write immediately with a `VortexException` naming the encoding and the configured edition(s).
 Where possible (any selection routed through `CascadingCompressor`, including nested competitions
