@@ -47,9 +47,9 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 ## Real-world conformance: the Raincloud corpus
 
 Cross-implementation conformance against [Raincloud](https://github.com/spiraldb/raincloud)
-(tracked in [#205](https://github.com/dfa1/vortex-java/issues/205)): 247 curated public
+(tracked in [#205](https://github.com/dfa1/vortex-java/issues/205)): 430 curated public
 datasets whose `.vortex` files are written by the Vortex **Python** bindings
-(`vortex-data 0.69.0`, pinned via Raincloud `v0.2.1`) with a Parquet sibling built from the
+(`vortex-data 0.86.1`, pinned via Raincloud `v0.3.0`) with a Parquet sibling built from the
 same Arrow table. `RaincloudConformanceIntegrationTest` reads each hydrated `.vortex` with
 vortex-java, exports CSV, and diffs it against the Parquet sibling read by hardwood (the
 oracle) — a zero-diff proves every value survived the Python-write / Java-read boundary.
@@ -65,7 +65,10 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 even be hydrated without credentials this environment lacks — Kaggle, gated HuggingFace, etc. —
 distinguishing "blocked on a credential" from plain `untriaged`). A scheduled workflow
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
-179 `ok`, 0 known gaps, 33 `missing_auth`, 35 untriaged. Every gap found so far is fixed
+252 `ok`, 0 known gaps, 33 `missing_auth`, 145 untriaged (mostly large datasets and the
+`tpcgen-rs-*` family, which needs `tpcgen-cli` to build). On the v0.3.0 corpus, 172 hydrated
+datasets match their Parquet sibling exactly; 14 more report as skipped because the oracle
+(hardwood 1.1.0.Beta1) cannot read their Parquet files (hardwood#1380, fixed upstream). Every gap found so far is fixed
 ([#206](https://github.com/dfa1/vortex-java/issues/206)–[#211](https://github.com/dfa1/vortex-java/issues/211),
 [#215](https://github.com/dfa1/vortex-java/issues/215)–[#217](https://github.com/dfa1/vortex-java/issues/217),
 [#221](https://github.com/dfa1/vortex-java/issues/221),
@@ -76,7 +79,10 @@ distinguishing "blocked on a credential" from plain `untriaged`). A scheduled wo
 [#261](https://github.com/dfa1/vortex-java/issues/261) oracle repeated/list column support, plus
 two bugs the widened oracle then caught: `CsvExporter` list offsets assumed I32/I64 only (any
 integer width is wire-legal, mirroring `VarBinArray`), and `ScanIterator` could not slice a shared
-`ListArray`/`FixedSizeListArray` spanning several split windows).
+`ListArray`/`FixedSizeListArray` spanning several split windows). The v0.3.0 bump
+found three more, all fixed: `vortex.bool` bit offsets ([#429](https://github.com/dfa1/vortex-java/pull/429)), CSV export of
+decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nullable `decimal_byte_parts` columns
+([#431](https://github.com/dfa1/vortex-java/pull/431)).
 
 ## Encodings
 

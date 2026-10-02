@@ -9,8 +9,14 @@ import dev.hardwood.row.PqList;
 import dev.hardwood.row.PqStruct;
 import dev.hardwood.schema.SchemaNode;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.TimeDtype;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
+import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -121,7 +127,7 @@ class RaincloudConformanceIntegrationTest {
 
             Thread oracleThread = Thread.ofVirtual().start(() -> {
                 try (oracleSink) {
-                    writeOracleCsv(parquet, oracleSink);
+                    writeOracleCsv(parquet, vortex, oracleSink);
                 } catch (Throwable t) {
                     oracleError.set(t);
                 }
@@ -164,7 +170,10 @@ class RaincloudConformanceIntegrationTest {
             // ranks there, not just an already-aborted one: a parquet the oracle cannot read
             // leaves it with zero rows written, and reporting that as this slug's conformance
             // mismatch blames vortex-java for a gap in the reader used to check it.
-            Throwable oe = oracleError.get();
+            // A "Pipe closed" oracle error is our own doing: the comparison stopped early (e.g. a
+            // line mismatch) and closed the read end under a still-writing oracle. Ranking it as an
+            // oracle abort would hide that mismatch behind a skip, so drop it.
+            Throwable oe = isPipeClosed(oracleError.get()) ? null : oracleError.get();
             Throwable ve = vortexError.get();
             if (ve instanceof VortexException e) {
                 throw e;
@@ -214,6 +223,55 @@ class RaincloudConformanceIntegrationTest {
         }
     }
 
+    /// The time unit of each top-level `vortex.timestamp` or `vortex.time` column (`null` for any
+    /// other column).
+    /// A writer may store the same instants in a coarser unit than the parquet sibling
+    /// (vortex-data 0.86 narrows `timestamp[ms]`/`time[ms]` to `[s]` when every value is a whole second),
+    /// and both sides print the raw stored integer, so the oracle rescales into this unit.
+    private static TimeUnit[] vortexTimeUnits(Path vortex) throws IOException {
+        try (VortexReader reader = VortexReader.open(vortex)) {
+            if (!(reader.dtype() instanceof DType.Struct struct)) {
+                return new TimeUnit[0];
+            }
+            TimeUnit[] units = new TimeUnit[struct.fieldTypes().size()];
+            for (int i = 0; i < units.length; i++) {
+                if (struct.fieldTypes().get(i) instanceof DType.Extension ext) {
+                    if (ExtensionId.VORTEX_TIMESTAMP.id().equals(ext.extensionId())) {
+                        units[i] = TimestampDtype.readUnit(ext);
+                    } else if (ExtensionId.VORTEX_TIME.id().equals(ext.extensionId())) {
+                        units[i] = TimeDtype.readUnit(ext);
+                    }
+                }
+            }
+            return units;
+        }
+    }
+
+    /// Converts a parquet timestamp `value` from `from` into `to`, exactly when `to` is finer and
+    /// by floor division when coarser (lossless here: the writer only narrows whole values).
+    private static long rescale(long value, LogicalType.TimeUnit from, TimeUnit to) {
+        long fromPerSecond = switch (from) {
+            case MILLIS -> 1_000L;
+            case MICROS -> 1_000_000L;
+            case NANOS -> 1_000_000_000L;
+        };
+        long toPerSecond = to.divisor();
+        return toPerSecond >= fromPerSecond
+                ? value * (toPerSecond / fromPerSecond)
+                : Math.floorDiv(value, fromPerSecond / toPerSecond);
+    }
+
+    /// Whether `t` (or a cause) is the "Pipe closed" `IOException` a producer gets after
+    /// [#closeQuietly(Closeable)] closed the read end under it.
+    private static boolean isPipeClosed(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof IOException && "Pipe closed".equals(c.getMessage())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// Runs the full conformance check but reports the outcome as an aborted test
     /// either way: only triaged matrix entries may count as green or red. The abort
     /// message says which way to flip the entry.
@@ -252,7 +310,7 @@ class RaincloudConformanceIntegrationTest {
             // gap was fixed: flip the expected-status.csv entry to ok in the same change
             Path oracleCsv = Files.createTempFile("oracle-", ".csv");
             try {
-                writeOracle(parquet, oracleCsv);
+                writeOracle(parquet, vortex, oracleCsv);
                 boolean stillMismatches = false;
                 try {
                     assertFilesMatch(vortexCsv, oracleCsv);
@@ -309,9 +367,9 @@ class RaincloudConformanceIntegrationTest {
     /// @param parquet the parquet sibling
     /// @param out     the output file to write CSV into
     /// @throws TestAbortedException if the oracle cannot read this parquet
-    private static void writeOracle(Path parquet, Path out) {
+    private static void writeOracle(Path parquet, Path vortex, Path out) {
         try (Writer writer = Files.newBufferedWriter(out)) {
-            writeOracleCsv(parquet, writer);
+            writeOracleCsv(parquet, vortex, writer);
         } catch (TestAbortedException e) {
             throw e;
         } catch (Exception e) {
@@ -321,7 +379,8 @@ class RaincloudConformanceIntegrationTest {
 
     /// Oracle: hardwood reads the parquet sibling and emits CSV through the same
     /// fastcsv writer configuration as `CsvExporter`, using its exact cell rules.
-    private static void writeOracleCsv(Path parquet, Writer out) throws IOException {
+    private static void writeOracleCsv(Path parquet, Path vortex, Writer out) throws IOException {
+        TimeUnit[] vortexUnits = vortexTimeUnits(vortex);
         try (ParquetFileReader pfr = ParquetFileReader.open(InputFile.of(parquet));
              RowReader rows = pfr.rowReader();
              CsvWriter csv = CsvWriter.builder().fieldSeparator(',').build(out)) {
@@ -346,7 +405,7 @@ class RaincloudConformanceIntegrationTest {
             while (rows.hasNext()) {
                 rows.next();
                 for (int c = 0; c < topLevel.size(); c++) {
-                    row[c] = oracleCell(topLevel.get(c), rows, c);
+                    row[c] = oracleCell(topLevel.get(c), rows, c, c < vortexUnits.length ? vortexUnits[c] : null);
                 }
                 csv.writeRecord(row);
             }
@@ -370,9 +429,23 @@ class RaincloudConformanceIntegrationTest {
     /// @param rows       the row reader positioned at the current row
     /// @param fieldIndex the field's position among top-level schema children
     /// @return the formatted cell string
-    private static String oracleCell(SchemaNode node, RowReader rows, int fieldIndex) {
+    private static String oracleCell(SchemaNode node, RowReader rows, int fieldIndex, TimeUnit vortexUnit) {
         if (rows.isNull(fieldIndex)) {
             return "";
+        }
+        if (vortexUnit != null && node instanceof SchemaNode.PrimitiveNode p) {
+            if (p.logicalType() instanceof LogicalType.TimestampType ts) {
+                return Long.toString(rescale(rows.getLong(fieldIndex), ts.unit(), vortexUnit));
+            }
+            if (p.logicalType() instanceof LogicalType.TimeType t) {
+                // TIME(MILLIS) is INT32 on the wire, finer units INT64
+                long raw = t.unit() == LogicalType.TimeUnit.MILLIS ? rows.getInt(fieldIndex) : rows.getLong(fieldIndex);
+                return Long.toString(rescale(raw, t.unit(), vortexUnit));
+            }
+        }
+        // any physical type (INT32/INT64/FIXED_LEN_BYTE_ARRAY): match CsvExporter's toPlainString
+        if (node instanceof SchemaNode.PrimitiveNode p && p.logicalType() instanceof LogicalType.DecimalType) {
+            return rows.getDecimal(fieldIndex).toPlainString();
         }
         if (node instanceof SchemaNode.GroupNode group) {
             if (group.isList()) {
@@ -466,6 +539,7 @@ class RaincloudConformanceIntegrationTest {
             case Float f -> Float.toString(f);
             case Double d -> Double.toString(d);
             case Boolean b -> Boolean.toString(b);
+            case java.math.BigDecimal d -> d.toPlainString();
             default -> throw new TestAbortedException(
                     "oracle cannot format nested value of type " + value.getClass().getSimpleName());
         };

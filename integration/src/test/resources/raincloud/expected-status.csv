@@ -15,7 +15,8 @@
 #                        so a future triager doesn't waste time rediscovering the same blocker.
 #                        An optional `#`-comment above the line can name the credential.
 # Corpus: all slugs with a Vortex artifact in the Raincloud catalog (spiraldb/raincloud),
-# written by vortex-data 0.69.0. Hydrate any subset with scripts/hydrate-raincloud-corpus.sh.
+# written by vortex-data 0.86.1 (raincloud v0.3.0). Hydrate any subset with scripts/hydrate-raincloud-corpus.sh.
+# Untriaged tpcgen-rs-* slugs need tpcgen-cli for a local build (see the hydrate script).
 120-years-of-olympic-history-athletes-and-results,ok
 ai2-arc,ok
 # kaggle auth login / KAGGLE_API_TOKEN
@@ -25,8 +26,18 @@ airbnbopendata,missing_auth
 amazon-reviews-2023-subscription-boxes,ok
 ampds-whe,ok
 anthropic-economic-index,ok
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 anthropic-hh-rlhf-helpful-base,ok
 anthropic-interviewer,ok
+appian-address,ok
+appian-category,ok
+appian-credit-card,ok
+appian-customer,ok
+appian-order,ok
+appian-order-item,untriaged
+appian-order-item-novelty-update,ok
+appian-product,ok
+appian-tax-record,ok
 aya-collection-templated,ok
 aya-dataset,ok
 # kaggle auth login / KAGGLE_API_TOKEN
@@ -81,6 +92,7 @@ bi-uberlandia,ok
 bi-uscensus,untriaged
 bi-wins,ok
 bi-yalelanguages,ok
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 bigscience-p3-eval-subset,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 building-permit-applications-data,missing_auth
@@ -94,11 +106,13 @@ cardiovascular-diseases-risk-prediction-dataset,ok
 # Fixed upstream on main (hardwood-hq/hardwood#1104, milestone 1.1.0.Beta2; our reproducer landed
 # as their regression test in #1381), so the bump to Beta2 should make this slug assert for real
 # again — drop this comment then, and if it still aborts, the blocker is a new one.
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 chess,ok
 clickbench-hits,untriaged
 cnn-dailymail,ok
 codeparrot-clean-valid,ok
 cohere-wikipedia-simple-embed,untriaged
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 coig,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 coronahack-chest-xraydataset,missing_auth
@@ -109,18 +123,52 @@ covid-world-vaccination-progress,ok
 covid19-data-from-john-hopkins-university,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
 crimes-in-boston,missing_auth
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 databricks-dolly-15k,ok
 dbpedia-embeddings,untriaged
 diabetes-health-indicators-dataset,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 disease-symptom-description-dataset,missing_auth
 docmatix-zero-shot,ok
+duckdb-tpcds-sf1-call_center,ok
+duckdb-tpcds-sf1-catalog_page,ok
+duckdb-tpcds-sf1-catalog_returns,ok
+duckdb-tpcds-sf1-catalog_sales,ok
+duckdb-tpcds-sf1-customer,ok
+duckdb-tpcds-sf1-customer_address,ok
+duckdb-tpcds-sf1-customer_demographics,ok
+duckdb-tpcds-sf1-date_dim,ok
+duckdb-tpcds-sf1-household_demographics,ok
+duckdb-tpcds-sf1-income_band,ok
+duckdb-tpcds-sf1-inventory,ok
+duckdb-tpcds-sf1-item,ok
+duckdb-tpcds-sf1-promotion,ok
+duckdb-tpcds-sf1-reason,ok
+duckdb-tpcds-sf1-ship_mode,ok
+duckdb-tpcds-sf1-store,ok
+duckdb-tpcds-sf1-store_returns,ok
+duckdb-tpcds-sf1-store_sales,ok
+duckdb-tpcds-sf1-time_dim,ok
+duckdb-tpcds-sf1-warehouse,ok
+duckdb-tpcds-sf1-web_page,ok
+duckdb-tpcds-sf1-web_returns,ok
+duckdb-tpcds-sf1-web_sales,ok
+duckdb-tpcds-sf1-web_site,ok
+duckdb-tpch-sf1-customer,ok
+duckdb-tpch-sf1-lineitem,untriaged
+duckdb-tpch-sf1-nation,ok
+duckdb-tpch-sf1-orders,ok
+duckdb-tpch-sf1-part,ok
+duckdb-tpch-sf1-partsupp,ok
+duckdb-tpch-sf1-region,ok
+duckdb-tpch-sf1-supplier,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 electric-motor-temperature,missing_auth
 emotions-dataset-for-nlp,ok
 fhv_tripdata_2025,ok
 fhvhv_tripdata_2025,untriaged
 finemath-4plus,untriaged
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 finepdfs-en-test,ok
 finetranslations-swedish,ok
 fineweb-2-swedish,untriaged
@@ -145,16 +193,40 @@ gtsrb-german-traffic-sign,ok
 hacker-news,untriaged
 heart-disease-health-indicators-dataset,ok
 hellaswag,ok
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 helpsteer2,ok
 hotel-booking-demand,ok
 hotpotqa-fullwiki,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 housing-prices-dataset,missing_auth
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 humaneval,ok
+imdb-job-aka-name,ok
+imdb-job-aka-title,ok
+imdb-job-cast-info,untriaged
+imdb-job-char-name,untriaged
+imdb-job-comp-cast-type,ok
+imdb-job-company-name,ok
+imdb-job-company-type,ok
+imdb-job-complete-cast,ok
+imdb-job-info-type,ok
+imdb-job-keyword,ok
+imdb-job-kind-type,ok
+imdb-job-link-type,ok
+imdb-job-movie-companies,ok
+imdb-job-movie-info,untriaged
+imdb-job-movie-info-idx,ok
+imdb-job-movie-keyword,ok
+imdb-job-movie-link,ok
+imdb-job-name,untriaged
+imdb-job-person-info,untriaged
+imdb-job-role-type,ok
+imdb-job-title,ok
 insurance,ok
 international-football-results-from-1872-to-2017,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 iowa-liquor-sales,missing_auth
+jsonbench-bluesky-100m,untriaged
 kepler-exoplanet-search-results,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 kepler-labelled-time-series-data,missing_auth
@@ -166,11 +238,14 @@ loan-default-dataset,missing_auth
 lung-cancer,ok
 marketing-data,ok
 mbpp,ok
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 medmcqa,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 mlcourse,missing_auth
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 mmlu,ok
 mmlu-pro,ok
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 mmmlu,ok
 mmmu,untriaged
 mnist,ok
@@ -179,11 +254,14 @@ movies,ok
 new-york-city-airbnb-open-data,missing_auth
 news-headlines-dataset-for-sarcasm-detection,ok
 nips-papers,ok
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 no-robots,ok
 nyc-311,ok
 nyc-parking-tickets,ok
+# fails to hydrate on raincloud v0.3.0: nyc.gov returns HTTP 403 for the rolling-sales download
 nyc-property-sales,ok
 nypd-complaints,ok
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 oasst1,ok
 open-food-facts,untriaged
 openlibrary-authors,ok
@@ -217,6 +295,7 @@ pleias-synth,untriaged
 pubmedqa-labeled,ok
 sf-salaries,ok
 slimpajama-6b,untriaged
+# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 squad-v2,ok
 stack-overflow-2018-developer-survey,ok
 stackoverflow-badges,ok
@@ -229,6 +308,126 @@ temperature-change,ok
 tinystories,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 titanic-dataset,missing_auth
+tpcgen-rs-tpcds-c-sf1-call_center,untriaged
+tpcgen-rs-tpcds-c-sf1-catalog_page,untriaged
+tpcgen-rs-tpcds-c-sf1-catalog_returns,untriaged
+tpcgen-rs-tpcds-c-sf1-catalog_sales,untriaged
+tpcgen-rs-tpcds-c-sf1-customer,untriaged
+tpcgen-rs-tpcds-c-sf1-customer_address,untriaged
+tpcgen-rs-tpcds-c-sf1-customer_demographics,untriaged
+tpcgen-rs-tpcds-c-sf1-date_dim,untriaged
+tpcgen-rs-tpcds-c-sf1-household_demographics,untriaged
+tpcgen-rs-tpcds-c-sf1-income_band,untriaged
+tpcgen-rs-tpcds-c-sf1-inventory,untriaged
+tpcgen-rs-tpcds-c-sf1-item,untriaged
+tpcgen-rs-tpcds-c-sf1-promotion,untriaged
+tpcgen-rs-tpcds-c-sf1-reason,untriaged
+tpcgen-rs-tpcds-c-sf1-ship_mode,untriaged
+tpcgen-rs-tpcds-c-sf1-store,untriaged
+tpcgen-rs-tpcds-c-sf1-store_returns,untriaged
+tpcgen-rs-tpcds-c-sf1-store_sales,untriaged
+tpcgen-rs-tpcds-c-sf1-time_dim,untriaged
+tpcgen-rs-tpcds-c-sf1-warehouse,untriaged
+tpcgen-rs-tpcds-c-sf1-web_page,untriaged
+tpcgen-rs-tpcds-c-sf1-web_returns,untriaged
+tpcgen-rs-tpcds-c-sf1-web_sales,untriaged
+tpcgen-rs-tpcds-c-sf1-web_site,untriaged
+tpcgen-rs-tpcds-c-sf10-call_center,untriaged
+tpcgen-rs-tpcds-c-sf10-catalog_page,untriaged
+tpcgen-rs-tpcds-c-sf10-catalog_returns,untriaged
+tpcgen-rs-tpcds-c-sf10-catalog_sales,untriaged
+tpcgen-rs-tpcds-c-sf10-customer,untriaged
+tpcgen-rs-tpcds-c-sf10-customer_address,untriaged
+tpcgen-rs-tpcds-c-sf10-customer_demographics,untriaged
+tpcgen-rs-tpcds-c-sf10-date_dim,untriaged
+tpcgen-rs-tpcds-c-sf10-household_demographics,untriaged
+tpcgen-rs-tpcds-c-sf10-income_band,untriaged
+tpcgen-rs-tpcds-c-sf10-inventory,untriaged
+tpcgen-rs-tpcds-c-sf10-item,untriaged
+tpcgen-rs-tpcds-c-sf10-promotion,untriaged
+tpcgen-rs-tpcds-c-sf10-reason,untriaged
+tpcgen-rs-tpcds-c-sf10-ship_mode,untriaged
+tpcgen-rs-tpcds-c-sf10-store,untriaged
+tpcgen-rs-tpcds-c-sf10-store_returns,untriaged
+tpcgen-rs-tpcds-c-sf10-store_sales,untriaged
+tpcgen-rs-tpcds-c-sf10-time_dim,untriaged
+tpcgen-rs-tpcds-c-sf10-warehouse,untriaged
+tpcgen-rs-tpcds-c-sf10-web_page,untriaged
+tpcgen-rs-tpcds-c-sf10-web_returns,untriaged
+tpcgen-rs-tpcds-c-sf10-web_sales,untriaged
+tpcgen-rs-tpcds-c-sf10-web_site,untriaged
+tpcgen-rs-tpcds-c-sf100-call_center,untriaged
+tpcgen-rs-tpcds-c-sf100-catalog_page,untriaged
+tpcgen-rs-tpcds-c-sf100-catalog_returns,untriaged
+tpcgen-rs-tpcds-c-sf100-catalog_sales,untriaged
+tpcgen-rs-tpcds-c-sf100-customer,untriaged
+tpcgen-rs-tpcds-c-sf100-customer_address,untriaged
+tpcgen-rs-tpcds-c-sf100-customer_demographics,untriaged
+tpcgen-rs-tpcds-c-sf100-date_dim,untriaged
+tpcgen-rs-tpcds-c-sf100-household_demographics,untriaged
+tpcgen-rs-tpcds-c-sf100-income_band,untriaged
+tpcgen-rs-tpcds-c-sf100-inventory,untriaged
+tpcgen-rs-tpcds-c-sf100-item,untriaged
+tpcgen-rs-tpcds-c-sf100-promotion,untriaged
+tpcgen-rs-tpcds-c-sf100-reason,untriaged
+tpcgen-rs-tpcds-c-sf100-ship_mode,untriaged
+tpcgen-rs-tpcds-c-sf100-store,untriaged
+tpcgen-rs-tpcds-c-sf100-store_returns,untriaged
+tpcgen-rs-tpcds-c-sf100-store_sales,untriaged
+tpcgen-rs-tpcds-c-sf100-time_dim,untriaged
+tpcgen-rs-tpcds-c-sf100-warehouse,untriaged
+tpcgen-rs-tpcds-c-sf100-web_page,untriaged
+tpcgen-rs-tpcds-c-sf100-web_returns,untriaged
+tpcgen-rs-tpcds-c-sf100-web_sales,untriaged
+tpcgen-rs-tpcds-c-sf100-web_site,untriaged
+tpcgen-rs-tpcds-trino-sf1-call_center,untriaged
+tpcgen-rs-tpcds-trino-sf1-catalog_page,untriaged
+tpcgen-rs-tpcds-trino-sf1-catalog_returns,untriaged
+tpcgen-rs-tpcds-trino-sf1-catalog_sales,untriaged
+tpcgen-rs-tpcds-trino-sf1-customer,untriaged
+tpcgen-rs-tpcds-trino-sf1-customer_address,untriaged
+tpcgen-rs-tpcds-trino-sf1-customer_demographics,untriaged
+tpcgen-rs-tpcds-trino-sf1-date_dim,untriaged
+tpcgen-rs-tpcds-trino-sf1-household_demographics,untriaged
+tpcgen-rs-tpcds-trino-sf1-income_band,untriaged
+tpcgen-rs-tpcds-trino-sf1-inventory,untriaged
+tpcgen-rs-tpcds-trino-sf1-item,untriaged
+tpcgen-rs-tpcds-trino-sf1-promotion,untriaged
+tpcgen-rs-tpcds-trino-sf1-reason,untriaged
+tpcgen-rs-tpcds-trino-sf1-ship_mode,untriaged
+tpcgen-rs-tpcds-trino-sf1-store,untriaged
+tpcgen-rs-tpcds-trino-sf1-store_returns,untriaged
+tpcgen-rs-tpcds-trino-sf1-store_sales,untriaged
+tpcgen-rs-tpcds-trino-sf1-time_dim,untriaged
+tpcgen-rs-tpcds-trino-sf1-warehouse,untriaged
+tpcgen-rs-tpcds-trino-sf1-web_page,untriaged
+tpcgen-rs-tpcds-trino-sf1-web_returns,untriaged
+tpcgen-rs-tpcds-trino-sf1-web_sales,untriaged
+tpcgen-rs-tpcds-trino-sf1-web_site,untriaged
+tpcgen-rs-tpch-sf1-customer,ok
+tpcgen-rs-tpch-sf1-lineitem,untriaged
+tpcgen-rs-tpch-sf1-nation,ok
+tpcgen-rs-tpch-sf1-orders,ok
+tpcgen-rs-tpch-sf1-part,ok
+tpcgen-rs-tpch-sf1-partsupp,ok
+tpcgen-rs-tpch-sf1-region,ok
+tpcgen-rs-tpch-sf1-supplier,ok
+tpcgen-rs-tpch-sf10-customer,ok
+tpcgen-rs-tpch-sf10-lineitem,untriaged
+tpcgen-rs-tpch-sf10-nation,ok
+tpcgen-rs-tpch-sf10-orders,untriaged
+tpcgen-rs-tpch-sf10-part,ok
+tpcgen-rs-tpch-sf10-partsupp,untriaged
+tpcgen-rs-tpch-sf10-region,ok
+tpcgen-rs-tpch-sf10-supplier,ok
+tpcgen-rs-tpch-sf100-customer,untriaged
+tpcgen-rs-tpch-sf100-lineitem,untriaged
+tpcgen-rs-tpch-sf100-nation,ok
+tpcgen-rs-tpch-sf100-orders,untriaged
+tpcgen-rs-tpch-sf100-part,untriaged
+tpcgen-rs-tpch-sf100-partsupp,untriaged
+tpcgen-rs-tpch-sf100-region,ok
+tpcgen-rs-tpch-sf100-supplier,ok
 truthfulqa-mc,ok
 uber-pickups-in-new-york-city,ok
 uci-abalone,ok
@@ -295,8 +494,8 @@ us-airbnb-open-data,missing_auth
 us-drought-meteorological-data,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
 walmart-dataset,missing_auth
-# fails to hydrate on raincloud v0.2.1 (HF moved dag_asr/test-*.parquet to data/ASR/dag/); fixed in raincloud v0.3.0
 waxal-dagbani-asr-test,untriaged
+# fails to hydrate on raincloud v0.3.0: the World Bank replaced WDI_CSV.zip, so the recipe sha256 pin no longer matches
 wdi,ok
 websight-v01,untriaged
 wikipedia-en,untriaged
