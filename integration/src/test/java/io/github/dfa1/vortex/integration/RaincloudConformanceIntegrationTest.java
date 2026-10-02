@@ -26,6 +26,7 @@ import java.io.PipedReader;
 import java.io.PipedWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
@@ -451,6 +452,13 @@ class RaincloudConformanceIntegrationTest {
             case String s -> {
                 StringBuilder sb = new StringBuilder();
                 oracleJsonString(sb, s);
+                yield sb.toString();
+            }
+            // un-annotated BYTE_ARRAY (audio/image blobs): CsvExporter renders binary through
+            // VarBinArray.getString, i.e. UTF-8 decoded, so decode the same way to compare
+            case byte[] bytes -> {
+                StringBuilder sb = new StringBuilder();
+                oracleJsonString(sb, new String(bytes, StandardCharsets.UTF_8));
                 yield sb.toString();
             }
             case Integer i -> isUnsignedInt(node) ? Integer.toUnsignedString(i) : Integer.toString(i);

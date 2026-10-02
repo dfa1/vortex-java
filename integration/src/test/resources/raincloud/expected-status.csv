@@ -79,7 +79,7 @@ bi-trainsuk1,ok
 bi-trainsuk2,untriaged
 bi-uberlandia,ok
 bi-uscensus,untriaged
-bi-wins,untriaged
+bi-wins,ok
 bi-yalelanguages,ok
 bigscience-p3-eval-subset,ok
 # kaggle auth login / KAGGLE_API_TOKEN
@@ -114,7 +114,7 @@ dbpedia-embeddings,untriaged
 diabetes-health-indicators-dataset,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 disease-symptom-description-dataset,missing_auth
-docmatix-zero-shot,untriaged
+docmatix-zero-shot,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 electric-motor-temperature,missing_auth
 emotions-dataset-for-nlp,ok
@@ -160,7 +160,7 @@ kepler-exoplanet-search-results,ok
 kepler-labelled-time-series-data,missing_auth
 # huggingface: accept dataset terms on the HF web UI + huggingface-cli login (gated repo)
 laion-400m,missing_auth
-librispeech-test-clean,untriaged
+librispeech-test-clean,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 loan-default-dataset,missing_auth
 lung-cancer,ok
@@ -295,6 +295,7 @@ us-airbnb-open-data,missing_auth
 us-drought-meteorological-data,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
 walmart-dataset,missing_auth
+# upstream rot (raincloud v0.2.1): google/WaxalNLP dag_asr/test-*.parquet matches 0 files, so the build fails
 waxal-dagbani-asr-test,untriaged
 wdi,ok
 websight-v01,untriaged
