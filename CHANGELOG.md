@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - CSV export (`CsvExporter`, `vortex export`) failed on any decimal column with `unsupported array type for CSV export`; decimals now export in plain notation (`0.0000000001`, never `1E-10`) ([#430](https://github.com/dfa1/vortex-java/pull/430)).
+- Nullable decimal columns stored as `vortex.decimal_byte_parts` hid their nulls: the array came back without its validity, so reading a null row threw `DecimalByteParts: null cell at index N`. Null rows now read as nulls (`MaskedArray`) ([#431](https://github.com/dfa1/vortex-java/pull/431)).
 - Bool arrays whose bits start mid-byte (`vortex.bool` with a nonzero bit offset, e.g. the validity of sparse patch values in vortex-data 0.86 files) read the first rows from padding, turning valid values into nulls and shifting the rest ([#429](https://github.com/dfa1/vortex-java/pull/429)).
 - Importing `vortex-bom` also pinned vortex-java's own build and test dependencies (JUnit, Mockito, Arrow, JMH, …) in the consumer, and left `vortex-fsst` and `vortex-calcite` unmanaged: the published BOM now manages only the vortex-java modules and the zstd bindings ([#427](https://github.com/dfa1/vortex-java/pull/427)).
 - vortex-jni aborted the JVM reading vortex-java files whose FSST string chunk trained no symbols (e.g. a dictionary pool of short strings): the empty symbol table was written as a 1-byte buffer declared as 8-byte values. Rewrite affected files ([#425](https://github.com/dfa1/vortex-java/issues/425)).
