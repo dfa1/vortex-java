@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Highlights
+
+- **Real-world conformance milestone: 172 Raincloud datasets, zero known gaps.** On the Raincloud v0.3.0 corpus (written by Vortex 0.86.1), 172 real-world datasets read by vortex-java match their Parquet sibling value for value, and none fail. Getting there found and fixed three reader/export bugs (#429, #430, #431) ([#432](https://github.com/dfa1/vortex-java/pull/432)).
+
 ### Added
 - Read and write `vortex.onpair` (unstable edition `unstable2026.06.0`): `tpch_orders.regular` and `clickbench_hits_5k.regular` from the v0.86.1 fixtures now scan, and `WriteOptions.withEdition(Editions.UNSTABLE_2026_06_0)` lets the cascade pick OnPair for string columns ([#425](https://github.com/dfa1/vortex-java/issues/425)).
 
