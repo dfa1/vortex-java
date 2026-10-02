@@ -152,7 +152,7 @@ class EditionsTest {
                     new EncodingId.Custom("vortex.tensor.inner_product"),
                     new EncodingId.Custom("vortex.tensor.l2_denorm"),
                     new EncodingId.Custom("vortex.tensor.l2_norm"),
-                    new EncodingId.Custom("vortex.onpair"));
+                    EncodingId.VORTEX_ONPAIR);
         }
 
         @Test

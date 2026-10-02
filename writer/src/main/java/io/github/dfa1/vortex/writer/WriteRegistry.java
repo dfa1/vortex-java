@@ -26,6 +26,7 @@ import io.github.dfa1.vortex.writer.encode.ListViewEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.MapEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.OnPairEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PatchedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
@@ -187,6 +188,7 @@ public final class WriteRegistry {
                     .register(new MapEncodingEncoder())
                     .register(new MaskedEncodingEncoder())
                     .register(new NullEncodingEncoder())
+                    .register(new OnPairEncodingEncoder())
                     .register(new PatchedEncodingEncoder())
                     .register(new PcoEncodingEncoder())
                     .register(new PrimitiveEncodingEncoder())

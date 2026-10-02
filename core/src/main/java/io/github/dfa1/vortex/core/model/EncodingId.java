@@ -88,6 +88,8 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
         VORTEX_ALPRD("vortex.alprd"),
         /// Map encoding (`vortex.map`): a list-view of `{key, value}` entry structs.
         VORTEX_MAP("vortex.map"),
+        /// OnPair dictionary-based short-string compression (`vortex.onpair`, unstable edition).
+        VORTEX_ONPAIR("vortex.onpair"),
 
         // Layout encoding IDs included so parser/registry can represent them safely
         /// Chunked layout encoding (`vortex.chunked`).
@@ -231,6 +233,8 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
     WellKnown VORTEX_ALPRD = WellKnown.VORTEX_ALPRD;
     /// Well-known `vortex.map` id.
     WellKnown VORTEX_MAP = WellKnown.VORTEX_MAP;
+    /// Well-known `vortex.onpair` id.
+    WellKnown VORTEX_ONPAIR = WellKnown.VORTEX_ONPAIR;
     /// Well-known `vortex.chunked` id.
     WellKnown VORTEX_CHUNKED = WellKnown.VORTEX_CHUNKED;
     /// Well-known `vortex.struct` id.

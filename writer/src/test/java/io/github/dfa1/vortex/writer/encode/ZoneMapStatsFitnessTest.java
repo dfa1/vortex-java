@@ -57,6 +57,7 @@ class ZoneMapStatsFitnessTest {
         m.put(EncodingId.VORTEX_VARBIN, Verdict.BOUNDS);
         m.put(EncodingId.VORTEX_VARBINVIEW, Verdict.BOUNDS);
         m.put(EncodingId.VORTEX_FSST, Verdict.BOUNDS);
+        m.put(EncodingId.VORTEX_ONPAIR, Verdict.BOUNDS);
         m.put(EncodingId.VORTEX_DICT, Verdict.BOUNDS);
         m.put(EncodingId.VORTEX_MASKED, Verdict.BOUNDS);
         m.put(EncodingId.VORTEX_EXT, Verdict.BOUNDS);
@@ -167,6 +168,7 @@ class ZoneMapStatsFitnessTest {
                 Arguments.of(EncodingId.VORTEX_VARBIN, DTypes.UTF8, words),
                 Arguments.of(EncodingId.VORTEX_VARBINVIEW, DTypes.UTF8, words),
                 Arguments.of(EncodingId.VORTEX_FSST, DTypes.UTF8, words),
+                Arguments.of(EncodingId.VORTEX_ONPAIR, DTypes.UTF8, words),
                 Arguments.of(EncodingId.FASTLANES_RLE, DTypes.I64, ascending),
                 Arguments.of(EncodingId.FASTLANES_FOR, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_PCO, DTypes.I64, ascending),

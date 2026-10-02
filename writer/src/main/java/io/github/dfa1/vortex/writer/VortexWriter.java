@@ -39,6 +39,7 @@ import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.OnPairEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
@@ -274,6 +275,12 @@ public final class VortexWriter implements Closeable {
         // not first-match dispatch, so Dict/FSST/VarBin genuinely compete on measured
         // size — matching Rust, which uses FSST for high-cardinality short strings
         // (e.g. taxi store_and_fwd_flag).
+        // OnPair (unstable edition) competes with FSST only when the caller opted into an unstable
+        // edition containing it; the default editions are core-only, so default writes never see it.
+        Edition unstable = options.editions().get(EditionFamily.UNSTABLE);
+        if (unstable != null && Editions.cumulativeMembers(unstable).contains(EncodingId.VORTEX_ONPAIR)) {
+            codecs.add(new OnPairEncodingEncoder());
+        }
         codecs.add(new FsstEncodingEncoder());
         codecs.add(new VarBinEncodingEncoder());
         if (options.enableZstd()) {

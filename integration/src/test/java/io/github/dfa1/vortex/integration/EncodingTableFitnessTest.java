@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,7 +42,7 @@ class EncodingTableFitnessTest {
     }
 
     private static final Pattern TABLE_ROW = Pattern.compile(
-            "^\\|\\s*+`([a-z][a-z0-9._]*)`\\s*+\\|\\s*+`?([A-Za-z0-9]*+)`?\\s*+\\|\\s*+`?([A-Za-z0-9]*+)`?\\s*+"
+            "^\\|\\s*+`([a-z][a-z0-9._]*)`\\s*+\\|\\s*+(?:—|`?([A-Za-z0-9]*+)`?)\\s*+\\|\\s*+(?:—|`?([A-Za-z0-9]*+)`?)\\s*+"
                     + "\\|\\s*+([✅❌])\\s*+\\|\\s*+([✅❌])\\s*+\\|",
             Pattern.MULTILINE);
 
@@ -64,7 +65,7 @@ class EncodingTableFitnessTest {
         Matcher m = TABLE_ROW.matcher(encodingsSection);
         while (m.find()) {
             documented.put(m.group(1), new Row(
-                    m.group(2), m.group(3),
+                    Objects.requireNonNullElse(m.group(2), ""), Objects.requireNonNullElse(m.group(3), ""),
                     m.group(4).equals("✅"), m.group(5).equals("✅")));
         }
     }
