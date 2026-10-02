@@ -9,6 +9,11 @@ option java_outer_classname = "EncodingProtos";
 import "scalar.proto";
 import "dtype.proto";
 
+// vortex.bool: the bitmap starts `offset` bits (< 8) into its buffer
+message BoolMetadata {
+  uint32 offset = 1;
+}
+
 message PatchesMetadata {
   uint64 len = 1;
   uint64 offset = 2;

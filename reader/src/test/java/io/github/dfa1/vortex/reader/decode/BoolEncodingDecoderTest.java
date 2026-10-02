@@ -2,19 +2,24 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoBoolMetadata;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.Arrays;
+import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -191,6 +196,102 @@ class BoolEncodingDecoderTest {
         MaskedArray masked = (MaskedArray) result;
         for (int i = 0; i < 3; i++) {
             assertThat(masked.isValid(i)).as("row %d must be null", i).isFalse();
+        }
+    }
+
+    /// `BoolMetadata.offset` (the bit offset into the first byte) must be honored. vortex-jni writes a
+    /// nonzero offset for a bool array sliced off a byte boundary; ignoring it read the first
+    /// `offset` rows from the padding bits and every later row shifted (Raincloud
+    /// cardiovascular-diseases-risk-prediction-dataset: 5 patch values decoded as null).
+    @Nested
+    class BitOffset {
+
+        @ParameterizedTest
+        @ValueSource(ints = {1, 3, 5, 7})
+        void decode_honorsBitOffset_randomBits(int offset) {
+            // Given — 1000 seeded-random bits placed `offset` bits into the buffer, so rows
+            // straddle byte boundaries and the last output byte has no source byte after it
+            boolean[] values = randomBits(1000, offset);
+            DecodeContext ctx = offsetCtx(values, offset, (values.length + offset + 7) / 8);
+            var sut = new BoolEncodingDecoder();
+
+            // When
+            var result = (BoolArray) sut.decode(ctx);
+
+            // Then
+            for (int i = 0; i < values.length; i++) {
+                assertThat(result.getBoolean(i)).as("row %d", i).isEqualTo(values[i]);
+            }
+        }
+
+        @Test
+        void decode_offsetFiveAllTrue_firstRowsAreTrue() {
+            // Given — the real-world shape: 7586 all-true validity bits at offset 5 in 949 bytes
+            boolean[] values = new boolean[7586];
+            Arrays.fill(values, true);
+            DecodeContext ctx = offsetCtx(values, 5, 949);
+            var sut = new BoolEncodingDecoder();
+
+            // When
+            var result = (BoolArray) sut.decode(ctx);
+
+            // Then — rows 0..4 were the ones read from padding before the fix
+            for (int i = 0; i < values.length; i++) {
+                assertThat(result.getBoolean(i)).as("row %d", i).isTrue();
+            }
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = {8, 255})
+        void decode_offsetOutOfRange_throws(int offset) {
+            // Given — Rust never writes offset >= 8; a file that does is malformed
+            DecodeContext ctx = offsetCtx(new boolean[]{true}, 0, 2, offset);
+            var sut = new BoolEncodingDecoder();
+
+            // When / Then
+            assertThatThrownBy(() -> sut.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("bit offset must be < 8");
+        }
+
+        @Test
+        void decode_bitmapTooShortOnceOffsetCounted_throws() {
+            // Given — 8 rows fit 1 byte at offset 0, but need 2 bytes at offset 1
+            DecodeContext ctx = offsetCtx(new boolean[8], 1, 1);
+            var sut = new BoolEncodingDecoder();
+
+            // When / Then
+            assertThatThrownBy(() -> sut.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("at bit offset 1");
+        }
+
+        private static boolean[] randomBits(int n, long seed) {
+            Random random = new Random(seed);
+            boolean[] bits = new boolean[n];
+            for (int i = 0; i < n; i++) {
+                bits[i] = random.nextBoolean();
+            }
+            return bits;
+        }
+
+        private static DecodeContext offsetCtx(boolean[] values, int offset, int bufferBytes) {
+            return offsetCtx(values, offset, bufferBytes, offset);
+        }
+
+        /// Packs `values` LSB-first starting at bit `offset` and declares `declaredOffset` in metadata.
+        private static DecodeContext offsetCtx(boolean[] values, int offset, int bufferBytes, int declaredOffset) {
+            byte[] bytes = new byte[bufferBytes];
+            for (int i = 0; i < values.length; i++) {
+                if (values[i]) {
+                    int bit = i + offset;
+                    bytes[bit >>> 3] |= (byte) (1 << (bit & 7));
+                }
+            }
+            MemorySegment meta = MemorySegment.ofArray(new ProtoBoolMetadata(declaredOffset).encode());
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_BOOL, meta, new ArrayNode[0], new int[]{0});
+            return new DecodeContext(node, DTypes.BOOL, values.length, new MemorySegment[]{MemorySegment.ofArray(bytes)},
+                    TestRegistry.ofDecoders(new BoolEncodingDecoder()), Arena.ofAuto());
         }
     }
 }
