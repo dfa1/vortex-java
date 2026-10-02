@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- vortex-jni aborted the JVM reading vortex-java files whose FSST string chunk trained no symbols (e.g. a dictionary pool of short strings): the empty symbol table was written as a 1-byte buffer declared as 8-byte values. Rewrite affected files ([#425](https://github.com/dfa1/vortex-java/issues/425)).
 - Full scans of the TPC-H compat fixtures failed with `cannot slice shared array of type LazyDecimalBytePartsArray`: when columns chunk on different boundaries the scan slices a chunk per window, and that had no case for decimal, list-view or map columns ([#424](https://github.com/dfa1/vortex-java/pull/424)).
 
 - `vortex inspect --html` lines schema and chunk rows up on a shared grid: long dtype or encoding names no longer push sizes out of the card, and phone-width reports no longer clip sizes and ratios ([#423](https://github.com/dfa1/vortex-java/pull/423)).

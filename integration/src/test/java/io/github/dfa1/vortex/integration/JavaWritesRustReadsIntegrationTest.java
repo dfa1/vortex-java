@@ -807,6 +807,26 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_jniReader_fsstUtf8Column_emptySymbolTable(@TempDir Path tmp) throws IOException {
+        // Given — single-byte distinct strings train no FSST symbols. The empty symbol table used to
+        // be written as a 1-byte buffer declared as U64, and vortex-jni panicked ("Buffer length 1
+        // must be a multiple of the scalar type's size 8"), aborting the JVM. The cascade hits this
+        // on ordinary data too: a global dict's values pool of short strings.
+        Path file = tmp.resolve("java_fsst_empty_symbols.vtx");
+        String[] data = {"x", "y", "z"};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
+                     List.of(new FsstEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
+        }
+
+        // Then
+        String[] decoded = readStringColumn(file, "s");
+        assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
     void javaWriter_jniReader_varBinViewUtf8Column_inlined(@TempDir Path tmp) throws IOException {
         // Given — VarBinView, all strings ≤12 bytes: inlined path (no data buffer)
         Path file = tmp.resolve("java_varbinview_inlined.vtx");
