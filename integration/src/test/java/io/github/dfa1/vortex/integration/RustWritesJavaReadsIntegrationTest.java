@@ -617,6 +617,36 @@ class RustWritesJavaReadsIntegrationTest {
         assertThat(result).hasSize(jni.size()).containsExactlyInAnyOrderElementsOf(jni);
     }
 
+    @Test
+    void s3_csvExport_decimalColumnMatchesJni(@TempDir Path tmp) throws Exception {
+        // Given — a Rust-written TPC-H fixture with a decimal(15, 2) column. CsvExporter had no case
+        // for decimal arrays and threw "unsupported array type for CSV export" on any decimal column
+        // (found on Raincloud's tpcgen-rs-tpch-sf1-* datasets). The public writer cannot produce
+        // decimal columns, so a Rust-written file is the only way to exercise this.
+        RustFixtures.assumeNetworkAvailable();
+        Path file = RustFixtures.downloadArray(tmp, "tpch_orders.compact.vortex");
+        var jni = new ArrayList<String>();
+        forEachArrowBatch(file, ScanOptions.of(), root -> {
+            var vec = root.getVector("o_totalprice");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                jni.add(((BigDecimal) vec.getObject(i)).toPlainString());
+            }
+        });
+        Path csv = tmp.resolve("orders.csv");
+
+        // When
+        io.github.dfa1.vortex.csv.CsvExporter.exportCsv(file, csv);
+
+        // Then — same plain-notation values (vortex-jni may return partitions in a different order)
+        var result = new ArrayList<String>();
+        try (var reader = de.siegmar.fastcsv.reader.CsvReader.builder().ofCsvRecord(csv)) {
+            var rows = reader.iterator();
+            int column = rows.next().getFields().indexOf("o_totalprice");
+            rows.forEachRemaining(row -> result.add(row.getField(column)));
+        }
+        assertThat(result).hasSize(jni.size()).containsExactlyInAnyOrderElementsOf(jni);
+    }
+
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"tpch_orders.regular.vortex", "clickbench_hits_5k.regular.vortex"})
     void s3_fullScan_onPairUtf8ColumnsMatchJni(String fixture, @TempDir Path tmp) throws Exception {

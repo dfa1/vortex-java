@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -180,6 +181,8 @@ public final class CsvExporter {
             case DoubleArray da -> Double.toString(da.getDouble(rowIdx));
             case FloatArray fa -> Float.toString(fa.getFloat(rowIdx));
             case BoolArray ba -> Boolean.toString(ba.getBoolean(rowIdx));
+            // toPlainString: toString switches to exponent notation for small values (1E-10)
+            case DecimalArray da -> da.getDecimal(rowIdx).toPlainString();
             case VarBinArray va -> va.getString(rowIdx);
             // Nullable columns decode as MaskedArray: null rows export as an empty field, valid
             // rows defer to the inner values array.
