@@ -185,6 +185,7 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     }
 
     /// One timestamp column split into its three `vortex.datetimeparts` children.
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Parts(long[] days, long[] seconds, long[] subseconds) {
     }
 }
