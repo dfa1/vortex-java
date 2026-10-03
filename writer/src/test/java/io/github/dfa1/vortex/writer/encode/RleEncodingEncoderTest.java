@@ -437,4 +437,49 @@ class RleEncodingEncoderTest {
             assertThat(result.applicable()).isFalse();
         }
     }
+
+    /// Float RLE (Rust's `FloatRLEScheme`): runs compare raw bits, so the encoding is lossless —
+    /// `-0.0` and `+0.0` are separate runs and a NaN payload survives, which `==` would get wrong.
+    @Nested
+    class Floats {
+
+        @Test
+        void accepts_floatDtypes() {
+            // When / Then
+            assertThat(ENCODER.accepts(DType.F64)).isTrue();
+            assertThat(ENCODER.accepts(DType.F32)).isTrue();
+        }
+
+        @Test
+        void roundTrip_f64_keepsSignedZeroAndNaNPayload() {
+            // Given
+            double nanPayload = Double.longBitsToDouble(0x7ff8_0000_0000_0042L);
+            double[] data = {1.5, 1.5, -0.0, -0.0, 0.0, nanPayload, nanPayload, 1.5};
+            EncodeResult encoded = ENCODER.encode(DType.F64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DType.F64, REGISTRY);
+
+            // When
+            Array result = DECODER.decode(ctx);
+
+            // Then
+            for (int i = 0; i < data.length; i++) {
+                assertThat(Double.doubleToRawLongBits(((io.github.dfa1.vortex.reader.array.DoubleArray) result).getDouble(i)))
+                        .as("index %d", i).isEqualTo(Double.doubleToRawLongBits(data[i]));
+            }
+        }
+
+        @Test
+        void encodeCascade_f32_valuesChildIsFloatArray() {
+            // Given
+            float[] data = {2.5f, 2.5f, -1f, -1f, -1f};
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DType.F32, data, EncodeTestHelper.testCtx());
+
+            // Then — a float[] so ALP and friends can compete on the run values
+            ChildSlot values = result.openChildren().getFirst();
+            assertThat(values.childDtype()).isEqualTo(DType.F32);
+            assertThat((float[]) values.childData()).containsExactly(2.5f, -1f);
+        }
+    }
 }

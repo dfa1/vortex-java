@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read and write `vortex.onpair` (unstable edition `unstable2026.06.0`): `tpch_orders.regular` and `clickbench_hits_5k.regular` from the v0.86.1 fixtures now scan, and `WriteOptions.withEdition(Editions.UNSTABLE_2026_06_0)` lets the cascade pick OnPair for string columns ([#425](https://github.com/dfa1/vortex-java/issues/425)).
 
 ### Changed
+- The writer run-length encodes float columns too (`fastlanes.rle`, as Rust's float RLE scheme does), losslessly: `-0.0` and NaN payloads round-trip ([#438](https://github.com/dfa1/vortex-java/pull/438)).
 - Cascading writes (`WriteOptions.cascading(n)`) compress run-end columns further: the run ends and values now go through the cascade (bit-packing, frame-of-reference, …) instead of being stored raw, as in Rust; about 1% smaller on the mixed-column size benchmark ([#435](https://github.com/dfa1/vortex-java/pull/435)).
 
 ### Fixed
