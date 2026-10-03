@@ -21,12 +21,6 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
@@ -97,8 +91,8 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 valuesBuf.byteSize(), valPType.byteSize());
 
         long poolLength = valuesBuf.byteSize() / valPType.byteSize();
-        Array values = typedArray(ctx.dtype(), valPType, poolLength, valuesBuf);
-        Array codes = typedArray(codesDtype, codePType, rowCount, codesBuf);
+        Array values = MaterializedArrays.of(ctx.dtype(), valPType, poolLength, valuesBuf);
+        Array codes = MaterializedArrays.of(codesDtype, codePType, rowCount, codesBuf);
         validateCodesInRange(codes, poolLength);
         return buildLazyDict(ctx.dtype(), valPType, rowCount, values, codes);
     }
@@ -390,16 +384,4 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         return rowValidity == null ? dict : new MaskedArray(dict, rowValidity);
     }
 
-
-    private static Array typedArray(DType dtype, PType ptype, long n, MemorySegment seg) {
-        return switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(dtype, n, seg);
-            case I32, U32 -> new MaterializedIntArray(dtype, n, seg);
-            case F64 -> new MaterializedDoubleArray(dtype, n, seg);
-            case F32 -> new MaterializedFloatArray(dtype, n, seg);
-            case I16, U16 -> new MaterializedShortArray(dtype, n, seg);
-            case I8, U8 -> new MaterializedByteArray(dtype, n, seg);
-            default -> throw new VortexException(EncodingId.VORTEX_DICT, "unsupported ptype " + ptype);
-        };
-    }
 }

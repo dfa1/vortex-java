@@ -10,10 +10,6 @@ import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -53,6 +49,9 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         int bitWidth = meta.bit_width();
         int offset = meta.offset();
         PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
+        if (ptype.isFloating()) {
+            throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
+        }
         int typeBits = ptype.bits();
         long rowCount = ctx.rowCount();
 
@@ -89,13 +88,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
             applyPatches(ctx, meta.patches(), output, ptype.byteSize());
         }
 
-        Array values = switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(ctx.dtype(), rowCount, output);
-            case I32, U32 -> new MaterializedIntArray(ctx.dtype(), rowCount, output);
-            case I16, U16 -> new MaterializedShortArray(ctx.dtype(), rowCount, output);
-            case I8, U8 -> new MaterializedByteArray(ctx.dtype(), rowCount, output);
-            default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
-        };
+        Array values = MaterializedArrays.of(ctx.dtype(), ptype, rowCount, output);
         return wrapValidity(ctx, meta, values, rowCount);
     }
 

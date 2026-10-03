@@ -7,12 +7,6 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoPatchedMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -69,16 +63,7 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
         MemorySegment out = patchedOutput(ctx, innerSeg, n, elemBytes, nPatches,
                 nChunks, nLanes, offset, laneOffsetsSeg, patchIndicesSeg, patchValuesSeg);
 
-        return switch (ptype) {
-            case I8, U8 -> new MaterializedByteArray(ctx.dtype(), n, out);
-            case I16, U16 -> new MaterializedShortArray(ctx.dtype(), n, out);
-            case I32, U32 -> new MaterializedIntArray(ctx.dtype(), n, out);
-            case I64, U64 -> new MaterializedLongArray(ctx.dtype(), n, out);
-            case F32 -> new MaterializedFloatArray(ctx.dtype(), n, out);
-            case F64 -> new MaterializedDoubleArray(ctx.dtype(), n, out);
-            default -> throw new VortexException(EncodingId.VORTEX_PATCHED,
-                    "unsupported ptype: " + ptype);
-        };
+        return MaterializedArrays.of(ctx.dtype(), ptype, n, out);
     }
 
     /// Produces the patched values buffer.
