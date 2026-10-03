@@ -81,14 +81,14 @@ class PostscriptParserParseBlobsBoundsTest {
                 .hasMessageContaining("depth");
     }
 
-    // ── FbsDecimal precision bound: precision < 1 || precision > 38 ─────────────────
+    // ── FbsDecimal precision bound: precision < 1 || precision > 76 ─────────────────
 
     @ParameterizedTest
-    @ValueSource(ints = {1, 38})
+    @ValueSource(ints = {1, 76})
     void parseBlobs_decimalPrecision_atEdges_parses(int precision) {
-        // Given — precision at the inclusive edges 1 and 38 (scale 0 keeps the scale guard happy).
-        // Kills `precision < 1` -> `<= 1` (would reject precision 1) and `precision > 38` ->
-        // `>= 38` (would reject precision 38).
+        // Given — precision at the inclusive edges 1 and 76 (i256, Rust's MAX_PRECISION; scale 0
+        // keeps the scale guard happy). Kills `precision < 1` -> `<= 1` (would reject precision 1)
+        // and `precision > 76` -> `>= 76` (would reject precision 76).
         MemorySegment dtype = decimalDtype(precision, (byte) 0);
 
         // When
@@ -99,9 +99,9 @@ class PostscriptParserParseBlobsBoundsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {0, 39})
+    @ValueSource(ints = {0, 77})
     void parseBlobs_decimalPrecision_outOfRange_throws(int precision) {
-        // Given — precision just outside [1, 38]
+        // Given — precision just outside [1, 76]
         MemorySegment dtype = decimalDtype(precision, (byte) 0);
 
         // When / Then
@@ -110,16 +110,18 @@ class PostscriptParserParseBlobsBoundsTest {
                 .hasMessageContaining("precision");
     }
 
-    // ── FbsDecimal scale bound: scale < 0 || scale > precision ──────────────────────
+    // ── FbsDecimal scale bound: scale > precision (negative scales are legal) ──────────────────────────────
 
     @Test
     void parseBlobs_decimalScale_atEdges_parses() {
-        // Given — scale 0 (lower edge) and scale == precision (upper edge) must both pass.
-        // Kills `scale < 0` -> `<= 0` (would reject scale 0) and `scale > precision` ->
-        // `>= precision` (would reject scale == precision).
+        // Given — scale == precision (upper edge) and negative scales must pass: Rust allows
+        // any scale <= precision, e.g. -2 for a column stored in hundreds. Kills `scale > precision`
+        // -> `>= precision` (would reject scale == precision).
 
         // When / Then
         assertThatCode(() -> parseDtype(decimalDtype(10, (byte) 0))).doesNotThrowAnyException();
+        assertThatCode(() -> parseDtype(decimalDtype(10, (byte) -2))).doesNotThrowAnyException();
+        assertThatCode(() -> parseDtype(decimalDtype(10, Byte.MIN_VALUE))).doesNotThrowAnyException();
         assertThatCode(() -> parseDtype(decimalDtype(10, (byte) 10))).doesNotThrowAnyException();
     }
 

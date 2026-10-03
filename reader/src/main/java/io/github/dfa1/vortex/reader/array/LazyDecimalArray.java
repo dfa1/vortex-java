@@ -51,15 +51,16 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
             case 2 -> BigInteger.valueOf(buf.get(LE_SHORT, offset));
             case 4 -> BigInteger.valueOf(buf.get(LE_INT, offset));
             case 8 -> BigInteger.valueOf(buf.get(LE_LONG, offset));
-            case 16 -> readSigned128Le(buf, offset);
+            case 16, 32 -> readWideSignedLe(buf, offset, width);
             default -> throw new VortexException("LazyDecimalArray: unsupported element width " + width);
         };
     }
 
-    private static BigInteger readSigned128Le(MemorySegment buf, long offset) {
-        byte[] be = new byte[16];
-        for (int k = 0; k < 16; k++) {
-            be[15 - k] = buf.get(ValueLayout.JAVA_BYTE, offset + k);
+    // i128 and i256 (precision > 38): reverse the little-endian bytes into BigInteger's big-endian
+    private static BigInteger readWideSignedLe(MemorySegment buf, long offset, int width) {
+        byte[] be = new byte[width];
+        for (int k = 0; k < width; k++) {
+            be[width - 1 - k] = buf.get(ValueLayout.JAVA_BYTE, offset + k);
         }
         return new BigInteger(be);
     }

@@ -20,12 +20,11 @@ public final class DecimalEncodingDecoder implements EncodingDecoder {
     @Override
     public Array decode(DecodeContext ctx) {
         MemorySegment meta = ctx.metadata();
-        if (meta == null || meta.byteSize() == 0) {
-            throw new VortexException(EncodingId.VORTEX_DECIMAL, "missing metadata");
-        }
+        // Absent or empty metadata is proto3's all-defaults message: values_type 0, i.e. i8. Rust
+        // writes exactly that for a precision <= 2 column, since the default field is omitted.
+        MemorySegment metaSeg = meta == null ? MemorySegment.NULL : meta;
         ProtoDecimalMetadata decoded;
         try {
-            MemorySegment metaSeg = meta;
             decoded = ProtoDecimalMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DECIMAL, "invalid metadata: " + e.getMessage());

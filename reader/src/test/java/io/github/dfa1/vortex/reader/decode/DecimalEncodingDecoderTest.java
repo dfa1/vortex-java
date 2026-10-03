@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.Arena;
@@ -35,6 +36,12 @@ class DecimalEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(node, DECIMAL, rowCount,
                 new MemorySegment[]{buf}, ReadRegistry.empty(), Arena.ofAuto());
         return SUT.decode(ctx);
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> absentMetadata() {
+        return java.util.stream.Stream.of(
+                org.junit.jupiter.params.provider.Arguments.of("null", null),
+                org.junit.jupiter.params.provider.Arguments.of("empty", MemorySegment.ofArray(new byte[0])));
     }
 
     @Test
@@ -76,23 +83,18 @@ class DecimalEncodingDecoderTest {
                     .hasMessageContaining("buffer too small");
         }
 
-        @Test
-        void missingMetadata_throws() {
-            // When / Then — null metadata
-            assertThatThrownBy(() -> decode((MemorySegment) null, 1, 8))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("missing metadata");
-        }
+        /// Proto3 omits a default field, so Rust writes values_type 0 (i8, a precision <= 2 column)
+        /// as empty metadata. Rejecting it as "missing" failed every such Rust- or Java-written file.
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("io.github.dfa1.vortex.reader.decode.DecimalEncodingDecoderTest#absentMetadata")
+        void absentOrEmptyMetadata_decodesAsI8(String name, MemorySegment meta) {
+            // Given — 3 rows over 3 bytes: only a 1-byte width fits, wider would be "buffer too small"
 
-        @Test
-        void emptyMetadata_throws() {
-            // Given — present but zero remaining
-            MemorySegment empty = MemorySegment.ofArray(new byte[0]);
+            // When
+            Array result = decode(meta, 3, 3);
 
-            // When / Then
-            assertThatThrownBy(() -> decode(empty, 1, 8))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("missing metadata");
+            // Then
+            assertThat(result.length()).isEqualTo(3);
         }
 
         @Test
