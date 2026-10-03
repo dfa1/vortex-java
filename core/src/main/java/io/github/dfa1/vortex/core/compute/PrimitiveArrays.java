@@ -219,6 +219,45 @@ public final class PrimitiveArrays {
         return seg;
     }
 
+    /// Narrows `longs` back to `ptype`'s heap carrier array (`byte[]` for I8/U8, `short[]` for
+    /// I16/U16, `int[]` for I32/U32, `long[]` for I64/U64) — the inverse of
+    /// [#toLongs(Object, PType, EncodingId)]. Truncation keeps the low bits, which round-trips
+    /// signed and unsigned values alike. Like `toLongs`, the I64/U64 case returns `longs` itself.
+    ///
+    /// @param longs    the wide values
+    /// @param ptype    the target integer type
+    /// @param encoding the encoding id used in the error message for unsupported types
+    /// @return the carrier array, `longs.length` elements
+    /// @throws VortexException for floating-point or other non-integer types
+    public static Object fromLongsArray(long[] longs, PType ptype, EncodingId encoding) {
+        int n = longs.length;
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] r = new byte[n];
+                for (int i = 0; i < n; i++) {
+                    r[i] = (byte) longs[i];
+                }
+                yield r;
+            }
+            case I16, U16 -> {
+                short[] r = new short[n];
+                for (int i = 0; i < n; i++) {
+                    r[i] = (short) longs[i];
+                }
+                yield r;
+            }
+            case I32, U32 -> {
+                int[] r = new int[n];
+                for (int i = 0; i < n; i++) {
+                    r[i] = (int) longs[i];
+                }
+                yield r;
+            }
+            case I64, U64 -> longs;
+            default -> throw new VortexException(encoding, "unsupported ptype: " + ptype);
+        };
+    }
+
     /// Copies only the elements at `true` positions in `mask` from `data`, preserving `ptype`'s
     /// storage array shape (`byte[]` for I8/U8, `short[]` for I16/U16/F16, `int[]` for I32/U32,
     /// `long[]` for I64/U64, `float[]` for F32, `double[]` for F64). Covers every primitive ptype,

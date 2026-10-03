@@ -226,4 +226,57 @@ class RunEndEncodingEncoderTest {
             return io.github.dfa1.vortex.core.proto.ProtoScalarValue.decode(seg, 0, seg.byteSize());
         }
     }
+
+    /// Cascading run-end (issue #410) hands its ends and values to the compressor as open child
+    /// slots instead of raw buffers, each with Rust's `RunEndScheme` exclusions: ends are strictly
+    /// increasing, so Dict/RunEnd/RLE/Sparse are barred; adjacent values always differ, so RunEnd is.
+    @Nested
+    class Cascade {
+
+        @Test
+        void encodeCascade_splitsRunsIntoEndsAndValuesSlots() {
+            // Given — runs 7x3, -2x2, 7x1 (the repeat of 7 is a new run, not merged)
+            long[] data = {7, 7, 7, -2, -2, 7};
+            var sut = new RunEndEncodingEncoder();
+
+            // When
+            CascadeStep result = sut.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.ownedBuffers()).isEmpty();
+            ChildSlot ends = result.openChildren().get(0);
+            ChildSlot values = result.openChildren().get(1);
+            assertThat((int[]) ends.childData()).containsExactly(3, 5, 6);
+            assertThat(ends.childDtype()).isEqualTo(new DType.Primitive(PType.U32, false));
+            assertThat(ends.excluded()).containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_RUNEND,
+                    EncodingId.FASTLANES_RLE, EncodingId.VORTEX_SPARSE);
+            assertThat((long[]) values.childData()).containsExactly(7L, -2L, 7L);
+            assertThat(values.excluded()).containsExactly(EncodingId.VORTEX_RUNEND);
+        }
+
+        @Test
+        void encodeCascade_narrowsValuesToTheColumnCarrier() {
+            // Given — a U8 column: values must come back as byte[] holding the unsigned 200
+            byte[] data = {(byte) 200, (byte) 200, 1};
+            var sut = new RunEndEncodingEncoder();
+
+            // When
+            CascadeStep result = sut.encodeCascade(new DType.Primitive(PType.U8, false), data,
+                    EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat((byte[]) result.openChildren().get(1).childData()).containsExactly((byte) 200, (byte) 1);
+        }
+
+        @Test
+        void encodeCascade_empty_notApplicable() {
+            // When
+            CascadeStep result = new RunEndEncodingEncoder().encodeCascade(DTypes.I64, new long[0],
+                    EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isFalse();
+        }
+    }
 }

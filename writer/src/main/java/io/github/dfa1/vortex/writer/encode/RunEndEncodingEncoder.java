@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -12,6 +13,7 @@ import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /// Write-only encoder for `vortex.runend`.
 public final class RunEndEncodingEncoder implements EncodingEncoder {
@@ -140,7 +142,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
             // loses, so that cost fell on columns run-end never wins: it was the hottest frame
             // (11.6%) while profiling the BITPACKED benchmark. Counting first also sizes both
             // segments exactly and writes straight into them, so run data never touches the heap.
-            long[] widened = widen(data, ptype, n);
+            long[] widened = PrimitiveArrays.toLongs(data, ptype, EncodingId.VORTEX_RUNEND);
             long runVal = widened[0];
             minVal = runVal;
             maxVal = runVal;
@@ -207,6 +209,60 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root, List.of(EncodedBuffer.of(endsBuf, PType.U32), EncodedBuffer.of(valuesBuf, ptype)), statsMin, statsMax);
     }
 
+    /// Barred from the ends child (issue #410, Rust's `RunEndScheme` descendant exclusions): run ends
+    /// are strictly increasing and all distinct, so a dictionary, a nested run-end, RLE or a sparse
+    /// fill can never pay for themselves there. Bit-packing / frame-of-reference are what win.
+    private static final Set<EncodingId> ENDS_EXCLUDED = Set.of(
+            EncodingId.VORTEX_DICT, EncodingId.VORTEX_RUNEND, EncodingId.FASTLANES_RLE, EncodingId.VORTEX_SPARSE);
+
+    /// Barred from the values child: adjacent run values always differ, so run-end on them finds
+    /// one run per value.
+    private static final Set<EncodingId> VALUES_EXCLUDED = Set.of(EncodingId.VORTEX_RUNEND);
+
+    /// Cascading run-end: the ends and values become open children instead of raw buffers, so
+    /// the compressor can bit-pack the ends (monotonic, small deltas) and FoR/bit-pack/dict the
+    /// values, as Rust's `RunEndScheme` does. Same `[ends, values]` wire shape as [#encode].
+    @Override
+    public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        if (!(dtype instanceof DType.Primitive p)) {
+            return CascadeStep.notApplicable();
+        }
+        PType ptype = p.ptype();
+        int n = arrayLength(data, ptype);
+        if (n == 0) {
+            return CascadeStep.notApplicable();
+        }
+        long[] widened = PrimitiveArrays.toLongs(data, ptype, EncodingId.VORTEX_RUNEND);
+        int numRuns = 1;
+        for (int i = 1; i < n; i++) {
+            if (widened[i] != widened[i - 1]) {
+                numRuns++;
+            }
+        }
+        int[] ends = new int[numRuns];
+        long[] values = new long[numRuns];
+        int k = 0;
+        for (int i = 1; i < n; i++) {
+            if (widened[i] != widened[i - 1]) {
+                ends[k] = i;
+                values[k] = widened[i - 1];
+                k++;
+            }
+        }
+        ends[k] = n;
+        values[k] = widened[n - 1];
+
+        byte[] metaBytes = new ProtoRunEndMetadata(
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U32.ordinal()), numRuns, 0L).encode();
+        EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_RUNEND, MemorySegment.ofArray(metaBytes),
+                new EncodeNode[]{null, null}, new int[0]);
+        ChildSlot endsSlot = new ChildSlot(new DType.Primitive(PType.U32, false), ends, 0, ENDS_EXCLUDED);
+        ChildSlot valuesSlot = new ChildSlot(dtype, PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.VORTEX_RUNEND), 1, VALUES_EXCLUDED);
+        byte[][] stats = ZoneMapStats.of(dtype, data);
+        return new CascadeStep(partialRoot, List.of(), List.of(endsSlot, valuesSlot),
+                ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
+    }
+
     private static byte[] statsBytes(PType ptype, long value) {
         if (ptype.isUnsigned()) {
             return ProtoScalarValue.ofUint64Value(value).encode();
@@ -222,70 +278,6 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
             case I64, U64 -> ((long[]) data).length;
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype: " + ptype);
         };
-    }
-
-    /// Widens a chunk to `long`s with one switch for the whole array rather than one per element.
-    /// I64/U64 input is returned in place; only the narrower carriers pay for a copy.
-    ///
-    /// @param data  the chunk's typed primitive array
-    /// @param ptype the column's primitive type
-    /// @param n     element count
-    /// @return the values as `long`s, sign- or zero-extended to match `ptype`
-    private static long[] widen(Object data, PType ptype, int n) {
-        switch (ptype) {
-            case I64, U64 -> {
-                return (long[]) data;
-            }
-            case I8 -> {
-                byte[] a = (byte[]) data;
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = a[i];
-                }
-                return out;
-            }
-            case U8 -> {
-                byte[] a = (byte[]) data;
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = Byte.toUnsignedLong(a[i]);
-                }
-                return out;
-            }
-            case I16 -> {
-                short[] a = (short[]) data;
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = a[i];
-                }
-                return out;
-            }
-            case U16 -> {
-                short[] a = (short[]) data;
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = Short.toUnsignedLong(a[i]);
-                }
-                return out;
-            }
-            case I32 -> {
-                int[] a = (int[]) data;
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = a[i];
-                }
-                return out;
-            }
-            case U32 -> {
-                int[] a = (int[]) data;
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = Integer.toUnsignedLong(a[i]);
-                }
-                return out;
-            }
-            default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype: " + ptype);
-        }
     }
 
 }

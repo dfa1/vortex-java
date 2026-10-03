@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VortexWriter` writes decimal columns: pass `BigDecimal[]` (nulls allowed when nullable) for any `DType.Decimal`, precision 1–76 and negative scales included; values are rescaled exactly, and one that would round or overflow the precision is rejected ([#434](https://github.com/dfa1/vortex-java/pull/434)).
 - Read and write `vortex.onpair` (unstable edition `unstable2026.06.0`): `tpch_orders.regular` and `clickbench_hits_5k.regular` from the v0.86.1 fixtures now scan, and `WriteOptions.withEdition(Editions.UNSTABLE_2026_06_0)` lets the cascade pick OnPair for string columns ([#425](https://github.com/dfa1/vortex-java/issues/425)).
 
+### Changed
+- Cascading writes (`WriteOptions.cascading(n)`) compress run-end columns further: the run ends and values now go through the cascade (bit-packing, frame-of-reference, …) instead of being stored raw, as in Rust; about 1% smaller on the mixed-column size benchmark ([#435](https://github.com/dfa1/vortex-java/pull/435)).
+
 ### Fixed
 - Reading valid Rust-written decimal columns failed for precision ≤ 2 (`vortex.decimal: missing metadata`), precision above 38 (`decimal precision out of range`, and no i256 decode), and negative scales; vortex-java now accepts Rust's full range: precision 1–76 and any scale up to the precision ([#433](https://github.com/dfa1/vortex-java/pull/433)).
 - CSV export (`CsvExporter`, `vortex export`) failed on any decimal column with `unsupported array type for CSV export`; decimals now export in plain notation (`0.0000000001`, never `1E-10`) ([#430](https://github.com/dfa1/vortex-java/pull/430)).

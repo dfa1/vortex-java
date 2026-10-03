@@ -392,4 +392,32 @@ class PrimitiveArraysTest {
         // Then
         assertThat(result).isEmpty();
     }
+
+    /// `fromLongsArray` is the inverse of `toLongs`: every integer type's extremes (the signed
+    /// minimum and the unsigned all-ones pattern) must survive widen-then-narrow bit for bit.
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void fromLongsArray_invertsToLongs(PType ptype) {
+        // Given — the minimum, -1/all-ones, zero and maximum at this width
+        long[] wide = PrimitiveArrays.toLongs(switch (ptype) {
+            case I8, U8 -> new byte[]{Byte.MIN_VALUE, -1, 0, Byte.MAX_VALUE};
+            case I16, U16 -> new short[]{Short.MIN_VALUE, -1, 0, Short.MAX_VALUE};
+            case I32, U32 -> new int[]{Integer.MIN_VALUE, -1, 0, Integer.MAX_VALUE};
+            default -> new long[]{Long.MIN_VALUE, -1L, 0L, Long.MAX_VALUE};
+        }, ptype, EncodingId.VORTEX_PRIMITIVE);
+
+        // When
+        Object result = PrimitiveArrays.fromLongsArray(wide, ptype, EncodingId.VORTEX_PRIMITIVE);
+
+        // Then
+        assertThat(PrimitiveArrays.toLongs(result, ptype, EncodingId.VORTEX_PRIMITIVE)).containsExactly(wide);
+    }
+
+    @Test
+    void fromLongsArray_rejectsFloatingPoint() {
+        // When / Then
+        assertThatThrownBy(() -> PrimitiveArrays.fromLongsArray(new long[]{1L}, PType.F64, EncodingId.VORTEX_PRIMITIVE))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("unsupported ptype: F64");
+    }
 }

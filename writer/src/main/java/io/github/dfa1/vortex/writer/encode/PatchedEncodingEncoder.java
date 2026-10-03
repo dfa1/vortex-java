@@ -87,10 +87,10 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
 
             return new CascadeStep(partialRoot, List.of(),
                     List.of(
-                            new ChildSlot(dtype, fromLongs(pd.inner, ptype), 0, SELF),
+                            new ChildSlot(dtype, PrimitiveArrays.fromLongsArray(pd.inner, ptype, EncodingId.VORTEX_PATCHED), 0, SELF),
                             new ChildSlot(u32Dtype, pd.laneOffsets, 1, SELF),
                             new ChildSlot(u16Dtype, pd.patchIndices, 2, SELF),
-                            new ChildSlot(dtype, fromLongs(pd.patchValues, ptype), 3, SELF)
+                            new ChildSlot(dtype, PrimitiveArrays.fromLongsArray(pd.patchValues, ptype, EncodingId.VORTEX_PATCHED), 3, SELF)
                     ),
                     null, null, true);
         }
@@ -245,34 +245,6 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
                 }
             }
             return bestWidth;
-        }
-
-        private static Object fromLongs(long[] values, PType ptype) {
-            return switch (ptype) {
-                case I8, U8 -> {
-                    byte[] r = new byte[values.length];
-                    for (int i = 0; i < values.length; i++) {
-                        r[i] = (byte) values[i];
-                    }
-                    yield r;
-                }
-                case I16, U16 -> {
-                    short[] r = new short[values.length];
-                    for (int i = 0; i < values.length; i++) {
-                        r[i] = (short) values[i];
-                    }
-                    yield r;
-                }
-                case I32, U32 -> {
-                    int[] r = new int[values.length];
-                    for (int i = 0; i < values.length; i++) {
-                        r[i] = (int) values[i];
-                    }
-                    yield r;
-                }
-                case I64, U64 -> values.clone();
-                default -> throw new VortexException(EncodingId.VORTEX_PATCHED, "unsupported ptype: " + ptype);
-            };
         }
 
     }
