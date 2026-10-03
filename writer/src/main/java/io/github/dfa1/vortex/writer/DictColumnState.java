@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -27,7 +28,7 @@ final class DictColumnState {
 
     // Columns with global cardinality below this threshold are dict-encoded across all chunks.
     // The cap is type-aware. Numeric stays low: a global dict hurts high-cardinality F64/I64
-    // columns (ALP/bitpacked codes beat U16 dict codes). Utf8 is raised far higher — text columns
+    // columns (ALP/bitpacked codes beat U16 dict codes). Utf8/Binary is raised far higher — text columns
     // with thousands of repeated distinct values (street/place names) dictionary-compress well
     // (#299), and the per-chunk short[] code buffer holds codes 0..32767 (up to 32768 distinct)
     // with no wider buffer; codePTypeForSize already emits U16 codes above 256.
@@ -37,15 +38,18 @@ final class DictColumnState {
     private static final int INDEX_MIN_CAPACITY = 64;
 
     private final DType dtype;
-    private final boolean utf8;
+    // Utf8 or Binary: keyed by value (String, or a ByteBuffer wrapping the bytes, whose
+    // equals/hashCode compare content), coded in first-seen order with no frequency remap.
+    private final boolean varBin;
+    private final boolean binary;
     private final PType ptype;
     private final boolean nullable;
-    // First-seen value -> code map (keys are boxed primitives or String, matching readPrimitiveElement).
+    // First-seen value -> code map (keys are boxed primitives, String, or ByteBuffer — see varBinKey).
     private final Map<Object, Integer> valueToCode = new LinkedHashMap<>();
     // Hot-path side index for the primitive path: raw value bits -> code + 1 (0 == empty), open
     // addressing with a power-of-two capacity so probing masks instead of taking a modulo (CLAUDE.md
     // hot-loop rule). valueToCode stays the authoritative store — it carries first-seen order, the
-    // Utf8 keys, and everything the demotion and flush paths read — but probing it needs a boxed key,
+    // VarBin keys, and everything the demotion and flush paths read — but probing it needs a boxed key,
     // and one Long per row of every candidate column profiled as the writer's hottest single frame.
     private LongIntMap bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
     // Occurrence count per code, indexed by code; grows in lockstep with valueToCode. A primitive
@@ -64,7 +68,8 @@ final class DictColumnState {
 
     DictColumnState(DType dtype) {
         this.dtype = dtype;
-        this.utf8 = dtype instanceof DType.Utf8;
+        this.binary = dtype instanceof DType.Binary;
+        this.varBin = binary || dtype instanceof DType.Utf8;
         this.ptype = dtype instanceof DType.Primitive p ? p.ptype() : null;
         this.nullable = dtype.nullable();
     }
@@ -73,8 +78,8 @@ final class DictColumnState {
         return dtype;
     }
 
-    boolean utf8() {
-        return utf8;
+    boolean varBin() {
+        return varBin;
     }
 
     PType ptype() {
@@ -130,9 +135,18 @@ final class DictColumnState {
         return chunkStatsSum;
     }
 
-    /// The distinct Utf8 values seen so far, in first-seen order. Only valid when [#utf8()].
-    String[] utf8Uniques() {
-        return valueToCode.keySet().toArray(new String[0]);
+    /// The distinct Utf8/Binary values seen so far, in first-seen order: a `String[]` for Utf8, a
+    /// `byte[][]` for Binary. Only valid when [#varBin()].
+    Object varBinUniques() {
+        if (!binary) {
+            return valueToCode.keySet().toArray(new String[0]);
+        }
+        byte[][] out = new byte[valueToCode.size()][];
+        int i = 0;
+        for (Object key : valueToCode.keySet()) {
+            out[i++] = ((ByteBuffer) key).array();
+        }
+        return out;
     }
 
     /// Ingests one chunk into this candidate column's cardinality-bounded dict state (ADR 0021): dedups
@@ -145,17 +159,17 @@ final class DictColumnState {
     /// encoding. This moves the cap check from `close()` to a continuous, mid-file guard so a column
     /// whose distinct set grows past the cap never accumulates unbounded memory first.
     ///
-    /// @param data the chunk data (primitive array, `String[]`, or a [NullableData] wrapper)
+    /// @param data the chunk data (primitive array, `String[]`, `byte[][]`, or a [NullableData] wrapper)
     /// @return `true` if the chunk was ingested within the cardinality cap; `false` if the column
     ///         must be demoted
     boolean ingestDictChunk(Object data) {
         boolean nullableData = data instanceof NullableData;
         Object values = nullableData ? ((NullableData) data).values() : data;
         boolean[] validity = nullableData ? ((NullableData) data).validity() : null;
-        int len = utf8 ? ((String[]) values).length : primitiveArrayLen(values, ptype);
-        int cap = dictMaxCardinality(utf8);
+        int len = varBin ? ((Object[]) values).length : primitiveArrayLen(values, ptype);
+        int cap = dictMaxCardinality(varBin);
         int startSize = valueToCode.size();
-        String[] strings = utf8 ? (String[]) values : null;
+        Object[] strings = varBin ? (Object[]) values : null;
 
         // One pass: insert new values and build the per-chunk code array. Ingest stays
         // all-or-nothing — a chunk that would breach the cap rolls back the entries it added (the
@@ -168,12 +182,12 @@ final class DictColumnState {
                 if (validity != null && !validity[i]) {
                     continue;
                 }
-                // Nullable Utf8 keeps a real null at invalid positions (ChunkImpl.adaptUtf8); treat
-                // it as a null slot (code 0), never as a dictionary entry.
-                String v = strings[i];
-                if (v == null) {
+                // Nullable Utf8/Binary keeps a real null at invalid positions (ChunkImpl.adaptUtf8,
+                // adaptBinary); treat it as a null slot (code 0), never as a dictionary entry.
+                if (strings[i] == null) {
                     continue;
                 }
+                Object v = varBinKey(strings[i]);
                 Integer code = valueToCode.get(v);
                 if (code == null) {
                     if (valueToCode.size() == cap) {
@@ -226,7 +240,12 @@ final class DictColumnState {
         chunkValidity.add(validity);
         chunkRowCounts.add((long) len);
         chunkNullCounts.add(validity != null ? VortexWriter.countNulls(validity) : 0L);
-        if (utf8) {
+        if (binary) {
+            // No min/max for Binary, matching the per-chunk VarBin path (VarBinEncodingEncoder).
+            chunkStatsMin.add(null);
+            chunkStatsMax.add(null);
+            chunkStatsSum.add(null);
+        } else if (varBin) {
             byte[][] mm = VarBinEncodingEncoder.minMaxStats((String[]) values);
             chunkStatsMin.add(mm != null ? mm[0] : null);
             chunkStatsMax.add(mm != null ? mm[1] : null);
@@ -246,7 +265,7 @@ final class DictColumnState {
     /// through [#buildInverseMap] and [#reconstructChunk], which must not see this chunk's values.
     private void rollbackTo(int startSize) {
         valueToCode.values().removeIf(code -> code >= startSize);
-        if (utf8) {
+        if (varBin) {
             return;
         }
         bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
@@ -308,7 +327,7 @@ final class DictColumnState {
         return inverse;
     }
 
-    /// Reconstructs demoted chunk `c`'s raw array (a typed primitive array or `String[]`, wrapped in
+    /// Reconstructs demoted chunk `c`'s raw array (a typed primitive array, `String[]` or `byte[][]`, wrapped in
     /// [NullableData] when the chunk carried validity) from its buffered `short[]` codes and the
     /// inverse code-to-value map. Null slots restore a zero/`null` placeholder — exactly what the
     /// per-chunk encoders expect from [NullableData].
@@ -317,7 +336,15 @@ final class DictColumnState {
         boolean[] validity = chunkValidity.get(c);
         int len = codes.length;
         Object values;
-        if (utf8) {
+        if (binary) {
+            byte[][] arr = new byte[len][];
+            for (int i = 0; i < len; i++) {
+                if (validity == null || validity[i]) {
+                    arr[i] = ((ByteBuffer) inverse[codes[i] & 0xFFFF]).array();
+                }
+            }
+            values = arr;
+        } else if (varBin) {
             String[] arr = new String[len];
             for (int i = 0; i < len; i++) {
                 if (validity == null || validity[i]) {
@@ -465,28 +492,29 @@ final class DictColumnState {
         };
     }
 
-    static boolean isUtf8DictCandidate(String[] data) {
-        return isUtf8DictCandidate(data, null);
+    static boolean isVarBinDictCandidate(Object[] data) {
+        return isVarBinDictCandidate(data, null);
     }
 
-    /// Like [#isUtf8DictCandidate(String[])] but ignores null (invalid) rows when counting distinct
+    /// Like [#isVarBinDictCandidate(Object[])] but ignores null (invalid) rows when counting distinct
     /// values, so a nullable low-cardinality column still qualifies for the shared global dictionary.
     /// The ratio denominator stays the total row count (not the valid-row count), matching the
     /// per-chunk encoders' convention that null placeholders occupy a row like any other value.
     ///
-    /// @param data     the string values; null elements at invalid positions are skipped
+    /// @param data     the Utf8 (`String[]`) or Binary (`byte[][]`) values; null elements at invalid
+    ///                 positions are skipped
     /// @param validity per-row validity bitmap, or `null` meaning every row is valid
     /// @return `true` if the column's distinct valid-value count is low enough to dictionary-encode
-    static boolean isUtf8DictCandidate(String[] data, boolean[] validity) {
+    static boolean isVarBinDictCandidate(Object[] data, boolean[] validity) {
         if (data.length == 0) {
             return false;
         }
-        var seen = HashSet.<String>newHashSet(Math.min(GLOBAL_DICT_MAX_CARDINALITY_UTF8, data.length));
+        var seen = HashSet.newHashSet(Math.min(GLOBAL_DICT_MAX_CARDINALITY_UTF8, data.length));
         for (int i = 0; i < data.length; i++) {
             if ((validity != null && !validity[i]) || data[i] == null) {
                 continue;
             }
-            seen.add(data[i]);
+            seen.add(varBinKey(data[i]));
             if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY_UTF8) {
                 return false;
             }
@@ -605,8 +633,14 @@ final class DictColumnState {
         return PType.U32;
     }
 
-    // The global-dict cardinality cap for a column, by whether it is Utf8 (see the constants above).
-    private static int dictMaxCardinality(boolean utf8) {
-        return utf8 ? GLOBAL_DICT_MAX_CARDINALITY_UTF8 : GLOBAL_DICT_MAX_CARDINALITY;
+    // The global-dict cardinality cap for a column, by whether it is Utf8/Binary (see the constants above).
+    private static int dictMaxCardinality(boolean varBin) {
+        return varBin ? GLOBAL_DICT_MAX_CARDINALITY_UTF8 : GLOBAL_DICT_MAX_CARDINALITY;
+    }
+
+    // A byte[] compares by identity, so Binary values are keyed by a ByteBuffer view, whose
+    // equals/hashCode compare content. The array is never mutated after ChunkImpl hands it over.
+    private static Object varBinKey(Object value) {
+        return value instanceof byte[] bytes ? ByteBuffer.wrap(bytes) : value;
     }
 }

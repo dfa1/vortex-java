@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read and write `vortex.onpair` (unstable edition `unstable2026.06.0`): `tpch_orders.regular` and `clickbench_hits_5k.regular` from the v0.86.1 fixtures now scan, and `WriteOptions.withEdition(Editions.UNSTABLE_2026_06_0)` lets the cascade pick OnPair for string columns ([#425](https://github.com/dfa1/vortex-java/issues/425)).
 
 ### Changed
+- Low-cardinality `Binary` columns are now written as a global dictionary, as Rust does for `Primitive`, `Utf8` and `Binary`; before, only primitive and `Utf8` columns were ([#443](https://github.com/dfa1/vortex-java/pull/443)).
 - With an unstable edition enabled (`WriteOptions.withEdition(Editions.UNSTABLE_2025_05_0)` or later), cascading writes can pick `fastlanes.delta`, its bases and deltas cascaded as in Rust; default writes never emit it ([#439](https://github.com/dfa1/vortex-java/pull/439)).
 - The writer run-length encodes float columns too (`fastlanes.rle`, as Rust's float RLE scheme does), losslessly: `-0.0` and NaN payloads round-trip ([#438](https://github.com/dfa1/vortex-java/pull/438)).
 - Cascading writes (`WriteOptions.cascading(n)`) compress run-end columns further: the run ends and values now go through the cascade (bit-packing, frame-of-reference, …) instead of being stored raw, as in Rust; about 1% smaller on the mixed-column size benchmark ([#435](https://github.com/dfa1/vortex-java/pull/435)).

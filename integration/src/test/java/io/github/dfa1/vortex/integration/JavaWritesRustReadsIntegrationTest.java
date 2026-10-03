@@ -1883,6 +1883,69 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_globalDict_nullableBinary(@TempDir Path tmp) throws IOException {
+        // Given — a low-cardinality nullable Binary column over two chunks. Rust's dict layout admits
+        // Primitive | Utf8 | Binary; the Java writer left Binary out, so this column was never
+        // dict-encoded. Equal values arrive as distinct byte[] instances, so the dedup must compare
+        // content; the empty value and nulls sit on the edges of the VarBin pool and the codes mask.
+        Path file = tmp.resolve("java_globaldict_binary.vtx");
+        ColumnName id = ColumnName.of("id");
+        ColumnName b = ColumnName.of("b");
+        DType.Struct schema = new DType.Struct(List.of(id, b), List.of(DType.I64, new DType.Binary(true)), false);
+        int rowsPerChunk = 1_000;
+        List<byte[]> expected = new ArrayList<>();
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            for (int c = 0; c < 2; c++) {
+                long[] ids = new long[rowsPerChunk];
+                byte[][] values = new byte[rowsPerChunk][];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    int row = c * rowsPerChunk + i;
+                    ids[i] = row;
+                    values[i] = switch (row % 4) {
+                        case 0 -> null;
+                        case 1 -> new byte[0];
+                        case 2 -> new byte[]{1, 2, 3};
+                        default -> new byte[]{(byte) 0xFF};
+                    };
+                    expected.add(values[i]);
+                }
+                sut.writeChunk(Map.of(id, ids, b, values));
+            }
+        }
+
+        // Then — the column is a global dict layout, and vortex-jni reads every row back, full scan
+        // and filtered (zone pruning over the dict column's per-chunk stats)
+        try (var vf = io.github.dfa1.vortex.reader.VortexReader.open(file,
+                io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
+            var tree = io.github.dfa1.vortex.inspect.InspectorTree.build(vf);
+            assertThat(tree.root().children())
+                    .filteredOn(n -> n.fieldName().equals(java.util.Optional.of("b")))
+                    .singleElement()
+                    .satisfies(n -> assertThat(hasDictLayout(n)).as("Binary column is a dict layout").isTrue());
+        }
+        List<Object> full = readColumnFiltered(file, "b", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(0L)));
+        assertThat(full).containsExactlyElementsOf(expected);
+        List<Object> filtered = readColumnFiltered(file, "b", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(1_500L)));
+        assertThat(filtered).containsExactlyElementsOf(expected.subList(1_500, expected.size()));
+    }
+
+    private static boolean hasDictLayout(io.github.dfa1.vortex.inspect.InspectorTree.Node node) {
+        if (node.layout().isDict()) {
+            return true;
+        }
+        for (var child : node.children()) {
+            if (hasDictLayout(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Test
     void javaWriter_rustReader_nullable_date(@TempDir Path tmp) throws IOException {
         // Given — nullable vortex.date column; row 1 is null.
         // Validates MaskedEncoding → ExtEncoding → PrimitiveEncoding layout survives Java→Rust read.

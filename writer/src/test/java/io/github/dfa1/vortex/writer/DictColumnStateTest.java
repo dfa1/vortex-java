@@ -1,6 +1,9 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.writer.encode.NullableData;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -90,7 +93,7 @@ class DictColumnStateTest {
         assertThat(result).isEqualTo(expected);
     }
 
-    // ── isUtf8DictCandidate ──────────────────────────────────────────────────────
+    // ── isVarBinDictCandidate ──────────────────────────────────────────────────────
 
     static Stream<Arguments> utf8DictCandidateCases() {
         return Stream.of(
@@ -107,17 +110,17 @@ class DictColumnStateTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("utf8DictCandidateCases")
-    void isUtf8DictCandidate(String name, String[] data, boolean expected) {
+    void isVarBinDictCandidate(String name, String[] data, boolean expected) {
         // Given — a string column with the case's data
 
         // When
-        boolean result = DictColumnState.isUtf8DictCandidate(data);
+        boolean result = DictColumnState.isVarBinDictCandidate(data);
 
         // Then
         assertThat(result).isEqualTo(expected);
     }
 
-    // ── isUtf8DictCandidate (nullable) ───────────────────────────────────────────
+    // ── isVarBinDictCandidate (nullable) ───────────────────────────────────────────
 
     static Stream<Arguments> nullableUtf8DictCandidateCases() {
         // Nullable Utf8 keeps real null array elements at invalid positions (ChunkImpl.adaptUtf8),
@@ -138,14 +141,52 @@ class DictColumnStateTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("nullableUtf8DictCandidateCases")
-    void isUtf8DictCandidate_nullable(String name, String[] data, boolean[] validity, boolean expected) {
+    void isVarBinDictCandidate_nullable(String name, String[] data, boolean[] validity, boolean expected) {
         // Given — a string column with the case's values and validity
 
         // When
-        boolean result = DictColumnState.isUtf8DictCandidate(data, validity);
+        boolean result = DictColumnState.isVarBinDictCandidate(data, validity);
 
         // Then
         assertThat(result).isEqualTo(expected);
+    }
+
+    @Test
+    void isVarBinDictCandidate_binaryComparesContentNotIdentity() {
+        // Given — 5 rows of 2 distinct byte strings, each row its own byte[] instance. Keyed by
+        // array identity (byte[] has no content equals) every row would look distinct and the
+        // column would never qualify.
+        byte[][] data = new byte[5][];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = new byte[]{(byte) (i % 2), 42};
+        }
+
+        // When
+        boolean result = DictColumnState.isVarBinDictCandidate(data);
+
+        // Then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void ingestDictChunk_binary_dedupsByContentAndReconstructs() {
+        // Given — a nullable Binary column whose equal values arrive as distinct byte[] instances
+        var sut = new DictColumnState(new DType.Binary(true));
+        byte[][] values = {{1, 2}, {3}, null, {1, 2}, {3}};
+        boolean[] validity = {true, true, false, true, true};
+
+        // When
+        boolean admitted = sut.ingestDictChunk(new NullableData(values, validity));
+        Object result = sut.reconstructChunk(sut.buildInverseMap(), 0);
+
+        // Then — two dictionary entries, and demotion rebuilds the original rows (null kept null)
+        assertThat(admitted).isTrue();
+        assertThat(sut.cardinality()).isEqualTo(2);
+        assertThat((byte[][]) sut.varBinUniques()).isDeepEqualTo(new byte[][]{{1, 2}, {3}});
+        assertThat(result).isInstanceOfSatisfying(NullableData.class, nd -> {
+            assertThat((byte[][]) nd.values()).isDeepEqualTo(values);
+            assertThat(nd.validity()).containsExactly(validity);
+        });
     }
 
     // ── codePTypeForSize ─────────────────────────────────────────────────────────
