@@ -258,6 +258,78 @@ public final class PrimitiveArrays {
         };
     }
 
+    /// Converts raw bit patterns to `ptype`'s heap carrier array, for every primitive type: integers
+    /// as [#fromLongsArray(long[], PType, EncodingId)] does, `F16` as its 16 bits in a `short[]`,
+    /// `F32`/`F64` reinterpreted from their IEEE-754 bits into `float[]`/`double[]`. The inverse of
+    /// reading each element's raw bits, so `-0.0` and NaN payloads round-trip exactly.
+    ///
+    /// @param bits     each element's raw bits, in the low bits of the `long`
+    /// @param ptype    the target primitive type
+    /// @param encoding the encoding id used in the error message for unsupported types
+    /// @return the carrier array, `bits.length` elements
+    /// @throws VortexException for a type with no primitive carrier
+    public static Object fromBitsArray(long[] bits, PType ptype, EncodingId encoding) {
+        int n = bits.length;
+        return switch (ptype) {
+            case F16 -> fromLongsArray(bits, PType.U16, encoding);
+            case F32 -> {
+                float[] r = new float[n];
+                for (int i = 0; i < n; i++) {
+                    r[i] = Float.intBitsToFloat((int) bits[i]);
+                }
+                yield r;
+            }
+            case F64 -> {
+                double[] r = new double[n];
+                for (int i = 0; i < n; i++) {
+                    r[i] = Double.longBitsToDouble(bits[i]);
+                }
+                yield r;
+            }
+            default -> fromLongsArray(bits, ptype, encoding);
+        };
+    }
+
+    /// Narrows (or widens) `ints` to `ptype`'s heap carrier array (`byte[]` for I8/U8, `short[]`
+    /// for I16/U16, `int[]` for I32/U32, `long[]` for I64/U64) — the `int[]` counterpart of
+    /// [#fromLongsArray(long[], PType, EncodingId)], for the codes, offsets and indices encoders
+    /// compute as `int`s before choosing their narrowest type. Truncation keeps the low bits; the
+    /// I32/U32 case returns `ints` itself.
+    ///
+    /// @param ints     the values, already within `ptype`'s range
+    /// @param ptype    the target integer type
+    /// @param encoding the encoding id used in the error message for unsupported types
+    /// @return the carrier array, `ints.length` elements
+    /// @throws VortexException for floating-point or other non-integer types
+    public static Object fromIntsArray(int[] ints, PType ptype, EncodingId encoding) {
+        int n = ints.length;
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] r = new byte[n];
+                for (int i = 0; i < n; i++) {
+                    r[i] = (byte) ints[i];
+                }
+                yield r;
+            }
+            case I16, U16 -> {
+                short[] r = new short[n];
+                for (int i = 0; i < n; i++) {
+                    r[i] = (short) ints[i];
+                }
+                yield r;
+            }
+            case I32, U32 -> ints;
+            case I64, U64 -> {
+                long[] r = new long[n];
+                for (int i = 0; i < n; i++) {
+                    r[i] = ints[i];
+                }
+                yield r;
+            }
+            default -> throw new VortexException(encoding, "unsupported ptype: " + ptype);
+        };
+    }
+
     /// Copies only the elements at `true` positions in `mask` from `data`, preserving `ptype`'s
     /// storage array shape (`byte[]` for I8/U8, `short[]` for I16/U16/F16, `int[]` for I32/U32,
     /// `long[]` for I64/U64, `float[]` for F32, `double[]` for F64). Covers every primitive ptype,

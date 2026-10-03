@@ -420,4 +420,84 @@ class PrimitiveArraysTest {
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("unsupported ptype: F64");
     }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void fromIntsArray_matchesFromLongsArray(PType ptype) {
+        // Given — codes/offsets within every width's unsigned range, including each width's top bit
+        int[] ints = {0, 1, 127, 255};
+
+        // When
+        Object result = PrimitiveArrays.fromIntsArray(ints, ptype, EncodingId.VORTEX_PRIMITIVE);
+
+        // Then — same carrier and values as the long[] path the encoders used before
+        long[] wide = {0, 1, 127, 255};
+        assertThat(result).isInstanceOf(PrimitiveArrays.fromLongsArray(wide, ptype, EncodingId.VORTEX_PRIMITIVE).getClass());
+        assertThat(PrimitiveArrays.toLongs(result, ptype, EncodingId.VORTEX_PRIMITIVE))
+                .containsExactly(PrimitiveArrays.toLongs(PrimitiveArrays.fromLongsArray(wide, ptype, EncodingId.VORTEX_PRIMITIVE),
+                        ptype, EncodingId.VORTEX_PRIMITIVE));
+    }
+
+    @Test
+    void fromIntsArray_i32_returnsTheInputItself() {
+        // Given
+        int[] ints = {1, 2, 3};
+
+        // When
+        Object result = PrimitiveArrays.fromIntsArray(ints, PType.U32, EncodingId.VORTEX_PRIMITIVE);
+
+        // Then — no copy at the int carrier's own width
+        assertThat(result).isSameAs(ints);
+    }
+
+    @Test
+    void fromIntsArray_rejectsFloatingPoint() {
+        // When / Then
+        assertThatThrownBy(() -> PrimitiveArrays.fromIntsArray(new int[]{1}, PType.F32, EncodingId.VORTEX_PRIMITIVE))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("unsupported ptype: F32");
+    }
+
+    @Test
+    void fromBitsArray_floats_roundTripNegativeZeroAndNanPayloads() {
+        // Given — values whose == comparison would lose them: -0.0 and a NaN with a payload
+        double nanWithPayload = Double.longBitsToDouble(0x7ff8_0000_0000_1234L);
+        long[] doubleBits = {Double.doubleToRawLongBits(-0.0), Double.doubleToRawLongBits(nanWithPayload)};
+        long[] floatBits = {Float.floatToRawIntBits(-0.0f), Float.floatToRawIntBits(Float.intBitsToFloat(0x7fc0_0042))};
+
+        // When
+        double[] doubles = (double[]) PrimitiveArrays.fromBitsArray(doubleBits, PType.F64, EncodingId.VORTEX_PRIMITIVE);
+        float[] floats = (float[]) PrimitiveArrays.fromBitsArray(floatBits, PType.F32, EncodingId.VORTEX_PRIMITIVE);
+
+        // Then — bit-exact
+        assertThat(Double.doubleToRawLongBits(doubles[0])).isEqualTo(doubleBits[0]);
+        assertThat(Double.doubleToRawLongBits(doubles[1])).isEqualTo(doubleBits[1]);
+        assertThat(Float.floatToRawIntBits(floats[0])).isEqualTo((int) floatBits[0]);
+        assertThat(Float.floatToRawIntBits(floats[1])).isEqualTo((int) floatBits[1]);
+    }
+
+    @Test
+    void fromBitsArray_f16_keepsTheRawBitsInAShortArray() {
+        // Given — F16 has no Java type; its 16 bits travel in a short[]
+        long[] bits = {0x3c00, 0xfbff};
+
+        // When
+        Object result = PrimitiveArrays.fromBitsArray(bits, PType.F16, EncodingId.VORTEX_PRIMITIVE);
+
+        // Then
+        assertThat(result).isInstanceOf(short[].class);
+        assertThat((short[]) result).containsExactly((short) 0x3c00, (short) 0xfbff);
+    }
+
+    @Test
+    void fromBitsArray_integers_delegateToFromLongsArray() {
+        // Given
+        long[] bits = {-1, 0, 7};
+
+        // When
+        Object result = PrimitiveArrays.fromBitsArray(bits, PType.I16, EncodingId.VORTEX_PRIMITIVE);
+
+        // Then
+        assertThat((short[]) result).containsExactly((short) -1, (short) 0, (short) 7);
+    }
 }

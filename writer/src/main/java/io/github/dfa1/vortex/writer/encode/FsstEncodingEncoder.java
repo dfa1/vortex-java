@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -132,8 +133,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         }
         Fsst c = compress(data, ctx.arena());
         byte[][] stats = zoneMapStats(data);
-        Object uncompLens = typedUnsigned(c.uncompLenPType(), c.uncompLens());
-        Object codesOffsets = typedUnsigned(c.codesOffPType(), c.codesOffsets());
+        Object uncompLens = PrimitiveArrays.fromIntsArray(c.uncompLens(), c.uncompLenPType(), EncodingId.VORTEX_FSST);
+        Object codesOffsets = PrimitiveArrays.fromIntsArray(c.codesOffsets(), c.codesOffPType(), EncodingId.VORTEX_FSST);
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_FSST,
                 MemorySegment.ofArray(c.metaBytes()),
@@ -292,31 +293,5 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     @FunctionalInterface
     private interface RowCompressor {
         long compress(Compressor compressor, int rowIndex, MemorySegment scratch, long destOffset);
-    }
-
-    /// Copies unsigned values into the narrowest Java array matching `ptype` (U8→`byte[]`,
-    /// U16→`short[]`, else `int[]`) so a [ChildSlot] can hand them to the cascade's primitive codecs.
-    ///
-    /// @param ptype the child's primitive type
-    /// @param vals  the values (already within `ptype`'s unsigned range)
-    /// @return a `byte[]`, `short[]`, or `int[]` holding `vals`
-    private static Object typedUnsigned(PType ptype, int[] vals) {
-        return switch (ptype) {
-            case U8, I8 -> {
-                byte[] a = new byte[vals.length];
-                for (int i = 0; i < vals.length; i++) {
-                    a[i] = (byte) vals[i];
-                }
-                yield a;
-            }
-            case U16, I16 -> {
-                short[] a = new short[vals.length];
-                for (int i = 0; i < vals.length; i++) {
-                    a[i] = (short) vals[i];
-                }
-                yield a;
-            }
-            default -> vals;
-        };
     }
 }

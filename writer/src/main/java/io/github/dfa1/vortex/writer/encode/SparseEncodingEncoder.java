@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -113,8 +114,10 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
         MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
 
-        Object idxArr = idxArr(patchIdx, idxPtype);
-        Object valArr = valArr(patchBits, ptype);
+        Object idxArr = PrimitiveArrays.fromIntsArray(
+                patchIdx.stream().mapToInt(Integer::intValue).toArray(), idxPtype, EncodingId.VORTEX_SPARSE);
+        Object valArr = PrimitiveArrays.fromBitsArray(
+                patchBits.stream().mapToLong(Long::longValue).toArray(), ptype, EncodingId.VORTEX_SPARSE);
 
         ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(
                 numPatches,
@@ -132,82 +135,6 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0, SELF);
         ChildSlot valSlot = new ChildSlot(dtype, valArr, 1, SELF);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(fillBuf)), List.of(idxSlot, valSlot), ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
-    }
-
-    private static Object idxArr(List<Integer> patchIdx, PType idxPtype) {
-        int n = patchIdx.size();
-        return switch (idxPtype) {
-            case U8 -> {
-                byte[] a = new byte[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = patchIdx.get(i).byteValue();
-                }
-                yield a;
-            }
-            case U16 -> {
-                short[] a = new short[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = patchIdx.get(i).shortValue();
-                }
-                yield a;
-            }
-            default -> {
-                int[] a = new int[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = patchIdx.get(i);
-                }
-                yield a;
-            }
-        };
-    }
-
-    private static Object valArr(List<Long> patchBits, PType ptype) {
-        int n = patchBits.size();
-        return switch (ptype) {
-            case I8, U8 -> {
-                byte[] a = new byte[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = patchBits.get(i).byteValue();
-                }
-                yield a;
-            }
-            case I16, U16 -> {
-                short[] a = new short[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = patchBits.get(i).shortValue();
-                }
-                yield a;
-            }
-            case I32, U32 -> {
-                int[] a = new int[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = patchBits.get(i).intValue();
-                }
-                yield a;
-            }
-            case I64, U64 -> {
-                long[] a = new long[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = patchBits.get(i);
-                }
-                yield a;
-            }
-            case F32 -> {
-                float[] a = new float[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = Float.intBitsToFloat(patchBits.get(i).intValue());
-                }
-                yield a;
-            }
-            case F64 -> {
-                double[] a = new double[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = Double.longBitsToDouble(patchBits.get(i));
-                }
-                yield a;
-            }
-            default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
-        };
     }
 
     /// Encodes a boolean mask as `vortex.sparse`: fill = the majority value, patches = the minority
@@ -242,7 +169,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         java.util.Arrays.fill(patchVals, !fillValue);
 
         PType idxPtype = PType.narrowestUnsigned(n);
-        Object idxArr = idxArr(patchIdx, idxPtype);
+        Object idxArr = PrimitiveArrays.fromIntsArray(patchIdx, idxPtype, EncodingId.VORTEX_SPARSE);
 
         ProtoScalarValue fillScalar = ProtoScalarValue.ofBoolValue(fillValue);
         byte[] fillBytes = fillScalar.encode();
@@ -271,28 +198,6 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{idxNode, valNode}, new int[]{0});
         return new EncodeResult(root, List.copyOf(buffers), null, null);
     }
-
-    private static Object idxArr(int[] patchIdx, PType idxPtype) {
-        int n = patchIdx.length;
-        return switch (idxPtype) {
-            case U8 -> {
-                byte[] a = new byte[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = (byte) patchIdx[i];
-                }
-                yield a;
-            }
-            case U16 -> {
-                short[] a = new short[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = (short) patchIdx[i];
-                }
-                yield a;
-            }
-            default -> patchIdx;
-        };
-    }
-
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Primitive p)) {

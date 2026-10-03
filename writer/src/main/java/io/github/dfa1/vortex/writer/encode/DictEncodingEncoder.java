@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -241,30 +242,11 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     }
 
     private static Object buildCodesArray(String[] strings, java.util.Map<String, Integer> valueMap, PType codePType) {
-        int n = strings.length;
-        return switch (codePType) {
-            case U8 -> {
-                byte[] a = new byte[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = (byte) (int) valueMap.get(strings[i]);
-                }
-                yield a;
-            }
-            case U16 -> {
-                short[] a = new short[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = (short) (int) valueMap.get(strings[i]);
-                }
-                yield a;
-            }
-            default -> {
-                int[] a = new int[n];
-                for (int i = 0; i < n; i++) {
-                    a[i] = valueMap.get(strings[i]);
-                }
-                yield a;
-            }
-        };
+        int[] codes = new int[strings.length];
+        for (int i = 0; i < codes.length; i++) {
+            codes[i] = valueMap.get(strings[i]);
+        }
+        return PrimitiveArrays.fromIntsArray(codes, codePType, EncodingId.VORTEX_DICT);
     }
 
     private static EncodeResult encodeUtf8(String[] strings, EncodeContext ctx) {
@@ -373,23 +355,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         Object uniqueArray = buildUniqueArray(ptype, firstSeenRaw, dictSize);
         MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
 
-        Object codesArr = switch (codePType) {
-            case U8 -> {
-                byte[] a = new byte[len];
-                for (int i = 0; i < len; i++) {
-                    a[i] = (byte) codes[i];
-                }
-                yield a;
-            }
-            case U16 -> {
-                short[] a = new short[len];
-                for (int i = 0; i < len; i++) {
-                    a[i] = (short) codes[i];
-                }
-                yield a;
-            }
-            default -> codes;
-        };
+        Object codesArr = PrimitiveArrays.fromIntsArray(codes, codePType, EncodingId.VORTEX_DICT);
         return new DictData(valuesBuf, codesArr, codePType, len, dictSize);
     }
 
@@ -421,48 +387,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     /// @param dictSize number of distinct values
     /// @return a typed primitive array of the distinct values in first-seen order
     private static Object buildUniqueArray(PType ptype, long[] raw, int dictSize) {
-        return switch (ptype) {
-            case I8, U8 -> {
-                byte[] a = new byte[dictSize];
-                for (int i = 0; i < dictSize; i++) {
-                    a[i] = (byte) raw[i];
-                }
-                yield a;
-            }
-            case I16, U16, F16 -> {
-                short[] a = new short[dictSize];
-                for (int i = 0; i < dictSize; i++) {
-                    a[i] = (short) raw[i];
-                }
-                yield a;
-            }
-            case I32, U32 -> {
-                int[] a = new int[dictSize];
-                for (int i = 0; i < dictSize; i++) {
-                    a[i] = (int) raw[i];
-                }
-                yield a;
-            }
-            case I64, U64 -> {
-                long[] a = new long[dictSize];
-                System.arraycopy(raw, 0, a, 0, dictSize);
-                yield a;
-            }
-            case F32 -> {
-                float[] a = new float[dictSize];
-                for (int i = 0; i < dictSize; i++) {
-                    a[i] = Float.intBitsToFloat((int) raw[i]);
-                }
-                yield a;
-            }
-            case F64 -> {
-                double[] a = new double[dictSize];
-                for (int i = 0; i < dictSize; i++) {
-                    a[i] = Double.longBitsToDouble(raw[i]);
-                }
-                yield a;
-            }
-        };
+        return PrimitiveArrays.fromBitsArray(java.util.Arrays.copyOf(raw, dictSize), ptype, EncodingId.VORTEX_DICT);
     }
 
     /// Raw bits of element `i`, with no boxing. Floats keep their exact payload here; see

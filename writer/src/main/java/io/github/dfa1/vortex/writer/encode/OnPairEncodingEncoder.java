@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -82,7 +83,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         List<ChildSlot> slots = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
             slots.add(new ChildSlot(new DType.Primitive(ptypes[i], false),
-                    typed(ptypes[i], values[i]), i, SELF));
+                    PrimitiveArrays.fromLongsArray(values[i], ptypes[i], EncodingId.VORTEX_ONPAIR), i, SELF));
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(c.metadata()),
                 new EncodeNode[4], new int[]{0});
@@ -90,35 +91,6 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(c.dictBytes(ctx.arena()))), slots,
                 stats != null ? stats[0] : null, stats != null ? stats[1] : null, true);
     }
-
-    /// Narrows `values` to the Java array the cascade's primitive codecs expect for `ptype`.
-    private static Object typed(PType ptype, long[] values) {
-        return switch (ptype) {
-            case U8 -> {
-                byte[] a = new byte[values.length];
-                for (int i = 0; i < a.length; i++) {
-                    a[i] = (byte) values[i];
-                }
-                yield a;
-            }
-            case U16 -> {
-                short[] a = new short[values.length];
-                for (int i = 0; i < a.length; i++) {
-                    a[i] = (short) values[i];
-                }
-                yield a;
-            }
-            case U32 -> {
-                int[] a = new int[values.length];
-                for (int i = 0; i < a.length; i++) {
-                    a[i] = (int) values[i];
-                }
-                yield a;
-            }
-            default -> values;
-        };
-    }
-
     private static byte[][] zoneMapStats(Object data) {
         return data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
     }
