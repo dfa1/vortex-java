@@ -1567,6 +1567,63 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_nullableLowCardUtf8_nullAsDictEntry(@TempDir Path tmp) throws IOException {
+        // Given — a nullable low-cardinality Utf8 column dict-encoded per chunk (global dict off,
+        // as for a column demoted from it). Like Rust's dict builder, the writer now
+        // stores null as one more dictionary entry, invalid in the pool's own validity, with
+        // non-nullable codes and no row-level vortex.masked bitmap. Rust reads the codes'
+        // nullability from DictMetadata.is_nullable_codes, so the metadata must say `false`
+        // explicitly or the codes child would be read as nullable.
+        Path file = tmp.resolve("java_nullable_lowcard_utf8.vtx");
+        ColumnName id = ColumnName.of("id");
+        ColumnName s = ColumnName.of("s");
+        DType.Struct schema = new DType.Struct(List.of(id, s), List.of(DType.I64, new DType.Utf8(true)), false);
+        String[] categories = {"alpha", "beta", "gamma", "delta"};
+        int n = 4_000;
+        long[] ids = new long[n];
+        String[] data = new String[n];
+        for (int i = 0; i < n; i++) {
+            ids[i] = i;
+            data[i] = (i % 7 == 0) ? null : categories[i % categories.length];
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3).withGlobalDict(false))) {
+            // When
+            sut.writeChunk(Map.of(id, ids, s, data));
+        }
+
+        // Then — the column is a dict whose pool carries the null, not a masked wrapper
+        try (var vf = io.github.dfa1.vortex.reader.VortexReader.open(file,
+                io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
+            var tree = io.github.dfa1.vortex.inspect.InspectorTree.build(vf);
+            assertThat(tree.segmentEncodings().values()).contains("vortex.dict").doesNotContain("vortex.masked");
+        }
+        // And vortex-jni reads every row back, full scan and filtered
+        List<Object> full = readColumnFiltered(file, "s", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(0L)));
+        assertThat(full).map(v -> v == null ? null : v.toString()).containsExactly(data);
+        List<Object> filtered = readColumnFiltered(file, "s", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(3_000L)));
+        assertThat(filtered).map(v -> v == null ? null : v.toString())
+                .containsExactly(Arrays.copyOfRange(data, 3_000, n));
+        // And the Java reader agrees
+        var javaRead = new ArrayList<String>();
+        try (var vf = io.github.dfa1.vortex.reader.VortexReader.open(file,
+                io.github.dfa1.vortex.reader.ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
+            iter.forEachRemaining(c -> {
+                io.github.dfa1.vortex.reader.array.Array arr = c.column("s");
+                for (long i = 0; i < arr.length(); i++) {
+                    javaRead.add(arr instanceof io.github.dfa1.vortex.reader.array.MaskedArray m
+                            ? (m.isValid(i) ? ((io.github.dfa1.vortex.reader.array.VarBinArray) m.inner()).getString(i) : null)
+                            : ((io.github.dfa1.vortex.reader.array.VarBinArray) arr).getString(i));
+                }
+            });
+        }
+        assertThat(javaRead).containsExactly(data);
+    }
+
+    @Test
     void javaWriter_rustReader_bool_boolEncoding(@TempDir Path tmp) throws IOException {
         // Given — BoolEncoding: bit-packed boolean column
         Path file = tmp.resolve("java_bool.vtx");

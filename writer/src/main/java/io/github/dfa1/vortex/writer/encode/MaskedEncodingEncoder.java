@@ -63,7 +63,18 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         byte[][] stats = maskedMinMaxStats(nonNullable, values, validity);
         byte[] statsMin = stats == null ? null : stats[0];
         byte[] statsMax = stats == null ? null : stats[1];
-        return new EncodeResult(root, buffers, statsMin, statsMax);
+        EncodeResult masked = new EncodeResult(root, buffers, statsMin, statsMax);
+
+        // Rust never wraps a dict-encoded nullable string column in a row mask: its dict builder
+        // makes null one more (invalid) pool entry. Offer that shape too and keep the smaller.
+        if (ctx.allowedCascading() > 0 && nonNullable instanceof DType.Utf8
+                && !ctx.excluded().contains(EncodingId.VORTEX_DICT)) {
+            EncodeResult dict = DictEncodingEncoder.encodeNullableUtf8(dtype, (String[]) values, validity, ctx);
+            if (dict != null && totalBytes(dict) < totalBytes(masked)) {
+                return new EncodeResult(dict.rootNode(), dict.encodedBuffers(), statsMin, statsMax);
+            }
+        }
+        return masked;
     }
 
     /// Computes MIN/MAX over only the row-valid elements of `values`, never `valuesResult`'s own

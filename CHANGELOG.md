@@ -5,6 +5,11 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Nullable low-cardinality string columns dict-encoded per chunk store null as a dictionary entry, as Rust does, instead of adding a row validity bitmap: about 20% smaller, now slightly below vortex-jni.
+
 ## [0.15.2] — 2026-10-03
 
 ### Highlights

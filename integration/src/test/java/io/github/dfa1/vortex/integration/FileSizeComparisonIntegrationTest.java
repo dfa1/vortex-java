@@ -400,11 +400,13 @@ class FileSizeComparisonIntegrationTest {
         assertThat(javaSize).as("dict-encoded masked values must beat raw VarBin storage")
                 .isLessThan(rawBytes);
 
-        // Then — Java within 4x of JNI. Rust's per-column dict + tighter chunk layout is still
-        // smaller; the guard's purpose is to catch a regression back to the raw-VarBin masked path.
+        // Then — Java at JNI's size or below (measured 0.96x). Like Rust's dict builder, null is one
+        // more dictionary entry, invalid in the pool's validity, so the column needs no row mask; the
+        // earlier masked(dict) shape paid for nulls twice (a placeholder entry plus a one-bit-per-row
+        // bitmap) and measured 1.18x.
         assertThat((double) javaSize / jniSize)
-                .as("nullable low-cardinality Utf8 must not regress to the raw-VarBin masked path")
-                .isLessThan(4.0);
+                .as("nullable low-cardinality Utf8 stores null in the dict pool, as Rust does")
+                .isLessThan(1.05);
 
         // Then — Java file is readable, row count and null positions preserved
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
@@ -494,24 +496,27 @@ class FileSizeComparisonIntegrationTest {
 
         Path jniFile = tmp.resolve("nullable-multichunk-jni.vtx");
         String jniUri = jniFile.toAbsolutePath().toUri().toString();
-        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(SESSION, jniUri, jniSchema, ALLOCATOR).build();
-             VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(SESSION, jniUri, jniSchema, ALLOCATOR).build()) {
             for (int off = 0; off < n; off += batch) {
-                VarCharVector vec = (VarCharVector) root.getVector("s");
-                vec.reset();
-                vec.allocateNew();
-                for (int i = 0; i < batch; i++) {
-                    if (data[off + i] == null) {
-                        vec.setNull(i);
-                    } else {
-                        vec.setSafe(i, data[off + i].getBytes(StandardCharsets.UTF_8));
+                // A fresh root per batch: the C-data export hands the vector's buffers to the
+                // writer, and refilling the same vector after reset() reached vortex-jni as mostly
+                // nulls (165k of 200k rows), which made the JNI file look ~30% smaller than Java's.
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
+                    VarCharVector vec = (VarCharVector) root.getVector("s");
+                    vec.allocateNew();
+                    for (int i = 0; i < batch; i++) {
+                        if (data[off + i] == null) {
+                            vec.setNull(i);
+                        } else {
+                            vec.setSafe(i, data[off + i].getBytes(StandardCharsets.UTF_8));
+                        }
                     }
-                }
-                root.setRowCount(batch);
-                try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                    Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                    writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+                    root.setRowCount(batch);
+                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                         ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                        writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+                    }
                 }
             }
         }
@@ -523,13 +528,15 @@ class FileSizeComparisonIntegrationTest {
                 "[NullableMultiChunkUtf8] %,d rows  %d chunks  JNI=%,d bytes  Java=%,d bytes  Java/JNI=%.2fx%n",
                 n, n / batch, jniSize, javaSize, ratio);
 
-        // Then — global dict across chunks, plus vortex.sparse on the masked codes' validity
-        // (patch indices further compressed via vortex.sequence/fastlanes.delta on the
-        // clustered/regular null pattern), closes most of the gap the per-chunk path leaves.
-        // The bound is set from the measured ratio (~1.17x) with headroom.
+        // Then — global dict across chunks matches JNI's bits per row (measured 1.03x): the rest is
+        // per-segment overhead, one codes segment per writeChunk against Rust's single codes flat.
         assertThat(ratio)
                 .as("nullable low-cardinality Utf8 with global dict across chunks stays near JNI")
-                .isLessThan(1.5);
+                .isLessThan(1.10);
+
+        // Then — both files hold the same data. Only sizes are compared above, so a JNI side that
+        // silently wrote different rows (a reused Arrow root once sent mostly nulls) would pass.
+        assertThat(nullCount(jniFile)).isEqualTo(nullCount(javaFile)).isEqualTo(n / 10);
 
         // Then — Java file is readable, row count preserved.
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
@@ -538,6 +545,19 @@ class FileSizeComparisonIntegrationTest {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
         }
         assertThat(totalRows.get()).isEqualTo(n);
+    }
+
+    /// Null rows of the single-column file, counted through the CSV exporter: it renders a null as
+    /// an empty line whatever array shape the reader returns (masked, or a dict whose pool holds
+    /// the null).
+    private static long nullCount(Path file) {
+        var csv = new java.io.StringWriter();
+        try {
+            io.github.dfa1.vortex.csv.CsvExporter.exportCsv(file, csv, io.github.dfa1.vortex.csv.ExportOptions.defaults());
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+        return csv.toString().lines().skip(1).filter(String::isEmpty).count();
     }
 
     /// Writes a nullable Utf8 column across the given per-chunk arrays, with the global-dict option

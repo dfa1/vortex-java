@@ -180,6 +180,66 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 statsMin, statsMax, true);
     }
 
+    /// Dictionary-encodes a nullable Utf8 column the way Rust's dict builder does: a null row is
+    /// one more dictionary entry, marked invalid in the values pool's own validity, so the codes
+    /// stay non-nullable and the column needs no row-level `vortex.masked` bitmap on top. The
+    /// masked form ([MaskedEncodingEncoder]) pays for nulls twice when Dict wins its inner cascade:
+    /// a placeholder pool entry and a one-bit-per-row validity.
+    ///
+    /// The codes are cascaded like any dict's codes; the pool goes through [MaskedEncodingEncoder]
+    /// with Dict excluded, so it is never wrapped in a second dict.
+    ///
+    /// @param dtype    the column's nullable Utf8 dtype; also the values pool's dtype, as Rust
+    ///                 requires
+    /// @param strings  the row values (any element at an invalid row is ignored)
+    /// @param validity per-row validity
+    /// @param ctx      the encode context of the enclosing masked column
+    /// @return the encoded dict, or `null` when more than half the rows are distinct (Dict cannot win)
+    static EncodeResult encodeNullableUtf8(DType dtype, String[] strings, boolean[] validity, EncodeContext ctx) {
+        int n = strings.length;
+        String[] keys = new String[n];
+        var valueMap = new LinkedHashMap<String, Integer>();
+        for (int i = 0; i < n; i++) {
+            keys[i] = validity[i] ? strings[i] : null;
+            valueMap.computeIfAbsent(keys[i], _ -> valueMap.size());
+            // Same "dict can't win" bail-out as encodeUtf8Cascade.
+            if (valueMap.size() * 2 > n) {
+                return null;
+            }
+        }
+        int dictSize = valueMap.size();
+        PType codePType = codePType(dictSize);
+        String[] pool = valueMap.keySet().toArray(new String[0]);
+        boolean[] poolValidity = new boolean[dictSize];
+        for (int i = 0; i < dictSize; i++) {
+            poolValidity[i] = pool[i] != null;
+        }
+
+        EncodeContext childCtx = ctx.withDecrementedDepth();
+        EncodeResult codes = new CascadingCompressor(List.copyOf(ctx.registry().encoderMap().values()))
+                .encode(new DType.Primitive(codePType, false), buildCodesArray(keys, valueMap, codePType),
+                        childCtx.withExcluded(CODES_EXCLUDED));
+        EncodeResult values = new MaskedEncodingEncoder()
+                .encode(dtype, new NullableData(pool, poolValidity), childCtx.withExcluded(EncodingId.VORTEX_DICT));
+
+        // is_nullable_codes must be explicit: when it is absent Rust takes the codes' nullability
+        // from the (nullable) dtype and would read these non-nullable codes as nullable.
+        byte[] metaBytes = new ProtoDictMetadata(
+                dictSize,
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(codePType.ordinal()),
+                false,
+                null
+        ).encode();
+        int codesBufCount = codes.buffers().size();
+        List<EncodedBuffer> buffers = new java.util.ArrayList<>(codesBufCount + values.buffers().size());
+        buffers.addAll(codes.encodedBuffers());
+        buffers.addAll(values.encodedBuffers());
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_DICT, MemorySegment.ofArray(metaBytes),
+                new EncodeNode[]{codes.rootNode(), EncodeNode.remapBufferIndices(values.rootNode(), codesBufCount)},
+                new int[0]);
+        return new EncodeResult(root, buffers, null, null);
+    }
+
     private static Object buildCodesArray(String[] strings, java.util.Map<String, Integer> valueMap, PType codePType) {
         int n = strings.length;
         return switch (codePType) {
