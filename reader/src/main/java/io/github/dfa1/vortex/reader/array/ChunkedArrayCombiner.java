@@ -56,7 +56,16 @@ public final class ChunkedArrayCombiner {
         return validity != null ? new MaskedArray(data, validity) : data;
     }
 
-    private static Array combinePrimitive(PType ptype, DType dtype, long totalRows,
+    /// Folds per-chunk primitive arrays into the zero-copy `ChunkedXxxArray` view for `ptype`.
+    /// Validity is not handled here; [#combine(DType, long, List, SegmentAllocator)] adds it.
+    ///
+    /// @param ptype     the chunks' primitive type
+    /// @param dtype     the dtype the combined view reports
+    /// @param totalRows the total logical row count across all chunks
+    /// @param chunks    the decoded per-chunk arrays, in row order
+    /// @return the combined primitive view
+    /// @throws VortexException for a ptype with no chunked view (F16)
+    public static Array combinePrimitive(PType ptype, DType dtype, long totalRows,
             List<Array> chunks) {
         return switch (ptype) {
             case I64, U64 -> ChunkedLongArray.of(dtype, totalRows, chunks);

@@ -2,16 +2,16 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.zstd.ZstdCompressContext;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoZstdFrameMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoZstdMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -125,8 +125,8 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     private EncodeResult encodePrimitive(DType.Primitive dt, Object data, Arena arena) {
         int byteWidth = dt.ptype().byteSize();
-        MemorySegment raw = primitiveToLeBytes(dt.ptype(), data, arena);
-        long n = primitiveLength(dt.ptype(), data);
+        MemorySegment raw = PrimitiveArrays.toSegment(data, dt.ptype(), arena);
+        long n = Array.getLength(data);
         return buildResult(raw, uniformLayout(n, byteWidth), arena);
     }
 
@@ -150,7 +150,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         boolean[] validity = nd.validity();
         // Strip null positions: only valid values reach the compressed payload (mirrors the Rust
         // reference). The decoder scatters them back over the validity mask carried by child[0].
-        MemorySegment full = primitiveToLeBytes(dt.ptype(), nd.values(), arena);
+        MemorySegment full = PrimitiveArrays.toSegment(nd.values(), dt.ptype(), arena);
         MemorySegment packed = packValidBytes(full, validity, byteWidth, arena);
         return buildNullableResult(packed, uniformLayout(countValid(validity), byteWidth), validity, ctx);
     }
@@ -342,68 +342,6 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
             }
         }
         return count;
-    }
-
-    private static MemorySegment primitiveToLeBytes(PType ptype, Object data, Arena arena) {
-        return switch (ptype) {
-            case I8, U8 -> {
-                byte[] arr = (byte[]) data;
-                MemorySegment seg = arena.allocate(arr.length);
-                MemorySegment.copy(arr, 0, seg, ValueLayout.JAVA_BYTE, 0, arr.length);
-                yield seg;
-            }
-            case I16, U16, F16 -> {
-                short[] arr = (short[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 2, 2);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_SHORT, i, arr[i]);
-                }
-                yield seg;
-            }
-            case I32, U32 -> {
-                int[] arr = (int[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_INT, i, arr[i]);
-                }
-                yield seg;
-            }
-            case I64, U64 -> {
-                long[] arr = (long[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_LONG, i, arr[i]);
-                }
-                yield seg;
-            }
-            case F32 -> {
-                float[] arr = (float[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_FLOAT, i, arr[i]);
-                }
-                yield seg;
-            }
-            case F64 -> {
-                double[] arr = (double[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_DOUBLE, i, arr[i]);
-                }
-                yield seg;
-            }
-        };
-    }
-
-    private static long primitiveLength(PType ptype, Object data) {
-        return switch (ptype) {
-            case I8, U8 -> ((byte[]) data).length;
-            case I16, U16, F16 -> ((short[]) data).length;
-            case I32, U32 -> ((int[]) data).length;
-            case F32 -> ((float[]) data).length;
-            case I64, U64 -> ((long[]) data).length;
-            case F64 -> ((double[]) data).length;
-        };
     }
 
     private static MemorySegment buildLengthPrefixed(byte[][] encoded, Arena arena) {

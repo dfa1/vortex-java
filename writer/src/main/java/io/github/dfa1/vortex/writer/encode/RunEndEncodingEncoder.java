@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.core.proto.ProtoRunEndMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -117,7 +118,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.VORTEX_RUNEND, "encode only supports Primitive dtype, got " + dtype);
         }
         PType ptype = p.ptype();
-        int n = arrayLength(data, ptype);
+        int n = Array.getLength(data);
         boolean unsign = ptype.isUnsigned();
 
         int elemBytes = ptype.byteSize();
@@ -228,7 +229,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
             return CascadeStep.notApplicable();
         }
         PType ptype = p.ptype();
-        int n = arrayLength(data, ptype);
+        int n = Array.getLength(data);
         if (n == 0) {
             return CascadeStep.notApplicable();
         }
@@ -269,15 +270,4 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         }
         return ProtoScalarValue.ofInt64Value(value).encode();
     }
-
-    private static int arrayLength(Object data, PType ptype) {
-        return switch (ptype) {
-            case I8, U8 -> ((byte[]) data).length;
-            case I16, U16 -> ((short[]) data).length;
-            case I32, U32 -> ((int[]) data).length;
-            case I64, U64 -> ((long[]) data).length;
-            default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype: " + ptype);
-        };
-    }
-
 }

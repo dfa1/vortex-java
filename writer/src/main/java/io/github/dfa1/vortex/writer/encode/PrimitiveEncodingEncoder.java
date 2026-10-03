@@ -3,10 +3,9 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
 /// Write-only encoder for `vortex.primitive` — raw little-endian primitive arrays.
@@ -25,7 +24,10 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        MemorySegment seg = encodePrimitive(ptype, data, ctx.arena());
+        // byte[] needs no byte swap, so it is wrapped in place rather than copied off-heap.
+        MemorySegment seg = data instanceof byte[] bytes
+                ? MemorySegment.ofArray(bytes)
+                : PrimitiveArrays.toSegment(data, ptype, ctx.arena());
         byte[] min = null;
         byte[] max = null;
         byte[][] stats = minMaxStats(ptype, data);
@@ -34,52 +36,6 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
             max = stats[1];
         }
         return EncodeResult.simple(EncodingId.VORTEX_PRIMITIVE, EncodedBuffer.of(seg, ptype), min, max);
-    }
-
-    private static MemorySegment encodePrimitive(PType ptype, Object data, Arena arena) {
-        return switch (ptype) {
-            case I8, U8 -> MemorySegment.ofArray((byte[]) data);
-            case I16, U16, F16 -> {
-                short[] arr = (short[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 2, 2);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_SHORT, i, arr[i]);
-                }
-                yield seg;
-            }
-            case I32, U32 -> {
-                int[] arr = (int[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_INT, i, arr[i]);
-                }
-                yield seg;
-            }
-            case I64, U64 -> {
-                long[] arr = (long[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_LONG, i, arr[i]);
-                }
-                yield seg;
-            }
-            case F32 -> {
-                float[] arr = (float[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_FLOAT, i, arr[i]);
-                }
-                yield seg;
-            }
-            case F64 -> {
-                double[] arr = (double[]) data;
-                MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
-                for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(VortexFormat.LE_DOUBLE, i, arr[i]);
-                }
-                yield seg;
-            }
-        };
     }
 
     /// Computes the serialized min/max [io.github.dfa1.vortex.core.proto.ProtoScalarValue] pair for a raw

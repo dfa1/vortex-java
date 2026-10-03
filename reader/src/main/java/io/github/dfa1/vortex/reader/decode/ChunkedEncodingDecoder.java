@@ -1,17 +1,11 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ChunkedArrayCombiner;
 import io.github.dfa1.vortex.reader.array.ChunkedBoolArray;
-import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
-import io.github.dfa1.vortex.reader.array.ChunkedDoubleArray;
-import io.github.dfa1.vortex.reader.array.ChunkedFloatArray;
-import io.github.dfa1.vortex.reader.array.ChunkedIntArray;
-import io.github.dfa1.vortex.reader.array.ChunkedLongArray;
-import io.github.dfa1.vortex.reader.array.ChunkedShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 
 import java.lang.foreign.MemorySegment;
@@ -100,7 +94,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
     /// [DType.Struct]. No concat / no per-row materialize.
     private static Array wrap(List<Array> chunks, DType dtype, long totalRows) {
         if (dtype instanceof DType.Primitive pt) {
-            return wrapPrimitive(chunks, pt, dtype, totalRows);
+            return ChunkedArrayCombiner.combinePrimitive(pt.ptype(), dtype, totalRows, chunks);
         }
         if (dtype instanceof DType.Bool) {
             return ChunkedBoolArray.of(dtype, totalRows, chunks);
@@ -117,7 +111,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
             }
             DType innerDtype = chunks.get(0).dtype();
             if (innerDtype instanceof DType.Primitive innerPt) {
-                return wrapPrimitive(chunks, innerPt, innerDtype, totalRows);
+                return ChunkedArrayCombiner.combinePrimitive(innerPt.ptype(), innerDtype, totalRows, chunks);
             }
             if (innerDtype instanceof DType.Bool) {
                 return ChunkedBoolArray.of(innerDtype, totalRows, chunks);
@@ -127,22 +121,6 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
         }
         throw new VortexException(EncodingId.VORTEX_CHUNKED,
                 "chunked not supported for dtype: " + dtype);
-    }
-
-    private static Array wrapPrimitive(
-            List<Array> chunks, DType.Primitive pt, DType dtype, long totalRows
-    ) {
-        PType ptype = pt.ptype();
-        return switch (ptype) {
-            case I64, U64 -> ChunkedLongArray.of(dtype, totalRows, chunks);
-            case I32, U32 -> ChunkedIntArray.of(dtype, totalRows, chunks);
-            case F64 -> ChunkedDoubleArray.of(dtype, totalRows, chunks);
-            case F32 -> ChunkedFloatArray.of(dtype, totalRows, chunks);
-            case I16, U16 -> ChunkedShortArray.of(dtype, totalRows, chunks);
-            case I8, U8 -> ChunkedByteArray.of(dtype, totalRows, chunks);
-            default -> throw new VortexException(EncodingId.VORTEX_CHUNKED,
-                    "unsupported ptype for chunked: " + ptype);
-        };
     }
 
     private static StructArray wrapStruct(List<Array> chunks, DType.Struct struct, long totalRows) {

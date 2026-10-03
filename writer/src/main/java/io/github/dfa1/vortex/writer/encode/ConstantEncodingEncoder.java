@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.reflect.Array;
 
 /// Write-only encoder for `vortex.constant`.
 public final class ConstantEncodingEncoder implements EncodingEncoder {
@@ -57,7 +58,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         byte[] scalarBytes = scalar.encode();
         // A constant array's min and max are both the one repeated value, by construction -- no
         // scan needed. Empty arrays report no stats, matching every other encoder's convention.
-        byte[] stats = arrayLength(data, ptype) > 0 ? scalarBytes : null;
+        byte[] stats = Array.getLength(data) > 0 ? scalarBytes : null;
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)), stats, stats);
     }
 
@@ -109,21 +110,9 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static int arrayLength(Object data, PType ptype) {
-        return switch (ptype) {
-            case I8, U8 -> ((byte[]) data).length;
-            case I16, U16 -> ((short[]) data).length;
-            case I32, U32 -> ((int[]) data).length;
-            case I64, U64 -> ((long[]) data).length;
-            case F32 -> ((float[]) data).length;
-            case F64 -> ((double[]) data).length;
-            default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
-        };
-    }
-
     private static boolean isConstant(Object data, PType ptype) {
         long firstRaw = readFirstRaw(data, ptype);
-        int len = arrayLength(data, ptype);
+        int len = Array.getLength(data);
         for (int i = 1; i < len; i++) {
             long raw = switch (ptype) {
                 case I8, U8 -> ((byte[]) data)[i];

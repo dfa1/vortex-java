@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.LinkedHashMap;
@@ -319,7 +320,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     private static DictData buildDictData(DType dtype, Object data) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        int len = arrayLength(data, ptype);
+        int len = Array.getLength(data);
 
         // Dedup on raw value bits rather than boxed keys. This probed a
         // LinkedHashMap<Object, Integer>, boxing a value per ROW just to look it up - the same
@@ -367,17 +368,6 @@ public final class DictEncodingEncoder implements EncodingEncoder {
             return PType.U16;
         }
         return PType.U32;
-    }
-
-    private static int arrayLength(Object data, PType ptype) {
-        return switch (ptype) {
-            case I8, U8 -> ((byte[]) data).length;
-            case I16, U16, F16 -> ((short[]) data).length;
-            case I32, U32 -> ((int[]) data).length;
-            case I64, U64 -> ((long[]) data).length;
-            case F32 -> ((float[]) data).length;
-            case F64 -> ((double[]) data).length;
-        };
     }
 
     /// Builds the dictionary pool from the first-seen raw bit patterns, in order.
