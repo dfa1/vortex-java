@@ -500,4 +500,34 @@ class PrimitiveArraysTest {
         // Then
         assertThat((short[]) result).containsExactly((short) -1, (short) 0, (short) 7);
     }
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void toSegment_writesLittleEndianElementAlignedBytes(PType ptype) {
+        // Given — -2 sets every byte of its width, so a missing byte swap or a short copy shows up;
+        // fromBitsArray builds the right carrier type for every ptype, floats included.
+        long[] bits = {1, -2, 0x7f};
+        Object carrier = PrimitiveArrays.fromBitsArray(bits, ptype, EncodingId.VORTEX_PRIMITIVE);
+        int width = ptype.byteSize();
+
+        try (Arena arena = Arena.ofConfined()) {
+            // When
+            MemorySegment result = PrimitiveArrays.toSegment(carrier, ptype, arena);
+
+            // Then — Rust rejects a buffer below its element alignment, so the address is asserted too
+            assertThat(result.byteSize()).isEqualTo(3L * width);
+            assertThat(result.address() % width).isZero();
+            long mask = width == 8 ? -1L : (1L << (width * 8)) - 1;
+            for (int i = 0; i < bits.length; i++) {
+                assertThat(leBits(result, (long) i * width, width)).isEqualTo(bits[i] & mask);
+            }
+        }
+    }
+
+    private static long leBits(MemorySegment seg, long offset, int width) {
+        long bits = 0;
+        for (int k = 0; k < width; k++) {
+            bits |= (seg.get(ValueLayout.JAVA_BYTE, offset + k) & 0xFFL) << (8 * k);
+        }
+        return bits;
+    }
 }

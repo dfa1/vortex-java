@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import java.lang.foreign.MemorySegment;
+import java.lang.reflect.Array;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.proto.ProtoSequenceMetadata;
 
@@ -51,7 +52,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
     }
 
     private static EncodeResult encodeInteger(PType pt, Object data) {
-        int n = intArrayLength(pt, data);
+        int n = Array.getLength(data);
         long base = 0;
         long multiplier = 0;
         if (n > 0) {
@@ -153,16 +154,6 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         return switch (pt) {
             case U8, U16, U32, U64 -> ProtoScalarValue.ofUint64Value(value);
             default -> ProtoScalarValue.ofInt64Value(value);
-        };
-    }
-
-    private static int intArrayLength(PType pt, Object data) {
-        return switch (pt) {
-            case I8, U8 -> ((byte[]) data).length;
-            case I16, U16 -> ((short[]) data).length;
-            case I32, U32 -> ((int[]) data).length;
-            case I64, U64 -> ((long[]) data).length;
-            default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unsupported ptype: " + pt);
         };
     }
 

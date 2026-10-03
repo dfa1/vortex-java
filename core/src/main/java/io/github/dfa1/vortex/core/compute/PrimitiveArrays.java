@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
+import java.lang.reflect.Array;
 
 /// Conversions between a boxed Java primitive value array and its wide / off-heap forms,
 /// shared by the integer encodings on both the read and write sides.
@@ -216,6 +217,31 @@ public final class PrimitiveArrays {
         for (int i = 0; i < n; i++) {
             PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
         }
+        return seg;
+    }
+
+    /// Copies a heap carrier array of any primitive type into a freshly allocated little-endian
+    /// off-heap segment, aligned to `ptype`'s element width (the alignment an `EncodedBuffer`
+    /// declares). One bulk copy per call; [MemorySegment#copy(Object, int, MemorySegment,
+    /// ValueLayout, long, int)] does any byte swap.
+    ///
+    /// @param data  the heap carrier array (`byte[]` for I8/U8, `short[]` for I16/U16/F16,
+    ///              `int[]` for I32/U32, `long[]` for I64/U64, `float[]` for F32, `double[]` for F64)
+    /// @param ptype the primitive type of `data`
+    /// @param arena allocator for the output segment
+    /// @return a native little-endian segment holding every element of `data`
+    public static MemorySegment toSegment(Object data, PType ptype, SegmentAllocator arena) {
+        ValueLayout layout = switch (ptype) {
+            case I8, U8 -> ValueLayout.JAVA_BYTE;
+            case I16, U16, F16 -> VortexFormat.LE_SHORT;
+            case I32, U32 -> VortexFormat.LE_INT;
+            case I64, U64 -> VortexFormat.LE_LONG;
+            case F32 -> VortexFormat.LE_FLOAT;
+            case F64 -> VortexFormat.LE_DOUBLE;
+        };
+        int n = Array.getLength(data);
+        MemorySegment seg = arena.allocate((long) n * ptype.byteSize(), ptype.byteSize());
+        MemorySegment.copy(data, 0, seg, layout, 0, n);
         return seg;
     }
 

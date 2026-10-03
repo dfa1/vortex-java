@@ -4,6 +4,8 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
+import java.lang.reflect.Array;
+
 /// Read-only stats over a primitive array, computed in a single scan and shared across
 /// all encoders that requested a given stat via [StatsOptions]. Replaces the per-encoder
 /// sample-encoding probe that biases on leading rows.
@@ -39,7 +41,7 @@ public record ArrayStats(
     /// @param options which stats to compute; merged options from all eligible encoders
     /// @return immutable [ArrayStats]
     public static ArrayStats compute(PType ptype, Object data, StatsOptions options) {
-        int n = arrayLength(ptype, data);
+        int n = Array.getLength(data);
         if (n == 0) {
             return EMPTY;
         }
@@ -198,17 +200,6 @@ public record ArrayStats(
             }
         }
         return false;
-    }
-
-    private static int arrayLength(PType ptype, Object data) {
-        return switch (ptype) {
-            case I8, U8 -> ((byte[]) data).length;
-            case I16, U16, F16 -> ((short[]) data).length;
-            case I32, U32 -> ((int[]) data).length;
-            case I64, U64 -> ((long[]) data).length;
-            case F32 -> ((float[]) data).length;
-            case F64 -> ((double[]) data).length;
-        };
     }
 
 
