@@ -512,7 +512,7 @@ public final class VortexWriter implements Closeable {
             }
 
             if (!firstChunkSeen && options.globalDict()) {
-                // Global dict candidate detection inspects raw primitive/String arrays. Nullable
+                // Global dict candidate detection inspects raw primitive/String/byte[] arrays. Nullable
                 // columns (carried as NullableData) run the same cardinality/ratio check against
                 // their values, skipping null positions per the validity bitmap; the reader's dict
                 // lazy-decode already handles masked (nullable) codes children.
@@ -524,8 +524,9 @@ public final class VortexWriter implements Closeable {
                 boolean candidate = false;
                 if (colDtype instanceof DType.Primitive p) {
                     candidate = DictColumnState.isDictCandidate(p.ptype(), values, validity);
-                } else if (colDtype instanceof DType.Utf8) {
-                    candidate = DictColumnState.isUtf8DictCandidate((String[]) values, validity);
+                } else if (colDtype instanceof DType.Utf8 || colDtype instanceof DType.Binary) {
+                    // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported).
+                    candidate = DictColumnState.isVarBinDictCandidate((Object[]) values, validity);
                 }
                 if (candidate) {
                     dictCandidates.add(colName);
@@ -1194,8 +1195,8 @@ public final class VortexWriter implements Closeable {
             if (state == null || state.chunkCount() == 0 || state.cardinality() == 0) {
                 continue;
             }
-            if (state.utf8()) {
-                writeGlobalDictUtf8Column(colName, state);
+            if (state.varBin()) {
+                writeGlobalDictVarBinColumn(colName, state);
             } else {
                 writeGlobalDictColumn(colName, state);
             }
@@ -1234,17 +1235,17 @@ public final class VortexWriter implements Closeable {
                 state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum()));
     }
 
-    private void writeGlobalDictUtf8Column(ColumnName colName, DictColumnState state) throws IOException {
+    private void writeGlobalDictVarBinColumn(ColumnName colName, DictColumnState state) throws IOException {
         int dictSize = state.cardinality();
         PType codePType = DictColumnState.codePTypeForSize(dictSize);
 
-        // Utf8 assigns codes in first-seen order with no frequency sort, so the incremental map's
+        // Utf8/Binary assigns codes in first-seen order with no frequency sort, so the incremental map's
         // order already matches — no remap pass (ADR 0021). Compress the distinct-values pool
-        // through the normal Utf8 competition (FSST/VarBin/Zstd) so it captures substring
+        // through the normal Utf8/Binary competition (FSST/VarBin/Zstd) so it captures substring
         // redundancy across dictionary entries (#299), but exclude Dict so the cascade never wraps
         // the (all-unique-by-construction) dictionary in another dict the reader cannot unwrap. At
         // cascade depth 0 there is no competition to run, so force flat VarBin as before.
-        String[] uniques = state.utf8Uniques();
+        Object uniques = state.varBinUniques();
         int valuesSegIdx = options.allowedCascading() > 0
                 ? writeSegment(state.dtype(), uniques, null, Set.of(EncodingId.VORTEX_DICT))
                 : writeSegment(state.dtype(), uniques, new VarBinEncodingEncoder());
