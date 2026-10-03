@@ -78,6 +78,23 @@ java -jar cli/target/vortex-cli-*-all.jar inspect --html data.vortex > report.ht
 open report.html
 ```
 
+The file can also be remote. Any `http(s)://` URL whose server answers HTTP Range requests
+works, S3 included, and nothing is downloaded up front. This is one of Rust's compat
+fixtures on S3:
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar inspect --html \
+    https://vortex-compat-fixtures.s3.amazonaws.com/v0.86.1/arrays/tpch_orders.compact.vortex \
+    > report.html
+```
+
+![inspect --html report of tpch_orders.compact.vortex](images/inspect-html.png)
+
+The report fetches every data segment to read its encoding and stats, one Range request
+each, so a remote file costs one round trip per segment: this 22-segment, 325 KB file
+takes about 11 s from S3 against well under a second locally. For a large remote file,
+download it first.
+
 Each schema row names the encoding a reader dispatches on for that column
 (`fastlanes.for`, `vortex.fsst`, `vortex.dict`, …) and, for fixed-width columns, how much
 smaller it is on disk than unencoded — `400,000 rows of I64` is 3.1 MB raw against 781 KB

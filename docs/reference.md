@@ -627,7 +627,7 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 
 | Subcommand | Syntax                                         | Description                                      |
 |------------|------------------------------------------------|--------------------------------------------------|
-| `inspect`  | `inspect [--html] <file.vortex>`                | Layout tree, encodings, row counts, buffer sizes; `--html` emits a self-contained HTML report on stdout |
+| `inspect`  | `inspect [--html] <file.vortex \| http(s)://url>` | Layout tree, encodings, row counts, buffer sizes; `--html` emits a self-contained HTML report on stdout |
 | `tui`      | `tui <file.vortex \| http(s)://url>`           | Interactive layout-tree browser (lazy stats + data) |
 | `view`     | `view <file.vortex \| http(s)://url>`          | Interactive spreadsheet-grid browser over the row data |
 | `schema`   | `schema <file.vortex>`                         | Column names and types                           |
