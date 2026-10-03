@@ -1315,6 +1315,43 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(decoded).containsExactly(data);
     }
 
+    /// Cascaded delta (unstable edition, Rust's DeltaScheme, issue #410): bases and deltas go through
+    /// the cascade (FoR / bit-packing) instead of raw buffers. vortex-jni must read the column back on
+    /// a full scan, a mid-chunk row range, and a zone-pruned filter, which slice the delta children.
+    @Test
+    void javaWriter_jniReader_delta_cascading_unstableEdition(@TempDir Path tmp) throws IOException {
+        // Given — 2 equal chunks of ~1s jittered timestamps (delta wins over FoR here)
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("ts")),
+                List.of(DType.I64, DType.I64), false);
+        java.util.Random random = new java.util.Random(7);
+        int rows = 16_384;
+        long[] ts = new long[rows];
+        for (int i = 0; i < rows; i++) {
+            ts[i] = 1_700_000_000_000L + i * 1_000L + random.nextInt(1_000);
+        }
+        Path file = tmp.resolve("java_delta_cascade.vtx");
+        WriteOptions options = WriteOptions.cascading(3).withEdition(io.github.dfa1.vortex.core.model.Editions.UNSTABLE_2025_05_0);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, options)) {
+            for (int start = 0; start < rows; start += 8_192) {
+                sut.writeChunk(Map.of(
+                        ColumnName.of("id"), LongStream.range(start, start + 8_192L).toArray(),
+                        ColumnName.of("ts"), Arrays.copyOfRange(ts, start, start + 8_192)));
+            }
+        }
+
+        // When
+        List<Object> full = readRowRange(file, "ts", 0, rows);
+        List<Object> range = readRowRange(file, "ts", 1_501, 12_345);
+        List<Object> filtered = readColumnFiltered(file, "ts", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(12_000L)));
+
+        // Then
+        assertThat(full).containsExactlyInAnyOrderElementsOf(slice(Arrays.stream(ts).boxed(), 0, rows));
+        assertThat(range).containsExactlyInAnyOrderElementsOf(slice(Arrays.stream(ts).boxed(), 1_501, 12_345));
+        assertThat(filtered).containsExactlyInAnyOrderElementsOf(slice(Arrays.stream(ts).boxed(), 12_000, rows));
+    }
+
     /// Float RLE (Rust's FloatRLEScheme): the writer used to refuse floats outright. Rust must read
     /// the raw-bit runs back losslessly, -0.0 and a NaN payload included.
     @Test

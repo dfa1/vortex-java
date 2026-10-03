@@ -263,4 +263,47 @@ class DeltaEncodingEncoderTest {
             default -> throw new AssertionError(ptype);
         };
     }
+
+    /// Cascading delta (issue #410): bases and deltas become open children carrying the terminal
+    /// path's exact values, each barring a second delta (Rust's `DeltaScheme`).
+    @org.junit.jupiter.api.Nested
+    class Cascade {
+
+        @Test
+        void encodeCascade_childrenMatchTerminalBuffers() {
+            // Given — two FastLanes chunks of a ramp
+            long[] data = new long[2_048];
+            for (int i = 0; i < data.length; i++) {
+                data[i] = 10L + 3L * i;
+            }
+            var sut = new DeltaEncodingEncoder();
+            EncodeResult terminal = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // When
+            CascadeStep result = sut.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.ownedBuffers()).isEmpty();
+            for (int child = 0; child < 2; child++) {
+                ChildSlot slot = result.openChildren().get(child);
+                MemorySegment expected = terminal.encodedBuffers().get(child).data();
+                assertThat((long[]) slot.childData()).as("child %d", child)
+                        .containsExactly(expected.toArray(VortexFormat.LE_LONG));
+                assertThat(slot.excluded()).containsExactly(io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_DELTA);
+            }
+        }
+
+        @Test
+        void encodeCascade_belowOneChunk_notApplicable() {
+            // Given — Rust's MIN_DELTA_LEN: under 1024 rows the transpose has nothing to work with
+            long[] data = new long[1_023];
+
+            // When
+            CascadeStep result = new DeltaEncodingEncoder().encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isFalse();
+        }
+    }
 }
