@@ -13,6 +13,7 @@ import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.ListArray;
+import io.github.dfa1.vortex.reader.array.ListViewArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -157,8 +158,8 @@ public final class CsvExporter {
     /// nested struct row) becomes a JSON `null`. Only the JSON layer is escaped here; the CSV writer
     /// independently quotes any cell containing the delimiter or a quote character.
     ///
-    /// A fixed-size list column ([FixedSizeListArray]) or variable-length list column ([ListArray]),
-    /// either possibly wrapped in a [MaskedArray] when nullable, renders as a JSON array cell
+    /// A fixed-size list column ([FixedSizeListArray]) or variable-length list column ([ListArray] or
+    /// [ListViewArray]), either possibly wrapped in a [MaskedArray] when nullable, renders as a JSON array cell
     /// `[v0,v1,...]` with elements following the same rules as [#jsonValue(Array, long)].
     ///
     /// @param arr    the column array to read from
@@ -192,6 +193,12 @@ public final class CsvExporter {
                 long start = offsetAt(la.offsets(), rowIdx);
                 long end = offsetAt(la.offsets(), rowIdx + 1);
                 yield jsonArray(la.elements(), start, end);
+            }
+            // A list view addresses each row by its own (offset, size) pair: rows may overlap or
+            // appear out of order in `elements`, so the next row's offset is not this row's end.
+            case ListViewArray lv -> {
+                long start = offsetAt(lv.offsets(), rowIdx);
+                yield jsonArray(lv.elements(), start, start + offsetAt(lv.sizes(), rowIdx));
             }
             // All-null columns (DType.Null) hold only a row count: every cell is an empty
             // field, same rule as a MaskedArray null row.
@@ -264,6 +271,12 @@ public final class CsvExporter {
                 long start = offsetAt(la.offsets(), rowIdx);
                 long end = offsetAt(la.offsets(), rowIdx + 1);
                 yield jsonArray(la.elements(), start, end);
+            }
+            // A list view addresses each row by its own (offset, size) pair: rows may overlap or
+            // appear out of order in `elements`, so the next row's offset is not this row's end.
+            case ListViewArray lv -> {
+                long start = offsetAt(lv.offsets(), rowIdx);
+                yield jsonArray(lv.elements(), start, start + offsetAt(lv.sizes(), rowIdx));
             }
             case NullArray _ -> "null";
             case VarBinArray va -> {

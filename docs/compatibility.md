@@ -38,7 +38,7 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 |------|------------|-------------|
 | `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
 | `vortex.onpair` experimental string encoding | Rust 0.74.0 | ✅ Read and written. In `core2026.08.1`, so default cascading writes offer it, as Rust's default compressor does; the trained dictionary is valid for Rust but not byte-identical to Rust's (Rust's sampling RNG is not portable). |
-| `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). |
+| `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). ❌ Reading is a real gap: vortex-jni's default writer turns an Arrow `arrow.parquet.variant` column into `vortex.parquet.variant` (`core2026.08.3`), which vortex-java has no decoder for. |
 | Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested against the currently pinned v0.85.0 fixtures; #8125 not yet re-verified. |
 | `vortex.dict` **layout** over a values pool that is neither VarBin- nor primitive-shaped (e.g. a dict-encoded `vortex.uuid`, whose storage is `FixedSizeList(U8, 16)`) | Not written by Rust: its dict layout admits only `Primitive \| Utf8 \| Binary` (`dict_layout_supported`), and its dict compressor schemes only integers, floats and strings | ⚠️ Unreachable from Rust- or Java-written files. Every type vortex-jni writes reads back exactly, dict-encoded or not (`DictAllTypesInteropIntegrationTest`, which also fails if a Rust bump starts dict-encoding another type). A foreign file with such a pool fails with `VortexException("unsupported dict values shape: …")`. |
 | Duplicate struct field names | Rust writer rejects ("StructLayout must have unique field names"); Rust reader tolerates foreign files (first-match access) | ⚠️ Deliberate divergence on read: Java rejects such files with `VortexException("duplicate field name in file schema")` instead of tolerating them — the name-keyed `Chunk` API cannot represent both columns, and silent column loss is worse than a loud failure on a file the reference writer refuses to produce. Java's writer mirrors the Rust writer's rejection. |
@@ -106,7 +106,7 @@ decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nul
 | `vortex.struct`             | `StructEncodingDecoder`          | `StructEncodingEncoder`          | ✅      | ✅      | Struct                                                                |
 | `vortex.chunked`            | `ChunkedEncodingDecoder`         | `ChunkedEncodingEncoder`         | ✅      | ✅      | Primitive + Struct concat                                             |
 | `vortex.fsst`               | `FsstEncodingDecoder`            | `FsstEncodingEncoder`            | ✅      | ✅      | Utf8, Binary                                                          |
-| `vortex.list`               | `ListEncodingDecoder`            | `ListEncodingEncoder`            | ✅      | ✅      |                                                                       |
+| `vortex.list`               | `ListEncodingDecoder`            | `ListEncodingEncoder`            | ✅      | ✅      | A nullable list's validity is its optional third child, as in Rust     |
 | `vortex.listview`           | `ListViewEncodingDecoder`        | `ListViewEncodingEncoder`        | ✅      | ✅      | Validity lives in the encoding's own fourth child slot, not under a `vortex.masked` wrapper. Read: both shapes decode. Write: only `vortex.map`'s entries child takes this path — a plain nullable `DType.List` column still routes through `vortex.masked` + `vortex.list` |
 | `vortex.map`                | `MapEncodingDecoder`             | `MapEncodingEncoder`             | ✅      | ✅      | Single `entries` child, a bare `vortex.listview` of non-nullable `{key, value}` structs (any other entries encoding is rejected, as in Rust); map validity is delegated to that child's validity slot. Single-flat columns only: neither `ChunkedArrayCombiner` nor `ScanIterator`'s row-window slicing has a `MapArray` arm yet, so a chunked map column or a split-window scan fails as `VortexException`. Pre-existing gap shared with `vortex.listview`; tracked separately |
 | `vortex.fixed_size_list`    | `FixedSizeListEncodingDecoder`   | `FixedSizeListEncodingEncoder`   | ✅      | ✅      |                                                                       |
@@ -159,7 +159,7 @@ decoder falls into one of three shapes:
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
 | `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinChunkedArray` (Utf8/Binary), ADR 0012 |
 | `vortex.fsst`               | Lazy          | Lazy          | `LazyFsstVarBinArray` — per-row code range is independent, so `getBytes(i)` decompresses only row `i`; `getByteLength`/`forEachByteLength` read the uncompressed-lengths child directly, no decompression at all, ADR 0026 |
-| `vortex.list`               | Lazy          | Lazy          | `ListArray` wraps elements + offsets children; shape inherits from child  |
+| `vortex.list`               | Lazy          | Lazy          | `ListArray` wraps elements + offsets children; shape inherits from child; a validity child yields a `MaskedArray` over it |
 | `vortex.listview`           | Lazy          | Lazy          | `ListViewArray` wraps elements + offsets + sizes children; a validity child yields a `MaskedArray` over it |
 | `vortex.map`                | Lazy          | Lazy          | `MapArray` wraps the entries child (a `ListViewArray`, or a `MaskedArray` over one when the map is nullable) |
 | `vortex.fixed_size_list`    | Lazy          | Lazy          | `FixedSizeListArray` wraps flat elements child; no per-row alloc          |
@@ -332,8 +332,8 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `decimal.vortex`                    | ✅      |
 | `decimal_byte_parts.vortex`         | ✅      |
 | `datetimeparts.vortex`              | ✅      |
-| `list.vortex`                       | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
-| `listview.vortex`                   | ❓      | Fixture exists in the bucket but no current test downloads/exercises it |
+| `list.vortex`                       | ✅      | Covered by a vortex-jni-written file instead (`RustListsInteropIntegrationTest`: nulls, empty and varying-length lists) |
+| `listview.vortex`                   | ✅      | Covered by a vortex-jni-written file instead (`RustListsInteropIntegrationTest`) |
 | `fixed_size_list.vortex`            | ✅      |
 | `zstd.vortex`                       | ✅      |
 | `tpch_lineitem.compact.vortex`      | ✅      | Full scan of every column compared against vortex-jni |
@@ -343,7 +343,7 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `pco.vortex`                        | ✅      |
 | `clickbench_hits_5k.compact.vortex` | ✅      |
 | `clickbench_hits_5k.regular.vortex` | ✅      | Full scan of every Utf8 column (`vortex.onpair`) compared against vortex-jni |
-| `masked.vortex`                     | ❓      | No fixture through v0.86.1 |
-| `patched.vortex`                    | ❓      | No fixture through v0.86.1 |
-| `variant.vortex`                    | ❓      | No fixture through v0.86.1 |
+| `masked.vortex`                     | ❓      | No fixture through v0.86.1, and vortex-jni's writer folds validity into each encoding rather than emitting `vortex.masked` for nullable primitive, string, struct or list input |
+| `patched.vortex`                    | ❓      | No fixture through v0.86.1; `vortex.patched` is in no edition, so vortex-jni's default writer never emits it |
+| `variant.vortex`                    | ❌      | No fixture through v0.86.1, but vortex-jni writes an Arrow `arrow.parquet.variant` column as `vortex.variant` over `vortex.parquet.variant`, which vortex-java cannot decode |
 | `map.vortex`                        | ✅      | New in v0.86.1; also covered directly (both directions, nullable) by the vortex-jni oracle (issue #351) |

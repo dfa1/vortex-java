@@ -4,7 +4,9 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ListArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoListMetadata;
 
@@ -50,6 +52,16 @@ public final class ListEncodingDecoder implements EncodingDecoder {
         Array elements = ctx.decodeChild(0, elementDtype, elementsLen);
         Array offsets = ctx.decodeChild(1, offsetsDtype, outerLen + 1);
 
-        return new ListArray(listDtype, outerLen, elements, offsets);
+        // A nullable list carries its validity as a third child (Rust: `children.get(2, ..)`),
+        // not under a vortex.masked wrapper. Ignoring it turned every null row into an empty list.
+        // As for vortex.listview, the declared nullability is authoritative: a third child under
+        // a non-nullable dtype is not consulted.
+        if (nchildren == 2 || !listDtype.nullable()) {
+            return new ListArray(listDtype, outerLen, elements, offsets);
+        }
+        Array validityArray = ctx.decodeChild(2, DType.BOOL, outerLen);
+        BoolArray validity = MaskedArray.requireBoolArray(validityArray, EncodingId.VORTEX_LIST, "validity child");
+        DType.List innerDtype = (DType.List) listDtype.withNullable(false);
+        return new MaskedArray(new ListArray(innerDtype, outerLen, elements, offsets), validity);
     }
 }
