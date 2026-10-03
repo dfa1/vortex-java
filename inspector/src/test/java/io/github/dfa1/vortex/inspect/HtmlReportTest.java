@@ -256,6 +256,48 @@ class HtmlReportTest {
     }
 
     @Test
+    void render_columnsChunkedDifferently_groupsTheChunksPanelByRowRange() {
+        // Given — "whole" is one 1000-row chunk, "split" two 500-row chunks: the shape of Rust's
+        // tpch_orders.compact, where most columns stay whole and o_comment splits. Grouping the
+        // panel by chunk index labelled chunk 0 with "whole"'s 0-999 while adding "split"'s first
+        // half to it, and chunk 1 with 500-999 — overlapping ranges, mixed sizes, one range missing.
+        Layout whole = new Layout(LayoutId.parse("vortex.flat"), 1000, null, List.of(), List.of(0));
+        Layout s0 = new Layout(LayoutId.parse("vortex.flat"), 500, null, List.of(), List.of(1));
+        Layout s1 = new Layout(LayoutId.parse("vortex.flat"), 500, null, List.of(), List.of(2));
+        Layout split = new Layout(LayoutId.parse("vortex.chunked"), 1000, null, List.of(s0, s1), List.of());
+        Layout root = new Layout(LayoutId.parse("vortex.struct"), 1000, null, List.of(whole, split), List.of());
+        InspectorTree.Node wholeNode = new InspectorTree.Node(whole, Optional.of("whole"), Set.of(),
+                ArrayStats.empty(), List.of());
+        InspectorTree.Node splitNode = new InspectorTree.Node(split, Optional.of("split"), Set.of(),
+                ArrayStats.empty(), List.of(
+                        new InspectorTree.Node(s0, Optional.empty(), Set.of(), ArrayStats.empty(), List.of()),
+                        new InspectorTree.Node(s1, Optional.empty(), Set.of(), ArrayStats.empty(), List.of())));
+        InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
+                ArrayStats.empty(), List.of(wholeNode, splitNode));
+        InspectorTree sut = new InspectorTree(2, 8192L,
+                new DType.Struct(List.of(ColumnName.of("whole"), ColumnName.of("split")),
+                        List.of(DType.I64, DType.I64), false),
+                List.of("vortex.flat"), Set.of(),
+                List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
+                        new SegmentSpec(1024, 512, (byte) 0, CompressionScheme.NONE),
+                        new SegmentSpec(1536, 512, (byte) 0, CompressionScheme.NONE)),
+                1000L, Map.of(), rootNode);
+
+        // When
+        String result = HtmlReport.render(sut, "mixed.vortex");
+
+        // Then — one panel entry per distinct row range, the whole column first, each sized by
+        // only the chunks that cover exactly those rows
+        assertThat(result)
+                .contains("<dt>Chunks</dt><dd>3</dd>")
+                .contains("<span class=\"rows\">0-999</span><span class=\"bar stack\"><i style=\"width:100.0000%")
+                .contains("<span class=\"rows\">0-499</span>")
+                .contains("<span class=\"rows\">500-999</span>");
+        assertThat(result.indexOf("<span class=\"rows\">0-999</span>"))
+                .isLessThan(result.indexOf("<span class=\"rows\">0-499</span>"));
+    }
+
+    @Test
     void render_chunkBars_areScaledAgainstTheLargestChunk() {
         // Given — two chunks of very different size. Scaling each stack against its own total
         // would make both bars full width, so a small chunk would look as big as a large one.

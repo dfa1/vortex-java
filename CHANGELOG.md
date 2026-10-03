@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `fastlanes.delta` and `vortex.patched` belong to no edition, as in Rust: emit them with the new `WriteOptions.withoutEditions()`, the counterpart of Rust's `disable_editions()` ([#441](https://github.com/dfa1/vortex-java/issues/441)).
 - Nullable low-cardinality string columns dict-encoded per chunk store null as a dictionary entry, as Rust does, instead of adding a row validity bitmap: about 20% smaller, now slightly below vortex-jni ([2091beb](https://github.com/dfa1/vortex-java/commit/2091beb3)).
 
+### Fixed
+- `vortex inspect --html` grouped the Chunks panel by chunk index, so files whose columns chunk differently (e.g. Rust's `tpch_orders.compact`) showed overlapping row ranges and mixed sizes; the panel now lists one entry per distinct row range.
+
 ## [0.15.2] — 2026-10-03
 
 ### Highlights

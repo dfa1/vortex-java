@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.reader.layout.Layout;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -85,7 +86,7 @@ public final class HtmlReport {
         stat(sb, "Size", ByteSize.format(tree.fileSize()));
         stat(sb, "Rows", count(tree.totalRowCount()));
         stat(sb, "Columns", count(columns.size()));
-        stat(sb, "Chunks", count(Math.max(chunkCount(columns),
+        stat(sb, "Chunks", count(Math.max(rowSpans(columns).size(),
                 chunks(tree.root(), tree.segmentSpecs(), tree.segmentEncodings()).size())));
         stat(sb, "Segments", count(tree.segmentCount()));
         stat(sb, "Metadata", ByteSize.format(metadataBytes(tree)));
@@ -225,28 +226,32 @@ public final class HtmlReport {
         sb.append("</tbody>\n</table>\n</div>\n</details>\n");
     }
 
+    /// One entry per distinct row range, not per chunk index: columns chunk independently (a
+    /// Rust-written file may keep one column whole while splitting another), so the `i`-th chunk of
+    /// two columns can cover different rows. Each entry lists the columns whose chunk covers
+    /// exactly its rows; entries may overlap when the columns' chunk boundaries differ.
     private static void appendChunks(StringBuilder sb, List<ColumnView> columns) {
-        int chunks = chunkCount(columns);
+        List<RowSpan> spans = rowSpans(columns);
         sb.append("<section class=\"card chunklist\">\n<div class=\"panelhead\">Chunks<span class=\"muted\">")
-                .append(count(chunks)).append(", column mix per chunk</span></div>\n");
+                .append(count(spans.size())).append(", column mix per row range</span></div>\n");
         long widest = 1L;
-        for (int i = 0; i < chunks; i++) {
-            widest = Math.max(widest, chunkBytes(columns, i));
+        for (RowSpan span : spans) {
+            widest = Math.max(widest, spanBytes(columns, span));
         }
-        for (int i = 0; i < chunks; i++) {
-            appendChunk(sb, columns, i, widest);
+        for (int i = 0; i < spans.size(); i++) {
+            appendChunk(sb, columns, i, spans.get(i), widest);
         }
         sb.append("</section>\n");
     }
 
-    private static void appendChunk(StringBuilder sb, List<ColumnView> columns, int index, long widest) {
-        long bytes = chunkBytes(columns, index);
+    private static void appendChunk(StringBuilder sb, List<ColumnView> columns, int index, RowSpan span, long widest) {
+        long bytes = spanBytes(columns, span);
         sb.append("<details class=\"row\">\n<summary><span class=\"ord\">").append(index)
-                .append("</span><span class=\"rows\">").append(chunkRowRange(columns, index))
+                .append("</span><span class=\"rows\">").append(rowRange(span.firstRow(), span.rows()))
                 .append("</span><span class=\"bar stack\">");
         for (ColumnView column : columns) {
-            if (index < column.chunks().size()) {
-                sb.append("<i style=\"width:").append(width(column.chunks().get(index).bytes(), widest))
+            for (ChunkView chunk : chunksIn(column, span)) {
+                sb.append("<i style=\"width:").append(width(chunk.bytes(), widest))
                         .append(";background:").append(fill(column.index())).append("\"></i>");
             }
         }
@@ -254,8 +259,7 @@ public final class HtmlReport {
                 .append("</span></summary>\n<div class=\"detail\">\n<table>\n")
                 .append("<thead><tr><th>column</th><th>min</th><th>max</th><th>size</th></tr></thead>\n<tbody>\n");
         for (ColumnView column : columns) {
-            if (index < column.chunks().size()) {
-                ChunkView chunk = column.chunks().get(index);
+            for (ChunkView chunk : chunksIn(column, span)) {
                 sb.append("<tr><td><i class=\"dot\" style=\"background:").append(fill(column.index()))
                         .append("\"></i><code>").append(escape(column.name())).append("</code></td><td>")
                         .append(value(chunk.stats().min(), column.type())).append("</td><td>")
@@ -464,27 +468,35 @@ public final class HtmlReport {
                 || node.children().stream().anyMatch(child -> anyLayout(child, test));
     }
 
-    private static int chunkCount(List<ColumnView> columns) {
-        return columns.stream().mapToInt(column -> column.chunks().size()).max().orElse(0);
+    /// The rows a chunk covers. The chunks panel groups column chunks by it.
+    private record RowSpan(long firstRow, long rows) {
     }
 
-    private static long chunkBytes(List<ColumnView> columns, int chunk) {
+    /// Every distinct row range any column's chunk covers, by first row, longest first.
+    private static List<RowSpan> rowSpans(List<ColumnView> columns) {
+        return columns.stream()
+                .flatMap(column -> column.chunks().stream())
+                .map(chunk -> new RowSpan(chunk.firstRow(), chunk.rows()))
+                .distinct()
+                .sorted(Comparator.comparingLong(RowSpan::firstRow)
+                        .thenComparing(Comparator.comparingLong(RowSpan::rows).reversed()))
+                .toList();
+    }
+
+    private static List<ChunkView> chunksIn(ColumnView column, RowSpan span) {
+        return column.chunks().stream()
+                .filter(chunk -> chunk.firstRow() == span.firstRow() && chunk.rows() == span.rows())
+                .toList();
+    }
+
+    private static long spanBytes(List<ColumnView> columns, RowSpan span) {
         long total = 0;
         for (ColumnView column : columns) {
-            if (chunk < column.chunks().size()) {
-                total += column.chunks().get(chunk).bytes();
+            for (ChunkView chunk : chunksIn(column, span)) {
+                total += chunk.bytes();
             }
         }
         return total;
-    }
-
-    private static String chunkRowRange(List<ColumnView> columns, int chunk) {
-        for (ColumnView column : columns) {
-            if (chunk < column.chunks().size()) {
-                return rowRange(column.chunks().get(chunk));
-            }
-        }
-        return "-";
     }
 
     // ---------------------------------------------------------------- fragments
@@ -539,10 +551,14 @@ public final class HtmlReport {
     }
 
     private static String rowRange(ChunkView chunk) {
-        if (chunk.rows() <= 0) {
+        return rowRange(chunk.firstRow(), chunk.rows());
+    }
+
+    private static String rowRange(long firstRow, long rows) {
+        if (rows <= 0) {
             return "empty";
         }
-        return count(chunk.firstRow()) + "-" + count(chunk.firstRow() + chunk.rows() - 1);
+        return count(firstRow) + "-" + count(firstRow + rows - 1);
     }
 
     private static String value(Object raw, DType type) {
