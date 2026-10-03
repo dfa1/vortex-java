@@ -37,6 +37,7 @@ import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.DecimalBytePartsEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DecimalEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ZigZagEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
@@ -267,6 +268,10 @@ public final class VortexWriter implements Closeable {
         // its size (#304). Registered on WriteRegistry already; this adds it as a top-level candidate.
         codecs.add(new AlpRdEncodingEncoder());
         codecs.add(new FrameOfReferenceEncodingEncoder());
+        // ZigZag folds signed values to small unsigned magnitudes and cascades them into
+        // bit-packing, as Rust's ZigZagScheme does (issue #410). It competes with FoR, which
+        // always fits in as few bits, so it is here for parity rather than for size.
+        codecs.add(new ZigZagEncodingEncoder());
         codecs.add(new RunEndEncodingEncoder());
         codecs.add(new RleEncodingEncoder());
         codecs.add(new SparseEncodingEncoder());

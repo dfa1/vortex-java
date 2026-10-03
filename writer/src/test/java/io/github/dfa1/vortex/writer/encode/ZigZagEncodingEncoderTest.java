@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -277,6 +279,58 @@ class ZigZagEncodingEncoderTest {
         private static io.github.dfa1.vortex.core.proto.ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
             MemorySegment seg = MemorySegment.ofArray(bytes);
             return io.github.dfa1.vortex.core.proto.ProtoScalarValue.decode(seg, 0, seg.byteSize());
+        }
+    }
+
+    /// Cascading zigzag (issue #410) hands its unsigned output to the compressor as an open child
+    /// instead of a raw buffer, with Rust's `ZigZagScheme` exclusions on that child.
+    @Nested
+    class Cascade {
+
+        @Test
+        void encodeCascade_emitsUnsignedZigZagChild() {
+            // Given — zigzag maps 0,-1,1,-2,2 to 0,1,2,3,4; I8 extremes map to 254/255
+            byte[] data = {0, -1, 1, -2, 2, Byte.MAX_VALUE, Byte.MIN_VALUE};
+            var sut = new ZigZagEncodingEncoder();
+
+            // When
+            CascadeStep result = sut.encodeCascade(new DType.Primitive(PType.I8, false), data,
+                    EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.ownedBuffers()).isEmpty();
+            ChildSlot child = result.openChildren().getFirst();
+            assertThat(child.childDtype()).isEqualTo(new DType.Primitive(PType.U8, false));
+            assertThat((byte[]) child.childData()).containsExactly(0, 1, 2, 3, 4, (byte) 254, (byte) 255);
+            assertThat(child.excluded()).containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_RUNEND,
+                    EncodingId.VORTEX_SPARSE, EncodingId.VORTEX_ZIGZAG);
+        }
+
+        @Test
+        void encodeCascade_boundsComeFromSignedValues() {
+            // Given — zigzag is not order-preserving: -100 encodes larger than 50
+            long[] data = {50, -100, 7};
+            var sut = new ZigZagEncodingEncoder();
+
+            // When
+            CascadeStep result = sut.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.statsMin()).isEqualTo(ProtoScalarValue.ofInt64Value(-100L).encode());
+            assertThat(result.statsMax()).isEqualTo(ProtoScalarValue.ofInt64Value(50L).encode());
+        }
+
+        @Test
+        void encodeCascade_noNegatives_notApplicable() {
+            // Given — without a negative value zigzag only doubles every magnitude
+            long[] data = {0, 3, 9};
+
+            // When
+            CascadeStep result = new ZigZagEncodingEncoder().encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isFalse();
         }
     }
 }
