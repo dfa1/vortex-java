@@ -447,6 +447,66 @@ class RustWritesJavaReadsIntegrationTest {
         }
     }
 
+    /// Decimal shapes the Java reader rejected though Rust writes them: a precision-2 column (Rust
+    /// stores it as i8, whose proto3 metadata is empty: "missing metadata"), a precision above 38
+    /// (i256; the reader capped precision at 38) and a negative scale (legal in Rust, rejected too).
+    @ParameterizedTest(name = "decimal({0},{1}) bitWidth={2}")
+    @CsvSource({"2, 0, 128", "50, 5, 256", "10, -2, 128"})
+    void jniWriter_javaReader_decimalBounds(int precision, int scale, int bitWidth, @TempDir Path tmp)
+            throws IOException {
+        // Given — seeded values spanning the precision, including its extremes
+        Schema schema = new Schema(List.of(
+                Field.notNullable("v", new ArrowType.Decimal(precision, scale, bitWidth))));
+        java.util.Random random = new java.util.Random(precision);
+        java.math.BigInteger max = java.math.BigInteger.TEN.pow(precision).subtract(java.math.BigInteger.ONE);
+        BigDecimal[] expected = new BigDecimal[500];
+        for (int i = 0; i < expected.length; i++) {
+            java.math.BigInteger unscaled = switch (i) {
+                case 0 -> max;
+                case 1 -> max.negate();
+                default -> new java.math.BigInteger(max.bitLength(), random).mod(max)
+                        .multiply(random.nextBoolean() ? java.math.BigInteger.ONE : java.math.BigInteger.ONE.negate());
+            };
+            expected[i] = new BigDecimal(unscaled, scale);
+        }
+        Path file = tmp.resolve("jni_decimal.vtx");
+        String uri = file.toAbsolutePath().toUri().toString();
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, schema, ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+            var vec = root.getVector("v");
+            vec.setInitialCapacity(expected.length);
+            vec.allocateNew();
+            for (int i = 0; i < expected.length; i++) {
+                if (vec instanceof org.apache.arrow.vector.DecimalVector d) {
+                    d.setSafe(i, expected[i]);
+                } else {
+                    ((org.apache.arrow.vector.Decimal256Vector) vec).setSafe(i, expected[i]);
+                }
+            }
+            root.setRowCount(expected.length);
+            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, arrowSchema);
+                writer.writeBatch(arr.memoryAddress(), arrowSchema.memoryAddress());
+            }
+        }
+
+        // When
+        var result = new ArrayList<BigDecimal>();
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                io.github.dfa1.vortex.reader.array.DecimalArray arr = c.column("v");
+                for (long i = 0; i < arr.length(); i++) {
+                    result.add(arr.getDecimal(i));
+                }
+            });
+        }
+
+        // Then
+        assertThat(result).containsExactly(expected);
+    }
+
     private static final Schema I16_SCHEMA = new Schema(List.of(
             Field.notNullable("v", new ArrowType.Int(16, true))
     ));
