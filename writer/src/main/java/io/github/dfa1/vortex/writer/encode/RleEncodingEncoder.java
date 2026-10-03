@@ -12,7 +12,9 @@ import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /// Write-only encoder for `fastlanes.rle`.
 public final class RleEncodingEncoder implements EncodingEncoder {
@@ -44,58 +46,18 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < n; i++) {
             longs[i] = validity[i] ? 1L : 0L;
         }
-
-        int numChunks = (n + FL_CHUNK_SIZE - 1) / FL_CHUNK_SIZE;
-        int paddedLen = numChunks * FL_CHUNK_SIZE;
-
-        long[] globalValues = new long[paddedLen];
-        short[] globalIndices = new short[paddedLen];
-        long[] valuesIdxOffsets = new long[numChunks];
-
-        long[] chunkInput = new long[FL_CHUNK_SIZE];
-        long[] chunkValues = new long[FL_CHUNK_SIZE];
-        short[] chunkIndices = new short[FL_CHUNK_SIZE];
-
-        int globalValuesCount = 0;
-        for (int chunk = 0; chunk < numChunks; chunk++) {
-            int chunkStart = chunk * FL_CHUNK_SIZE;
-            int chunkEnd = Math.min(chunkStart + FL_CHUNK_SIZE, n);
-            int chunkLen = chunkEnd - chunkStart;
-
-            System.arraycopy(longs, chunkStart, chunkInput, 0, chunkLen);
-            long lastVal = longs[chunkEnd - 1];
-            for (int i = chunkLen; i < FL_CHUNK_SIZE; i++) {
-                chunkInput[i] = lastVal;
-            }
-
-            int numChunkValues = rleEncode(chunkInput, chunkValues, chunkIndices);
-
-            valuesIdxOffsets[chunk] = globalValuesCount;
-            System.arraycopy(chunkValues, 0, globalValues, globalValuesCount, numChunkValues);
-            globalValuesCount += numChunkValues;
-
-            System.arraycopy(chunkIndices, 0, globalIndices, chunkStart, FL_CHUNK_SIZE);
-        }
-
-        boolean[] valuesArr = new boolean[globalValuesCount];
-        for (int i = 0; i < globalValuesCount; i++) {
-            valuesArr[i] = globalValues[i] != 0L;
+        Runs runs = runs(longs);
+        boolean[] valuesArr = new boolean[runs.valuesCount()];
+        for (int i = 0; i < valuesArr.length; i++) {
+            valuesArr[i] = runs.values()[i] != 0L;
         }
         EncodeResult valuesResult = new BoolEncodingEncoder().encode(DType.BOOL, valuesArr, ctx);
-        MemorySegment indicesSeg = toIndicesSeg(globalIndices, paddedLen, ctx.arena());
-        MemorySegment offsetsSeg = fromLongsU64(valuesIdxOffsets, numChunks, ctx.arena());
+        MemorySegment indicesSeg = toIndicesSeg(runs.indices(), runs.paddedLen(), ctx.arena());
+        MemorySegment offsetsSeg = fromLongsU64(runs.offsets(), runs.numChunks(), ctx.arena());
 
         PType indicesPtype = PType.U16;
         PType offsetsPtype = PType.U64;
-
-        byte[] metaBytes = new ProtoRLEMetadata(
-                globalValuesCount,
-                paddedLen,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
-                numChunks,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
-                0L
-        ).encode();
+        byte[] metaBytes = runs.metadata();
 
         int indicesBufIdx = valuesResult.buffers().size();
         EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, indicesBufIdx);
@@ -129,6 +91,86 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         // raw values do.
         byte[][] stats = ZoneMapStats.of(dtype, data);
 
+        Runs runs = runs(longs);
+        MemorySegment valuesSeg = fromLongs(runs.values(), runs.valuesCount(), ptype, ctx.arena());
+        MemorySegment indicesSeg = toIndicesSeg(runs.indices(), runs.paddedLen(), ctx.arena());
+        MemorySegment offsetsSeg = fromLongsU64(runs.offsets(), runs.numChunks(), ctx.arena());
+
+        PType indicesPtype = PType.U16;
+        PType offsetsPtype = PType.U64;
+        byte[] metaBytes = runs.metadata();
+
+        EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+        EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
+        EncodeNode root = new EncodeNode(
+                EncodingId.FASTLANES_RLE,
+                MemorySegment.ofArray(metaBytes),
+                new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
+                new int[0]);
+        return new EncodeResult(root, List.of(EncodedBuffer.of(valuesSeg, ptype), EncodedBuffer.of(indicesSeg, indicesPtype),
+                EncodedBuffer.of(offsetsSeg, offsetsPtype)), null, null).withStats(stats);
+    }
+
+    /// Barred from the indices and offsets children (issue #410, Rust's `rle_descendant_exclusions`):
+    /// Dict and Sparse cannot pay off on per-chunk run positions or monotone offsets. Rust keeps a
+    /// RunEnd rule there commented out as unsound, so RunEnd is not barred. RLE names itself, as
+    /// Rust's compressor never repeats a scheme within one chain.
+    private static final Set<EncodingId> POSITIONS_EXCLUDED =
+            Set.of(EncodingId.FASTLANES_RLE, EncodingId.VORTEX_DICT, EncodingId.VORTEX_SPARSE);
+
+    /// Barred from the values child: only RLE itself (no rule upstream).
+    private static final Set<EncodingId> VALUES_EXCLUDED = Set.of(EncodingId.FASTLANES_RLE);
+
+    /// Cascading RLE, mirroring Rust's `IntRLEScheme`: the values, indices and offsets become open
+    /// children (Rust ids values=0, indices=1, offsets=2, also our wire order) for the compressor
+    /// to bit-pack / FoR, instead of raw buffers. Same layout and metadata as [#encode].
+    @Override
+    public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        long[] longs = toLongs(data, ptype);
+        if (longs.length == 0) {
+            return CascadeStep.notApplicable();
+        }
+        Runs runs = runs(longs);
+        EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_RLE, MemorySegment.ofArray(runs.metadata()),
+                new EncodeNode[]{null, null, null}, new int[0]);
+        long[] values = Arrays.copyOf(runs.values(), runs.valuesCount());
+        List<ChildSlot> slots = List.of(
+                new ChildSlot(dtype, PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.FASTLANES_RLE), 0,
+                        VALUES_EXCLUDED),
+                new ChildSlot(new DType.Primitive(PType.U16, false), runs.indices(), 1, POSITIONS_EXCLUDED),
+                new ChildSlot(new DType.Primitive(PType.U64, false), runs.offsets(), 2, POSITIONS_EXCLUDED));
+        byte[][] stats = ZoneMapStats.of(dtype, data);
+        return new CascadeStep(partialRoot, List.of(), slots, ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
+    }
+
+    /// One column run-length encoded in FastLanes 1024-row chunks.
+    ///
+    /// @param values      the run values, chunk after chunk (first `valuesCount` are used)
+    /// @param valuesCount number of run values
+    /// @param indices     per padded row, the index of its run within its chunk
+    /// @param paddedLen   row count rounded up to a whole chunk
+    /// @param offsets     per chunk, the index of its first run value
+    /// @param numChunks   chunk count
+    private record Runs(long[] values, int valuesCount, short[] indices, int paddedLen, long[] offsets,
+            int numChunks) {
+
+        byte[] metadata() {
+            return new ProtoRLEMetadata(
+                    valuesCount,
+                    paddedLen,
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U16.ordinal()),
+                    numChunks,
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U64.ordinal()),
+                    0L
+            ).encode();
+        }
+    }
+
+    /// Run-length encodes `longs` chunk by chunk; the last chunk is padded with its final value.
+    private static Runs runs(long[] longs) {
+        int n = longs.length;
         int numChunks = (n + FL_CHUNK_SIZE - 1) / FL_CHUNK_SIZE;
         int paddedLen = numChunks * FL_CHUNK_SIZE;
 
@@ -161,33 +203,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
 
             System.arraycopy(chunkIndices, 0, globalIndices, chunkStart, FL_CHUNK_SIZE);
         }
-
-        MemorySegment valuesSeg = fromLongs(globalValues, globalValuesCount, ptype, ctx.arena());
-        MemorySegment indicesSeg = toIndicesSeg(globalIndices, paddedLen, ctx.arena());
-        MemorySegment offsetsSeg = fromLongsU64(valuesIdxOffsets, numChunks, ctx.arena());
-
-        PType indicesPtype = PType.U16;
-        PType offsetsPtype = PType.U64;
-
-        byte[] metaBytes = new ProtoRLEMetadata(
-                globalValuesCount,
-                paddedLen,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
-                numChunks,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
-                0L
-        ).encode();
-
-        EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
-        EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
-        EncodeNode root = new EncodeNode(
-                EncodingId.FASTLANES_RLE,
-                MemorySegment.ofArray(metaBytes),
-                new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
-                new int[0]);
-        return new EncodeResult(root, List.of(EncodedBuffer.of(valuesSeg, ptype), EncodedBuffer.of(indicesSeg, indicesPtype),
-                EncodedBuffer.of(offsetsSeg, offsetsPtype)), null, null).withStats(stats);
+        return new Runs(globalValues, globalValuesCount, globalIndices, paddedLen, valuesIdxOffsets, numChunks);
     }
 
     private static int rleEncode(long[] input, long[] chunkValues, short[] chunkIndices) {
