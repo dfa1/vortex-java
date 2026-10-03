@@ -334,28 +334,22 @@ final class DictColumnState {
     Object reconstructChunk(Object[] inverse, int c) {
         short[] codes = chunkCodes.get(c);
         boolean[] validity = chunkValidity.get(c);
-        int len = codes.length;
-        Object values;
-        if (binary) {
-            byte[][] arr = new byte[len][];
-            for (int i = 0; i < len; i++) {
-                if (validity == null || validity[i]) {
-                    arr[i] = ((ByteBuffer) inverse[codes[i] & 0xFFFF]).array();
-                }
-            }
-            values = arr;
-        } else if (varBin) {
-            String[] arr = new String[len];
-            for (int i = 0; i < len; i++) {
-                if (validity == null || validity[i]) {
-                    arr[i] = (String) inverse[codes[i] & 0xFFFF];
-                }
-            }
-            values = arr;
-        } else {
-            values = reconstructPrimitiveValues(ptype, codes, validity, inverse);
-        }
+        Object values = varBin
+                ? reconstructVarBinValues(binary, codes, validity, inverse)
+                : reconstructPrimitiveValues(ptype, codes, validity, inverse);
         return validity != null ? new NullableData(values, validity) : values;
+    }
+
+    private static Object reconstructVarBinValues(boolean binary, short[] codes, boolean[] validity, Object[] inverse) {
+        int len = codes.length;
+        Object[] arr = binary ? new byte[len][] : new String[len];
+        for (int i = 0; i < len; i++) {
+            if (validity == null || validity[i]) {
+                Object key = inverse[codes[i] & 0xFFFF];
+                arr[i] = binary ? ((ByteBuffer) key).array() : key;
+            }
+        }
+        return arr;
     }
 
     private static Object reconstructPrimitiveValues(PType ptype, short[] codes, boolean[] validity, Object[] inverse) {
