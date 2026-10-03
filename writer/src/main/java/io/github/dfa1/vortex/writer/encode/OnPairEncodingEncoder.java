@@ -134,7 +134,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
             }
             return new PType[]{
                 PType.narrowestUnsigned(dictOffsets[dictOffsets.length - 1]),
-                PType.narrowestUnsigned(dictOffsets.length - 2),
+                PType.narrowestUnsigned((long) dictOffsets.length - 2),
                 PType.narrowestUnsigned(codesOffsets[codesOffsets.length - 1]),
                 PType.narrowestUnsigned(maxLength)};
         }
@@ -202,7 +202,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
             for (int i = 0; i < n; i++) {
                 int pos = offsets[i];
                 int end = offsets[i + 1];
-                lengths[i] = end - pos;
+                lengths[i] = (long) end - pos;
                 while (pos < end) {
                     long match = dict.longestMatch(bytes, pos, end);
                     codes[numCodes++] = Trie.token(match);
@@ -236,8 +236,8 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
                 order[i] = order[j];
                 order[j] = tmp;
             }
-            long totalBytes = offsets[n] - offsets[0];
-            Threshold threshold = new Threshold(DICT_CAPACITY - 256, totalBytes);
+            long totalBytes = (long) offsets[n] - offsets[0];
+            Threshold threshold = new Threshold((long) DICT_CAPACITY - 256, totalBytes);
             LongIntMap pairs = new LongIntMap(1024);
             for (int r : order) {
                 int start = offsets[r];

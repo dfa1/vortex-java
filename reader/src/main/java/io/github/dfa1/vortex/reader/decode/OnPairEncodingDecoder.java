@@ -80,7 +80,7 @@ public final class OnPairEncodingDecoder implements EncodingDecoder {
                     throw new VortexException(ID, "negative uncompressed length at row " + i);
                 }
                 total += lengths[i];
-                offsets.setAtIndex(VortexFormat.LE_LONG, i + 1, total);
+                offsets.setAtIndex(VortexFormat.LE_LONG, (long) i + 1, total);
             }
 
             byte[] dict = dictBytes.toArray(ValueLayout.JAVA_BYTE);

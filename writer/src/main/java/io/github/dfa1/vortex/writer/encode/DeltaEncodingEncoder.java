@@ -81,6 +81,7 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
     /// @param paddedLen row count rounded up to a whole chunk
     /// @param statsMin  zone-map minimum, `null` when empty
     /// @param statsMax  zone-map maximum, `null` when empty
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Deltas(long[] bases, long[] deltas, long paddedLen, byte[] statsMin, byte[] statsMax) {
 
         byte[] metadata() {

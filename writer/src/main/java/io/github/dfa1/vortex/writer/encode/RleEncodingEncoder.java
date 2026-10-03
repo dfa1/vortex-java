@@ -183,6 +183,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
     /// @param paddedLen   row count rounded up to a whole chunk
     /// @param offsets     per chunk, the index of its first run value
     /// @param numChunks   chunk count
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Runs(long[] values, int valuesCount, short[] indices, int paddedLen, long[] offsets,
             int numChunks) {
 

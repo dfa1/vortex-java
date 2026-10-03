@@ -102,7 +102,7 @@ class WriterEditionGuardTest {
 
         // Then
         try (var vf = VortexReader.open(file)) {
-            assertThat(vf.footer().arraySpecs()).doesNotContain(io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_DELTA);
+            assertThat(vf.footer().arraySpecs()).isNotEmpty().doesNotContain(io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_DELTA);
         }
     }
 
@@ -161,7 +161,7 @@ class WriterEditionGuardTest {
 
         // Then
         try (var vf = VortexReader.open(file)) {
-            assertThat(vf.footer().arraySpecs()).doesNotContain(io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_DELTA);
+            assertThat(vf.footer().arraySpecs()).isNotEmpty().doesNotContain(io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_DELTA);
         }
     }
 }
