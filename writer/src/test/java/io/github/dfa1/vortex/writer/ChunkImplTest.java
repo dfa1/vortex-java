@@ -7,6 +7,8 @@ import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 
@@ -272,6 +274,92 @@ class ChunkImplTest {
         void wrongTypeRejected() {
             assertThatThrownBy(() -> putGet(DType.BOOL, new int[]{1}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("expects boolean[]");
+        }
+    }
+
+    /// Decimal columns take `BigDecimal[]`, validated once at the boundary so no encoder ever sees
+    /// a value that would silently round or overflow its storage width.
+    @Nested
+    class Decimal {
+
+        private static final DType.Decimal PRICE = new DType.Decimal((byte) 5, (byte) 2, false);
+
+        @Test
+        void rescalesToColumnScale() {
+            // Given — 1.5 and 7 carry fewer fractional digits than the scale; padding is exact
+            BigDecimal[] values = {new BigDecimal("1.5"), new BigDecimal("7")};
+
+            // When
+            Object result = putGet(PRICE, values);
+
+            // Then
+            assertThat((BigDecimal[]) result).containsExactly(new BigDecimal("1.50"), new BigDecimal("7.00"));
+        }
+
+        @Test
+        void rejectsMoreFractionalDigitsThanScale() {
+            // Given — 1.005 would round at scale 2: the writer must not change a value silently
+            BigDecimal[] values = {new BigDecimal("1.005")};
+
+            // When / Then
+            assertThatThrownBy(() -> putGet(PRICE, values))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("more than 2 fractional digit(s)");
+        }
+
+        @Test
+        void acceptsPrecisionEdgeAndRejectsOnePast() {
+            // Given — decimal(5,2): 999.99 is the largest value, 1000.00 needs 6 digits
+            BigDecimal[] edge = {new BigDecimal("999.99"), new BigDecimal("-999.99")};
+            BigDecimal[] past = {new BigDecimal("1000")};
+
+            // When / Then
+            assertThat((BigDecimal[]) putGet(PRICE, edge)).hasSize(2);
+            assertThatThrownBy(() -> putGet(PRICE, past))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("exceeds precision 5");
+        }
+
+        @Test
+        void negativeScaleStoresHundreds() {
+            // Given — decimal(4,-2) holds multiples of 100: 123400 is unscaled 1234
+            DType.Decimal hundreds = new DType.Decimal((byte) 4, (byte) -2, false);
+
+            // When
+            Object result = putGet(hundreds, new BigDecimal[]{new BigDecimal("123400")});
+
+            // Then
+            assertThat(((BigDecimal[]) result)[0].unscaledValue()).isEqualTo(BigInteger.valueOf(1234));
+        }
+
+        @Test
+        void nullableConvertsToNullableData() {
+            // Given
+            DType.Decimal nullable = new DType.Decimal((byte) 5, (byte) 2, true);
+
+            // When
+            Object result = putGet(nullable, new BigDecimal[]{BigDecimal.ONE, null});
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            assertThat(((NullableData) result).validity()).containsExactly(true, false);
+            assertThat((BigDecimal[]) ((NullableData) result).values()).containsExactly(new BigDecimal("1.00"), null);
+        }
+
+        @Test
+        void nonNullableRejectsNullElement() {
+            // When / Then
+            assertThatThrownBy(() -> putGet(PRICE, new BigDecimal[]{BigDecimal.ONE, null}))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("received null at row 1");
+        }
+
+        @Test
+        void wrongTypeRejected() {
+            // When / Then
+            assertThatThrownBy(() -> putGet(PRICE, new double[]{1.5}))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("expects BigDecimal[]");
         }
     }
 }

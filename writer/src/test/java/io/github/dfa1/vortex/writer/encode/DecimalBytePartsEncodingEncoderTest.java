@@ -73,4 +73,20 @@ class DecimalBytePartsEncodingEncoderTest {
         assertThat(meta.zeroth_child_ptype().value()).isEqualTo(7); // I64 ordinal
         assertThat(meta.lower_part_count()).isZero();
     }
+
+    /// The byte-parts layout stores the whole unscaled value in one i64 mantissa (no low parts), so
+    /// it must not offer itself for a precision whose values overflow a long: the cascade would
+    /// pick it and fail (or truncate) on a decimal(19+) column.
+    @org.junit.jupiter.params.ParameterizedTest(name = "precision {0} accepted={1}")
+    @org.junit.jupiter.params.provider.CsvSource({"1, true", "18, true", "19, false", "38, false", "76, false"})
+    void accepts_onlyPrecisionsThatFitAnI64(int precision, boolean expected) {
+        // Given
+        var sut = new DecimalBytePartsEncodingEncoder();
+
+        // When
+        boolean result = sut.accepts(new DType.Decimal((byte) precision, (byte) 0, false));
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
 }

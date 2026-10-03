@@ -5,6 +5,9 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -67,6 +70,7 @@ final class ChunkImpl implements Chunk {
             case DType.Utf8 u -> adaptUtf8(column, u, value);
             case DType.Binary bin -> adaptBinary(column, bin, value);
             case DType.Bool b -> adaptBool(column, b, value);
+            case DType.Decimal d -> adaptDecimal(column, d, value);
             // Other dtypes (Struct, List, Extension, …) still accept their existing carriers
             // without typed adaptation; the writer's per-encoding path validates downstream.
             default -> value;
@@ -136,6 +140,40 @@ final class ChunkImpl implements Chunk {
             validity[i] = arr[i] != null;
         }
         return new NullableData(arr, validity);
+    }
+
+    /// Decimal columns take `BigDecimal[]`. Each value is rescaled to the column scale exactly (more
+    /// fractional digits than the scale would silently round, so that is rejected) and must fit
+    /// the column precision. Nullable columns mark absent rows with `null`, mirroring Utf8.
+    private static Object adaptDecimal(String column, DType.Decimal dtype, Object value) {
+        if (!(value instanceof BigDecimal[] arr)) {
+            throw new IllegalArgumentException(
+                    "column '" + column + "' expects BigDecimal[] for Decimal; got " + value.getClass().getSimpleName());
+        }
+        BigInteger limit = BigInteger.TEN.pow(dtype.precision());
+        BigDecimal[] scaled = new BigDecimal[arr.length];
+        boolean[] validity = new boolean[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] == null) {
+                if (!dtype.nullable()) {
+                    throw new IllegalArgumentException(
+                            "non-nullable column '" + column + "' received null at row " + i);
+                }
+                continue;
+            }
+            try {
+                scaled[i] = arr[i].setScale(dtype.scale(), RoundingMode.UNNECESSARY);
+            } catch (ArithmeticException e) {
+                throw new IllegalArgumentException("column '" + column + "' row " + i + ": " + arr[i]
+                        + " has more than " + dtype.scale() + " fractional digit(s)", e);
+            }
+            if (scaled[i].unscaledValue().abs().compareTo(limit) >= 0) {
+                throw new IllegalArgumentException("column '" + column + "' row " + i + ": " + arr[i]
+                        + " exceeds precision " + dtype.precision() + " at scale " + dtype.scale());
+            }
+            validity[i] = true;
+        }
+        return dtype.nullable() ? new NullableData(scaled, validity) : scaled;
     }
 
     private static Object adaptBinary(String column, DType.Binary dtype, Object value) {

@@ -25,7 +25,8 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
             new PrimitiveEncodingEncoder(),
             new VarBinEncodingEncoder(),
             new FixedSizeListEncodingEncoder(),
-            new ListEncodingEncoder());
+            new ListEncodingEncoder(),
+            new DecimalEncodingEncoder());
 
     @Override
     public EncodingId encodingId() {

@@ -165,6 +165,11 @@ Accepted array types per column `DType`:
 | `Primitive(F64)`              | `double[]`         | `Double[]`         |
 | `Utf8`                        | `String[]`         | `String[]` (nulls allowed) |
 | `Bool`                        | `boolean[]`        | `Boolean[]`        |
+| `Decimal(precision, scale)`   | `BigDecimal[]`     | `BigDecimal[]` (nulls allowed) |
+
+Decimal values are rescaled to the column scale exactly: a value with more fractional digits than
+the scale, or more digits than the precision, is rejected with `IllegalArgumentException` rather
+than rounded. Every precision Rust supports (1–76, i8 … i256 storage) and negative scales work.
 
 ### `WriteOptions` (`io.github.dfa1.vortex.writer.WriteOptions`)
 

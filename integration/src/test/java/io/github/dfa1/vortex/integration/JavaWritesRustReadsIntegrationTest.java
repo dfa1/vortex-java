@@ -756,6 +756,113 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(values).containsExactly(data);
     }
 
+    /// Decimal columns written from `BigDecimal[]` (the writer accepted no decimal input before)
+    /// must read back in vortex-jni at every storage width Rust picks from the precision (i8 … i256),
+    /// nullable or not, flat or through the cascade (which may pick `vortex.decimal_byte_parts`).
+    /// A full scan alone never slices; the row range and the zone-pruned filter on `id` slice the
+    /// decimal buffers at row offsets, where a wrong declared alignment aborts the JVM.
+    @ParameterizedTest(name = "decimal({0},{1}) nullable={2} cascading={3}")
+    @MethodSource("decimalShapes")
+    void javaWriter_jniReader_decimalColumn(int precision, int scale, boolean nullable, boolean cascading,
+            @TempDir Path tmp) throws IOException {
+        // Given — two equal 1000-row chunks (a shared zone stride), seeded random values including
+        // the precision extremes and zero, every 7th row null when nullable
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("v")),
+                List.of(new DType.Primitive(PType.I64, false),
+                        new DType.Decimal((byte) precision, (byte) scale, nullable)),
+                false);
+        java.util.Random random = new java.util.Random(precision * 31L + scale);
+        java.math.BigInteger max = java.math.BigInteger.TEN.pow(precision).subtract(java.math.BigInteger.ONE);
+        int rows = 2_000;
+        java.math.BigDecimal[] expected = new java.math.BigDecimal[rows];
+        for (int i = 0; i < rows; i++) {
+            java.math.BigInteger unscaled = switch (i % 50) {
+                case 0 -> max;
+                case 1 -> max.negate();
+                case 2 -> java.math.BigInteger.ZERO;
+                default -> new java.math.BigInteger(max.bitLength(), random).mod(max.add(java.math.BigInteger.ONE))
+                        .multiply(random.nextBoolean() ? java.math.BigInteger.ONE : java.math.BigInteger.ONE.negate());
+            };
+            expected[i] = nullable && i % 7 == 3 ? null : new java.math.BigDecimal(unscaled, scale);
+        }
+        Path file = tmp.resolve("java_decimal.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, cascading ? WriteOptions.cascading(3) : WriteOptions.defaults())) {
+            for (int start = 0; start < rows; start += 1_000) {
+                sut.writeChunk(Map.of(
+                        ColumnName.of("id"), LongStream.range(start, start + 1_000L).toArray(),
+                        ColumnName.of("v"), Arrays.copyOfRange(expected, start, start + 1_000)));
+            }
+        }
+
+        // When
+        List<Object> full = readRowRange(file, "v", 0, rows);
+        List<Object> range = readRowRange(file, "v", 333, 1_777);
+        List<Object> filtered = readColumnFiltered(file, "v", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(1_500L)));
+        List<Object> java = readJavaDecimals(file, "v");
+
+        // Then — same values, nulls included (vortex-jni may return partitions in a different order)
+        assertThat(full).containsExactlyInAnyOrder((Object[]) expected);
+        assertThat(range).containsExactlyInAnyOrder((Object[]) Arrays.copyOfRange(expected, 333, 1_777));
+        assertThat(filtered).containsExactlyInAnyOrder((Object[]) Arrays.copyOfRange(expected, 1_500, rows));
+        assertThat(java).as("vortex-java reader").containsExactly((Object[]) expected);
+    }
+
+    static Stream<Arguments> decimalShapes() {
+        // precision picks Rust's storage width: <=2 i8, <=4 i16, <=9 i32, <=18 i64, <=38 i128, else i256
+        int[][] widths = {{2, 0}, {4, 2}, {9, 2}, {18, 4}, {38, 10}, {50, 5}};
+        return Arrays.stream(widths).flatMap(w -> Stream.of(
+                Arguments.of(w[0], w[1], false, false),
+                Arguments.of(w[0], w[1], true, false),
+                Arguments.of(w[0], w[1], false, true),
+                Arguments.of(w[0], w[1], true, true)));
+    }
+
+    private static List<Object> readJavaDecimals(Path file, String column) throws IOException {
+        var values = new ArrayList<Object>();
+        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file);
+             var chunks = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+            chunks.forEachRemaining(chunk -> {
+                io.github.dfa1.vortex.reader.array.Array array = chunk.column(column);
+                for (long i = 0; i < array.length(); i++) {
+                    values.add(switch (array) {
+                        case io.github.dfa1.vortex.reader.array.MaskedArray m -> m.isValid(i)
+                                ? ((io.github.dfa1.vortex.reader.array.DecimalArray) m.inner()).getDecimal(i) : null;
+                        case io.github.dfa1.vortex.reader.array.DecimalArray d -> d.getDecimal(i);
+                        default -> throw new AssertionError("not a decimal: " + array);
+                    });
+                }
+            });
+        }
+        return values;
+    }
+
+    private static List<Object> readColumnFiltered(Path file, String column, Expression filter) throws IOException {
+        String uri = file.toAbsolutePath().toUri().toString();
+        ScanOptions opts = ScanOptions.builder()
+                                   .projection(Expression.select(new String[]{column}, Expression.root()))
+                                   .filter(filter)
+                                   .build();
+        var values = new ArrayList<Object>();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(opts);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    var vector = root.getVector(column);
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        values.add(vector.getObject(i));
+                    }
+                }
+            }
+        }
+        return values;
+    }
+
     @Test
     void javaWriter_jniReader_i32Column(@TempDir Path tmp) throws IOException {
         // Given
