@@ -10,6 +10,10 @@ Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) 
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
 for zero-copy memory-mapped reads — good performance out of the box, without native dependencies.
 
+Checked against the Rust reference in both directions (Rust writes, Java reads and vice versa),
+and against 172 real-world [Raincloud](docs/compatibility.md#real-world-conformance-the-raincloud-corpus) datasets, each matching its Parquet
+copy value for value.
+
 ## Who is this for
 
 - JVM analytics engines and OLAP systems
@@ -24,7 +28,7 @@ for zero-copy memory-mapped reads — good performance out of the box, without n
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.15.1</version>
+  <version>0.15.2</version>
 </dependency>
 ```
 
@@ -57,7 +61,7 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-writer</artifactId>
-  <version>0.15.1</version>
+  <version>0.15.2</version>
 </dependency>
 ```
 

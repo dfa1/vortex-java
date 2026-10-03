@@ -5,11 +5,13 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.2] — 2026-10-03
 
 ### Highlights
 
 - **Real-world conformance milestone: 172 Raincloud datasets, zero known gaps.** On the Raincloud v0.3.0 corpus (written by Vortex 0.86.1), 172 real-world datasets read by vortex-java match their Parquet sibling value for value, and none fail. Getting there found and fixed three reader/export bugs (#429, #430, #431) ([#432](https://github.com/dfa1/vortex-java/pull/432)).
+- **Decimal columns, end to end.** The writer now writes decimals, and the reader accepts Rust's full decimal range (precision 1–76, negative scales) ([#433](https://github.com/dfa1/vortex-java/pull/433), [#434](https://github.com/dfa1/vortex-java/pull/434)).
+- **The compressor follows Rust more closely.** Cascading writes now pick and cascade run-end, zigzag, RLE (integer and float) and global-dict Binary the way Rust's compressor does ([#410](https://github.com/dfa1/vortex-java/issues/410)).
 
 ### Added
 - `VortexWriter` writes decimal columns: pass `BigDecimal[]` (nulls allowed when nullable) for any `DType.Decimal`, precision 1–76 and negative scales included; values are rescaled exactly, and one that would round or overflow the precision is rejected ([#434](https://github.com/dfa1/vortex-java/pull/434)).
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Low-cardinality `Binary` columns are now written as a global dictionary, as Rust does for `Primitive`, `Utf8` and `Binary`; before, only primitive and `Utf8` columns were ([#443](https://github.com/dfa1/vortex-java/pull/443)).
+- Cascading writes offer `vortex.zigzag` and `fastlanes.rle` to the cascade and compress their children with Rust's exclusions ([#436](https://github.com/dfa1/vortex-java/pull/436), [#437](https://github.com/dfa1/vortex-java/pull/437)).
 - With an unstable edition enabled (`WriteOptions.withEdition(Editions.UNSTABLE_2025_05_0)` or later), cascading writes can pick `fastlanes.delta`, its bases and deltas cascaded as in Rust; default writes never emit it ([#439](https://github.com/dfa1/vortex-java/pull/439)).
 - The writer run-length encodes float columns too (`fastlanes.rle`, as Rust's float RLE scheme does), losslessly: `-0.0` and NaN payloads round-trip ([#438](https://github.com/dfa1/vortex-java/pull/438)).
 - Cascading writes (`WriteOptions.cascading(n)`) compress run-end columns further: the run ends and values now go through the cascade (bit-packing, frame-of-reference, …) instead of being stored raw, as in Rust; about 1% smaller on the mixed-column size benchmark ([#435](https://github.com/dfa1/vortex-java/pull/435)).
@@ -29,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Importing `vortex-bom` also pinned vortex-java's own build and test dependencies (JUnit, Mockito, Arrow, JMH, …) in the consumer, and left `vortex-fsst` and `vortex-calcite` unmanaged: the published BOM now manages only the vortex-java modules and the zstd bindings ([#427](https://github.com/dfa1/vortex-java/pull/427)).
 - vortex-jni aborted the JVM reading vortex-java files whose FSST string chunk trained no symbols (e.g. a dictionary pool of short strings): the empty symbol table was written as a 1-byte buffer declared as 8-byte values. Rewrite affected files ([#425](https://github.com/dfa1/vortex-java/issues/425)).
 - Full scans of the TPC-H compat fixtures failed with `cannot slice shared array of type LazyDecimalBytePartsArray`: when columns chunk on different boundaries the scan slices a chunk per window, and that had no case for decimal, list-view or map columns ([#424](https://github.com/dfa1/vortex-java/pull/424)).
-
 - `vortex inspect --html` lines schema and chunk rows up on a shared grid: long dtype or encoding names no longer push sizes out of the card, and phone-width reports no longer clip sizes and ratios ([#423](https://github.com/dfa1/vortex-java/pull/423)).
 
 ## [0.15.1] — 2026-10-01
