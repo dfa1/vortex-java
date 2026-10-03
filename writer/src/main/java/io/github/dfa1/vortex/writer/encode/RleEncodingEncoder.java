@@ -28,7 +28,9 @@ public final class RleEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive p && !p.ptype().isFloating();
+        // every primitive, floats included (Rust's FloatRLEScheme): runs compare raw bits, so -0.0,
+        // +0.0 and NaN payloads stay distinct and the encoding is lossless
+        return dtype instanceof DType.Primitive;
     }
 
     /// Encodes a boolean array as `fastlanes.rle`: the same FastLanes 1024-row chunked
@@ -137,12 +139,40 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{null, null, null}, new int[0]);
         long[] values = Arrays.copyOf(runs.values(), runs.valuesCount());
         List<ChildSlot> slots = List.of(
-                new ChildSlot(dtype, PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.FASTLANES_RLE), 0,
-                        VALUES_EXCLUDED),
+                new ChildSlot(dtype, valuesCarrier(values, ptype), 0, VALUES_EXCLUDED),
                 new ChildSlot(new DType.Primitive(PType.U16, false), runs.indices(), 1, POSITIONS_EXCLUDED),
                 new ChildSlot(new DType.Primitive(PType.U64, false), runs.offsets(), 2, POSITIONS_EXCLUDED));
         byte[][] stats = ZoneMapStats.of(dtype, data);
         return new CascadeStep(partialRoot, List.of(), slots, ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
+    }
+
+    /// Run values back in the column's carrier array: floats from their raw bits (undoing
+    /// [#toLongs]), integers through [PrimitiveArrays#fromLongsArray(long[], PType, EncodingId)].
+    private static Object valuesCarrier(long[] values, PType ptype) {
+        return switch (ptype) {
+            case F64 -> {
+                double[] r = new double[values.length];
+                for (int i = 0; i < r.length; i++) {
+                    r[i] = Double.longBitsToDouble(values[i]);
+                }
+                yield r;
+            }
+            case F32 -> {
+                float[] r = new float[values.length];
+                for (int i = 0; i < r.length; i++) {
+                    r[i] = Float.intBitsToFloat((int) values[i]);
+                }
+                yield r;
+            }
+            case F16 -> {
+                short[] r = new short[values.length];
+                for (int i = 0; i < r.length; i++) {
+                    r[i] = (short) values[i];
+                }
+                yield r;
+            }
+            default -> PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.FASTLANES_RLE);
+        };
     }
 
     /// One column run-length encoded in FastLanes 1024-row chunks.

@@ -1315,6 +1315,57 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(decoded).containsExactly(data);
     }
 
+    /// Float RLE (Rust's FloatRLEScheme): the writer used to refuse floats outright. Rust must read
+    /// the raw-bit runs back losslessly, -0.0 and a NaN payload included.
+    @Test
+    void javaWriter_rustReader_rle_f64(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("java_rle_f64.vtx");
+        double nanPayload = Double.longBitsToDouble(0x7ff8_0000_0000_0042L);
+        double[] data = new double[3_000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = switch (i / 500) {
+                case 0 -> 1.25;
+                case 1 -> -0.0;
+                case 2 -> 0.0;
+                case 3 -> nanPayload;
+                default -> -7.5;
+            };
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults(),
+                     List.of(new RleEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
+        }
+
+        // Then
+        double[] decoded = readDoubleColumn(file, "v");
+        assertThat(Arrays.stream(decoded).mapToLong(Double::doubleToRawLongBits).toArray())
+                .containsExactly(Arrays.stream(data).mapToLong(Double::doubleToRawLongBits).toArray());
+    }
+
+    /// Float RLE through the cascade: its values child is a double[] the compressor may hand to
+    /// ALP; whatever wins, vortex-jni must read the column back exactly.
+    @Test
+    void javaWriter_jniReader_rle_f64_cascading(@TempDir Path tmp) throws IOException {
+        // Given — long runs of a few prices: RLE territory
+        Path file = tmp.resolve("java_rle_f64_cascade.vtx");
+        double[] prices = {19.99, 24.5, 7.25};
+        double[] data = new double[20_000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = prices[(i / 700) % prices.length];
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.cascading(3))) {
+            // When
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
+        }
+
+        // Then
+        assertThat(readDoubleColumn(file, "v")).containsExactly(data);
+    }
+
     @Test
     void javaWriter_rustReader_rle_i32(@TempDir Path tmp) throws IOException {
         // Given — FastLanes RLE: chunk-based RLE with offset; exercises chunk boundary proto fields
