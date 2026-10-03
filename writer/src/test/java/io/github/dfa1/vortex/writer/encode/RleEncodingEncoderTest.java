@@ -392,4 +392,49 @@ class RleEncodingEncoderTest {
             assertThat(meta.indices_ptype().value()).isEqualTo(1);
         }
     }
+
+    /// Cascading RLE (issue #410) hands values, indices and offsets to the compressor as open
+    /// children instead of raw buffers, with Rust's `rle_descendant_exclusions` on each.
+    @Nested
+    class Cascade {
+
+        @Test
+        void encodeCascade_opensValuesIndicesAndOffsetsSlots() {
+            // Given — 1500 rows: two FastLanes chunks; chunk 0 has runs 5,9 and chunk 1 a single 9
+            int[] data = new int[1_500];
+            java.util.Arrays.fill(data, 0, 600, 5);
+            java.util.Arrays.fill(data, 600, 1_500, 9);
+            var sut = new RleEncodingEncoder();
+
+            // When
+            CascadeStep result = sut.encodeCascade(DTypes.I32, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.ownedBuffers()).isEmpty();
+            ChildSlot values = result.openChildren().get(0);
+            ChildSlot indices = result.openChildren().get(1);
+            ChildSlot offsets = result.openChildren().get(2);
+            assertThat((int[]) values.childData()).containsExactly(5, 9, 9);
+            assertThat(values.excluded()).containsExactly(EncodingId.FASTLANES_RLE);
+            assertThat(indices.childDtype()).isEqualTo(new DType.Primitive(io.github.dfa1.vortex.core.model.PType.U16, false));
+            assertThat((short[]) indices.childData()).hasSize(2_048);
+            assertThat(((short[]) indices.childData())[599]).isZero();
+            assertThat(((short[]) indices.childData())[600]).isEqualTo((short) 1);
+            assertThat((long[]) offsets.childData()).containsExactly(0L, 2L);
+            for (ChildSlot positions : List.of(indices, offsets)) {
+                assertThat(positions.excluded()).containsExactlyInAnyOrder(EncodingId.FASTLANES_RLE,
+                        EncodingId.VORTEX_DICT, EncodingId.VORTEX_SPARSE);
+            }
+        }
+
+        @Test
+        void encodeCascade_empty_notApplicable() {
+            // When
+            CascadeStep result = new RleEncodingEncoder().encodeCascade(DTypes.I32, new int[0], EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isFalse();
+        }
+    }
 }
