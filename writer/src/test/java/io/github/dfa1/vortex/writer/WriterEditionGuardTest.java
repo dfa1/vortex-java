@@ -85,4 +85,83 @@ class WriterEditionGuardTest {
             assertThat(readAllLongs(vf, "ts")).containsExactly(data);
         }
     }
+
+    /// Delta joins the cascade like Rust's `DeltaScheme`: registered, but only offered when an
+    /// enabled edition contains `fastlanes.delta` (issue #410). Default writes must never emit it,
+    /// even on data it would win.
+    @Test
+    void cascading_defaultEditions_neverEmitDelta(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("delta_default.vtx");
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.cascading(3))) {
+            sut.writeChunk(Map.of(ColumnName.of("ts"), jitteredTimestamps()));
+        }
+
+        // Then
+        try (var vf = VortexReader.open(file)) {
+            assertThat(vf.footer().arraySpecs()).doesNotContain(io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_DELTA);
+        }
+    }
+
+    @Test
+    void cascading_unstableEdition_picksDeltaOnJitteredTimestamps(@TempDir Path tmp) throws IOException {
+        // Given — ~1s ticks with sub-second jitter: FoR needs the whole span (~23 bits), the
+        // transposed deltas only the jitter around the lane stride
+        Path file = tmp.resolve("delta_unstable_cascade.vtx");
+        long[] data = jitteredTimestamps();
+        WriteOptions options = WriteOptions.cascading(3).withEdition(Editions.UNSTABLE_2025_05_0);
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, I64_SCHEMA, options)) {
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
+        }
+
+        // Then
+        try (var vf = VortexReader.open(file)) {
+            assertThat(vf.footer().arraySpecs()).contains(io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_DELTA);
+            assertThat(readAllLongs(vf, "ts")).containsExactly(data);
+        }
+    }
+
+    private static long[] jitteredTimestamps() {
+        java.util.Random random = new java.util.Random(7);
+        long[] data = new long[8_192];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = 1_700_000_000_000L + i * 1_000L + random.nextInt(1_000);
+        }
+        return data;
+    }
+
+    /// The edition policy must reach candidates an encoder keeps privately: Sparse compresses a
+    /// validity bitmap's patch indices over its own list, which offers `fastlanes.delta`. Before,
+    /// only the writer's own encoder lists were excluded, so once cascading delta could win there
+    /// a default-edition write failed with "fastlanes.delta: outside the configured edition(s)".
+    @Test
+    void cascading_defaultEditions_privateCandidateListsHonorTheEdition(@TempDir Path tmp) throws IOException {
+        // Given — a nullable column with a periodic null pattern: its validity goes sparse, and
+        // the regular patch indices are exactly what delta compresses best
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("s")), List.of(new DType.Utf8(true)), false);
+        String[] categories = {"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"};
+        java.util.Random random = new java.util.Random(42);
+        String[] data = new String[50_000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = i % 10 == 0 ? null : categories[random.nextInt(categories.length)];
+        }
+        Path file = tmp.resolve("sparse_validity.vtx");
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3).withGlobalDict(false))) {
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
+        }
+
+        // Then
+        try (var vf = VortexReader.open(file)) {
+            assertThat(vf.footer().arraySpecs()).doesNotContain(io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_DELTA);
+        }
+    }
 }

@@ -36,6 +36,7 @@ import io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.DecimalBytePartsEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DecimalEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ZigZagEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
@@ -125,7 +126,7 @@ public final class VortexWriter implements Closeable {
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
     // Edition guard (issue #301): the cumulative member set of every WriteOptions#editions()
     // family enabled for this writer, or empty when no edition is configured (guard off).
-    // editionExcluded is its complement over the concrete encoders this writer actually holds
+    // editionExcluded is its complement over every well-known encoding id plus the custom encoders this writer holds
     // (encodings + cascadeCodecs) - seeded into every EncodeContext's initial `excluded` set so
     // CascadingCompressor's existing per-candidate exclusion check (already consulted at every
     // selection site, including nested competitions like a masked column's validity-bitmap
@@ -210,7 +211,7 @@ public final class VortexWriter implements Closeable {
         return Set.copyOf(allowed);
     }
 
-    /// The concrete encoder ids this writer actually holds that fall outside `allowed`. Seeding
+    /// Every encoder id — well-known, plus the custom ones this writer holds — outside `allowed`. Seeding
     /// this into every [EncodeContext]'s initial exclusion set lets [CascadingCompressor]'s
     /// existing per-candidate check skip them and fall back to the best remaining candidate,
     /// instead of the edition guard only surfacing as a hard failure after encoding completes.
@@ -220,6 +221,15 @@ public final class VortexWriter implements Closeable {
             return Set.of();
         }
         Set<EncodingId> excluded = new LinkedHashSet<>();
+        // Every well-known id, not only the encoders listed here: an encoder can carry its own private
+        // candidate list (Sparse's bool patch-index cascade offers fastlanes.delta), and those
+        // candidates must be filtered by the same edition policy.
+        for (EncodingId.WellKnown id : EncodingId.WellKnown.values()) {
+            if (!allowed.contains(id)) {
+                excluded.add(id);
+            }
+        }
+        // custom (non-well-known) encoders this writer holds
         for (EncodingEncoder enc : encodings) {
             if (!allowed.contains(enc.encodingId())) {
                 excluded.add(enc.encodingId());
@@ -274,6 +284,13 @@ public final class VortexWriter implements Closeable {
         codecs.add(new ZigZagEncodingEncoder());
         codecs.add(new RunEndEncodingEncoder());
         codecs.add(new RleEncodingEncoder());
+        // Delta (unstable edition, like Rust: "no edition includes fastlanes.delta yet, so the
+        // session's enabled editions decide") competes only when the caller opted into an unstable
+        // edition containing it; default writes never see it.
+        Edition unstable = options.editions().get(EditionFamily.UNSTABLE);
+        if (unstable != null && Editions.cumulativeMembers(unstable).contains(EncodingId.FASTLANES_DELTA)) {
+            codecs.add(new DeltaEncodingEncoder());
+        }
         codecs.add(new SparseEncodingEncoder());
         codecs.add(new DictEncodingEncoder());
         codecs.add(new BitpackedEncodingEncoder());
@@ -288,7 +305,6 @@ public final class VortexWriter implements Closeable {
         // (e.g. taxi store_and_fwd_flag).
         // OnPair (unstable edition) competes with FSST only when the caller opted into an unstable
         // edition containing it; the default editions are core-only, so default writes never see it.
-        Edition unstable = options.editions().get(EditionFamily.UNSTABLE);
         if (unstable != null && Editions.cumulativeMembers(unstable).contains(EncodingId.VORTEX_ONPAIR)) {
             codecs.add(new OnPairEncodingEncoder());
         }
