@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -195,6 +196,25 @@ class PatchedEncodingDecoderTest {
         assertThat(longs.getLong(0)).isEqualTo(100L);
         assertThat(longs.getLong(1)).isEqualTo(999L);
         assertThat(longs.getLong(2)).isEqualTo(300L);
+    }
+
+    @Test
+    void decode_f16_singlePatch() {
+        // Given — Rust's Patched accepts every native ptype (match_each_native_ptype), F16 included;
+        // this decoder used to reject F16. 0x3c00 = 1.0, 0x4000 = 2.0, 0x4200 = 3.0, 0x4900 = 10.0.
+        DType dtype = DType.F16;
+
+        // When
+        Array result = decode(dtype, 3,
+                TestSegments.leShorts((short) 0x3c00, (short) 0x4000, (short) 0x4200), TestSegments.leInts(0, 1),
+                TestSegments.leShorts((short) 1), TestSegments.leShorts((short) 0x4900), 1);
+
+        // Then
+        assertThat(result).isInstanceOf(Float16Array.class);
+        Float16Array halves = (Float16Array) result;
+        assertThat(halves.getFloat(0)).isEqualTo(1.0f);
+        assertThat(halves.getFloat(1)).isEqualTo(10.0f);
+        assertThat(halves.getFloat(2)).isEqualTo(3.0f);
     }
 
     @Test

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Null rows of Rust-written `vortex.list` columns read as empty lists: the decoder ignored the list's validity child.
 - CSV export (`CsvExporter`, `vortex export`) failed on list-view columns with `unsupported array type for CSV export: ListViewArray`.
 - `vortex inspect --html` grouped the Chunks panel by chunk index, so files whose columns chunk differently (e.g. Rust's `tpch_orders.compact`) showed overlapping row ranges and mixed sizes; the panel now lists one entry per distinct row range.
+- `vortex.patched` columns of F16 values failed to read with `unsupported ptype: F16`; Rust accepts every primitive type there. ([#449](https://github.com/dfa1/vortex-java/pull/449))
 
 ## [0.15.2] — 2026-10-03
 

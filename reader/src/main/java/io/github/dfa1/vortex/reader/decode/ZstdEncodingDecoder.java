@@ -10,13 +10,6 @@ import io.github.dfa1.vortex.core.proto.ProtoZstdMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloat16Array;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
@@ -144,7 +137,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
             }
         }
         DType.Primitive nonNull = new DType.Primitive(dt.ptype(), false);
-        return buildPrimitive(nonNull, rowCount, out);
+        return MaterializedArrays.of(nonNull, nonNull.ptype(), rowCount, out);
     }
 
     private static VarBinArray buildScatteredVarBin(
@@ -260,25 +253,12 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
     private static Array buildArray(DType dtype, long n, MemorySegment decompressed, DecodeContext ctx) {
         if (dtype instanceof DType.Primitive dt) {
-            return buildPrimitive(dt, n, decompressed);
+            return MaterializedArrays.of(dt, dt.ptype(), n, decompressed);
         }
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
             return buildVarBin(dtype, n, decompressed, ctx);
         }
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
-    }
-
-    private static Array buildPrimitive(DType.Primitive dt, long n, MemorySegment decompressed) {
-        PType ptype = dt.ptype();
-        return switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(dt, n, decompressed);
-            case I32, U32 -> new MaterializedIntArray(dt, n, decompressed);
-            case F64 -> new MaterializedDoubleArray(dt, n, decompressed);
-            case F32 -> new MaterializedFloatArray(dt, n, decompressed);
-            case I16, U16 -> new MaterializedShortArray(dt, n, decompressed);
-            case I8, U8 -> new MaterializedByteArray(dt, n, decompressed);
-            case F16 -> new MaterializedFloat16Array(dt, n, decompressed);
-        };
     }
 
     /// Reads a 4-byte little-endian length prefix at `pos` from a decompressed VarBin payload and

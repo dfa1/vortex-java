@@ -9,10 +9,6 @@ import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -47,6 +43,9 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         }
 
         PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
+        if (ptype.isFloating()) {
+            throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
+        }
         long rowCount = ctx.rowCount();
         int typeBits = ptype.bits();
         int lanes = FastLanes.lanes(ptype);
@@ -56,7 +55,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         int offset = meta.offset();
 
         if (deltasLen == 0L || rowCount == 0L) {
-            return array(ctx, ptype, 0L, ctx.arena().allocate(0));
+            return MaterializedArrays.of(ctx.dtype(), ptype, 0L, ctx.arena().allocate(0));
         }
 
         // Rows come from the window `[offset, offset + rowCount)` of the `deltasLen` elements
@@ -104,7 +103,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
             undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
             scatterChunk(out, ptype, chunkUndelta, chunk * FastLanes.CHUNK - offset, rowCount);
         }
-        return array(ctx, ptype, rowCount, out.asReadOnly());
+        return MaterializedArrays.of(ctx.dtype(), ptype, rowCount, out.asReadOnly());
     }
 
     /// Untransposes one chunk straight into the output window.
@@ -161,24 +160,6 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
             }
             default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
         }
-    }
-
-    /// Wraps a decoded segment in the `Materialized*Array` matching `ptype`.
-    ///
-    /// @param ctx    decode context, source of the logical dtype
-    /// @param ptype  physical type of the values in `seg`
-    /// @param length row count
-    /// @param seg    the decoded values, little-endian at `ptype`'s width
-    /// @return the typed array view over `seg`
-    /// @throws VortexException if `ptype` is not an integer ptype
-    private static Array array(DecodeContext ctx, PType ptype, long length, MemorySegment seg) {
-        return switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(ctx.dtype(), length, seg);
-            case I32, U32 -> new MaterializedIntArray(ctx.dtype(), length, seg);
-            case I16, U16 -> new MaterializedShortArray(ctx.dtype(), length, seg);
-            case I8, U8 -> new MaterializedByteArray(ctx.dtype(), length, seg);
-            default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
-        };
     }
 
     private static void undeltaChunk(long[] deltas, long[] bases, int lanes, int typeBits, long mask, long[] out) {
