@@ -27,13 +27,13 @@ class EditionIdTest {
         @Test
         void toString_doubleDigitMonthAndNonZeroVersion() {
             // Given
-            EditionId sut = new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 11), 2);
+            EditionId sut = new EditionId(EditionFamily.PREVIEW, YearMonth.of(2026, 11), 2);
 
             // When
             String result = sut.toString();
 
             // Then
-            assertThat(result).isEqualTo("unstable2026.11.2");
+            assertThat(result).isEqualTo("preview2026.11.2");
         }
     }
 
@@ -100,14 +100,14 @@ class EditionIdTest {
 
         @Test
         void isAtOrBefore_differentFamily_isAlwaysFalse() {
-            // Given — unstable2025.05.0 is chronologically "earlier" than core2026.07.0, but
+            // Given — preview2025.05.0 is chronologically "earlier" than core2026.08.0, but
             // families are never ordered against each other
-            EditionId unstable = new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2025, 5), 0);
-            EditionId core = new EditionId(EditionFamily.CORE, YearMonth.of(2026, 7), 0);
+            EditionId preview = new EditionId(EditionFamily.PREVIEW, YearMonth.of(2025, 5), 0);
+            EditionId core = new EditionId(EditionFamily.CORE, YearMonth.of(2026, 8), 0);
 
             // When / Then
-            assertThat(unstable.isAtOrBefore(core)).isFalse();
-            assertThat(core.isAtOrBefore(unstable)).isFalse();
+            assertThat(preview.isAtOrBefore(core)).isFalse();
+            assertThat(core.isAtOrBefore(preview)).isFalse();
         }
     }
 }

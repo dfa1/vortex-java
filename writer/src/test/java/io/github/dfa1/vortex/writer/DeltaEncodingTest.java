@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -42,7 +41,7 @@ class DeltaEncodingTest {
         long[] data = {100L, 105L, 110L, 115L, 120L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -61,7 +60,7 @@ class DeltaEncodingTest {
         long[] data = {1000L, 990L, 975L, 950L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -80,7 +79,7 @@ class DeltaEncodingTest {
         long[] data = {42L, 42L, 42L, 42L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -99,7 +98,7 @@ class DeltaEncodingTest {
         long[] data = {99L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -118,7 +117,7 @@ class DeltaEncodingTest {
         long[] data = {0L, 5L, 7L, 12L, 11L, 15L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));
@@ -140,7 +139,7 @@ class DeltaEncodingTest {
         long[] chunk2 = {2000L, 2005L, 2010L};
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), chunk1));
@@ -165,7 +164,7 @@ class DeltaEncodingTest {
         }
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));

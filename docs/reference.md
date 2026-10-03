@@ -69,7 +69,7 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | `LayoutId` | `sealed interface` — `WellKnown` enum + `Custom` record | Layout identity (separate namespace from encodings; `vortex.flat` is layout-only); both zoned aliases `vortex.zoned`/`vortex.stats` |
 | `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
 | `MemorySize` | `record MemorySize(long bytes)` | Validated non-negative byte count; `ofKiB`/`ofMiB`/`ofGiB` factories, `toGiB()` for display. Rejects negative values (`IllegalArgumentException`) — a programmer-error guard, not a `VortexException`-worthy untrusted-input check |
-| `EditionFamily` | `enum` — `CORE`, `UNSTABLE` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
+| `EditionFamily` | `enum` — `CORE`, `PREVIEW` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
 | `EditionId` | `record EditionId(EditionFamily family, YearMonth cutMonth, int version)` | e.g. `core2025.05.0`; `isAtOrBefore` orders editions within a family only |
 | `Edition` | `record Edition(EditionId id, Set<EncodingId> added)` | Only `Editions`'s catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |
 
@@ -177,7 +177,7 @@ Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedC
 
 | Factory                         | Defaults                                                                                          |
 |---------------------------------|---------------------------------------------------------------------------------------------------|
-| `WriteOptions.defaults()`       | `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0`, `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_0}` |
+| `WriteOptions.defaults()`       | `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0`, `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_3}` |
 | `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`                                                           |
 
 | Method | Notes |
@@ -186,7 +186,8 @@ Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedC
 | `withGlobalDict(boolean)` | Toggle the shared cross-chunk dictionary |
 | `withZstd(boolean)` | Add Zstandard to the cascade codec competition. Requires `allowedCascading > 0` — Zstd only competes inside the cascade, so `withZstd(true)` throws `IllegalArgumentException` at depth 0; combine with `cascading(depth)` |
 | `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |
-| `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family. No method disables the guard entirely — an `unstable`-family encoding is reached by enabling its edition explicitly, e.g. `withEdition(Editions.UNSTABLE_2025_05_0)` |
+| `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family |
+| `withoutEditions()` | Turn the edition guard off, as Rust's `disable_editions()`: every encoding may be emitted, including those in no edition (`fastlanes.delta`, `vortex.patched`). Files may not be readable by other Vortex versions |
 
 ---
 
@@ -330,55 +331,48 @@ type](../CLAUDE.md#adding-an-extension-type)).
 ## Editions
 
 Frozen, named, additive sets of encoding IDs, each carrying a forever read-compatibility
-guarantee once frozen (see ADR 0023). vortex-java mirrors the ground-truth catalog from
-[vortex-data/vortex#8871](https://github.com/vortex-data/vortex/pull/8871) — the published
-[editions spec](https://github.com/vortex-data/vortex/blob/develop/docs/specs/editions.md)'s own
-registry section is not populated upstream yet. Editions are a **write/read policy, not part of
-the wire format** — nothing about a targeted edition is ever persisted into a `.vortex` file.
+guarantee once frozen (see ADR 0023). vortex-java mirrors Rust's `vortex-edition` declarations at
+the pinned vortex-jni release (0.86.1); `EditionCatalogParityIntegrationTest` fails the build if the
+two drift. Editions are a **write/read policy, not part of the wire format**: nothing about a
+targeted edition is ever persisted into a `.vortex` file.
 
 ### `Editions` (`io.github.dfa1.vortex.core.model.Editions`)
 
 | Member                              | Notes                                                                 |
 |--------------------------------------|------------------------------------------------------------------------------|
-| `CORE_2025_05_0` … `CORE_2026_08_0` | The frozen `core` editions (forever read-compatibility guarantee)           |
-| `UNSTABLE_2025_05_0` … `UNSTABLE_2026_06_0` | The draft `unstable` editions (no compatibility guarantee)          |
-| `ALL`                                | Every declared edition, in declaration order                                 |
+| `CORE_2025_05_0` … `CORE_2026_08_3` | The frozen `core` editions (forever read-compatibility guarantee)           |
+| `PREVIEW_2026_08_0`                  | The `preview` family's draft edition: opt-in components not yet in `core` (empty today) |
+| `ALL`                                | Every declared edition, in Rust's declaration order                          |
 | `cumulativeMembers(Edition)`         | The edition's own additions plus every earlier same-family edition's         |
 | `owningEdition(EncodingId)`          | The edition an id first joined, or empty if it belongs to none               |
 
-vortex-java implements every `core`-family encoding through `core2026.08.0`, including
-`vortex.map` (`EncodingId.VORTEX_MAP`, the canonical encoding for the `DType.Map` logical type). Of
-`unstable`, only `fastlanes.delta`, `vortex.patched` and `vortex.onpair` have an
-`EncodingId.WellKnown` constant; the rest (`vortex.zstd_buffers`, `vortex.parquet.variant`, the
-`vortex.tensor.*` family) resolve to `EncodingId.Custom` and are stored in the catalog anyway, mirroring
-upstream faithfully.
+vortex-java implements every `core`-family encoding except `vortex.parquet.variant`, which resolves
+to `EncodingId.Custom` and is stored in the catalog anyway, mirroring upstream faithfully.
+`fastlanes.delta` and `vortex.patched` belong to no edition, as in Rust.
 
 ### Writer integration (`WriteOptions#editions()`)
 
-`WriteOptions.defaults()`/`cascading(depth)` enable the latest frozen `core` edition
-(`Editions.CORE_2026_08_0`) by default — verified safe: the cascade candidate list never includes
-`DeltaEncodingEncoder`/`PatchedEncodingEncoder`, and adds `OnPairEncodingEncoder` (the third
-`unstable`-family encoder) only when an enabled `unstable` edition contains `vortex.onpair`, e.g.
-`WriteOptions.cascading(3).withEdition(Editions.UNSTABLE_2026_06_0)` — so no default write can emit
-an `unstable` encoding. If a write would emit an
-encoding outside the union of every enabled edition's cumulative members, `VortexWriter` fails
-the write immediately with a `VortexException` naming the encoding and the configured edition(s).
-Where possible (any selection routed through `CascadingCompressor`, including nested competitions
-like a masked column's validity-bitmap cascade) the guard instead steers selection away from the
-ineligible candidate ahead of time, falling back to the best remaining one — see ADR 0023.
+`WriteOptions.defaults()`/`cascading(depth)` enable the newest frozen `core` edition
+(`Editions.CORE_2026_08_3`), the edition Rust's default session enables, so a default write may emit
+exactly what Rust's default writer may — including `vortex.onpair`, which competes with FSST for
+string columns. If a write would emit an encoding outside the union of every enabled edition's
+cumulative members, `VortexWriter` fails the write immediately with a `VortexException` naming the
+encoding and the configured edition(s). Where possible (any selection routed through
+`CascadingCompressor`, including nested competitions like a masked column's validity-bitmap cascade)
+the guard instead steers selection away from the ineligible candidate ahead of time, falling back to
+the best remaining one — see ADR 0023.
 
 `WriteOptions.withEdition(Edition)` enables an edition, replacing any edition already enabled for
-that edition's family. Multiple families can be enabled at once (e.g. `core` and `unstable`
-simultaneously); at most one edition per family. There is deliberately no "disable the guard"
-method — an `unstable`-family encoding is reached by enabling its edition explicitly, not by
-opting out of the guard altogether.
+that edition's family; several families can be enabled at once, at most one edition per family.
+`WriteOptions.withoutEditions()` turns the guard off, the counterpart of Rust's
+`disable_editions()`: the cascade then also offers encodings that are in no edition
+(`fastlanes.delta`), and a file written this way may not be readable by other Vortex versions.
 
 ### Reader integration
 
 When `ReadRegistry` hits an unregistered encoding id (and `allowUnknown()` is off), the thrown
-`VortexException` names the edition the id belongs to (and whether it's an `unstable` draft with
-no compatibility guarantee), or says the id is unknown to every edition and points at
-`allowUnknown()`.
+`VortexException` names the edition the id belongs to, or says the id is unknown to every edition
+and points at `allowUnknown()`.
 
 ---
 

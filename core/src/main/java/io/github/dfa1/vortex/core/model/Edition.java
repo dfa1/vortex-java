@@ -3,8 +3,8 @@ package io.github.dfa1.vortex.core.model;
 import java.util.Set;
 
 /// A Vortex edition: a named set of encodings that join its family at this point. A `core`-family
-/// edition is frozen and carries a forever read-compatibility guarantee; an `unstable`-family
-/// edition is a draft and carries none — see [EditionFamily].
+/// edition is frozen and carries a forever read-compatibility guarantee; a `preview`-family edition
+/// is opt-in and not yet adopted by the default writer — see [EditionFamily].
 ///
 /// `added` is only the encodings that join *at this exact edition*, not the family's cumulative
 /// set — [Editions#cumulativeMembers(Edition)] computes that.

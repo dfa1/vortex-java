@@ -10,7 +10,6 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -36,7 +35,7 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// vortex-java writes `vortex.onpair` (unstable edition), vortex-jni reads it back (#425).
+/// vortex-java writes `vortex.onpair` (edition `core2026.08.1`, so default writes may pick it), vortex-jni reads it back (#425).
 ///
 /// Beyond full scans, a pushed-down string equality runs Rust's compressed-domain compare kernel,
 /// which tokenizes the needle with its own greedy longest-match and compares codes: it returns the
@@ -60,7 +59,7 @@ class OnPairInteropIntegrationTest {
         String[] data = urls(5_000, 1);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA,
-                     WriteOptions.defaults().withEdition(Editions.UNSTABLE_2026_06_0),
+                     WriteOptions.defaults(),
                      List.of(new OnPairEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("s"), data));
@@ -80,7 +79,7 @@ class OnPairInteropIntegrationTest {
         List<String[]> chunks = List.of(urls(4_000, 2), urls(4_000, 3), urls(1_234, 4));
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA,
-                     WriteOptions.cascading(3).withEdition(Editions.UNSTABLE_2026_06_0))) {
+                     WriteOptions.cascading(3))) {
             // When
             for (String[] chunk : chunks) {
                 sut.writeChunk(Map.of(ColumnName.of("s"), chunk));
@@ -93,11 +92,12 @@ class OnPairInteropIntegrationTest {
     }
 
     @Test
-    void cascadingWithDefaultEditions_neverPicksOnPair(@TempDir Path tmp) throws IOException {
-        // Given — same data, default (core-only) editions
+    void cascadingWithAnEditionBeforeOnPair_neverPicksOnPair(@TempDir Path tmp) throws IOException {
+        // Given — same data, targeting core2026.08.0, the edition just before OnPair joined core
         Path file = tmp.resolve("java_no_onpair.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
+             var sut = VortexWriter.create(ch, SCHEMA,
+                     WriteOptions.cascading(3).withEdition(io.github.dfa1.vortex.core.model.Editions.CORE_2026_08_0))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("s"), urls(4_000, 2)));
         }

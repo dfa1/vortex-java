@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.integration;
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
@@ -78,7 +77,7 @@ class JavaRoundTripIntegrationTest {
         data[61] = 7_000_000;
         data[88] = 8_000_000;
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2026_04_0),
+             var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new PatchedEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("v"), data));
@@ -114,7 +113,7 @@ class JavaRoundTripIntegrationTest {
         // When
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema,
-                     WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+                     WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             sut.writeChunk(Map.of(ColumnName.of("v"), narrow(expected, ptype)));
         }

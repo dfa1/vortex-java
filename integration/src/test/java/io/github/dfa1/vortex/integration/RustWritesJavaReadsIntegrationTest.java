@@ -711,7 +711,7 @@ class RustWritesJavaReadsIntegrationTest {
     @ValueSource(strings = {"tpch_orders.regular.vortex", "clickbench_hits_5k.regular.vortex"})
     void s3_fullScan_onPairUtf8ColumnsMatchJni(String fixture, @TempDir Path tmp) throws Exception {
         // Given — the two v0.86.1 fixtures whose string columns Rust compressed with vortex.onpair
-        // (unstable edition); before #425 the Java scan failed with "no decoder registered". Every
+        // (edition core2026.08.1); before #425 the Java scan failed with "no decoder registered". Every
         // Utf8 column is compared, so the OnPair ones are covered whichever columns they are.
         RustFixtures.assumeNetworkAvailable();
         Path file = RustFixtures.downloadArray(tmp, fixture);

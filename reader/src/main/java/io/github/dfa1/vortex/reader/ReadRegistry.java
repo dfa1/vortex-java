@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.core.model.Edition;
-import io.github.dfa1.vortex.core.model.EditionFamily;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
@@ -149,7 +148,7 @@ public final class ReadRegistry {
 
     /// Builds the "no decoder registered" message, enriched with which [Edition] `id` belongs to
     /// when known — an actionable pointer ("this file is newer than your build, or the encoding is
-    /// unstable/experimental") instead of a bare id string. Issue #301.
+    /// experimental") instead of a bare id string. Issue #301.
     ///
     /// @param id the unrecognized encoding id
     /// @return the message body (the caller's [VortexException] constructor prefixes the id itself)
@@ -159,10 +158,7 @@ public final class ReadRegistry {
             return "no decoder registered; unknown to all editions (custom/experimental encoding)"
                     + " — register a decoder or enable ReadRegistry.Builder#allowUnknown()";
         }
-        Edition edition = owning.get();
-        String draftNote = edition.id().family() == EditionFamily.UNSTABLE
-                ? ", unstable — no compatibility guarantee" : "";
-        return "no decoder registered (joined edition " + edition.id() + draftNote
+        return "no decoder registered (joined edition " + owning.get().id()
                 + "); register a decoder or enable ReadRegistry.Builder#allowUnknown()";
     }
 

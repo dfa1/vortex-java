@@ -88,7 +88,7 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
         VORTEX_ALPRD("vortex.alprd"),
         /// Map encoding (`vortex.map`): a list-view of `{key, value}` entry structs.
         VORTEX_MAP("vortex.map"),
-        /// OnPair dictionary-based short-string compression (`vortex.onpair`, unstable edition).
+        /// OnPair dictionary-based short-string compression (`vortex.onpair`, `core2026.08.1`).
         VORTEX_ONPAIR("vortex.onpair"),
 
         // Layout encoding IDs included so parser/registry can represent them safely

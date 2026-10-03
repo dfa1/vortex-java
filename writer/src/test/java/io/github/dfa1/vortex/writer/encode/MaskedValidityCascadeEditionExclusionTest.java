@@ -22,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// This generalizes to any nested candidate list built the same way, including
 /// [SparseEncodingEncoder]'s `INDEX_CASCADE_CANDIDATES` — used by [MaskedEncodingEncoder]'s
 /// nested validity-mask cascade to compress a `vortex.sparse` patch-index array, entirely
-/// independent of any top-level cascade codec list, which is what makes an `unstable`-family
-/// encoding structurally reachable from a plain nullable-column write, not just an explicit
+/// independent of any top-level cascade codec list, which is what makes an encoding outside the
+/// enabled editions structurally reachable from a plain nullable-column write, not just an explicit
 /// custom encoder list. Uses `vortex.constant` vs. `vortex.primitive` (not `fastlanes.delta`) as
 /// the competing pair: `DeltaEncodingEncoder` stores its transposed bases and deltas at full
 /// width with no further cascading, so it never actually wins a real size competition against raw

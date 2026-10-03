@@ -6,26 +6,24 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-/// Catalog of Vortex [Edition]s, seeded from the ground-truth declarations in
-/// [vortex-data/vortex#8871](https://github.com/vortex-data/vortex/pull/8871) (the published
-/// [editions spec](https://github.com/vortex-data/vortex/blob/develop/docs/specs/editions.md)'s
-/// own "Edition registry" section is not yet populated upstream, so this catalog was built
-/// directly from the Rust source: `vortex-edition/src/lib.rs` and
-/// `vortex/src/editions/{core,unstable}/*.rs`).
+/// Catalog of Vortex [Edition]s, mirroring the Rust reference's first-party declarations
+/// (`vortex-edition/src/declarations/`) at the release vortex-java interoperates with: vortex
+/// 0.86.1, the pinned `vortex-jni` version. `EditionCatalogParityIntegrationTest` parses those
+/// declarations and fails the build if this catalog drifts from them (issue #441).
 ///
-/// Two families exist today: `core` (frozen, the default writer target) and `unstable` (draft,
-/// opt-in, no compatibility guarantee). Membership is additive — an edition's full member set is
-/// the union of everything it and every earlier edition of the same family added; see
-/// [#cumulativeMembers(Edition)].
+/// Two families exist: `core` (frozen, the default writer target) and `preview` (opt-in
+/// components awaiting adoption into `core`; its one edition is still empty). Membership is
+/// additive — an edition's full member set is the union of everything it and every earlier
+/// edition of the same family added; see [#cumulativeMembers(Edition)].
 ///
-/// vortex-java implements every `core`-family encoding through `core2026.08.0`, referenced below
-/// by their [EncodingId.WellKnown] constants — including `vortex.map`, the canonical encoding for
-/// the [DType.Map] logical type. Of `unstable`, it implements `fastlanes.delta`,
-/// `vortex.patched` and `vortex.onpair` — the remaining ids
-/// (`vortex.zstd_buffers`, `vortex.parquet.variant`, the `vortex.tensor.*` family)
-/// have no `WellKnown` constant yet, so they are named as [EncodingId.Custom] instead; the catalog
-/// stores both uniformly and mirrors upstream faithfully rather than being truncated to what is
-/// implemented today.
+/// Rust editions also gate layouts, extension dtypes and zone-map aggregates; this catalog models
+/// array encodings only, so `core2026.08.0` (which adds only the `vortex.zoned` layout and the
+/// zone-map aggregates) has no members here. Encodings in no edition at all — `fastlanes.delta`,
+/// `vortex.patched` — are writable only with the guard turned off, as in Rust.
+///
+/// vortex-java implements every `core`-family encoding except `vortex.parquet.variant`, which
+/// has no [EncodingId.WellKnown] constant yet and is named as an [EncodingId.Custom] instead: the
+/// catalog mirrors upstream faithfully rather than being truncated to what is implemented today.
 public final class Editions {
 
     /// The baseline `core` edition: stable encodings writable by Vortex (Rust reference) 0.36.0.
@@ -53,46 +51,41 @@ public final class Editions {
             Set.of(EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
                     EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED));
 
-    /// The `core` edition adding stable encodings released through July 2026.
-    public static final Edition CORE_2026_07_0 = new Edition(
-            new EditionId(EditionFamily.CORE, YearMonth.of(2026, 7), 0),
-            Set.of(EncodingId.VORTEX_VARIANT));
-
-    /// The `core` edition adding the canonical Map encoding, released through August 2026.
+    /// The first August 2026 `core` edition. In Rust it adds the `vortex.zoned` layout and the
+    /// zone-map aggregates, none of which this catalog models, so it has no encoding members.
     public static final Edition CORE_2026_08_0 = new Edition(
             new EditionId(EditionFamily.CORE, YearMonth.of(2026, 8), 0),
-            Set.of(EncodingId.VORTEX_MAP));
+            Set.of());
 
-    /// The May 2025 draft edition of the `unstable` family.
-    public static final Edition UNSTABLE_2025_05_0 = new Edition(
-            new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2025, 5), 0),
-            Set.of(EncodingId.FASTLANES_DELTA));
-
-    /// The February 2026 draft edition of the `unstable` family.
-    public static final Edition UNSTABLE_2026_02_0 = new Edition(
-            new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 2), 0),
-            Set.of(new EncodingId.Custom("vortex.zstd_buffers")));
-
-    /// The April 2026 draft edition of the `unstable` family.
-    public static final Edition UNSTABLE_2026_04_0 = new Edition(
-            new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 4), 0),
-            Set.of(
-                    new EncodingId.Custom("vortex.parquet.variant"), EncodingId.VORTEX_PATCHED,
-                    new EncodingId.Custom("vortex.tensor.cosine_similarity"),
-                    new EncodingId.Custom("vortex.tensor.inner_product"),
-                    new EncodingId.Custom("vortex.tensor.l2_denorm"),
-                    new EncodingId.Custom("vortex.tensor.l2_norm")));
-
-    /// The June 2026 draft edition of the `unstable` family.
-    public static final Edition UNSTABLE_2026_06_0 = new Edition(
-            new EditionId(EditionFamily.UNSTABLE, YearMonth.of(2026, 6), 0),
+    /// The second August 2026 `core` edition, adding OnPair string compression.
+    public static final Edition CORE_2026_08_1 = new Edition(
+            new EditionId(EditionFamily.CORE, YearMonth.of(2026, 8), 1),
             Set.of(EncodingId.VORTEX_ONPAIR));
 
-    /// Every declared edition, in the order above. Order matters: [#owningEdition(EncodingId)]
-    /// returns the first entry whose `added` set contains the queried id.
+    /// The third August 2026 `core` edition, adding the canonical Map encoding.
+    public static final Edition CORE_2026_08_2 = new Edition(
+            new EditionId(EditionFamily.CORE, YearMonth.of(2026, 8), 2),
+            Set.of(EncodingId.VORTEX_MAP));
+
+    /// The fourth August 2026 `core` edition, adding the Variant encodings (Rust also adds the
+    /// `vortex.uuid` extension dtype here, which this catalog does not model). The newest frozen
+    /// `core` edition, and the one the default writer targets, as in Rust.
+    public static final Edition CORE_2026_08_3 = new Edition(
+            new EditionId(EditionFamily.CORE, YearMonth.of(2026, 8), 3),
+            Set.of(new EncodingId.Custom("vortex.parquet.variant"), EncodingId.VORTEX_VARIANT));
+
+    /// The August 2026 draft edition of the `preview` family. Empty in Rust too: no component has
+    /// entered preview yet.
+    public static final Edition PREVIEW_2026_08_0 = new Edition(
+            new EditionId(EditionFamily.PREVIEW, YearMonth.of(2026, 8), 0),
+            Set.of());
+
+    /// Every declared edition, in Rust's declaration order. Order matters:
+    /// [#owningEdition(EncodingId)] returns the first entry whose `added` set contains the
+    /// queried id.
     public static final List<Edition> ALL = List.of(
-            CORE_2025_05_0, CORE_2025_06_0, CORE_2025_10_0, CORE_2026_07_0, CORE_2026_08_0,
-            UNSTABLE_2025_05_0, UNSTABLE_2026_02_0, UNSTABLE_2026_04_0, UNSTABLE_2026_06_0);
+            CORE_2025_05_0, CORE_2025_06_0, CORE_2025_10_0, CORE_2026_08_0, CORE_2026_08_1,
+            CORE_2026_08_2, CORE_2026_08_3, PREVIEW_2026_08_0);
 
     private Editions() {
     }

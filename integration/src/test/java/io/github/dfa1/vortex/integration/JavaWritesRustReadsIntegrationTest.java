@@ -10,7 +10,6 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.OhlcData;
@@ -1315,11 +1314,11 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(decoded).containsExactly(data);
     }
 
-    /// Cascaded delta (unstable edition, Rust's DeltaScheme, issue #410): bases and deltas go through
+    /// Cascaded delta (in no edition, so editions disabled; Rust's DeltaScheme, issue #410): bases and deltas go through
     /// the cascade (FoR / bit-packing) instead of raw buffers. vortex-jni must read the column back on
     /// a full scan, a mid-chunk row range, and a zone-pruned filter, which slice the delta children.
     @Test
-    void javaWriter_jniReader_delta_cascading_unstableEdition(@TempDir Path tmp) throws IOException {
+    void javaWriter_jniReader_delta_cascading_withoutEditions(@TempDir Path tmp) throws IOException {
         // Given — 2 equal chunks of ~1s jittered timestamps (delta wins over FoR here)
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("ts")),
                 List.of(DType.I64, DType.I64), false);
@@ -1330,7 +1329,7 @@ class JavaWritesRustReadsIntegrationTest {
             ts[i] = 1_700_000_000_000L + i * 1_000L + random.nextInt(1_000);
         }
         Path file = tmp.resolve("java_delta_cascade.vtx");
-        WriteOptions options = WriteOptions.cascading(3).withEdition(io.github.dfa1.vortex.core.model.Editions.UNSTABLE_2025_05_0);
+        WriteOptions options = WriteOptions.cascading(3).withoutEditions();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, options)) {
             for (int start = 0; start < rows; start += 8_192) {
@@ -1483,7 +1482,7 @@ class JavaWritesRustReadsIntegrationTest {
             data[i] = acc;
         }
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults().withEdition(Editions.UNSTABLE_2025_05_0),
+             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults().withoutEditions(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of(ColumnName.of("ts"), data));

@@ -5,7 +5,7 @@ import java.util.Locale;
 import java.util.Objects;
 
 /// Identifier of a Vortex [edition](https://github.com/vortex-data/vortex/blob/develop/docs/specs/editions.md),
-/// e.g. `core2026.07.0`.
+/// e.g. `core2026.08.3`.
 ///
 /// `family` names an independently versioned, additive group of encodings (`core` is the set the
 /// default writer emits); `cutMonth` records when the edition was frozen and orders editions

@@ -64,12 +64,12 @@ class ReadRegistryTest {
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("joined edition core2025.06.0")
                 .hasMessageContaining("allowUnknown")
-                .hasMessageNotContaining("unstable");
+                .hasMessageNotContaining("unknown to all editions");
     }
 
     @Test
-    void decodeUnstableEditionEncodingWithoutDecoder_notesNoCompatibilityGuarantee() {
-        // Given — fastlanes.delta belongs to the draft unstable2025.05.0 edition
+    void decodeEncodingInNoEditionWithoutDecoder_saysUnknownToAllEditions() {
+        // Given — Rust declares fastlanes.delta in no edition
         ReadRegistry sut = ReadRegistry.empty();
         ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA,
                 MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
@@ -79,8 +79,7 @@ class ReadRegistryTest {
         // When / Then
         assertThatThrownBy(() -> sut.decode(ctx))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("joined edition unstable2025.05.0")
-                .hasMessageContaining("unstable — no compatibility guarantee");
+                .hasMessageContaining("unknown to all editions");
     }
 
     @Test

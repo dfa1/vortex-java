@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/// Read-only decoder for `vortex.onpair` (unstable edition `unstable2026.06.0`).
+/// Read-only decoder for `vortex.onpair` (edition `core2026.08.1`).
 ///
 /// OnPair is a dictionary-based short-string compression: buffer 0 holds the concatenated token
 /// bytes and child 0 their `dict_size + 1` offsets (token `t` is `dict[off[t]..off[t+1]]`). Each row

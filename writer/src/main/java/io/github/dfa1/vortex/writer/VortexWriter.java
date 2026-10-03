@@ -284,11 +284,10 @@ public final class VortexWriter implements Closeable {
         codecs.add(new ZigZagEncodingEncoder());
         codecs.add(new RunEndEncodingEncoder());
         codecs.add(new RleEncodingEncoder());
-        // Delta (unstable edition, like Rust: "no edition includes fastlanes.delta yet, so the
-        // session's enabled editions decide") competes only when the caller opted into an unstable
-        // edition containing it; default writes never see it.
-        Edition unstable = options.editions().get(EditionFamily.UNSTABLE);
-        if (unstable != null && Editions.cumulativeMembers(unstable).contains(EncodingId.FASTLANES_DELTA)) {
+        // Delta is in no edition ("no edition includes fastlanes.delta yet"), so like Rust's
+        // DeltaScheme it competes only when the edition guard is off (WriteOptions#withoutEditions).
+        Set<EncodingId> allowed = editionAllowed(options.editions());
+        if (allowed.isEmpty() || allowed.contains(EncodingId.FASTLANES_DELTA)) {
             codecs.add(new DeltaEncodingEncoder());
         }
         codecs.add(new SparseEncodingEncoder());
@@ -303,9 +302,9 @@ public final class VortexWriter implements Closeable {
         // not first-match dispatch, so Dict/FSST/VarBin genuinely compete on measured
         // size — matching Rust, which uses FSST for high-cardinality short strings
         // (e.g. taxi store_and_fwd_flag).
-        // OnPair (unstable edition) competes with FSST only when the caller opted into an unstable
-        // edition containing it; the default editions are core-only, so default writes never see it.
-        if (unstable != null && Editions.cumulativeMembers(unstable).contains(EncodingId.VORTEX_ONPAIR)) {
+        // OnPair (core2026.08.1) competes with FSST whenever the enabled editions include it, as
+        // Rust's OnPairScheme does in its default compressor: the default edition does.
+        if (allowed.isEmpty() || allowed.contains(EncodingId.VORTEX_ONPAIR)) {
             codecs.add(new OnPairEncodingEncoder());
         }
         codecs.add(new FsstEncodingEncoder());
@@ -748,7 +747,7 @@ public final class VortexWriter implements Closeable {
         Optional<Edition> owning = Editions.owningEdition(id);
         String hint = owning.isPresent()
                 ? "; it joins " + owning.get().id() + " — enable that edition via WriteOptions.withEdition(...)"
-                : "; it is not part of any known edition";
+                : "; it is not part of any edition — only WriteOptions.withoutEditions() permits it";
         return new VortexException(id, "outside the configured edition(s) [" + configured + "]" + hint);
     }
 

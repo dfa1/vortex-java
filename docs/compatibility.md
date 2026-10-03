@@ -37,7 +37,7 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 | Item | Introduced | Java status |
 |------|------------|-------------|
 | `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
-| `vortex.onpair` experimental string encoding | Rust 0.74.0 | ✅ Read and written. The writer emits it only when `WriteOptions.withEdition(Editions.UNSTABLE_2026_06_0)` is set; the trained dictionary is valid for Rust but not byte-identical to Rust's (Rust's sampling RNG is not portable). |
+| `vortex.onpair` experimental string encoding | Rust 0.74.0 | ✅ Read and written. In `core2026.08.1`, so default cascading writes offer it, as Rust's default compressor does; the trained dictionary is valid for Rust but not byte-identical to Rust's (Rust's sampling RNG is not portable). |
 | `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). |
 | Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested against the currently pinned v0.85.0 fixtures; #8125 not yet re-verified. |
 | `vortex.dict` **layout** over a values pool that is neither VarBin- nor primitive-shaped (e.g. a dict-encoded `vortex.uuid`, whose storage is `FixedSizeList(U8, 16)`) | Not written by Rust: its dict layout admits only `Primitive \| Utf8 \| Binary` (`dict_layout_supported`), and its dict compressor schemes only integers, floats and strings | ⚠️ Unreachable from Rust- or Java-written files. Every type vortex-jni writes reads back exactly, dict-encoded or not (`DictAllTypesInteropIntegrationTest`, which also fails if a Rust bump starts dict-encoding another type). A foreign file with such a pool fails with `VortexException("unsupported dict values shape: …")`. |
@@ -117,12 +117,12 @@ decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nul
 | `vortex.datetimeparts`      | `DateTimePartsEncodingDecoder`   | `DateTimePartsEncodingEncoder`   | ✅      | ✅      |                                                                       |
 | `vortex.pco`                | `PcoEncodingDecoder`             | `PcoEncodingEncoder`             | ✅      | ✅      | Decode: all modes. Encode: Classic + Consecutive delta + IntMult; FloatMult/FloatQuant deferred |
 | `fastlanes.bitpacked`       | `BitpackedEncodingDecoder`       | `BitpackedEncodingEncoder`       | ✅      | ✅      | Unsigned integer PTypes                                               |
-| `fastlanes.delta`           | `DeltaEncodingDecoder`           | `DeltaEncodingEncoder`           | ✅      | ✅      | Integer PTypes. Unstable edition: cascading writes offer it (bases/deltas cascaded, as Rust's `DeltaScheme`) only with an unstable edition containing it |
+| `fastlanes.delta`           | `DeltaEncodingDecoder`           | `DeltaEncodingEncoder`           | ✅      | ✅      | Integer PTypes. In no edition: cascading writes offer it (bases/deltas cascaded, as Rust's `DeltaScheme`) only with `WriteOptions.withoutEditions()` |
 | `fastlanes.for`             | `FrameOfReferenceEncodingDecoder`| `FrameOfReferenceEncodingEncoder`| ✅      | ✅      | Integer PTypes                                                        |
 | `fastlanes.rle`             | `RleEncodingDecoder`             | `RleEncodingEncoder`             | ✅      | ✅      | Chunk-based RLE. Integers and floats (Rust's int and float RLE schemes); float runs compare raw bits, so -0.0 and NaN payloads round-trip. Cascades values/indices/offsets |
 | `vortex.patched`            | `PatchedEncodingDecoder`         | `PatchedEncodingEncoder`         | ✅      | ✅      | Primitive PTypes; base + chunked patches (1024-elem blocks)            |
 | `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ✅      | Canonical container; constant / chunked-of-constants core + optional shredded child. Typed-scalar values only — nested objects need `parquet.variant` (ADR 0014) |
-| `vortex.onpair`             | `OnPairEncodingDecoder`          | `OnPairEncodingEncoder`          | ✅      | ✅      | Utf8, Binary; unstable edition, cascade candidate only when `UNSTABLE_2026_06_0` is enabled |
+| `vortex.onpair`             | `OnPairEncodingDecoder`          | `OnPairEncodingEncoder`          | ✅      | ✅      | Utf8, Binary; `core2026.08.1`, a cascade candidate under the default edition (competes with FSST, as in Rust) |
 
 ### Decode shape
 
@@ -186,8 +186,8 @@ every other row, so it stays Lazy instead (ADR 0026).
 ### Unknown encodings
 
 Files containing unrecognized encoding IDs throw `VortexException` by default. The message names
-which [edition](#editions) the id belongs to (and whether it's an `unstable` draft with no
-compatibility guarantee), or says the id is unknown to every edition if it belongs to none. Opt
+which [edition](#editions) the id belongs to, or says the id is unknown to every edition if it
+belongs to none. Opt
 in to passthrough mode to read such files without failing:
 
 ```java
@@ -212,17 +212,20 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `core2025.05.0` | `core` | 23 baseline: `fastlanes.bitpacked`/`for`, `vortex.alp`/`alprd`/`bool`/`bytebool`/`chunked`/`constant`/`datetimeparts`/`decimal`/`decimal_byte_parts`/`dict`/`ext`/`fsst`/`list`/`null`/`primitive`/`runend`/`sparse`/`struct`/`varbin`/`varbinview`/`zigzag` |
 | `core2025.06.0` | `core` | `vortex.pco`, `vortex.sequence`, `vortex.zstd` |
 | `core2025.10.0` | `core` | `fastlanes.rle`, `vortex.fixed_size_list`, `vortex.listview`, `vortex.masked` |
-| `core2026.07.0` | `core` | `vortex.variant` |
-| `core2026.08.0` | `core` | `vortex.map` |
-| `unstable2025.05.0` | `unstable` | `fastlanes.delta` ✅ implemented |
-| `unstable2026.02.0` | `unstable` | `vortex.zstd_buffers` ❌ not implemented |
-| `unstable2026.04.0` | `unstable` | `vortex.parquet.variant` ❌, `vortex.patched` ✅, `vortex.tensor.*` (4 ids) ❌ |
-| `unstable2026.06.0` | `unstable` | `vortex.onpair` ✅ implemented |
+| `core2026.08.0` | `core` | no encoding (Rust adds the `vortex.zoned` layout and zone-map aggregates, not modelled) |
+| `core2026.08.1` | `core` | `vortex.onpair` |
+| `core2026.08.2` | `core` | `vortex.map` |
+| `core2026.08.3` | `core` | `vortex.variant`, `vortex.parquet.variant` ❌ not implemented — **default write target** |
+| `preview2026.08.0` | `preview` | nothing yet |
 
-`core` editions are frozen with a forever read-compatibility guarantee; `unstable` editions are
-drafts with none. (Upstream additionally records each frozen `core` edition's minimum *Rust*
-Vortex reader release — that number refers to a different implementation's release train, has no
-relationship to vortex-java's own versioning, and isn't surfaced here or in any vortex-java API.)
+Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.86.1);
+`EditionCatalogParityIntegrationTest` fails the build on drift. `core` editions are frozen with a
+forever read-compatibility guarantee; `preview` holds opt-in components not yet adopted by `core`.
+`fastlanes.delta` and `vortex.patched` are in no edition: as in Rust, only a write with the guard
+off (`WriteOptions.withoutEditions()`) may emit them. Rust editions also gate layouts, extension
+dtypes and zone-map aggregates; vortex-java's catalog models array encodings only. (Upstream
+additionally records each edition's minimum *Rust* Vortex release; that number belongs to a
+different implementation's release train and isn't surfaced in any vortex-java API.)
 
 ## Extension types
 

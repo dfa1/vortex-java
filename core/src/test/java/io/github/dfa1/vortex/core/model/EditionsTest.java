@@ -10,8 +10,8 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Golden tests pinning the ground-truth edition data from
-/// [vortex-data/vortex#8871](https://github.com/vortex-data/vortex/pull/8871): a stray edit to
+/// Golden tests pinning the edition data mirrored from Rust's `vortex-edition` declarations at
+/// vortex 0.86.1: a stray edit to
 /// [Editions]'s declarations that changes a cumulative member set fails here, mirroring upstream's
 /// own `validate_edition` test harness.
 class EditionsTest {
@@ -74,85 +74,39 @@ class EditionsTest {
         }
 
         @Test
-        void core2026_07_0_isTheFullCoreSet() {
-            // Given — the latest frozen core edition
-            // When
-            Set<EncodingId> result = Editions.cumulativeMembers(Editions.CORE_2026_07_0);
-
-            // Then — every core encoding through vortex.variant; 31 total
-            assertThat(result).hasSize(31).isEqualTo(union(CORE_2025_05_0_BASELINE,
-                    EncodingId.VORTEX_PCO, EncodingId.VORTEX_SEQUENCE, EncodingId.VORTEX_ZSTD,
-                    EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
-                    EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED,
-                    EncodingId.VORTEX_VARIANT));
-        }
-
-        @Test
-        void core2026_08_0_addsToPreviousCore() {
-            // Given — the latest frozen core edition, adding the canonical Map encoding
+        void core2026_08_0_addsNoEncoding() {
+            // Given — Rust's core2026.08.0 adds only the vortex.zoned layout and zone-map
+            // aggregates, which this catalog does not model
             // When
             Set<EncodingId> result = Editions.cumulativeMembers(Editions.CORE_2026_08_0);
 
-            // Then — the 31 above plus vortex.map; 32 total
-            assertThat(result).hasSize(32).isEqualTo(union(CORE_2025_05_0_BASELINE,
+            // Then — exactly core2025.10.0's 30 members
+            assertThat(result).hasSize(30).isEqualTo(Editions.cumulativeMembers(Editions.CORE_2025_10_0));
+        }
+
+        @Test
+        void core2026_08_3_isTheFullCoreSet() {
+            // Given — the newest frozen core edition, the default writer target
+            // When
+            Set<EncodingId> result = Editions.cumulativeMembers(Editions.CORE_2026_08_3);
+
+            // Then — the 30 above plus onpair (08.1), map (08.2) and the two variants (08.3); 34 total
+            assertThat(result).hasSize(34).isEqualTo(union(CORE_2025_05_0_BASELINE,
                     EncodingId.VORTEX_PCO, EncodingId.VORTEX_SEQUENCE, EncodingId.VORTEX_ZSTD,
                     EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
                     EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED,
-                    EncodingId.VORTEX_VARIANT, EncodingId.VORTEX_MAP));
+                    EncodingId.VORTEX_ONPAIR, EncodingId.VORTEX_MAP,
+                    EncodingId.VORTEX_VARIANT, new EncodingId.Custom("vortex.parquet.variant")));
         }
 
         @Test
-        void unstable2025_05_0_isExactlyItsOwnAddition() {
-            // Given the first unstable edition — no earlier unstable edition to accumulate from
+        void preview2026_08_0_isEmpty() {
+            // Given — no component has entered Rust's preview family yet
             // When
-            Set<EncodingId> result = Editions.cumulativeMembers(Editions.UNSTABLE_2025_05_0);
+            Set<EncodingId> result = Editions.cumulativeMembers(Editions.PREVIEW_2026_08_0);
 
             // Then
-            assertThat(result).containsExactly(EncodingId.FASTLANES_DELTA);
-        }
-
-        @Test
-        void unstable2026_02_0_addsToThePreviousUnstable() {
-            // Given
-            // When
-            Set<EncodingId> result = Editions.cumulativeMembers(Editions.UNSTABLE_2026_02_0);
-
-            // Then
-            assertThat(result).containsExactlyInAnyOrder(
-                    EncodingId.FASTLANES_DELTA, new EncodingId.Custom("vortex.zstd_buffers"));
-        }
-
-        @Test
-        void unstable2026_04_0_addsToPreviousUnstable() {
-            // Given
-            // When
-            Set<EncodingId> result = Editions.cumulativeMembers(Editions.UNSTABLE_2026_04_0);
-
-            // Then
-            assertThat(result).containsExactlyInAnyOrder(
-                    EncodingId.FASTLANES_DELTA, new EncodingId.Custom("vortex.zstd_buffers"),
-                    new EncodingId.Custom("vortex.parquet.variant"), EncodingId.VORTEX_PATCHED,
-                    new EncodingId.Custom("vortex.tensor.cosine_similarity"),
-                    new EncodingId.Custom("vortex.tensor.inner_product"),
-                    new EncodingId.Custom("vortex.tensor.l2_denorm"),
-                    new EncodingId.Custom("vortex.tensor.l2_norm"));
-        }
-
-        @Test
-        void unstable2026_06_0_isTheFullUnstableSet() {
-            // Given — the latest draft unstable edition
-            // When
-            Set<EncodingId> result = Editions.cumulativeMembers(Editions.UNSTABLE_2026_06_0);
-
-            // Then
-            assertThat(result).hasSize(9).containsExactlyInAnyOrder(
-                    EncodingId.FASTLANES_DELTA, new EncodingId.Custom("vortex.zstd_buffers"),
-                    new EncodingId.Custom("vortex.parquet.variant"), EncodingId.VORTEX_PATCHED,
-                    new EncodingId.Custom("vortex.tensor.cosine_similarity"),
-                    new EncodingId.Custom("vortex.tensor.inner_product"),
-                    new EncodingId.Custom("vortex.tensor.l2_denorm"),
-                    new EncodingId.Custom("vortex.tensor.l2_norm"),
-                    EncodingId.VORTEX_ONPAIR);
+            assertThat(result).isEmpty();
         }
 
         @Test
@@ -174,7 +128,7 @@ class EditionsTest {
                     EncodingId.VORTEX_PRIMITIVE,             // core2025.05.0
                     EncodingId.VORTEX_ZSTD,                  // core2025.06.0
                     EncodingId.VORTEX_MASKED,                // core2025.10.0
-                    EncodingId.VORTEX_VARIANT);              // core2026.07.0
+                    EncodingId.VORTEX_VARIANT);              // core2026.08.3
         }
     }
 
@@ -193,23 +147,31 @@ class EditionsTest {
 
         @Test
         void owningEdition_latestCoreFamilyId_returnsTheEditionItFirstJoined() {
-            // Given — vortex.map joins at the newest core edition, the last entry scanned
+            // Given — vortex.variant joins at the newest core edition, the last core entry scanned
             // When
-            Optional<Edition> result = Editions.owningEdition(EncodingId.VORTEX_MAP);
+            Optional<Edition> result = Editions.owningEdition(EncodingId.VORTEX_VARIANT);
 
             // Then
-            assertThat(result).contains(Editions.CORE_2026_08_0);
+            assertThat(result).contains(Editions.CORE_2026_08_3);
         }
 
         @Test
-        void owningEdition_unstableFamilyId_returnsTheUnstableEdition() {
-            // Given
+        void owningEdition_onPair_isCoreNotADraft() {
+            // Given — vortex.onpair joined Rust's core at 2026.08.1, so default writes may emit it
             // When
-            Optional<Edition> result = Editions.owningEdition(EncodingId.VORTEX_PATCHED);
+            Optional<Edition> result = Editions.owningEdition(EncodingId.VORTEX_ONPAIR);
 
             // Then
-            assertThat(result).contains(Editions.UNSTABLE_2026_04_0);
-            assertThat(result.get().id().family()).isEqualTo(EditionFamily.UNSTABLE);
+            assertThat(result).contains(Editions.CORE_2026_08_1);
+        }
+
+        @Test
+        void owningEdition_encodingInNoEdition_returnsEmpty() {
+            // Given — Rust declares fastlanes.delta and vortex.patched in no edition: only a write
+            // with editions disabled may emit them
+            // When / Then
+            assertThat(Editions.owningEdition(EncodingId.FASTLANES_DELTA)).isEmpty();
+            assertThat(Editions.owningEdition(EncodingId.VORTEX_PATCHED)).isEmpty();
         }
 
         @Test

@@ -25,7 +25,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Global-dict Utf8 columns compress their distinct-values pool through the normal Utf8
-/// competition (FSST/VarBin/Zstd) instead of hardcoded raw varbin (#299). Rust dict-encodes
+/// competition (FSST/OnPair/VarBin/Zstd) instead of hardcoded raw varbin (#299). Rust dict-encodes
 /// *and* FSST-compresses the same columns; before this change Java left the pool uncompressed,
 /// which was a large part of the nyc-311 file-size gap.
 class DictValuesPoolCompressionIntegrationTest {
@@ -66,14 +66,16 @@ class DictValuesPoolCompressionIntegrationTest {
             }
         }
 
-        // Then — the values pool is FSST-compressed. The global dictionary itself is a *layout*
-        // (LAYOUT_DICT), so it is not listed among the segment encodings; FSST winning the
+        // Then — the values pool is compressed by FSST or OnPair (both compete under the default
+        // core2026.08.3 edition, as in Rust; OnPair wins this shared-prefix corpus). The global
+        // dictionary itself is a *layout* (LAYOUT_DICT), so it is not listed among the segment
+        // encodings; a string-fragmentation encoding winning the
         // values-pool competition is the observable proof the pool is no longer raw varbin.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             InspectorTree tree = InspectorTree.build(vf);
             assertThat(tree.usedEncodings())
-                    .as("FSST compresses the dictionary values pool")
-                    .contains("vortex.fsst");
+                    .as("a string-fragmentation encoding compresses the dictionary values pool")
+                    .containsAnyOf("vortex.fsst", "vortex.onpair");
         }
 
         // And global-dict dedup + FSST keeps the file far below the ~1.8 MB of raw repeated
@@ -150,8 +152,9 @@ class DictValuesPoolCompressionIntegrationTest {
         // is visible in usedEncodings alongside the vortex.dict wrapper.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             assertThat(InspectorTree.build(vf).usedEncodings())
-                    .as("per-chunk dict encoding with an FSST-compressed values pool")
-                    .contains("vortex.dict", "vortex.fsst");
+                    .as("per-chunk dict encoding with a compressed values pool")
+                    .contains("vortex.dict")
+                    .containsAnyOf("vortex.fsst", "vortex.onpair");
         }
 
         // And every value round-trips exactly.

@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.SplittableRandom;
 
-/// Write-only encoder for `vortex.onpair` (unstable edition `unstable2026.06.0`).
+/// Write-only encoder for `vortex.onpair` (edition `core2026.08.1`).
 ///
 /// Ports the `onpair` crate's trainer: starting from the 256 single-byte tokens, it scans a seeded
 /// random sample of rows, splitting each with greedy longest-prefix match, and promotes an adjacent
@@ -29,8 +29,9 @@ import java.util.SplittableRandom;
 /// segmentation must be exactly that. The dictionary itself need not match Rust's byte-for-byte
 /// (its RNG is not portable), only satisfy those invariants.
 ///
-/// Never part of the default cascade: [io.github.dfa1.vortex.writer.VortexWriter] adds it as a
-/// candidate only when `WriteOptions` enables an `unstable` edition that contains it.
+/// Competes with FSST for string columns whenever the enabled editions include it, as Rust's
+/// `OnPairScheme` does in its default compressor: [io.github.dfa1.vortex.writer.VortexWriter]
+/// adds it as a cascade candidate under the default edition.
 public final class OnPairEncodingEncoder implements EncodingEncoder {
 
     private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_ONPAIR);

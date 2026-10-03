@@ -40,13 +40,11 @@ import java.util.Map;
 ///                                  low-cardinality columns dictionary-encoded.
 /// @param editions                  the [Edition] enabled per family, gating which
 ///                                  encodings this writer may emit — see [#withEdition(Edition)]. Defaults to
-///                                  the latest frozen `core` edition ([Editions#CORE_2026_08_0]): vortex-java
-///                                  implements every `core`-family encoding through `core2026.08.0`, and the
-///                                  default cascade never selects an `unstable`-family one, so this is a
-///                                  zero-cost guardrail against ever silently widening a file's minimum
-///                                  required reader. Deliberately has no "disable the guard" method: an
-///                                  `unstable`-family encoding is reached by enabling its edition explicitly
-///                                  via [#withEdition(Edition)], not by opting out of the guard altogether.
+///                                  the newest frozen `core` edition ([Editions#CORE_2026_08_3]), the edition
+///                                  Rust's default session enables, so a default write may emit exactly what
+///                                  Rust's default writer may. Empty means the guard is off
+///                                  ([#withoutEditions()]): every encoding is permitted, including those in
+///                                  no edition at all (`fastlanes.delta`, `vortex.patched`).
 public record WriteOptions(
         boolean enableZoneMaps,
         double compressionRatioThreshold,
@@ -85,7 +83,7 @@ public record WriteOptions(
 
     /// The default edition guard: only the latest frozen `core` edition enabled. See the `editions`
     /// parameter's javadoc above for the safety rationale.
-    private static final Map<EditionFamily, Edition> DEFAULT_EDITIONS = Map.of(EditionFamily.CORE, Editions.CORE_2026_08_0);
+    private static final Map<EditionFamily, Edition> DEFAULT_EDITIONS = Map.of(EditionFamily.CORE, Editions.CORE_2026_08_3);
 
     /// Default options: global dictionary encoding enabled, no cascading compression, Zstd disabled,
     /// edition guard targeting the latest frozen `core` edition.
@@ -163,7 +161,7 @@ public record WriteOptions(
     /// Returns a copy of these options with `edition` enabled, replacing any edition already
     /// enabled for `edition.id().family()`. Enabling an edition from a different family than any
     /// currently configured adds to, rather than replaces, the enabled set — a writer may target at
-    /// most one edition per family, but multiple families at once (e.g. `core` and `unstable`
+    /// most one edition per family, but multiple families at once (e.g. `core` and `preview`
     /// simultaneously).
     ///
     /// Encoding an id outside the union of every currently-enabled edition's cumulative members
@@ -177,5 +175,18 @@ public record WriteOptions(
         updated.put(edition.id().family(), edition);
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
                 enableZstd, globalDictMaxRetainedBytes, updated);
+    }
+
+    /// Returns a copy of these options with the edition guard turned off, the counterpart of Rust's
+    /// `VortexWriteOptions::disable_editions()`: every encoding this writer implements may be
+    /// emitted, including those in no edition at all (`fastlanes.delta`, `vortex.patched`), which
+    /// the cascade then also offers as candidates. A reader is only guaranteed to support the
+    /// encodings of the editions it knows, so a file written this way may not be readable by other
+    /// Vortex versions or configurations.
+    ///
+    /// @return a new `WriteOptions` with no edition enabled
+    public WriteOptions withoutEditions() {
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+                enableZstd, globalDictMaxRetainedBytes, Map.of());
     }
 }

@@ -4,7 +4,7 @@ package io.github.dfa1.vortex.core.model;
 ///
 /// Unlike [EncodingId]/[LayoutId], this is a closed enum, not a sealed
 /// interface with a `Custom` fallback: an edition family is a cross-implementation
-/// compatibility promise ("any reader supporting `core2026.07.0` can read this file"), so a
+/// compatibility promise ("any reader supporting `core2026.08.3` can read this file"), so a
 /// private, single-writer "family" would carry no real guarantee — nothing else in the Vortex
 /// ecosystem would recognize it. There is no legitimate use case for a fabricated family, so
 /// none is offered.
@@ -18,7 +18,7 @@ public enum EditionFamily {
     /// The `core` family: encodings the default writer emits, each edition frozen with a forever
     /// read-compatibility guarantee.
     CORE,
-    /// The `unstable` family: opt-in encodings with no compatibility guarantee — every `unstable`
-    /// edition is a draft.
-    UNSTABLE
+    /// The `preview` family: additive, opt-in components maintained as part of Vortex but not yet
+    /// adopted by the default `core` writer.
+    PREVIEW
 }
