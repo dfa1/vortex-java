@@ -7,12 +7,14 @@ import java.util.Optional;
 import java.util.Set;
 
 /// Catalog of Vortex [Edition]s, mirroring the Rust reference's first-party declarations
-/// (`vortex-edition/src/declarations/`) at the release vortex-java interoperates with: vortex
+/// (`vortex-edition/src/declarations/`, plus the plugin families declared in
+/// `encodings/*/src/editions.rs`) at the release vortex-java interoperates with: vortex
 /// 0.86.1, the pinned `vortex-jni` version. `EditionCatalogParityIntegrationTest` parses those
 /// declarations and fails the build if this catalog drifts from them (issue #441).
 ///
-/// Two families exist: `core` (frozen, the default writer target) and `preview` (opt-in
-/// components awaiting adoption into `core`; its one edition is still empty). Membership is
+/// Three families exist: `core` (frozen, the default writer target), `preview` (opt-in components
+/// awaiting adoption into `core`; its one edition is still empty) and `zstd` (declared by Rust's
+/// `vortex-zstd` plugin crate, not the core declarations; opt-in). Membership is
 /// additive — an edition's full member set is the union of everything it and every earlier
 /// edition of the same family added; see [#cumulativeMembers(Edition)].
 ///
@@ -21,8 +23,9 @@ import java.util.Set;
 /// zone-map aggregates) has no members here. Encodings in no edition at all — `fastlanes.delta`,
 /// `vortex.patched` — are writable only with the guard turned off, as in Rust.
 ///
-/// vortex-java implements every `core`-family encoding except `vortex.parquet.variant`, which
-/// has no [EncodingId.WellKnown] constant yet and is named as an [EncodingId.Custom] instead: the
+/// vortex-java implements every `core`-family encoding except `vortex.parquet.variant`, and not
+/// `zstd`'s `vortex.zstd_buffers`; both have no [EncodingId.WellKnown] constant yet and are named
+/// as [EncodingId.Custom] instead: the
 /// catalog mirrors upstream faithfully rather than being truncated to what is implemented today.
 public final class Editions {
 
@@ -80,12 +83,20 @@ public final class Editions {
             new EditionId(EditionFamily.PREVIEW, YearMonth.of(2026, 8), 0),
             Set.of());
 
-    /// Every declared edition, in Rust's declaration order. Order matters:
+    /// The February 2026 draft edition of the `zstd` family, declared by Rust's `vortex-zstd` plugin:
+    /// buffer-level Zstd that keeps an array's buffer layout for GPU decompression. vortex-java
+    /// does not implement `vortex.zstd_buffers` yet, hence the [EncodingId.Custom].
+    public static final Edition ZSTD_2026_02_0 = new Edition(
+            new EditionId(EditionFamily.ZSTD, YearMonth.of(2026, 2), 0),
+            Set.of(new EncodingId.Custom("vortex.zstd_buffers")));
+
+    /// Every declared edition, in Rust's declaration order (core declarations first, then the
+    /// plugin-declared families). Order matters:
     /// [#owningEdition(EncodingId)] returns the first entry whose `added` set contains the
     /// queried id.
     public static final List<Edition> ALL = List.of(
             CORE_2025_05_0, CORE_2025_06_0, CORE_2025_10_0, CORE_2026_08_0, CORE_2026_08_1,
-            CORE_2026_08_2, CORE_2026_08_3, PREVIEW_2026_08_0);
+            CORE_2026_08_2, CORE_2026_08_3, PREVIEW_2026_08_0, ZSTD_2026_02_0);
 
     private Editions() {
     }

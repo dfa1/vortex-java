@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -26,13 +27,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// silently allows or refuses different encodings than Rust's writer.
 ///
 /// Parses the declaration sources for every edition id and its `EditionMember::array` members and
-/// compares them with the catalog edition by edition, in Rust's declaration order. Layout, dtype
-/// and aggregate members are ignored: the catalog models array encodings only.
+/// compares them with the catalog edition by edition, in Rust's declaration order: the core
+/// declarations first, then every plugin crate under `encodings/` that declares its own family in
+/// `src/editions.rs` (today only `vortex-zstd`'s `zstd`). Layout, dtype and aggregate members are
+/// ignored: the catalog models array encodings only.
 class EditionCatalogParityIntegrationTest {
 
     private static final String TAG = RustFixtures.VERSION.substring(1);
-    private static final String BASE =
-            "https://raw.githubusercontent.com/vortex-data/vortex/" + TAG + "/vortex-edition/src/declarations/";
+    private static final String RAW = "https://raw.githubusercontent.com/vortex-data/vortex/" + TAG + "/";
+    private static final String BASE = RAW + "vortex-edition/src/declarations/";
+    private static final URI ENCODINGS_LISTING =
+            URI.create("https://api.github.com/repos/vortex-data/vortex/contents/encodings?ref=" + TAG);
     private static final Path CACHE_DIR = Path.of("/tmp/vortex-edition-declarations", TAG);
 
     // `&core::v2026_08::DECLARATION_0,` in mod.rs's EDITION_DECLARATIONS list
@@ -45,12 +50,15 @@ class EditionCatalogParityIntegrationTest {
             "static (\\w+): EditionDeclaration = EditionDeclaration \\{(.*?)\\n};", Pattern.DOTALL);
     private static final Pattern DECLARATION_ID = Pattern.compile("id: (\\w+),");
     private static final Pattern ARRAY_MEMBER = Pattern.compile("EditionMember::array\\(&\"([^\"]+)\"\\)");
+    // a directory entry in the GitHub contents listing of `encodings/`
+    private static final Pattern LISTED_DIR = Pattern.compile("\"name\":\\s*\"([\\w-]+)\"[^}]*?\"type\":\\s*\"dir\"");
 
     @Test
     void catalogMatchesRustDeclarations(@TempDir Path tmp) throws Exception {
         // Given — Rust's declarations at the pinned release, as edition id -> array member ids
         LocalHttpCache.assumeNetworkAvailable(URI.create("https://raw.githubusercontent.com"));
         Map<String, Set<String>> rust = rustDeclarations(tmp);
+        rust.putAll(pluginDeclarations());
 
         // When
         Map<String, Set<String>> result = new LinkedHashMap<>();
@@ -79,15 +87,54 @@ class EditionCatalogParityIntegrationTest {
                 }
                 Matcher id = DECLARATION_ID.matcher(block.group(2));
                 assertThat(id.find()).as("edition id in %s", ref.group()).isTrue();
-                Set<String> members = new TreeSet<>();
-                Matcher member = ARRAY_MEMBER.matcher(block.group(2));
-                while (member.find()) {
-                    members.add(member.group(1));
-                }
-                editions.put(consts.get(id.group(1)), members);
+                editions.put(consts.get(id.group(1)), arrayMembers(block.group(2)));
             }
         }
         return editions;
+    }
+
+    /// Editions declared by plugin crates (`encodings/<crate>/src/editions.rs`), in crate order.
+    private static Map<String, Set<String>> pluginDeclarations() throws Exception {
+        Map<String, Set<String>> editions = new LinkedHashMap<>();
+        Matcher dir = LISTED_DIR.matcher(fetchOptional(ENCODINGS_LISTING)
+                .orElseThrow(() -> new IllegalStateException("cannot list " + ENCODINGS_LISTING)));
+        while (dir.find()) {
+            Optional<String> source = fetchOptional(URI.create(RAW + "encodings/" + dir.group(1) + "/src/editions.rs"));
+            if (source.isEmpty()) {
+                continue;
+            }
+            Map<String, String> consts = editionConstants(source.get());
+            Matcher block = DECLARATION_BLOCK.matcher(source.get());
+            while (block.find()) {
+                Matcher id = DECLARATION_ID.matcher(block.group(2));
+                assertThat(id.find()).as("edition id in encodings/%s", dir.group(1)).isTrue();
+                editions.put(consts.get(id.group(1)), arrayMembers(block.group(2)));
+            }
+        }
+        return editions;
+    }
+
+    private static Set<String> arrayMembers(String declaration) {
+        Set<String> members = new TreeSet<>();
+        Matcher member = ARRAY_MEMBER.matcher(declaration);
+        while (member.find()) {
+            members.add(member.group(1));
+        }
+        return members;
+    }
+
+    /// The body at `uri`, or empty on a 404: most `encodings/` crates declare no edition family.
+    private static Optional<String> fetchOptional(URI uri) throws Exception {
+        var conn = (java.net.HttpURLConnection) uri.toURL().openConnection();
+        int code = conn.getResponseCode();
+        if (code == 404) {
+            return Optional.empty();
+        }
+        org.junit.jupiter.api.Assumptions.assumeTrue(code < 500 && code != 403,
+                () -> "transient or rate-limited response " + code + " for " + uri);
+        try (var in = conn.getInputStream()) {
+            return Optional.of(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        }
     }
 
     /// Constant name -> the edition id's wire form (`core2026.08.1`), formatted like

@@ -69,7 +69,7 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | `LayoutId` | `sealed interface` — `WellKnown` enum + `Custom` record | Layout identity (separate namespace from encodings; `vortex.flat` is layout-only); both zoned aliases `vortex.zoned`/`vortex.stats` |
 | `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
 | `MemorySize` | `record MemorySize(long bytes)` | Validated non-negative byte count; `ofKiB`/`ofMiB`/`ofGiB` factories, `toGiB()` for display. Rejects negative values (`IllegalArgumentException`) — a programmer-error guard, not a `VortexException`-worthy untrusted-input check |
-| `EditionFamily` | `enum` — `CORE`, `PREVIEW` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
+| `EditionFamily` | `enum` — `CORE`, `PREVIEW`, `ZSTD` | Closed (unlike `EncodingId`/`LayoutId`): an edition family is a cross-implementation compatibility promise, so a custom family carries no real guarantee — see [Editions](#editions) |
 | `EditionId` | `record EditionId(EditionFamily family, YearMonth cutMonth, int version)` | e.g. `core2025.05.0`; `isAtOrBefore` orders editions within a family only |
 | `Edition` | `record Edition(EditionId id, Set<EncodingId> added)` | Only `Editions`'s catalog constants should be constructed (API contract, not compiler-enforced — see ADR 0023) |
 
@@ -342,12 +342,14 @@ targeted edition is ever persisted into a `.vortex` file.
 |--------------------------------------|------------------------------------------------------------------------------|
 | `CORE_2025_05_0` … `CORE_2026_08_3` | The frozen `core` editions (forever read-compatibility guarantee)           |
 | `PREVIEW_2026_08_0`                  | The `preview` family's draft edition: opt-in components not yet in `core` (empty today) |
+| `ZSTD_2026_02_0`                     | The `zstd` family's draft edition (`vortex.zstd_buffers`), declared by Rust's `vortex-zstd` plugin |
 | `ALL`                                | Every declared edition, in Rust's declaration order                          |
 | `cumulativeMembers(Edition)`         | The edition's own additions plus every earlier same-family edition's         |
 | `owningEdition(EncodingId)`          | The edition an id first joined, or empty if it belongs to none               |
 
-vortex-java implements every `core`-family encoding except `vortex.parquet.variant`, which resolves
-to `EncodingId.Custom` and is stored in the catalog anyway, mirroring upstream faithfully.
+vortex-java implements every `core`-family encoding except `vortex.parquet.variant`, and not `zstd`'s
+`vortex.zstd_buffers`; both resolve to `EncodingId.Custom` and are stored in the catalog anyway,
+mirroring upstream faithfully.
 `fastlanes.delta` and `vortex.patched` belong to no edition, as in Rust.
 
 ### Writer integration (`WriteOptions#editions()`)

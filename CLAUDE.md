@@ -267,7 +267,7 @@ When stuck on encode/decode behavior, consult **in this order**:
   `WriteOptions#editions()` gates which encodings a write may emit and is checked/enforced entirely
   at write time; nothing about a targeted edition is ever persisted into a `.vortex` file — the
   compatibility guarantee is always re-derivable from the encoding ids already in the footer plus
-  the shared `Editions` catalog. `EditionFamily` is a closed enum (`CORE`/`PREVIEW`, Rust's families), unlike
+  the shared `Editions` catalog. `EditionFamily` is a closed enum (`CORE`/`PREVIEW`/`ZSTD`, Rust's families), unlike
   `EncodingId`/`LayoutId`'s sealed-interface-plus-`Custom` shape: a private edition family would
   carry no real cross-implementation guarantee, so there is no legitimate use case for one.
 

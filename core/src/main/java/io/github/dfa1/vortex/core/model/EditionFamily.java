@@ -20,5 +20,9 @@ public enum EditionFamily {
     CORE,
     /// The `preview` family: additive, opt-in components maintained as part of Vortex but not yet
     /// adopted by the default `core` writer.
-    PREVIEW
+    PREVIEW,
+    /// The `zstd` family: optional Zstd-backed serialized array representations, declared by Rust's
+    /// `vortex-zstd` plugin rather than the core declarations. A reader built without that plugin
+    /// cannot resolve its members, so it is versioned independently and never enabled by default.
+    ZSTD
 }

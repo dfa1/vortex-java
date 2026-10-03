@@ -217,10 +217,13 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `core2026.08.2` | `core` | `vortex.map` |
 | `core2026.08.3` | `core` | `vortex.variant`, `vortex.parquet.variant` ❌ not implemented — **default write target** |
 | `preview2026.08.0` | `preview` | nothing yet |
+| `zstd2026.02.0` | `zstd` | `vortex.zstd_buffers` ❌ not implemented (buffer-level Zstd for GPU decode; declared by Rust's `vortex-zstd` plugin, opt-in) |
 
 Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.86.1);
 `EditionCatalogParityIntegrationTest` fails the build on drift. `core` editions are frozen with a
-forever read-compatibility guarantee; `preview` holds opt-in components not yet adopted by `core`.
+forever read-compatibility guarantee; `preview` holds opt-in components not yet adopted by `core`;
+`zstd` is declared by Rust's `vortex-zstd` plugin crate rather than the core declarations, and is
+never enabled by default.
 `fastlanes.delta` and `vortex.patched` are in no edition: as in Rust, only a write with the guard
 off (`WriteOptions.withoutEditions()`) may emit them. Rust editions also gate layouts, extension
 dtypes and zone-map aggregates; vortex-java's catalog models array encodings only. (Upstream

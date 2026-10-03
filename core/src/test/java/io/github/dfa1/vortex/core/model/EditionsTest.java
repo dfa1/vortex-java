@@ -166,6 +166,18 @@ class EditionsTest {
         }
 
         @Test
+        void owningEdition_zstdBuffers_isThePluginDeclaredZstdFamily() {
+            // Given — vortex.zstd_buffers joins Rust's zstd family, declared by the vortex-zstd
+            // plugin, not core (array-level vortex.zstd is core2025.06.0)
+            // When
+            Optional<Edition> result = Editions.owningEdition(new EncodingId.Custom("vortex.zstd_buffers"));
+
+            // Then
+            assertThat(result).contains(Editions.ZSTD_2026_02_0);
+            assertThat(result.get().id().family()).isEqualTo(EditionFamily.ZSTD);
+        }
+
+        @Test
         void owningEdition_encodingInNoEdition_returnsEmpty() {
             // Given — Rust declares fastlanes.delta and vortex.patched in no edition: only a write
             // with editions disabled may emit them
