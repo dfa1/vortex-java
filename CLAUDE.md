@@ -7,6 +7,13 @@ Guidance for Claude Code working in this repository.
 Java 25 native implementation of the [Vortex](https://github.com/vortex-data/vortex) columnar
 file format. Uses FFM (`MemorySegment`/`Arena`) — never JNI or `sun.misc.Unsafe`.
 
+**Prime directive: behavioral parity with the Rust reference.** What we write, what we accept on
+read, how the compressor picks and cascades encodings (schemes, children, exclusions), defaults and
+error cases all mirror Rust (look it up per [Reference implementation](#reference-implementation)).
+A size or speed win is never a reason to diverge; report it as information. A deliberate divergence
+needs an explicit decision, recorded where it applies (e.g. the stricter field-name rule in
+`docs/compatibility.md`).
+
 ### Naming convention (benchmarks & comparisons)
 
 One vocabulary across all artifacts (tables, identifiers, prose):
