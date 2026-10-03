@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.fbs.FbsBinary;
 import io.github.dfa1.vortex.core.fbs.FbsBool;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.fbs.FbsDecimal;
 import io.github.dfa1.vortex.core.fbs.FbsDType;
 import io.github.dfa1.vortex.core.fbs.FbsExtension;
 import io.github.dfa1.vortex.core.fbs.FbsFixedSizeList;
@@ -59,6 +60,10 @@ final class DTypeFbsSerializer {
             case DType.Primitive(var ptype, var nullable) -> {
                 int inner = FbsPrimitive.createFbsPrimitive(fbb, ptype.ordinal(), nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, inner);
+            }
+            case DType.Decimal(var precision, var scale, var nullable) -> {
+                int inner = FbsDecimal.createFbsDecimal(fbb, precision, scale, nullable);
+                yield FbsDType.createFbsDType(fbb, FbsType.FbsDecimal, inner);
             }
             case DType.Struct(var fieldNames, var fieldTypes, var nullable) -> {
                 // Build child DType tables first (FlatBuffers bottom-up requirement)

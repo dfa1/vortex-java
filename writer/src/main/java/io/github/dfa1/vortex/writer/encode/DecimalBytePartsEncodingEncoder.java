@@ -1,9 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import java.lang.foreign.MemorySegment;
+import java.math.BigDecimal;
 import io.github.dfa1.vortex.core.proto.ProtoDecimalBytePartsMetadata;
 
 
@@ -17,13 +19,19 @@ public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Decimal;
+        // zero low parts: the whole unscaled value lives in one i64, so precision 18 is the ceiling
+        return dtype instanceof DType.Decimal d && d.precision() <= 18;
     }
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         DType.Decimal d = (DType.Decimal) dtype;
-        long[] longs = (long[]) data;
+        long[] longs = switch (data) {
+            case long[] l -> l;
+            case BigDecimal[] values -> unscaledLongs(values);
+            default -> throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS,
+                    "expected BigDecimal[] or long[], got " + data.getClass().getSimpleName());
+        };
         DType mspDtype = new DType.Primitive(PType.I64, d.nullable());
         EncodeResult mspResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(mspDtype, longs, ctx);
 
@@ -40,5 +48,16 @@ public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
         // fold them in here rather than keep reporting the msp alone.
         return new EncodeResult(root, mspResult.encodedBuffers(), null, null)
                 .withStats(ZoneMapStats.ofDecimal(longs));
+    }
+
+    /// Unscaled values as longs; a `null` (masked-out row) becomes 0, never read.
+    private static long[] unscaledLongs(BigDecimal[] values) {
+        long[] out = new long[values.length];
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] != null) {
+                out[i] = values[i].unscaledValue().longValueExact();
+            }
+        }
+        return out;
     }
 }

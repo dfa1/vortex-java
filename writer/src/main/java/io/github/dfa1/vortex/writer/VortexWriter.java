@@ -34,6 +34,8 @@ import io.github.dfa1.vortex.writer.encode.DateTimePartsEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.DecimalBytePartsEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DecimalEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
@@ -105,7 +107,7 @@ public final class VortexWriter implements Closeable {
     private static final List<EncodingEncoder> DEFAULT_CODECS = List.of(
             new AlpEncodingEncoder(), new PrimitiveEncodingEncoder(), new BoolEncodingEncoder(),
             new DictEncodingEncoder(), new VarBinEncodingEncoder(), new ExtEncodingEncoder(),
-            new FixedSizeListEncodingEncoder(), new ListEncodingEncoder());
+            new FixedSizeListEncodingEncoder(), new ListEncodingEncoder(), new DecimalEncodingEncoder());
 
     // Base cascade codec list — no Zstd. Zstd is appended (before PrimitiveEncoding) when
     // WriteOptions.enableZstd() is true. See WriteOptions.withZstd(boolean) for the tradeoff.
@@ -270,6 +272,10 @@ public final class VortexWriter implements Closeable {
         codecs.add(new SparseEncodingEncoder());
         codecs.add(new DictEncodingEncoder());
         codecs.add(new BitpackedEncodingEncoder());
+        // Decimals: byte-parts (precision <= 18) cascades its i64 mantissa through FoR/bit-packing;
+        // plain vortex.decimal covers every width. The competition keeps the smaller.
+        codecs.add(new DecimalBytePartsEncodingEncoder());
+        codecs.add(new DecimalEncodingEncoder());
         // FsstEncodingEncoder sits between Dict and VarBin. Utf8 goes through
         // CascadingCompressor's sample-and-measure competition (like Primitive dtypes),
         // not first-match dispatch, so Dict/FSST/VarBin genuinely compete on measured
@@ -360,6 +366,7 @@ public final class VortexWriter implements Closeable {
             case double[] a -> a.length;
             case boolean[] a -> a.length;
             case String[] a -> a.length;
+            case java.math.BigDecimal[] a -> a.length;
             case byte[][] a -> a.length;
             // A struct column's row count is its fields' row count (all fields share length,
             // enforced by StructEncodingEncoder); an empty struct carries no rows.
@@ -422,6 +429,8 @@ public final class VortexWriter implements Closeable {
     /// A nullable column may be supplied as a boxed array (`Long[]`, `Integer[]`, `Double[]`,
     /// `Boolean[]`, …) with `null` marking absent rows; it routes through `MaskedEncoding` just like
     /// the builder form. Non-nullable columns take the raw primitive array (`long[]`, `int[]`, …).
+    /// Decimal columns take `BigDecimal[]` (nulls allowed when nullable), each rescaled exactly to
+    /// the column scale; a value that would round or overflow the precision is rejected.
     ///
     /// @param columns map from [ColumnName] to typed array data
     /// @throws IOException              if an I/O error occurs writing to the underlying channel

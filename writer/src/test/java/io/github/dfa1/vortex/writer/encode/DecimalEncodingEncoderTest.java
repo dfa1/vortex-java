@@ -102,4 +102,41 @@ class DecimalEncodingEncoderTest {
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("not multiple of byteWidth");
     }
+
+    /// `pack` lays unscaled values out little-endian two's complement at the storage width Rust
+    /// derives from the precision; a wrong sign extension or byte order would read back as a
+    /// different value in every reader. `null` (a masked-out row) packs as zero.
+    @ParameterizedTest(name = "width {0}")
+    @org.junit.jupiter.params.provider.ValueSource(ints = {1, 2, 4, 8, 16, 32})
+    void pack_roundTripsSignedValuesAtEveryWidth(int width) {
+        // Given — the extremes a width can hold for its precision, a negative, zero and a null
+        java.math.BigInteger max = java.math.BigInteger.ONE.shiftLeft(8 * width - 1).subtract(java.math.BigInteger.ONE);
+        java.math.BigDecimal[] values = {
+                new java.math.BigDecimal(max), new java.math.BigDecimal(max.negate()),
+                new java.math.BigDecimal(-1), java.math.BigDecimal.ZERO, null};
+
+        // When
+        MemorySegment result = DecimalEncodingEncoder.pack(values, width, Arena.ofAuto());
+
+        // Then
+        assertThat(result.byteSize()).isEqualTo((long) values.length * width);
+        for (int i = 0; i < values.length; i++) {
+            byte[] be = new byte[width];
+            for (int b = 0; b < width; b++) {
+                be[width - 1 - b] = result.get(java.lang.foreign.ValueLayout.JAVA_BYTE, (long) i * width + b);
+            }
+            java.math.BigInteger expected = values[i] == null ? java.math.BigInteger.ZERO : values[i].unscaledValue();
+            assertThat(new java.math.BigInteger(be)).as("row %d", i).isEqualTo(expected);
+        }
+    }
+
+    @ParameterizedTest(name = "precision {0} -> {1} bytes")
+    @CsvSource({"1, 1", "2, 1", "3, 2", "4, 2", "5, 4", "9, 4", "10, 8", "18, 8", "19, 16", "38, 16", "39, 32", "76, 32"})
+    void storageWidth_matchesRustPrecisionBoundaries(int precision, int expectedBytes) {
+        // When
+        int result = DecimalEncodingEncoder.storageWidth((byte) precision);
+
+        // Then
+        assertThat(result).isEqualTo(expectedBytes);
+    }
 }

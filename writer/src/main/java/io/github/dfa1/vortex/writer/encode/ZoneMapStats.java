@@ -4,8 +4,12 @@ import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.Objects;
 
 /// Computes the `{min, max}` zone-map bounds for whatever shape an encoder was handed.
 ///
@@ -39,6 +43,9 @@ final class ZoneMapStats {
                 return PrimitiveEncodingEncoder.minMaxStats(p.ptype(),
                         PrimitiveArrays.compact(p.ptype(), values, validity));
             }
+            if (nonNullable instanceof DType.Decimal d && values instanceof BigDecimal[] decimals) {
+                return ofDecimal(d, decimals);
+            }
             // A String[] carries a real null at its invalid positions, so the lexicographic
             // null-skip is already correct and needs no compaction.
             return values instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
@@ -51,6 +58,18 @@ final class ZoneMapStats {
             return PrimitiveEncodingEncoder.minMaxStats(p.ptype(), data);
         }
         return null;
+    }
+
+    /// Bounds over the non-null `values` of a decimal column (a `null` is a masked-out row),
+    /// packed at the column's storage width like the dense path.
+    ///
+    /// @param dtype  the decimal dtype (precision picks the width)
+    /// @param values the decimals, `null` at masked-out rows
+    /// @return a two-element `{min, max}` array of encoded scalars, or `null` when none is valid
+    static byte[][] ofDecimal(DType.Decimal dtype, BigDecimal[] values) {
+        BigDecimal[] valid = Arrays.stream(values).filter(Objects::nonNull).toArray(BigDecimal[]::new);
+        int width = DecimalEncodingEncoder.storageWidth(dtype.precision());
+        return ofDecimal(DecimalEncodingEncoder.pack(valid, width, Arena.ofAuto()), width);
     }
 
     /// Bounds for a decimal column whose values are packed little-endian at a fixed width.
