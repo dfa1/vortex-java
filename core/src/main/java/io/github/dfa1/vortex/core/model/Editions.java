@@ -23,10 +23,10 @@ import java.util.Set;
 /// zone-map aggregates) has no members here. Encodings in no edition at all — `fastlanes.delta`,
 /// `vortex.patched` — are writable only with the guard turned off, as in Rust.
 ///
-/// vortex-java implements every `core`-family encoding except `vortex.parquet.variant`, and not
-/// `zstd`'s `vortex.zstd_buffers`; both have no [EncodingId.WellKnown] constant yet and are named
-/// as [EncodingId.Custom] instead: the
-/// catalog mirrors upstream faithfully rather than being truncated to what is implemented today.
+/// vortex-java implements every `core`-family encoding (`vortex.parquet.variant` read only), but not
+/// `zstd`'s `vortex.zstd_buffers`, which has no [EncodingId.WellKnown] constant yet and is named as
+/// an [EncodingId.Custom] instead: the catalog mirrors upstream faithfully rather than being
+/// truncated to what is implemented today.
 public final class Editions {
 
     /// The baseline `core` edition: stable encodings writable by Vortex (Rust reference) 0.36.0.
@@ -75,7 +75,7 @@ public final class Editions {
     /// `core` edition, and the one the default writer targets, as in Rust.
     public static final Edition CORE_2026_08_3 = new Edition(
             new EditionId(EditionFamily.CORE, YearMonth.of(2026, 8), 3),
-            Set.of(new EncodingId.Custom("vortex.parquet.variant"), EncodingId.VORTEX_VARIANT));
+            Set.of(EncodingId.VORTEX_PARQUET_VARIANT, EncodingId.VORTEX_VARIANT));
 
     /// The August 2026 draft edition of the `preview` family. Empty in Rust too: no component has
     /// entered preview yet.

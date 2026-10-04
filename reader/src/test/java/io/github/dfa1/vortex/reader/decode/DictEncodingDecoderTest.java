@@ -161,6 +161,19 @@ class DictEncodingDecoderTest {
         }
 
         @Test
+        void nonPrimitiveNonVarBinDtype_throwsVortexException() {
+            // Given — a dtype with no dict carrier must fail as a VortexException, not a raw
+            // ClassCastException from a (DType.Primitive) cast
+            MemorySegment codes = u8Codes(0, 1);
+            MemorySegment values = TestSegments.leInts(1, 2);
+
+            // When / Then
+            assertThatThrownBy(() -> decodeProtoSegments(DType.BOOL, PType.U8, codes, values, 2, 2))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("unsupported dict dtype");
+        }
+
+        @Test
         void unsupportedValuePType_throws() {
             // Given — F16 expands fine (2 bytes) but typedArray has no F16 mapping
             MemorySegment codes = u8Codes(0, 1);
@@ -315,8 +328,12 @@ class DictEncodingDecoderTest {
             assertThat(result.getString(2)).isEqualTo("cde");
         }
 
-        @Test
-        void protoLayout_decodesStringsByCode() {
+        /// Binary shares the Utf8 dictionary shape; it used to fall into the primitive path and
+        /// leak a ClassCastException (Rust dict-encodes the `value` child of
+        /// `vortex.parquet.variant` as a Binary dictionary, #445).
+        @ParameterizedTest
+        @MethodSource("io.github.dfa1.vortex.reader.decode.DictEncodingDecoderTest#varBinDtypes")
+        void protoLayout_decodesStringsByCode(DType dtype) {
             // Given — children present: child[0]=codes, child[1]=varbin dictionary values
             byte[] dictBytes = "fizzbuzz".getBytes(StandardCharsets.UTF_8); // "fizz","buzz"
             MemorySegment bytes = MemorySegment.ofArray(dictBytes);
@@ -335,7 +352,7 @@ class DictEncodingDecoderTest {
             ArrayNode dictNode = new ArrayNode(EncodingId.VORTEX_DICT, dictMeta,
                     new ArrayNode[]{codesNode, valuesNode}, new int[]{});
 
-            DecodeContext ctx = new DecodeContext(dictNode, DType.UTF8, 3,
+            DecodeContext ctx = new DecodeContext(dictNode, dtype, 3,
                     segs, REGISTRY, Arena.ofAuto());
 
             // When
@@ -983,5 +1000,9 @@ class DictEncodingDecoderTest {
             };
             assertThat(actual).as("index %d", i).isEqualTo(expected[i]);
         }
+    }
+
+    static Stream<DType> varBinDtypes() {
+        return Stream.of(DType.UTF8, DType.BINARY);
     }
 }

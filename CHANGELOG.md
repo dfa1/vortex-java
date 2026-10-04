@@ -13,7 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `fastlanes.delta` and `vortex.patched` belong to no edition, as in Rust: emit them with the new `WriteOptions.withoutEditions()`, the counterpart of Rust's `disable_editions()` ([#441](https://github.com/dfa1/vortex-java/issues/441)).
 - Nullable low-cardinality string columns dict-encoded per chunk store null as a dictionary entry, as Rust does, instead of adding a row validity bitmap: about 20% smaller, now slightly below vortex-jni ([2091beb](https://github.com/dfa1/vortex-java/commit/2091beb3)).
 
+### Added
+- Read `vortex.parquet.variant`, the encoding vortex-jni's default writer uses for Arrow `arrow.parquet.variant` columns: each row's Apache Variant `metadata`/`value` binaries come back as a struct ([#445](https://github.com/dfa1/vortex-java/issues/445)).
+
 ### Fixed
+- Dictionary-encoded Binary columns (e.g. the `value` child of `vortex.parquet.variant`) failed to read with a `ClassCastException` ([#445](https://github.com/dfa1/vortex-java/issues/445)).
 - Null rows of Rust-written `vortex.list` columns read as empty lists: the decoder ignored the list's validity child.
 - CSV export (`CsvExporter`, `vortex export`) failed on list-view columns with `unsupported array type for CSV export: ListViewArray`.
 - `vortex inspect --html` grouped the Chunks panel by chunk index, so files whose columns chunk differently (e.g. Rust's `tpch_orders.compact`) showed overlapping row ranges and mixed sizes; the panel now lists one entry per distinct row range.

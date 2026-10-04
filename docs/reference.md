@@ -347,9 +347,9 @@ targeted edition is ever persisted into a `.vortex` file.
 | `cumulativeMembers(Edition)`         | The edition's own additions plus every earlier same-family edition's         |
 | `owningEdition(EncodingId)`          | The edition an id first joined, or empty if it belongs to none               |
 
-vortex-java implements every `core`-family encoding except `vortex.parquet.variant`, and not `zstd`'s
-`vortex.zstd_buffers`; both resolve to `EncodingId.Custom` and are stored in the catalog anyway,
-mirroring upstream faithfully.
+vortex-java implements every `core`-family encoding (`vortex.parquet.variant` read only), but not
+`zstd`'s `vortex.zstd_buffers`, which resolves to `EncodingId.Custom` and is stored in the catalog
+anyway, mirroring upstream faithfully.
 `fastlanes.delta` and `vortex.patched` belong to no edition, as in Rust.
 
 ### Writer integration (`WriteOptions#editions()`)

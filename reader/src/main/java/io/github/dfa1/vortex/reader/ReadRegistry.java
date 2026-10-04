@@ -31,6 +31,7 @@ import io.github.dfa1.vortex.reader.decode.MapEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.MaskedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.NullEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.OnPairEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ParquetVariantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PatchedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PcoEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -231,6 +232,7 @@ public final class ReadRegistry {
                     .register(new MaskedEncodingDecoder())
                     .register(new NullEncodingDecoder())
                     .register(new OnPairEncodingDecoder())
+                    .register(new ParquetVariantEncodingDecoder())
                     .register(new PatchedEncodingDecoder())
                     .register(new PcoEncodingDecoder())
                     .register(new PrimitiveEncodingDecoder())
