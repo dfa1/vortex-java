@@ -15,6 +15,7 @@ import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
 import io.github.dfa1.zstd.ZstdDecompressContext;
 import io.github.dfa1.zstd.ZstdDecompressDictionary;
+import io.github.dfa1.zstd.ZstdException;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -26,7 +27,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     // The io.github.dfa1.zstd binding is an OPTIONAL dependency: probe once so a reader
     // touching vortex.zstd without it gets an actionable message instead of a raw
     // NoClassDefFoundError surfacing from the first binding call.
-    private static final boolean ZSTD_BINDING_PRESENT =
+    static final boolean ZSTD_BINDING_PRESENT =
             bindingPresent("io.github.dfa1.zstd.ZstdDecompressContext");
 
     /// Reports whether the named binding class is loadable — package-private and
@@ -46,11 +47,12 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
     /// Fails with an actionable [VortexException] when the optional zstd binding is absent.
     ///
-    /// @param present whether the binding is on the classpath
+    /// @param present  whether the binding is on the classpath
+    /// @param encoding the Zstd-backed encoding the file uses
     /// @throws VortexException naming the two artifacts to add, if `present` is `false`
-    static void requireBinding(boolean present) {
+    static void requireBinding(boolean present, EncodingId encoding) {
         if (!present) {
-            throw new VortexException(EncodingId.VORTEX_ZSTD, "this file uses vortex.zstd, but the "
+            throw new VortexException(encoding, "this file uses " + encoding.id() + ", but the "
                     + "optional zstd binding is not on the classpath — add io.github.dfa1.zstd:zstd "
                     + "and io.github.dfa1.zstd:zstd-platform (versions pinned by the vortex BOM)");
         }
@@ -63,7 +65,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        requireBinding(ZSTD_BINDING_PRESENT);
+        requireBinding(ZSTD_BINDING_PRESENT, EncodingId.VORTEX_ZSTD);
         MemorySegment rawMeta = ctx.metadata();
         if (rawMeta == null) {
             throw new VortexException(EncodingId.VORTEX_ZSTD, "missing metadata");
@@ -203,13 +205,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
                     MemorySegment src = asNative(ctx.buffer(frameBufferBase + i), scratch);
                     int uncompSize = IoBounds.toIntSize(meta.frames().get(i).uncompressed_size());
                     MemorySegment dst = out.asSlice(outOffset, uncompSize);
-                    long written = dictionary == null
-                            ? dctx.decompress(dst, src)
-                            : dctx.decompress(dst, src, dictionary);
-                    if (written != uncompSize) {
-                        throw new VortexException(EncodingId.VORTEX_ZSTD,
-                                "frame " + i + ": expected " + uncompSize + " bytes, got " + written);
-                    }
+                    decompressFrame(dctx, dst, src, dictionary, EncodingId.VORTEX_ZSTD, i);
                     outOffset += uncompSize;
                 }
             } finally {
@@ -242,7 +238,31 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
     /// Returns `seg` unchanged when it is already native (the production mmap path); otherwise
     /// copies it into `scratch` so the zero-copy native API can read it.
-    private static MemorySegment asNative(MemorySegment seg, Arena scratch) {
+    /// Decompresses one Zstd frame into exactly `dst`. A corrupt frame, or one whose content does
+    /// not fill `dst` exactly, throws [VortexException]: the binding reports frame errors as its
+    /// own unchecked `ZstdException`, which must not escape the reader (ADR 0003).
+    ///
+    /// @param dctx       decompression context
+    /// @param dst        output slice, sized to the frame's declared uncompressed size
+    /// @param src        the compressed frame, native
+    /// @param dictionary shared dictionary, or `null`
+    /// @param encoding   the encoding being decoded, for error attribution
+    /// @param frame      frame index, for the error message
+    static void decompressFrame(ZstdDecompressContext dctx, MemorySegment dst, MemorySegment src,
+            ZstdDecompressDictionary dictionary, EncodingId encoding, int frame) {
+        long written;
+        try {
+            written = dictionary == null ? dctx.decompress(dst, src) : dctx.decompress(dst, src, dictionary);
+        } catch (ZstdException e) {
+            throw new VortexException(encoding, "frame " + frame + ": " + e.getMessage(), e);
+        }
+        if (written != dst.byteSize()) {
+            throw new VortexException(encoding,
+                    "frame " + frame + ": expected " + dst.byteSize() + " bytes, got " + written);
+        }
+    }
+
+    static MemorySegment asNative(MemorySegment seg, Arena scratch) {
         if (seg.isNative()) {
             return seg;
         }

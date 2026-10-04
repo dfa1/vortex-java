@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +38,7 @@ class ZstdBindingGuardTest {
     @Test
     void requireBinding_absent_throwsActionableVortexException() {
         // Given / When / Then — the message names the two artifacts a consumer must add
-        assertThatThrownBy(() -> ZstdEncodingDecoder.requireBinding(false))
+        assertThatThrownBy(() -> ZstdEncodingDecoder.requireBinding(false, EncodingId.VORTEX_ZSTD))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("io.github.dfa1.zstd:zstd")
                 .hasMessageContaining("zstd-platform");
@@ -46,6 +47,6 @@ class ZstdBindingGuardTest {
     @Test
     void requireBinding_present_doesNotThrow() {
         // Given / When / Then
-        assertThatCode(() -> ZstdEncodingDecoder.requireBinding(true)).doesNotThrowAnyException();
+        assertThatCode(() -> ZstdEncodingDecoder.requireBinding(true, EncodingId.VORTEX_ZSTD)).doesNotThrowAnyException();
     }
 }

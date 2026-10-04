@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import org.junit.jupiter.api.Nested;
@@ -53,6 +54,47 @@ class VarBinEncodingDecoderTest {
         assertThat(arr.getBytes(0)).containsExactly('a');
         assertThat(arr.getBytes(1)).containsExactly('b');
         assertThat(arr.getBytes(2)).containsExactly('c');
+    }
+
+    /// Children are `[offsets, validity?]` (Rust's VarBin deserialize). The decoder used to ignore
+    /// the validity child, so every null row of a Rust-written nullable varbin read back as an
+    /// empty value (#444 surfaced it through `vortex.zstd_buffers`).
+    @Test
+    void decode_validityChild_masksNullRows() {
+        // Given "a", null, "c": validity bits 0b101
+        ArrayNode offsetsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{2});
+        ArrayNode varbinNode = new ArrayNode(EncodingId.VORTEX_VARBIN, i32OffsetsMeta(),
+                new ArrayNode[]{offsetsNode, validityNode}, new int[]{0});
+        MemorySegment[] segments = {MemorySegment.ofArray("ac".getBytes(StandardCharsets.UTF_8)),
+                TestSegments.leInts(0, 1, 1, 2), MemorySegment.ofArray(new byte[]{0b101})};
+        DecodeContext ctx = new DecodeContext(varbinNode, new DType.Utf8(true), 3, segments,
+                TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder()), Arena.ofAuto());
+
+        // When
+        Array result = SUT.decode(ctx);
+
+        // Then
+        MaskedArray masked = (MaskedArray) result;
+        assertThat(masked.isValid(0)).isTrue();
+        assertThat(masked.isValid(1)).isFalse();
+        assertThat(((VarBinArray) masked.inner()).getString(2)).isEqualTo("c");
+    }
+
+    @Test
+    void decode_threeChildren_throws() {
+        // Given — Rust accepts only [offsets] or [offsets, validity]
+        ArrayNode offsetsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode varbinNode = new ArrayNode(EncodingId.VORTEX_VARBIN, i32OffsetsMeta(),
+                new ArrayNode[]{offsetsNode, offsetsNode, offsetsNode}, new int[]{0});
+        DecodeContext ctx = new DecodeContext(varbinNode, DType.UTF8, 1,
+                new MemorySegment[]{MemorySegment.ofArray(new byte[]{'a'}), TestSegments.leInts(0, 1)},
+                REGISTRY, Arena.ofAuto());
+
+        // When / Then
+        assertThatThrownBy(() -> SUT.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("expected 1 or 2 children, got 3");
     }
 
     /// Adversarial offsets from an untrusted file (TODO.md §Security, per-encoding
