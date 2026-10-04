@@ -96,7 +96,7 @@ class EditionsTest {
                     EncodingId.FASTLANES_RLE, EncodingId.VORTEX_FIXED_SIZE_LIST,
                     EncodingId.VORTEX_LISTVIEW, EncodingId.VORTEX_MASKED,
                     EncodingId.VORTEX_ONPAIR, EncodingId.VORTEX_MAP,
-                    EncodingId.VORTEX_VARIANT, new EncodingId.Custom("vortex.parquet.variant")));
+                    EncodingId.VORTEX_VARIANT, EncodingId.VORTEX_PARQUET_VARIANT));
         }
 
         @Test

@@ -148,6 +148,12 @@ message VariantMetadata {
   optional vortex.dtype.DType shredded_dtype = 1;
 }
 
+message ParquetVariantMetadata {
+  bool has_value = 1;
+  optional vortex.dtype.DType typed_value_dtype = 2;
+  bool value_nullable = 3;
+}
+
 message OnPairMetadata {
   vortex.dtype.PType uncompressed_lengths_ptype = 1;
   uint32 dict_size = 3;

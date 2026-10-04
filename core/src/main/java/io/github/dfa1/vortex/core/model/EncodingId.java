@@ -112,6 +112,9 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
         VORTEX_PATCHED("vortex.patched"),
         /// Variant logical encoding: canonical container over `core_storage` plus an optional shredded child.
         VORTEX_VARIANT("vortex.variant"),
+        /// Parquet Variant physical encoding (`vortex.parquet.variant`): per-row Apache Variant binary
+        /// `metadata` and `value` children, plus an optional shredded `typed_value` child.
+        VORTEX_PARQUET_VARIANT("vortex.parquet.variant"),
         ;
 
         // O(1) access to a WellKnown constant by its string representation
@@ -253,4 +256,6 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
     WellKnown VORTEX_PATCHED = WellKnown.VORTEX_PATCHED;
     /// Well-known `vortex.variant` id.
     WellKnown VORTEX_VARIANT = WellKnown.VORTEX_VARIANT;
+    /// Well-known `vortex.parquet.variant` id.
+    WellKnown VORTEX_PARQUET_VARIANT = WellKnown.VORTEX_PARQUET_VARIANT;
 }

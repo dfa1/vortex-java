@@ -53,7 +53,9 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     public Array decode(DecodeContext ctx) {
         MemorySegment meta = ctx.metadata();
 
-        if (ctx.dtype() instanceof DType.Utf8) {
+        // Binary dictionaries share the Utf8 shape (VarBin values + codes); Rust dict-encodes
+        // e.g. the `value` child of `vortex.parquet.variant` this way.
+        if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
             if (ctx.node().children().length == 0) {
                 if (meta == null || meta.byteSize() == 0) {
                     throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata for legacy utf8 dict");
@@ -78,7 +80,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
 
     private static Array decodeLegacyJava(DecodeContext ctx, byte codeTypeByte) {
         PType codePType = PType.fromOrdinal(Byte.toUnsignedInt(codeTypeByte));
-        PType valPType = ((DType.Primitive) ctx.dtype()).ptype();
+        PType valPType = valuePType(ctx.dtype());
         long rowCount = ctx.rowCount();
         requireUnsignedCodePType(codePType);
 
@@ -108,7 +110,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         PType codePType = PType.fromOrdinal(meta.codes_ptype().value());
         long valuesLen = meta.values_len();
         long rowCount = ctx.rowCount();
-        PType valPType = ((DType.Primitive) ctx.dtype()).ptype();
+        PType valPType = valuePType(ctx.dtype());
         requireUnsignedCodePType(codePType);
 
         // Row validity mirrors the Rust reference: a DictArray row is null when its CODE
@@ -149,6 +151,13 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     /// @param values   dictionary pool, already mask-unwrapped
     /// @param codes    per-row codes, already mask-unwrapped
     /// @return the lazy dict array
+    private static PType valuePType(DType dtype) {
+        if (!(dtype instanceof DType.Primitive p)) {
+            throw new VortexException(EncodingId.VORTEX_DICT, "unsupported dict dtype: " + dtype);
+        }
+        return p.ptype();
+    }
+
     private static Array buildLazyDict(DType dtype, PType valPType, long n, Array values, Array codes) {
         try {
             return switch (valPType) {
