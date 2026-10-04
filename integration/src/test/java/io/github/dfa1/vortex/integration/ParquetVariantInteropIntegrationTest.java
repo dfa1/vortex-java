@@ -222,14 +222,16 @@ class ParquetVariantInteropIntegrationTest {
             while (iter.hasNext()) {
                 VariantArray column = iter.next().column("v");
                 StructArray struct = (StructArray) column.coreStorage();
-                VarBinArray value = (VarBinArray) struct.field(1);
+                MaskedArray value = (MaskedArray) struct.field(1);
                 MaskedArray typed = (MaskedArray) column.shredded();
                 for (long i = 0; i < struct.length(); i++) {
                     int row = rows.size();
+                    // Exactly one of value / typed_value holds each row; the other is null.
+                    assertThat(value.isValid(i)).as("value validity, row %d", row).isNotEqualTo(typed.isValid(i));
                     if (typed.isValid(i)) {
                         rows.add("typed:" + ((IntArray) typed.inner()).getInt(i));
                     } else {
-                        assertThat(value.getBytes(i)).isEqualTo(int8OrString(row));
+                        assertThat(((VarBinArray) value.inner()).getBytes(i)).isEqualTo(int8OrString(row));
                         rows.add("value:" + row);
                     }
                 }

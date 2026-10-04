@@ -23,10 +23,8 @@ import java.util.Set;
 /// zone-map aggregates) has no members here. Encodings in no edition at all — `fastlanes.delta`,
 /// `vortex.patched` — are writable only with the guard turned off, as in Rust.
 ///
-/// vortex-java implements every `core`-family encoding (`vortex.parquet.variant` read only), but not
-/// `zstd`'s `vortex.zstd_buffers`, which has no [EncodingId.WellKnown] constant yet and is named as
-/// an [EncodingId.Custom] instead: the catalog mirrors upstream faithfully rather than being
-/// truncated to what is implemented today.
+/// vortex-java implements every encoding in the catalog; `vortex.parquet.variant` and
+/// `vortex.zstd_buffers` are read only.
 public final class Editions {
 
     /// The baseline `core` edition: stable encodings writable by Vortex (Rust reference) 0.36.0.
@@ -85,10 +83,10 @@ public final class Editions {
 
     /// The February 2026 draft edition of the `zstd` family, declared by Rust's `vortex-zstd` plugin:
     /// buffer-level Zstd that keeps an array's buffer layout for GPU decompression. vortex-java
-    /// does not implement `vortex.zstd_buffers` yet, hence the [EncodingId.Custom].
+    /// reads `vortex.zstd_buffers` but does not write it.
     public static final Edition ZSTD_2026_02_0 = new Edition(
             new EditionId(EditionFamily.ZSTD, YearMonth.of(2026, 2), 0),
-            Set.of(new EncodingId.Custom("vortex.zstd_buffers")));
+            Set.of(EncodingId.VORTEX_ZSTD_BUFFERS));
 
     /// Every declared edition, in Rust's declaration order (core declarations first, then the
     /// plugin-declared families). Order matters:

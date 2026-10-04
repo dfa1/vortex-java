@@ -44,6 +44,7 @@ import io.github.dfa1.vortex.reader.decode.VarBinEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.VarBinViewEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.VariantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ZstdBuffersEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ZstdEncodingDecoder;
 
 import java.lang.foreign.MemorySegment;
@@ -245,6 +246,7 @@ public final class ReadRegistry {
                     .register(new VariantEncodingDecoder())
                     .register(new VarBinViewEncodingDecoder())
                     .register(new ZigZagEncodingDecoder())
+                    .register(new ZstdBuffersEncodingDecoder())
                     .register(new ZstdEncodingDecoder());
         }
 

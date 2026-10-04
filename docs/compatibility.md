@@ -123,6 +123,7 @@ decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nul
 | `vortex.patched`            | `PatchedEncodingDecoder`         | `PatchedEncodingEncoder`         | ✅      | ✅      | Primitive PTypes; base + chunked patches (1024-elem blocks)            |
 | `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ✅      | Canonical container; constant / chunked-of-constants core + optional shredded child. Typed-scalar values only — nested objects need `parquet.variant` (ADR 0014) |
 | `vortex.parquet.variant`    | `ParquetVariantEncodingDecoder`  | —                                | ✅      | ❌      | Read only: decodes to a struct `{metadata, value?, typed_value?}` of Apache Variant binaries (Arrow's `arrow.parquet.variant` storage shape), masked by row validity. Writing is not implemented; Java writes typed-scalar variants through `vortex.variant` (ADR 0014) |
+| `vortex.zstd_buffers`       | `ZstdBuffersEncodingDecoder`     | —                                | ✅      | ❌      | Read only (`zstd2026.02.0`, opt-in in Rust): each buffer of any wrapped encoding is Zstd-decompressed at its declared alignment, then the inner encoding decodes with its own children. Needs the optional zstd binding, like `vortex.zstd`. Interop-tested against a Rust-written fixture (`scripts/fixtures/zstd-buffers`) |
 | `vortex.onpair`             | `OnPairEncodingDecoder`          | `OnPairEncodingEncoder`          | ✅      | ✅      | Utf8, Binary; `core2026.08.1`, a cascade candidate under the default edition (competes with FSST, as in Rust) |
 
 ### Decode shape
@@ -218,7 +219,7 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `core2026.08.2` | `core` | `vortex.map` |
 | `core2026.08.3` | `core` | `vortex.variant`, `vortex.parquet.variant` (read only) — **default write target** |
 | `preview2026.08.0` | `preview` | nothing yet |
-| `zstd2026.02.0` | `zstd` | `vortex.zstd_buffers` ❌ not implemented (buffer-level Zstd for GPU decode; declared by Rust's `vortex-zstd` plugin, opt-in) |
+| `zstd2026.02.0` | `zstd` | `vortex.zstd_buffers` (read only; buffer-level Zstd for GPU decode; declared by Rust's `vortex-zstd` plugin, opt-in) |
 
 Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.86.1);
 `EditionCatalogParityIntegrationTest` fails the build on drift. `core` editions are frozen with a

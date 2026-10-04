@@ -170,7 +170,7 @@ class EditionsTest {
             // Given — vortex.zstd_buffers joins Rust's zstd family, declared by the vortex-zstd
             // plugin, not core (array-level vortex.zstd is core2025.06.0)
             // When
-            Optional<Edition> result = Editions.owningEdition(new EncodingId.Custom("vortex.zstd_buffers"));
+            Optional<Edition> result = Editions.owningEdition(EncodingId.VORTEX_ZSTD_BUFFERS);
 
             // Then
             assertThat(result).contains(Editions.ZSTD_2026_02_0);

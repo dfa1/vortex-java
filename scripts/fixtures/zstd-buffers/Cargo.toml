@@ -1,0 +1,11 @@
+# Writes the vortex.zstd_buffers interop fixture (#444): vortex-jni cannot emit it (the zstd
+# edition family is opt-in and the JNI writer exposes no compressor options).
+[package]
+name = "zstd-buffers-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+vortex = { version = "=0.86.1", features = ["tokio", "zstd"] }
+tokio = { version = "1", features = ["full"] }

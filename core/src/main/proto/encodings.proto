@@ -148,6 +148,15 @@ message VariantMetadata {
   optional vortex.dtype.DType shredded_dtype = 1;
 }
 
+message ZstdBuffersMetadata {
+  string inner_encoding_id = 1;
+  bytes inner_metadata = 2;
+  repeated uint64 uncompressed_sizes = 3;
+  repeated uint32 buffer_alignments = 4;
+  repeated vortex.dtype.DType child_dtypes = 5;
+  repeated uint64 child_lens = 6;
+}
+
 message ParquetVariantMetadata {
   bool has_value = 1;
   optional vortex.dtype.DType typed_value_dtype = 2;

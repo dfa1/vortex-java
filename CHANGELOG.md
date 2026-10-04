@@ -15,8 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Read `vortex.parquet.variant`, the encoding vortex-jni's default writer uses for Arrow `arrow.parquet.variant` columns: each row's Apache Variant `metadata`/`value` binaries come back as a struct ([#445](https://github.com/dfa1/vortex-java/issues/445)).
+- Read `vortex.zstd_buffers`, Rust's opt-in buffer-level Zstd encoding (`zstd2026.02.0`) ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 
 ### Fixed
+- Null rows of Rust-written `vortex.varbin` columns read as empty values: the decoder ignored the validity child ([#444](https://github.com/dfa1/vortex-java/issues/444)).
+- A corrupt `vortex.zstd` frame surfaced as the zstd binding's `ZstdException` instead of `VortexException` ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 - Dictionary-encoded Binary columns (e.g. the `value` child of `vortex.parquet.variant`) failed to read with a `ClassCastException` ([#445](https://github.com/dfa1/vortex-java/issues/445)).
 - Null rows of Rust-written `vortex.list` columns read as empty lists: the decoder ignored the list's validity child.
 - CSV export (`CsvExporter`, `vortex export`) failed on list-view columns with `unsupported array type for CSV export: ListViewArray`.

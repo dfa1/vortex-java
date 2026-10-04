@@ -115,6 +115,9 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
         /// Parquet Variant physical encoding (`vortex.parquet.variant`): per-row Apache Variant binary
         /// `metadata` and `value` children, plus an optional shredded `typed_value` child.
         VORTEX_PARQUET_VARIANT("vortex.parquet.variant"),
+        /// Buffer-level Zstd (`vortex.zstd_buffers`): each buffer of a wrapped array compressed
+        /// independently, keeping its layout; the `zstd` edition family, opt-in in Rust.
+        VORTEX_ZSTD_BUFFERS("vortex.zstd_buffers"),
         ;
 
         // O(1) access to a WellKnown constant by its string representation
@@ -258,4 +261,6 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
     WellKnown VORTEX_VARIANT = WellKnown.VORTEX_VARIANT;
     /// Well-known `vortex.parquet.variant` id.
     WellKnown VORTEX_PARQUET_VARIANT = WellKnown.VORTEX_PARQUET_VARIANT;
+    /// Well-known `vortex.zstd_buffers` id.
+    WellKnown VORTEX_ZSTD_BUFFERS = WellKnown.VORTEX_ZSTD_BUFFERS;
 }
