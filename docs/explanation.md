@@ -17,7 +17,8 @@ reads, making it easier to:
 - build and test on any platform with a standard JDK
 - debug and profile with standard JVM tooling
 
-The total JAR size is less than **1MB**.
+The reader stack (`vortex-reader` + `vortex-core` + `vortex-fsst`) is ~800 KB with no other
+required dependencies — `vortex-jni` is a 75 MB jar plus Arrow, Netty and Guava.
 
 ### Why Java 25+
 
@@ -529,7 +530,7 @@ See the [benchmark tables](#benchmarks) for numbers. Summary:
 | Tooling | Ubiquitous: Spark, DuckDB, pandas, Arrow, Hive, … | Early-stage — fewer readers outside the Rust impl |
 | Spec | [Apache Parquet format spec](https://parquet.apache.org/docs/file-format/) | Rust reference implementation is the ground truth |
 | Write maturity | Stable, battle-tested | Alpha — APIs will change |
-| JVM library size | Parquet-mr: ~10 MB + transitive deps | vortex-java: < 1 MB, zero native deps |
+| JVM library size | Parquet-mr: ~10 MB + transitive deps | vortex-java: ~800 KB, zero native deps; vortex-jni: 75 MB + Arrow/Netty/Guava |
 
 ### When to choose Vortex
 

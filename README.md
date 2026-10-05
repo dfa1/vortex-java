@@ -18,10 +18,12 @@ copy value for value.
 
 - JVM analytics engines and OLAP systems
 - Anyone who wants mmap-backed, zero-copy columnar reads without native-library management
-- **Windows JVM users.** A pure-Java Vortex implementation without JNI
-  or native-library dependencies. CI builds the full reactor on
-  Linux + macOS + Windows × JDK 25 + 26.
-  
+- **Small footprint.** The Rust reference's JNI bindings (`vortex-jni`) are a 75 MB jar
+  (native binaries for four platforms) that pulls in Arrow, Netty, Guava and RoaringBitmap.
+  vortex-java's reader is ~800 KB of plain Java (`vortex-reader` + `vortex-core` +
+  `vortex-fsst`) with no other required dependencies, and runs on any platform with a JDK.
+  CI builds the full reactor on Linux + macOS + Windows × JDK 25 + 26.
+
 ## Quickstart
 
 ```xml
