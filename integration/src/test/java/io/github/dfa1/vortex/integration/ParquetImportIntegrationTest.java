@@ -152,31 +152,6 @@ class ParquetImportIntegrationTest {
     }
 
     @Test
-    void taxiParquet_importedSize_vsOriginal(@TempDir Path tmp) throws Exception {
-        // Given — NYC Yellow Taxi 2024-01 (~3M rows, 19 cols, mix of I64 / F64 / I32 / Utf8).
-        // Same fixture/cache path as TaxiParquetOracleVsJavaIntegrationTest. CloudFront
-        // rate-limits/blocks some egress IPs (notably GitHub Actions runners → 403), so any
-        // download failure skips rather than fails.
-        Path src = LocalHttpCache.downloadIfMissingOrSkip(tmp, Path.of("/tmp"),
-                URI.create("https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet"),
-                "yellow_tripdata_2024-01.parquet");
-        Path vortex = tmp.resolve("taxi.vortex");
-
-        // When
-        ParquetImporter.importParquet(src, vortex);
-
-        // Then
-        long parquetSize = Files.size(src);
-        long vortexSize = Files.size(vortex);
-        System.out.printf(
-                "[TaxiSizeComparison] Parquet=%,d bytes (%.1f MB)  Vortex=%,d bytes (%.1f MB)  Vortex/Parquet=%.2fx%n",
-                parquetSize, parquetSize / 1_048_576.0,
-                vortexSize, vortexSize / 1_048_576.0,
-                (double) vortexSize / parquetSize);
-        assertThat(vortexSize).isGreaterThan(0);
-    }
-
-    @Test
     void parquetAndVortexRowCountsAreEqual(@TempDir Path tmp) throws Exception {
         // Given
         assumeNetworkAvailable();

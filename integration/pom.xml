@@ -14,11 +14,11 @@
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
-        <!-- JUnit tags excluded from a routine `./mvnw verify`. Defaults to `raincloud` so the
-             real-world Raincloud corpus tests never run by default — see the failsafe plugin
-             config below. Override on the CLI to opt in, e.g. `-Dvortex.it.excludedGroups=`
+        <!-- JUnit tags excluded from a routine `./mvnw verify`: `raincloud` (the real-world
+             Raincloud corpus, see the failsafe plugin config below) and `taxi` (the ~3M-row NYC
+             taxi Parquet oracle, ~14 s; CloudFront 403s GitHub runners, so CI skipped it anyway). Override on the CLI to opt in, e.g. `-Dvortex.it.excludedGroups=`
              (empty) runs every tag; a literal pom value could not be cleared this way. -->
-        <vortex.it.excludedGroups>raincloud</vortex.it.excludedGroups>
+        <vortex.it.excludedGroups>raincloud,taxi</vortex.it.excludedGroups>
     </properties>
 
     <dependencies>

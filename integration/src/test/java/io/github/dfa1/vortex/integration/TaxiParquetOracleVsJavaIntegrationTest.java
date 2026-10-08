@@ -9,6 +9,7 @@ import dev.hardwood.schema.FileSchema;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -31,10 +32,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// A zero-diff between the two CSVs proves the Java parquet importer preserves every
 /// value exactly.
+///
+/// Tagged `taxi` and excluded from a routine build (~14 s for ~3M rows); opt in with
+/// `-Dvortex.it.excludedGroups=`.
+@Tag("taxi")
 class TaxiParquetOracleVsJavaIntegrationTest {
 
-    // NYC Yellow Taxi 2024-01, same fixture/cache path as
-    // ParquetImportIntegrationTest.taxiParquet_importedSize_vsOriginal.
+    // NYC Yellow Taxi 2024-01, cached under /tmp.
     private static final String TAXI_URL =
             "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet";
     private static final String TAXI_NAME = "yellow_tripdata_2024-01.parquet";

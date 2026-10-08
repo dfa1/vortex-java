@@ -124,16 +124,30 @@ class EditionCatalogParityIntegrationTest {
     }
 
     /// The body at `uri`, or empty on a 404: most `encodings/` crates declare no edition family.
+    /// Both outcomes are cached under [#CACHE_DIR] (a `.404` marker for a miss): the ref is a
+    /// pinned tag, and re-fetching ~20 crates per run dominated this test's time.
     private static Optional<String> fetchOptional(URI uri) throws Exception {
+        Path cached = CACHE_DIR.resolve(uri.getPath().substring(1).replace('/', '_'));
+        Path missing = cached.resolveSibling(cached.getFileName() + ".404");
+        if (Files.exists(cached)) {
+            return Optional.of(Files.readString(cached));
+        }
+        if (Files.exists(missing)) {
+            return Optional.empty();
+        }
         var conn = (java.net.HttpURLConnection) uri.toURL().openConnection();
         int code = conn.getResponseCode();
+        Files.createDirectories(CACHE_DIR);
         if (code == 404) {
+            Files.createFile(missing);
             return Optional.empty();
         }
         org.junit.jupiter.api.Assumptions.assumeTrue(code < 500 && code != 403,
                 () -> "transient or rate-limited response " + code + " for " + uri);
         try (var in = conn.getInputStream()) {
-            return Optional.of(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            String body = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            Files.writeString(cached, body);
+            return Optional.of(body);
         }
     }
 
