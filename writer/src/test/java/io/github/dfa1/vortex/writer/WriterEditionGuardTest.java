@@ -47,15 +47,15 @@ class WriterEditionGuardTest {
     @Test
     void defaultGuard_forcedOutOfEditionEncoder_throwsNamingIdAndEdition(@TempDir Path tmp) throws IOException {
         // Given — fastlanes.delta is in no edition, so outside the default core2026.08.3 guard;
-        // the explicit single-encoder list forces findEncoder's first-match dispatch straight to
-        // it, bypassing CascadingCompressor's exclusion-aware competition entirely
+        // at depth 0 the explicit single-encoder list forces findEncoder's first-match dispatch
+        // straight to it, bypassing CascadingCompressor's exclusion-aware competition entirely
         Path file = tmp.resolve("delta_guarded.vtx");
         long[] data = {100L, 105L, 110L, 115L, 120L};
         Map<ColumnName, Object> chunk = Map.of(ColumnName.of("ts"), data);
 
         // When / Then
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
+             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.cascading(0),
                      List.of(new DeltaEncodingEncoder()))) {
             assertThatThrownBy(() -> sut.writeChunk(chunk))
                     .isInstanceOf(VortexException.class)

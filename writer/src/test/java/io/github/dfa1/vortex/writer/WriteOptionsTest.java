@@ -65,11 +65,11 @@ class WriteOptionsTest {
     }
 
     @Test
-    void withZstd_onDefaults_rejectedBecauseCascadingIsZero() {
-        // Given — defaults() has allowedCascading == 0, so Zstd could never be reached by
-        // VortexWriter (it is only added to the cascade codec list, which is only consulted when
-        // allowedCascading > 0); this must fail loudly rather than silently write plain files.
-        WriteOptions base = WriteOptions.defaults();
+    void withZstd_atDepthZero_rejectedBecauseCascadingIsZero() {
+        // Given — at allowedCascading == 0 Zstd could never be reached by VortexWriter (it is only
+        // added to the cascade codec list, which is only consulted when allowedCascading > 0);
+        // this must fail loudly rather than silently write plain files.
+        WriteOptions base = WriteOptions.cascading(0);
 
         // When / Then
         assertThatIllegalArgumentException().isThrownBy(() -> base.withZstd(true));

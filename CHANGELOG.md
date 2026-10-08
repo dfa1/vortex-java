@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** `WriteOptions.defaults()` cascades up to depth 3, as Rust's writer always does: default writes are smaller (e.g. two-decimal F64 1.06 MB → 924 KB per 1M rows) and slower. `WriteOptions.cascading(0)` restores first-match encoding. A custom encoder list or `WriteRegistry` is now also the cascade's candidate set, with canonical `vortex.primitive` as the fallback ([#458](https://github.com/dfa1/vortex-java/issues/458)).
 - **Breaking:** the edition catalog now mirrors Rust 0.86.1. `EditionFamily.UNSTABLE` and the `UNSTABLE_*` editions are gone in favor of Rust's `PREVIEW` and `ZSTD` families (`ZSTD_2026_02_0`: `vortex.zstd_buffers`); `CORE_2026_07_0` is removed, `CORE_2026_08_0` no longer contains Map, and `core` gains `CORE_2026_08_1` (OnPair), `CORE_2026_08_2` (Map) and `CORE_2026_08_3` (Variant) ([#441](https://github.com/dfa1/vortex-java/issues/441)).
 - Default writes target `core2026.08.3`, Rust's default edition, so cascading writes may now pick `vortex.onpair` for string columns, as Rust's do ([#441](https://github.com/dfa1/vortex-java/issues/441)).
 - `fastlanes.delta` and `vortex.patched` belong to no edition, as in Rust: emit them with the new `WriteOptions.withoutEditions()`, the counterpart of Rust's `disable_editions()` ([#441](https://github.com/dfa1/vortex-java/issues/441)).

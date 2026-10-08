@@ -48,13 +48,6 @@ class VortexWriterTest {
         return snapshots;
     }
 
-    private static ReadRegistry primitiveRegistry() {
-        return ReadRegistry.builder()
-                .register(new io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder())
-                .register(new io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder())
-                .build();
-    }
-
     @Test
     void writeSegments_are64ByteAligned(@TempDir Path tmp) throws IOException {
         // Given a multi-chunk, multi-column file whose encoded buffers are not 64-byte multiples.
@@ -370,7 +363,7 @@ class VortexWriterTest {
         Path cascadedFile = tmp.resolve("ts_cascaded.vtx");
 
         // When — same data, depth 0 (no cascade) vs depth 3 (cascade enabled)
-        writeOne(flatFile, schema, instants, WriteOptions.defaults());
+        writeOne(flatFile, schema, instants, WriteOptions.cascading(0));
         writeOne(cascadedFile, schema, instants, WriteOptions.cascading(3));
 
         // Then — cascaded file must be smaller because primitive storage is bit-packed
@@ -428,7 +421,7 @@ class VortexWriterTest {
         }
 
         // Then
-        var registry = primitiveRegistry();
+        var registry = ReadRegistry.loadAll();
         try (var vf = VortexReader.open(file, registry)) {
             List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.all());
             assertThat(snapshots).hasSize(1);
@@ -450,7 +443,7 @@ class VortexWriterTest {
         }
 
         // Then
-        var registry = primitiveRegistry();
+        var registry = ReadRegistry.loadAll();
         try (var vf = VortexReader.open(file, registry)) {
             List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.all());
             assertThat(snapshots).hasSize(2);
@@ -474,7 +467,7 @@ class VortexWriterTest {
         }
 
         // Then
-        var registry = primitiveRegistry();
+        var registry = ReadRegistry.loadAll();
         try (var vf = VortexReader.open(file, registry);
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
@@ -501,7 +494,7 @@ class VortexWriterTest {
         }
 
         // When
-        var registry = primitiveRegistry();
+        var registry = ReadRegistry.loadAll();
         try (var vf = VortexReader.open(file, registry);
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
@@ -525,7 +518,7 @@ class VortexWriterTest {
         }
 
         // When / Then
-        var registry = primitiveRegistry();
+        var registry = ReadRegistry.loadAll();
         try (var vf = VortexReader.open(file, registry);
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
@@ -549,7 +542,7 @@ class VortexWriterTest {
         }
 
         // Then
-        var registry = primitiveRegistry();
+        var registry = ReadRegistry.loadAll();
         try (var vf = VortexReader.open(file, registry)) {
             List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.columns("id"));
             assertThat(snapshots).hasSize(1);

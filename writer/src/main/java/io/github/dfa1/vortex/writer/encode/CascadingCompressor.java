@@ -18,6 +18,8 @@ import java.util.function.IntToLongFunction;
 /// At depth 0 only terminal encodings are considered.
 public final class CascadingCompressor {
 
+    private static final EncodingEncoder CANONICAL_PRIMITIVE = new PrimitiveEncodingEncoder();
+
     private final List<EncodingEncoder> encodings;
 
     /// Constructs a `CascadingCompressor` with the given candidate encoders.
@@ -383,6 +385,11 @@ public final class CascadingCompressor {
             if (enc.accepts(dtype)) {
                 return enc;
             }
+        }
+        // Rust keeps the canonical array when no configured scheme applies: canonical encodings
+        // are not schemes, so a restricted candidate list never leaves a primitive unencodable.
+        if (dtype instanceof DType.Primitive) {
+            return CANONICAL_PRIMITIVE;
         }
         throw new UnsupportedOperationException("no encoder for dtype: " + dtype);
     }

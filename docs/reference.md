@@ -138,7 +138,7 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 | Method                                                                           | Notes                                                                                                            |
 |----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
 | `static create(WritableByteChannel, DType.Struct, WriteOptions)`                 | Default codec set                                                                                                |
-| `static create(WritableByteChannel, DType.Struct, WriteOptions, List<EncodingEncoder>)` | Custom encoder list; disables the global dict (would otherwise silently reach outside the given list) |
+| `static create(WritableByteChannel, DType.Struct, WriteOptions, List<EncodingEncoder>)` | Custom encoder list; disables the global dict (would otherwise silently reach outside the given list). The list is also the whole cascade candidate set; as in Rust, a primitive no candidate accepts falls back to canonical `vortex.primitive` |
 | `static create(WritableByteChannel, DType.Struct, WriteOptions, WriteRegistry)`  | Custom [`WriteRegistry`](#writeregistry-iogithubdfa1vortexwriterwriteregistry) — encoders and extension encoders together |
 | `writeChunk(Consumer<Chunk>)`                                                    | One batch of rows; typed builder validates column names + array types at each `.put`; missing columns throw `IllegalStateException` when the lambda returns. Preferred when columns are known at compile time. |
 | `writeChunk(Map<ColumnName, Object>)`                                                | One batch of rows by map. Validates that every schema column is present and that all columns share the same row count. Use when the column set is built dynamically (Parquet/JDBC importers, generic exporters). |
@@ -177,8 +177,8 @@ Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedC
 
 | Factory                         | Defaults                                                                                          |
 |---------------------------------|---------------------------------------------------------------------------------------------------|
-| `WriteOptions.defaults()`       | `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0`, `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_3}` |
-| `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`                                                           |
+| `WriteOptions.defaults()`       | `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=3` (Rust's `MAX_CASCADE`), `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_3}` |
+| `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`; `0` disables cascading (each column takes the first accepting encoder) |
 
 | Method | Notes |
 |--------|-------|

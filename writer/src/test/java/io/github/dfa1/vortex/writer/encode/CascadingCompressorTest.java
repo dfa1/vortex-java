@@ -105,6 +105,22 @@ class CascadingCompressorTest {
             assertThat(containsEncoding(result.rootNode(), EncodingId.VORTEX_ALP)).isFalse();
         }
 
+        @Test
+        void noCandidateAccepts_fallsBackToCanonicalPrimitive() {
+            // Given — a custom list with no I64 encoder: Rust keeps the canonical array when no
+            // configured scheme applies, so this must not throw "no encoder for dtype"
+            long[] values = {1L, 2L, 3L};
+            List<EncodingEncoder> floatOnly = List.of(new AlpEncodingEncoder());
+            CascadingCompressor sut = new CascadingCompressor(floatOnly);
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I64, values,
+                    EncodeContext.ofDepth(3, Arena.ofAuto(), toRegistry(floatOnly)));
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+        }
+
         private boolean containsEncoding(EncodeNode node, EncodingId id) {
             if (node.encodingId().equals(id)) {
                 return true;

@@ -642,12 +642,13 @@ final class XorI64EncodingEncoder implements EncodingEncoder {
 
 DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false);
 
-// a registry containing only this encoder — accepts(DType) alone wouldn't win a default
-// cascade competition against the built-in vortex.primitive for every I64 column
+// a registry containing only this encoder, at cascade depth 0 so every I64 column takes the
+// first accepting encoder; under the default cascade it must measure smaller than the canonical
+// vortex.primitive fallback to be picked
 WriteRegistry registry = WriteRegistry.builder().register(new XorI64EncodingEncoder()).build();
 
 try (var ch = FileChannel.open(Path.of("data.vortex"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-     var writer = VortexWriter.create(ch, schema, WriteOptions.defaults(), registry)) {
+     var writer = VortexWriter.create(ch, schema, WriteOptions.cascading(0), registry)) {
     writer.writeChunk(chunk -> chunk.put(ColumnName.of("id"), new long[]{1, 2, 3}));
 }
 ```

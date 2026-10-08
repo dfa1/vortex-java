@@ -85,17 +85,20 @@ public record WriteOptions(
     /// parameter's javadoc above for the safety rationale.
     private static final Map<EditionFamily, Edition> DEFAULT_EDITIONS = Map.of(EditionFamily.CORE, Editions.CORE_2026_08_3);
 
-    /// Default options: global dictionary encoding enabled, no cascading compression, Zstd disabled,
-    /// edition guard targeting the latest frozen `core` edition.
+    /// Default cascade depth: Rust's `MAX_CASCADE`. The Rust writer always runs its cascading
+    /// compressor, so a depth-0 default stored e.g. ALP's integers unpacked (#458).
+    private static final int DEFAULT_CASCADE_DEPTH = 3;
+
+    /// Default options: global dictionary encoding enabled, cascading compression up to depth 3
+    /// (as Rust), Zstd disabled, edition guard targeting the latest frozen `core` edition.
     ///
     /// @return default `WriteOptions`
     public static WriteOptions defaults() {
-        return new WriteOptions(true, 0.90, 0, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
-                DEFAULT_EDITIONS);
+        return cascading(DEFAULT_CASCADE_DEPTH);
     }
 
     /// Enable cascading compression with up to `depth` recursive levels.
-    /// Depth 0 preserves current first-match behavior.
+    /// Depth 0 disables cascading: each column takes the first accepting encoder.
     ///
     /// @param depth maximum cascade depth
     /// @return `WriteOptions` with cascading enabled at the given depth

@@ -189,7 +189,9 @@ public final class VortexWriter implements Closeable {
         this.dictRetainedBudget = options.globalDictMaxRetainedBytes().bytes();
         this.encodings = encodings;
         this.defaultRegistry = buildRegistry(encodings);
-        this.cascadeCodecs = buildCascadeCodecs(options);
+        // A custom encoder list is the whole candidate set, cascade included: emitting a built-in
+        // the caller left out would produce a file their own read registry may not decode.
+        this.cascadeCodecs = encodings == DEFAULT_CODECS ? buildCascadeCodecs(options) : List.copyOf(encodings);
         this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
         this.editionAllowed = editionAllowed(options.editions());
         this.editionExcluded = editionExcluded(this.editionAllowed, encodings, this.cascadeCodecs);
