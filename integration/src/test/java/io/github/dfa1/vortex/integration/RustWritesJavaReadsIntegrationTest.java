@@ -292,6 +292,23 @@ class RustWritesJavaReadsIntegrationTest {
         assertThat(result).isEqualTo(1);
     }
 
+    @Test
+    void jniWriter_filteredUtf8Scan_comparesInUtf8ByteOrder(@TempDir Path tmp) throws IOException {
+        // Given — Rust writes string zone stats in UTF-8 byte order: min U+E000, max the emoji. The
+        // reader compared filters in UTF-16 order, where the emoji (a surrogate pair) sorts below
+        // U+E000, so eq(emoji) "proved" the zone empty and dropped the matching row.
+        String emoji = "\uD83D\uDE00";
+        Path file = tmp.resolve("jni_utf8_order.vtx");
+        writeJniUtf8(file, new String[]{"\uE000", emoji});
+
+        // When
+        long result = countChunks(file, io.github.dfa1.vortex.reader.ScanOptions.all()
+                .withFilter(io.github.dfa1.vortex.reader.RowFilter.eq("k", emoji)));
+
+        // Then — the only chunk holds the match, so it must survive pruning
+        assertThat(result).isEqualTo(1);
+    }
+
     private static long countChunks(Path file, io.github.dfa1.vortex.reader.ScanOptions opts) throws IOException {
         long[] count = {0};
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());

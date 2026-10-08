@@ -38,7 +38,7 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
                         EditionId, Edition, EditionFamily, Editions, MemorySize
           core.io       IoBounds, PTypeIO, VortexFormat
           core.error    VortexException
-          core.compute  FastLanes, PrimitiveArrays
+          core.compute  FastLanes, PrimitiveArrays, Utf8Order
           core.fbs / core.proto — generated wire codecs + their runtimes
 reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats, Zone,
           ScanOptions, RowFilter; file internals (Footer, Trailer, PostscriptParser, …)

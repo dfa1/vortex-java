@@ -10,6 +10,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CompareTest {
 
     @Test
+    void stringsOrderByUtf8BytesNotUtf16() {
+        // Given a supplementary character (a surrogate pair in UTF-16, 4 bytes in UTF-8) and a BMP
+        // character above the surrogate range. UTF-16 puts the emoji first; Rust, which writes
+        // string zone stats in byte order, puts it last — comparing filters in UTF-16 against
+        // those stats pruned zones that held the match.
+        String emoji = "\uD83D\uDE00";
+
+        // When
+        int result = Compare.values(emoji, "\uE000", DType.UTF8);
+
+        // Then
+        assertThat(result).isPositive();
+    }
+
+    @Test
     void signedColumnOrdersByValue() {
         // Given a signed I64 column
         // When comparing a smaller against a larger value

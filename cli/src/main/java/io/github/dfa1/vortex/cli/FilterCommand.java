@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -227,7 +228,8 @@ final class FilterCommand {
             case BoolArray ba -> Boolean.compare(ba.getBoolean(rowIdx), (Boolean) value);
             case VarBinArray va -> {
                 String v = va.getString(rowIdx);
-                yield v.compareTo((String) value);
+                // UTF-8 byte order, matching the reader's zone-map pruning and Rust.
+                yield Utf8Order.compare(v, (String) value);
             }
             default -> throw new IllegalArgumentException(
                     "filter not supported for column type: " + arr.getClass().getSimpleName());

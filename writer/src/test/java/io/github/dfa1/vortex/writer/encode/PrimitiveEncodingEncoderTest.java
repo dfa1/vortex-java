@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -130,6 +132,50 @@ class PrimitiveEncodingEncoderTest {
             // Then
             long totalBytes = result.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
             assertThat(totalBytes).isEqualTo((long) data.length * 8);
+        }
+    }
+
+    @Nested
+    class MinMaxStats {
+
+        @Test
+        void leadingNanIsSkipped() {
+            // Given a NaN in the first row: min/max used to start from it, and every later compare
+            // with NaN is false, so both stats stuck at NaN. Rust's min/max skips NaN.
+            double[] values = {Double.NaN, 3.0, -1.0};
+
+            // When
+            byte[][] result = PrimitiveEncodingEncoder.minMaxStats(PType.F64, values);
+
+            // Then
+            assertThat(result[0]).isEqualTo(ProtoScalarValue.ofF64Value(-1.0).encode());
+            assertThat(result[1]).isEqualTo(ProtoScalarValue.ofF64Value(3.0).encode());
+        }
+
+        @Test
+        void allNanHasNoMinMax() {
+            // Given only NaN, which has no NaN-skipping extremes
+            float[] values = {Float.NaN, Float.NaN};
+
+            // When
+            byte[][] result = PrimitiveEncodingEncoder.minMaxStats(PType.F32, values);
+
+            // Then
+            assertThat(result).isNull();
+        }
+
+        @Test
+        void infinitiesAreValidExtremes() {
+            // Given only +Inf: the NaN-skipping loop starts min at +Inf and max at -Inf, so the
+            // all-NaN check must not mistake a genuine infinity for "no values"
+            double[] values = {Double.POSITIVE_INFINITY};
+
+            // When
+            byte[][] result = PrimitiveEncodingEncoder.minMaxStats(PType.F64, values);
+
+            // Then
+            assertThat(result[0]).isEqualTo(ProtoScalarValue.ofF64Value(Double.POSITIVE_INFINITY).encode());
+            assertThat(result[1]).isEqualTo(ProtoScalarValue.ofF64Value(Double.POSITIVE_INFINITY).encode());
         }
     }
 

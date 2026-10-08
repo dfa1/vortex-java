@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read `vortex.zstd_buffers`, Rust's opt-in buffer-level Zstd encoding (`zstd2026.02.0`) ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 
 ### Fixed
+- Filtered scans of Rust-written files could skip rows matching a string with characters outside the Basic Multilingual Plane (e.g. emoji): strings were compared in UTF-16 order, Rust's stats are in UTF-8 byte order. The writer's string min/max, `vortex filter` and the inspector now use UTF-8 order too ([#458](https://github.com/dfa1/vortex-java/issues/458)).
+- A float column whose first value is NaN recorded NaN as its min and max, disabling pruning on that chunk; min/max now skip NaN, as Rust's do ([#458](https://github.com/dfa1/vortex-java/issues/458)).
+- File-level `U64` min/max merged values at or above 2^63 as negative ([#458](https://github.com/dfa1/vortex-java/issues/458)).
 - Filtered scans of Rust-written files never pruned string or binary columns: their `vortex.bounded_max`/`vortex.bounded_min` zone stats were unsupported, and zones narrower than a chunk were ignored ([#446](https://github.com/dfa1/vortex-java/issues/446)).
 - Null rows of Rust-written `vortex.varbin` columns read as empty values: the decoder ignored the validity child ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 - A corrupt `vortex.zstd` frame surfaced as the zstd binding's `ZstdException` instead of `VortexException` ([#444](https://github.com/dfa1/vortex-java/issues/444)).

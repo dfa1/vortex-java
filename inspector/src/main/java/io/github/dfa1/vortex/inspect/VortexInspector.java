@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.layout.Layout;
@@ -116,7 +117,7 @@ public final class VortexInspector {
         if (a.getClass() != b.getClass() || !(a instanceof Comparable)) {
             return a;
         }
-        return ((Comparable) a).compareTo(b) <= 0 ? a : b;
+        return compare(a, b) <= 0 ? a : b;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -130,7 +131,13 @@ public final class VortexInspector {
         if (a.getClass() != b.getClass() || !(a instanceof Comparable)) {
             return a;
         }
-        return ((Comparable) a).compareTo(b) >= 0 ? a : b;
+        return compare(a, b) >= 0 ? a : b;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static int compare(Object a, Object b) {
+        // Strings in UTF-8 byte order, the order the stats were written in.
+        return a instanceof String sa ? Utf8Order.compare(sa, (String) b) : ((Comparable) a).compareTo(b);
     }
 
     private static String format(Object v) {

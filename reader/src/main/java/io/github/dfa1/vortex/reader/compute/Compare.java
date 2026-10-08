@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 
@@ -8,7 +9,8 @@ import io.github.dfa1.vortex.core.model.DType;
 ///
 /// The comparison mode is keyed off the *column* dtype, never the boxed operand type: integer
 /// columns compare as longs (unsigned columns via [Long#compareUnsigned(long, long)]), float columns
-/// as doubles, and everything else through the natural [Comparable] order. Keying off the column
+/// as doubles, strings in UTF-8 byte order ([Utf8Order]), and everything else through the natural
+/// [Comparable] order. Keying off the column
 /// keeps the compare width-agnostic — a caller may box a filter value at any integer width — and
 /// never routes an integer column through double-compare, which would lose precision past 2^53.
 ///
@@ -49,6 +51,10 @@ public final class Compare {
                 return Double.compare(na.doubleValue(), nb.doubleValue());
             }
             return Long.compare(na.longValue(), nb.longValue());
+        }
+        if (a instanceof String sa && b instanceof String sb) {
+            // UTF-8 byte order, the order Rust writes string stats in, not String#compareTo's UTF-16.
+            return Utf8Order.compare(sa, sb);
         }
         try {
             return ((Comparable<Object>) a).compareTo(b);

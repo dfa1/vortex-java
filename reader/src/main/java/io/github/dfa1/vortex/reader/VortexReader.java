@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
@@ -114,14 +115,14 @@ public final class VortexReader implements VortexHandle {
         );
     }
 
-    @SuppressWarnings("unchecked")
-    private static Object minOf(Object a, Object b) {
-        return ((Comparable<Object>) a).compareTo(b) <= 0 ? a : b;
+    // Through Compare, the reader's one scalar order: unsigned columns compare unsigned (a U64 max
+    // >= 2^63 is a negative Long) and strings in UTF-8 byte order, as the stats were written.
+    private static Object minOf(Object a, Object b, DType column) {
+        return Compare.values(a, b, column) <= 0 ? a : b;
     }
 
-    @SuppressWarnings("unchecked")
-    private static Object maxOf(Object a, Object b) {
-        return ((Comparable<Object>) a).compareTo(b) >= 0 ? a : b;
+    private static Object maxOf(Object a, Object b, DType column) {
+        return Compare.values(a, b, column) >= 0 ? a : b;
     }
 
     @Override
@@ -235,13 +236,14 @@ public final class VortexReader implements VortexHandle {
         Map<ColumnName, ArrayStats> result = new LinkedHashMap<>();
         try (ScanIterator iter = new ScanIterator(this, ScanOptions.all())) {
             for (ColumnName name : schema.fieldNames()) {
-                result.put(name, aggregateStats(iter.columnZoneStats(name.value())));
+                result.put(name, aggregateStats(iter.columnZoneStats(name.value()),
+                        schema.fieldTypes().get(schema.fieldNames().indexOf(name))));
             }
         }
         return Map.copyOf(result);
     }
 
-    private ArrayStats aggregateStats(List<ArrayStats> zones) {
+    private ArrayStats aggregateStats(List<ArrayStats> zones, DType column) {
         Object globalMin = null;
         Object globalMax = null;
         // Null count is meaningful only when every chunk carries it; one missing makes the column
@@ -250,10 +252,10 @@ public final class VortexReader implements VortexHandle {
         boolean allHaveNullCount = !zones.isEmpty();
         for (ArrayStats s : zones) {
             if (s.min() != null) {
-                globalMin = globalMin == null ? s.min() : minOf(globalMin, s.min());
+                globalMin = globalMin == null ? s.min() : minOf(globalMin, s.min(), column);
             }
             if (s.max() != null) {
-                globalMax = globalMax == null ? s.max() : maxOf(globalMax, s.max());
+                globalMax = globalMax == null ? s.max() : maxOf(globalMax, s.max(), column);
             }
             if (s.nullCount() != null) {
                 totalNullCount += s.nullCount();

@@ -189,11 +189,11 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
             }
             case F32 -> {
                 float[] arr = (float[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                float min = arr[0];
-                float max = arr[0];
+                // NaN-skipping, as Rust's min/max (skip_nans): every comparison with NaN is false, so
+                // starting from the infinities skips NaN without a per-element branch; an all-NaN
+                // (or empty) array ends with min > max and has no min/max.
+                float min = Float.POSITIVE_INFINITY;
+                float max = Float.NEGATIVE_INFINITY;
                 for (float v : arr) {
                     if (v < min) {
                         min = v;
@@ -202,15 +202,15 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                         max = v;
                     }
                 }
-                yield new byte[][]{scalarF32(min), scalarF32(max)};
+                yield min > max ? null : new byte[][]{scalarF32(min), scalarF32(max)};
             }
             case F64 -> {
                 double[] arr = (double[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                double min = arr[0];
-                double max = arr[0];
+                // NaN-skipping, as Rust's min/max (skip_nans): every comparison with NaN is false, so
+                // starting from the infinities skips NaN without a per-element branch; an all-NaN
+                // (or empty) array ends with min > max and has no min/max.
+                double min = Double.POSITIVE_INFINITY;
+                double max = Double.NEGATIVE_INFINITY;
                 for (double v : arr) {
                     if (v < min) {
                         min = v;
@@ -219,15 +219,13 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                         max = v;
                     }
                 }
-                yield new byte[][]{scalarF64(min), scalarF64(max)};
+                yield min > max ? null : new byte[][]{scalarF64(min), scalarF64(max)};
             }
             case F16 -> {
                 short[] arr = (short[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                float min = Float.float16ToFloat(arr[0]);
-                float max = Float.float16ToFloat(arr[0]);
+                // NaN-skipping like F32/F64 above.
+                float min = Float.POSITIVE_INFINITY;
+                float max = Float.NEGATIVE_INFINITY;
                 for (short v : arr) {
                     float fv = Float.float16ToFloat(v);
                     if (fv < min) {
@@ -237,7 +235,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                         max = fv;
                     }
                 }
-                yield new byte[][]{scalarF32(min), scalarF32(max)};
+                yield min > max ? null : new byte[][]{scalarF32(min), scalarF32(max)};
             }
         };
     }

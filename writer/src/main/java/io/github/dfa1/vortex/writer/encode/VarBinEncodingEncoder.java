@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -79,10 +80,10 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
             if (s == null) {
                 continue;
             }
-            if (minStr == null || s.compareTo(minStr) < 0) {
+            if (minStr == null || Utf8Order.compare(s, minStr) < 0) {
                 minStr = s;
             }
-            if (maxStr == null || s.compareTo(maxStr) > 0) {
+            if (maxStr == null || Utf8Order.compare(s, maxStr) > 0) {
                 maxStr = s;
             }
         }
