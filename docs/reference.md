@@ -188,7 +188,7 @@ Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedC
 | `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |
 | `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family |
 | `withoutEditions()` | Turn the edition guard off, as Rust's `disable_editions()`: every encoding may be emitted, including those in no edition (`fastlanes.delta`, `vortex.patched`). Files may not be readable by other Vortex versions |
-| `withColumnEncoding(ColumnName, ColumnEncoding)` | Choose one column's encodings from `ColumnEncoding.candidates(encoders...)` only — the whole candidate set, children included, with canonical encodings as the fallback (Rust's `with_field_writer` over a restricted scheme set). The edition guard still applies and the column skips the global dict. An unknown column fails `VortexWriter.create` |
+| `withColumnEncoding(ColumnName, ColumnEncoding)` | Choose one column's encodings from `ColumnEncoding.candidates(EncodingId...)` only — the whole candidate set, children included, with canonical encodings as the fallback (Rust's `with_field_writer` over a restricted scheme set). The edition guard still applies and the column skips the global dict. An unknown column, or an encoding the writer cannot emit, fails `VortexWriter.create` |
 
 ---
 

@@ -603,17 +603,15 @@ with ALP/FoR/bit-packing as the only candidates, to the same bytes.
 ```java
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.writer.ColumnEncoding;
-import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
 
 DType.Struct schema = new DType.Struct(List.of(ColumnName.of("price")), List.of(DType.F64), false);
 double[] prices = {19.99, 4.50, 120.00};
 
 WriteOptions options = WriteOptions.defaults().withColumnEncoding(ColumnName.of("price"),
-        ColumnEncoding.candidates(new AlpEncodingEncoder(), new FrameOfReferenceEncodingEncoder(),
-                new BitpackedEncodingEncoder()));
+        ColumnEncoding.candidates(EncodingId.VORTEX_ALP, EncodingId.FASTLANES_FOR,
+                EncodingId.FASTLANES_BITPACKED));
 
 try (var ch = FileChannel.open(Path.of("prices.vortex"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
      var writer = VortexWriter.create(ch, schema, options)) {
@@ -623,7 +621,9 @@ try (var ch = FileChannel.open(Path.of("prices.vortex"), StandardOpenOption.CREA
 
 The listed encoders are the column's whole candidate set: ALP's integers can only be
 frame-of-reference- or bit-packed here, and anything no candidate improves on stays in its
-canonical encoding. Other columns keep the default cascade.
+canonical encoding. Other columns keep the default cascade. Encodings are named by `EncodingId`;
+a custom encoding registered on the writer's `WriteRegistry` is named by its id the same way, and
+an id the writer cannot encode fails `VortexWriter.create`.
 
 ## Register a custom encoding (write side)
 

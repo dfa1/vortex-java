@@ -206,7 +206,7 @@ public final class VortexWriter implements Closeable {
             if (!schema.fieldNames().contains(e.getKey())) {
                 throw new IllegalArgumentException("column encoding for unknown column: " + e.getKey());
             }
-            columnEncoders.put(e.getKey(), columnEncoder(e.getValue()));
+            columnEncoders.put(e.getKey(), columnEncoder(e.getKey(), e.getValue()));
         }
         this.editionExcluded = editionExcluded(this.editionAllowed, encodings, this.cascadeCodecs);
         for (ColumnName name : schema.fieldNames()) {
@@ -1037,8 +1037,27 @@ public final class VortexWriter implements Closeable {
 
     /// The encoder a column with a [ColumnEncoding] override is written with: the cascade over the
     /// column's candidates only, wrapping nullable data in `vortex.masked` as the default path does.
-    private EncodingEncoder columnEncoder(ColumnEncoding encoding) {
-        List<EncodingEncoder> encoders = encoding.encoders();
+    ///
+    /// @throws IllegalArgumentException if this writer has no encoder for one of the encodings
+    private EncodingEncoder columnEncoder(ColumnName column, ColumnEncoding encoding) {
+        // The encoders this writer cascades with; a default writer also offers the other built-ins
+        // (Pco, Zstd, …) that are registered but not default candidates. A custom encoder list stays
+        // the whole set, as it is for every other column.
+        Map<EncodingId, EncodingEncoder> available = new LinkedHashMap<>();
+        for (EncodingEncoder enc : cascadeCodecs) {
+            available.putIfAbsent(enc.encodingId(), enc);
+        }
+        if (encodings == DEFAULT_CODECS) {
+            WriteRegistry.loadAll().encoderMap().forEach(available::putIfAbsent);
+        }
+        List<EncodingEncoder> encoders = new ArrayList<>();
+        for (EncodingId id : encoding.encodings()) {
+            EncodingEncoder enc = available.get(id);
+            if (enc == null) {
+                throw new IllegalArgumentException("column '" + column + "': this writer cannot encode " + id);
+            }
+            encoders.add(enc);
+        }
         WriteRegistry registry = buildRegistry(encoders);
         return new EncodingEncoder() {
             @Override

@@ -9,9 +9,6 @@ import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,7 +30,7 @@ class ColumnEncodingTest {
     private static final ColumnName PRICE = ColumnName.of("price");
 
     private static final ColumnEncoding ALP_CASCADE = ColumnEncoding.candidates(
-            new AlpEncodingEncoder(), new FrameOfReferenceEncodingEncoder(), new BitpackedEncodingEncoder());
+            EncodingId.VORTEX_ALP, EncodingId.FASTLANES_FOR, EncodingId.FASTLANES_BITPACKED);
 
     @TempDir
     Path tmp;
@@ -88,7 +85,7 @@ class ColumnEncodingTest {
             codes[i] = i % 4;
         }
         WriteOptions options = WriteOptions.defaults().withColumnEncoding(PRICE,
-                ColumnEncoding.candidates(new BitpackedEncodingEncoder()));
+                ColumnEncoding.candidates(EncodingId.FASTLANES_BITPACKED));
 
         // When
         Path file = write(DType.I64, codes, options);
@@ -122,6 +119,21 @@ class ColumnEncodingTest {
                 .isThrownBy(() -> VortexWriter.create(FileChannel.open(tmp.resolve("x.vtx"),
                         StandardOpenOption.CREATE, StandardOpenOption.WRITE), schema, options))
                 .withMessageContaining("prcie");
+    }
+
+    @Test
+    void encodingTheWriterCannotEmitIsRejectedAtCreate() {
+        // Given vortex.zstd_buffers, which vortex-java only reads: naming it must fail loudly at
+        // create rather than silently leaving the column on its canonical encoding
+        WriteOptions options = WriteOptions.defaults().withColumnEncoding(PRICE,
+                ColumnEncoding.candidates(EncodingId.VORTEX_ZSTD_BUFFERS));
+        var schema = new DType.Struct(List.of(PRICE), List.of(DType.F64), false);
+
+        // When / Then
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> VortexWriter.create(FileChannel.open(tmp.resolve("y.vtx"),
+                        StandardOpenOption.CREATE, StandardOpenOption.WRITE), schema, options))
+                .withMessageContaining("vortex.zstd_buffers");
     }
 
     @Test

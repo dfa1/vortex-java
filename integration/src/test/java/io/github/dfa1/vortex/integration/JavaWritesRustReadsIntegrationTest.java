@@ -721,9 +721,9 @@ class JavaWritesRustReadsIntegrationTest {
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("p")), List.of(DType.F64), false);
         WriteOptions options = WriteOptions.defaults().withColumnEncoding(ColumnName.of("p"),
                 io.github.dfa1.vortex.writer.ColumnEncoding.candidates(
-                        new io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder(),
-                        new io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder(),
-                        new io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder()));
+                        io.github.dfa1.vortex.core.model.EncodingId.VORTEX_ALP,
+                        io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_FOR,
+                        io.github.dfa1.vortex.core.model.EncodingId.FASTLANES_BITPACKED));
         int n = 30_000;
         double[] prices = new double[n];
         for (int i = 0; i < n; i++) {
