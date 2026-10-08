@@ -593,6 +593,38 @@ field list (`keyType`, `valueType`, `keysSorted`, `nullable`) and `entriesDtype(
 
 ---
 
+## Choose a column's encodings
+
+When a column's shape is known in advance — a fixed-precision decimal, an enum — restrict its
+encoder selection to the encodings that fit. The column then skips candidates that cannot win,
+which is most of a cascading write's cost: one million two-decimal prices write about 6× faster
+with ALP/FoR/bit-packing as the only candidates, to the same bytes.
+
+```java
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.writer.ColumnEncoding;
+import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
+
+DType.Struct schema = new DType.Struct(List.of(ColumnName.of("price")), List.of(DType.F64), false);
+double[] prices = {19.99, 4.50, 120.00};
+
+WriteOptions options = WriteOptions.defaults().withColumnEncoding(ColumnName.of("price"),
+        ColumnEncoding.candidates(new AlpEncodingEncoder(), new FrameOfReferenceEncodingEncoder(),
+                new BitpackedEncodingEncoder()));
+
+try (var ch = FileChannel.open(Path.of("prices.vortex"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+     var writer = VortexWriter.create(ch, schema, options)) {
+    writer.writeChunk(chunk -> chunk.put(ColumnName.of("price"), prices));
+}
+```
+
+The listed encoders are the column's whole candidate set: ALP's integers can only be
+frame-of-reference- or bit-packed here, and anything no candidate improves on stays in its
+canonical encoding. Other columns keep the default cascade.
+
 ## Register a custom encoding (write side)
 
 `EncodingId` is a sealed `WellKnown`/`Custom` type — `EncodingId.Custom` lets a third party mint

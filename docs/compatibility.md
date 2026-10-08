@@ -233,6 +233,11 @@ readers from 0.12.1 read `vortex.zoned`; before this release they placed a dicti
 `vortex.zoned` zones by its code chunks rather than the stride, which can mis-attribute zone stats
 when the chunk count happens to equal the zone count, so read new files with this release or later.
 
+Per-column encoder choice (`WriteOptions.withColumnEncoding`) mirrors Rust's
+`WriteStrategyBuilder::with_field_writer` with a compressor restricted to chosen schemes, but is
+narrower: a Rust field writer replaces the column's whole layout strategy, while vortex-java
+keeps the column's zone map and chunking and only restricts its encodings.
+
 `fastlanes.delta` and `vortex.patched` are in no edition: as in Rust, only a write with the guard
 off (`WriteOptions.withoutEditions()`) may emit them. Rust editions also gate layouts, extension
 dtypes and zone-map aggregates; vortex-java's catalog models array encodings only. (Upstream

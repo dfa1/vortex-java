@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.Edition;
 import io.github.dfa1.vortex.core.model.EditionFamily;
 import io.github.dfa1.vortex.core.model.Editions;
@@ -7,6 +8,7 @@ import io.github.dfa1.vortex.core.model.MemorySize;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /// Tuning knobs for the Vortex writer.
 ///
@@ -45,6 +47,8 @@ import java.util.Map;
 ///                                  Rust's default writer may. Empty means the guard is off
 ///                                  ([#withoutEditions()]): every encoding is permitted, including those in
 ///                                  no edition at all (`fastlanes.delta`, `vortex.patched`).
+/// @param columnEncodings           per-column overrides of the default encoder selection — see
+///                                  [#withColumnEncoding(ColumnName, ColumnEncoding)]; empty by default
 public record WriteOptions(
         boolean enableZoneMaps,
         double compressionRatioThreshold,
@@ -52,7 +56,8 @@ public record WriteOptions(
         boolean globalDict,
         boolean enableZstd,
         MemorySize globalDictMaxRetainedBytes,
-        Map<EditionFamily, Edition> editions
+        Map<EditionFamily, Edition> editions,
+        Map<ColumnName, ColumnEncoding> columnEncodings
 ) {
     /// Defensively copies `editions` into an immutable map and rejects a Zstd flag that could
     /// never take effect.
@@ -69,6 +74,36 @@ public record WriteOptions(
                             + "use WriteOptions.cascading(depth).withZstd(true)");
         }
         editions = Map.copyOf(editions);
+        columnEncodings = Map.copyOf(columnEncodings);
+    }
+
+    /// Options with no per-column encoding overrides.
+    ///
+    /// @param enableZoneMaps             see the record components
+    /// @param compressionRatioThreshold  see the record components
+    /// @param allowedCascading           see the record components
+    /// @param globalDict                 see the record components
+    /// @param enableZstd                 see the record components
+    /// @param globalDictMaxRetainedBytes see the record components
+    /// @param editions                   see the record components
+    public WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
+                        boolean globalDict, boolean enableZstd, MemorySize globalDictMaxRetainedBytes,
+                        Map<EditionFamily, Edition> editions) {
+        this(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
+                globalDictMaxRetainedBytes, editions, Map.of());
+    }
+
+    /// Returns a copy of these options choosing `column`'s encodings by `encoding` instead of the
+    /// default cascade, replacing any override already set for it.
+    ///
+    /// @param column   the column to override, which must be in the schema the options write
+    /// @param encoding how the column's encodings are chosen
+    /// @return a new `WriteOptions` with the override set
+    public WriteOptions withColumnEncoding(ColumnName column, ColumnEncoding encoding) {
+        Map<ColumnName, ColumnEncoding> updated = new HashMap<>(columnEncodings);
+        updated.put(Objects.requireNonNull(column, "column"), Objects.requireNonNull(encoding, "encoding"));
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+                enableZstd, globalDictMaxRetainedBytes, editions, updated);
     }
 
     /// Default aggregate retention budget (2 GB) for the buffered per-chunk code arrays of global
@@ -113,7 +148,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the zone-map flag updated
     public WriteOptions withZoneMaps(boolean enabled) {
         return new WriteOptions(enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
-                globalDictMaxRetainedBytes, editions);
+                globalDictMaxRetainedBytes, editions, columnEncodings);
     }
 
     /// Returns a copy of these options with global dictionary encoding set to `enabled`.
@@ -122,7 +157,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the global dict flag updated
     public WriteOptions withGlobalDict(boolean enabled) {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, enableZstd,
-                globalDictMaxRetainedBytes, editions);
+                globalDictMaxRetainedBytes, editions, columnEncodings);
     }
 
     /// Returns a copy of these options with Zstandard compression set to `enabled`.
@@ -143,7 +178,7 @@ public record WriteOptions(
     /// @throws IllegalArgumentException if `enabled` is `true` and `allowedCascading()` is `0`
     public WriteOptions withZstd(boolean enabled) {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled,
-                globalDictMaxRetainedBytes, editions);
+                globalDictMaxRetainedBytes, editions, columnEncodings);
     }
 
     /// Returns a copy of these options with the global-dictionary retention budget set to `budget`.
@@ -158,7 +193,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the global-dict retention budget updated
     public WriteOptions withGlobalDictMaxRetainedBytes(MemorySize budget) {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, budget, editions);
+                enableZstd, budget, editions, columnEncodings);
     }
 
     /// Returns a copy of these options with `edition` enabled, replacing any edition already
@@ -177,7 +212,7 @@ public record WriteOptions(
         Map<EditionFamily, Edition> updated = new HashMap<>(editions);
         updated.put(edition.id().family(), edition);
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, updated);
+                enableZstd, globalDictMaxRetainedBytes, updated, columnEncodings);
     }
 
     /// Returns a copy of these options with the edition guard turned off, the counterpart of Rust's
@@ -190,6 +225,6 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with no edition enabled
     public WriteOptions withoutEditions() {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, Map.of());
+                enableZstd, globalDictMaxRetainedBytes, Map.of(), columnEncodings);
     }
 }

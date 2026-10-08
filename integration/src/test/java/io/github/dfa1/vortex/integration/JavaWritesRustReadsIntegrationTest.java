@@ -715,6 +715,37 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_jniReader_columnEncodingCandidates_readsAndFilters(@TempDir Path tmp) throws IOException {
+        // Given — a column restricted to ALP/FoR/bitpacking (#461): the override must still write
+        // a file vortex-jni reads and filters correctly, not just a smaller or faster one
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("p")), List.of(DType.F64), false);
+        WriteOptions options = WriteOptions.defaults().withColumnEncoding(ColumnName.of("p"),
+                io.github.dfa1.vortex.writer.ColumnEncoding.candidates(
+                        new io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder(),
+                        new io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder(),
+                        new io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder()));
+        int n = 30_000;
+        double[] prices = new double[n];
+        for (int i = 0; i < n; i++) {
+            prices[i] = (5_000 + i) / 100.0;
+        }
+        Path file = tmp.resolve("java_column_encoding.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, options)) {
+            sut.writeChunk(Map.of(ColumnName.of("p"), prices));
+        }
+
+        // When
+        double[] all = readDoubleColumn(file, "p");
+        List<Object> filtered = readColumnFiltered(file, "p", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("p"), Expression.literal(340.0)));
+
+        // Then — prices run 50.00 .. 349.99 in 0.01 steps, so 340.00 .. 349.99 (1000 rows) match
+        assertThat(all).containsExactly(prices);
+        assertThat(filtered).hasSize(1000);
+    }
+
+    @Test
     void javaWriter_jniReader_filteredUtf8_prunesOnTruncatedBounds(@TempDir Path tmp) throws IOException {
         // Given — sorted keys longer than the 64-byte bounded_max/bounded_min limit (#447), so
         // each zone stores a truncated lower bound and an incremented upper bound. A bound that

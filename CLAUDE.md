@@ -47,7 +47,7 @@ reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, A
           reader.extension — ExtensionDecoder + Date/Time/Timestamp/Uuid impls
           reader.layout — Layout, LayoutDecoder, LayoutDecodeContext, LayoutRegistry
           + built-in *LayoutDecoder impls, ZonedStatsSchema
-writer  — VortexWriter, WriteRegistry, WriteOptions, ExtensionEncoder
+writer  — VortexWriter, WriteRegistry, WriteOptions, ColumnEncoding, ExtensionEncoder
           writer.encode — EncodingEncoder, EncodeContext, EncodeResult, EncodedBuffer, NullableData
           + *EncodingEncoder impls,
           extension encoders

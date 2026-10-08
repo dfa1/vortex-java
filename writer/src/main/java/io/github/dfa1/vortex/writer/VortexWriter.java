@@ -166,6 +166,8 @@ public final class VortexWriter implements Closeable {
     // vortex.stats zone map is built from colChunks/dictColRefs at close.
     private final boolean zonedLayout;
     private final Map<ColumnName, ZoneAccumulator> zoneAccumulators = new LinkedHashMap<>();
+    // WriteOptions.columnEncodings resolved to the encoder each overridden column is written with.
+    private final Map<ColumnName, EncodingEncoder> columnEncoders = new LinkedHashMap<>();
     // Stats (ProtoScalarValue bytes) of the most recently written segment, captured for ChunkRef.
     private byte[] lastStatsMin;
     private byte[] lastStatsMax;
@@ -200,6 +202,12 @@ public final class VortexWriter implements Closeable {
         this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
         this.editionAllowed = editionAllowed(options.editions());
         this.zonedLayout = options.enableZoneMaps() && editionHasZonedLayout(options.editions());
+        for (Map.Entry<ColumnName, ColumnEncoding> e : options.columnEncodings().entrySet()) {
+            if (!schema.fieldNames().contains(e.getKey())) {
+                throw new IllegalArgumentException("column encoding for unknown column: " + e.getKey());
+            }
+            columnEncoders.put(e.getKey(), columnEncoder(e.getValue()));
+        }
         this.editionExcluded = editionExcluded(this.editionAllowed, encodings, this.cascadeCodecs);
         for (ColumnName name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
@@ -534,7 +542,7 @@ public final class VortexWriter implements Closeable {
                         .add(data, arrayLength(data));
             }
 
-            if (!firstChunkSeen && options.globalDict()) {
+            if (!firstChunkSeen && options.globalDict() && !columnEncoders.containsKey(colName)) {
                 // Global dict candidate detection inspects raw primitive/String/byte[] arrays. Nullable
                 // columns (carried as NullableData) run the same cardinality/ratio check against
                 // their values, skipping null positions per the validity bitmap; the reader's dict
@@ -586,7 +594,7 @@ public final class VortexWriter implements Closeable {
                 }
             } else {
                 long rowCount = arrayLength(data);
-                int segIdx = writeSegment(colDtype, data);
+                int segIdx = writeSegment(colDtype, data, columnEncoders.get(colName));
                 colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
             }
         }
@@ -1025,6 +1033,35 @@ public final class VortexWriter implements Closeable {
         zoneMaps.put(colName,
                 new ZoneMapRef(zonesSegIdx, nZones, ZoneMapStatCodec.zonedMetadataBytes(
                         ZoneMapStatCodec.uniformZoneLength(rowCounts), minMaxDtype != null, sumDtype != null)));
+    }
+
+    /// The encoder a column with a [ColumnEncoding] override is written with: the cascade over the
+    /// column's candidates only, wrapping nullable data in `vortex.masked` as the default path does.
+    private EncodingEncoder columnEncoder(ColumnEncoding encoding) {
+        List<EncodingEncoder> encoders = encoding.encoders();
+        WriteRegistry registry = buildRegistry(encoders);
+        return new EncodingEncoder() {
+            @Override
+            public EncodingId encodingId() {
+                return encoders.getFirst().encodingId();
+            }
+
+            @Override
+            public boolean accepts(DType dtype) {
+                return true;
+            }
+
+            @Override
+            public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+                // The candidates are the whole set: the column's context (and so a masked column's
+                // value cascade, which reads ctx.registry()) sees only them.
+                EncodeContext columnCtx = EncodeContext.ofDepth(options.allowedCascading(), ctx.arena(),
+                        registry, editionExcluded);
+                return data instanceof NullableData && !(dtype instanceof DType.Extension)
+                        ? new MaskedEncodingEncoder().encode(dtype, data, columnCtx)
+                        : new CascadingCompressor(encoders).encode(dtype, data, columnCtx);
+            }
+        };
     }
 
     /// Encodes a `vortex.zoned` stats table through the cascade at any depth and with any encoder
