@@ -48,9 +48,28 @@ public final class CascadingCompressor {
         };
     }
 
-    private static final int STRIDE_COUNT = 32;
+    /// Rows per sample stride: Rust's `SAMPLE_SIZE`.
+    private static final int SAMPLE_STRIDE = 64;
 
-    /// Build a stratified sample: pick `STRIDE_COUNT` contiguous strides at random
+    /// Strides are taken in multiples of this many: Rust rounds its sample count up to a multiple
+    /// of 16 (`next_multiple_of(.., 16)`), so `16 * SAMPLE_STRIDE` keeps every sample a multiple of
+    /// 1024 rows.
+    private static final int STRIDE_MULTIPLE = 16;
+
+    /// Rust's `sample_count_approx_one_percent` scaled by `ctx`: about `sampleFraction` of `n` in
+    /// [#SAMPLE_STRIDE]-row strides, the stride count rounded up to [#STRIDE_MULTIPLE] and at least
+    /// `minSampleSize` rows. The sample is then always a multiple of 1024 rows, as in Rust. Taking
+    /// exactly 1% instead (2622 of 262144 rows) penalized FastLanes bit-packing, which pads to
+    /// 1024-value blocks: on such a sample 7-bit codes measured larger than raw bytes and lost,
+    /// though they win on the full chunk (#458).
+    private static int sampleSize(int n, EncodeContext ctx) {
+        long strides = (long) (n * ctx.sampleFraction()) / SAMPLE_STRIDE;
+        strides = (strides + STRIDE_MULTIPLE - 1) / STRIDE_MULTIPLE * STRIDE_MULTIPLE;
+        strides = Math.max(strides, Math.max(1, ctx.minSampleSize() / SAMPLE_STRIDE));
+        return (int) Math.min(strides * SAMPLE_STRIDE, n);
+    }
+
+    /// Build a stratified sample: pick [#SAMPLE_STRIDE]-row contiguous strides at random
     /// offsets, concatenated. Preserves local run structure (so RunEnd/RLE can win)
     /// while covering breadth (so cardinality-based encoders see realistic distinct counts).
     /// Falls back to first-N when the data is short enough for one stride to span it.
@@ -125,7 +144,7 @@ public final class CascadingCompressor {
                                     // must be reproducible across builds for stable compression
                                     // heuristics. No security boundary — output is sample indices.
     private static void forEachStride(int n, int sampleSize, long seed, StrideCopy copier) {
-        int strideCount = Math.min(STRIDE_COUNT, sampleSize);
+        int strideCount = Math.max(1, sampleSize / SAMPLE_STRIDE);
         Random rng = new Random(seed);
         int dstOff = 0;
         int partRemainder = n % strideCount;
@@ -250,8 +269,7 @@ public final class CascadingCompressor {
         int n = dataLength(data);
 
         // Build sample
-        int sampleSize = (int) Math.max(ctx.minSampleSize(), Math.ceil(n * ctx.sampleFraction()));
-        sampleSize = Math.min(sampleSize, n);
+        int sampleSize = sampleSize(n, ctx);
         Object sample = (sampleSize < n) ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data;
 
         long bestSampleSize = baselineFn.applyAsLong(sampleSize);

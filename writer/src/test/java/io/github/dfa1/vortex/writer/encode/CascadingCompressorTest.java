@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -103,6 +104,28 @@ class CascadingCompressorTest {
 
             // Then
             assertThat(containsEncoding(result.rootNode(), EncodingId.VORTEX_ALP)).isFalse();
+        }
+
+        @Test
+        void largeChunk_sampleIsAMultipleOf1024_soBitpackingWins() {
+            // Given 262144 one-byte rows of 7-bit values, like the dict codes of Rust's ~1 MB F32
+            // chunk (#458). An exact 1% sample (2622 rows) made FastLanes bit-packing pad to 3072
+            // values: 2688 packed bytes against 2622 raw, so it lost though it wins on the chunk.
+            // Rust rounds its sample up to 3072 rows. (Wider values hide the bug: packing still
+            // beats 4 raw bytes per value even when padded.)
+            int n = 262_144;
+            byte[] values = new byte[n];
+            Random rng = new Random(42);
+            for (int i = 0; i < n; i++) {
+                values[i] = (byte) rng.nextInt(100);
+            }
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult result = sut.encode(new DType.Primitive(PType.U8, false), values, ctx(3));
+
+            // Then
+            assertThat(containsEncoding(result.rootNode(), EncodingId.FASTLANES_BITPACKED)).isTrue();
         }
 
         @Test

@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read `vortex.zstd_buffers`, Rust's opt-in buffer-level Zstd encoding (`zstd2026.02.0`) ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 
 ### Fixed
+- Batches above ~100 000 rows compressed worse than smaller ones (e.g. a 262 144-row F32 batch 14% larger than vortex-jni's): the cascade sampled exactly 1% of rows, a size FastLanes bit-packing pads past and so never won. Samples are now sized as Rust sizes them, a multiple of 1024 rows ([#458](https://github.com/dfa1/vortex-java/issues/458)).
 - `VortexReader#columnStats()` reported no min/max for string columns of Rust-written files; it now takes them from the chunks' own stats when the zone map holds only bounds ([#447](https://github.com/dfa1/vortex-java/issues/447)).
 - Zone maps of Rust-written dictionary columns were ignored: the reader placed `vortex.zoned` zones by code chunk instead of Rust's fixed stride ([#447](https://github.com/dfa1/vortex-java/issues/447)).
 - Filtered scans of Rust-written files could skip rows matching a string with characters outside the Basic Multilingual Plane (e.g. emoji): strings were compared in UTF-16 order, Rust's stats are in UTF-8 byte order. The writer's string min/max, `vortex filter` and the inspector now use UTF-8 order too ([#458](https://github.com/dfa1/vortex-java/issues/458)).
