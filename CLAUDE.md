@@ -147,10 +147,11 @@ DType (FlatBuffer), and Layout (FlatBuffer) blobs elsewhere in the file.
 
 Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
 - **Flat** single encoded segment · **Chunked** sequence of Flats · **Struct** one child/column
-- **Zoned** (`vortex.stats`; reads also accept the newer Rust alias `vortex.zoned`) wraps a child with per-chunk min/max for zone-map pruning.
-  The writer emits one zone per `writeChunk` batch. Rust reads the declared zone length as a
-  uniform stride (row `r` → zone `r / len`), so it must be the shared batch length, or `0`
-  ("no stride") when batches differ — never a configured value (#418)
+- **Zoned** wraps a child with a per-zone stats table for zone-map pruning. By default the writer
+  emits Rust's `vortex.zoned`: fixed 8192-row zones independent of `writeChunk` batches
+  (`ZoneAccumulator`), Rust's per-dtype aggregate set, no zone sum (#447). Targets before
+  `core2026.08.0` get the legacy `vortex.stats`: one zone per batch, whose declared length Rust
+  reads as a stride, so it is the shared batch length or `0` when batches differ (#418)
 
 Encoding IDs are strings (`"vortex.primitive"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs →
 `EncodingDecoder`; immutable after construction, built-in decoders are registered explicitly by

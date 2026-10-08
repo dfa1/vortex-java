@@ -182,7 +182,7 @@ Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedC
 
 | Method | Notes |
 |--------|-------|
-| `withZoneMaps(boolean)` | Toggle per-chunk min/max/sum statistics. One zone per `writeChunk` batch; Rust readers (vortex-jni) prune on them only when every batch but the last has the same row count, and otherwise read the column unpruned |
+| `withZoneMaps(boolean)` | Toggle zone-map statistics. By default Rust's `vortex.zoned`: one zone per 8192 rows regardless of `writeChunk` batches, with max/min (strings: 64-byte bounds), `nan_count` for floats and `null_count`, no sum. An edition before `core2026.08.0` gets the legacy `vortex.stats`: one zone per batch with a sum, pruned by vortex-jni only when every batch but the last has the same row count |
 | `withGlobalDict(boolean)` | Toggle the shared cross-chunk dictionary |
 | `withZstd(boolean)` | Add Zstandard to the cascade codec competition. Requires `allowedCascading > 0` — Zstd only competes inside the cascade, so `withZstd(true)` throws `IllegalArgumentException` at depth 0; combine with `cascading(depth)` |
 | `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |
@@ -602,7 +602,10 @@ keywords that open a typed literal (`date`, `time`, `timestamp`, `interval`), wh
 even under Babel and need back-ticks: `` select `date` from vtx.ohlc ``.
 
 Whole-table aggregates (`min`/`max`/`sum`) are answered from zone-map statistics via
-`VortexAggregatePushDownRule` where possible — no data segment is decoded. `connect` is the
+`VortexAggregatePushDownRule` where possible — no data segment is decoded. The fold needs one zone
+per chunk and a per-zone sum, i.e. the legacy `vortex.stats` zone map (writes targeting an edition
+before `core2026.08.0`); files with Rust's `vortex.zoned` — the default since #447, and every
+Rust-written file — answer the same aggregates through a scan. `connect` is the
 supported entry point; `VortexSchema`/`VortexTable` (`io.github.dfa1.vortex.calcite`) are the
 underlying schema/table plumbing it assembles, exposed for callers building a Calcite schema tree
 by hand instead of going through `connect`.

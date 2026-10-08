@@ -50,7 +50,7 @@ class AggregateSumNullTest {
                 List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.I64, true)), false);
         Path file = tmp.resolve("sum-nulls.vortex");
         // Large chunk so the whole column is one chunk; zone maps on so the SUM stat is emitted.
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, schema, opts)) {
             writer.writeChunk(Map.of(ColumnName.of("v"), new NullableData(values, valid)));

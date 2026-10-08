@@ -478,7 +478,9 @@ try (Connection conn = VortexCalcite.connect("vtx", tables)) {
 ```
 
 Whole-table `min`/`max`/`sum` aggregates are answered straight from zone-map statistics — no data
-segment is decoded. Column names that collide with SQL reserved words (`close`, `open`, `value`,
+segment is decoded — on files with the legacy `vortex.stats` zone map (written with
+`WriteOptions.defaults().withEdition(Editions.CORE_2025_10_0)`). Files with the default
+`vortex.zoned` zone map answer them through a scan. Column names that collide with SQL reserved words (`close`, `open`, `value`,
 `year`, …) work unquoted; the handful that open a typed literal (`date`, `time`, `timestamp`,
 `interval`) still need back-ticks: `` select `date` from vtx.ohlc ``. See
 [reference.md#calcite-sql-adapter](reference.md#calcite-sql-adapter) for the full lexical/parser

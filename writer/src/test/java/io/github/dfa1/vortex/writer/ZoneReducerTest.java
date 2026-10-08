@@ -45,7 +45,7 @@ class ZoneReducerTest {
         // Given — three I64 chunks (one zone each); column total is 1+..+150 = 11325
         Path file = tmp.resolve("ints.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var w = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults())) {
+             var w = VortexWriter.create(ch, I64_SCHEMA, LegacyZoneMaps.OPTIONS)) {
             w.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));
             w.writeChunk(Map.of(ColumnName.of("id"), range(51L, 100L)));
             w.writeChunk(Map.of(ColumnName.of("id"), range(101L, 150L)));
@@ -65,7 +65,7 @@ class ZoneReducerTest {
         // Given — a single F64 chunk so the sum stat boxes as Double, not Long
         Path file = tmp.resolve("floats.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var w = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults())) {
+             var w = VortexWriter.create(ch, F64_SCHEMA, LegacyZoneMaps.OPTIONS)) {
             w.writeChunk(Map.of(ColumnName.of("v"), new double[]{1.5, 2.5, 3.0}));
         }
 
@@ -82,7 +82,7 @@ class ZoneReducerTest {
     void noZoneMapYieldsNull(@TempDir Path tmp) throws IOException {
         // Given — zone maps disabled, so no per-zone SUM exists to fold
         Path file = tmp.resolve("nostats.vtx");
-        WriteOptions noZoneMaps = WriteOptions.defaults().withZoneMaps(false);
+        WriteOptions noZoneMaps = LegacyZoneMaps.OPTIONS.withZoneMaps(false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = VortexWriter.create(ch, I64_SCHEMA, noZoneMaps)) {
             w.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));
@@ -104,7 +104,7 @@ class ZoneReducerTest {
         // noZoneMapYieldsNull: there the table is absent; here it is present but incomplete.
         Path file = tmp.resolve("overflow.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var w = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults())) {
+             var w = VortexWriter.create(ch, I64_SCHEMA, LegacyZoneMaps.OPTIONS)) {
             w.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));                                // sums fine
             w.writeChunk(Map.of(ColumnName.of("id"), new long[]{Long.MAX_VALUE, Long.MAX_VALUE}));    // overflows
         }

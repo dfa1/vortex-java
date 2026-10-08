@@ -52,7 +52,7 @@ class ZoneMapPruningTest {
     private static Path writeThreeChunks(Path tmp) throws IOException {
         Path file = tmp.resolve("three_chunks.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+             var sut = VortexWriter.create(ch, SCHEMA, LegacyZoneMaps.OPTIONS)) {
             sut.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));
             sut.writeChunk(Map.of(ColumnName.of("id"), range(51L, 100L)));
             sut.writeChunk(Map.of(ColumnName.of("id"), range(101L, 150L)));
@@ -83,7 +83,7 @@ class ZoneMapPruningTest {
     private static Path writeI64Chunk(Path tmp, long... values) throws IOException {
         Path file = tmp.resolve("i64_one.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+             var sut = VortexWriter.create(ch, SCHEMA, LegacyZoneMaps.OPTIONS)) {
             sut.writeChunk(Map.of(ColumnName.of("id"), values));
         }
         return file;
@@ -108,7 +108,7 @@ class ZoneMapPruningTest {
     private static Path writeU64Chunks(Path tmp) throws IOException {
         Path file = tmp.resolve("u64_chunks.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, U64_SCHEMA, WriteOptions.defaults())) {
+             var sut = VortexWriter.create(ch, U64_SCHEMA, LegacyZoneMaps.OPTIONS)) {
             sut.writeChunk(Map.of(ColumnName.of("id"), range(10L, 20L)));            // [10..20], 11 rows
             sut.writeChunk(Map.of(ColumnName.of("id"), urange(TWO_POW_63 + 10, 11))); // [2^63+10 .. 2^63+20], 11 rows
         }
@@ -128,7 +128,7 @@ class ZoneMapPruningTest {
     private static Path writeF32Chunks(Path tmp) throws IOException {
         Path file = tmp.resolve("f32_chunks.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults())) {
+             var sut = VortexWriter.create(ch, F32_SCHEMA, LegacyZoneMaps.OPTIONS)) {
             sut.writeChunk(Map.of(ColumnName.of("v"), f32range(1, 50)));
             sut.writeChunk(Map.of(ColumnName.of("v"), f32range(51, 100)));
             sut.writeChunk(Map.of(ColumnName.of("v"), f32range(101, 150)));
@@ -549,7 +549,7 @@ class ZoneMapPruningTest {
         private Path writeFourChunks(Path tmp, boolean globalDict) throws IOException {
             Path file = tmp.resolve("dict_" + globalDict + ".vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 var sut = VortexWriter.create(ch, DICT_SCHEMA, WriteOptions.defaults().withGlobalDict(globalDict))) {
+                 var sut = VortexWriter.create(ch, DICT_SCHEMA, LegacyZoneMaps.OPTIONS.withGlobalDict(globalDict))) {
                 for (int c = 0; c < 4; c++) {
                     String[] symbols = new String[1_000];
                     Arrays.fill(symbols, "sym" + c);
@@ -603,7 +603,7 @@ class ZoneMapPruningTest {
                     false);
             Path file = tmp.resolve("dict_nulls_" + globalDict + ".vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 var sut = VortexWriter.create(ch, schema, WriteOptions.defaults().withGlobalDict(globalDict))) {
+                 var sut = VortexWriter.create(ch, schema, LegacyZoneMaps.OPTIONS.withGlobalDict(globalDict))) {
                 for (int c = 0; c < 4; c++) {
                     String[] symbols = new String[1_000];
                     Arrays.fill(symbols, c == 2 ? null : "sym" + c);

@@ -50,7 +50,7 @@ class AggregateRuleBranchTest {
         // fixture's globalDict "symbol" column covers the other shape in the same test (issue #409).
         Path stringsFile = tmp.resolve("strings.vortex");
         DType.Struct stringsSchema = DType.structBuilder().field("symbol", DType.UTF8).build();
-        WriteOptions stringsOpts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions stringsOpts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
         try (var ch = FileChannel.open(stringsFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, stringsSchema, stringsOpts)) {
             writer.writeChunk(Map.of(ColumnName.of("symbol"), new String[]{"AAPL", "MSFT", "NVDA", "TSLA"}));

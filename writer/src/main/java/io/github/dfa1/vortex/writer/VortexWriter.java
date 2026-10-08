@@ -161,6 +161,11 @@ public final class VortexWriter implements Closeable {
 
     // Per-column zone-maps, populated by flushZoneMaps() in close() when enableZoneMaps is set.
     private final Map<ColumnName, ZoneMapRef> zoneMaps = new LinkedHashMap<>();
+    // Rust's vortex.zoned: fixed 8192-row zones fed from the raw batches, independent of chunking.
+    // Used when the targeted core edition includes the layout; otherwise the legacy per-chunk
+    // vortex.stats zone map is built from colChunks/dictColRefs at close.
+    private final boolean zonedLayout;
+    private final Map<ColumnName, ZoneAccumulator> zoneAccumulators = new LinkedHashMap<>();
     // Stats (ProtoScalarValue bytes) of the most recently written segment, captured for ChunkRef.
     private byte[] lastStatsMin;
     private byte[] lastStatsMax;
@@ -194,6 +199,7 @@ public final class VortexWriter implements Closeable {
         this.cascadeCodecs = encodings == DEFAULT_CODECS ? buildCascadeCodecs(options) : List.copyOf(encodings);
         this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
         this.editionAllowed = editionAllowed(options.editions());
+        this.zonedLayout = options.enableZoneMaps() && editionHasZonedLayout(options.editions());
         this.editionExcluded = editionExcluded(this.editionAllowed, encodings, this.cascadeCodecs);
         for (ColumnName name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
@@ -202,6 +208,17 @@ public final class VortexWriter implements Closeable {
 
     /// The union of every enabled edition's cumulative member set, or empty if no edition is
     /// configured — an empty result means the guard is off entirely.
+    /// Whether the write may emit Rust's `vortex.zoned` layout, added in `core2026.08.0`: with the
+    /// edition guard off (Rust's `disable_editions()` writes its latest layouts), or when the
+    /// enabled core edition is that one or later.
+    private static boolean editionHasZonedLayout(Map<EditionFamily, Edition> editions) {
+        if (editions.isEmpty()) {
+            return true;
+        }
+        Edition core = editions.get(EditionFamily.CORE);
+        return core != null && Editions.ALL.indexOf(core) >= Editions.ALL.indexOf(Editions.CORE_2026_08_0);
+    }
+
     private static Set<EncodingId> editionAllowed(Map<EditionFamily, Edition> editions) {
         if (editions.isEmpty()) {
             return Set.of();
@@ -510,6 +527,11 @@ public final class VortexWriter implements Closeable {
                 if (impl != null) {
                     data = impl.encodeAll(extDtype, coll);
                 }
+            }
+
+            if (zonedLayout) {
+                zoneAccumulators.computeIfAbsent(colName, _ -> new ZoneAccumulator(colDtype))
+                        .add(data, arrayLength(data));
             }
 
             if (!firstChunkSeen && options.globalDict()) {
@@ -899,6 +921,18 @@ public final class VortexWriter implements Closeable {
         if (!options.enableZoneMaps()) {
             return;
         }
+        if (zonedLayout) {
+            for (Map.Entry<ColumnName, ZoneAccumulator> e : zoneAccumulators.entrySet()) {
+                ZoneAccumulator acc = e.getValue();
+                acc.finish();
+                if (acc.zoneCount() == 0) {
+                    continue;
+                }
+                int zonesSegIdx = writeSegment(acc.tableDtype(), acc.tableData(), zoneTableEncoder());
+                zoneMaps.put(e.getKey(), new ZoneMapRef(zonesSegIdx, acc.zoneCount(), acc.metadata()));
+            }
+            return;
+        }
         for (Map.Entry<ColumnName, List<ChunkRef>> e : colChunks.entrySet()) {
             ColumnName colName = e.getKey();
             List<ChunkRef> chunks = e.getValue();
@@ -989,8 +1023,32 @@ public final class VortexWriter implements Closeable {
                 names.stream().map(ColumnName::of).toList(), List.copyOf(types), false);
         int zonesSegIdx = writeSegment(statsDtype, new StructData(fields), new StructEncodingEncoder());
         zoneMaps.put(colName,
-                new ZoneMapRef(zonesSegIdx, nZones, ZoneMapStatCodec.uniformZoneLength(rowCounts),
-                        minMaxDtype != null, sumDtype != null));
+                new ZoneMapRef(zonesSegIdx, nZones, ZoneMapStatCodec.zonedMetadataBytes(
+                        ZoneMapStatCodec.uniformZoneLength(rowCounts), minMaxDtype != null, sumDtype != null)));
+    }
+
+    /// Encodes a `vortex.zoned` stats table through the cascade at any depth and with any encoder
+    /// list, as Rust's stats strategy always compresses it: [CascadingCompressor] encodes the
+    /// struct itself (including the nullable `bounded_max` state) and falls back to canonical
+    /// encodings for any field no candidate accepts.
+    private EncodingEncoder zoneTableEncoder() {
+        List<EncodingEncoder> codecs = cascadeCodecs;
+        return new EncodingEncoder() {
+            @Override
+            public EncodingId encodingId() {
+                return EncodingId.VORTEX_STRUCT;
+            }
+
+            @Override
+            public boolean accepts(DType dtype) {
+                return dtype instanceof DType.Struct;
+            }
+
+            @Override
+            public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+                return new CascadingCompressor(codecs).encode(dtype, data, ctx);
+            }
+        };
     }
 
     /// Wraps a column's data layout in a `vortex.stats` (zoned) layout when a zone-map was
@@ -1003,7 +1061,7 @@ public final class VortexWriter implements Closeable {
         int zonesSegV = FbsLayout.createSegmentsVector(fbb, new long[]{zm.zonesSegIdx()});
         int zonesFlat = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, zm.nZones(), 0, 0, zonesSegV);
         int childV = FbsLayout.createChildrenVector(fbb, new int[]{dataLayout, zonesFlat});
-        int metaV = FbsLayout.createMetadataVector(fbb, ZoneMapStatCodec.zonedMetadataBytes(zm.zoneLen(), zm.hasMinMax(), zm.hasSum()));
+        int metaV = FbsLayout.createMetadataVector(fbb, zm.metadata());
         return FbsLayout.createFbsLayout(fbb, LAYOUT_ZONED, colRows, metaV, childV, 0);
     }
 
@@ -1032,13 +1090,14 @@ public final class VortexWriter implements Closeable {
         int asv = FbsFooter.createArraySpecsVector(fbb, asOffsets);
 
         // layout_specs, in LAYOUT_* index order: FLAT, CHUNKED, STRUCT, DICT, then the zoned
-        // layout emitted as the legacy "vortex.stats" alias (old and new Rust readers accept it;
-        // "vortex.zoned" would break older readers).
+        // layout: Rust's "vortex.zoned" when the edition has it, else the legacy "vortex.stats"
+        // alias every reader accepts.
         int ls0 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.FLAT.id()));
         int ls1 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.CHUNKED.id()));
         int ls2 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.STRUCT.id()));
         int ls3 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.DICT.id()));
-        int ls4 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.STATS.id()));
+        int ls4 = FbsLayoutSpec.createFbsLayoutSpec(fbb,
+                fbb.createString((zonedLayout ? LayoutId.ZONED : LayoutId.STATS).id()));
         int lsv = FbsFooter.createLayoutSpecsVector(fbb, new int[]{ls0, ls1, ls2, ls3, ls4});
 
         // segment_specs (inline struct vector — write in reverse order)
@@ -1278,7 +1337,8 @@ public final class VortexWriter implements Closeable {
     /// Per-column zone-map: the flat segment holding the per-zone stats table, the zone
     /// count (one zone per chunk), the logical rows per zone, and whether the table carries
     /// MIN/MAX (else NULL_COUNT only).
-    private record ZoneMapRef(int zonesSegIdx, long nZones, long zoneLen, boolean hasMinMax, boolean hasSum) {
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
+    private record ZoneMapRef(int zonesSegIdx, long nZones, byte[] metadata) {
     }
 
     private record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,

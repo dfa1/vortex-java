@@ -214,7 +214,7 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `core2025.05.0` | `core` | 23 baseline: `fastlanes.bitpacked`/`for`, `vortex.alp`/`alprd`/`bool`/`bytebool`/`chunked`/`constant`/`datetimeparts`/`decimal`/`decimal_byte_parts`/`dict`/`ext`/`fsst`/`list`/`null`/`primitive`/`runend`/`sparse`/`struct`/`varbin`/`varbinview`/`zigzag` |
 | `core2025.06.0` | `core` | `vortex.pco`, `vortex.sequence`, `vortex.zstd` |
 | `core2025.10.0` | `core` | `fastlanes.rle`, `vortex.fixed_size_list`, `vortex.listview`, `vortex.masked` |
-| `core2026.08.0` | `core` | no encoding (Rust adds the `vortex.zoned` layout and zone-map aggregates, not modelled) |
+| `core2026.08.0` | `core` | no encoding; Rust adds the `vortex.zoned` layout, which the writer emits from this edition on (older targets get `vortex.stats`) |
 | `core2026.08.1` | `core` | `vortex.onpair` |
 | `core2026.08.2` | `core` | `vortex.map` |
 | `core2026.08.3` | `core` | `vortex.variant`, `vortex.parquet.variant` (read only) — **default write target** |
@@ -226,6 +226,13 @@ Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0
 forever read-compatibility guarantee; `preview` holds opt-in components not yet adopted by `core`;
 `zstd` is declared by Rust's `vortex-zstd` plugin crate rather than the core declarations, and is
 never enabled by default.
+Zone maps follow the edition too. A write targeting `core2026.08.0` or later (the default)
+emits Rust's `vortex.zoned` with fixed 8192-row zones and the aggregate set vortex-jni writes;
+earlier targets emit the legacy `vortex.stats`, one zone per `writeChunk` batch. vortex-java
+readers from 0.12.1 read `vortex.zoned`; before this release they placed a dictionary column's
+`vortex.zoned` zones by its code chunks rather than the stride, which can mis-attribute zone stats
+when the chunk count happens to equal the zone count, so read new files with this release or later.
+
 `fastlanes.delta` and `vortex.patched` are in no edition: as in Rust, only a write with the guard
 off (`WriteOptions.withoutEditions()`) may emit them. Rust editions also gate layouts, extension
 dtypes and zone-map aggregates; vortex-java's catalog models array encodings only. (Upstream

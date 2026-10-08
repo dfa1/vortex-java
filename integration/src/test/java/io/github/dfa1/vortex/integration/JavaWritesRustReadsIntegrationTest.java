@@ -707,7 +707,40 @@ class JavaWritesRustReadsIntegrationTest {
                 Arguments.of("short middle chunk", new int[]{4, 4, 2, 4}, 10L),
                 // fixed batches far below chunkSize (65 536): the stride is the batch length
                 Arguments.of("fixed batches, short tail", new int[]{5, 5, 5, 3}, 7L),
-                Arguments.of("one chunk", new int[]{9}, 4L));
+                Arguments.of("one chunk", new int[]{9}, 4L),
+                // vortex.zoned's 8192-row zones straddle uneven batches: a zone's stats must
+                // cover rows from both batches it spans (#447)
+                Arguments.of("8192-row zones across uneven batches", new int[]{5000, 5000, 7000}, 9000L),
+                Arguments.of("tiny batch between zones", new int[]{20_000, 3, 20_000}, 16_384L));
+    }
+
+    @Test
+    void javaWriter_jniReader_filteredUtf8_prunesOnTruncatedBounds(@TempDir Path tmp) throws IOException {
+        // Given — sorted keys longer than the 64-byte bounded_max/bounded_min limit (#447), so
+        // each zone stores a truncated lower bound and an incremented upper bound. A bound that
+        // excluded its own zone's values would make vortex-jni drop the matching row.
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("k")), List.of(DType.UTF8), false);
+        String prefix = "x".repeat(60);
+        int batch = 7_000;
+        Path file = tmp.resolve("java_long_keys.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            for (int b = 0; b < 3; b++) {
+                String[] keys = new String[batch];
+                for (int i = 0; i < batch; i++) {
+                    keys[i] = prefix + String.format("%08d", b * batch + i);
+                }
+                sut.writeChunk(Map.of(ColumnName.of("k"), keys));
+            }
+        }
+        String target = prefix + String.format("%08d", 12_345);
+
+        // When
+        List<Object> result = readColumnFiltered(file, "k", Expression.binary(Expression.BinaryOp.EQ,
+                Expression.column("k"), Expression.literal(target)));
+
+        // Then
+        assertThat(result).extracting(Object::toString).containsExactly(target);
     }
 
     @Test

@@ -138,12 +138,14 @@ class VortexInspectorIntegrationTest {
         // Given — a global-dictionary column stores per-chunk *codes* under its zone map; their
         // array-level min/max are code numbers (0, 1, ...), not values. Chunk 0 holds only
         // "apple"/"banana" and chunk 1 only "cherry"/"date", so each chunk row must show its own
-        // value range, which only the zone-map table carries.
+        // value range, which only the zone-map table carries. The legacy vortex.stats layout (an
+        // edition before core2026.08.0) zones per batch; default vortex.zoned zones per 8192 rows.
         Path file = tmp.resolve("dict.vtx");
         ColumnName fruit = ColumnName.of("fruit");
         var schema = new DType.Struct(List.of(fruit), List.of(DType.UTF8), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var writer = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+             var writer = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema,
+                     WriteOptions.cascading(3).withEdition(io.github.dfa1.vortex.core.model.Editions.CORE_2025_10_0))) {
             writer.writeChunk(Map.of(fruit, repeat(1_000, "apple", "banana")));
             writer.writeChunk(Map.of(fruit, repeat(1_000, "cherry", "date")));
         }

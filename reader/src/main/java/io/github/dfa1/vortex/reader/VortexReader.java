@@ -236,8 +236,16 @@ public final class VortexReader implements VortexHandle {
         Map<ColumnName, ArrayStats> result = new LinkedHashMap<>();
         try (ScanIterator iter = new ScanIterator(this, ScanOptions.all())) {
             for (ColumnName name : schema.fieldNames()) {
-                result.put(name, aggregateStats(iter.columnZoneStats(name.value()),
-                        schema.fieldTypes().get(schema.fieldNames().indexOf(name))));
+                DType column = schema.fieldTypes().get(schema.fieldNames().indexOf(name));
+                ArrayStats stats = aggregateStats(iter.columnZoneStats(name.value()), column);
+                if (stats.min() == null && stats.max() == null) {
+                    // A string zone map holds only bounds (Rust's bounded_max/bounded_min), which
+                    // are not exact: take min/max from the chunks' own array stats instead.
+                    ArrayStats exact = aggregateStats(iter.chunkStats(name.value()), column);
+                    stats = new ArrayStats(exact.min(), exact.max(), stats.sum(), stats.trueCount(),
+                            stats.nullCount(), stats.isSorted(), stats.isStrictSorted());
+                }
+                result.put(name, stats);
             }
         }
         return Map.copyOf(result);

@@ -460,10 +460,29 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return fromTable;
         }
         // No zone-map table — surface each chunk's embedded ArrayStats (sum absent).
+        return chunkStats(column);
+    }
+
+    /// Each scan window's exact embedded array stats for `column`, read from the covering chunk's
+    /// data segment rather than the zone map: what [VortexReader#columnStats()] falls back on when
+    /// the zone map only bounds a string column's min/max (Rust's `bounded_max`/`bounded_min`).
+    /// A dictionary chunk reports its values pool's stats, which bound exactly the values it holds.
+    ///
+    /// @param column the column name
+    /// @return per-window stats, positionally aligned with [#chunkRowCounts()]
+    List<ArrayStats> chunkStats(String column) {
+        if (chunks == null) {
+            initialize();
+        }
+        ColumnName name = ColumnName.of(column);
         List<ArrayStats> out = new ArrayList<>(chunks.size());
         for (ChunkSpec spec : chunks) {
-            Layout flat = spec.layoutFor(name);
-            out.add(flat == null ? ArrayStats.empty() : readFlatStats(flat));
+            Layout layout = spec.layoutFor(name);
+            if (layout != null && layout.isDict() && !layout.children().isEmpty()) {
+                // child[0] = values, child[1] = codes — the order DictLayoutDecoder decodes.
+                layout = layout.children().getFirst();
+            }
+            out.add(layout == null || !layout.isFlat() ? ArrayStats.empty() : readFlatStats(layout));
         }
         return out;
     }
@@ -977,17 +996,23 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// of the last zone), or `null` when the layout does not describe exactly `zoneCount` non-empty
     /// zones. The three `vortex.zoned`-family shapes place their zones differently:
     ///
-    /// - a dictionary column's table has one zone per **code chunk** ([#dictCodeChunkStarts]) — the
-    ///   dict node above them is decoded as a unit, so chunk planning sees one full-range chunk;
-    /// - Rust's `vortex.zoned` declares a uniform **zone length** independent of chunk boundaries;
+    /// - Rust's `vortex.zoned` declares a uniform **zone length** independent of chunk boundaries,
+    ///   dictionary columns included;
+    /// - this writer's legacy `vortex.stats` dictionary column has one zone per **code chunk**
+    ///   ([#dictCodeChunkStarts]) — the dict node above them is decoded as a unit, so chunk planning
+    ///   sees one full-range chunk;
     /// - this writer's legacy `vortex.stats` emits one zone per **physical chunk**, in chunk order
     ///   (`VortexWriter#flushZoneMaps`). Its declared zone length only caps a chunk's size (a batch
     ///   smaller than the cap becomes its own, smaller chunk), so it cannot drive arithmetic.
     private static long[] zoneStarts(Layout zoned, int zoneCount) {
-        long[] starts = dictCodeChunkStarts(zoned);
-        if (starts == null && zoned.layoutId() == LayoutId.ZONED) {
+        long[] starts;
+        if (zoned.layoutId() == LayoutId.ZONED) {
+            // Always a stride, whatever the data child: Rust's zones never follow dict code chunks.
             starts = strideStarts(ZonedStatsSchema.aggregateZoneLength(zoned.metadata()), zoned.rowCount(), zoneCount);
-        } else if (starts == null && !zoned.children().isEmpty()) {
+        } else {
+            starts = dictCodeChunkStarts(zoned);
+        }
+        if (starts == null && zoned.layoutId() != LayoutId.ZONED && !zoned.children().isEmpty()) {
             List<Layout> flats = new ArrayList<>();
             collectFlats(zoned.children().getFirst(), flats);
             starts = cumulativeStarts(flats);

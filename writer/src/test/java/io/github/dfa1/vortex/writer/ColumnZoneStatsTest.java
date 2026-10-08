@@ -40,7 +40,7 @@ class ColumnZoneStatsTest {
     private static Path writeThreeChunks(Path tmp) throws IOException {
         Path file = tmp.resolve("zones.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+             var sut = VortexWriter.create(ch, SCHEMA, LegacyZoneMaps.OPTIONS)) {
             sut.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));
             sut.writeChunk(Map.of(ColumnName.of("id"), range(51L, 100L)));
             sut.writeChunk(Map.of(ColumnName.of("id"), range(101L, 150L)));
@@ -108,7 +108,7 @@ class ColumnZoneStatsTest {
         // Given — a float column so the sum stat decodes as Double, not Long
         Path file = tmp.resolve("f64.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults())) {
+             var sut = VortexWriter.create(ch, F64_SCHEMA, LegacyZoneMaps.OPTIONS)) {
             sut.writeChunk(Map.of(ColumnName.of("v"), new double[]{1.5, 2.5, 3.0}));
         }
 

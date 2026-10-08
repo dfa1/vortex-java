@@ -57,7 +57,7 @@ class AggregateWhereCleanPartitionTest {
                 .field("val", DType.I64)
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the fold reads.
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             for (int c = 0; c < CHUNKS; c++) {
@@ -319,7 +319,7 @@ class AggregateWhereCleanPartitionTest {
                 List.of(new DType.Primitive(PType.F64, false), new DType.Primitive(PType.I64, false)),
                 false);
         Path f = tmp.resolve("floating-nan.vortex");
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
         try (var ch = FileChannel.open(f, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             writer.writeChunk(Map.of(
@@ -527,7 +527,7 @@ class AggregateWhereCleanPartitionTest {
     private static void writeChunks(Path file, DType.Struct schema, Map<ColumnName, Object> chunk0,
                                     Map<ColumnName, Object> chunk1) throws Exception {
         // chunkSize large so each writeChunk is exactly one chunk (one zone).
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             writer.writeChunk(chunk0);

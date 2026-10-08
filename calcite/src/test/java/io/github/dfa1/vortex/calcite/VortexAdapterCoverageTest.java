@@ -57,7 +57,7 @@ class VortexAdapterCoverageTest {
     static void write() throws Exception {
         file = tmp.resolve("alltypes.vortex");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var w = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+             var w = VortexWriter.create(ch, SCHEMA, LegacyZoneMaps.OPTIONS)) {
             w.writeChunk(Map.ofEntries(
                     Map.entry(ColumnName.of("i8"), new byte[]{1, 2, 3}),
                     Map.entry(ColumnName.of("i16"), new short[]{10, 20, 30}),

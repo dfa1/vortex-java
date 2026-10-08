@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Breaking:** default writes emit Rust's `vortex.zoned` zone map instead of the legacy `vortex.stats`: one zone per 8192 rows regardless of `writeChunk` batches, with Rust's per-dtype stats (64-byte string bounds, `nan_count`) and no zone sum. Calcite and `ZoneReducer` aggregate push-down needs the legacy layout, so on these files it falls back to a scan; target `Editions.CORE_2025_10_0` to keep it. Read new files with this release or later ([#447](https://github.com/dfa1/vortex-java/issues/447)).
 - **Breaking:** `WriteOptions.defaults()` cascades up to depth 3, as Rust's writer always does: default writes are smaller (e.g. two-decimal F64 1.06 MB → 924 KB per 1M rows) and slower. `WriteOptions.cascading(0)` restores first-match encoding. A custom encoder list or `WriteRegistry` is now also the cascade's candidate set, with canonical `vortex.primitive` as the fallback ([#458](https://github.com/dfa1/vortex-java/issues/458)).
 - **Breaking:** the edition catalog now mirrors Rust 0.86.1. `EditionFamily.UNSTABLE` and the `UNSTABLE_*` editions are gone in favor of Rust's `PREVIEW` and `ZSTD` families (`ZSTD_2026_02_0`: `vortex.zstd_buffers`); `CORE_2026_07_0` is removed, `CORE_2026_08_0` no longer contains Map, and `core` gains `CORE_2026_08_1` (OnPair), `CORE_2026_08_2` (Map) and `CORE_2026_08_3` (Variant) ([#441](https://github.com/dfa1/vortex-java/issues/441)).
 - Default writes target `core2026.08.3`, Rust's default edition, so cascading writes may now pick `vortex.onpair` for string columns, as Rust's do ([#441](https://github.com/dfa1/vortex-java/issues/441)).
@@ -19,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read `vortex.zstd_buffers`, Rust's opt-in buffer-level Zstd encoding (`zstd2026.02.0`) ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 
 ### Fixed
+- `VortexReader#columnStats()` reported no min/max for string columns of Rust-written files; it now takes them from the chunks' own stats when the zone map holds only bounds ([#447](https://github.com/dfa1/vortex-java/issues/447)).
+- Zone maps of Rust-written dictionary columns were ignored: the reader placed `vortex.zoned` zones by code chunk instead of Rust's fixed stride ([#447](https://github.com/dfa1/vortex-java/issues/447)).
 - Filtered scans of Rust-written files could skip rows matching a string with characters outside the Basic Multilingual Plane (e.g. emoji): strings were compared in UTF-16 order, Rust's stats are in UTF-8 byte order. The writer's string min/max, `vortex filter` and the inspector now use UTF-8 order too ([#458](https://github.com/dfa1/vortex-java/issues/458)).
 - A float column whose first value is NaN recorded NaN as its min and max, disabling pruning on that chunk; min/max now skip NaN, as Rust's do ([#458](https://github.com/dfa1/vortex-java/issues/458)).
 - File-level `U64` min/max merged values at or above 2^63 as negative ([#458](https://github.com/dfa1/vortex-java/issues/458)).

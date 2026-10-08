@@ -339,10 +339,10 @@ field list.
 
 ### Pruning by zone maps
 
-`vortex.stats` is the pruning hook. At scan time, when `ScanOptions` carries a
-predicate, the reader walks `Zoned` nodes first: it inspects the child `Chunked`'s
-per-chunk min/max sidecar, drops chunks whose `[min, max]` cannot satisfy the predicate,
-and only opens segments for survivors. Smaller chunks (default 131 072 rows) →
+The zoned layout (`vortex.zoned`, legacy `vortex.stats`) is the pruning hook. At scan time,
+when `ScanOptions` carries a predicate, the reader walks `Zoned` nodes first: it reads the
+per-zone stats table (one zone per 8192 rows for `vortex.zoned`), drops chunks whose overlapping
+zones' `[min, max]` cannot satisfy the predicate, and only opens segments for survivors. Smaller chunks (default 131 072 rows) →
 finer-grained pruning than Parquet's row-group granularity (typically 1 M rows).
 
 When `WriteOptions.enableZoneMaps` is false, the writer omits the wrapping `Zoned` node

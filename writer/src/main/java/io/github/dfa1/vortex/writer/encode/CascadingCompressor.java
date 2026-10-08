@@ -19,6 +19,10 @@ import java.util.function.IntToLongFunction;
 public final class CascadingCompressor {
 
     private static final EncodingEncoder CANONICAL_PRIMITIVE = new PrimitiveEncodingEncoder();
+    private static final EncodingEncoder CANONICAL_BOOL = new BoolEncodingEncoder();
+    private static final EncodingEncoder CANONICAL_VARBIN = new VarBinEncodingEncoder();
+    private static final EncodingEncoder CANONICAL_DECIMAL = new DecimalEncodingEncoder();
+    private static final EncodingEncoder CANONICAL_EXTENSION = new ExtEncodingEncoder();
 
     private final List<EncodingEncoder> encodings;
 
@@ -165,7 +169,9 @@ public final class CascadingCompressor {
 
     private EncodeResult encodeWithCtx(DType dtype, Object data, EncodeContext ctx) {
         if (dtype instanceof DType.Struct structDtype) {
-            return encodeStruct(structDtype, (StructData) data, ctx);
+            return data instanceof NullableData(StructData fields, boolean[] validity)
+                    ? encodeStruct(structDtype, fields, validity, ctx)
+                    : encodeStruct(structDtype, (StructData) data, null, ctx);
         }
 
         // Utf8/Binary: same sample-and-measure competition as Primitive below (Dict/VarBin
@@ -345,22 +351,33 @@ public final class CascadingCompressor {
         return new EncodeResult(root, List.copyOf(allBuffers), step.statsMin(), step.statsMax());
     }
 
-    private EncodeResult encodeStruct(DType.Struct dtype, StructData data, EncodeContext ctx) {
+    /// Encodes a struct, with its row validity as child 0 ahead of the fields when `validity` is
+    /// non-null — the `vortex.struct` shape the reader (and Rust) expect for a nullable struct.
+    private EncodeResult encodeStruct(DType.Struct dtype, StructData data, boolean[] validity, EncodeContext ctx) {
         List<Object> fields = data.fieldArrays();
         List<DType> fieldTypes = dtype.fieldTypes();
         List<EncodedBuffer> allBuffers = new ArrayList<>();
-        EncodeNode[] children = new EncodeNode[fields.size()];
+        int fieldOffset = validity == null ? 0 : 1;
+        EncodeNode[] children = new EncodeNode[fields.size() + fieldOffset];
+        if (validity != null) {
+            EncodeResult validityResult = MaskedEncodingEncoder.encodeValidity(validity, ctx);
+            children[0] = validityResult.rootNode();
+            allBuffers.addAll(validityResult.encodedBuffers());
+        }
         for (int i = 0; i < fields.size(); i++) {
             DType fieldDtype = fieldTypes.get(i);
             Object fieldData = fields.get(i);
             // Mirrors StructEncodingEncoder's own field loop: a nullable field arrives as
             // NullableData(values, validity), not the dense array (String[], byte[][], ...)
-            // encodeWithCtx's per-dtype dispatch expects.
-            EncodeResult fieldResult = (fieldData instanceof NullableData && !(fieldDtype instanceof DType.Extension))
+            // encodeWithCtx's per-dtype dispatch expects. A nullable struct carries its validity
+            // as its own child instead, so it recurses rather than being masked.
+            boolean masked = fieldData instanceof NullableData
+                    && !(fieldDtype instanceof DType.Extension) && !(fieldDtype instanceof DType.Struct);
+            EncodeResult fieldResult = masked
                     ? new MaskedEncodingEncoder().encode(fieldDtype, fieldData, ctx)
                     : encodeWithCtx(fieldDtype, fieldData, ctx);
             int bufOffset = allBuffers.size();
-            children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
+            children[fieldOffset + i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
             allBuffers.addAll(fieldResult.encodedBuffers());
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_STRUCT, null, children, new int[0]);
@@ -387,10 +404,14 @@ public final class CascadingCompressor {
             }
         }
         // Rust keeps the canonical array when no configured scheme applies: canonical encodings
-        // are not schemes, so a restricted candidate list never leaves a primitive unencodable.
-        if (dtype instanceof DType.Primitive) {
-            return CANONICAL_PRIMITIVE;
-        }
-        throw new UnsupportedOperationException("no encoder for dtype: " + dtype);
+        // are not schemes, so a restricted candidate list never leaves a canonical type unencodable.
+        return switch (dtype) {
+            case DType.Primitive _ -> CANONICAL_PRIMITIVE;
+            case DType.Bool _ -> CANONICAL_BOOL;
+            case DType.Utf8 _, DType.Binary _ -> CANONICAL_VARBIN;
+            case DType.Decimal _ -> CANONICAL_DECIMAL;
+            case DType.Extension _ -> CANONICAL_EXTENSION;
+            default -> throw new UnsupportedOperationException("no encoder for dtype: " + dtype);
+        };
     }
 }

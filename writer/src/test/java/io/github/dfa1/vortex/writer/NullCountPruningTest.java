@@ -34,7 +34,8 @@ class NullCountPruningTest {
     // sizes and null patterns: 3 rows / 0 nulls, 2 rows / 1 null, 4 rows / all null.
     private Path write() throws IOException {
         Path file = tmp.resolve("nulls.vtx");
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256),
+                Map.of(io.github.dfa1.vortex.core.model.EditionFamily.CORE, io.github.dfa1.vortex.core.model.Editions.CORE_2025_10_0));
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {
             sut.writeChunk(Map.of(ColumnName.of("v"), new NullableData(

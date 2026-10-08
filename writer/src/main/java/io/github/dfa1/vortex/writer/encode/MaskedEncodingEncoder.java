@@ -135,7 +135,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// @param validity per-row validity bitmap
     /// @param ctx      the encode context
     /// @return the encoded validity child
-    private static EncodeResult encodeValidity(boolean[] validity, EncodeContext ctx) {
+    static EncodeResult encodeValidity(boolean[] validity, EncodeContext ctx) {
         if (isConstantValidity(validity)) {
             return new ConstantEncodingEncoder().encode(DType.BOOL, validity, ctx);
         }
