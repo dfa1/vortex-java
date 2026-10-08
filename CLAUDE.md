@@ -83,11 +83,13 @@ scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conforma
 JAZZER_FUZZ=1 ./mvnw test -pl fuzz -am -Dvortex.fuzz.excludedGroups=  # actually fuzz (unbounded)
 ```
 
-Three opt-in suites are tag-excluded from a routine build, even when named with `-Dit.test`/`-Dtest`:
+Tag-excluded from a routine local build, even when named with `-Dit.test`/`-Dtest`:
+- **Slow integration tests** (`@Tag("slow")`, failsafe): seconds per test (big fixtures, S3
+  downloads). The integration `ci` profile (auto-active when `CI` is set, as on GitHub Actions)
+  runs them; locally clear the exclusion with `-Dvortex.it.excludedGroups=`. Tag any new
+  integration test taking over ~1 s.
 - **Raincloud corpus** (`@Tag("raincloud")`, failsafe): clear the exclusion with
-  `-Dvortex.it.excludedGroups=` as shown above.
-- **NYC taxi Parquet oracle** (`@Tag("taxi")`, failsafe, ~14 s on ~3M rows): same switch,
-  `-Dvortex.it.excludedGroups=`.
+  `-Dvortex.it.excludedGroups=` as shown above. Not run by the `ci` profile.
 - **Jazzer fuzz** (`@Tag("fuzz")`, own `fuzz` module): clear it with `-Dvortex.fuzz.excludedGroups=`.
   Without `JAZZER_FUZZ=1` it only replays the saved corpus; with it, it fuzzes until stopped —
   never in CI or unattended. See [ADR 0020](adr/0020-jazzer-fuzz-infrastructure.md).

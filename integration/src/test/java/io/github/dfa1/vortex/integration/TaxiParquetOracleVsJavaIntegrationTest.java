@@ -33,9 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// A zero-diff between the two CSVs proves the Java parquet importer preserves every
 /// value exactly.
 ///
-/// Tagged `taxi` and excluded from a routine build (~14 s for ~3M rows); opt in with
-/// `-Dvortex.it.excludedGroups=`.
-@Tag("taxi")
+/// Tagged `slow` (~14 s for ~3M rows): skipped locally, run on CI.
+@Tag("slow")
 class TaxiParquetOracleVsJavaIntegrationTest {
 
     // NYC Yellow Taxi 2024-01, cached under /tmp.

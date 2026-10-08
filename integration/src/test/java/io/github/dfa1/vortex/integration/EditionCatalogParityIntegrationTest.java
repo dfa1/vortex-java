@@ -145,10 +145,9 @@ class EditionCatalogParityIntegrationTest {
         org.junit.jupiter.api.Assumptions.assumeTrue(code < 500 && code != 403,
                 () -> "transient or rate-limited response " + code + " for " + uri);
         try (var in = conn.getInputStream()) {
-            String body = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            Files.writeString(cached, body);
-            return Optional.of(body);
+            Files.write(cached, in.readAllBytes());
         }
+        return Optional.of(Files.readString(cached));
     }
 
     /// Constant name -> the edition id's wire form (`core2026.08.1`), formatted like

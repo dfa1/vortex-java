@@ -37,6 +37,7 @@ import org.apache.arrow.vector.UInt8Vector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -53,6 +54,9 @@ import static org.assertj.core.data.Percentage.withPercentage;
 ///
 /// Both readers decode the same local bytes — no auth, no network dependency during
 /// decode. A mismatch in any column value points to a decoding bug in the Java reader.
+///
+/// Tagged `slow` (~24 s, ~1 s per fixture): skipped locally, run on CI.
+@Tag("slow")
 class RustJavaReaderComparisonIntegrationTest {
 
     private static final Session SESSION = Session.create();

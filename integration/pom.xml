@@ -14,11 +14,13 @@
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
-        <!-- JUnit tags excluded from a routine `./mvnw verify`: `raincloud` (the real-world
-             Raincloud corpus, see the failsafe plugin config below) and `taxi` (the ~3M-row NYC
-             taxi Parquet oracle, ~14 s; CloudFront 403s GitHub runners, so CI skipped it anyway). Override on the CLI to opt in, e.g. `-Dvortex.it.excludedGroups=`
-             (empty) runs every tag; a literal pom value could not be cleared this way. -->
-        <vortex.it.excludedGroups>raincloud,taxi</vortex.it.excludedGroups>
+        <!-- JUnit tags excluded from a routine local `./mvnw verify`:
+             - `raincloud`: the real-world Raincloud corpus, see the failsafe plugin config below.
+             - `slow`: tests that take seconds each (big fixtures, S3 downloads). The `ci`
+               profile below runs them on CI.
+             Override on the CLI, e.g. `-Dvortex.it.excludedGroups=` (empty) runs every tag;
+             a literal pom value could not be cleared this way. -->
+        <vortex.it.excludedGroups>raincloud,slow</vortex.it.excludedGroups>
     </properties>
 
     <dependencies>
@@ -118,6 +120,18 @@
     </dependencies>
 
     <profiles>
+        <!-- CI (GitHub Actions sets CI=true) runs the `slow` tests a local build skips. -->
+        <profile>
+            <id>ci</id>
+            <activation>
+                <property>
+                    <name>env.CI</name>
+                </property>
+            </activation>
+            <properties>
+                <vortex.it.excludedGroups>raincloud</vortex.it.excludedGroups>
+            </properties>
+        </profile>
         <profile>
             <id>coverage</id>
             <!-- When reporting coverage, promote every dependency module exercised by the

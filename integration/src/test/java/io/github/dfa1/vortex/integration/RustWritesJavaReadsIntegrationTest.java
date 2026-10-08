@@ -34,6 +34,7 @@ import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -683,6 +684,7 @@ class RustWritesJavaReadsIntegrationTest {
         }
     }
 
+    @Tag("slow") // S3 download, 1.5-6 s per case
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {
         "pco.vortex",                        // all pco ptypes: Classic+Consecutive+IntMult+FloatMult
@@ -706,6 +708,7 @@ class RustWritesJavaReadsIntegrationTest {
         assertThat(java).containsExactly(jni);
     }
 
+    @Tag("slow") // S3 download
     @ParameterizedTest(name = "{0}")
     @CsvSource({
         "tpch_lineitem.regular.vortex, l_extendedprice",
@@ -746,6 +749,7 @@ class RustWritesJavaReadsIntegrationTest {
         assertThat(result).hasSize(jni.size()).containsExactlyInAnyOrderElementsOf(jni);
     }
 
+    @Tag("slow") // S3 download
     @Test
     void s3_csvExport_decimalColumnMatchesJni(@TempDir Path tmp) throws Exception {
         // Given — a Rust-written TPC-H fixture with a decimal(15, 2) column. CsvExporter had no case
@@ -776,6 +780,7 @@ class RustWritesJavaReadsIntegrationTest {
         assertThat(result).hasSize(jni.size()).containsExactlyInAnyOrderElementsOf(jni);
     }
 
+    @Tag("slow") // S3 download
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"tpch_orders.regular.vortex", "clickbench_hits_5k.regular.vortex"})
     void s3_fullScan_onPairUtf8ColumnsMatchJni(String fixture, @TempDir Path tmp) throws Exception {

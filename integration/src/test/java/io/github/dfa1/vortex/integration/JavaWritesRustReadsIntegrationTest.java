@@ -52,6 +52,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -2295,6 +2296,7 @@ class JavaWritesRustReadsIntegrationTest {
         assertBitwiseEqualsF32(decoded, data);
     }
 
+    @Tag("slow") // ~2 s
     @Test
     void javaWriter_rustReader_pco_i64_twoChunks(@TempDir Path tmp) throws IOException {
         // Given — 150K sequential I64 values: crosses the 64K chunk boundary twice
@@ -2312,6 +2314,7 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(decoded).containsExactly(data);
     }
 
+    @Tag("slow") // ~2.5 s
     @Test
     void javaWriter_rustReader_pco_i64_multiChunk(@TempDir Path tmp) throws IOException {
         // Given — 200K sequential I64 values: crosses the 64K chunk boundary three times
