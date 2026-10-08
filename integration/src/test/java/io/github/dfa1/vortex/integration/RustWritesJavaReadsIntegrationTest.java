@@ -27,6 +27,7 @@ import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.SmallIntVector;
+import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
@@ -266,6 +267,57 @@ class RustWritesJavaReadsIntegrationTest {
             next += zone.rowCount();
         }
         assertThat(next).isEqualTo(n);
+    }
+
+    @Test
+    void jniWriter_filteredUtf8Scan_prunesOnBoundedZoneStats(@TempDir Path tmp) throws IOException {
+        // Given — Rust records string zones as vortex.bounded_max/bounded_min (#446). Sorted keys
+        // spanning several ~1 MB chunks, so only the chunk holding the key can match; before
+        // bounded stats were read, the zone map was dropped and every chunk was decoded.
+        int n = 1_000_000;
+        String[] keys = new String[n];
+        for (int i = 0; i < n; i++) {
+            keys[i] = String.format("key-%08d", i);
+        }
+        Path file = tmp.resolve("jni_utf8_pruning.vtx");
+        writeJniUtf8(file, keys);
+        long totalChunks = countChunks(file, io.github.dfa1.vortex.reader.ScanOptions.all());
+
+        // When
+        long result = countChunks(file, io.github.dfa1.vortex.reader.ScanOptions.all()
+                .withFilter(io.github.dfa1.vortex.reader.RowFilter.eq("k", "key-00000005")));
+
+        // Then
+        assertThat(totalChunks).isGreaterThan(1);
+        assertThat(result).isEqualTo(1);
+    }
+
+    private static long countChunks(Path file, io.github.dfa1.vortex.reader.ScanOptions opts) throws IOException {
+        long[] count = {0};
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(opts)) {
+            iter.forEachRemaining(c -> count[0]++);
+        }
+        return count[0];
+    }
+
+    private static void writeJniUtf8(Path file, String[] values) throws IOException {
+        Schema schema = new Schema(List.of(Field.notNullable("k", new ArrowType.Utf8())));
+        String uri = file.toAbsolutePath().toUri().toString();
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, schema, ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+            VarCharVector vec = (VarCharVector) root.getVector("k");
+            vec.allocateNew(values.length);
+            for (int i = 0; i < values.length; i++) {
+                vec.setSafe(i, values[i].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            root.setRowCount(values.length);
+            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, arrowSchema);
+                writer.writeBatch(arr.memoryAddress(), arrowSchema.memoryAddress());
+            }
+        }
     }
 
     @Test

@@ -100,9 +100,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private boolean singleColumnIsSyntheticWrapper;
     private Map<ColumnName, DType> columnDtypes;
     // Decoded zone-map table per column, fetched at most once per scan (one segment read instead of
-    // one per pruning check) — see #zonesFor(ColumnName). Absent entries (no usable zone map) are
+    // one per pruning check) — see #zonesFor(ColumnName, boolean). Absent entries (no usable zone map) are
     // not cached: those paths cost no I/O, so recomputing is cheap.
     private Map<ColumnName, List<Zone>> zoneCache;
+    // Same zones with Rust's bounded string min/max filled in: pruning only, never surfaced.
+    private Map<ColumnName, List<Zone>> pruningZoneCache;
     private int chunkIndex;
     private int peekedChunkIdx = -1;
     private long rowsReturned;
@@ -453,7 +455,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             initialize();
         }
         ColumnName name = ColumnName.of(column);
-        List<ArrayStats> fromTable = decodeZoneTable(name);
+        List<ArrayStats> fromTable = decodeZoneTable(name, false);
         if (fromTable != null) {
             return fromTable;
         }
@@ -473,7 +475,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// @param column the column name
     /// @return the column's zones in row order; empty if it has no usable zone map
     public List<Zone> columnZones(String column) {
-        List<Zone> zones = zonesFor(ColumnName.of(column));
+        List<Zone> zones = zonesFor(ColumnName.of(column), false);
         return zones == null ? List.of() : zones;
     }
 
@@ -483,7 +485,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// fields; the schema is reconstructed from the layout metadata (legacy `vortex.stats` bitset
     /// or newer `vortex.zoned` aggregate specs — see [ZonedStatsSchema]). It is decoded into a
     /// short-lived confined arena and the scalar values are boxed out before the arena closes.
-    private List<ArrayStats> decodeZoneTable(ColumnName column) {
+    ///
+    /// Rust records string and binary zones as `bounded_max`/`bounded_min`: a truncated upper or
+    /// lower bound, not the exact value. With `includeBounds` those bounds fill min/max, which is
+    /// sound for pruning (a bound never excludes a matching row) but not an exact statistic, so the
+    /// public surfaces that callers fold aggregates from leave min/max absent instead.
+    private List<ArrayStats> decodeZoneTable(ColumnName column, boolean includeBounds) {
         Layout zoned = findZonedLayout(file.layout(), column);
         if (zoned == null || zoned.children().size() < 2) {
             return null;
@@ -522,6 +529,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
             Array minA = fieldOrNull(table, "min");
             Array maxA = fieldOrNull(table, "max");
+            Array boundedMinA = includeBounds ? fieldOrNull(table, ZonedStatsSchema.BOUNDED_MIN) : null;
+            Array boundedMaxA = includeBounds ? fieldOrNull(table, ZonedStatsSchema.BOUNDED_MAX) : null;
             Array sumA = fieldOrNull(table, "sum");
             Array nullCountA = fieldOrNull(table, "null_count");
             // Not pre-sized from nZones: it is bounded above only by Integer.MAX_VALUE (see the
@@ -532,8 +541,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             for (long i = 0; i < nZones; i++) {
                 Object nullCount = boxedScalar(nullCountA, i);
                 out.add(new ArrayStats(
-                        boxedScalar(minA, i),
-                        boxedScalar(maxA, i),
+                        minA != null ? boxedScalar(minA, i) : boxedScalar(boundedMinA, i),
+                        maxA != null ? boxedScalar(maxA, i) : boundedMaxScalar(boundedMaxA, i),
                         boxedScalar(sumA, i),
                         null,
                         nullCount == null ? null : ((Number) nullCount).longValue(),
@@ -567,6 +576,27 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
         }
         return null;
+    }
+
+    /// The bound of a `bounded_max` state at zone `i`, or `null` when the state is absent, the zone
+    /// has no non-null value, or the bound is unknown (no bound fits the byte limit).
+    private static Object boundedMaxScalar(Array state, long i) {
+        if (state == null) {
+            return null;
+        }
+        if (state instanceof MaskedArray masked) {
+            if (!masked.isValid(i)) {
+                return null;
+            }
+            return boundedMaxScalar(masked.inner(), i);
+        }
+        if (!(state instanceof StructArray struct)) {
+            return null;
+        }
+        if (Boolean.TRUE.equals(boxedScalar(fieldOrNull(struct, ZonedStatsSchema.UNKNOWN), i))) {
+            return null;
+        }
+        return boxedScalar(fieldOrNull(struct, ZonedStatsSchema.BOUND), i);
     }
 
     private static Array fieldOrNull(StructArray table, String field) {
@@ -891,33 +921,37 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 if (flat == null) {
                     yield false;
                 }
-                // The row count handed to canPrune must be the span the stats describe, not the
-                // covering chunk's: a zone can be wider than the chunk (Rust's vortex.zoned) or
-                // narrower than the layout (a dict column's code chunk), and the IS NOT NULL test
-                // compares nullCount against it.
-                Zone zone = zoneCovering(chunk, col);
-                ArrayStats stats = zone == null ? readFlatStats(flat) : zone.stats();
-                long statsRows = zone == null ? flat.rowCount() : zone.rowCount();
-                yield canPrune(predicate, stats, statsRows, columnDType(col));
+                // Each zone is judged on its own rows, not the window's: a zone can be wider than
+                // the window (Rust's vortex.zoned) or narrower (a dict column's code chunk, or 8192-row
+                // zones in a larger chunk), and the IS NOT NULL test compares nullCount against it.
+                List<Zone> zones = zonesOverlapping(chunk, col);
+                if (zones == null) {
+                    yield canPrune(predicate, readFlatStats(flat), flat.rowCount(), columnDType(col));
+                }
+                // The window has no matching row iff none of the zones covering it has one.
+                for (Zone zone : zones) {
+                    if (!canPrune(predicate, zone.stats(), zone.rowCount(), columnDType(col))) {
+                        yield false;
+                    }
+                }
+                yield true;
             }
         };
     }
 
-    /// Returns the zone of `col` whose rows contain all of `chunk`'s window, or `null` when the
-    /// column has no usable zone map or no single zone covers the window — in which case the caller
-    /// falls back to the chunk's own embedded stats. Reading here decodes (and caches) one small
-    /// zone-map segment per column for the whole scan, instead of [#readFlatStats(Layout)]'s
+    /// Returns the zones of `col` that together cover `chunk`'s window, in row order, or `null` when
+    /// the column has no usable zone map or its zones do not reach the window's end — in which case
+    /// the caller falls back to the chunk's own embedded stats. Reading here decodes (and caches) one
+    /// small zone-map segment per column for the whole scan, instead of [#readFlatStats(Layout)]'s
     /// per-chunk read of the chunk's full data segment — the difference that makes pruning over
     /// HTTP actually cheaper than not pruning.
-    ///
-    /// Never a partial overlap: a window straddling two zones would have rows invisible to the
-    /// stats used to judge it.
-    private Zone zoneCovering(ChunkSpec chunk, ColumnName col) {
-        List<Zone> zones = zonesFor(col);
+    private List<Zone> zonesOverlapping(ChunkSpec chunk, ColumnName col) {
+        List<Zone> zones = zonesFor(col, true);
         if (zones == null) {
             return null;
         }
         long start = chunk.windowStart();
+        long end = start + chunk.rowCount();
         // Last zone starting at or before the window (zones are sorted and contiguous from row 0).
         int lo = 0;
         int hi = zones.size() - 1;
@@ -929,8 +963,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 hi = mid - 1;
             }
         }
-        Zone zone = zones.get(lo);
-        return start + chunk.rowCount() <= zone.firstRow() + zone.rowCount() ? zone : null;
+        int last = lo;
+        while (last < zones.size() && zones.get(last).firstRow() + zones.get(last).rowCount() < end) {
+            last++;
+        }
+        if (last == zones.size()) {
+            return null;
+        }
+        return zones.subList(lo, last + 1);
     }
 
     /// Row ranges of the zones in `zoned`'s table as cumulative starts (the final entry is the end
@@ -1008,15 +1048,27 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     /// The column's zones, row ranges attached, or `null` when it has no usable zone map.
-    private List<Zone> zonesFor(ColumnName col) {
-        if (zoneCache == null) {
-            zoneCache = new HashMap<>();
+    ///
+    /// @param includeBounds `true` for pruning, where Rust's bounded string min/max may stand in
+    ///                      for the exact values; see [#decodeZoneTable(ColumnName, boolean)]
+    private List<Zone> zonesFor(ColumnName col, boolean includeBounds) {
+        Map<ColumnName, List<Zone>> cache;
+        if (includeBounds) {
+            if (pruningZoneCache == null) {
+                pruningZoneCache = new HashMap<>();
+            }
+            cache = pruningZoneCache;
+        } else {
+            if (zoneCache == null) {
+                zoneCache = new HashMap<>();
+            }
+            cache = zoneCache;
         }
-        List<Zone> cached = zoneCache.get(col);
+        List<Zone> cached = cache.get(col);
         if (cached != null) {
             return cached;
         }
-        List<ArrayStats> stats = decodeZoneTable(col);
+        List<ArrayStats> stats = decodeZoneTable(col, includeBounds);
         if (stats == null || stats.isEmpty()) {
             return null;
         }
@@ -1029,7 +1081,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             zones.add(new Zone(starts[i], starts[i + 1] - starts[i], stats.get(i)));
         }
         List<Zone> result = List.copyOf(zones);
-        zoneCache.put(col, result);
+        cache.put(col, result);
         return result;
     }
 

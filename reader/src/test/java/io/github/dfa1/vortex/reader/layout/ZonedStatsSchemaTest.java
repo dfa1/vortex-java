@@ -285,15 +285,36 @@ class ZonedStatsSchemaTest {
 
         @Test
         void bailsOnUnknownAggregate() {
-            // Given — bounded_max stores a nested struct we cannot faithfully describe. Returning a
-            // partial schema would misalign the positional decode, so reconstruction must bail.
-            MemorySegment meta = aggregateMeta(4096, "vortex.bounded_max", "vortex.null_count");
+            // Given — an aggregate this reader has no mapping for. Returning a partial schema would
+            // misalign the positional decode, so reconstruction must bail.
+            MemorySegment meta = aggregateMeta(4096, "vortex.approx_distinct", "vortex.null_count");
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.UTF8, meta);
 
             // Then
             assertThat(result).isNull();
+        }
+
+        @Test
+        void mapsBoundedMinMaxToTheirStateStructs() {
+            // Given — the aggregate set Rust 0.86.1's default writer records for every Utf8 column
+            // (#446): before, bounded_max made the whole zone map unusable for string columns.
+            MemorySegment meta = aggregateMeta(8192,
+                    "vortex.bounded_max", "vortex.bounded_min", "vortex.nan_count", "vortex.null_count");
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.UTF8, meta);
+
+            // Then — bounded_max is a nullable {bound, unknown} struct, bounded_min the plain
+            // nullable bound (a prefix is always a lower bound, so it has no unknown flag);
+            // nan_count dropped for a non-float column as Rust drops it
+            DType.Struct maxState = new DType.Struct(
+                    List.of(ColumnName.of("bound"), ColumnName.of("unknown")),
+                    List.of(DType.UTF8.withNullable(true), DType.BOOL), true);
+            assertThat(result).isEqualTo(new DType.Struct(
+                    List.of(ColumnName.of("bounded_max"), ColumnName.of("bounded_min"), ColumnName.of("null_count")),
+                    List.of(maxState, DType.UTF8.withNullable(true), DType.U64.withNullable(true)), false));
         }
 
         @Test

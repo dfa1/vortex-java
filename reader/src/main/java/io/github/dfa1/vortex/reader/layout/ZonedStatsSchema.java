@@ -198,8 +198,7 @@ public final class ZonedStatsSchema {
     /// matters.
     ///
     /// Returns `null` when the metadata is not a decodable aggregate-spec blob or names an
-    /// aggregate this reader cannot map to a [Stat] (e.g. `vortex.bounded_max`, whose state is a
-    /// nested struct). Bailing keeps the positional schema faithful: the caller falls back to
+    /// aggregate this reader cannot map to a [Stat] or a bounded min/max state. Bailing keeps the positional schema faithful: the caller falls back to
     /// per-chunk stats rather than decoding a misaligned table.
     ///
     /// @param columnDtype the column's logical dtype (the `data` child's dtype)
@@ -213,6 +212,20 @@ public final class ZonedStatsSchema {
         List<ColumnName> names = new ArrayList<>(aggregateIds.size());
         List<DType> types = new ArrayList<>(aggregateIds.size());
         for (String aggregateId : aggregateIds) {
+            String boundedField = boundedFieldName(aggregateId);
+            if (boundedField != null) {
+                // Same supported dtypes as min/max (Rust's bounded supported_dtype delegates to
+                // MinMax), so an unsupported column drops the field exactly as it drops max/min.
+                DType boundDtype = statDtype(Stat.MAX, columnDtype);
+                if (boundDtype == null) {
+                    continue;
+                }
+                names.add(ColumnName.of(boundedField));
+                // A truncated prefix is always a valid lower bound, so bounded_min's state is the
+                // plain nullable bound; only bounded_max can fail to find one and carries `unknown`.
+                types.add(boundedField.equals(BOUNDED_MAX) ? boundedMaxStateDtype(boundDtype) : boundDtype.withNullable(true));
+                continue;
+            }
             Stat stat = statForAggregate(aggregateId);
             if (stat == null) {
                 // Unknown aggregate — the encoded table has a field here we cannot describe, so
@@ -364,13 +377,41 @@ public final class ZonedStatsSchema {
         return null;
     }
 
+    /// Table field name of Rust's `vortex.bounded_max` state, an upper bound on the zone's max.
+    public static final String BOUNDED_MAX = "bounded_max";
+    /// Table field name of Rust's `vortex.bounded_min` state: a lower bound on the zone's min, null
+    /// when the zone has no non-null value.
+    public static final String BOUNDED_MIN = "bounded_min";
+    /// Name of the bound field inside the `bounded_max` state struct.
+    public static final String BOUND = "bound";
+    /// Name of the flag inside the `bounded_max` state struct that marks the bound as unknown.
+    public static final String UNKNOWN = "unknown";
+
+    private static String boundedFieldName(String aggregateId) {
+        return switch (aggregateId) {
+            case "vortex.bounded_max" -> BOUNDED_MAX;
+            case "vortex.bounded_min" -> BOUNDED_MIN;
+            default -> null;
+        };
+    }
+
+    /// Rust's `make_bounded_max_partial_dtype`: a nullable struct of the nullable bound and a
+    /// non-nullable `unknown` flag. A null struct means the zone has no non-null value; `unknown`
+    /// means a value exists but no bound fits the aggregate's byte limit.
+    private static DType boundedMaxStateDtype(DType boundDtype) {
+        return new DType.Struct(
+                List.of(ColumnName.of(BOUND), ColumnName.of(UNKNOWN)),
+                List.of(boundDtype.withNullable(true), DType.BOOL),
+                true);
+    }
+
     /// First byte of `vortex.zoned` metadata: the protobuf envelope version Rust writes.
     private static final int AGGREGATE_METADATA_VERSION = 1;
 
     /// Maps a well-known aggregate-function id (Rust `AggregateFnId`) to the [Stat] whose stored
     /// dtype and canonical field name it uses in the zone-map table, or `null` when the reader
-    /// has no faithful mapping (nested-state aggregates like `vortex.bounded_max`, or functions
-    /// not stored as a scalar stat).
+    /// has no faithful mapping (functions not stored as a scalar stat; the bounded min/max
+    /// aggregates are handled separately by [#boundedFieldName(String)]).
     private static Stat statForAggregate(String aggregateId) {
         return switch (aggregateId) {
             case "vortex.max" -> Stat.MAX;

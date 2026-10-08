@@ -241,6 +241,8 @@ Implements `Iterator<Chunk>` and `AutoCloseable`. Drives one scan.
 | `columnZoneStats(String)` | One `ArrayStats` per zone-map row; falls back to per-chunk stats when the column has no zone map. |
 | `columnZones(String)`  | One `Zone(firstRow, rowCount, stats)` per zone-map row, placed on the column's rows; empty when there is no usable zone map. |
 
+Both return exact statistics only. Rust records string and binary zones as `vortex.bounded_max`/`vortex.bounded_min`, truncated bounds rather than exact values: filtered scans prune on them, but these methods leave `min`/`max` absent for such columns.
+
 ### `Chunk` (`io.github.dfa1.vortex.reader.Chunk`)
 
 Implements `AutoCloseable`. Each chunk owns a confined `Arena` holding the decoded

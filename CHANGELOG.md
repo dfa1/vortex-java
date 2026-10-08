@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read `vortex.zstd_buffers`, Rust's opt-in buffer-level Zstd encoding (`zstd2026.02.0`) ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 
 ### Fixed
+- Filtered scans of Rust-written files never pruned string or binary columns: their `vortex.bounded_max`/`vortex.bounded_min` zone stats were unsupported, and zones narrower than a chunk were ignored ([#446](https://github.com/dfa1/vortex-java/issues/446)).
 - Null rows of Rust-written `vortex.varbin` columns read as empty values: the decoder ignored the validity child ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 - A corrupt `vortex.zstd` frame surfaced as the zstd binding's `ZstdException` instead of `VortexException` ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 - Dictionary-encoded Binary columns (e.g. the `value` child of `vortex.parquet.variant`) failed to read with a `ClassCastException` ([#445](https://github.com/dfa1/vortex-java/issues/445)).
