@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -53,6 +52,18 @@ public record ArrayStats(
     /// `DENSE_DISTINCT_MAX_RANGE`.
     private static final long DENSE_MAX_RANGE = 1 << 16;
 
+    /// Integer values are widened and checked for transitions this many at a time, as Rust's
+    /// `typed_int_stats` chunks them.
+    private static final int CHUNK = 64;
+
+    /// Integer values are widened this many at a time: a whole number of [#CHUNK]s, large enough
+    /// that the per-call switch and loop setup vanish, small enough to stay in L1.
+    private static final int BUFFER = 1024;
+
+    /// Below this average run length a dense count skips run detection: there is too little to
+    /// merge to pay for the check.
+    private static final long SHORT_RUNS = 4;
+
     /// Compute stats over `data` according to `options`.
     ///
     /// @param ptype   the primitive type of `data`
@@ -81,19 +92,19 @@ public record ArrayStats(
         // having never reached the cap.
         long cap = n / 2L + 1L;
         if (!ptype.isFloating()) {
-            // Widened once (zero-copy for I64/U64) so one loop serves every integer width.
-            long[] values = PrimitiveArrays.toLongs(data, ptype, EncodingId.VORTEX_PRIMITIVE);
-            long min = values[0];
-            long max = values[0];
-            for (int i = 0; i < n; i++) {
-                min = Math.min(min, values[i]);
-                max = Math.max(max, values[i]);
-            }
+            // Widened a chunk at a time into one small buffer, so one loop serves every integer
+            // width without copying the whole array to a long[] (8 bytes per row of garbage on
+            // every int[] column, #476).
+            long[] buffer = new long[BUFFER];
+            long[] minMax = minMax(ptype, data);
+            long min = minMax[0];
+            long max = minMax[1];
             ArrayStats counted = accumulate
-                    ? integerStats(values, n, cap, options.countDistinct(), averageRunLength, min, max)
+                    ? integerStats(ptype, data, n, buffer, cap, options.countDistinct(), averageRunLength, min, max)
                     : new ArrayStats(n, -1, 0, 0, false, averageRunLength, 0, 0);
             if (ptype == PType.U64) {
                 // Narrower unsigned widths are zero-extended, so signed order is already theirs.
+                long[] values = (long[]) data;
                 long unsignedMin = -1L;
                 long unsignedMax = 0L;
                 for (int i = 0; i < n; i++) {
@@ -124,63 +135,98 @@ public record ArrayStats(
     }
 
     /// Integer stats as Rust's `typed_int_stats` (vortex-compressor #10037, #10041) computes
-    /// them: the min/max decides between a dense counter and a hash map, and the hash map is
-    /// touched once per run of equal values rather than once per row.
+    /// them: the min/max decides between a dense counter and a hash map, either counter is
+    /// touched once per run of equal values rather than once per row, and a chunk of 64 values
+    /// without a transition (checked branch-free) is counted in one step.
     ///
-    /// Both shortcuts produce exactly the counts a per-row hash would, so every encoder's verdict
+    /// The shortcuts produce exactly the counts a per-row count would, so every encoder's verdict
     /// is unchanged; only the cost moves. Before them this was the hottest frame of a cascading
     /// write — on an ALP-encoded price column (ints 5000..15000) every row paid a hash probe for
-    /// a range a 10k-slot array covers.
+    /// a range a 10k-slot array covers, and a dense `counts[v]++` per row on a runny date column
+    /// serialized on the store to the same slot.
     ///
-    /// @param a      the values, widened to `long` (unsigned widths zero-extended)
+    /// @param ptype  the integer type of `data`
+    /// @param data   the values
     /// @param n      element count, at least 1
+    /// @param buffer scratch buffer of [#BUFFER] values
     /// @param cap    distinct count past which the hashed scan may stop
     /// @param countDistinct whether [#distinctCount()] is reported
     /// @param averageRunLength the already computed [#averageRunLength()]
-    /// @param min    the signed minimum of `a`
-    /// @param max    the signed maximum of `a`
+    /// @param min    the signed minimum of `data`, widened
+    /// @param max    the signed maximum of `data`, widened
     /// @return the stats, min/max not yet set
-    private static ArrayStats integerStats(long[] a, int n, long cap, boolean countDistinct, long averageRunLength,
-                                           long min, long max) {
+    private static ArrayStats integerStats(PType ptype, Object data, int n, long[] buffer, long cap,
+                                           boolean countDistinct, long averageRunLength, long min, long max) {
         // Signed difference: wraps negative exactly when the true range exceeds Long.MAX_VALUE.
         // U64 values above 2^63 sit at negative signed positions, but the signed interval still
         // bounds every value, so dense indexing stays correct; only Rust's choice of path (which
         // ranges in unsigned space) can differ, and the counts are identical either way.
         long span = max - min;
-        if (span >= 0 && (span < DENSE_ALWAYS_RANGE
-                || span < DENSE_MAX_RANGE && span < n)) {
-            return denseStats(a, n, min, (int) span + 1, countDistinct, averageRunLength);
-        }
+        int[] dense = span >= 0 && (span < DENSE_ALWAYS_RANGE || span < DENSE_MAX_RANGE && span < n)
+                ? new int[(int) span + 1]
+                : null;
+        LongIntMap hashed = dense == null ? new LongIntMap(Math.min(n, 2048)) : null;
 
-        LongIntMap counts = new LongIntMap(Math.min(n, 2048));
-        long prev = a[0];
-        int pending = 0;
-        for (int i = 0; i < n; i++) {
-            long v = a[i];
-            if (v != prev) {
-                counts.increment(prev, pending);
-                if (counts.size() > cap) {
-                    return fromCounts(n, counts, true, countDistinct, averageRunLength);
+        if (dense != null && averageRunLength < SHORT_RUNS) {
+            // Runs too short to merge: a branch-free increment per row, without the transition
+            // check, which on run-free columns measured 2x slower than plain counting.
+            for (int from = 0; from < n; from += BUFFER) {
+                int len = widen(ptype, data, from, n, buffer);
+                for (int i = 0; i < len; i++) {
+                    dense[(int) (buffer[i] - min)]++;
                 }
-                prev = v;
-                pending = 0;
             }
-            pending++;
+            return fromDense(n, dense, min, countDistinct, averageRunLength);
         }
-        counts.increment(prev, pending);
-        return fromCounts(n, counts, counts.size() > cap, countDistinct, averageRunLength);
+        widen(ptype, data, 0, n, buffer);
+        long prev = buffer[0];
+        int pending = 0;
+        for (int from = 0; from < n; from += BUFFER) {
+            int len = widen(ptype, data, from, n, buffer);
+            for (int start = 0; start < len; start += CHUNK) {
+                int end = Math.min(start + CHUNK, len);
+                if (end - start == CHUNK) {
+                    int transitions = buffer[start] != prev ? 1 : 0;
+                    for (int i = start + 1; i < end; i++) {
+                        transitions += buffer[i] != buffer[i - 1] ? 1 : 0;
+                    }
+                    if (transitions == 0) {
+                        pending += CHUNK;
+                        continue;
+                    }
+                }
+                for (int i = start; i < end; i++) {
+                    long v = buffer[i];
+                    if (v != prev) {
+                        if (dense != null) {
+                            dense[(int) (prev - min)] += pending;
+                        } else {
+                            hashed.increment(prev, pending);
+                            if (hashed.size() > cap) {
+                                return fromCounts(n, hashed, true, countDistinct, averageRunLength);
+                            }
+                        }
+                        prev = v;
+                        pending = 0;
+                    }
+                    pending++;
+                }
+            }
+        }
+        if (dense != null) {
+            dense[(int) (prev - min)] += pending;
+            return fromDense(n, dense, min, countDistinct, averageRunLength);
+        }
+        hashed.increment(prev, pending);
+        return fromCounts(n, hashed, hashed.size() > cap, countDistinct, averageRunLength);
     }
 
-    /// Counts by `value - min` into an array: no hashing, and never capped.
-    private static ArrayStats denseStats(long[] a, int n, long min, int range, boolean countDistinct,
-                                         long averageRunLength) {
-        int[] counts = new int[range];
-        for (int i = 0; i < n; i++) {
-            counts[(int) (a[i] - min)]++;
-        }
+    /// Stats from counts indexed by `value - min`: never capped.
+    private static ArrayStats fromDense(int n, int[] counts, long min, boolean countDistinct,
+                                        long averageRunLength) {
         int distinct = 0;
         int topIndex = 0;
-        for (int i = 0; i < range; i++) {
+        for (int i = 0; i < counts.length; i++) {
             int c = counts[i];
             if (c != 0) {
                 distinct++;
@@ -193,6 +239,140 @@ public record ArrayStats(
         }
         return new ArrayStats(n, countDistinct ? distinct : -1L, min + topIndex, counts[topIndex], false,
                 averageRunLength, 0, 0);
+    }
+
+    /// Signed min and max of the widened values, computed on the array's own carrier: NEON has
+    /// no 64-bit integer min/max, so C2 vectorizes these loops for `int`, `short` and `byte`
+    /// but not over a widened `long` buffer, where this pass measured ~8% of a write (#476).
+    /// Unsigned widths are masked in the loop, which keeps them in their carrier's lanes.
+    ///
+    /// @return `{min, max}`
+    private static long[] minMax(PType ptype, Object data) {
+        return switch (ptype) {
+            case I8 -> {
+                byte[] a = (byte[]) data;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (byte v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U8 -> {
+                byte[] a = (byte[]) data;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (byte v : a) {
+                    min = Math.min(min, v & 0xFF);
+                    max = Math.max(max, v & 0xFF);
+                }
+                yield new long[]{min, max};
+            }
+            case I16 -> {
+                short[] a = (short[]) data;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (short v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U16 -> {
+                short[] a = (short[]) data;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (short v : a) {
+                    min = Math.min(min, v & 0xFFFF);
+                    max = Math.max(max, v & 0xFFFF);
+                }
+                yield new long[]{min, max};
+            }
+            case I32 -> {
+                int[] a = (int[]) data;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (int v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U32 -> {
+                // Flipping the sign bit maps unsigned order onto signed order, so the loop stays
+                // a plain int min/max.
+                int[] a = (int[]) data;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (int v : a) {
+                    min = Math.min(min, v ^ Integer.MIN_VALUE);
+                    max = Math.max(max, v ^ Integer.MIN_VALUE);
+                }
+                yield new long[]{Integer.toUnsignedLong(min ^ Integer.MIN_VALUE),
+                        Integer.toUnsignedLong(max ^ Integer.MIN_VALUE)};
+            }
+            case I64, U64 -> {
+                long[] a = (long[]) data;
+                long min = Long.MAX_VALUE;
+                long max = Long.MIN_VALUE;
+                for (long v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            default -> throw new VortexException(EncodingId.VORTEX_PRIMITIVE, "not an integer ptype: " + ptype);
+        };
+    }
+
+    /// Copies up to `chunk.length` values of `data` from `from` into `chunk`, sign-extending the signed
+    /// widths and zero-extending the unsigned ones; one switch per chunk, not per value.
+    ///
+    /// @return how many values were copied
+    private static int widen(PType ptype, Object data, int from, int n, long[] chunk) {
+        int len = Math.min(chunk.length, n - from);
+        switch (ptype) {
+            case I8 -> {
+                byte[] a = (byte[]) data;
+                for (int i = 0; i < len; i++) {
+                    chunk[i] = a[from + i];
+                }
+            }
+            case U8 -> {
+                byte[] a = (byte[]) data;
+                for (int i = 0; i < len; i++) {
+                    chunk[i] = a[from + i] & 0xFFL;
+                }
+            }
+            case I16 -> {
+                short[] a = (short[]) data;
+                for (int i = 0; i < len; i++) {
+                    chunk[i] = a[from + i];
+                }
+            }
+            case U16 -> {
+                short[] a = (short[]) data;
+                for (int i = 0; i < len; i++) {
+                    chunk[i] = a[from + i] & 0xFFFFL;
+                }
+            }
+            case I32 -> {
+                int[] a = (int[]) data;
+                for (int i = 0; i < len; i++) {
+                    chunk[i] = a[from + i];
+                }
+            }
+            case U32 -> {
+                int[] a = (int[]) data;
+                for (int i = 0; i < len; i++) {
+                    chunk[i] = a[from + i] & 0xFFFF_FFFFL;
+                }
+            }
+            case I64, U64 -> System.arraycopy((long[]) data, from, chunk, 0, len);
+            default -> throw new VortexException(EncodingId.VORTEX_PRIMITIVE, "not an integer ptype: " + ptype);
+        }
+        return len;
     }
 
     private static ArrayStats fromCounts(int n, LongIntMap counts, boolean capped, boolean countDistinct,

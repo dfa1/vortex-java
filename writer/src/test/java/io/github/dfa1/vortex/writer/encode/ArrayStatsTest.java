@@ -185,7 +185,29 @@ class ArrayStatsTest {
         for (int i = 0; i < straddle.length; i++) {
             straddle[i] = Long.MAX_VALUE - 50 + rng.nextInt(100);
         }
+        // Dense with long runs (a date column): the run-aware dense counter, whose 64-value
+        // chunks skip runs in one step. 3_001 rows leaves a tail shorter than a chunk.
+        int[] dates = new int[3_001];
+        for (int i = 0; i < dates.length; i++) {
+            dates[i] = 18_000 + i / 50;
+        }
+        // Unsigned 16/32-bit above the signed range: the chunked widening must zero-extend.
+        short[] u16 = new short[1_500];
+        int[] u32 = new int[2_500];
+        for (int i = 0; i < u32.length; i++) {
+            u32[i] = 0x8000_0000 + (i / 7) * 65_537;
+        }
+        // Signed 16-bit straddling zero: sign extension, dense.
+        short[] i16 = new short[1_500];
+        for (int i = 0; i < u16.length; i++) {
+            u16[i] = (short) (0xFF00 + rng.nextInt(200));
+            i16[i] = (short) (rng.nextInt(400) - 200);
+        }
         return Stream.of(
+                Arguments.of(PType.I32, dates, Arrays.stream(dates).asLongStream().toArray()),
+                Arguments.of(PType.U16, u16, widen(u16, true)),
+                Arguments.of(PType.I16, i16, widen(i16, false)),
+                Arguments.of(PType.U32, u32, Arrays.stream(u32).mapToLong(Integer::toUnsignedLong).toArray()),
                 Arguments.of(PType.U8, narrow, widen(narrow, true)),
                 Arguments.of(PType.I8, narrow, widen(narrow, false)),
                 Arguments.of(PType.I32, priceCodes, Arrays.stream(priceCodes).asLongStream().toArray()),
@@ -243,6 +265,14 @@ class ArrayStatsTest {
 
         // Then: integer division, as Rust's value_count / runs
         assertThat(result.averageRunLength()).isEqualTo(1);
+    }
+
+    private static long[] widen(short[] a, boolean unsigned) {
+        long[] out = new long[a.length];
+        for (int i = 0; i < a.length; i++) {
+            out[i] = unsigned ? Short.toUnsignedLong(a[i]) : a[i];
+        }
+        return out;
     }
 
     private static long[] widen(byte[] a, boolean unsigned) {

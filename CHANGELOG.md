@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently, to the same bytes as a sequential write: 10M-row OHLC 0.99 → 4.34 writes/s on 8 threads ([#474](https://github.com/dfa1/vortex-java/issues/474)).
 
 ### Changed
+- Cascading writes are about 9% faster and allocate 11% less, to the same bytes: the compressor's distinct-value counter hashes doubles 3× faster, and integer stats no longer copy the column to a `long[]`, take min/max on its own type, and count runs rather than rows, as Rust does (10M-row OHLC: 0.95 → 1.04 writes/s) ([#476](https://github.com/dfa1/vortex-java/issues/476)).
 - **Breaking:** `WriteOptions` is a final class instead of a record: same accessors and `withXxx` methods, but identity `equals` and no public canonical constructor, since its executor has no value equality ([#474](https://github.com/dfa1/vortex-java/issues/474)).
 
 ## [0.16.0] — 2026-10-09
