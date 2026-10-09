@@ -144,6 +144,11 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 | `writeChunk(Map<ColumnName, Object>)`                                                | One batch of rows by map. Validates that every schema column is present and that all columns share the same row count. Use when the column set is built dynamically (Parquet/JDBC importers, generic exporters). |
 | `close()`                                                                        | Finalizes file (footer, postscript, trailer)                                                                     |
 
+Batches are not chunks: as Rust's writer does, each primitive, boolean, decimal, string and binary
+column is repartitioned into chunks of whole 8192-row blocks reaching 1 MB of uncompressed data
+(e.g. 131 072 rows of I64, 524 288 of U16 dict codes), the rest becoming the last chunk. Nested
+columns, and targets before `core2026.08.0` (legacy `vortex.stats` zones), keep one chunk per batch.
+
 ### `Chunk` (`io.github.dfa1.vortex.writer.Chunk`)
 
 Builder handed to the `writeChunk(Consumer<Chunk>)` lambda. Validates each `.put`
@@ -492,7 +497,7 @@ Record: `(int chunkSize, List<String> columns, ProgressListener progressListener
 | `.withColumns(List<String>)`      | Project columns during import                                  |
 | `.withProgressListener(listener)` | Progress callbacks                                             |
 | `.withWriteOptions(WriteOptions)` | Override write options                                         |
-| `.withChunkSize(int)`             | Override chunk size                                            |
+| `.withChunkSize(int)`             | Rows per `writeChunk` batch                                    |
 
 ### `ParquetExporter` (`io.github.dfa1.vortex.parquet.ParquetExporter`)
 
@@ -572,7 +577,7 @@ Record: `(int fetchSize, int chunkSize, WriteOptions writeOptions, ProgressListe
 |-------------------------------------|-----------------------------------------------------------------------------|
 | `JdbcImportOptions.defaults()`    | `fetchSize=10_000`, `chunkSize=65_536`, `WriteOptions.cascading(3)`, no listener |
 | `.withFetchSize(int)`             | Rows the JDBC driver fetches per round trip                             |
-| `.withChunkSize(int)`             | Rows per Vortex chunk written to disk                                   |
+| `.withChunkSize(int)`             | Rows per `writeChunk` batch; chunks on disk follow the writer's repartition |
 | `.withWriteOptions(WriteOptions)` | Override write options                                                  |
 | `.withProgressListener(listener)` | Callback invoked after each full chunk is flushed                       |
 

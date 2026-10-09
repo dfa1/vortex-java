@@ -169,6 +169,8 @@ public final class VortexWriter implements Closeable {
     private final Map<ColumnName, ZoneAccumulator> zoneAccumulators = new LinkedHashMap<>();
     // WriteOptions.columnEncodings resolved to the encoder each overridden column is written with.
     private final Map<ColumnName, EncodingEncoder> columnEncoders = new LinkedHashMap<>();
+    // Rust's repartition: each column's batches coalesce into ~1 MB chunks of 8192-row multiples.
+    private final Map<ColumnName, Repartitioner> repartitioners = new LinkedHashMap<>();
     // Stats (ProtoScalarValue bytes) of the most recently written segment, captured for ChunkRef.
     private byte[] lastStatsMin;
     private byte[] lastStatsMax;
@@ -578,9 +580,7 @@ public final class VortexWriter implements Closeable {
                     // Cap breached by this chunk: demote (replaying the already-buffered chunks per
                     // -chunk) then write this chunk — which ingest rejected without buffering — too.
                     demoteDictColumn(colName);
-                    long rowCount = arrayLength(data);
-                    int segIdx = writeSegment(colDtype, data);
-                    colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
+                    appendChunk(colName, colDtype, data);
                 } else {
                     long before = dictRetainedBytes.getOrDefault(colName, 0L);
                     long after = state.retainedBytes();
@@ -594,16 +594,45 @@ public final class VortexWriter implements Closeable {
                     }
                 }
             } else {
-                long rowCount = arrayLength(data);
-                int segIdx = writeSegment(colDtype, data, columnEncoders.get(colName));
-                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
+                appendChunk(colName, colDtype, data);
             }
         }
         firstChunkSeen = true;
     }
 
+    /// Hands one batch of a column to its [Repartitioner], writing every chunk it completes; a
+    /// column whose carriers cannot be coalesced is written one chunk per batch.
+    private void appendChunk(ColumnName colName, DType colDtype, Object data) throws IOException {
+        // The legacy vortex.stats zone map is one zone per chunk, so its targets keep batch chunks.
+        if (!zonedLayout || !Repartitioner.supports(colDtype)) {
+            writeDataChunk(colName, colDtype, data);
+            return;
+        }
+        Repartitioner repartitioner = repartitioners.computeIfAbsent(colName, _ -> new Repartitioner(colDtype));
+        for (Object chunk : repartitioner.add(data, arrayLength(data))) {
+            writeDataChunk(colName, colDtype, chunk);
+        }
+    }
+
+    private void writeDataChunk(ColumnName colName, DType colDtype, Object data) throws IOException {
+        long rowCount = arrayLength(data);
+        int segIdx = writeSegment(colDtype, data, columnEncoders.get(colName));
+        colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
+    }
+
+    /// Writes every column's pending rows as its last chunk.
+    private void flushRepartitioners() throws IOException {
+        for (Map.Entry<ColumnName, Repartitioner> e : repartitioners.entrySet()) {
+            Object last = e.getValue().finish();
+            if (last != null) {
+                writeDataChunk(e.getKey(), columnDtype(e.getKey()), last);
+            }
+        }
+    }
+
     @Override
     public void close() throws IOException {
+        flushRepartitioners();
         flushDictColumns();
         flushZoneMaps();
         ByteBuffer footerBuf = buildFooter();
@@ -1220,7 +1249,7 @@ public final class VortexWriter implements Closeable {
         int[] codesFlats = new int[numChunks];
         long totalCodesRows = 0;
         for (int j = 0; j < numChunks; j++) {
-            long rowCount = ref.chunkRowCounts().get(j);
+            long rowCount = ref.codesRowCounts().get(j);
             int segV = FbsLayout.createSegmentsVector(fbb, new long[]{ref.codesSegIdxes().get(j)});
             codesFlats[j] = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, rowCount, 0, 0, segV);
             totalCodesRows += rowCount;
@@ -1306,11 +1335,7 @@ public final class VortexWriter implements Closeable {
         DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
         Object[] inverse = state.buildInverseMap();
         for (int c = 0; c < state.chunkCount(); c++) {
-            Object rawChunk = state.reconstructChunk(inverse, c);
-            long rowCount = arrayLength(rawChunk);
-            int segIdx = writeSegment(colDtype, rawChunk);
-            colChunks.get(colName).add(
-                    new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
+            appendChunk(colName, colDtype, state.reconstructChunk(inverse, c));
         }
     }
 
@@ -1370,14 +1395,28 @@ public final class VortexWriter implements Closeable {
         return new NullableData(uniques, poolValidity);
     }
 
-    // The buffered codes are already the wire codes: first-seen order, null included.
+    // The buffered codes are already the wire codes: first-seen order, null included. Rust's dict
+    // strategy coalesces the codes like any data column, so U16 codes chunk at 512Ki rows; the
+    // legacy zone map keeps one code chunk per batch, its zones.
     private void writeGlobalDictCodes(ColumnName colName, DictColumnState state, int valuesSegIdx) throws IOException {
         DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, false);
         List<Integer> codesSegIdxes = new ArrayList<>();
+        List<Long> codesRowCounts = new ArrayList<>();
+        Repartitioner repartitioner = zonedLayout ? new Repartitioner(codesDtype) : null;
         for (int c = 0; c < state.chunkCount(); c++) {
-            codesSegIdxes.add(writeSegment(codesDtype, state.chunkCodes(c)));
+            short[] codes = state.chunkCodes(c);
+            List<Object> ready = repartitioner != null ? repartitioner.add(codes, codes.length) : List.of(codes);
+            for (Object chunk : ready) {
+                codesSegIdxes.add(writeSegment(codesDtype, chunk));
+                codesRowCounts.add((long) ((short[]) chunk).length);
+            }
         }
-        dictColRefs.put(colName, new DictColRef(valuesSegIdx, state.cardinality(), codesSegIdxes,
+        Object last = repartitioner != null ? repartitioner.finish() : null;
+        if (last != null) {
+            codesSegIdxes.add(writeSegment(codesDtype, last));
+            codesRowCounts.add((long) ((short[]) last).length);
+        }
+        dictColRefs.put(colName, new DictColRef(valuesSegIdx, state.cardinality(), codesSegIdxes, codesRowCounts,
                 state.chunkRowCounts(), state.chunkNullCounts(),
                 state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
     }
@@ -1401,7 +1440,7 @@ public final class VortexWriter implements Closeable {
 
     /// @param nullableCodes whether the codes child carries validity (Rust's `is_nullable_codes`)
     private record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,
-            List<Long> chunkRowCounts, List<Long> chunkNullCounts,
+            List<Long> codesRowCounts, List<Long> chunkRowCounts, List<Long> chunkNullCounts,
             List<byte[]> chunkStatsMin, List<byte[]> chunkStatsMax, List<byte[]> chunkStatsSum,
             boolean nullableCodes) {
         long totalRows() {

@@ -372,7 +372,7 @@ class JdbcImporterTest {
             // When
             JdbcImporter.importQuery(conn, "SELECT * FROM readings ORDER BY id", vortex, options);
 
-            // Then — every row round-trips correctly across all 10 chunk boundaries, and the
+            // Then — every row round-trips correctly across all 10 page boundaries, and the
             // global dict for `category` survived buffering across the whole stream (rather than
             // resetting per page) without breaching its cardinality cap or memory budget.
             try (VortexReader reader = VortexReader.open(vortex)) {
@@ -398,7 +398,9 @@ class JdbcImporterTest {
                         }
                     }
                 }
-                assertThat(chunkCount).isEqualTo(10);
+                // The 10 pages coalesce on disk: 100,000 I64 ids are under Rust's 1 MB repartition
+                // target (#470), so the writer emits a single chunk
+                assertThat(chunkCount).isEqualTo(1);
                 assertThat(totalRows).isEqualTo(100_000);
             }
         }

@@ -182,15 +182,14 @@ class GlobalDictPrimitiveTest {
             }
         }
 
-        // Then — the demoted column is Chunked-of-Flats (one Flat per chunk), never a shared Dict.
+        // Then — the demoted column is written per chunk, never as a shared Dict.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             var columnLayout = unwrapZoned(vf.layout().children().getFirst());
             assertThat(columnLayout.isDict()).as("cardinality-demoted column must not be a global dict").isFalse();
-            assertThat(columnLayout.isChunked()).as("demoted column is a chunked layout").isTrue();
-            assertThat(columnLayout.children())
-                    .as("one Flat per written chunk after cardinality demotion")
-                    .hasSize(chunkCount)
-                    .allSatisfy(child -> assertThat(child.isFlat()).isTrue());
+            // The replayed batches coalesce like any column's (Rust's repartition, #470): well
+            // under 1 MB, so one Flat.
+            assertThat(columnLayout.children()).as("demoted rows coalesce into one chunk")
+                    .singleElement().satisfies(child -> assertThat(child.isFlat()).isTrue());
 
             // And every value round-trips exactly across all chunks despite the mid-file demotion.
             assertThat(readAllLongs(vf, "v")).containsExactly(expected);
@@ -240,15 +239,14 @@ class GlobalDictPrimitiveTest {
             }
         }
 
-        // Then — the demoted column is Chunked-of-Flats (one Flat per chunk), never a shared Dict.
+        // Then — the demoted column is written per chunk, never as a shared Dict.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             var columnLayout = unwrapZoned(vf.layout().children().getFirst());
             assertThat(columnLayout.isDict()).as("cardinality-demoted column must not be a global dict").isFalse();
-            assertThat(columnLayout.isChunked()).as("demoted column is a chunked layout").isTrue();
-            assertThat(columnLayout.children())
-                    .as("one Flat per written chunk after cardinality demotion")
-                    .hasSize(chunkCount)
-                    .allSatisfy(child -> assertThat(child.isFlat()).isTrue());
+            // The replayed batches coalesce like any column's (Rust's repartition, #470): well
+            // under 1 MB, so one Flat.
+            assertThat(columnLayout.children()).as("demoted rows coalesce into one chunk")
+                    .singleElement().satisfies(child -> assertThat(child.isFlat()).isTrue());
 
             // And every value AND every null round-trips exactly, confirming the nullable
             // reconstruction path (validity restore + NullableData re-wrap) end-to-end.

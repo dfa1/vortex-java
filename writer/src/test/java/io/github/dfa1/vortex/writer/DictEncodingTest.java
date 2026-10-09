@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -78,7 +79,7 @@ class DictEncodingTest {
     }
 
     @Test
-    void roundTrip_multipleChunks(@TempDir Path tmp) throws IOException {
+    void roundTrip_multipleBatches(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("dict_multi.vtx");
         int[] chunk1 = {10, 20, 10};
@@ -92,26 +93,18 @@ class DictEncodingTest {
             sut.writeChunk(Map.of(ColumnName.of("category"), chunk2));
         }
 
-        // Then — process each chunk inside try-with-resources; arena released after close()
+        // Then — both batches coalesce into one chunk (Rust's repartition, #470), values in order
         try (var vf = VortexReader.open(file, dictRegistry());
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
-            try (Chunk c1 = iter.next()) {
-                Array a1 = c1.column("category");
-                assertThat(a1.length()).isEqualTo(3L);
-                assertThat(a1.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 0)).isEqualTo(10);
-                assertThat(a1.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 4)).isEqualTo(20);
-                assertThat(a1.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 8)).isEqualTo(10);
-            }
-
-            assertThat(iter.hasNext()).isTrue();
-            try (Chunk c2 = iter.next()) {
-                Array a2 = c2.column("category");
-                assertThat(a2.length()).isEqualTo(4L);
-                assertThat(a2.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 0)).isEqualTo(30);
-                assertThat(a2.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 4)).isEqualTo(10);
-                assertThat(a2.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 8)).isEqualTo(20);
-                assertThat(a2.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 12)).isEqualTo(30);
+            try (Chunk c = iter.next()) {
+                Array a = c.column("category");
+                assertThat(a.length()).isEqualTo(7L);
+                MemorySegment result = a.materialize(Arena.ofAuto());
+                int[] expected = {10, 20, 10, 30, 10, 20, 30};
+                for (int i = 0; i < expected.length; i++) {
+                    assertThat(result.get(VortexFormat.LE_INT, 4L * i)).as("row %d", i).isEqualTo(expected[i]);
+                }
             }
 
             assertThat(iter.hasNext()).isFalse();
