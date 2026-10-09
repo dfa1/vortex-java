@@ -50,7 +50,8 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
-    public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
+        ArrayStats stats = data.stats();
         if (!(dtype instanceof DType.Primitive) || !stats.hasMostFrequent()) {
             return Estimate.COMPLETE;
         }

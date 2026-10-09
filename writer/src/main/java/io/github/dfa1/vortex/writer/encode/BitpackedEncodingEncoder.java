@@ -50,26 +50,27 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         long signedMin = 0L;
         long signedMax = 0L;
         int[] bitWidthFreq = new int[typeBits + 1];
-        boolean hasNegative = false;
 
         if (n > 0) {
-            signedMin = longs[0];
-            signedMax = longs[0];
+            // Min/max apart from the histogram: a uniform body C2 can vectorize, where the
+            // histogram's scatter store cannot be. Unsigned order is signed order with the sign bit
+            // flipped, so one branch-free loop serves both signednesses. A width of 0 needs no
+            // branch either: numberOfLeadingZeros(0) is 64.
+            long flip = unsign ? Long.MIN_VALUE : 0L;
+            long min = Long.MAX_VALUE;
+            long max = Long.MIN_VALUE;
             for (long v : longs) {
-                if (unsign ? Long.compareUnsigned(v, signedMin) < 0 : v < signedMin) {
-                    signedMin = v;
-                }
-                if (unsign ? Long.compareUnsigned(v, signedMax) > 0 : v > signedMax) {
-                    signedMax = v;
-                }
-                if (!unsign && v < 0) {
-                    hasNegative = true;
-                }
+                min = Math.min(min, v ^ flip);
+                max = Math.max(max, v ^ flip);
+            }
+            signedMin = min ^ flip;
+            signedMax = max ^ flip;
+            for (long v : longs) {
                 long uv = v & typeMask;
-                int width = uv == 0L ? 0 : Long.SIZE - Long.numberOfLeadingZeros(uv);
-                bitWidthFreq[width]++;
+                bitWidthFreq[Long.SIZE - Long.numberOfLeadingZeros(uv)]++;
             }
         }
+        boolean hasNegative = !unsign && signedMin < 0;
 
         // Match Rust's bitpack_encode: refuse signed arrays with negatives. The cascade is
         // expected to FoR-shift them to non-negative first. Fall back to full type width here

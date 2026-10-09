@@ -3,11 +3,15 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -149,5 +153,75 @@ class ArrayStatsTest {
         assertThat(reference.get(result.mostFrequentBits()))
                 .as("value %d reported as most frequent", result.mostFrequentBits())
                 .isEqualTo(expectedTopFreq);
+    }
+
+    /// One case per counting path `compute` can take for integers. They must all agree with a
+    /// per-row hash: the dense counter and the run-aware hashing are shortcuts that change the
+    /// cost of the scan, never its answer, or the cascade would pick different encodings.
+    static Stream<Arguments> integerCountingPaths() {
+        var rng = new Random(42L);
+        // Dense, always: an 8-bit range regardless of length.
+        byte[] narrow = new byte[3_000];
+        for (int i = 0; i < narrow.length; i++) {
+            narrow[i] = (byte) rng.nextInt(256);
+        }
+        // Dense because the range (10k, like ALP-encoded two-decimal prices) is under the length.
+        int[] priceCodes = new int[50_000];
+        for (int i = 0; i < priceCodes.length; i++) {
+            priceCodes[i] = 5_000 + rng.nextInt(10_001);
+        }
+        // Hashed with long runs: wide values, each repeated 30 times (a date column).
+        long[] runs = new long[30_000];
+        for (int i = 0; i < runs.length; i++) {
+            runs[i] = (i / 30) * 1_000_003L;
+        }
+        // Hashed, no runs, range wider than the array.
+        long[] wide = new long[20_000];
+        for (int i = 0; i < wide.length; i++) {
+            wide[i] = rng.nextInt(4_000) * 1_000_000_007L;
+        }
+        // U64 straddling 2^63: signed min/max still bound the values, so dense indexing holds.
+        long[] straddle = new long[5_000];
+        for (int i = 0; i < straddle.length; i++) {
+            straddle[i] = Long.MAX_VALUE - 50 + rng.nextInt(100);
+        }
+        return Stream.of(
+                Arguments.of(PType.U8, narrow, widen(narrow, true)),
+                Arguments.of(PType.I8, narrow, widen(narrow, false)),
+                Arguments.of(PType.I32, priceCodes, Arrays.stream(priceCodes).asLongStream().toArray()),
+                Arguments.of(PType.I64, runs, runs),
+                Arguments.of(PType.I64, wide, wide),
+                Arguments.of(PType.U64, straddle, straddle));
+    }
+
+    @ParameterizedTest
+    @MethodSource("integerCountingPaths")
+    void compute_everyIntegerCountingPath_matchesPerRowReference(PType ptype, Object data, long[] widened) {
+        // Given: reference counts by brute force; ties name the smaller value, as both counters do
+        Map<Long, Integer> reference = new HashMap<>();
+        for (long v : widened) {
+            reference.merge(v, 1, Integer::sum);
+        }
+        int expectedTopFreq = reference.values().stream().max(Integer::compare).orElseThrow();
+        long expectedTopBits = reference.entrySet().stream()
+                .filter(e -> e.getValue() == expectedTopFreq)
+                .mapToLong(Map.Entry::getKey).min().orElseThrow();
+
+        // When
+        ArrayStats result = ArrayStats.compute(ptype, data, StatsOptions.DISTINCT_AND_TOP);
+
+        // Then
+        assertThat(result.distinctCapped()).isFalse();
+        assertThat(result.distinctCount()).isEqualTo(reference.size());
+        assertThat(result.topFrequency()).isEqualTo(expectedTopFreq);
+        assertThat(result.mostFrequentBits()).isEqualTo(expectedTopBits);
+    }
+
+    private static long[] widen(byte[] a, boolean unsigned) {
+        long[] out = new long[a.length];
+        for (int i = 0; i < a.length; i++) {
+            out[i] = unsigned ? Byte.toUnsignedLong(a[i]) : a[i];
+        }
+        return out;
     }
 }

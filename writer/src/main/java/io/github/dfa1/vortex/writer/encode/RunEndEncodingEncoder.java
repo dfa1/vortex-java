@@ -35,7 +35,8 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
-    public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
+        ArrayStats stats = data.stats();
         if (!(dtype instanceof DType.Primitive) || !stats.hasDistinctCount()) {
             return Estimate.COMPLETE;
         }

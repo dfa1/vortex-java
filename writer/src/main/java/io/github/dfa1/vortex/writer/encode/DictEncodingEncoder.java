@@ -46,7 +46,8 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
-    public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
+        ArrayStats stats = data.stats();
         // Stats path only covers Primitive (Utf8 still uses sample-encoded selection).
         if (!(dtype instanceof DType.Primitive) || !stats.hasDistinctCount()) {
             return Estimate.COMPLETE;

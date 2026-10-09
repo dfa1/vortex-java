@@ -62,15 +62,19 @@ public interface EncodingEncoder {
         return StatsOptions.NONE;
     }
 
-    /// Estimate compression effectiveness on `data` given pre-computed [ArrayStats].
-    /// Returning a verdict lets the cascade skip the expensive sample-encode probe.
+    /// Estimate compression effectiveness on `data` from its stats, as Rust's
+    /// `Scheme::expected_compression_ratio` does. Returning a verdict lets the cascade skip the
+    /// expensive sample-encode probe.
+    ///
+    /// The stats are computed on the first [ArrayAndStats#stats()] call and shared with every
+    /// other candidate, so a verdict that needs no stats should not ask for them.
     ///
     /// @param dtype the logical type of the data
-    /// @param data  the input data
-    /// @param stats pre-computed stats reflecting the merged [StatsOptions]
+    /// @param data  the input data with its lazily computed stats, reflecting the merged
+    ///              [StatsOptions]
     /// @return [Estimate#SKIP] / [Estimate#ALWAYS_USE], or [Estimate#COMPLETE] to
     ///         defer to the sample-encoded selection path
-    default Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+    default Estimate expectedRatio(DType dtype, ArrayAndStats data) {
         return Estimate.COMPLETE;
     }
 }
