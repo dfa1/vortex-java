@@ -179,44 +179,59 @@ class DictColumnStateTest {
         boolean admitted = sut.ingestDictChunk(new NullableData(values, validity));
         Object result = sut.reconstructChunk(sut.buildInverseMap(), 0);
 
-        // Then — two dictionary entries, and demotion rebuilds the original rows (null kept null)
+        // Then — two values plus the null entry, and demotion rebuilds the original rows (null kept null)
         assertThat(admitted).isTrue();
-        assertThat(sut.cardinality()).isEqualTo(2);
-        assertThat((byte[][]) sut.varBinUniques()).isDeepEqualTo(new byte[][]{{1, 2}, {3}});
+        assertThat(sut.cardinality()).isEqualTo(3);
+        assertThat((byte[][]) sut.uniques()).isDeepEqualTo(new byte[][]{{1, 2}, {3}, null});
         assertThat(result).isInstanceOfSatisfying(NullableData.class, nd -> {
             assertThat((byte[][]) nd.values()).isDeepEqualTo(values);
             assertThat(nd.validity()).containsExactly(validity);
         });
     }
 
-    // ── emitCodes / withNullSlot ─────────────────────────────────────────────────
+    // ── code assignment ──────────────────────────────────────────────────────────
 
     @Test
-    void emitCodes_nullRowsPointAtTheNullEntry_neverRemapped() {
-        // Given: first-seen codes 0,1 remapped to 1,0; row 1 is null. The null entry is code 2,
-        // the slot after the distinct values, so the codes carry no validity of their own (Rust's
-        // dict layout shape) — remapping the null row would point it at a real value instead
-        short[] buffered = {0, 0, 1, 1};
-        int[] remap = {1, 0};
-        boolean[] validity = {true, false, true, true};
+    void ingestDictChunk_assignsCodesFirstSeen_nullIncluded() {
+        // Given — Rust's dict builder codes values in first-seen order and gives null the next code
+        // at its first appearance. The dominant 0.0 arrives after a rare value: a frequency ranking
+        // (the old remap) would make it code 0 and push null to the end, so the codes reaching the
+        // cascade differed from Rust's.
+        var sut = new DictColumnState(new DType.Primitive(PType.F64, true));
+        double[] values = {1.75, 0.0, 0.0, 0.0, 0.0, -1.75};
+        boolean[] validity = {true, true, false, true, false, true};
 
         // When
-        short[] result = DictColumnState.emitCodes(buffered, remap, validity, 2);
+        boolean admitted = sut.ingestDictChunk(new NullableData(values, validity));
+        short[] result = sut.chunkCodes(0);
 
         // Then
-        assertThat(result).containsExactly((short) 1, (short) 2, (short) 0, (short) 0);
+        assertThat(admitted).isTrue();
+        assertThat(result).containsExactly((short) 0, (short) 1, (short) 2, (short) 1, (short) 2, (short) 3);
+        assertThat(sut.nullCode()).isEqualTo(2);
+        assertThat((double[]) sut.uniques()).containsExactly(1.75, 0.0, 0.0, -1.75);
     }
 
     @Test
-    void withNullSlot_appendsOneZeroPlaceholder() {
-        // Given
-        double[] uniques = {0.0, 1.75, -1.75};
+    void ingestDictChunk_rejectedChunk_rollsBackItsNullEntry() {
+        // Given — a full dictionary; the next chunk brings its first null and then a new value, so
+        // the chunk is rejected and must not leave a null entry behind for the demotion replay
+        var sut = new DictColumnState(new DType.Primitive(PType.I64, true));
+        long[] full = new long[DictColumnState.GLOBAL_DICT_MAX_CARDINALITY - 1];
+        for (int i = 0; i < full.length; i++) {
+            full[i] = i;
+        }
+        sut.ingestDictChunk(full);
+        long[] next = {0, -1};
+        boolean[] validity = {false, true};
 
         // When
-        Object result = DictColumnState.withNullSlot(uniques);
+        boolean result = sut.ingestDictChunk(new NullableData(next, validity));
 
         // Then
-        assertThat((double[]) result).containsExactly(0.0, 1.75, -1.75, 0.0);
+        assertThat(result).isFalse();
+        assertThat(sut.nullCode()).isEqualTo(-1);
+        assertThat(sut.cardinality()).isEqualTo(full.length);
     }
 
     // ── primitiveArrayLen / readPrimitiveElement ─────────────────────────────────

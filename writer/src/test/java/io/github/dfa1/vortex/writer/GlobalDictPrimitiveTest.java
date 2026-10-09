@@ -257,16 +257,13 @@ class GlobalDictPrimitiveTest {
     }
 
     @Test
-    void frequencyRemap_dominantValueGetsCode0_regardlessOfFirstSeenOrder(@TempDir Path tmp) throws IOException {
+    void dominantValueNotFirstSeen_codesStillCompress(@TempDir Path tmp) throws IOException {
         // Given — a strongly skewed F64 column whose DOMINANT value (0.5, ~98% of rows) is NOT the
-        // first value seen: the first row is a rare value (7.0) so first-seen ordering would give the
-        // rare value code 0. The primitive path's frequency remap (ADR 0021) must still rank the
-        // dominant value to code 0 so SparseEncodingEncoder (fill=0) compresses the mostly-zero codes
-        // child. If the remap were dropped (silently reusing the incremental first-seen codes), the
-        // dominant value would get a nonzero code, sparse would NOT fire, and the file would be far
-        // larger. Asserting a small file therefore pins "dominant → code 0" behaviorally.
+        // first value seen, so with first-seen codes (Rust's dict builder, #471) it gets code 1, not
+        // 0. The codes child must still compress: Sparse fills with the most frequent code, as
+        // Rust's does, so a Sparse that assumed fill=0 would balloon the file.
         var schema = new DType.Struct(List.of(ColumnName.of("rate")), List.of(DType.F64), false);
-        Path file = tmp.resolve("freq_remap_f64.vortex");
+        Path file = tmp.resolve("dominant_not_first_f64.vortex");
         double[] rare = {7.0, 8.0, 9.0, 10.0, 11.0};
         int rowsPerChunk = 5_000;
         int chunkCount = 4;
@@ -286,9 +283,8 @@ class GlobalDictPrimitiveTest {
             }
         }
 
-        // Then — the dominant value at code 0 lets the codes child compress to sparse: the whole file
-        // (dict of ~6 doubles + mostly-zero U8 codes) stays tiny. A broken remap would balloon it.
-        assertThat(Files.size(file)).as("dominant value at code 0 enables sparse codes").isLessThan(8_000L);
+        // Then — the dominant code compresses away: the whole file (dict of ~6 doubles + codes) stays tiny
+        assertThat(Files.size(file)).as("dominant non-zero code still compresses").isLessThan(8_000L);
 
         // And values round-trip exactly.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {

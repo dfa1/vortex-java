@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read `vortex.zstd_buffers`, Rust's opt-in buffer-level Zstd encoding (`zstd2026.02.0`) ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 
 ### Fixed
+- Global dictionaries assign codes in first-seen order, null included, as Rust's dict builder does, instead of ranking numeric values by frequency and appending null last: the codes reaching the cascade now match vortex-jni's (taxi `Airport_fee`, `extra`, `mta_tax`) ([#471](https://github.com/dfa1/vortex-java/issues/471)).
 - Global-dict layouts write `all_values_referenced = false` as Rust's dict layout writer does, so their metadata matches vortex-jni's byte for byte ([#473](https://github.com/dfa1/vortex-java/issues/473)).
 - Float arithmetic sequences (e.g. `i * 0.5`) could be written as `vortex.sequence`, which Rust rejects for float types; the encoding is now offered for integer columns only, as Rust's `SequenceScheme` ([#472](https://github.com/dfa1/vortex-java/issues/472)).
 - Cascading writes of integer columns with rare negatives (e.g. NYC taxi `tip_amount`, 4.4× vortex-jni's size) bit-packed whole chunks at full width: samples rarely held a negative. Bit-packing now skips arrays whose stats show a negative, as Rust's does, and taxi 2024-01 writes 42 MB instead of 60 MB (vortex-jni: 44 MB) ([#466](https://github.com/dfa1/vortex-java/pull/466)).
