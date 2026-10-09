@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.inspect.ByteSize;
 import io.github.dfa1.vortex.csv.ImportOptions;
 import io.github.dfa1.vortex.parquet.ParquetExporter;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
+import io.github.dfa1.vortex.writer.WriteOptions;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,6 +17,7 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ForkJoinPool;
 
 @SuppressWarnings("java:S106")
 final class ImportCommand {
@@ -98,9 +100,10 @@ final class ImportCommand {
     }
 
     private static int runRemoteParquet(String parquetUrl, Path vortexPath) throws IOException {
+        io.github.dfa1.vortex.parquet.ImportOptions defaults = io.github.dfa1.vortex.parquet.ImportOptions.defaults();
         io.github.dfa1.vortex.parquet.ImportOptions options =
-                io.github.dfa1.vortex.parquet.ImportOptions.defaults()
-                        .withProgressListener(ImportCommand::renderProgress);
+                defaults.withProgressListener(ImportCommand::renderProgress)
+                        .withWriteOptions(compressInParallel(defaults.writeOptions()));
         ParquetImporter.importParquet(URI.create(parquetUrl), vortexPath, options);
         ProgressBar.clear();
         printSimpleResult(vortexPath);
@@ -169,9 +172,10 @@ final class ImportCommand {
     }
 
     private static int runParquet(Path parquetPath, Path vortexPath) throws IOException {
+        io.github.dfa1.vortex.parquet.ImportOptions defaults = io.github.dfa1.vortex.parquet.ImportOptions.defaults();
         io.github.dfa1.vortex.parquet.ImportOptions options =
-                io.github.dfa1.vortex.parquet.ImportOptions.defaults()
-                        .withProgressListener(ImportCommand::renderProgress);
+                defaults.withProgressListener(ImportCommand::renderProgress)
+                        .withWriteOptions(compressInParallel(defaults.writeOptions()));
         ParquetImporter.importParquet(parquetPath, vortexPath, options);
         ProgressBar.clear();
         printResult(parquetPath, vortexPath, options.writeOptions().allowedCascading());
@@ -179,9 +183,17 @@ final class ImportCommand {
     }
 
     private static ImportOptions csvOptions(Character delimiter) {
-        ImportOptions options = ImportOptions.defaults()
-                                         .withProgressListener(ImportCommand::renderProgress);
+        ImportOptions defaults = ImportOptions.defaults();
+        ImportOptions options = defaults.withProgressListener(ImportCommand::renderProgress)
+                                        .withWriteOptions(compressInParallel(defaults.writeOptions()));
         return delimiter != null ? options.withDelimiter(delimiter) : options;
+    }
+
+    /// Compresses columns and chunks on the common pool while the importer keeps parsing: the file is
+    /// byte-identical to a sequential write, only sooner (an import is bound by its single-threaded
+    /// parse, so the gain is the encoding time, not a multiple of the cores).
+    private static WriteOptions compressInParallel(WriteOptions options) {
+        return options.withExecutor(ForkJoinPool.commonPool());
     }
 
     @FunctionalInterface

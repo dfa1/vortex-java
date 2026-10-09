@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently (4.4× on 8 threads). ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Changed
+- `vortex import` compresses on the common pool while it parses, about 20% faster (a 4.2M-row CSV 5.2 → 4.2 s); the file is byte-identical. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - **Breaking:** the reader takes `ColumnName` where it took a `String` column name (`ScanOptions`, `RowFilter`, `Chunk#column`, `Chunk#as`, `VortexReader#decodeChunk`, `ScanIterator#columnZoneStats`, `ScanIterator#columnZones`, `StructArray#field`, `DType.Struct#field`, `ZoneReducer#sum`, `Compute#filteredAggregate`, `DType.StructBuilder#field`, the CSV/Parquet `ExportOptions`, Calcite's `VortexTable`), matching the writer. ([#504](https://github.com/dfa1/vortex-java/pull/504))
 - A scan window over a column shared by several windows materializes as a zero-copy view of the decoded column instead of a row-by-row copy (Raincloud full scans up to 51% faster: IMDB `title` 14.9 → 22.5 scans/s, Appian `order` 15.7 → 18.5) ([#502](https://github.com/dfa1/vortex-java/pull/502)).
 - Frame-of-reference columns over bit-packed data decode into one buffer instead of two: the reference is added in place to the freshly unpacked values, as Rust does, halving their decode memory (Raincloud full scans 3–9% faster) ([#500](https://github.com/dfa1/vortex-java/pull/500)).

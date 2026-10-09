@@ -127,6 +127,28 @@ class ImportCommandTest {
         }
 
         @Test
+        void csvImport_writesTheSameBytesAsASequentialImport(@TempDir Path tmp) throws IOException {
+            // Given: more rows than one import chunk (65,536), so several chunks compress concurrently
+            StringBuilder rows = new StringBuilder("id,price,name\n");
+            for (int i = 0; i < 150_000; i++) {
+                rows.append(i).append(',').append(i % 977 / 100.0).append(",n").append(i % 13).append('\n');
+            }
+            Path csv = tmp.resolve("in.csv");
+            Files.writeString(csv, rows, StandardCharsets.UTF_8);
+            Path sequential = tmp.resolve("sequential.vortex");
+            Path out = tmp.resolve("out.vortex");
+            io.github.dfa1.vortex.csv.CsvImporter.importCsv(csv, sequential);
+
+            // When: the CLI compresses on the common pool, which must not change a byte of the file
+            CliTestSupport.Captured result = capture(() ->
+                    ImportCommand.run(new String[]{"import", csv.toString(), out.toString()}));
+
+            // Then
+            assertThat(result.status()).isEqualTo(ExitStatus.OK);
+            assertThat(Files.readAllBytes(out)).isEqualTo(Files.readAllBytes(sequential));
+        }
+
+        @Test
         void csvWithCustomDelimiter_imports(@TempDir Path tmp) throws IOException {
             // Given — tab-separated values
             Path csv = tmp.resolve("data.tsv");
