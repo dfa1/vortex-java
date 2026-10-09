@@ -19,6 +19,7 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
+import io.github.dfa1.vortex.reader.array.UnionArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -162,10 +163,12 @@ public final class CsvExporter {
     /// [ListViewArray]), either possibly wrapped in a [MaskedArray] when nullable, renders as a JSON array cell
     /// `[v0,v1,...]` with elements following the same rules as [#jsonValue(Array, long)].
     ///
+    /// A union column ([UnionArray]) renders the value of the variant each row selects.
+    ///
     /// @param arr    the column array to read from
     /// @param rowIdx the zero-based row index within `arr`
     /// @return the rendered cell text
-    private static String cellValue(Array arr, long rowIdx) {
+    static String cellValue(Array arr, long rowIdx) {
         return switch (arr) {
             // Long/IntArray have no dtype-aware getter, so gate the unsigned rendering on the
             // ptype; U64/U32 high-half values would otherwise print as negative.
@@ -207,6 +210,8 @@ public final class CsvExporter {
             // itself null (a null struct row is decoded as every field masked invalid, never as the
             // StructArray being wrapped once), which exports as an empty field like any other null.
             case StructArray sa -> isNullStructRow(sa, rowIdx) ? "" : jsonObject(sa, rowIdx);
+            // A union row renders as the value of the variant it selects.
+            case UnionArray ua -> ua.isValid(rowIdx) ? cellValue(ua.variant(ua.variantIndex(rowIdx)), rowIdx) : "";
             default -> throw new VortexException(
                     "unsupported array type for CSV export: " + arr.getClass().getSimpleName());
         };
@@ -279,6 +284,7 @@ public final class CsvExporter {
                 yield jsonArray(lv.elements(), start, start + offsetAt(lv.sizes(), rowIdx));
             }
             case NullArray _ -> "null";
+            case UnionArray ua -> ua.isValid(rowIdx) ? jsonValue(ua.variant(ua.variantIndex(rowIdx)), rowIdx) : "null";
             case VarBinArray va -> {
                 StringBuilder sb = new StringBuilder();
                 jsonString(sb, va.getString(rowIdx));

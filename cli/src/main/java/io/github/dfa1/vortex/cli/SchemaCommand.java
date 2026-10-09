@@ -90,6 +90,17 @@ final class SchemaCommand {
             case DType.Extension(var id, _, _, var nullable) ->
                     "ext<" + id + ">" + (nullable ? "?" : "");
             case DType.Variant(var nullable) -> "variant" + (nullable ? "?" : "");
+            case DType.Union u -> {
+                StringBuilder sb = new StringBuilder("union<");
+                for (int i = 0; i < u.names().size(); i++) {
+                    if (i > 0) {
+                        sb.append(", ");
+                    }
+                    sb.append(u.typeIds().get(i)).append(' ').append(u.names().get(i).value())
+                            .append(": ").append(formatDType(u.variantTypes().get(i)));
+                }
+                yield sb.append('>').append(u.nullable() ? "?" : "").toString();
+            }
         };
     }
 }

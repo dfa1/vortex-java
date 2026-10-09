@@ -15,10 +15,12 @@ import io.github.dfa1.vortex.core.fbs.FbsPType;
 import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
 import io.github.dfa1.vortex.core.fbs.FbsStruct;
 import io.github.dfa1.vortex.core.fbs.FbsType;
+import io.github.dfa1.vortex.core.fbs.FbsUnion;
 import io.github.dfa1.vortex.core.fbs.FbsUtf8;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -167,7 +169,51 @@ class PostscriptParserDTypeGuardsTest {
         assertThat(result.dtype()).isEqualTo(new DType.Map(DType.UTF8, DType.I64, true, false));
     }
 
+    @Test
+    void convertDType_union_parsesUnsignedTypeIds() {
+        // Given — type id 200 is negative as a FlatBuffers `byte`; Rust reads it as u8
+        MemorySegment dtype = unionDType(new String[]{"n", "s"}, new byte[]{0, (byte) 200});
+
+        // When
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        PostscriptParser.ParsedFile result = PostscriptParser.parseBlobs(footer, layout, dtype);
+
+        // Then
+        assertThat(result.dtype()).isEqualTo(new DType.Union(List.of(ColumnName.of("n"), ColumnName.of("s")),
+                List.of(DType.I64, DType.UTF8), List.of(0, 200), true));
+    }
+
+    @Test
+    void convertDType_unionDuplicateTypeIds_throwsVortexException() {
+        // Given — a crafted union reusing type id 3: rows could not say which variant they hold
+        MemorySegment dtype = unionDType(new String[]{"n", "s"}, new byte[]{3, 3});
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("type_ids must be distinct");
+    }
+
     // ── FlatBuffer builders ─────────────────────────────────────────────────────
+
+    /// Builds a nullable root union dtype blob of an i64 and a utf8 variant.
+    private static MemorySegment unionDType(String[] names, byte[] typeIds) {
+        var fbb = new FbsBuilder(256);
+        int[] typeOffsets = {
+                FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false)),
+                FbsDType.createFbsDType(fbb, FbsType.FbsUtf8, FbsUtf8.createFbsUtf8(fbb, false))};
+        int[] nameOffsets = new int[names.length];
+        for (int i = 0; i < names.length; i++) {
+            nameOffsets[i] = fbb.createString(names[i]);
+        }
+        int union = FbsUnion.createFbsUnion(fbb, FbsUnion.createNamesVector(fbb, nameOffsets),
+                FbsUnion.createDtypesVector(fbb, typeOffsets), FbsUnion.createTypeIdsVector(fbb, typeIds), true);
+        fbb.finish(FbsDType.createFbsDType(fbb, FbsType.FbsUnion, union));
+        return fbb.dataSegment();
+    }
 
     /// Builds a root `map<utf8, i64>` dtype blob, optionally omitting either child field or
     /// declaring the key type nullable.

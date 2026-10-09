@@ -53,6 +53,7 @@ new code — the record constructors stay available for pattern matching and tes
 | `DType.FixedSizeList` | —                                                      | `new DType.FixedSizeList(elementType, fixedSize, nullable)` |
 | `DType.Map`           | —                                                      | `new DType.Map(keyType, valueType, keysSorted, nullable)`   |
 | `DType.Extension`     | —                                                      | `new DType.Extension(id, storageDType, metadata, nullable)` |
+| `DType.Union`         | — (read only: no union is written)                     | `new DType.Union(names, variantTypes, typeIds, nullable)`; `variantIndex(typeId)` |
 
 Helpers: `nullable()` (boolean accessor on every record), `asNullable()` (fluent
 shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.field(name)`,
