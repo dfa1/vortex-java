@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.DecimalArray;
@@ -7,13 +8,17 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.ListViewArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MapArray;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.UnionArray;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
 import java.math.BigDecimal;
+import java.util.List;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
@@ -86,6 +91,26 @@ class ScanIteratorSliceTest {
         assertThat(result.length()).isEqualTo(2);
         assertThat(result.entries().length()).isEqualTo(2);
         assertThat(((IntArray) ((ListViewArray) result.entries()).offsets()).getInt(0)).isEqualTo(2);
+    }
+
+    @Test
+    void union_slicesTypeIdsAndEveryVariantToTheWindow() {
+        // Given — a sparse union: type ids and both variants row-aligned, rows pick b, a, b, a
+        var unionType = new DType.Union(List.of(ColumnName.of("a"), ColumnName.of("b")),
+                List.of(DType.I64, DType.I64), List.of(0, 1), false);
+        var u8 = new DType.Primitive(PType.U8, false);
+        var full = new UnionArray(unionType, 4,
+                new MaterializedByteArray(u8, 4, MemorySegment.ofArray(new byte[]{1, 0, 1, 0})),
+                List.of(new MaterializedLongArray(DType.I64, 4, longs(10, 11, 12, 13)),
+                        new MaterializedLongArray(DType.I64, 4, longs(20, 21, 22, 23))));
+
+        // When
+        var result = (UnionArray) ScanIterator.sliceArray(full, 1, 2, unionType);
+
+        // Then — window rows 1..2 are a=11 then b=22
+        assertThat(result.length()).isEqualTo(2);
+        assertThat(((LongArray) result.variant(result.variantIndex(0))).getLong(0)).isEqualTo(11);
+        assertThat(((LongArray) result.variant(result.variantIndex(1))).getLong(1)).isEqualTo(22);
     }
 
     private static ListViewArray listView() {

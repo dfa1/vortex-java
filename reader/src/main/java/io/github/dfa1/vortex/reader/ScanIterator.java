@@ -33,6 +33,7 @@ import io.github.dfa1.vortex.reader.array.OffsetLongArray;
 import io.github.dfa1.vortex.reader.array.OffsetShortArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
+import io.github.dfa1.vortex.reader.array.UnionArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 import io.github.dfa1.vortex.reader.layout.Layout;
@@ -910,6 +911,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
             case MapArray a -> new MapArray((DType.Map) dtype, length,
                     sliceArray(a.entries(), offset, length, a.entries().dtype()));
+            // A sparse union's children are all row-aligned with it: slice each to the window.
+            case UnionArray a -> {
+                DType.Union ud = (DType.Union) dtype;
+                var slicedVariants = new ArrayList<Array>(a.variantCount());
+                for (int i = 0; i < a.variantCount(); i++) {
+                    slicedVariants.add(sliceArray(a.variant(i), offset, length, ud.variantTypes().get(i)));
+                }
+                yield new UnionArray(ud, length, sliceArray(a.typeIds(), offset, length, a.typeIds().dtype()), slicedVariants);
+            }
             // Float16, Generic, Variant and Unknown arrays have no slice yet; they fail loudly here.
             default -> throw new VortexException(
                     "scan: cannot slice shared array of type " + full.getClass().getSimpleName());

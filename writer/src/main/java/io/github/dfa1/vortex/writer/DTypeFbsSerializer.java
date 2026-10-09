@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
 import io.github.dfa1.vortex.core.fbs.FbsStruct;
 import io.github.dfa1.vortex.core.fbs.FbsType;
 import io.github.dfa1.vortex.core.fbs.FbsUtf8;
+import io.github.dfa1.vortex.core.fbs.FbsUnion;
 import io.github.dfa1.vortex.core.fbs.FbsVariant;
 import io.github.dfa1.vortex.core.model.DType;
 
@@ -118,6 +119,23 @@ final class DTypeFbsSerializer {
             case DType.Variant(var nullable) -> {
                 int inner = FbsVariant.createFbsVariant(fbb, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsVariant, inner);
+            }
+            case DType.Union(var names, var variantTypes, var typeIds, var nullable) -> {
+                int[] typeOffsets = new int[variantTypes.size()];
+                for (int i = 0; i < typeOffsets.length; i++) {
+                    typeOffsets[i] = serializeDType(fbb, variantTypes.get(i));
+                }
+                int[] nameOffsets = new int[names.size()];
+                for (int i = 0; i < nameOffsets.length; i++) {
+                    nameOffsets[i] = fbb.createString(names.get(i).value());
+                }
+                byte[] ids = new byte[typeIds.size()];
+                for (int i = 0; i < ids.length; i++) {
+                    ids[i] = typeIds.get(i).byteValue();
+                }
+                int inner = FbsUnion.createFbsUnion(fbb, FbsUnion.createNamesVector(fbb, nameOffsets),
+                        FbsUnion.createDtypesVector(fbb, typeOffsets), FbsUnion.createTypeIdsVector(fbb, ids), nullable);
+                yield FbsDType.createFbsDType(fbb, FbsType.FbsUnion, inner);
             }
             default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);
         };

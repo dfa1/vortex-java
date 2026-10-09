@@ -118,6 +118,9 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
         /// Buffer-level Zstd (`vortex.zstd_buffers`): each buffer of a wrapped array compressed
         /// independently, keeping its layout; the `zstd` edition family, opt-in in Rust.
         VORTEX_ZSTD_BUFFERS("vortex.zstd_buffers"),
+        /// Sparse union (`vortex.union`): a `U8` type-ids child plus one row-aligned child per
+        /// variant, no buffers or metadata; in no edition, so read only.
+        VORTEX_UNION("vortex.union"),
         ;
 
         // O(1) access to a WellKnown constant by its string representation
@@ -263,4 +266,6 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
     WellKnown VORTEX_PARQUET_VARIANT = WellKnown.VORTEX_PARQUET_VARIANT;
     /// Well-known `vortex.zstd_buffers` id.
     WellKnown VORTEX_ZSTD_BUFFERS = WellKnown.VORTEX_ZSTD_BUFFERS;
+    /// Well-known `vortex.union` id.
+    WellKnown VORTEX_UNION = WellKnown.VORTEX_UNION;
 }

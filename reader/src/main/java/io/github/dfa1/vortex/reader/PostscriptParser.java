@@ -328,6 +328,31 @@ final class PostscriptParser {
                         storage.nullable());
             }
             case FbsType.FbsVariant -> new DType.Variant(fbs.type(new FbsVariant()).nullable());
+            case FbsType.FbsUnion -> {
+                var u = fbs.type(new io.github.dfa1.vortex.core.fbs.FbsUnion());
+                var names = new ArrayList<io.github.dfa1.vortex.core.model.ColumnName>(u.namesLength());
+                for (int i = 0; i < u.namesLength(); i++) {
+                    String name = u.names(i);
+                    final int variantIndex = i;
+                    io.github.dfa1.vortex.core.model.ColumnName.violation(name).ifPresent(reason -> {
+                        throw new VortexException("invalid union variant name at index " + variantIndex
+                                + " in file schema: " + reason);
+                    });
+                    names.add(new io.github.dfa1.vortex.core.model.ColumnName(name));
+                }
+                var types = new ArrayList<DType>(u.dtypesLength());
+                for (int i = 0; i < u.dtypesLength(); i++) {
+                    types.add(convertDType(u.dtypes(i), depth + 1));
+                }
+                var typeIds = new ArrayList<Integer>(u.typeIdsLength());
+                for (int i = 0; i < u.typeIdsLength(); i++) {
+                    // Unsigned on the wire: FlatBuffers' `byte` is signed, Rust reads it as u8.
+                    typeIds.add(u.typeIds(i) & 0xFF);
+                }
+                // DType.Union validates the shape (lengths, 1..256 variants, distinct ids/names)
+                // and throws VortexException, so a crafted schema never escapes as anything else.
+                yield new DType.Union(names, types, typeIds, u.nullable());
+            }
             default -> throw new VortexException("unsupported DType typeType=" + typeType);
         };
     }

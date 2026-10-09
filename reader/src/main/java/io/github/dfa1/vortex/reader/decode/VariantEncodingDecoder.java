@@ -114,6 +114,18 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         if (proto.variant() != null) {
             return new DType.Variant(proto.variant().nullable());
         }
+        if (proto.union() != null) {
+            var u = proto.union();
+            var names = new ArrayList<io.github.dfa1.vortex.core.model.ColumnName>(u.names().size());
+            for (String name : u.names()) {
+                names.add(io.github.dfa1.vortex.core.model.ColumnName.of(name));
+            }
+            var types = new ArrayList<DType>(u.dtypes().size());
+            for (io.github.dfa1.vortex.core.proto.ProtoDType child : u.dtypes()) {
+                types.add(dtypeFromProto(child));
+            }
+            return new DType.Union(names, types, u.type_ids(), u.nullable());
+        }
         throw new VortexException("unsupported proto DType");
     }
 }

@@ -20,7 +20,8 @@ import java.util.Objects;
 public sealed interface DType
         permits DType.Null, DType.Bool, DType.Primitive, DType.Decimal,
                         DType.Utf8, DType.Binary, DType.Struct,
-                        DType.List, DType.FixedSizeList, DType.Map, DType.Extension, DType.Variant {
+                        DType.List, DType.FixedSizeList, DType.Map, DType.Extension, DType.Variant,
+                        DType.Union {
 
     /// Returns whether this type allows null values.
     ///
@@ -37,7 +38,7 @@ public sealed interface DType
         return switch (this) {
             case Primitive(var pt, _) -> pt.isUnsigned();
             case Null _, Bool _, Decimal _, Utf8 _, Binary _, Struct _, List _,
-                 FixedSizeList _, Map _, Extension _, Variant _ -> false;
+                 FixedSizeList _, Map _, Extension _, Variant _, Union _ -> false;
         };
     }
 
@@ -68,6 +69,7 @@ public sealed interface DType
             case Map(var key, var value, var keysSorted, _) -> new Map(key, value, keysSorted, nullable);
             case Extension(var id, var storage, var meta, _) -> new Extension(id, storage, meta, nullable);
             case Variant _ -> new Variant(nullable);
+            case Union(var names, var types, var typeIds, _) -> new Union(names, types, typeIds, nullable);
         };
     }
 
@@ -426,5 +428,62 @@ public sealed interface DType
     ///
     /// @param nullable whether null values are permitted
     record Variant(boolean nullable) implements DType {
+    }
+
+    /// Sparse union logical type, Rust's `DType::Union`: each row holds a value of exactly one
+    /// variant, selected by an unsigned 8-bit type id. Type ids are distinct but need not be
+    /// consecutive (e.g. `[0, 5, 7]`).
+    ///
+    /// @param names        ordered variant names, distinct
+    /// @param variantTypes ordered variant types, parallel to `names`
+    /// @param typeIds      the type id (0–255) of each variant, parallel to `names`, distinct
+    /// @param nullable     whether null values are permitted
+    record Union(
+            java.util.List<ColumnName> names,
+            java.util.List<DType> variantTypes,
+            java.util.List<Integer> typeIds,
+            boolean nullable
+    ) implements DType {
+
+        /// Rust's limit: one variant per `u8` type id.
+        public static final int MAX_VARIANTS = 256;
+
+        /// Validates the variant shape as Rust's `UnionVariants::validate_shape` does.
+        ///
+        /// @param names        ordered variant names
+        /// @param variantTypes ordered variant types
+        /// @param typeIds      the type id of each variant
+        /// @param nullable     whether null values are permitted
+        /// @throws VortexException if the lists differ in size, hold no or more than
+        ///         [#MAX_VARIANTS] variants, or repeat a name or type id, or a type id is not a `u8`
+        public Union {
+            names = java.util.List.copyOf(names);
+            variantTypes = java.util.List.copyOf(variantTypes);
+            typeIds = java.util.List.copyOf(typeIds);
+            if (names.size() != variantTypes.size() || names.size() != typeIds.size()) {
+                throw new VortexException("union names, dtypes and type_ids length mismatch: "
+                        + names.size() + ", " + variantTypes.size() + ", " + typeIds.size());
+            }
+            if (names.isEmpty() || names.size() > MAX_VARIANTS) {
+                throw new VortexException("union must have 1 to " + MAX_VARIANTS + " variants, got " + names.size());
+            }
+            if (typeIds.stream().anyMatch(id -> id < 0 || id > 255)) {
+                throw new VortexException("union type_ids must fit in u8, got " + typeIds);
+            }
+            if (java.util.Set.copyOf(typeIds).size() != typeIds.size()) {
+                throw new VortexException("union type_ids must be distinct, got " + typeIds);
+            }
+            if (java.util.Set.copyOf(names).size() != names.size()) {
+                throw new VortexException("union variant names must be distinct, got " + names);
+            }
+        }
+
+        /// Returns the position of the variant with the given type id.
+        ///
+        /// @param typeId an unsigned 8-bit type id
+        /// @return the variant index, or `-1` when no variant has that type id
+        public int variantIndex(int typeId) {
+            return typeIds.indexOf(typeId);
+        }
     }
 }

@@ -25,33 +25,158 @@ public final class FbsUnion extends FbsTable {
         return this;
     }
 
+    /// @return the length of the `names` vector
+    public int namesLength() {
+        int o = fieldOffset(4);
+        return o != 0 ? vectorLength(o) : 0;
+    }
+
+    /// @param j element index
+    /// @return the j-th `names` string
+    public String names(int j) {
+        int o = fieldOffset(4);
+        return readStringAt(vectorElements(o) + (long) j * 4);
+    }
+
+    /// @return the length of the `dtypes` vector
+    public int dtypesLength() {
+        int o = fieldOffset(6);
+        return o != 0 ? vectorLength(o) : 0;
+    }
+
+    /// @param j element index
+    /// @return the j-th `dtypes` element
+    public FbsDType dtypes(int j) {
+        int o = fieldOffset(6);
+        return new FbsDType().assign(seg, indirect(vectorElements(o) + (long) j * 4));
+    }
+
+    /// @return the length of the `typeIds` vector
+    public int typeIdsLength() {
+        int o = fieldOffset(8);
+        return o != 0 ? vectorLength(o) : 0;
+    }
+
+    /// @param j element index
+    /// @return the j-th `typeIds` element
+    public int typeIds(int j) {
+        int o = fieldOffset(8);
+        return o != 0 ? (int) readByte(vectorElements(o) + (long) j * 1) : 0;
+    }
+
+    /// @return a zero-copy slice of the `typeIds` byte vector, or null if absent
+    public MemorySegment typeIdsAsSegment() {
+        int o = fieldOffset(8);
+        return o != 0 ? byteVector(o) : null;
+    }
+
     /// @return the `nullable` field
     public boolean nullable() {
-        int o = fieldOffset(4);
+        int o = fieldOffset(10);
         return o != 0 ? readByte(pos + o) != 0 : false;
+    }
+
+    /// Sets the `names` offset field.
+    /// @param b the builder
+    /// @param offset the referenced offset
+    public static void addNames(FbsBuilder b, int offset) {
+        b.addOffset(0, offset, 0);
+    }
+
+    /// Creates the `names` offset vector.
+    /// @param b the builder
+    /// @param data element offsets
+    /// @return the vector offset
+    public static int createNamesVector(FbsBuilder b, int[] data) {
+        b.startVector(4, data.length, 4);
+        for (int i = data.length - 1; i >= 0; i--) {
+            b.addOffset(data[i]);
+        }
+        return b.endVector();
+    }
+
+    /// Begins the `names` vector.
+    /// @param b the builder
+    /// @param numElems element count
+    public static void startNamesVector(FbsBuilder b, int numElems) {
+        b.startVector(4, numElems, 4);
+    }
+
+    /// Sets the `dtypes` offset field.
+    /// @param b the builder
+    /// @param offset the referenced offset
+    public static void addDtypes(FbsBuilder b, int offset) {
+        b.addOffset(1, offset, 0);
+    }
+
+    /// Creates the `dtypes` offset vector.
+    /// @param b the builder
+    /// @param data element offsets
+    /// @return the vector offset
+    public static int createDtypesVector(FbsBuilder b, int[] data) {
+        b.startVector(4, data.length, 4);
+        for (int i = data.length - 1; i >= 0; i--) {
+            b.addOffset(data[i]);
+        }
+        return b.endVector();
+    }
+
+    /// Begins the `dtypes` vector.
+    /// @param b the builder
+    /// @param numElems element count
+    public static void startDtypesVector(FbsBuilder b, int numElems) {
+        b.startVector(4, numElems, 4);
+    }
+
+    /// Sets the `typeIds` offset field.
+    /// @param b the builder
+    /// @param offset the referenced offset
+    public static void addTypeIds(FbsBuilder b, int offset) {
+        b.addOffset(2, offset, 0);
+    }
+
+    /// Creates the `typeIds` byte vector.
+    /// @param b the builder
+    /// @param data the bytes
+    /// @return the vector offset
+    public static int createTypeIdsVector(FbsBuilder b, byte[] data) {
+        return b.createByteVector(data);
+    }
+
+    /// Begins the `typeIds` vector.
+    /// @param b the builder
+    /// @param numElems element count
+    public static void startTypeIdsVector(FbsBuilder b, int numElems) {
+        b.startVector(1, numElems, 1);
     }
 
     /// Sets the `nullable` field.
     /// @param b the builder
     /// @param nullable value
     public static void addNullable(FbsBuilder b, boolean nullable) {
-        b.addBoolean(0, nullable, false);
+        b.addBoolean(3, nullable, false);
     }
 
     /// Builds a `FbsUnion` table.
     /// @param b the builder
+    /// @param namesOffset field value
+    /// @param dtypesOffset field value
+    /// @param typeIdsOffset field value
     /// @param nullable field value
     /// @return the table offset
-    public static int createFbsUnion(FbsBuilder b, boolean nullable) {
-        b.startTable(1);
-        b.addBoolean(0, nullable, false);
+    public static int createFbsUnion(FbsBuilder b, int namesOffset, int dtypesOffset, int typeIdsOffset, boolean nullable) {
+        b.startTable(4);
+        b.addOffset(2, typeIdsOffset, 0);
+        b.addOffset(1, dtypesOffset, 0);
+        b.addOffset(0, namesOffset, 0);
+        b.addBoolean(3, nullable, false);
         return b.endTable();
     }
 
     /// Begins a `FbsUnion` table.
     /// @param b the builder
     public static void startFbsUnion(FbsBuilder b) {
-        b.startTable(1);
+        b.startTable(4);
     }
 
     /// Finishes a `FbsUnion` table.

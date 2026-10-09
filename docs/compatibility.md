@@ -36,7 +36,7 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 
 | Item | Introduced | Java status |
 |------|------------|-------------|
-| `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
+| `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ⚠️ Read: `DType.Union` (Rust's shape rules) and the `vortex.union` sparse union array (`UnionArray`). Not written: `vortex.union` is in no Rust edition. No interop test: vortex-jni's Arrow bridge rejects unions, so no Rust producer exists. |
 | `vortex.onpair` experimental string encoding | Rust 0.74.0 | ✅ Read and written. In `core2026.08.1`, so default cascading writes offer it, as Rust's default compressor does; the trained dictionary is valid for Rust but not byte-identical to Rust's (Rust's sampling RNG is not portable). |
 | `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java reads `vortex.parquet.variant`, the Apache Variant binary encoding vortex-jni's default writer uses for Arrow `arrow.parquet.variant` columns, as a struct of per-row `metadata`/`value` binaries; it does not interpret the Variant binary itself. Java writes variant columns of **typed scalar** values only (constant / chunked-of-constants core, optional shredded child), via `vortex.variant`; writing `vortex.parquet.variant` is not implemented ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). |
 | Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested against the currently pinned v0.85.0 fixtures; #8125 not yet re-verified. |
@@ -122,6 +122,7 @@ decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nul
 | `fastlanes.rle`             | `RleEncodingDecoder`             | `RleEncodingEncoder`             | ✅      | ✅      | Chunk-based RLE. Integers and floats (Rust's int and float RLE schemes); float runs compare raw bits, so -0.0 and NaN payloads round-trip. Cascades values/indices/offsets |
 | `vortex.patched`            | `PatchedEncodingDecoder`         | `PatchedEncodingEncoder`         | ✅      | ✅      | Primitive PTypes; base + chunked patches (1024-elem blocks)            |
 | `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ✅      | Canonical container; constant / chunked-of-constants core + optional shredded child. Typed-scalar values only — nested objects need `parquet.variant` (ADR 0014) |
+| `vortex.union`              | `UnionEncodingDecoder`           | —                                | ✅      | ❌      | Read only: sparse union, `U8` type ids (nullable iff the union is) + one row-aligned child per variant; in no edition, so never written |
 | `vortex.parquet.variant`    | `ParquetVariantEncodingDecoder`  | —                                | ✅      | ❌      | Read only: decodes to a struct `{metadata, value?, typed_value?}` of Apache Variant binaries (Arrow's `arrow.parquet.variant` storage shape), masked by row validity. Writing is not implemented; Java writes typed-scalar variants through `vortex.variant` (ADR 0014) |
 | `vortex.zstd_buffers`       | `ZstdBuffersEncodingDecoder`     | —                                | ✅      | ❌      | Read only (`zstd2026.02.0`, opt-in in Rust): each buffer of any wrapped encoding is Zstd-decompressed at its declared alignment, then the inner encoding decodes with its own children. Needs the optional zstd binding, like `vortex.zstd`. Interop-tested against a Rust-written fixture (`scripts/fixtures/zstd-buffers`) |
 | `vortex.onpair`             | `OnPairEncodingDecoder`          | `OnPairEncodingEncoder`          | ✅      | ✅      | Utf8, Binary; `core2026.08.1`, a cascade candidate under the default edition (competes with FSST, as in Rust) |
@@ -178,6 +179,7 @@ decoder falls into one of three shapes:
 | `vortex.patched`            | Materialized  | Materialized  | inner is full base + chunked patches (1024-elem blocks, lane-window-sorted); per-row access requires 2 laneOffsets reads + binary search inside the chunk window, so eager scatter wins for full scans |
 | `vortex.variant`            | Lazy          | Lazy          | container wraps constant/chunked core (inner-typed) + optional shredded child |
 | `vortex.onpair`             | Materialized  | Materialized  | codes walked in order into one `VarBinOffsetArray`                       |
+| `vortex.union`              | Lazy          | Lazy          | `UnionArray` over its decoded type ids and variant children              |
 
 Decompression-style encodings (Bitpacked / Pco / Zstd / Delta) stay Materialized by design —
 element-at-`i` requires decoding a window, so they must allocate output (ADR 0010). Their output
