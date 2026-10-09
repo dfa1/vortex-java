@@ -129,12 +129,22 @@ public final class LongIntMap {
     /// @param key the raw bit pattern to count
     /// @return the updated count for `key`
     public int increment(long key) {
+        return increment(key, 1);
+    }
+
+    /// Adds `count` to `key`'s count, inserting it when unseen: one probe for a whole run of
+    /// equal values (see `ArrayStats`).
+    ///
+    /// @param key   the raw bit pattern to count
+    /// @param count occurrences to add; must be positive
+    /// @return the updated count for `key`
+    public int increment(long key, int count) {
         int slot = slotOf(key);
         while (values[slot] != 0 && keys[slot] != key) {
             slot = (slot + 1) & mask;
         }
         int raw = values[slot];
-        int updated = raw == 0 ? 1 : raw;
+        int updated = (raw == 0 ? 0 : raw - 1) + count;
         values[slot] = updated + 1;
         if (raw == 0) {
             // Only a fresh slot needs its key written. Storing it on every call added a memory

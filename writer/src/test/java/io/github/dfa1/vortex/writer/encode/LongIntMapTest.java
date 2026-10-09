@@ -87,6 +87,23 @@ class LongIntMapTest {
         }
 
         @Test
+        void increment_byCount_addsAWholeRunInOneProbe() {
+            // Given: ArrayStats flushes a run of equal values as one call, so a fresh key must
+            // start at the run length (not at 1) and a seen key must add the full run.
+            LongIntMap sut = new LongIntMap(16);
+
+            // When
+            int first = sut.increment(0L, 5);
+            int result = sut.increment(0L, 3);
+
+            // Then
+            assertThat(first).isEqualTo(5);
+            assertThat(result).isEqualTo(8);
+            assertThat(sut.get(0L)).isEqualTo(8);
+            assertThat(sut.size()).isEqualTo(1);
+        }
+
+        @Test
         void maxEntry_findsTheMostFrequentKey() {
             // Given — most-frequent is derived by one pass over the table rather than tracked per
             // increment, so it has to agree with the counts after the fact.

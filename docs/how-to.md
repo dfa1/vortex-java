@@ -693,8 +693,10 @@ and opaque payloads. The Rust reader holds a buffer to exactly that alignment: l
 construction, more aborts any row-range read that slices the buffer.
 
 To mix a custom encoder into the normal cascade competition instead of a single-encoder registry,
-start from `WriteRegistry.builder().registerDefaults()` and override `EncodingEncoder#expectedRatio`
-to steer selection, rather than relying on `accepts(DType)` alone.
+start from `WriteRegistry.builder().registerDefaults()` and override
+`EncodingEncoder#expectedRatio(DType, ArrayAndStats)` to steer selection, rather than relying on
+`accepts(DType)` alone. Declare the stats it reads in `statsOptions()`; `ArrayAndStats#stats()`
+computes them on first use and shares the scan with every other candidate.
 
 **Read side** (matching decoder, registered on `ReadRegistry` — see
 [reference.md#encoding-registry](reference.md#encoding-registry)):

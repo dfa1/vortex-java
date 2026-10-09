@@ -203,7 +203,8 @@ public final class CascadingCompressor {
         // (VarBinEncodingEncoder unconditionally accepts both, so a winner always exists in
         // practice).
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-            return competeAndEncode(dtype, data, ctx, ArrayStats.EMPTY, sampleSize -> Long.MAX_VALUE);
+            return competeAndEncode(dtype, new ArrayAndStats(dtype, data, StatsOptions.NONE), ctx,
+                    sampleSize -> Long.MAX_VALUE);
         }
 
         // Remaining non-primitives (extension types, List, ...): find the accepting encoding and
@@ -217,20 +218,18 @@ public final class CascadingCompressor {
         }
 
         // Stats-first selection (Rust vortex-compressor pattern): merge every eligible
-        // encoder's StatsOptions, compute stats in one pass, query each encoder's
-        // expectedRatio(). ALWAYS_USE short-circuits; SKIP excludes; COMPLETE defers
-        // to the sample-encoded path below.
+        // encoder's StatsOptions so the one scan, run lazily by the first encoder whose
+        // expectedRatio() reads stats, satisfies every later one. ALWAYS_USE short-circuits;
+        // SKIP excludes; COMPLETE defers to the sample-encoded path below.
         StatsOptions merged = StatsOptions.NONE;
         for (EncodingEncoder enc : encodings) {
             if (enc.accepts(dtype) && !ctx.excluded().contains(enc.encodingId())) {
                 merged = StatsOptions.merge(merged, enc.statsOptions());
             }
         }
-        ArrayStats stats = merged == StatsOptions.NONE
-                                   ? ArrayStats.EMPTY
-                                   : ArrayStats.compute(p.ptype(), data, merged);
 
-        return competeAndEncode(dtype, data, ctx, stats, sampleSize -> primitiveBytes(dtype, sampleSize));
+        return competeAndEncode(dtype, new ArrayAndStats(p, data, merged), ctx,
+                sampleSize -> primitiveBytes(dtype, sampleSize));
     }
 
     /// Shared sample-and-measure competition: stats-based skip/always-use sweep, then a
@@ -238,16 +237,16 @@ public final class CascadingCompressor {
     /// whichever measures smallest against `baselineFn`'s reference size.
     ///
     /// @param dtype      the logical type of the data to encode
-    /// @param data       the full input data
+    /// @param input      the full input data with its lazily computed stats for the
+    ///                   [EncodingEncoder#expectedRatio] sweep
     /// @param ctx        encoding context supplying the arena, encoder map, and cascade parameters
-    /// @param stats      pre-computed stats for the [EncodingEncoder#expectedRatio] sweep,
-    ///                   or [ArrayStats#EMPTY] when the dtype has no stats support
     /// @param baselineFn given the sample size, returns the reference size a candidate must
     ///                   beat to win
     /// @return the [EncodeResult] produced by the winning encoding
     private EncodeResult competeAndEncode(
-            DType dtype, Object data, EncodeContext ctx, ArrayStats stats, IntToLongFunction baselineFn
+            DType dtype, ArrayAndStats input, EncodeContext ctx, IntToLongFunction baselineFn
     ) {
+        Object data = input.data();
         // First sweep: stats verdicts. ALWAYS_USE short-circuits; SKIP excludes from
         // the sample-encoded competition below; COMPLETE defers to it.
         boolean[] skipMask = new boolean[encodings.size()];
@@ -257,7 +256,7 @@ public final class CascadingCompressor {
                 skipMask[i] = true;
                 continue;
             }
-            Estimate est = enc.expectedRatio(dtype, data, stats);
+            Estimate est = enc.expectedRatio(dtype, input);
             if (est == Estimate.ALWAYS_USE) {
                 return spliceResult(enc, dtype, data, ctx);
             }

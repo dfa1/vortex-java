@@ -28,7 +28,8 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
-    public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
+        ArrayStats stats = data.stats();
         if (stats.valueCount() == 0) {
             return Estimate.ALWAYS_USE;
         }
