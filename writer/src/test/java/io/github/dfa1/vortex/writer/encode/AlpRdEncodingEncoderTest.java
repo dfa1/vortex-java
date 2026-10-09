@@ -84,6 +84,48 @@ class AlpRdEncodingEncoderTest {
         assertThat(meta.right_bit_width()).isGreaterThan(0);
     }
 
+    @Test
+    void encode_f64_tiedPrefixesGetDeterministicDictionaryCodes() throws IOException {
+        // Given: the `alp` crate's own tie test (rd_encoder_uses_deterministic_codes_for_tied_prefixes).
+        // Several left parts occur equally often, so which eight make the dictionary, and in what
+        // order, used to depend on HashMap iteration order; Rust ranks ties by ascending pattern
+        double[] values = new double[1000];
+        for (int i = 0; i < values.length; i++) {
+            long rowId = 1_000 + i;
+            values[i] = ((rowId * 53) % 36_000) / 100.0 - 180.0;
+        }
+        var sut = new AlpRdEncodingEncoder();
+
+        // When
+        EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+        var metaSeg = result.rootNode().metadata();
+        ProtoALPRDMetadata meta = ProtoALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+
+        // Then
+        assertThat(meta.right_bit_width()).isEqualTo(53);
+        assertThat(meta.dict()).containsExactly(514, 1538, 515, 1539, 513, 1537, 512, 1536);
+    }
+
+    @Test
+    void encode_f64_trainsTheDictionaryOnRunsSpreadOverTheArray() throws IOException {
+        // Given: 131072 values whose exponent changes every 64 rows, with 1.0 at every 256th row.
+        // A sample taken every 256th row sees only 1.0, builds a one-entry dictionary, and sends
+        // every other value to the exceptions (the klines quote_volume column paid 70-120 KB a
+        // chunk for it); Rust trains on 64 evenly spread runs of 64 values and sees all eight
+        Random random = new Random(7);
+        double[] values = new double[131_072];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i % 256 == 0 ? 1.0 : Math.scalb(1.0 + random.nextDouble(), (i / 64) % 8);
+        }
+        var sut = new AlpRdEncodingEncoder();
+
+        // When
+        EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+        // Then: left and right parts only, no exception patches
+        assertThat(result.rootNode().children()).hasSize(2);
+    }
+
     // Property test: ALPRD is a lossless raw-bit split (dictionary left parts + bit-packed right parts,
     // exceptions stored verbatim), so the round-trip must be *bit-exact* for arbitrary finite values —
     // including -0.0 and exception-heavy random data where most left parts miss the 8-entry dictionary.

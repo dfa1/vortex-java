@@ -16,7 +16,10 @@ import java.util.Map;
 /// Write-only encoder for `vortex.alprd`.
 public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
-    private static final int SAMPLE_SIZE = 512;
+    /// Rust's `alp` crate trains the dictionary on at most this many values (`MAX_SAMPLE`).
+    private static final int MAX_SAMPLE = 4096;
+    /// Length of each contiguous run of the training sample (`SAMPLE_BLOCK`).
+    private static final int SAMPLE_BLOCK = 64;
     private static final int MAX_CUT = 16;
     private static final int MAX_DICT_SIZE = 8;
 
@@ -49,17 +52,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             return emptyResult(DType.U64, ctx);
         }
 
-        int sampleLen = Math.min(SAMPLE_SIZE, n);
-        // Train the dictionary on a stratified sample spanning the whole array, not the first
-        // `sampleLen` rows. The cascade measures ALP-RD's cost on its own stratified sample, so a
-        // head-only dictionary here can look cheap in the competition yet flood the tail with
-        // exceptions on the full re-encode when the leading rows are unrepresentative (sorted or
-        // clustered floats). Mirrors AlpEncodingEncoder.findExponentsF64 (#304 review).
-        double[] sample = new double[sampleLen];
-        long stride = Math.max(1L, (long) n / sampleLen);
-        for (int i = 0; i < sampleLen; i++) {
-            sample[i] = values[(int) Math.min(i * stride, (long) n - 1)];
-        }
+        // Rust's SamplePlan::subsample: contiguous runs spread over the whole array, so a periodic
+        // input cannot hide one phase from the dictionary, and a head-only sample cannot flood
+        // the tail with exceptions (#304 review).
+        double[] sample = sampleF64(values);
+        int sampleLen = sample.length;
         Dictionary64 best = findBestDictionaryF64(sample, sampleLen);
 
         Map<Short, Short> lookup = buildLookup(best.dict);
@@ -96,6 +93,45 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, rightParts,
             DType.U64, excPos, excVals, scalarF64(min), scalarF64(max), ctx);
+    }
+
+    /// Rust's `SamplePlan::subsample` (`alp` crate): the whole input when it has at most
+    /// [#MAX_SAMPLE] values, else [#MAX_SAMPLE] values as evenly spread [#SAMPLE_BLOCK]-value runs.
+    private static int[] sampleStarts(int n) {
+        if (n <= MAX_SAMPLE) {
+            return null;
+        }
+        int blocks = MAX_SAMPLE / SAMPLE_BLOCK;
+        int spacing = (n - SAMPLE_BLOCK) / (blocks - 1);
+        int[] starts = new int[blocks];
+        for (int i = 0; i < blocks; i++) {
+            starts[i] = i * spacing;
+        }
+        return starts;
+    }
+
+    private static double[] sampleF64(double[] values) {
+        int[] starts = sampleStarts(values.length);
+        if (starts == null) {
+            return values;
+        }
+        double[] sample = new double[starts.length * SAMPLE_BLOCK];
+        for (int i = 0; i < starts.length; i++) {
+            System.arraycopy(values, starts[i], sample, i * SAMPLE_BLOCK, SAMPLE_BLOCK);
+        }
+        return sample;
+    }
+
+    private static float[] sampleF32(float[] values) {
+        int[] starts = sampleStarts(values.length);
+        if (starts == null) {
+            return values;
+        }
+        float[] sample = new float[starts.length * SAMPLE_BLOCK];
+        for (int i = 0; i < starts.length; i++) {
+            System.arraycopy(values, starts[i], sample, i * SAMPLE_BLOCK, SAMPLE_BLOCK);
+        }
+        return sample;
     }
 
     private static Dictionary64 findBestDictionaryF64(double[] values, int sampleLen) {
@@ -147,14 +183,9 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             return emptyResult(DType.U32, ctx);
         }
 
-        int sampleLen = Math.min(SAMPLE_SIZE, n);
-        // Stratified sample across the whole array (see encodeF64): a head-only dictionary can be
-        // measured cheap by the cascade yet explode on the tail during the full re-encode.
-        float[] sample = new float[sampleLen];
-        long stride = Math.max(1L, (long) n / sampleLen);
-        for (int i = 0; i < sampleLen; i++) {
-            sample[i] = values[(int) Math.min(i * stride, (long) n - 1)];
-        }
+        // Same sample plan as encodeF64.
+        float[] sample = sampleF32(values);
+        int sampleLen = sample.length;
         Dictionary32 best = findBestDictionaryF32(sample, sampleLen);
 
         Map<Short, Short> lookup = buildLookup(best.dict);
@@ -238,7 +269,10 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
     private static short[] topKByCount(Map<Short, Integer> counts) {
         List<Map.Entry<Short, Integer>> sorted = new ArrayList<>(counts.entrySet());
-        sorted.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+        // Rust's select_dictionary: most frequent first, ties by ascending (unsigned) pattern, so the
+        // dictionary is decided by the data and not by HashMap iteration order.
+        sorted.sort(Map.Entry.<Short, Integer>comparingByValue().reversed()
+                .thenComparing(e -> Short.toUnsignedInt(e.getKey())));
         int dictSize = Math.min(sorted.size(), MAX_DICT_SIZE);
         short[] dict = new short[dictSize];
         for (int i = 0; i < dictSize; i++) {
