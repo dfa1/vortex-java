@@ -58,18 +58,11 @@ CI runs `./mvnw verify` on Java 25 and 26. Both must pass before merge.
 
 ## Finding work
 
-[TODO.md](TODO.md) is the canonical work list. Items are grouped by area. Good starting points
-for a first contribution:
-
-- **Testing** — add adversarial/fuzz tests for the reader (see the Security review section in
-  TODO.md); self-contained, no format knowledge required
-- **Docs** — format specification diagrams (TODO.md → Documentation); improves everyone's
-  understanding while building your own
-- **`vortex.zstd` nullable encode** — bounded scope, well-specified in TODO.md, mirrors what
-  other encodings already do
-
-More complex items (global dict, pco encode, Vector API) have detailed design notes in
-TODO.md — read those before starting.
+[GitHub Issues](https://github.com/dfa1/vortex-java/issues) is the single work list. Good starting
+points for a first contribution are the
+[`help wanted`](https://github.com/dfa1/vortex-java/labels/help%20wanted) and
+[`good first issue`](https://github.com/dfa1/vortex-java/labels/good%20first%20issue) labels.
+Larger items link their design ADR from the issue body — read it before starting.
 
 ## Making a change
 

@@ -226,7 +226,7 @@ almost always this.
 The reader memory-maps and parses untrusted binary input. Every malformed input must throw
 `VortexException`, never `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`,
 `OutOfMemoryError`, `StackOverflowError`, a raw FlatBuffer runtime exception, or a Protobuf parser
-exception. See [TODO.md §Security](TODO.md) for the current gap list (per-encoding adversarial
+exception. See the [`security` issues](https://github.com/dfa1/vortex-java/labels/security) for the current gap list (per-encoding adversarial
 tests, resource caps, fuzz infra) and [ADR 0003](adr/0003-vortex-exception-sanitization.md) /
 [ADR 0004](adr/0004-resource-caps-read-options.md) for the design.
 
