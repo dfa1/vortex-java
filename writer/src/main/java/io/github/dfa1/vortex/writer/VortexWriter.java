@@ -49,6 +49,7 @@ import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.SequenceEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
@@ -325,6 +326,8 @@ public final class VortexWriter implements Closeable {
             codecs.add(new DeltaEncodingEncoder());
         }
         codecs.add(new SparseEncodingEncoder());
+        // Rust's SequenceScheme: an exact integer arithmetic sequence costs two scalars (#507).
+        codecs.add(new SequenceEncodingEncoder());
         codecs.add(new DictEncodingEncoder());
         codecs.add(new BitpackedEncodingEncoder());
         // Decimals: byte-parts (precision <= 18) cascades its i64 mantissa through FoR/bit-packing;

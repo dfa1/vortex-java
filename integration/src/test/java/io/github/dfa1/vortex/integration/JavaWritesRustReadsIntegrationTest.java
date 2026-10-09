@@ -540,6 +540,40 @@ class JavaWritesRustReadsIntegrationTest {
                 slice(batches.stream().flatMapToLong(b -> Arrays.stream(b.volume())).boxed(), begin, end));
     }
 
+    @Test
+    void javaWriter_jniReader_sequence_fullFilteredAndRowRange(@TempDir Path tmp) throws IOException {
+        // Given — a fixed-step timestamp column, which the cascade writes as vortex.sequence (two
+        // scalars, no buffers). Rust must read it whole, with a filter (zone pruning plus a
+        // sequence slice) and over a row range that starts and ends mid-chunk.
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("t")), List.of(DType.I64), false);
+        long[] times = new long[100_000];
+        for (int i = 0; i < times.length; i++) {
+            times[i] = 1_704_067_200_000L + i * 60_000L;
+        }
+        Path file = tmp.resolve("java_sequence.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            sut.writeChunk(Map.of(ColumnName.of("t"), times));
+        }
+        long threshold = times[70_001];
+
+        // When
+        long[] full = readLongColumn(file, "t");
+        long[] filtered = readLongColumnFiltered(file, "t", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("t"), Expression.literal(threshold)));
+        List<Object> range = readRowRange(file, "t", 1_501, 70_333);
+
+        // Then
+        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file,
+                io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
+            assertThat(reader.footer().arraySpecs())
+                    .contains(io.github.dfa1.vortex.core.model.EncodingId.VORTEX_SEQUENCE);
+        }
+        assertThat(full).containsExactly(times);
+        assertThat(filtered).containsExactly(Arrays.copyOfRange(times, 70_001, times.length));
+        assertThat(range).containsExactlyElementsOf(slice(Arrays.stream(times).boxed(), 1_501, 70_333));
+    }
+
     private static List<Object> slice(java.util.stream.Stream<?> values, int begin, int end) {
         return values.skip(begin).limit((long) end - begin).map(Object.class::cast).toList();
     }

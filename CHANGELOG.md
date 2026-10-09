@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `WriteOptions` is a final class instead of a record. ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Fixed
+- Integer columns that are an exact arithmetic sequence (timestamps at a fixed step) are written as `vortex.sequence` instead of bit-packed, as Rust does (a 4.2M-row klines file 155 → 128 MB). ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - A zone-map metadata varint whose 10th byte exceeds 1 is rejected instead of silently truncated. ([#504](https://github.com/dfa1/vortex-java/pull/504))
 
 ## [0.16.0] — 2026-10-09
