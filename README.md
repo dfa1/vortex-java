@@ -11,8 +11,7 @@ Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) 
 for zero-copy memory-mapped reads — good performance out of the box, without native dependencies.
 
 Checked against the Rust reference in both directions (Rust writes, Java reads and vice versa),
-and against 172 real-world [Raincloud](docs/compatibility.md#real-world-conformance-the-raincloud-corpus) datasets, each matching its Parquet
-copy value for value.
+and against 172 real-world [Raincloud](docs/compatibility.md#real-world-conformance-the-raincloud-corpus) datasets, each matching its Parquet copy value for value.
 
 ### At a glance (vs vortex-jni 0.86.1)
 
@@ -119,14 +118,6 @@ Docs follow the [Diátaxis](https://diataxis.fr/) framework.
 | [docs/explanation.md](docs/explanation.md)     | Explanation | Design rationale, memory model, benchmarks                              |
 | [docs/testing.md](docs/testing.md)             | Explanation | Test strategy: layers, counts per module, what each layer verifies      |
 
-## Vortex implementations
-
-| Project                                                             | Language | Notes                                   |
-|---------------------------------------------------------------------|----------|-----------------------------------------|
-| [vortex-data/vortex](https://github.com/vortex-data/vortex)         | Rust     | Reference implementation + JNI bindings |
-| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
-| [Evariops/Vorticity](https://github.com/Evariops/Vorticity)         | C#       | Pure .NET, dependency-free              |
-| **dfa1/vortex-java**                                                | **Java** | **This library**                        |
 
 ## Contributing
 
@@ -138,9 +129,18 @@ coding conventions, and how to add a new encoding.
 This project uses [Claude Code](https://claude.ai/code) for implementation work.
 Architecture, API design, and all decisions are human-driven.
 
-## See also
+
 
 - [vortex.dev](https://vortex.dev) — the Vortex project's website
 - [Vortex: A Columnar File Format for GPU Streaming](https://www.infoq.com/presentations/vortex-columnar-file-format-gpu-streaming/) — InfoQ presentation
 - [Vortex: One Format for Any Shape](https://spiraldb.com/blog/vortex-one-format-for-any-shape) — SpiralDB blog post
 - [BtrBlocks: The Compressor Behind Vortex](https://vortex.dev/blog/btrblocks-compressor) — the cascading, cost-based encoding selection this project's own cascading compressor is modeled on
+
+## Other Vortex implementations
+
+| Project                                                             | Language | Notes                                   |
+|---------------------------------------------------------------------|----------|-----------------------------------------|
+| [vortex-data/vortex](https://github.com/vortex-data/vortex)         | Rust     | Reference implementation + JNI bindings |
+| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
+| [Evariops/Vorticity](https://github.com/Evariops/Vorticity)         | C#       | Pure .NET, dependency-free              |
+| **dfa1/vortex-java**                                                | **Java** | **This library**                        |
