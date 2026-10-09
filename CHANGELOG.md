@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently (4.4× on 8 threads). ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Changed
+- Full scans of real files are up to 6× faster (Raincloud, all columns: TPC-DS `store_sales` 0.95 → 5.88 scans/s, IMDB `title` 4.4 → 19.6, green taxi 2025 11.6 → 30.8): run-end, sparse, dictionary and date-time-parts columns decode sequentially, as Rust does, instead of a binary search per row ([#497](https://github.com/dfa1/vortex-java/pull/497)).
 - Dictionary decode validates its codes 2.3–3.6× faster. ([#484](https://github.com/dfa1/vortex-java/issues/484))
 - Bit-packing is about 2.3× faster. ([#484](https://github.com/dfa1/vortex-java/issues/484))
 - Delta encode and decode are up to 2× faster. ([#484](https://github.com/dfa1/vortex-java/issues/484))

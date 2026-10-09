@@ -4,6 +4,8 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 
+import java.util.function.LongConsumer;
+
 /// Package-private helper for the [LazyDateTimePartsLongArray] record.
 ///
 /// `days`, `seconds` and `subseconds` children can each be one of
@@ -40,6 +42,27 @@ final class DateTimePartsArrays {
             default -> throw new VortexException(
                     "DateTimeParts: unsupported child array type: " + arr.getClass().getSimpleName());
         };
+    }
+
+    /// Emits every element of `arr` widened to `long`, in order, through the child's own sequential
+    /// `forEach`: one type switch per child rather than per row, and a run-end or sparse child walks
+    /// its runs or patches instead of searching them per row.
+    ///
+    /// @param arr a [ByteArray], [ShortArray], [IntArray], [LongArray] or a [MaskedArray] over one
+    /// @param c   receives each widened element
+    static void forEachWidened(Array arr, LongConsumer c) {
+        switch (arr) {
+            case ByteArray a when isUnsigned(a) -> a.forEachByte(v -> c.accept(Byte.toUnsignedLong(v)));
+            case ByteArray a -> a.forEachByte(c::accept);
+            case ShortArray a when isUnsigned(a) -> a.forEachShort(v -> c.accept(Short.toUnsignedLong(v)));
+            case ShortArray a -> a.forEachShort(c::accept);
+            case IntArray a when isUnsigned(a) -> a.forEachInt(v -> c.accept(Integer.toUnsignedLong(v)));
+            case IntArray a -> a.forEachInt(c::accept);
+            case LongArray a -> a.forEachLong(c);
+            case MaskedArray a -> forEachWidened(a.inner(), c);
+            default -> throw new VortexException(
+                    "DateTimeParts: unsupported child array type: " + arr.getClass().getSimpleName());
+        }
     }
 
     private static boolean isUnsigned(Array a) {
