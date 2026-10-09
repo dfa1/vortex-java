@@ -29,53 +29,73 @@ no upgrade risk, and a supported LTS for users.
 ## Benchmarks
 
 JMH throughput (ops/s = full-file scans or writes per second). Higher is better. Re-measured
-2026-10-09 on `main` after #464–#469, against vortex-jni 0.86.1.
+2026-10-09 against vortex-jni 0.86.1: the OHLC, big-file and Parquet suites on `04d862b0`
+(after the `core.simd` kernels, #484), the real-file scans on `73bf8026` (after the sequential
+decode work, #497–#502).
 
 **Environment:** Apple M5, Zulu JDK 25.0.2. Reads 3 forks (`-f 3`), writes 5 forks (`-f 5`):
 the cascading write varies ~±5% from fork to fork, so fewer forks cannot resolve it. Each
 suite ran on its own; sustained multi-suite runs thermally throttle the laptop.
 
+### Real files — full scans of every column (`RealFileScanBenchmark`)
+
+Raincloud corpus files (written by Rust through Python `vortex-data`, see
+`scripts/hydrate-raincloud-corpus.sh`) plus the Java-written NYC taxi file, every column of every
+chunk materialized. "Before" is `main` at the start of the read work (`b0d75ba4`); the gains come
+from decoding run-end, sparse, dictionary and date-time-parts columns sequentially as Rust does
+instead of a binary search per row (#497), OnPair's 16-byte over-copy (#498), bool bitmaps 8 rows
+per step (#499), frame-of-reference added in place (#500) and zero-copy scan windows (#502).
+2 forks per file; green taxi 2025 swings ±4–8 between forks.
+
+| File                                  | Before (scans/s) | Now (scans/s) | Speedup |
+|---------------------------------------|------------------|---------------|---------|
+| TPC-DS `store_sales` (sf1)            | 0.95             | 6.77 ± 0.54   | 7.1×    |
+| NYC taxi 2024-01 (Java-written)       | 1.07             | 8.55 ± 2.15   | 8.0×    |
+| IMDB `title`                          | 4.38             | 22.48 ± 1.43  | 5.1×    |
+| green taxi 2025                       | 11.6             | ~33           | 2.8×    |
+| BI `corporations`                     | 8.37             | 22.76 ± 1.01  | 2.7×    |
+| Appian `order`                        | 7.41             | 18.52 ± 0.05  | 2.5×    |
+| TPC-H `orders` (sf1)                  | 71.1             | 97.63 ± 5.50  | 1.4×    |
+
 ### OHLC read — 10 M rows, 61.7 MB (Rust-written file, single-column projection)
 
-| Benchmark                     | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup   |
-|-------------------------------|---------------------|--------------------|-----------|
-| close (F64/ALP)               | 72.8 ± 0.4          | 46.3 ± 0.3         | **1.6×**  |
-| volume (I64/bitpacked)        | 106.1 ± 1.0         | 47.1 ± 1.1         | **2.3×**  |
-| symbol (Utf8)                 | 57.5 ± 19.4         | 14.8 ± 0.3         | **~3.9×** |
-| cascading (Java-written, volume) | 106.6 ± 0.5      | n/a                | —         |
+| Benchmark                        | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup  |
+|----------------------------------|---------------------|--------------------|----------|
+| close (F64/ALP)                  | 77.3 ± 0.4          | 46.4 ± 0.5         | **1.7×** |
+| volume (I64/bitpacked)           | 108.1 ± 0.9         | 48.1 ± 1.2         | **2.2×** |
+| symbol (Utf8)                    | 68.8 ± 1.3          | 15.3 ± 0.9         | **4.5×** |
+| cascading (Java-written, volume) | 108.9 ± 1.0         | n/a                | —        |
 
 vortex-jni reads are 3–6× faster than in the 2026-07 snapshot (vortex-jni 0.79: `close` 8.1,
-`volume` 8.2, `symbol` 9.6 ops/s), so the gap narrowed from 2–11× to 1.6–4×. `symbol`'s
-error bar is wide because its forks are bimodal (per-fork JIT compilation); read it as
-"several times faster", not as 3.9× exactly.
+`volume` 8.2, `symbol` 9.6 ops/s), so the gap narrowed from 2–11× to 1.7–4.5×. These are single
+numeric or string columns, which the real-file work above barely touches.
 
 ### OHLC write — 10 M rows
 
-Re-measured 2026-10-09 after #475, 5 forks. Both writers start from the same plain Java arrays.
-vortex-jni accepts only Arrow batches, so its number includes converting each batch to Arrow
-vectors (~280 ms per write), as any Java caller of vortex-jni pays; vortex-jni documents no
-faster path (#477).
+Both writers start from the same plain Java arrays. vortex-jni accepts only Arrow batches, so
+its number includes converting each batch to Arrow vectors (~280 ms per write), as any Java
+caller of vortex-jni pays; vortex-jni documents no faster path (#477).
 
 | Benchmark                               | vortex-java (ops/s) | vortex-jni (ops/s) | Ratio |
 |-----------------------------------------|---------------------|--------------------|-------|
-| write, cascading depth 3 (`defaults()`) | 0.951 ± 0.029       | 0.843 ± 0.006      | 1.13× |
+| write, cascading depth 3 (`defaults()`) | 1.107 ± 0.035       | 0.853 ± 0.002      | 1.30× |
 
 | vortex-java cascade depth | ops/s         | Output (bytes) |
 |---------------------------|---------------|----------------|
-| 0 (first match)           | 2.673 ± 0.075 | 460,424,918    |
-| 1                         | 0.856 ± 0.027 | 76,831,090     |
-| 2                         | 0.947 ± 0.028 | 59,461,778     |
-| 3 (default, Rust's)       | 0.951 ± 0.029 | 59,456,658     |
+| 0 (first match)           | 2.536 ± 0.419 | 460,424,918    |
+| 1                         | 0.940 ± 0.034 | 76,831,090     |
+| 2                         | 1.006 ± 0.137 | 59,461,778     |
+| 3 (default, Rust's)       | 1.107 ± 0.035 | 59,456,658     |
 
 | Output (bytes)          | vortex-java | vortex-jni |
 |-------------------------|-------------|------------|
 | OHLC 10 M rows          | 59,456,658  | 61,681,692 |
 | NYC taxi 2024-01 (2.96 M rows, 19 cols) | 42,338,902 | 44,463,892 |
 
-Without the Arrow conversion, Rust's encoder alone writes ~15% faster than vortex-java
-(1.094 ± 0.004 ops/s): Rust overlaps part of its compression on runtime threads while Java's
-writer is single-threaded (#474), and Java still spends more CPU than Rust in compressor stats
-(#476).
+vortex-java now writes about as fast as Rust's encoder alone without the Arrow conversion
+(1.094 ± 0.004 ops/s, measured earlier the same day), single-threaded; Rust overlaps part of its
+compression on runtime threads, and Java's writer can too with `WriteOptions#withExecutor` (#474).
+The last step, 0.951 → 1.107 ops/s, is the lane-inner FastLanes bit-pack and delta kernels (#484).
 
 How it got here — porting the Rust compressor's decisions rather than tuning Java's own:
 2026-10-08 `main` wrote 0.433 ops/s and 6.9 GB allocated per write; #464–#469 brought it to
@@ -90,17 +110,12 @@ had hidden.
 
 | Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup  |
 |-----------|---------------------|--------------------|----------|
-| scan      | 18.3 ± 0.2          | 5.3 ± 0.1          | **3.4×** |
+| scan      | 18.5 ± 1.2          | 5.6 ± 0.1          | **3.3×** |
 
 ### Parquet vs Vortex read — NYC Yellow Taxi 2024-01, 3 M rows, 19 columns
 
-Both formats store all 19 columns; projection happens at read time. Both sides scalar decode
-(Hardwood disables SIMD on JDK 25; Vortex Java uses FFM scalar reads throughout).
-
-**Environment:** Apple M5, Zulu JDK 25.0.2, 3 warmup × 3 s, 5 measurement × 5 s, 3 forks.
-Re-measured 2026-07-24 against commit `4a170f1b`. The batch Parquet paths are noisy
-(SIMD-disabled scalar decode + page-cache/GC jitter — hence the wide error bars); the
-Vortex paths are tight.
+Both formats store all 19 columns; projection happens at read time. 3 warmup × 3 s,
+5 measurement × 5 s, 3 forks.
 
 Two Parquet variants are measured to isolate format cost from API overhead:
 
@@ -111,19 +126,18 @@ Two Parquet variants are measured to isolate format cost from API overhead:
 
 | Benchmark                                                                | ops/s        | vs Parquet batch         |
 |--------------------------------------------------------------------------|--------------|--------------------------|
-| `parquetRead` — batch, 1 col (`trip_distance`)                           | 172.7 ± 28.0 | baseline                 |
-| `parquetReadRowByRow` — row cursor, 1 col                                | 65.5 ± 0.9   | 0.38× (2.6× API penalty) |
-| `vortexRead` — 1 col (`trip_distance`)                                   | 273.3 ± 5.8  | **1.58×**                |
-| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 109.1 ± 18.4 | baseline                 |
-| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 42.4 ± 0.8   | 0.39× (2.6× API penalty) |
-| `vortexReadMultiColumn` — 2 cols                                         | 46.9 ± 14.4  | 0.43×                    |
+| `parquetRead` — batch, 1 col (`trip_distance`)                           | 283.3 ± 3.5  | baseline                 |
+| `parquetReadRowByRow` — row cursor, 1 col                                | 84.0 ± 1.9   | 0.30× (3.4× API penalty) |
+| `vortexRead` — 1 col (`trip_distance`)                                   | 273.4 ± 1.6  | 0.97×                    |
+| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 191.1 ± 22.8 | baseline                 |
+| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 48.6 ± 1.9   | 0.25× (3.9× API penalty) |
+| `vortexReadMultiColumn` — 2 cols                                         | 130.5 ± 0.6  | 0.68×                    |
 
-**The 2026-06 `vortexRead` regression is resolved.** Single-column `vortexRead` recovered
-from 43 → **273 ops/s** and now reads _faster_ than Parquet batch (1.58×), past even the
-235 ops/s pre-regression peak; the cascade-choice collapse noted in the prior snapshot no
-longer reproduces. Two-column `vortexReadMultiColumn` also recovered (34 → 47) but still
-trails the 2-column Parquet batch — the remaining gap is the multi-column scatter/expansion
-path, not single-column decode.
+Hardwood's batch reads got much faster since the 2026-07-24 snapshot (`trip_distance` 172.7 →
+283.3, two columns 109.1 → 191.1), so single-column Vortex is now at parity rather than 1.58×
+ahead. Two-column `vortexReadMultiColumn` nearly tripled (46.9 → 130.5) but still trails the
+two-column Parquet batch. Both Vortex columns here are nullable global dictionaries, read as a
+`MaskedArray` whose values the benchmark folds.
 
 #### Why ZstdEncoding is excluded from the numeric cascade
 
