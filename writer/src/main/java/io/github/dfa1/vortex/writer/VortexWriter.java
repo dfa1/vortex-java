@@ -691,6 +691,9 @@ public final class VortexWriter implements Closeable {
                 EncodeContext encodeCtx = options.allowedCascading() > 0
                         ? EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded)
                         : EncodeContext.of(arena, defaultRegistry, editionExcluded);
+                // A wrapping override (masked) cascades its inner values, so the exclusions hold
+                // there too -- a nullable global-dict pool must never become a dict itself.
+                encodeCtx = encodeCtx.withExcluded(excludedFromCascade);
                 result = encodingOverride.encode(dtype, data, encodeCtx);
             } else if (options.allowedCascading() > 0) {
                 EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded);
@@ -1366,31 +1369,45 @@ public final class VortexWriter implements Closeable {
     }
 
     private void writeGlobalDictVarBinColumn(ColumnName colName, DictColumnState state) throws IOException {
-        int dictSize = state.cardinality();
+        // Null is one more pool entry, invalid, with non-nullable codes -- Rust's dict layout
+        // shape, as for numeric columns (writeGlobalDictColumn).
+        boolean hasNulls = state.chunkNullCounts().stream().anyMatch(c -> c > 0);
+        int distinct = state.cardinality();
+        int dictSize = hasNulls ? distinct + 1 : distinct;
 
         // Utf8/Binary assigns codes in first-seen order with no frequency sort, so the incremental map's
         // order already matches — no remap pass (ADR 0021). Compress the distinct-values pool
         // through the normal Utf8/Binary competition (FSST/VarBin/Zstd) so it captures substring
         // redundancy across dictionary entries (#299), but exclude Dict so the cascade never wraps
         // the (all-unique-by-construction) dictionary in another dict the reader cannot unwrap. At
-        // cascade depth 0 there is no competition to run, so force flat VarBin as before.
+        // cascade depth 0 there is no competition to run, so force flat VarBin as before; a pool
+        // with a null entry is masked there instead, its values still VarBin.
         Object uniques = state.varBinUniques();
-        int valuesSegIdx = options.allowedCascading() > 0
-                ? writeSegment(state.dtype(), uniques, null, Set.of(EncodingId.VORTEX_DICT))
-                : writeSegment(state.dtype(), uniques, new VarBinEncodingEncoder());
+        Object pool = uniques;
+        if (hasNulls) {
+            boolean[] poolValidity = new boolean[dictSize];
+            Arrays.fill(poolValidity, 0, distinct, true);
+            pool = new NullableData(DictColumnState.withNullSlot(uniques), poolValidity);
+        }
+        int valuesSegIdx;
+        if (options.allowedCascading() > 0) {
+            valuesSegIdx = writeSegment(state.dtype(), pool, null, Set.of(EncodingId.VORTEX_DICT));
+        } else if (hasNulls) {
+            valuesSegIdx = writeSegment(state.dtype(), pool, new MaskedEncodingEncoder(), Set.of(EncodingId.VORTEX_DICT));
+        } else {
+            valuesSegIdx = writeSegment(state.dtype(), pool, new VarBinEncodingEncoder());
+        }
 
-        DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, state.nullable());
+        DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, false);
         List<Integer> codesSegIdxes = new ArrayList<>();
         for (int c = 0; c < state.chunkCount(); c++) {
-            boolean[] validity = state.chunkValidity(c);
-            Object codesArr = DictColumnState.emitCodes(state.chunkCodes(c), null, validity, 0);
-            Object codesData = validity != null ? new NullableData(codesArr, validity) : codesArr;
-            codesSegIdxes.add(writeSegment(codesDtype, codesData));
+            Object codesArr = DictColumnState.emitCodes(state.chunkCodes(c), null, state.chunkValidity(c), distinct);
+            codesSegIdxes.add(writeSegment(codesDtype, codesArr));
         }
 
         dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes,
                 state.chunkRowCounts(), state.chunkNullCounts(),
-                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), state.nullable()));
+                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
     }
 
     private record SegRef(long offset, long len) {
