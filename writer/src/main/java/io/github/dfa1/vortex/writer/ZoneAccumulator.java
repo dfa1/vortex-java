@@ -417,8 +417,8 @@ final class ZoneAccumulator {
             return null;
         }
         String s = new String(cut, StandardCharsets.UTF_8);
-        int lastStart = s.offsetByCodePoints(s.length(), -1);
-        int last = s.codePointAt(lastStart);
+        int last = s.codePointBefore(s.length());
+        int lastStart = s.length() - Character.charCount(last);
         int next = last + 1;
         if (next > Character.MAX_CODE_POINT || (next >= Character.MIN_SURROGATE && next <= Character.MAX_SURROGATE)
                 || utf8Width(next) != utf8Width(last)) {

@@ -116,22 +116,59 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         };
     }
 
+    // One typed loop per width, the ptype switch hoisted out (CLAUDE.md hot-loop rule). Floats
+    // compare raw bits, so distinct NaN payloads or -0.0 vs 0.0 are not constant.
     private static boolean isConstant(Object data, PType ptype) {
-        long firstRaw = readFirstRaw(data, ptype);
-        int len = Array.getLength(data);
-        for (int i = 1; i < len; i++) {
-            long raw = switch (ptype) {
-                case I8, U8 -> ((byte[]) data)[i];
-                case I16, U16 -> ((short[]) data)[i];
-                case I32, U32 -> ((int[]) data)[i];
-                case I64, U64 -> ((long[]) data)[i];
-                case F32 -> Float.floatToRawIntBits(((float[]) data)[i]);
-                case F64 -> Double.doubleToRawLongBits(((double[]) data)[i]);
-                default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
-            };
-            if (raw != firstRaw) {
-                return false;
+        switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = (byte[]) data;
+                for (int i = 1; i < a.length; i++) {
+                    if (a[i] != a[0]) {
+                        return false;
+                    }
+                }
             }
+            case I16, U16 -> {
+                short[] a = (short[]) data;
+                for (int i = 1; i < a.length; i++) {
+                    if (a[i] != a[0]) {
+                        return false;
+                    }
+                }
+            }
+            case I32, U32 -> {
+                int[] a = (int[]) data;
+                for (int i = 1; i < a.length; i++) {
+                    if (a[i] != a[0]) {
+                        return false;
+                    }
+                }
+            }
+            case I64, U64 -> {
+                long[] a = (long[]) data;
+                for (int i = 1; i < a.length; i++) {
+                    if (a[i] != a[0]) {
+                        return false;
+                    }
+                }
+            }
+            case F32 -> {
+                float[] a = (float[]) data;
+                for (int i = 1; i < a.length; i++) {
+                    if (Float.floatToRawIntBits(a[i]) != Float.floatToRawIntBits(a[0])) {
+                        return false;
+                    }
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) data;
+                for (int i = 1; i < a.length; i++) {
+                    if (Double.doubleToRawLongBits(a[i]) != Double.doubleToRawLongBits(a[0])) {
+                        return false;
+                    }
+                }
+            }
+            default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
         }
         return true;
     }

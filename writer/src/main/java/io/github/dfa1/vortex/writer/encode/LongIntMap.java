@@ -47,7 +47,7 @@ public final class LongIntMap {
         keys = new long[capacity];
         values = new int[capacity];
         mask = capacity - 1;
-        shift = Long.numberOfLeadingZeros(capacity - 1);
+        shift = Long.numberOfLeadingZeros(mask);
         growAt = capacity / 2;
     }
 
@@ -213,7 +213,7 @@ public final class LongIntMap {
         keys = new long[capacity];
         values = new int[capacity];
         mask = capacity - 1;
-        shift = Long.numberOfLeadingZeros(capacity - 1);
+        shift = Long.numberOfLeadingZeros(mask);
         growAt = capacity / 2;
         for (int i = 0; i < oldKeys.length; i++) {
             if (oldValues[i] != 0) {
