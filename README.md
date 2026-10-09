@@ -117,18 +117,17 @@ coding conventions, and how to add a new encoding.
 This project uses [Claude Code](https://claude.ai/code) for implementation work.
 Architecture, API design, and all decisions are human-driven.
 
-
+## References
 
 - [vortex.dev](https://vortex.dev) — the Vortex project's website
 - [Vortex: A Columnar File Format for GPU Streaming](https://www.infoq.com/presentations/vortex-columnar-file-format-gpu-streaming/) — InfoQ presentation
 - [Vortex: One Format for Any Shape](https://spiraldb.com/blog/vortex-one-format-for-any-shape) — SpiralDB blog post
 - [BtrBlocks: The Compressor Behind Vortex](https://vortex.dev/blog/btrblocks-compressor) — the cascading, cost-based encoding selection this project's own cascading compressor is modeled on
 
-## Other Vortex implementations
+### Other Vortex implementations
 
 | Project                                                             | Language | Notes                                   |
 |---------------------------------------------------------------------|----------|-----------------------------------------|
 | [vortex-data/vortex](https://github.com/vortex-data/vortex)         | Rust     | Reference implementation + JNI bindings |
 | [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
 | [Evariops/Vorticity](https://github.com/Evariops/Vorticity)         | C#       | Pure .NET, dependency-free              |
-| **dfa1/vortex-java**                                                | **Java** | **This library**                        |
