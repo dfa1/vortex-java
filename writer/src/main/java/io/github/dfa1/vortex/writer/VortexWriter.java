@@ -68,6 +68,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -1229,8 +1230,7 @@ public final class VortexWriter implements Closeable {
         int valuesFlat = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, ref.valuesLen(), 0, 0, valSegV);
 
         // DictLayoutMetadata proto (matches Rust): field 1 = codes_ptype (PType varint)
-        PType codePType = DictColumnState.codePTypeForSize((int) ref.valuesLen());
-        byte[] metaBytes = buildDictLayoutMetaBytes(codePType);
+        byte[] metaBytes = buildDictLayoutMetaBytes(DictColumnState.CODES_PTYPE, ref.nullableCodes());
         int metaVec = metaBytes.length > 0 ? FbsLayout.createMetadataVector(fbb, metaBytes) : 0;
 
         // Dict layout: child[0]=values, child[1]=codes (matches Rust DictLayout child order)
@@ -1239,14 +1239,19 @@ public final class VortexWriter implements Closeable {
         return FbsLayout.createFbsLayout(fbb, LAYOUT_DICT, totalCodesRows, metaVec, dictChildV, 0);
     }
 
-    private static byte[] buildDictLayoutMetaBytes(PType codePType) {
+    /// Rust's `DictLayoutMetadata`: field 1 `codes_ptype`, field 2 `is_nullable_codes`. Rust's
+    /// writer always sets field 2 (its reader falls back to the column's nullability when it is
+    /// absent), so the metadata matches vortex-jni's byte for byte.
+    private static byte[] buildDictLayoutMetaBytes(PType codePType, boolean nullableCodes) {
         int ordinal = codePType.ordinal();
+        // Field 2, wire type 0 (varint): tag = (2<<3)|0 = 0x10
+        byte[] codesNullability = {0x10, (byte) (nullableCodes ? 1 : 0)};
         if (ordinal == 0) {
             // Proto3 omits default values; U8 ordinal=0 is the default
-            return new byte[0];
+            return codesNullability;
         }
         // Field 1, wire type 0 (varint): tag = (1<<3)|0 = 0x08
-        return new byte[]{0x08, (byte) ordinal};
+        return new byte[]{0x08, (byte) ordinal, codesNullability[0], codesNullability[1]};
     }
 
     // ── Global dict helpers ───────────────────────────────────────────────────
@@ -1320,40 +1325,48 @@ public final class VortexWriter implements Closeable {
     }
 
     private void writeGlobalDictColumn(ColumnName colName, DictColumnState state) throws IOException {
-        int dictSize = state.cardinality();
-        PType codePType = DictColumnState.codePTypeForSize(dictSize);
+        // A column that met a null gets one more pool entry, invalid, that every null row points
+        // at -- Rust's dict builder (vortex-array builders/dict) -- so the codes need no validity of
+        // their own: Rust's dict layout writer always emits non-nullable codes. A masked codes child
+        // instead hands its null slots a real code, which skews every codes-side estimate (Sparse
+        // saw taxi Airport_fee's placeholder code as a 90% value).
+        boolean hasNulls = state.chunkNullCounts().stream().anyMatch(c -> c > 0);
+        int distinct = state.cardinality();
+        int dictSize = hasNulls ? distinct + 1 : distinct;
 
         // The incremental map assigns codes in first-seen order; the primitive path instead ranks
-        // distinct values by occurrence count descending so the dominant value gets code 0. This lets
-        // SparseEncodingEncoder (fill=0) compress the codes child when one value dominates — matching
-        // Rust's FloatDictScheme (taxi mta_tax/Airport_fee/extra). Build the first-seen -> frequency
-        // -rank remap once, then translate every buffered code array through it (one O(rows) pass, no
-        // re-scan of raw values).
+        // distinct values by occurrence count descending so the dominant value gets code 0. Build
+        // the first-seen -> frequency-rank remap once, then translate every buffered code array
+        // through it (one O(rows) pass, no re-scan of raw values).
         int[] remap = state.buildFrequencyRemap();
         Object uniqueArr = state.buildFrequencyRankedUniqueArray(remap);
+        Object pool = uniqueArr;
+        if (hasNulls) {
+            boolean[] poolValidity = new boolean[dictSize];
+            Arrays.fill(poolValidity, 0, distinct, true);
+            pool = new NullableData(DictColumnState.withNullSlot(uniqueArr), poolValidity);
+        }
 
         // Write values segment using the same codec path as regular segments so codes benefit from
         // bitpacking/FOR when cascading is enabled. Safe: global dict is disabled for custom-encoding
         // writers (withGlobalDict(false)), so this.encodings == DEFAULT_CODECS here.
-        int valuesSegIdx = writeSegment(state.dtype(), uniqueArr);
+        int valuesSegIdx = writeSegment(state.dtype(), pool);
 
-        DType codesDtype = new DType.Primitive(codePType, state.nullable());
+        DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, false);
         List<Integer> codesSegIdxes = new ArrayList<>();
         for (int c = 0; c < state.chunkCount(); c++) {
-            boolean[] validity = state.chunkValidity(c);
-            Object codesArr = DictColumnState.emitCodes(state.chunkCodes(c), remap, validity, codePType);
-            Object codesData = validity != null ? new NullableData(codesArr, validity) : codesArr;
-            codesSegIdxes.add(writeSegment(codesDtype, codesData));
+            Object codesArr = DictColumnState.emitCodes(state.chunkCodes(c), remap, state.chunkValidity(c),
+                    distinct);
+            codesSegIdxes.add(writeSegment(codesDtype, codesArr));
         }
 
         dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes,
                 state.chunkRowCounts(), state.chunkNullCounts(),
-                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum()));
+                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
     }
 
     private void writeGlobalDictVarBinColumn(ColumnName colName, DictColumnState state) throws IOException {
         int dictSize = state.cardinality();
-        PType codePType = DictColumnState.codePTypeForSize(dictSize);
 
         // Utf8/Binary assigns codes in first-seen order with no frequency sort, so the incremental map's
         // order already matches — no remap pass (ADR 0021). Compress the distinct-values pool
@@ -1366,18 +1379,18 @@ public final class VortexWriter implements Closeable {
                 ? writeSegment(state.dtype(), uniques, null, Set.of(EncodingId.VORTEX_DICT))
                 : writeSegment(state.dtype(), uniques, new VarBinEncodingEncoder());
 
-        DType codesDtype = new DType.Primitive(codePType, state.nullable());
+        DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, state.nullable());
         List<Integer> codesSegIdxes = new ArrayList<>();
         for (int c = 0; c < state.chunkCount(); c++) {
             boolean[] validity = state.chunkValidity(c);
-            Object codesArr = DictColumnState.emitCodes(state.chunkCodes(c), null, validity, codePType);
+            Object codesArr = DictColumnState.emitCodes(state.chunkCodes(c), null, validity, 0);
             Object codesData = validity != null ? new NullableData(codesArr, validity) : codesArr;
             codesSegIdxes.add(writeSegment(codesDtype, codesData));
         }
 
         dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes,
                 state.chunkRowCounts(), state.chunkNullCounts(),
-                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum()));
+                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), state.nullable()));
     }
 
     private record SegRef(long offset, long len) {
@@ -1397,9 +1410,11 @@ public final class VortexWriter implements Closeable {
     private record ZoneMapRef(int zonesSegIdx, long nZones, byte[] metadata) {
     }
 
+    /// @param nullableCodes whether the codes child carries validity (Rust's `is_nullable_codes`)
     private record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,
             List<Long> chunkRowCounts, List<Long> chunkNullCounts,
-            List<byte[]> chunkStatsMin, List<byte[]> chunkStatsMax, List<byte[]> chunkStatsSum) {
+            List<byte[]> chunkStatsMin, List<byte[]> chunkStatsMax, List<byte[]> chunkStatsSum,
+            boolean nullableCodes) {
         long totalRows() {
             return chunkRowCounts.stream().mapToLong(Long::longValue).sum();
         }

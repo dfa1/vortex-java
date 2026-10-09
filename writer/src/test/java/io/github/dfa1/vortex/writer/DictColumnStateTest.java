@@ -189,27 +189,34 @@ class DictColumnStateTest {
         });
     }
 
-    // ── codePTypeForSize ─────────────────────────────────────────────────────────
+    // ── emitCodes / withNullSlot ─────────────────────────────────────────────────
 
-    static Stream<Arguments> codePTypeCases() {
-        return Stream.of(
-                arguments(1, PType.U8),
-                arguments(256, PType.U8),      // upper edge of U8
-                arguments(257, PType.U16),     // first U16
-                arguments(65_536, PType.U16),  // upper edge of U16
-                arguments(65_537, PType.U32)); // first U32
-    }
-
-    @ParameterizedTest
-    @MethodSource("codePTypeCases")
-    void codePTypeForSize_picksNarrowestUnsignedCarrier(int dictSize, PType expected) {
-        // Given — a dictionary of `dictSize` distinct values
+    @Test
+    void emitCodes_nullRowsPointAtTheNullEntry_neverRemapped() {
+        // Given: first-seen codes 0,1 remapped to 1,0; row 1 is null. The null entry is code 2,
+        // the slot after the distinct values, so the codes carry no validity of their own (Rust's
+        // dict layout shape) — remapping the null row would point it at a real value instead
+        short[] buffered = {0, 0, 1, 1};
+        int[] remap = {1, 0};
+        boolean[] validity = {true, false, true, true};
 
         // When
-        PType result = DictColumnState.codePTypeForSize(dictSize);
+        short[] result = DictColumnState.emitCodes(buffered, remap, validity, 2);
 
         // Then
-        assertThat(result).isEqualTo(expected);
+        assertThat(result).containsExactly((short) 1, (short) 2, (short) 0, (short) 0);
+    }
+
+    @Test
+    void withNullSlot_appendsOneZeroPlaceholder() {
+        // Given
+        double[] uniques = {0.0, 1.75, -1.75};
+
+        // When
+        Object result = DictColumnState.withNullSlot(uniques);
+
+        // Then
+        assertThat((double[]) result).containsExactly(0.0, 1.75, -1.75, 0.0);
     }
 
     // ── primitiveArrayLen / readPrimitiveElement ─────────────────────────────────

@@ -2054,6 +2054,52 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(filtered).containsExactlyElementsOf(expected.subList(1_500, expected.size()));
     }
 
+    @Test
+    void javaWriter_rustReader_globalDict_nullableF64_nullAsDictEntry(@TempDir Path tmp) throws IOException {
+        // Given — a nullable low-cardinality F64 column (taxi Airport_fee's shape: one dominant value,
+        // two rare ones, nulls) over two chunks. Its global dict now stores null as an invalid pool
+        // entry with non-nullable codes and declares is_nullable_codes = false, as Rust's dict
+        // layout writer does; the null rows must come back null through that pool entry alone.
+        Path file = tmp.resolve("java_globaldict_nullable_f64.vtx");
+        ColumnName id = ColumnName.of("id");
+        ColumnName fee = ColumnName.of("fee");
+        DType.Struct schema = new DType.Struct(List.of(id, fee),
+                List.of(DType.I64, new DType.Primitive(PType.F64, true)), false);
+        int rowsPerChunk = 1_000;
+        List<Object> expected = new ArrayList<>();
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            for (int c = 0; c < 2; c++) {
+                long[] ids = new long[rowsPerChunk];
+                Double[] values = new Double[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    int row = c * rowsPerChunk + i;
+                    ids[i] = row;
+                    values[i] = row % 10 == 3 ? null : row % 17 == 0 ? 1.75 : row % 101 == 0 ? -1.75 : 0.0;
+                    expected.add(values[i]);
+                }
+                sut.writeChunk(Map.of(id, ids, fee, values));
+            }
+        }
+
+        // Then — a dict layout, and vortex-jni reads every row back, full scan and filtered
+        try (var vf = io.github.dfa1.vortex.reader.VortexReader.open(file,
+                io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
+            var tree = io.github.dfa1.vortex.inspect.InspectorTree.build(vf);
+            assertThat(tree.root().children())
+                    .filteredOn(n -> n.fieldName().equals(java.util.Optional.of("fee")))
+                    .singleElement()
+                    .satisfies(n -> assertThat(hasDictLayout(n)).as("F64 column is a dict layout").isTrue());
+        }
+        List<Object> full = readColumnFiltered(file, "fee", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(0L)));
+        assertThat(full).containsExactlyElementsOf(expected);
+        List<Object> filtered = readColumnFiltered(file, "fee", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("id"), Expression.literal(1_500L)));
+        assertThat(filtered).containsExactlyElementsOf(expected.subList(1_500, expected.size()));
+    }
+
     private static boolean hasDictLayout(io.github.dfa1.vortex.inspect.InspectorTree.Node node) {
         if (node.layout().isDict()) {
             return true;
