@@ -141,8 +141,7 @@ class GlobalDictUtf8Test {
     @Test
     void mediumCardinality_utf8_usesU16Codes(@TempDir Path tmp) throws IOException {
         // Given — 300 distinct strings over 1000 rows: a global-dict candidate whose dict size (300)
-        // is above the 256 U8-code boundary, so codes are U16. Exercises emitCodes's U16
-        // arm (the existing low-card test has 3 values → U8).
+        // is above the 256 U8-code boundary, so codes are U16.
         Path file = tmp.resolve("u16_utf8.vortex");
         int rows = 1_000;
         int cardinality = 300;

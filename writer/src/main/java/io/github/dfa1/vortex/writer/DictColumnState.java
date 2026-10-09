@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,14 +16,14 @@ import java.util.Map;
 
 /// Cardinality-bounded buffering state for one global-dictionary candidate column (ADR 0021). Instead of
 /// retaining raw values from a column's first chunk until `close()`, this holds a deduplicated
-/// value-to-code map (first-seen order, capped at [#GLOBAL_DICT_MAX_CARDINALITY]), a parallel
-/// per-code occurrence count (used by the primitive path's frequency remap), and one cheap
+/// value-to-code map (first-seen order, capped at [#GLOBAL_DICT_MAX_CARDINALITY]) and one cheap
 /// `short[]` code array per ingested chunk. Per-chunk stats are captured at ingest time from the
 /// raw chunk, before it is discarded.
 ///
-/// A null (invalid) slot buffers code `0` unconditionally: the raw placeholder value is never
-/// looked up in the map, matching the pre-ADR builders. The reader ignores those slots because the
-/// codes child is masked by the same per-chunk validity.
+/// Codes are assigned as Rust's dict builder assigns them (`vortex-array` `builders/dict`): in
+/// first-seen order, null included -- the first null slot takes the next code for an entry that
+/// the values pool marks invalid, and every later null points at it. The buffered codes are
+/// therefore the wire codes.
 final class DictColumnState {
 
     // Columns with global cardinality below this threshold are dict-encoded across all chunks.
@@ -45,10 +44,12 @@ final class DictColumnState {
     static final int GLOBAL_DICT_MAX_CARDINALITY_UTF8 = 32_768;
 
     private static final int INDEX_MIN_CAPACITY = 64;
+    // The null entry's key in valueToCode: identity-compared, so no real value can collide with it.
+    private static final Object NULL_KEY = new Object();
 
     private final DType dtype;
     // Utf8 or Binary: keyed by value (String, or a ByteBuffer wrapping the bytes, whose
-    // equals/hashCode compare content), coded in first-seen order with no frequency remap.
+    // equals/hashCode compare content), coded in first-seen order like the primitive path.
     private final boolean varBin;
     private final boolean binary;
     private final PType ptype;
@@ -61,11 +62,10 @@ final class DictColumnState {
     // VarBin keys, and everything the demotion and flush paths read — but probing it needs a boxed key,
     // and one Long per row of every candidate column profiled as the writer's hottest single frame.
     private LongIntMap bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
-    // Occurrence count per code, indexed by code; grows in lockstep with valueToCode. A primitive
-    // array, not a List<Long>: this is incremented once per row, and boxing there cost one Long
-    // allocation per row of every global-dict candidate column.
-    private long[] codeCounts = new long[16];
-    // One code array per ingested chunk (null slots hold code 0).
+    // The null entry's code, or -1 until the first null slot; mirrors valueToCode.get(NULL_KEY)
+    // so the hot loops never probe the map for it.
+    private int nullCode = -1;
+    // One code array per ingested chunk (null slots hold nullCode).
     private final List<short[]> chunkCodes = new ArrayList<>();
     private final List<boolean[]> chunkValidity = new ArrayList<>();
     private final List<Long> chunkRowCounts = new ArrayList<>();
@@ -99,8 +99,14 @@ final class DictColumnState {
         return nullable;
     }
 
+    /// Number of dictionary entries, the null entry included.
     int cardinality() {
         return valueToCode.size();
+    }
+
+    /// The null entry's code, or `-1` when no null has been seen.
+    int nullCode() {
+        return nullCode;
     }
 
     /// Approximate retained heap footprint: the buffered code arrays (2 B/row) plus the small
@@ -144,24 +150,56 @@ final class DictColumnState {
         return chunkStatsSum;
     }
 
-    /// The distinct Utf8/Binary values seen so far, in first-seen order: a `String[]` for Utf8, a
-    /// `byte[][]` for Binary. Only valid when [#varBin()].
-    Object varBinUniques() {
-        if (!binary) {
-            return valueToCode.keySet().toArray(new String[0]);
+    /// The dictionary entries in code order: a typed primitive array, `String[]` or `byte[][]`. The
+    /// null entry's slot holds a zero (or `null`) placeholder, for the caller to mask off.
+    Object uniques() {
+        Object[] inverse = buildInverseMap();
+        int n = inverse.length;
+        if (varBin) {
+            Object[] out = binary ? new byte[n][] : new String[n];
+            for (int i = 0; i < n; i++) {
+                if (i != nullCode) {
+                    out[i] = binary ? ((ByteBuffer) inverse[i]).array() : inverse[i];
+                }
+            }
+            return out;
         }
-        byte[][] out = new byte[valueToCode.size()][];
-        int i = 0;
-        for (Object key : valueToCode.keySet()) {
-            out[i++] = ((ByteBuffer) key).array();
-        }
-        return out;
+        return switch (ptype) {
+            case I32, U32 -> {
+                int[] a = new int[n];
+                for (int i = 0; i < n; i++) {
+                    if (i != nullCode) {
+                        a[i] = (Integer) inverse[i];
+                    }
+                }
+                yield a;
+            }
+            case I64, U64 -> {
+                long[] a = new long[n];
+                for (int i = 0; i < n; i++) {
+                    if (i != nullCode) {
+                        a[i] = (Long) inverse[i];
+                    }
+                }
+                yield a;
+            }
+            case F64 -> {
+                double[] a = new double[n];
+                for (int i = 0; i < n; i++) {
+                    if (i != nullCode) {
+                        a[i] = (Double) inverse[i];
+                    }
+                }
+                yield a;
+            }
+            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
+        };
     }
 
     /// Ingests one chunk into this candidate column's cardinality-bounded dict state (ADR 0021): dedups
     /// each valid value into the shared value-to-code map, appends a per-chunk `short[]` code array,
     /// and captures the chunk's row/null counts and min/max/sum stats before the raw array is
-    /// discarded. Null slots buffer code `0` and are excluded from the distinct set.
+    /// discarded. Null slots buffer the null entry's code, assigned at the first one.
     ///
     /// Returns `false` — without mutating this state — the moment a new distinct value would push the
     /// map past [#GLOBAL_DICT_MAX_CARDINALITY]; the caller then demotes the column to per-chunk
@@ -178,6 +216,7 @@ final class DictColumnState {
         int len = varBin ? ((Object[]) values).length : primitiveArrayLen(values, ptype);
         int cap = dictMaxCardinality(varBin);
         int startSize = valueToCode.size();
+        int startNullCode = nullCode;
         Object[] strings = varBin ? (Object[]) values : null;
 
         // One pass: insert new values and build the per-chunk code array. Ingest stays
@@ -188,19 +227,21 @@ final class DictColumnState {
         short[] codes = new short[len];
         if (strings != null) {
             for (int i = 0; i < len; i++) {
-                if (validity != null && !validity[i]) {
-                    continue;
-                }
                 // Nullable Utf8/Binary keeps a real null at invalid positions (ChunkImpl.adaptUtf8,
-                // adaptBinary); treat it as a null slot (code 0), never as a dictionary entry.
-                if (strings[i] == null) {
+                // adaptBinary); either way the slot is null and points at the null entry.
+                if ((validity != null && !validity[i]) || strings[i] == null) {
+                    if (nullCode < 0 && !addNullEntry(cap)) {
+                        rollbackTo(startSize, startNullCode);
+                        return false;
+                    }
+                    codes[i] = (short) nullCode;
                     continue;
                 }
                 Object v = varBinKey(strings[i]);
                 Integer code = valueToCode.get(v);
                 if (code == null) {
                     if (valueToCode.size() == cap) {
-                        rollbackTo(startSize);
+                        rollbackTo(startSize, startNullCode);
                         return false;
                     }
                     code = valueToCode.size();
@@ -216,12 +257,17 @@ final class DictColumnState {
             long[] bits = rawBits(values, ptype, len);
             for (int i = 0; i < len; i++) {
                 if (validity != null && !validity[i]) {
+                    if (nullCode < 0 && !addNullEntry(cap)) {
+                        rollbackTo(startSize, startNullCode);
+                        return false;
+                    }
+                    codes[i] = (short) nullCode;
                     continue;
                 }
                 int code = bitsIndex.get(bits[i]);
                 if (code < 0) {
                     if (valueToCode.size() == cap) {
-                        rollbackTo(startSize);
+                        rollbackTo(startSize, startNullCode);
                         return false;
                     }
                     code = valueToCode.size();
@@ -230,19 +276,6 @@ final class DictColumnState {
                 }
                 codes[i] = (short) code;
             }
-        }
-
-        // Counts are applied only once the chunk is committed, which keeps the rollback above to
-        // the map alone and the hot loop above to a single probe per row.
-        int size = valueToCode.size();
-        if (size > codeCounts.length) {
-            codeCounts = java.util.Arrays.copyOf(codeCounts, Math.max(size, codeCounts.length * 2));
-        }
-        for (int i = 0; i < len; i++) {
-            if ((validity != null && !validity[i]) || (strings != null && strings[i] == null)) {
-                continue;
-            }
-            codeCounts[codes[i] & 0xFFFF]++;
         }
 
         chunkCodes.add(codes);
@@ -269,23 +302,33 @@ final class DictColumnState {
         return true;
     }
 
+    // Gives the null entry the next code, as Rust's dict builder does at the first null; false
+    // when the dictionary is already full.
+    private boolean addNullEntry(int cap) {
+        if (valueToCode.size() == cap) {
+            return false;
+        }
+        nullCode = valueToCode.size();
+        valueToCode.put(NULL_KEY, nullCode);
+        return true;
+    }
+
     /// Drops every dictionary entry added since the map held `startSize` values, restoring the
     /// state a rejected chunk found — the demoting caller replays the already-buffered chunks
     /// through [#buildInverseMap] and [#reconstructChunk], which must not see this chunk's values.
-    private void rollbackTo(int startSize) {
+    private void rollbackTo(int startSize, int startNullCode) {
         valueToCode.values().removeIf(code -> code >= startSize);
+        nullCode = startNullCode;
         if (varBin) {
             return;
         }
         bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
         for (Map.Entry<Object, Integer> e : valueToCode.entrySet()) {
-            bitsIndex.put(valueBits(ptype, e.getKey()), e.getValue());
+            if (e.getKey() != NULL_KEY) {
+                bitsIndex.put(valueBits(ptype, e.getKey()), e.getValue());
+            }
         }
     }
-
-
-
-
 
     /// The chunk's values as raw bit patterns, keyed so that two rows share a pattern exactly when
     /// their boxed values are `equals` (hence `doubleToLongBits`, which folds every NaN together
@@ -353,8 +396,9 @@ final class DictColumnState {
         int len = codes.length;
         Object[] arr = binary ? new byte[len][] : new String[len];
         for (int i = 0; i < len; i++) {
-            if (validity == null || validity[i]) {
-                Object key = inverse[codes[i] & 0xFFFF];
+            Object key = inverse[codes[i] & 0xFFFF];
+            // A null string at a valid row also points at the null entry; it stays null.
+            if ((validity == null || validity[i]) && key != NULL_KEY) {
                 arr[i] = binary ? ((ByteBuffer) key).array() : key;
             }
         }
@@ -392,104 +436,6 @@ final class DictColumnState {
                 yield arr;
             }
             default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
-        };
-    }
-
-    /// Builds the first-seen -> frequency-rank code remap for the primitive dict path. Distinct values
-    /// are ranked by their (incrementally tracked) occurrence count descending, so the dominant value
-    /// gets rank 0. `remap[firstSeenCode]` is the frequency-rank code. Ties keep first-seen order,
-    /// matching the pre-ADR stable sort on a first-seen-ordered `LinkedHashMap`.
-    int[] buildFrequencyRemap() {
-        int n = cardinality();
-        Integer[] order = new Integer[n];
-        for (int i = 0; i < n; i++) {
-            order[i] = i;
-        }
-        // Stable sort by count descending; equal counts preserve first-seen (ascending index) order.
-        java.util.Arrays.sort(order, (a, b) -> Long.compare(codeCounts[b], codeCounts[a]));
-        int[] remap = new int[n];
-        for (int rank = 0; rank < n; rank++) {
-            remap[order[rank]] = rank;
-        }
-        return remap;
-    }
-
-    /// Builds the primitive dictionary's unique-values array in frequency-rank order: slot `rank`
-    /// holds the value whose first-seen code remaps to `rank`. Only the carriers [#isDictCandidate]
-    /// admits — I32/U32, I64/U64, F64 — reach here.
-    Object buildFrequencyRankedUniqueArray(int[] remap) {
-        int dictSize = cardinality();
-        Object[] byRank = new Object[dictSize];
-        for (Map.Entry<Object, Integer> e : valueToCode.entrySet()) {
-            byRank[remap[e.getValue()]] = e.getKey();
-        }
-        return switch (ptype) {
-            case I32, U32 -> {
-                int[] a = new int[dictSize];
-                for (int i = 0; i < dictSize; i++) {
-                    a[i] = (Integer) byRank[i];
-                }
-                yield a;
-            }
-            case I64, U64 -> {
-                long[] a = new long[dictSize];
-                for (int i = 0; i < dictSize; i++) {
-                    a[i] = (Long) byRank[i];
-                }
-                yield a;
-            }
-            case F64 -> {
-                double[] a = new double[dictSize];
-                for (int i = 0; i < dictSize; i++) {
-                    a[i] = (Double) byRank[i];
-                }
-                yield a;
-            }
-            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
-        };
-    }
-
-    /// Emits one chunk's wire codes ([#CODES_PTYPE]) from its buffered `short[]` first-seen codes,
-    /// optionally translated through a frequency remap (primitive path). A null slot (validity[i]
-    /// false) emits `nullCode` unconditionally, never remapped: the primitive path points it at the
-    /// pool's invalid null entry, as Rust's dict builder does.
-    ///
-    /// @param buffered the buffered first-seen codes for one chunk
-    /// @param remap    the first-seen -> frequency-rank remap, or `null` to emit codes unchanged
-    /// @param validity per-row validity, or `null` when every row is valid
-    /// @param nullCode the code a null slot emits
-    /// @return the U16 codes
-    static short[] emitCodes(short[] buffered, int[] remap, boolean[] validity, int nullCode) {
-        short[] codes = new short[buffered.length];
-        for (int i = 0; i < buffered.length; i++) {
-            if (validity == null || validity[i]) {
-                int fs = buffered[i] & 0xFFFF;
-                codes[i] = (short) (remap == null ? fs : remap[fs]);
-            } else {
-                codes[i] = (short) nullCode;
-            }
-        }
-        return codes;
-    }
-
-    /// The values pool with one more slot, for the invalid null entry Rust's dict builder adds
-    /// when it meets a null: the slot holds a zero (or `null`) placeholder and is masked off by the
-    /// caller.
-    ///
-    /// @param values the distinct values (a primitive array, `String[]` or `byte[][]`)
-    /// @return a copy one element longer
-    static Object withNullSlot(Object values) {
-        return switch (values) {
-            case long[] a -> Arrays.copyOf(a, a.length + 1);
-            case int[] a -> Arrays.copyOf(a, a.length + 1);
-            case short[] a -> Arrays.copyOf(a, a.length + 1);
-            case byte[] a -> Arrays.copyOf(a, a.length + 1);
-            case double[] a -> Arrays.copyOf(a, a.length + 1);
-            case float[] a -> Arrays.copyOf(a, a.length + 1);
-            // Utf8/Binary: the null slot holds a real null, as ChunkImpl leaves it at invalid rows
-            case String[] a -> Arrays.copyOf(a, a.length + 1);
-            case byte[][] a -> Arrays.copyOf(a, a.length + 1);
-            default -> throw new IllegalStateException("not a values pool: " + values.getClass());
         };
     }
 

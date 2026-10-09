@@ -1329,84 +1329,55 @@ public final class VortexWriter implements Closeable {
     }
 
     private void writeGlobalDictColumn(ColumnName colName, DictColumnState state) throws IOException {
-        // A column that met a null gets one more pool entry, invalid, that every null row points
-        // at -- Rust's dict builder (vortex-array builders/dict) -- so the codes need no validity of
-        // their own: Rust's dict layout writer always emits non-nullable codes. A masked codes child
-        // instead hands its null slots a real code, which skews every codes-side estimate (Sparse
-        // saw taxi Airport_fee's placeholder code as a 90% value).
-        boolean hasNulls = state.chunkNullCounts().stream().anyMatch(c -> c > 0);
-        int distinct = state.cardinality();
-        int dictSize = hasNulls ? distinct + 1 : distinct;
-
-        // The incremental map assigns codes in first-seen order; the primitive path instead ranks
-        // distinct values by occurrence count descending so the dominant value gets code 0. Build
-        // the first-seen -> frequency-rank remap once, then translate every buffered code array
-        // through it (one O(rows) pass, no re-scan of raw values).
-        int[] remap = state.buildFrequencyRemap();
-        Object uniqueArr = state.buildFrequencyRankedUniqueArray(remap);
-        Object pool = uniqueArr;
-        if (hasNulls) {
-            boolean[] poolValidity = new boolean[dictSize];
-            Arrays.fill(poolValidity, 0, distinct, true);
-            pool = new NullableData(DictColumnState.withNullSlot(uniqueArr), poolValidity);
-        }
-
         // Write values segment using the same codec path as regular segments so codes benefit from
         // bitpacking/FOR when cascading is enabled. Safe: global dict is disabled for custom-encoding
         // writers (withGlobalDict(false)), so this.encodings == DEFAULT_CODECS here.
-        int valuesSegIdx = writeSegment(state.dtype(), pool);
-
-        DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, false);
-        List<Integer> codesSegIdxes = new ArrayList<>();
-        for (int c = 0; c < state.chunkCount(); c++) {
-            Object codesArr = DictColumnState.emitCodes(state.chunkCodes(c), remap, state.chunkValidity(c),
-                    distinct);
-            codesSegIdxes.add(writeSegment(codesDtype, codesArr));
-        }
-
-        dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes,
-                state.chunkRowCounts(), state.chunkNullCounts(),
-                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
+        int valuesSegIdx = writeSegment(state.dtype(), dictPool(state));
+        writeGlobalDictCodes(colName, state, valuesSegIdx);
     }
 
     private void writeGlobalDictVarBinColumn(ColumnName colName, DictColumnState state) throws IOException {
-        // Null is one more pool entry, invalid, with non-nullable codes -- Rust's dict layout
-        // shape, as for numeric columns (writeGlobalDictColumn).
-        boolean hasNulls = state.chunkNullCounts().stream().anyMatch(c -> c > 0);
-        int distinct = state.cardinality();
-        int dictSize = hasNulls ? distinct + 1 : distinct;
-
-        // Utf8/Binary assigns codes in first-seen order with no frequency sort, so the incremental map's
-        // order already matches — no remap pass (ADR 0021). Compress the distinct-values pool
-        // through the normal Utf8/Binary competition (FSST/VarBin/Zstd) so it captures substring
-        // redundancy across dictionary entries (#299), but exclude Dict so the cascade never wraps
-        // the (all-unique-by-construction) dictionary in another dict the reader cannot unwrap. At
-        // cascade depth 0 there is no competition to run, so force flat VarBin as before; a pool
-        // with a null entry is masked there instead, its values still VarBin.
-        Object uniques = state.varBinUniques();
-        Object pool = uniques;
-        if (hasNulls) {
-            boolean[] poolValidity = new boolean[dictSize];
-            Arrays.fill(poolValidity, 0, distinct, true);
-            pool = new NullableData(DictColumnState.withNullSlot(uniques), poolValidity);
-        }
+        // Compress the distinct-values pool through the normal Utf8/Binary competition
+        // (FSST/VarBin/Zstd) so it captures substring redundancy across dictionary entries (#299),
+        // but exclude Dict so the cascade never wraps the (all-unique-by-construction) dictionary in
+        // another dict the reader cannot unwrap. At cascade depth 0 there is no competition to run,
+        // so force flat VarBin as before; a pool with a null entry is masked there instead, its
+        // values still VarBin.
+        Object pool = dictPool(state);
         int valuesSegIdx;
         if (options.allowedCascading() > 0) {
             valuesSegIdx = writeSegment(state.dtype(), pool, null, Set.of(EncodingId.VORTEX_DICT));
-        } else if (hasNulls) {
+        } else if (state.nullCode() >= 0) {
             valuesSegIdx = writeSegment(state.dtype(), pool, new MaskedEncodingEncoder(), Set.of(EncodingId.VORTEX_DICT));
         } else {
             valuesSegIdx = writeSegment(state.dtype(), pool, new VarBinEncodingEncoder());
         }
+        writeGlobalDictCodes(colName, state, valuesSegIdx);
+    }
 
+    // The dictionary entries in code order. A column that met a null holds one entry, invalid, that
+    // every null row points at -- Rust's dict builder (vortex-array builders/dict) -- so the codes
+    // need no validity of their own: Rust's dict layout writer always emits non-nullable codes.
+    private static Object dictPool(DictColumnState state) {
+        Object uniques = state.uniques();
+        int nullCode = state.nullCode();
+        if (nullCode < 0) {
+            return uniques;
+        }
+        boolean[] poolValidity = new boolean[state.cardinality()];
+        Arrays.fill(poolValidity, true);
+        poolValidity[nullCode] = false;
+        return new NullableData(uniques, poolValidity);
+    }
+
+    // The buffered codes are already the wire codes: first-seen order, null included.
+    private void writeGlobalDictCodes(ColumnName colName, DictColumnState state, int valuesSegIdx) throws IOException {
         DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, false);
         List<Integer> codesSegIdxes = new ArrayList<>();
         for (int c = 0; c < state.chunkCount(); c++) {
-            Object codesArr = DictColumnState.emitCodes(state.chunkCodes(c), null, state.chunkValidity(c), distinct);
-            codesSegIdxes.add(writeSegment(codesDtype, codesArr));
+            codesSegIdxes.add(writeSegment(codesDtype, state.chunkCodes(c)));
         }
-
-        dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes,
+        dictColRefs.put(colName, new DictColRef(valuesSegIdx, state.cardinality(), codesSegIdxes,
                 state.chunkRowCounts(), state.chunkNullCounts(),
                 state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
     }
