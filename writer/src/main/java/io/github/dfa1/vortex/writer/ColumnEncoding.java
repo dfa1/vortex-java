@@ -16,7 +16,7 @@ import java.util.List;
 /// (`WriteStrategyBuilder::with_field_writer`): the list is the whole candidate set, children
 /// included, and a value no listed encoder improves on stays in its canonical encoding
 /// (`vortex.primitive`, `vortex.varbin`, …). Skipping candidates that cannot win is most of a
-/// cascading write's cost: one million fixed-precision doubles write about 6x faster with
+/// cascading write's cost: one million fixed-precision doubles write about 3.5x faster with
 /// `candidates(VORTEX_ALP, FASTLANES_FOR, FASTLANES_BITPACKED)` than with the default cascade, to
 /// the same bytes.
 ///

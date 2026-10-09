@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nullable low-cardinality string columns dict-encoded per chunk store null as a dictionary entry, as Rust does, instead of adding a row validity bitmap: about 20% smaller, now slightly below vortex-jni ([2091beb](https://github.com/dfa1/vortex-java/commit/2091beb3)).
 
 ### Added
-- `WriteOptions.withColumnEncoding(column, ColumnEncoding.candidates(EncodingId...))` restricts one column's encodings to the given ones, as Rust's `with_field_writer` does. A known shape writes much faster: one million fixed-precision doubles with ALP/FoR/bit-packing as the only candidates write about 6× faster than with the default cascade, to the same bytes ([#461](https://github.com/dfa1/vortex-java/issues/461)).
+- `WriteOptions.withColumnEncoding(column, ColumnEncoding.candidates(EncodingId...))` restricts one column's encodings to the given ones, as Rust's `with_field_writer` does. A known shape writes much faster: one million fixed-precision doubles with ALP/FoR/bit-packing as the only candidates write about 3.5× faster than with the default cascade (24 → 7 ms), to the same bytes ([#461](https://github.com/dfa1/vortex-java/issues/461)).
 - Read `vortex.parquet.variant`, the encoding vortex-jni's default writer uses for Arrow `arrow.parquet.variant` columns: each row's Apache Variant `metadata`/`value` binaries come back as a struct ([#445](https://github.com/dfa1/vortex-java/issues/445)).
 - Read `vortex.zstd_buffers`, Rust's opt-in buffer-level Zstd encoding (`zstd2026.02.0`) ([#444](https://github.com/dfa1/vortex-java/issues/444)).
 

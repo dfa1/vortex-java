@@ -597,7 +597,7 @@ field list (`keyType`, `valueType`, `keysSorted`, `nullable`) and `entriesDtype(
 
 When a column's shape is known in advance — a fixed-precision decimal, an enum — restrict its
 encoder selection to the encodings that fit. The column then skips candidates that cannot win,
-which is most of a cascading write's cost: one million two-decimal prices write about 6× faster
+which is most of a cascading write's cost: one million two-decimal prices write about 3.5× faster
 with ALP/FoR/bit-packing as the only candidates, to the same bytes.
 
 ```java
