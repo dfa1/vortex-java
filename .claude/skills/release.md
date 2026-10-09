@@ -118,6 +118,21 @@ After the workflow completes successfully:
 - Open `CHANGELOG.md` and add a fresh `## [<developmentVersion-without-snapshot>] — Unreleased` section at the top with empty `### Added` / `### Changed` / `### Fixed` placeholders for the next cycle.
 - Commit as `docs(changelog): open <next-version> section` and push.
 
+## Re-sync release notes (after editing a released CHANGELOG section)
+
+The GitHub release body is the version's CHANGELOG section verbatim. When a released section is
+edited, refresh its release. This is outward-facing: confirm with the user first, and say which
+versions will change.
+
+```bash
+v=0.16.0   # or loop over `gh release list`
+awk -v h="## [$v]" 'index($0,h)==1{p=1;next} /^## \[/{p=0} /^\[[0-9.]+\]: /{p=0} p' CHANGELOG.md > /tmp/notes.md
+grep -q '^- ' /tmp/notes.md && gh release edit "v$v" --notes-file /tmp/notes.md
+```
+
+Always `gh release edit`, never delete and recreate: tags and attached assets stay. Skip a version
+whose extracted notes are empty.
+
 ## Rules
 
 - **Never** force-push or delete tags. If a release is broken, cut a new patch version.
