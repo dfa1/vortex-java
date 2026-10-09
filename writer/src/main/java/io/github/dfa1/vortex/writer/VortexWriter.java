@@ -1242,19 +1242,20 @@ public final class VortexWriter implements Closeable {
         return FbsLayout.createFbsLayout(fbb, LAYOUT_DICT, totalCodesRows, metaVec, dictChildV, 0);
     }
 
-    /// Rust's `DictLayoutMetadata`: field 1 `codes_ptype`, field 2 `is_nullable_codes`. Rust's
-    /// writer always sets field 2 (its reader falls back to the column's nullability when it is
-    /// absent), so the metadata matches vortex-jni's byte for byte.
+    /// Rust's `DictLayoutMetadata`: field 1 `codes_ptype`, field 2 `is_nullable_codes`, field 3
+    /// `all_values_referenced`. Rust's writer always sets fields 2 and 3 (field 3 as `false`: its
+    /// `DictLayout::new` never claims every value is referenced), so the metadata matches
+    /// vortex-jni's byte for byte.
     private static byte[] buildDictLayoutMetaBytes(PType codePType, boolean nullableCodes) {
         int ordinal = codePType.ordinal();
-        // Field 2, wire type 0 (varint): tag = (2<<3)|0 = 0x10
-        byte[] codesNullability = {0x10, (byte) (nullableCodes ? 1 : 0)};
+        // Fields 2 and 3, wire type 0 (varint): tags (2<<3)|0 = 0x10 and (3<<3)|0 = 0x18
+        byte[] flags = {0x10, (byte) (nullableCodes ? 1 : 0), 0x18, 0};
         if (ordinal == 0) {
             // Proto3 omits default values; U8 ordinal=0 is the default
-            return codesNullability;
+            return flags;
         }
         // Field 1, wire type 0 (varint): tag = (1<<3)|0 = 0x08
-        return new byte[]{0x08, (byte) ordinal, codesNullability[0], codesNullability[1]};
+        return new byte[]{0x08, (byte) ordinal, flags[0], flags[1], flags[2], flags[3]};
     }
 
     // ── Global dict helpers ───────────────────────────────────────────────────
