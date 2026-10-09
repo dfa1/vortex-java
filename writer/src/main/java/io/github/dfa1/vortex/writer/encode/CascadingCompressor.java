@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.IntToLongFunction;
+import java.util.function.Supplier;
 
 /// Cascading compressor: evaluates multiple encodings on a sample and picks the one
 /// producing the smallest output. With `allowedCascading > 0`, also recurses
@@ -255,59 +256,85 @@ public final class CascadingCompressor {
             DType dtype, ArrayAndStats input, EncodeContext ctx, IntToLongFunction baselineFn
     ) {
         Object data = input.data();
-        // First sweep: stats verdicts. ALWAYS_USE short-circuits; SKIP excludes from
-        // the sample-encoded competition below; COMPLETE defers to it.
-        boolean[] skipMask = new boolean[encodings.size()];
-        for (int i = 0; i < encodings.size(); i++) {
-            EncodingEncoder enc = encodings.get(i);
-            if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
-                skipMask[i] = true;
-                continue;
-            }
-            Estimate est = enc.expectedRatio(dtype, input);
-            if (est == Estimate.ALWAYS_USE) {
-                return spliceResult(enc, dtype, data, ctx);
-            }
-            if (est == Estimate.SKIP) {
-                skipMask[i] = true;
-            }
-        }
-
         int n = dataLength(data);
-
-        // Build sample
         int sampleSize = sampleSize(n, ctx);
-        Object sample = (sampleSize < n) ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data;
+        Choice choice = chooseBest(dtype, input, ctx, baselineFn.applyAsLong(sampleSize),
+                () -> sampleSize < n ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data);
 
-        long bestSampleSize = baselineFn.applyAsLong(sampleSize);
-        EncodingEncoder winner = null;
-
-        for (int i = 0; i < encodings.size(); i++) {
-            if (skipMask[i]) {
-                continue;
-            }
-            EncodingEncoder enc = encodings.get(i);
-            CascadeStep step = enc.encodeCascade(dtype, sample, ctx);
-
-            // At depth 0, skip encodings that require cascade
-            if (!step.isTerminal() && ctx.allowedCascading() == 0) {
-                continue;
-            }
-
-            long size = measureStep(enc, step, ctx);
-            if (size < bestSampleSize) {
-                bestSampleSize = size;
-                winner = enc;
-            }
-        }
-
-        if (winner == null) {
+        if (choice.encoder() == null) {
             // No encoding beats the baseline — fall back to the first accepting encoder
             return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
+        // Run the winner on the full data
+        return spliceResult(choice.encoder(), dtype, data, ctx);
+    }
 
-        // Re-run winner on full data
-        return spliceResult(winner, dtype, data, ctx);
+    /// The winner of a selection and the size it was scored at on the sample (or its estimate).
+    ///
+    /// @param encoder   the winning encoder, or `null` when none beat the baseline
+    /// @param size      the winner's sample size in bytes, or the baseline when there is none;
+    ///                  unmeasured when `alwaysUse`
+    /// @param alwaysUse whether the winner was settled by [Estimate#ALWAYS_USE]
+    private record Choice(EncodingEncoder encoder, double size, boolean alwaysUse) {
+    }
+
+    /// Rust's `choose_best_scheme` (`compressor/select.rs`), for one array.
+    ///
+    /// The verdict pass runs first, over the array's own stats: SKIP drops a candidate,
+    /// ALWAYS_USE wins outright, and a [Estimate.Ratio] competes without encoding anything. Only
+    /// the candidates left deferred ([Estimate#COMPLETE]) are trial-encoded, on the sample, which
+    /// is built only if one of them needs it. Scores compare as Rust's ratios do (higher wins,
+    /// only above 1 counts): a ratio `r` stands for `baseline / r` sample bytes, and a candidate
+    /// must come in strictly under the best so far, starting from the baseline.
+    ///
+    /// @param dtype    the logical type of the array
+    /// @param input    the array with its lazily computed stats
+    /// @param ctx      the context the array is encoded under
+    /// @param baseline the uncompressed size of the sample in bytes
+    /// @param sample   the sample deferred candidates are measured on
+    /// @return the winner, if any
+    private Choice chooseBest(DType dtype, ArrayAndStats input, EncodeContext ctx, long baseline,
+                              Supplier<Object> sample) {
+        EncodingEncoder best = null;
+        double bestSize = baseline;
+        List<EncodingEncoder> deferred = new ArrayList<>();
+        for (EncodingEncoder enc : encodings) {
+            if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
+                continue;
+            }
+            Estimate est = competes(dtype) ? enc.expectedRatio(dtype, input, ctx) : Estimate.COMPLETE;
+            if (est == Estimate.ALWAYS_USE) {
+                return new Choice(enc, 0, true);
+            }
+            if (est instanceof Estimate.Ratio(double ratio)) {
+                double size = baseline / ratio;
+                if (size < bestSize) {
+                    best = enc;
+                    bestSize = size;
+                }
+            } else if (est == Estimate.COMPLETE) {
+                deferred.add(enc);
+            }
+        }
+        if (deferred.isEmpty()) {
+            return new Choice(best, bestSize, false);
+        }
+
+        Object measured = sample.get();
+        EncodeContext sampleCtx = ctx.withSampling();
+        for (EncodingEncoder enc : deferred) {
+            CascadeStep step = enc.encodeCascade(dtype, measured, sampleCtx);
+            // At depth 0, skip encodings that require cascade
+            if (!step.isTerminal() && sampleCtx.allowedCascading() <= 0) {
+                continue;
+            }
+            long size = measureStep(enc, step, sampleCtx);
+            if (size < bestSize) {
+                best = enc;
+                bestSize = size;
+            }
+        }
+        return new Choice(best, bestSize, false);
     }
 
     /// Derives the context a child slot is filled under: one cascade level deeper, with the slot's
@@ -325,43 +352,24 @@ public final class CascadingCompressor {
         return total;
     }
 
-    /// Smallest size any candidate encodes the (already sampled) child `data` to.
+    /// Smallest size any candidate encodes the (already sampled) child `data` to: the same
+    /// [#chooseBest] selection as a full array, run on the sample itself.
     ///
-    /// Selects as Rust's `choose_best_scheme` does at every cascade level, not only at the top:
-    /// stats verdicts first, so a candidate whose verdict is SKIP is never trial-encoded. Without
-    /// it every accepting encoder was trial-encoded at every level, which was most of a cascading
-    /// write's CPU and allocation.
-    ///
-    /// Two sample-context rules from Rust's `compress` (`compressor/cascade.rs`): an empty array
-    /// is returned before any selection, so it costs nothing; and constant detection is skipped,
-    /// since a constant sample does not imply a constant array — so ALWAYS_USE does not settle the
-    /// child here, the candidate is only measured like the rest. Short-circuiting it made an
-    /// empty patch child of Sparse cost a constant node and flipped taxi's dict codes from Sparse
-    /// (Rust's choice) to bit-packing.
+    /// An empty child is returned before any selection, as Rust's `compress` does
+    /// (`compressor/cascade.rs`), so it costs nothing.
     private long measureBestChild(DType dtype, Object data, EncodeContext ctx) {
         int n = dataLength(data);
-        long best = primitiveBytes(dtype, n);
+        long baseline = primitiveBytes(dtype, n);
         if (n == 0) {
-            return best;
+            return baseline;
         }
-        ArrayAndStats input = competes(dtype) ? withStats(dtype, data, ctx) : null;
-        for (EncodingEncoder enc : encodings) {
-            if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
-                continue;
-            }
-            if (input != null && enc.expectedRatio(dtype, input) == Estimate.SKIP) {
-                continue;
-            }
-            CascadeStep step = enc.encodeCascade(dtype, data, ctx);
-            if (!step.isTerminal() && ctx.allowedCascading() == 0) {
-                continue;
-            }
-            long size = measureStep(enc, step, ctx);
-            if (size < best) {
-                best = size;
-            }
+        Choice choice = chooseBest(dtype, withStats(dtype, data, ctx), ctx, baseline, () -> data);
+        if (choice.alwaysUse()) {
+            // ALWAYS_USE: settled without a measurement, so measure the winner for its size
+            CascadeStep step = choice.encoder().encodeCascade(dtype, data, ctx);
+            return Math.min(baseline, measureStep(choice.encoder(), step, ctx));
         }
-        return best;
+        return Math.round(choice.size());
     }
 
     private EncodeResult spliceResult(EncodingEncoder winner, DType dtype, Object data, EncodeContext ctx) {

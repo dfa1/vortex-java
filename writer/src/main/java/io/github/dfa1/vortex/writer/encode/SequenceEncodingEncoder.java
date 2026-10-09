@@ -19,6 +19,27 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         return EncodingId.VORTEX_SEQUENCE;
     }
 
+    /// Rust's `SequenceScheme` verdict (`vortex-btrblocks` `schemes/integer/sequence.rs`).
+    ///
+    /// Never on a sample: the cascade samples in random strides, so a sample of a sequence is
+    /// not one, and a sample that happens to be one says nothing of the array. On the real array,
+    /// an exact distinct count other than the length rules it out; otherwise it is checked
+    /// directly, and a sequence scores Rust's `len / 2` — two scalars stand for the whole array.
+    @Override
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        if (ctx.sample()) {
+            return Estimate.SKIP;
+        }
+        ArrayStats stats = data.stats();
+        if (stats.hasDistinctCount() && !stats.distinctCapped() && stats.distinctCount() != stats.valueCount()) {
+            return Estimate.SKIP;
+        }
+        if (!encodeCascade(dtype, data.data(), ctx).applicable()) {
+            return Estimate.SKIP;
+        }
+        return Estimate.ratio(stats.valueCount() / 2.0);
+    }
+
     @Override
     public boolean accepts(DType dtype) {
         return dtype instanceof DType.Primitive;

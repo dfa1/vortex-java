@@ -694,9 +694,11 @@ construction, more aborts any row-range read that slices the buffer.
 
 To mix a custom encoder into the normal cascade competition instead of a single-encoder registry,
 start from `WriteRegistry.builder().registerDefaults()` and override
-`EncodingEncoder#expectedRatio(DType, ArrayAndStats)` to steer selection, rather than relying on
-`accepts(DType)` alone. Declare the stats it reads in `statsOptions()`; `ArrayAndStats#stats()`
-computes them on first use and shares the scan with every other candidate.
+`EncodingEncoder#expectedRatio(DType, ArrayAndStats, EncodeContext)` to steer selection, rather
+than relying on `accepts(DType)` alone: return `Estimate.SKIP`, `Estimate.ratio(double)` (an
+estimate that competes without encoding) or `Estimate.COMPLETE` (measure on a sample). Declare the
+stats it reads in `statsOptions()`; `ArrayAndStats#stats()` computes them on first use and shares
+the scan with every other candidate.
 
 **Read side** (matching decoder, registered on `ReadRegistry` — see
 [reference.md#encoding-registry](reference.md#encoding-registry)):

@@ -1,10 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.writer.WriteRegistry;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.lang.foreign.Arena;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +34,8 @@ class RunLengthVerdictTest {
         }
 
         // When
-        Estimate result = sut.expectedRatio(DType.I64, new ArrayAndStats(DType.I64, data, StatsOptions.NONE));
+        Estimate result = sut.expectedRatio(DType.I64, new ArrayAndStats(DType.I64, data, StatsOptions.NONE),
+                EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.builder().registerDefaults().build()));
 
         // Then
         assertThat(result).isEqualTo(expected);

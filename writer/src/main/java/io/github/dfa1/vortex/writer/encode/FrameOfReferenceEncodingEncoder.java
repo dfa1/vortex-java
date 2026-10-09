@@ -20,6 +20,29 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         return EncodingId.FASTLANES_FOR;
     }
 
+    /// Rust's `FoRScheme` estimate (`vortex-btrblocks` `schemes/integer/for_.rs`), from min/max
+    /// alone: skip when there is nothing to subtract (min 0), nothing left (constant), or when
+    /// plain bit-packing would be as narrow; else the type width over the offset width.
+    @Override
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        if (ctx.finishedCascading()) {
+            return Estimate.SKIP;
+        }
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        ArrayStats stats = data.stats();
+        long span = stats.maxMinusMin();
+        if (stats.min() == 0 || span == 0) {
+            return Estimate.SKIP;
+        }
+        int forBitWidth = 64 - Long.numberOfLeadingZeros(span);
+        // Only when min >= 0: otherwise bit-packing cannot apply without ZigZag
+        int maxLog = stats.maxIlog2(ptype);
+        if (!stats.minIsNegative(ptype) && maxLog >= 0 && forBitWidth >= maxLog + 1) {
+            return Estimate.SKIP;
+        }
+        return Estimate.ratio((double) ptype.bits() / forBitWidth);
+    }
+
     @Override
     public boolean accepts(DType dtype) {
         return dtype instanceof DType.Primitive p && !p.ptype().isFloating();

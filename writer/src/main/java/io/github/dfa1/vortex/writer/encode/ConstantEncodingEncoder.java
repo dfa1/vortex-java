@@ -28,7 +28,12 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
-    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        // Rust detects constants in the compressor itself, never on a sample: a constant sample
+        // does not imply a constant array (`compressor/cascade.rs`).
+        if (ctx.sample()) {
+            return Estimate.SKIP;
+        }
         ArrayStats stats = data.stats();
         if (stats.valueCount() == 0) {
             return Estimate.ALWAYS_USE;

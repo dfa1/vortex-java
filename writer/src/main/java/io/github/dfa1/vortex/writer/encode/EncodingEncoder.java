@@ -72,9 +72,11 @@ public interface EncodingEncoder {
     /// @param dtype the logical type of the data
     /// @param data  the input data with its lazily computed stats, reflecting the merged
     ///              [StatsOptions]
-    /// @return [Estimate#SKIP] / [Estimate#ALWAYS_USE], or [Estimate#COMPLETE] to
-    ///         defer to the sample-encoded selection path
-    default Estimate expectedRatio(DType dtype, ArrayAndStats data) {
+    /// @param ctx   the context the data would be encoded under: [EncodeContext#sample()] and
+    ///              [EncodeContext#finishedCascading()] decide several of Rust's verdicts
+    /// @return [Estimate#SKIP] / [Estimate#ALWAYS_USE], an [Estimate#ratio(double)] computed from
+    ///         stats, or [Estimate#COMPLETE] to defer to the sample-encoded selection path
+    default Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
         return Estimate.COMPLETE;
     }
 }
