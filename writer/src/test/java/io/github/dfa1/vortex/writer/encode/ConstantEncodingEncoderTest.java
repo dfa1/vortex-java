@@ -43,6 +43,32 @@ class ConstantEncodingEncoderTest {
     private static final ConstantEncodingDecoder DECODER = new ConstantEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER);
 
+    @Test
+    void encode_utf8_roundTripsThroughTheDecoder() {
+        // Given: the scalar is a string, as Rust writes it for a constant utf8 leaf
+        String[] data = new String[1_000];
+        java.util.Arrays.fill(data, "ADAUSDT");
+
+        // When
+        EncodeResult encoded = ENCODER.encode(DType.UTF8, data, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DType.UTF8, REGISTRY);
+        Array result = DECODER.decode(ctx);
+
+        // Then: one 9-byte buffer (tag, length, 7 characters), whatever the row count
+        assertThat(encoded.encodedBuffers()).singleElement().extracting(b -> b.data().byteSize()).isEqualTo(9L);
+        assertThat(result.length()).isEqualTo(1_000L);
+    }
+
+    @Test
+    void encode_utf8_rejectsStringsThatDiffer() {
+        // Given
+        String[] data = {"a", "b"};
+
+        // When / Then
+        assertThatThrownBy(() -> ENCODER.encode(DType.UTF8, data, EncodeTestHelper.testCtx()))
+                .isInstanceOf(VortexException.class);
+    }
+
     @Nested
     class Decode {
 

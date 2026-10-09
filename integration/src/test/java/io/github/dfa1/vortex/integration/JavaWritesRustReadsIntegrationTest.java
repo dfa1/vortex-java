@@ -615,6 +615,33 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(range).containsExactlyElementsOf(slice(Arrays.stream(prices).boxed(), 1_501, 70_333));
     }
 
+    @Test
+    void javaWriter_jniReader_constantString_fullAndRowRange(@TempDir Path tmp) throws IOException {
+        // Given — a string column of one repeated symbol, as the klines `symbol` chunks: the
+        // cascade writes it as a vortex.constant holding a string scalar, as Rust does
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
+        String[] symbols = new String[100_000];
+        Arrays.fill(symbols, "ADAUSDT");
+        Path file = tmp.resolve("java_constant_string.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults().withGlobalDict(false))) {
+            sut.writeChunk(Map.of(ColumnName.of("s"), symbols));
+        }
+
+        // When
+        String[] full = readStringColumn(file, "s");
+        List<Object> range = readRowRange(file, "s", 1_501, 70_333);
+
+        // Then
+        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file,
+                io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
+            assertThat(reader.footer().arraySpecs())
+                    .contains(io.github.dfa1.vortex.core.model.EncodingId.VORTEX_CONSTANT);
+        }
+        assertThat(full).containsExactly(symbols);
+        assertThat(range).hasSize(70_333 - 1_501).containsOnly("ADAUSDT");
+    }
+
     private static List<Object> slice(java.util.stream.Stream<?> values, int begin, int end) {
         return values.skip(begin).limit((long) end - begin).map(Object.class::cast).toList();
     }

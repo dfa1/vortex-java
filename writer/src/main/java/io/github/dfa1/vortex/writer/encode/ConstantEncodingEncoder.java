@@ -19,7 +19,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Bool;
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Bool || dtype instanceof DType.Utf8;
     }
 
     @Override
@@ -33,6 +33,11 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         // does not imply a constant array (`compressor/cascade.rs`).
         if (ctx.sample()) {
             return Estimate.SKIP;
+        }
+        if (dtype instanceof DType.Utf8) {
+            // Strings carry no stats; Rust's constant check is one pass over the array
+            String[] strings = (String[]) data.data();
+            return strings.length > 0 && isConstantStrings(strings) ? Estimate.ALWAYS_USE : Estimate.SKIP;
         }
         ArrayStats stats = data.stats();
         if (stats.valueCount() == 0) {
@@ -52,6 +57,9 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         if (dtype instanceof DType.Bool) {
             return encodeBool((boolean[]) data);
         }
+        if (dtype instanceof DType.Utf8) {
+            return encodeUtf8((String[]) data);
+        }
         if (!(dtype instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive or Bool dtype, got " + dtype);
         }
@@ -70,6 +78,13 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
+        if (dtype instanceof DType.Utf8) {
+            String[] strings = (String[]) data;
+            if (strings.length == 0 || !isConstantStrings(strings)) {
+                return CascadeStep.notApplicable();
+            }
+            return CascadeStep.terminal(encode(dtype, data, encodeCtx));
+        }
         if (dtype instanceof DType.Bool bool) {
             if (!isConstantBool((boolean[]) data)) {
                 return CascadeStep.notApplicable();
@@ -80,6 +95,25 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
             return CascadeStep.notApplicable();
         }
         return CascadeStep.terminal(encode(dtype, data, encodeCtx));
+    }
+
+    private static EncodeResult encodeUtf8(String[] data) {
+        if (data.length == 0 || !isConstantStrings(data)) {
+            throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
+        }
+        byte[] scalarBytes = ProtoScalarValue.ofStringValue(data[0]).encode();
+        // Both extremes are the one repeated value, by construction
+        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)),
+                scalarBytes, scalarBytes);
+    }
+
+    private static boolean isConstantStrings(String[] data) {
+        for (int i = 1; i < data.length; i++) {
+            if (!data[i].equals(data[0])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static EncodeResult encodeBool(boolean[] data) {

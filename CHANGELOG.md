@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ALP writes its patches as Rust does: indices narrowed to the smallest unsigned type that holds them, plus the per-1024-value chunk offsets. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - The cascade draws the same compression sample as Rust (its ChaCha12 generator and fixed seed, ported bit for bit), so it picks the encodings Rust picks on borderline columns. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - With the global dictionary on, the writer's cascade no longer dictionary-encodes integer chunks (Rust's file writer excludes `IntDictScheme`), and it compresses a float dictionary's value pool through the cascade, as Rust does, instead of writing it raw (klines price columns −0.1 MB each). ([#507](https://github.com/dfa1/vortex-java/issues/507))
+- A string column whose every row is the same value is written as `vortex.constant`, as Rust does, instead of a one-entry dictionary (klines `symbol` chunks 366 → 157 B). ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - A zone-map metadata varint whose 10th byte exceeds 1 is rejected instead of silently truncated. ([#504](https://github.com/dfa1/vortex-java/pull/504))
 
 ## [0.16.0] — 2026-10-09

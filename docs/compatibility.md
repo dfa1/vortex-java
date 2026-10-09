@@ -93,7 +93,7 @@ decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nul
 | `vortex.null`               | `NullEncodingDecoder`            | `NullEncodingEncoder`            | ✅      | ✅      | Null                                                                  |
 | `vortex.bytebool`           | `ByteBoolEncodingDecoder`        | `ByteBoolEncodingEncoder`        | ✅      | ✅      | Bool (byte-per-element)                                               |
 | `vortex.zigzag`             | `ZigZagEncodingDecoder`          | `ZigZagEncodingEncoder`          | ✅      | ✅      | Signed integer PTypes                                                 |
-| `vortex.constant`           | `ConstantEncodingDecoder`        | `ConstantEncodingEncoder`        | ✅      | ✅      | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension               |
+| `vortex.constant`           | `ConstantEncodingDecoder`        | `ConstantEncodingEncoder`        | ✅      | ✅      | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension; the cascade writes it for Primitive, Bool and Utf8 |
 | `vortex.ext`                | `ExtEncodingDecoder`             | `ExtEncodingEncoder`             | ✅      | ✅      | Extension                                                             |
 | `vortex.runend`             | `RunEndEncodingDecoder`          | `RunEndEncodingEncoder`          | ✅      | ✅      | Primitive, Utf8/Binary, Bool                                          |
 | `vortex.varbin`             | `VarBinEncodingDecoder`          | `VarBinEncodingEncoder`          | ✅      | ✅      | Utf8, Binary                                                          |

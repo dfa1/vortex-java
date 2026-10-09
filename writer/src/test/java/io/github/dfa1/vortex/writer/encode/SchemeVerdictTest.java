@@ -176,6 +176,34 @@ class SchemeVerdictTest {
             assertThat(result).isEqualTo(Estimate.SKIP);
             assertThat(sut.expectedRatio(DType.I64, data, REAL)).isEqualTo(Estimate.ALWAYS_USE);
         }
+
+        @Test
+        void aConstantStringArrayAlwaysUsesItNeverOnASample() {
+            // Given: a column whose every row is the same symbol, as the klines `symbol` chunks.
+            // Rust's compressor short-circuits any constant leaf, strings included
+            ConstantEncodingEncoder sut = new ConstantEncodingEncoder();
+            ArrayAndStats data = new ArrayAndStats(DType.UTF8, new String[]{"BTCUSDT", "BTCUSDT", "BTCUSDT"}, StatsOptions.NONE);
+
+            // When
+            Estimate real = sut.expectedRatio(DType.UTF8, data, REAL);
+            Estimate sampled = sut.expectedRatio(DType.UTF8, data, SAMPLE);
+
+            // Then
+            assertThat(real).isEqualTo(Estimate.ALWAYS_USE);
+            assertThat(sampled).isEqualTo(Estimate.SKIP);
+        }
+
+        @Test
+        void skipsStringsThatDifferOrAreEmpty() {
+            // Given
+            ConstantEncodingEncoder sut = new ConstantEncodingEncoder();
+            ArrayAndStats different = new ArrayAndStats(DType.UTF8, new String[]{"a", "a", "b"}, StatsOptions.NONE);
+            ArrayAndStats empty = new ArrayAndStats(DType.UTF8, new String[0], StatsOptions.NONE);
+
+            // When / Then
+            assertThat(sut.expectedRatio(DType.UTF8, different, REAL)).isEqualTo(Estimate.SKIP);
+            assertThat(sut.expectedRatio(DType.UTF8, empty, REAL)).isEqualTo(Estimate.SKIP);
+        }
     }
 
     @Nested
