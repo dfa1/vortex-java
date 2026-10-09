@@ -2,12 +2,14 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -321,21 +323,32 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
                 excValsArr[i] = excVals.get(i);
             }
 
-            EncodeResult idxResult = bp.encode(DType.U64, excPosArr, ctx);
-            EncodeResult valResult = bp.encode(DType.U16, excValsArr, ctx);
-
+            // Rust's compress_patches: indices narrowed to the smallest unsigned type that holds them,
+            // values left as they are (a constant array when they are all equal), and none of it
+            // bit-packed. Bit-packing pads to 1024-value blocks, which inflates the handful of
+            // exceptions of a small sample and biases the cascade away from ALP-RD.
+            PType idxType = narrowestIndexType(excPosArr[excPosArr.length - 1]);
             int idxOffset = allBuffers.size();
-            allBuffers.addAll(idxResult.encodedBuffers());
-            int idxBufCount = idxResult.buffers().size();
-            allBuffers.addAll(valResult.encodedBuffers());
+            allBuffers.add(EncodedBuffer.of(indexBuffer(excPosArr, idxType, ctx), idxType));
+            EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, idxOffset);
 
-            EncodeNode idxNode = EncodeNode.remapBufferIndices(idxResult.rootNode(), idxOffset);
-            EncodeNode valNode = EncodeNode.remapBufferIndices(valResult.rootNode(), idxOffset + idxBufCount);
+            EncodeNode valNode;
+            int valOffset = allBuffers.size();
+            if (allEqual(excValsArr)) {
+                EncodeResult constant = new ConstantEncodingEncoder().encode(DType.U16, excValsArr, ctx);
+                allBuffers.addAll(constant.encodedBuffers());
+                valNode = EncodeNode.remapBufferIndices(constant.rootNode(), valOffset);
+            } else {
+                MemorySegment valBuf = ctx.arena().allocate((long) excValsArr.length * Short.BYTES, Short.BYTES);
+                MemorySegment.copy(excValsArr, 0, valBuf, VortexFormat.LE_SHORT, 0, excValsArr.length);
+                allBuffers.add(EncodedBuffer.of(valBuf, PType.U16));
+                valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, valOffset);
+            }
 
             patchesMeta = new ProtoPatchesMetadata(
                     excPos.size(),
                     0L,
-                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U64.ordinal()),
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxType.ordinal()),
                     null, null, null);
             children = new EncodeNode[]{leftNode, rightNode, idxNode, valNode};
         }
@@ -350,6 +363,39 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         EncodeNode root = new EncodeNode(
             EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(metaBytes), children, new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), statsMin, statsMax);
+    }
+
+    private static PType narrowestIndexType(long maxIndex) {
+        if (maxIndex <= 0xFFL) {
+            return PType.U8;
+        }
+        if (maxIndex <= 0xFFFFL) {
+            return PType.U16;
+        }
+        return maxIndex <= 0xFFFF_FFFFL ? PType.U32 : PType.U64;
+    }
+
+    private static MemorySegment indexBuffer(long[] positions, PType type, EncodeContext ctx) {
+        int width = type.byteSize();
+        MemorySegment buffer = ctx.arena().allocate((long) positions.length * width, width);
+        for (int i = 0; i < positions.length; i++) {
+            switch (type) {
+                case U8 -> buffer.set(ValueLayout.JAVA_BYTE, i, (byte) positions[i]);
+                case U16 -> buffer.setAtIndex(VortexFormat.LE_SHORT, i, (short) positions[i]);
+                case U32 -> buffer.setAtIndex(VortexFormat.LE_INT, i, (int) positions[i]);
+                default -> buffer.setAtIndex(VortexFormat.LE_LONG, i, positions[i]);
+            }
+        }
+        return buffer;
+    }
+
+    private static boolean allEqual(short[] values) {
+        for (short value : values) {
+            if (value != values[0]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static byte[] scalarF64(double v) {

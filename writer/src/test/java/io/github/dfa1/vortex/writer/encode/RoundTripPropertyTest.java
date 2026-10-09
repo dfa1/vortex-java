@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.DeltaEncodingDecoder;
@@ -42,7 +43,9 @@ class RoundTripPropertyTest {
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(
             new DeltaEncodingDecoder(), new FrameOfReferenceEncodingDecoder(),
             new ZigZagEncodingDecoder(), new AlpRdEncodingDecoder(),
-            new BitpackedEncodingDecoder(), new PrimitiveEncodingDecoder());
+            new BitpackedEncodingDecoder(), new PrimitiveEncodingDecoder(),
+            // ALP-RD stores equal exception values as a constant array, as Rust's compress_patches does
+            new ConstantEncodingDecoder());
 
     private static Array roundTrip(EncodingEncoder encoder, EncodingDecoder decoder, DType dtype, Object data, int n) {
         EncodeResult enc = encoder.encode(dtype, data, EncodeTestHelper.testCtx());

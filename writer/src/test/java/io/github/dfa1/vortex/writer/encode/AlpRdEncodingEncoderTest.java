@@ -7,7 +7,10 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
@@ -124,6 +127,57 @@ class AlpRdEncodingEncoderTest {
 
         // Then: left and right parts only, no exception patches
         assertThat(result.rootNode().children()).hasSize(2);
+    }
+
+    @Test
+    void encode_f64_patchesAreNarrowedPrimitivesAndConstantWhenEqual() throws IOException {
+        // Given: eight common exponents fill the dictionary; three outliers share one exponent
+        // that is not in it, so their left parts are equal exceptions. Rust's compress_patches keeps
+        // the indices as a plain primitive of the smallest unsigned type (u16 here: positions below
+        // 65536) and turns equal values into a constant array, with no bit-packing
+        Random random = new Random(11);
+        double[] values = new double[2_000];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = Math.scalb(1.0 + random.nextDouble(), i % 8);
+        }
+        values[100] = Math.scalb(1.5, 20);
+        values[900] = Math.scalb(1.25, 20);
+        values[1_700] = Math.scalb(1.75, 20);
+        var sut = new AlpRdEncodingEncoder();
+
+        // When
+        EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+        var metaSeg = result.rootNode().metadata();
+        ProtoALPRDMetadata meta = ProtoALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+
+        // Then
+        EncodeNode[] children = result.rootNode().children();
+        assertThat(children).hasSize(4);
+        assertThat(children[2].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+        assertThat(children[3].encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+        assertThat(meta.patches().len()).isEqualTo(3);
+        assertThat(meta.patches().indices_ptype()).isEqualTo(ProtoPType.fromValue(PType.U16.ordinal()));
+    }
+
+    @Test
+    void encode_f64_patchValuesStayPrimitiveWhenTheyDiffer() throws IOException {
+        // Given: as above, but the outliers have two different exponents, so the exceptions differ
+        Random random = new Random(11);
+        double[] values = new double[2_000];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = Math.scalb(1.0 + random.nextDouble(), i % 8);
+        }
+        values[100] = Math.scalb(1.5, 20);
+        values[900] = Math.scalb(1.25, 30);
+        var sut = new AlpRdEncodingEncoder();
+
+        // When
+        EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+        // Then
+        EncodeNode[] children = result.rootNode().children();
+        assertThat(children).hasSize(4);
+        assertThat(children[3].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
     }
 
     // Property test: ALPRD is a lossless raw-bit split (dictionary left parts + bit-packed right parts,
