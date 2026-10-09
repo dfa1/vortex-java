@@ -14,6 +14,10 @@ import java.util.Arrays;
 /// - Keys are raw 64-bit patterns, so callers compare floats by `doubleToLongBits` and never box.
 /// - Capacity is a power of two, so probing masks rather than taking a modulo (CLAUDE.md
 ///   hot-loop rule: a modulo per element blocks auto-vectorization and costs 20–40 cycles).
+/// - The slot is the top bits of `key * phi`, as Fibonacci hashing takes them. Bits 32 and up
+///   of the product (what this used before) see only the key's low 50 bits, so keys that differ
+///   mostly above them — doubles, whose exponent and leading mantissa sit there — piled into
+///   long probe chains: 17 ns per row on a price column, 5 ns after (#476).
 /// - Growth is 4x, not 2x. Starting small keeps a low-cardinality column cheap, but doubling made
 ///   a high-cardinality one rehash six times on the way up and `grow` alone measured 10.5% of a
 ///   cascading write.
@@ -30,6 +34,7 @@ public final class LongIntMap {
     private long[] keys;
     private int[] values;
     private int mask;
+    private int shift;
     private int size;
     private int growAt;
 
@@ -42,6 +47,7 @@ public final class LongIntMap {
         keys = new long[capacity];
         values = new int[capacity];
         mask = capacity - 1;
+        shift = Long.numberOfLeadingZeros(capacity - 1);
         growAt = capacity / 2;
     }
 
@@ -207,6 +213,7 @@ public final class LongIntMap {
         keys = new long[capacity];
         values = new int[capacity];
         mask = capacity - 1;
+        shift = Long.numberOfLeadingZeros(capacity - 1);
         growAt = capacity / 2;
         for (int i = 0; i < oldKeys.length; i++) {
             if (oldValues[i] != 0) {
@@ -227,7 +234,7 @@ public final class LongIntMap {
     /// @param key the raw bit pattern
     /// @return the starting slot for `key`
     private int slotOf(long key) {
-        return (int) ((key * HASH_MULTIPLIER) >>> 32) & mask;
+        return (int) ((key * HASH_MULTIPLIER) >>> shift);
     }
 
     private static int nextPowerOfTwo(int x) {
