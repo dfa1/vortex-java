@@ -1,8 +1,10 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -14,6 +16,7 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
@@ -50,8 +53,16 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
             return MaskedArray.wrapIfPresent(rawEncoded, validity);
         }
 
-        MemorySegment src = ctx.materialize(rawEncoded);
         long n = ctx.rowCount();
+        if (unpackedByThisDecode(ctx) && rawEncoded.segmentIfPresent().isPresent()) {
+            MemorySegment owned = rawEncoded.segmentIfPresent().get();
+            if (owned.byteSize() >= n * p.ptype().byteSize()) {
+                addInPlace(owned, n, p.ptype(), ref);
+                return MaskedArray.wrapIfPresent(MaterializedArrays.of(ctx.dtype(), p.ptype(), n, owned), validity);
+            }
+        }
+
+        MemorySegment src = ctx.materialize(rawEncoded);
         Array result = switch (p.ptype()) {
             case I64, U64 -> new LazyForLongArray(ctx.dtype(), n, src, ref);
             case I32, U32 -> new LazyForIntArray(ctx.dtype(), n, src, (int) ref);
@@ -60,6 +71,45 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
             default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
         };
         return MaskedArray.wrapIfPresent(result, validity);
+    }
+
+    // Rust's FoR decompress fuses the unpack of a BitPacked child with the reference add, and adds
+    // in place to any buffer it owns uniquely. A bitpacked child unpacks into a buffer allocated by
+    // this very decode and referenced nowhere else, so adding there is that same in-place map: one
+    // buffer for the column instead of the unpacked one plus a second on materialize.
+    private static boolean unpackedByThisDecode(DecodeContext ctx) {
+        ArrayNode[] children = ctx.node().children();
+        return children.length > 0 && EncodingId.FASTLANES_BITPACKED.equals(children[0].encodingId());
+    }
+
+    // Wrapping add at the element width, one uniform loop per width so C2 vectorizes it.
+    private static void addInPlace(MemorySegment seg, long n, PType ptype, long ref) {
+        switch (ptype) {
+            case I64, U64 -> {
+                for (long i = 0; i < n; i++) {
+                    seg.setAtIndex(VortexFormat.LE_LONG, i, seg.getAtIndex(VortexFormat.LE_LONG, i) + ref);
+                }
+            }
+            case I32, U32 -> {
+                int r = (int) ref;
+                for (long i = 0; i < n; i++) {
+                    seg.setAtIndex(VortexFormat.LE_INT, i, seg.getAtIndex(VortexFormat.LE_INT, i) + r);
+                }
+            }
+            case I16, U16 -> {
+                short r = (short) ref;
+                for (long i = 0; i < n; i++) {
+                    seg.setAtIndex(VortexFormat.LE_SHORT, i, (short) (seg.getAtIndex(VortexFormat.LE_SHORT, i) + r));
+                }
+            }
+            case I8, U8 -> {
+                byte r = (byte) ref;
+                for (long i = 0; i < n; i++) {
+                    seg.set(ValueLayout.JAVA_BYTE, i, (byte) (seg.get(ValueLayout.JAVA_BYTE, i) + r));
+                }
+            }
+            default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + ptype);
+        }
     }
 
     private static long referenceValue(ProtoScalarValue scalar) {
