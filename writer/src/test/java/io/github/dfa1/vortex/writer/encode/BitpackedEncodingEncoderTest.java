@@ -1,5 +1,10 @@
 package io.github.dfa1.vortex.writer.encode;
 
+
+import io.github.dfa1.vortex.core.model.DType;
+
+import io.github.dfa1.vortex.core.model.PType;
+
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -9,6 +14,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -26,6 +32,8 @@ class BitpackedEncodingEncoderTest {
     private static final BitpackedEncodingEncoder ENCODER = new BitpackedEncodingEncoder();
     private static final BitpackedEncodingDecoder DECODER = new BitpackedEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER);
+    // Patches decode through their primitive children.
+    private static final ReadRegistry PATCHED_REGISTRY = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder());
 
     static Stream<Arguments> u32Arrays() {
         return Stream.of(
@@ -113,6 +121,82 @@ class BitpackedEncodingEncoderTest {
         for (int i = 0; i < data.length; i++) {
             assertThat(seg.get(VortexFormat.LE_LONG, (long) i * 8)).as("width %d index %d", width, i).isEqualTo(data[i]);
         }
+    }
+
+    /// Every word width (the per-width store paths), across block boundaries — a full block, one
+    /// row over (a partial last block), several blocks — with ~1% of values too wide for the
+    /// chosen width, so the patch path runs on the histogram's patch count. Small arrays alone
+    /// never reach a second block.
+    @ParameterizedTest(name = "{0} n={1}")
+    @MethodSource("multiBlockArrays")
+    void encodeDecode_multiBlockWithPatches_isLossless(PType ptype, int n, long[] values) {
+        // Given
+        DType dtype = new DType.Primitive(ptype, false);
+        Object data = carrier(ptype, values);
+
+        // When
+        EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
+        Array result = DECODER.decode(DecodeTestHelper.toDecodeContext(encoded, n, dtype, PATCHED_REGISTRY));
+
+        // Then
+        var seg = result.materialize(Arena.ofAuto());
+        long mask = ptype.bits() == 64 ? -1L : (1L << ptype.bits()) - 1L;
+        for (int i = 0; i < n; i++) {
+            assertThat(readWord(seg, i, ptype) & mask)
+                    .as("%s index %d", ptype, i).isEqualTo(values[i] & mask);
+        }
+    }
+
+    static Stream<Arguments> multiBlockArrays() {
+        Random rng = new Random(0xB10C5L);
+        return Stream.of(PType.U8, PType.U16, PType.U32, PType.U64).flatMap(ptype ->
+                Stream.of(1024, 1025, 3_000).map(n -> {
+                    int width = Math.max(1, ptype.bits() / 2 - 1);
+                    long[] values = new long[n];
+                    for (int i = 0; i < n; i++) {
+                        values[i] = i % 97 == 0
+                                ? rng.nextLong() >>> (64 - ptype.bits())   // patch: full type width
+                                : rng.nextLong() >>> (64 - width);
+                    }
+                    return Arguments.of(ptype, n, values);
+                }));
+    }
+
+    private static long readWord(java.lang.foreign.MemorySegment seg, int i, PType ptype) {
+        return switch (ptype.bits()) {
+            case 8 -> seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, i);
+            case 16 -> seg.get(VortexFormat.LE_SHORT, 2L * i);
+            case 32 -> seg.get(VortexFormat.LE_INT, 4L * i);
+            default -> seg.get(VortexFormat.LE_LONG, 8L * i);
+        };
+    }
+
+    private static Object carrier(PType ptype, long[] values) {
+        int n = values.length;
+        return switch (ptype.bits()) {
+            case 8 -> {
+                byte[] out = new byte[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = (byte) values[i];
+                }
+                yield out;
+            }
+            case 16 -> {
+                short[] out = new short[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = (short) values[i];
+                }
+                yield out;
+            }
+            case 32 -> {
+                int[] out = new int[n];
+                for (int i = 0; i < n; i++) {
+                    out[i] = (int) values[i];
+                }
+                yield out;
+            }
+            default -> values;
+        };
     }
 
     static Stream<Arguments> u32Widths() {
