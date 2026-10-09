@@ -495,20 +495,4 @@ public record ArrayStats(
     public boolean hasDistinctCount() {
         return distinctCount >= 0;
     }
-
-    /// @return whether [#mostFrequentBits()] + [#topFrequency()] were computed
-    public boolean hasMostFrequent() {
-        return topFrequency > 0;
-    }
-
-    /// Validates that distinct count was requested and throws if missing.
-    ///
-    /// @param requester encoding id used in the error message
-    /// @return the distinct value count
-    public long requireDistinctCount(EncodingId requester) {
-        if (!hasDistinctCount()) {
-            throw new VortexException(requester, "ArrayStats.distinctCount not computed");
-        }
-        return distinctCount;
-    }
 }
