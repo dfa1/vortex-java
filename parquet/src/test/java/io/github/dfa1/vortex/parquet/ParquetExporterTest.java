@@ -306,7 +306,7 @@ class ParquetExporterTest {
                     List.of(new DType.Primitive(PType.I64, false), new DType.Utf8(false)),
                     Map.of(ColumnName.of("id"), new long[]{1L, 2L}, ColumnName.of("name"), new String[]{"a", "b"}));
             Path parquet = tmp.resolve("out.parquet");
-            ExportOptions options = ExportOptions.defaults().withColumns(List.of("id"));
+            ExportOptions options = ExportOptions.defaults().withColumns(List.of(ColumnName.of("id")));
 
             // When
             ParquetExporter.exportParquet(vortex, parquet, options);
@@ -324,7 +324,7 @@ class ParquetExporterTest {
                     List.of(ColumnName.of("id")), List.of(new DType.Primitive(PType.I64, false)),
                     Map.of(ColumnName.of("id"), new long[]{1L}));
             Path parquet = tmp.resolve("out.parquet");
-            ExportOptions options = ExportOptions.defaults().withColumns(List.of("does_not_exist"));
+            ExportOptions options = ExportOptions.defaults().withColumns(List.of(ColumnName.of("does_not_exist")));
 
             // When / Then
             assertThatThrownBy(() -> ParquetExporter.exportParquet(vortex, parquet, options))
@@ -392,7 +392,7 @@ class ParquetExporterTest {
                  ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk chunk = iter.next()) {
-                    MaskedArray id = chunk.column("id");
+                    MaskedArray id = chunk.column(ColumnName.of("id"));
                     LongArray idValues = (LongArray) id.inner();
                     assertThat(id.isValid(0)).isTrue();
                     assertThat(idValues.getLong(0)).isEqualTo(1L);
@@ -400,35 +400,35 @@ class ParquetExporterTest {
                     assertThat(id.isValid(2)).isTrue();
                     assertThat(idValues.getLong(2)).isEqualTo(-3L);
 
-                    ByteArray age = chunk.column("age");
+                    ByteArray age = chunk.column(ColumnName.of("age"));
                     assertThat(age.getInt(0)).isZero();
                     assertThat(age.getInt(1)).isEqualTo(255);
                     assertThat(age.getInt(2)).isEqualTo(42);
 
-                    MaskedArray score = chunk.column("score");
+                    MaskedArray score = chunk.column(ColumnName.of("score"));
                     DoubleArray scoreValues = (DoubleArray) score.inner();
                     assertThat(scoreValues.getDouble(0)).isEqualTo(1.5);
                     assertThat(score.isValid(1)).isFalse();
                     assertThat(scoreValues.getDouble(2)).isEqualTo(-2.25);
 
-                    MaskedArray name = chunk.column("name");
+                    MaskedArray name = chunk.column(ColumnName.of("name"));
                     VarBinArray nameValues = (VarBinArray) name.inner();
                     assertThat(nameValues.getString(0)).isEqualTo("Ada");
                     assertThat(name.isValid(1)).isFalse();
                     assertThat(nameValues.getString(2)).isEqualTo("Grace");
 
-                    VarBinArray blob = chunk.column("blob");
+                    VarBinArray blob = chunk.column(ColumnName.of("blob"));
                     assertThat(blob.getBytes(0)).isEqualTo(new byte[]{1, 2});
                     assertThat(blob.getBytes(1)).isEqualTo(new byte[]{});
                     assertThat(blob.getBytes(2)).isEqualTo(new byte[]{9, 9, 9});
 
-                    BoolArray active = chunk.column("active");
+                    BoolArray active = chunk.column(ColumnName.of("active"));
                     assertThat(active.getBoolean(0)).isTrue();
                     assertThat(active.getBoolean(1)).isFalse();
                     assertThat(active.getBoolean(2)).isTrue();
 
                     // bigCount is U32: row 1's raw bit pattern -1 represents 4294967295 unsigned
-                    IntArray bigCount = chunk.column("bigCount");
+                    IntArray bigCount = chunk.column(ColumnName.of("bigCount"));
                     assertThat(bigCount.getInt(0)).isZero();
                     assertThat(bigCount.getInt(1)).isEqualTo(-1);
                     assertThat(bigCount.getInt(2)).isEqualTo(12345);
@@ -459,7 +459,7 @@ class ParquetExporterTest {
                  ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk chunk = iter.next()) {
-                    assertThat(chunk.as("events", Instant.class)).containsExactlyElementsOf(instants);
+                    assertThat(chunk.as(ColumnName.of("events"), Instant.class)).containsExactlyElementsOf(instants);
                 }
             }
         }

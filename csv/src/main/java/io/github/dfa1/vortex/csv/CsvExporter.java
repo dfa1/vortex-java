@@ -82,13 +82,11 @@ public final class CsvExporter {
         if (!(reader.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("only struct root dtype supported for CSV export");
         }
-        List<String> colNames = options.hasProjection()
-                ? options.columns()
-                : schema.fieldNames().stream().map(ColumnName::value).toList();
+        List<ColumnName> colNames = options.hasProjection() ? options.columns() : schema.fieldNames();
         int colCount = colNames.size();
 
         if (options.writeHeader()) {
-            csvWriter.writeRecord(colNames);
+            csvWriter.writeRecord(colNames.stream().map(ColumnName::value).toList());
         }
 
         ProgressListener progress = options.progressListener();
@@ -107,7 +105,7 @@ public final class CsvExporter {
         }
     }
 
-    private static void writeChunk(Chunk chunk, List<String> colNames, int colCount,
+    private static void writeChunk(Chunk chunk, List<ColumnName> colNames, int colCount,
             String[] row, CsvWriter csvWriter, RowPredicate predicate,
             ProgressListener progress, long rowsTotal, long[] state) {
         Array[] arrays = new Array[colCount];

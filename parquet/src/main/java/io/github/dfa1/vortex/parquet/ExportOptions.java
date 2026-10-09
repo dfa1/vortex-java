@@ -1,12 +1,13 @@
 package io.github.dfa1.vortex.parquet;
 
 import dev.hardwood.writer.WriterConfig;
+import io.github.dfa1.vortex.core.model.ColumnName;
 
 import java.util.List;
 
 /// Options controlling Vortex → Parquet export.
 public record ExportOptions(
-        List<String> columns,
+        List<ColumnName> columns,
         ProgressListener progressListener,
         WriterConfig writerConfig
 ) {
@@ -15,7 +16,7 @@ public record ExportOptions(
     }
 
     /// Restrict export to specific top-level columns, in the given order. Empty list = all columns.
-    public ExportOptions withColumns(List<String> cols) {
+    public ExportOptions withColumns(List<ColumnName> cols) {
         return new ExportOptions(List.copyOf(cols), progressListener, writerConfig);
     }
 

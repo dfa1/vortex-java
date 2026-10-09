@@ -68,7 +68,7 @@ class SingleStructColumnScanIntegrationTest {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
                 assertThat(chunk.columns().keySet()).containsExactly(ColumnName.of("point"));
-                StructArray col = chunk.column("point");
+                StructArray col = chunk.column(ColumnName.of("point"));
                 IntArray x = (IntArray) col.field(0);
                 IntArray y = (IntArray) col.field(1);
                 assertThat(x.getInt(0)).isEqualTo(1);

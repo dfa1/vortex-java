@@ -177,10 +177,10 @@ class DictValuesPoolCompressionIntegrationTest {
 
     private static List<String> readAllStrings(VortexReader vf) {
         List<String> out = new ArrayList<>();
-        try (var iter = vf.scan(ScanOptions.columns("desc"))) {
+        try (var iter = vf.scan(ScanOptions.columns(ColumnName.of("desc")))) {
             while (iter.hasNext()) {
                 try (var chunk = iter.next()) {
-                    Array col = chunk.column("desc");
+                    Array col = chunk.column(ColumnName.of("desc"));
                     VarBinArray strings = (VarBinArray) col;
                     long n = strings.length();
                     for (long i = 0; i < n; i++) {

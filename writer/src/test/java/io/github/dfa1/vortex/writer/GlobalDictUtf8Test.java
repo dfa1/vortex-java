@@ -360,7 +360,7 @@ class GlobalDictUtf8Test {
         var collected = new ArrayList<String>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
+                Array arr = c.column(ColumnName.of(col));
                 MaskedArray masked = arr instanceof MaskedArray m ? m : null;
                 VarBinArray vb = (VarBinArray) (masked != null ? masked.inner() : arr);
                 for (long i = 0; i < vb.length(); i++) {

@@ -63,7 +63,7 @@ class ColumnZoneStatsTest {
     private static List<ArrayStats> zoneStats(Path file, String column) throws IOException {
         try (VortexReader vf = VortexReader.open(file, registry());
              var iter = vf.scan(new ScanOptions(List.of(), null, ScanOptions.NO_LIMIT))) {
-            return iter.columnZoneStats(column);
+            return iter.columnZoneStats(ColumnName.of(column));
         }
     }
 
@@ -143,7 +143,7 @@ class ColumnZoneStatsTest {
         List<Zone> result;
         try (VortexReader vf = VortexReader.open(file, registry());
              var iter = vf.scan(ScanOptions.all())) {
-            result = iter.columnZones("id");
+            result = iter.columnZones(ColumnName.of("id"));
         }
 
         // Then
@@ -162,7 +162,7 @@ class ColumnZoneStatsTest {
         List<Zone> result;
         try (VortexReader vf = VortexReader.open(file, registry());
              var iter = vf.scan(ScanOptions.all())) {
-            result = iter.columnZones("missing");
+            result = iter.columnZones(ColumnName.of("missing"));
         }
 
         // Then

@@ -40,7 +40,7 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
      var iter = vf.scan(ScanOptions.all())) {
     while (iter.hasNext()) {
         try (Chunk chunk = iter.next()) {
-            LongArray ts = chunk.column("timestamp");
+            LongArray ts = chunk.column(ColumnName.of("timestamp"));
             for (long i = 0; i < ts.length(); i++) {
                 System.out.println(ts.getLong(i));
             }
@@ -68,10 +68,10 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 
 ```java
 DType.Struct schema = DType.structBuilder()
-        .field("timestamp", DType.I64)
-        .field("symbol",    DType.UTF8)
-        .field("price",     DType.F64)
-        .field("volume",    DType.I64.asNullable())     // boxed Long[] → nullable
+        .field(ColumnName.of("timestamp"), DType.I64)
+        .field(ColumnName.of("symbol"),    DType.UTF8)
+        .field(ColumnName.of("price"),     DType.F64)
+        .field(ColumnName.of("volume"),    DType.I64.asNullable())     // boxed Long[] → nullable
         .build();
 
 try (var ch = FileChannel.open(Path.of("data/example.vortex"),

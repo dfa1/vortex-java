@@ -91,8 +91,8 @@ class AggregatePushDownTest {
 
         // And the literal values equal what the stats say (no data was decoded to produce them)
         try (VortexReader reader = VortexReader.open(file)) {
-            VortexAggregates.Summary low = VortexAggregates.of(reader, "low");
-            VortexAggregates.Summary high = VortexAggregates.of(reader, "high");
+            VortexAggregates.Summary low = VortexAggregates.of(reader, ColumnName.of("low"));
+            VortexAggregates.Summary high = VortexAggregates.of(reader, ColumnName.of("high"));
             assertThat(ohlcRow.get(0).getValueAs(Double.class)).isEqualTo(((Number) low.min()).doubleValue());
             assertThat(ohlcRow.get(1).getValueAs(Double.class)).isEqualTo(((Number) high.max()).doubleValue());
             assertThat(ohlcRow.get(2).getValueAs(Long.class)).isEqualTo((long) ROWS);
@@ -107,7 +107,7 @@ class AggregatePushDownTest {
         // with globalDict=true, which — a separate, pre-existing gap — carries no zone-map min/max
         // at all, so it would abandon regardless of this fix.
         Path stringsFile = localTmp.resolve("strings.vortex");
-        DType.Struct stringsSchema = DType.structBuilder().field("symbol", DType.UTF8).build();
+        DType.Struct stringsSchema = DType.structBuilder().field(ColumnName.of("symbol"), DType.UTF8).build();
         WriteOptions stringsOpts = new WriteOptions(true, 0.90, 0, false, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
         try (var ch = FileChannel.open(stringsFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, stringsSchema, stringsOpts)) {
@@ -180,8 +180,8 @@ class AggregatePushDownTest {
         // And the folded sums equal what ZoneReducer computes — exact Long for volume (not widened
         // to Double), Double for low
         try (VortexReader reader = VortexReader.open(file)) {
-            Number volumeSum = VortexAggregates.of(reader, "volume").sum();
-            Number lowSum = VortexAggregates.of(reader, "low").sum();
+            Number volumeSum = VortexAggregates.of(reader, ColumnName.of("volume")).sum();
+            Number lowSum = VortexAggregates.of(reader, ColumnName.of("low")).sum();
             assertThat(volumeSum).isInstanceOf(Long.class);
             assertThat(sumRow.get(0).getValueAs(Long.class)).isEqualTo(volumeSum.longValue());
             assertThat(sumRow.get(1).getValueAs(Double.class)).isEqualTo(lowSum.doubleValue());
@@ -226,8 +226,8 @@ class AggregatePushDownTest {
             // Then the plan touched no table scan and the values match the zone-map stats
             assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan").doesNotContain("Aggregate");
             try (VortexReader reader = VortexReader.open(file)) {
-                assertThat(lo).isEqualTo(((Number) VortexAggregates.of(reader, "low").min()).doubleValue());
-                assertThat(hi).isEqualTo(((Number) VortexAggregates.of(reader, "high").max()).doubleValue());
+                assertThat(lo).isEqualTo(((Number) VortexAggregates.of(reader, ColumnName.of("low")).min()).doubleValue());
+                assertThat(hi).isEqualTo(((Number) VortexAggregates.of(reader, ColumnName.of("high")).max()).doubleValue());
             }
             assertThat(c).isEqualTo(ROWS);
         }
@@ -287,7 +287,7 @@ class AggregatePushDownTest {
                 avg = rs.getDouble("a");
             }
             try (VortexReader reader = VortexReader.open(file)) {
-                double sum = VortexAggregates.of(reader, "low").sum().doubleValue();
+                double sum = VortexAggregates.of(reader, ColumnName.of("low")).sum().doubleValue();
                 assertThat(avg).isEqualTo(sum / ROWS);
             }
         }

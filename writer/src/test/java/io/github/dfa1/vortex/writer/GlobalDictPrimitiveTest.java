@@ -338,10 +338,10 @@ class GlobalDictPrimitiveTest {
         // When — I16 now encodes via the cascade (a ShortArray view), not a dict
         short[] result;
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("v"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("v")))) {
             var out = new java.util.ArrayList<Short>();
             iter.forEachRemaining(c -> {
-                io.github.dfa1.vortex.reader.array.ShortArray arr = c.column("v");
+                io.github.dfa1.vortex.reader.array.ShortArray arr = c.column(ColumnName.of("v"));
                 for (long i = 0; i < arr.length(); i++) {
                     out.add(arr.getShort(i));
                 }
@@ -507,7 +507,7 @@ class GlobalDictPrimitiveTest {
         var collected = new ArrayList<Long>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
+                Array arr = c.column(ColumnName.of(col));
                 MaskedArray masked = arr instanceof MaskedArray m ? m : null;
                 LongArray la = (LongArray) (masked != null ? masked.inner() : arr);
                 for (long i = 0; i < la.length(); i++) {

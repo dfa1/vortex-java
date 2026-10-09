@@ -75,7 +75,7 @@ class WriterZoneMapHttpPruningTest {
         // below should issue further requests.
         try (var reader = VortexHttpReader.open(FILE_URI, ReadRegistry.loadAll(), client)) {
             int afterOpen = requestCount.get();
-            try (var iter = reader.scan(ScanOptions.all().withFilter(RowFilter.gt("v", 1000L)))) {
+            try (var iter = reader.scan(ScanOptions.all().withFilter(RowFilter.gt(ColumnName.of("v"), 1000L)))) {
                 assertThat(iter.hasNext()).isFalse();
             }
 

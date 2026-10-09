@@ -4,6 +4,7 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -211,10 +212,10 @@ class RleF64InteropIntegrationTest {
 
     private static double[] readDoubleColumn(Path file) throws IOException {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(ScanOptions.columns("v"))) {
+             var iter = vf.scan(ScanOptions.columns(ColumnName.of("v")))) {
             var out = new ArrayList<Double>();
             iter.forEachRemaining(c -> {
-                DoubleArray arr = c.column("v");
+                DoubleArray arr = c.column(ColumnName.of("v"));
                 for (long i = 0; i < arr.length(); i++) {
                     out.add(arr.getDouble(i));
                 }
@@ -225,10 +226,10 @@ class RleF64InteropIntegrationTest {
 
     private static double[] readDoubleColumnUnwrapped(Path file) throws IOException {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(ScanOptions.columns("v"))) {
+             var iter = vf.scan(ScanOptions.columns(ColumnName.of("v")))) {
             var out = new ArrayList<Double>();
             iter.forEachRemaining(c -> {
-                Array a = c.column("v");
+                Array a = c.column(ColumnName.of("v"));
                 DoubleArray arr = (DoubleArray) (a instanceof MaskedArray m ? m.inner() : a);
                 for (long i = 0; i < arr.length(); i++) {
                     out.add(arr.getDouble(i));
@@ -240,10 +241,10 @@ class RleF64InteropIntegrationTest {
 
     private static float[] readFloatColumn(Path file) throws IOException {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(ScanOptions.columns("v"))) {
+             var iter = vf.scan(ScanOptions.columns(ColumnName.of("v")))) {
             var out = new ArrayList<Float>();
             iter.forEachRemaining(c -> {
-                FloatArray arr = c.column("v");
+                FloatArray arr = c.column(ColumnName.of("v"));
                 for (long i = 0; i < arr.length(); i++) {
                     out.add(arr.getFloat(i));
                 }

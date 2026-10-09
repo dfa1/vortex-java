@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
@@ -211,8 +212,8 @@ class FilterCommandTest {
         // Given the null-test predicate variants — the CLI grammar never produces them, but
         // columnPredicate must handle them for switch exhaustiveness over Predicate
         // When
-        RowPredicate isNull = FilterCommand.columnPredicate("c", new Predicate.IsNull());
-        RowPredicate isNotNull = FilterCommand.columnPredicate("c", new Predicate.IsNotNull());
+        RowPredicate isNull = FilterCommand.columnPredicate(ColumnName.of("c"), new Predicate.IsNull());
+        RowPredicate isNotNull = FilterCommand.columnPredicate(ColumnName.of("c"), new Predicate.IsNotNull());
 
         // Then — each compiles to a usable per-row test
         assertThat(isNull).isNotNull();
@@ -224,7 +225,7 @@ class FilterCommandTest {
     void columnPredicate_compositeAndRangeLeaves_throw(Predicate predicate) {
         // Given a composite or range predicate the CLI cannot express
         // When / Then — columnPredicate rejects it rather than silently mishandling
-        assertThatThrownBy(() -> FilterCommand.columnPredicate("c", predicate))
+        assertThatThrownBy(() -> FilterCommand.columnPredicate(ColumnName.of("c"), predicate))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("not supported on the command line");
     }

@@ -22,7 +22,7 @@ class ScanOptionsTest {
     @Test
     void withColumns_setsProjection() {
         // Given / When
-        ScanOptions sut = ScanOptions.all().withColumns("price", "qty");
+        ScanOptions sut = ScanOptions.all().withColumns(ColumnName.of("price"), ColumnName.of("qty"));
 
         // Then
         assertThat(sut.columns()).containsExactly(ColumnName.of("price"), ColumnName.of("qty"));
@@ -33,7 +33,7 @@ class ScanOptionsTest {
     @Test
     void withFilter_setsFilter() {
         // Given
-        RowFilter filter = RowFilter.gte("price", 100);
+        RowFilter filter = RowFilter.gte(ColumnName.of("price"), 100);
 
         // When
         ScanOptions sut = ScanOptions.all().withFilter(filter);
@@ -47,9 +47,9 @@ class ScanOptionsTest {
     void fluent_chainingPreservesAllFields() {
         // Given / When
         ScanOptions sut = ScanOptions.all()
-                                  .withColumns("price", "qty")
+                                  .withColumns(ColumnName.of("price"), ColumnName.of("qty"))
                                   .withLimit(10)
-                                  .withFilter(RowFilter.gte("price", 50));
+                                  .withFilter(RowFilter.gte(ColumnName.of("price"), 50));
 
         // Then
         assertThat(sut.columns()).containsExactly(ColumnName.of("price"), ColumnName.of("qty"));
@@ -63,7 +63,7 @@ class ScanOptionsTest {
         ScanOptions original = ScanOptions.all();
 
         // When
-        original.withLimit(5).withColumns("x");
+        original.withLimit(5).withColumns(ColumnName.of("x"));
 
         // Then
         assertThat(original.limit()).isEqualTo(ScanOptions.NO_LIMIT);

@@ -217,7 +217,7 @@ public record InspectorTree(
 
     private static List<Zone> columnZones(VortexHandle handle, String column) {
         try (ScanIterator scan = handle.scan(ScanOptions.all())) {
-            return scan.columnZones(column);
+            return scan.columnZones(ColumnName.of(column));
         }
     }
 

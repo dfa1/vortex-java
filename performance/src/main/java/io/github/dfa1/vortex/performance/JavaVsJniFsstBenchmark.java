@@ -184,10 +184,10 @@ public class JavaVsJniFsstBenchmark {
     public long javaFsstDecode() throws IOException {
         long[] sum = {0L};
         try (VortexReader vf = VortexReader.open(javaReadFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("line"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("line")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    VarBinArray line = c.column("line");
+                    VarBinArray line = c.column(ColumnName.of("line"));
                     line.forEachByteLength(v -> sum[0] += v);
                 }
             }
@@ -204,10 +204,10 @@ public class JavaVsJniFsstBenchmark {
     public long javaFsstDecodeStrings() throws IOException {
         long[] sum = {0L};
         try (VortexReader vf = VortexReader.open(javaReadFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("line"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("line")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    VarBinArray line = c.column("line");
+                    VarBinArray line = c.column(ColumnName.of("line"));
                     long rows = c.rowCount();
                     for (long i = 0; i < rows; i++) {
                         sum[0] += line.getBytes(i).length;

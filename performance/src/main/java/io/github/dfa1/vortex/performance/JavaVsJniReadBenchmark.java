@@ -297,10 +297,10 @@ public class JavaVsJniReadBenchmark {
     public long javaReadCascading() throws IOException {
         long sum = 0L;
         try (VortexReader vf = VortexReader.open(cascadingFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("volume"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("volume")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    LongArray volume = c.column("volume");
+                    LongArray volume = c.column(ColumnName.of("volume"));
                     sum += volume.fold(0L, Long::sum);
                 }
             }
@@ -313,10 +313,10 @@ public class JavaVsJniReadBenchmark {
     public long javaReadVolume() throws IOException {
         long sum = 0L;
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("volume"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("volume")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    LongArray volume = c.column("volume");
+                    LongArray volume = c.column(ColumnName.of("volume"));
                     sum += volume.fold(0L, Long::sum);
                 }
             }
@@ -329,10 +329,10 @@ public class JavaVsJniReadBenchmark {
     public double javaReadClose() throws IOException {
         double sum = 0.0;
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("close"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("close")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    DoubleArray close = c.column("close");
+                    DoubleArray close = c.column(ColumnName.of("close"));
                     sum += close.fold(0.0, Double::sum);
                 }
             }
@@ -345,10 +345,10 @@ public class JavaVsJniReadBenchmark {
     public long javaReadSymbol() throws IOException {
         long[] sum = {0L};
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("symbol"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("symbol")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    VarBinArray symbol = c.column("symbol");
+                    VarBinArray symbol = c.column(ColumnName.of("symbol"));
                     symbol.forEachByteLength(v -> sum[0] += v);
                 }
             }
@@ -387,10 +387,10 @@ public class JavaVsJniReadBenchmark {
         long taken = 0L;
         try (VortexReader vf = VortexReader.open(benchFile, registry);
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all()
-                             .withColumns("volume").withLimit(limit))) {
+                             .withColumns(ColumnName.of("volume")).withLimit(limit))) {
             while (iter.hasNext() && taken < limit) {
                 try (Chunk c = iter.next()) {
-                    LongArray volume = c.column("volume");
+                    LongArray volume = c.column(ColumnName.of("volume"));
                     long take = Math.min(volume.length(), limit - taken);
                     for (long i = 0; i < take; i++) {
                         sum += volume.getLong(i);

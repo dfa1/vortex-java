@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.integration;
 import dev.hardwood.InputFile;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
@@ -117,7 +118,7 @@ class ParquetImportIntegrationTest {
              ScanIterator iter = reader.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk first = iter.next()) {
-                MaskedArray col = first.column("c_customer_sk");
+                MaskedArray col = first.column(ColumnName.of("c_customer_sk"));
                 LongArray colValues = (LongArray) col.inner();
                 assertThat(colValues.getLong(0)).isEqualTo(100L);
                 assertThat(colValues.getLong(1)).isEqualTo(99L);
@@ -142,7 +143,7 @@ class ParquetImportIntegrationTest {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk first = iter.next()) {
                 // Nullable Utf8 decodes as MaskedArray (validity + VarBin values); rows 0-2 are non-null.
-                MaskedArray col = first.column("c_first_name");
+                MaskedArray col = first.column(ColumnName.of("c_first_name"));
                 VarBinArray values = (VarBinArray) col.inner();
                 assertThat(values.getString(0)).isEqualTo("Jeannette");
                 assertThat(values.getString(1)).isEqualTo("Austin");

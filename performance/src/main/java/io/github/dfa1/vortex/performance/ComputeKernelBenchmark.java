@@ -165,13 +165,13 @@ public class ComputeKernelBenchmark {
         }
 
         for (int k = 0; k < reader.chunkCount(); k++) {
-            Chunk decoded = reader.decodeChunk(k, COLUMNS);
+            Chunk decoded = reader.decodeChunk(k, COLUMNS.stream().map(ColumnName::of).toList());
             chunks.add(decoded);
 
-            Array priceArr = decoded.column("price");
-            Array measureArr = decoded.column("measure");
-            Array categoryArr = decoded.column("category");
-            Array plainArr = decoded.column("plain");
+            Array priceArr = decoded.column(ColumnName.of("price"));
+            Array measureArr = decoded.column(ColumnName.of("measure"));
+            Array categoryArr = decoded.column(ColumnName.of("category"));
+            Array plainArr = decoded.column(ColumnName.of("plain"));
 
             if (k == 0) {
                 System.out.printf("[ComputeKernelBenchmark] decoded column types:%n");
@@ -255,7 +255,7 @@ public class ComputeKernelBenchmark {
     }
 
     /// Fused dict-filtered multi-column aggregate: per chunk,
-    /// [Compute#filteredAggregate(Chunk, RowFilter, String)] evaluates `category == 7` as a whole
+    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)] evaluates `category == 7` as a whole
     /// [RowFilter] and folds `measure`'s `SUM` / `MIN` / `MAX` / non-null count over the selected
     /// rows — the kernel behind the Calcite boundary-chunk aggregate push-down, on the same
     /// dict-filtered workload as [#fusedFilteredSumDict()]. Folds the selected count and sum into
@@ -275,7 +275,7 @@ public class ComputeKernelBenchmark {
         long acc = 0;
         for (Chunk chunk : chunks) {
             FilteredAggregate aggregate = Compute.filteredAggregate(
-                    chunk, RowFilter.eq("category", CATEGORY_VALUE), "measure");
+                    chunk, RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE), ColumnName.of("measure"));
             acc += aggregate.selectedRows() + aggregate.sum().longValue();
         }
         return acc;
@@ -283,7 +283,7 @@ public class ComputeKernelBenchmark {
 
     /// ADR 0019 baseline, lever 1 — multi-aggregate over one filter: `SUM`/`MIN`(measure) and
     /// `SUM`(plain) under the same single-leaf `category == 7` filter, expressed the only way the
-    /// current API allows — one [Compute#filteredAggregate(Chunk, RowFilter, String)] call PER
+    /// current API allows — one [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)] call PER
     /// aggregate column, so the filter column is re-scanned once per aggregate. The transducer
     /// façade folds every aggregate from one scan; this method is the number it must beat.
     ///
@@ -295,9 +295,9 @@ public class ComputeKernelBenchmark {
     public long fusedFilteredAggregateTwoAggregates() {
         long acc = 0;
         for (Chunk chunk : chunks) {
-            RowFilter filter = RowFilter.eq("category", CATEGORY_VALUE);
-            FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, "measure");
-            FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, "plain");
+            RowFilter filter = RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE);
+            FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, ColumnName.of("measure"));
+            FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, ColumnName.of("plain"));
             acc += measure.selectedRows() + measure.sum().longValue()
                     + ((Long) measure.min()).longValue() + plain.sum().longValue();
         }
@@ -322,10 +322,10 @@ public class ComputeKernelBenchmark {
     public long fusedFilteredAggregateMulti() {
         long acc = 0;
         for (Chunk chunk : chunks) {
-            RowFilter filter = RowFilter.eq("category", CATEGORY_VALUE)
-                    .and(RowFilter.gt("price", PRICE_THRESHOLD));
-            FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, "measure");
-            FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, "plain");
+            RowFilter filter = RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE)
+                    .and(RowFilter.gt(ColumnName.of("price"), PRICE_THRESHOLD));
+            FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, ColumnName.of("measure"));
+            FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, ColumnName.of("plain"));
             acc += measure.selectedRows() + measure.sum().longValue() + plain.sum().longValue();
         }
         return acc;

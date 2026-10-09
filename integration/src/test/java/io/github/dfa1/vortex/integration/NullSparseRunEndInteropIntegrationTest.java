@@ -4,6 +4,7 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -228,7 +229,7 @@ class NullSparseRunEndInteropIntegrationTest {
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
                 var iter = reader.scan(ScanOptions.all())) {
             iter.forEachRemaining(chunk -> {
-                Array col = chunk.column("v");
+                Array col = chunk.column(ColumnName.of("v"));
                 rowCount[0] += col.length();
                 if (col instanceof NullArray) {
                     nullCount[0] += col.length();
@@ -309,7 +310,7 @@ class NullSparseRunEndInteropIntegrationTest {
     private static Class<?> carrier(Path file) throws IOException {
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = reader.scan(ScanOptions.all())) {
-            MaskedArray masked = iter.next().column("v");
+            MaskedArray masked = iter.next().column(ColumnName.of("v"));
             return masked.inner().getClass();
         }
     }
@@ -331,7 +332,7 @@ class NullSparseRunEndInteropIntegrationTest {
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = reader.scan(ScanOptions.all())) {
             iter.forEachRemaining(chunk -> {
-                MaskedArray masked = chunk.column("v");
+                MaskedArray masked = chunk.column(ColumnName.of("v"));
                 Array inner = masked.inner();
                 for (long i = 0; i < masked.length(); i++) {
                     consumer.accept(masked, inner, i);

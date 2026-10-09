@@ -85,8 +85,8 @@ import java.util.stream.Collectors;
 /// Usage:
 /// ```java
 /// var schema = DType.structBuilder()
-///         .field("id", DType.I64)
-///         .field("value", DType.F64)
+///         .field(ColumnName.of("id"), DType.I64)
+///         .field(ColumnName.of("value"), DType.F64)
 ///         .build();
 /// try (var channel = FileChannel.open(path, CREATE, WRITE);
 ///      var writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {

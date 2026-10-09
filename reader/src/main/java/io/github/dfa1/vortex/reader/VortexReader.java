@@ -199,24 +199,24 @@ public final class VortexReader implements VortexHandle {
     /// @return a self-contained [Chunk] holding the decoded columns for that chunk
     /// @throws VortexException if `chunkIndex` is out of bounds or a name in `columns` is not a
     ///         column of this file
-    public Chunk decodeChunk(int chunkIndex, List<String> columns) {
-        List<String> requested = List.copyOf(columns);
+    public Chunk decodeChunk(int chunkIndex, List<ColumnName> columns) {
+        List<ColumnName> requested = List.copyOf(columns);
         validateColumns(requested);
         ScanOptions options = requested.isEmpty()
                 ? ScanOptions.all()
-                : ScanOptions.columns(requested.toArray(new String[0]));
+                : ScanOptions.columns(requested.toArray(new ColumnName[0]));
         try (ScanIterator iter = new ScanIterator(this, options)) {
             return iter.decodeChunkAt(chunkIndex);
         }
     }
 
-    private void validateColumns(List<String> columns) {
+    private void validateColumns(List<ColumnName> columns) {
         if (columns.isEmpty() || !(dtype instanceof DType.Struct struct)) {
             return;
         }
         List<ColumnName> known = struct.fieldNames();
-        for (String name : columns) {
-            if (!known.contains(ColumnName.of(name))) {
+        for (ColumnName name : columns) {
+            if (!known.contains(name)) {
                 throw new VortexException("decodeChunk: unknown column: " + name);
             }
         }
@@ -226,7 +226,7 @@ public final class VortexReader implements VortexHandle {
     /// Returns an empty map if the root layout is not a struct.
     /// Columns with no embedded stats return [ArrayStats#empty()].
     ///
-    /// Folds the column's per-zone statistics ([ScanIterator#columnZoneStats(String)]), which for a
+    /// Folds the column's per-zone statistics ([ScanIterator#columnZoneStats(ColumnName)]), which for a
     /// global-dictionary column is the only place its values' min/max live — the flat nodes under
     /// the zone map hold dictionary codes, whose own min/max describe the codes, not the values.
     public Map<ColumnName, ArrayStats> columnStats() {
@@ -237,11 +237,11 @@ public final class VortexReader implements VortexHandle {
         try (ScanIterator iter = new ScanIterator(this, ScanOptions.all())) {
             for (ColumnName name : schema.fieldNames()) {
                 DType column = schema.fieldTypes().get(schema.fieldNames().indexOf(name));
-                ArrayStats stats = aggregateStats(iter.columnZoneStats(name.value()), column);
+                ArrayStats stats = aggregateStats(iter.columnZoneStats(name), column);
                 if (stats.min() == null && stats.max() == null) {
                     // A string zone map holds only bounds (Rust's bounded_max/bounded_min), which
                     // are not exact: take min/max from the chunks' own array stats instead.
-                    ArrayStats exact = aggregateStats(iter.chunkStats(name.value()), column);
+                    ArrayStats exact = aggregateStats(iter.chunkStats(name), column);
                     stats = new ArrayStats(exact.min(), exact.max(), stats.sum(), stats.trueCount(),
                             stats.nullCount(), stats.isSorted(), stats.isStrictSorted());
                 }

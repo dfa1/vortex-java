@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -49,8 +50,8 @@ class ComputeTest {
         // When the chunk or the filter is null
         // Then the facade fails fast
         assertThatNullPointerException()
-                .isThrownBy(() -> Compute.filteredAggregate(null, RowFilter.gt("f", 0L), "v"));
+                .isThrownBy(() -> Compute.filteredAggregate(null, RowFilter.gt(ColumnName.of("f"), 0L), ColumnName.of("v")));
         assertThatNullPointerException()
-                .isThrownBy(() -> Compute.filteredAggregate(chunk, null, "v"));
+                .isThrownBy(() -> Compute.filteredAggregate(chunk, null, ColumnName.of("v")));
     }
 }

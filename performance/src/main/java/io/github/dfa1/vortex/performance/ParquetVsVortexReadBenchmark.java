@@ -6,6 +6,7 @@ import dev.hardwood.reader.ColumnReaders;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnProjection;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -213,7 +214,7 @@ public class ParquetVsVortexReadBenchmark {
     public double vortexRead() throws IOException {
         double sum = 0.0;
         try (VortexReader vr = VortexReader.open(vortexFile, registry);
-             var iter = vr.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("trip_distance"))) {
+             var iter = vr.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("trip_distance")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     DoubleArray col = values(c, "trip_distance");
@@ -232,7 +233,7 @@ public class ParquetVsVortexReadBenchmark {
         double fareSum = 0.0;
         long idSum = 0L;
         try (VortexReader vr = VortexReader.open(vortexFile, registry);
-             var iter = vr.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("fare_amount", "PULocationID"))) {
+             var iter = vr.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("fare_amount"), ColumnName.of("PULocationID")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     DoubleArray fare = values(c, "fare_amount");
@@ -249,6 +250,6 @@ public class ParquetVsVortexReadBenchmark {
     // Rust writes it): fold the values under the mask, as the Parquet batch path folds its arrays.
     @SuppressWarnings("unchecked")
     private static <T extends Array> T values(Chunk chunk, String column) {
-        return (T) MaskedArray.unwrap(chunk.column(column)).inner();
+        return (T) MaskedArray.unwrap(chunk.column(ColumnName.of(column))).inner();
     }
 }

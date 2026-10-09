@@ -203,15 +203,15 @@ Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedC
 
 ### `ScanOptions` (`io.github.dfa1.vortex.reader.ScanOptions`)
 
-Record: `(List<ColumnName> columns, RowFilter rowFilter, long limit)` (built via `columns(String...)`). Empty `columns` = read all. `NO_LIMIT` =
+Record: `(List<ColumnName> columns, RowFilter rowFilter, long limit)` (built via `columns(ColumnName...)`). Empty `columns` = read all. `NO_LIMIT` =
 `Long.MAX_VALUE`.
 
 | Factory / builder                                   | Effect                           |
 |-----------------------------------------------------|----------------------------------|
 | `ScanOptions.all()`                                 | All columns, no filter, no limit |
-| `ScanOptions.columns(String... names)`              | Project columns                  |
+| `ScanOptions.columns(ColumnName... names)`         | Project columns                  |
 | `ScanOptions.limit(long n)`                         | Limit rows                       |
-| `.withColumns(String... names)`                     | Project columns (builder)        |
+| `.withColumns(ColumnName... names)`                | Project columns (builder)        |
 | `.withFilter(RowFilter)`                            | Add zone-map filter              |
 | `.withLimit(long n)`                                | Cap rows                         |
 | `.hasProjection()` / `.hasFilter()` / `.hasLimit()` | Predicates                       |
@@ -246,8 +246,8 @@ Implements `Iterator<Chunk>` and `AutoCloseable`. Drives one scan.
 | `next()`               | Returns a fresh `Chunk` whose arena the caller closes. Throws `IllegalStateException` if a prior `Chunk` is still open, or `NoSuchElementException` if exhausted. |
 | `forEachRemaining(Consumer)` | Overridden to wrap each `next()` in try-with-resources so chunks auto-close.   |
 | `close()`              | Releases iterator state and closes any chunk still open.                             |
-| `columnZoneStats(String)` | One `ArrayStats` per zone-map row; falls back to per-chunk stats when the column has no zone map. |
-| `columnZones(String)`  | One `Zone(firstRow, rowCount, stats)` per zone-map row, placed on the column's rows; empty when there is no usable zone map. |
+| `columnZoneStats(ColumnName)` | One `ArrayStats` per zone-map row; falls back to per-chunk stats when the column has no zone map. |
+| `columnZones(ColumnName)` | One `Zone(firstRow, rowCount, stats)` per zone-map row, placed on the column's rows; empty when there is no usable zone map. |
 
 Both return exact statistics only. Rust records string and binary zones as `vortex.bounded_max`/`vortex.bounded_min`, truncated bounds rather than exact values: filtered scans prune on them, but these methods leave `min`/`max` absent for such columns.
 
@@ -260,16 +260,14 @@ check (`IllegalStateException`).
 
 Columns are stored as one order-preserving map keyed by the validated [`ColumnName`]; each
 entry is a `Chunk.Column(Array array, DType dtype)` carrier, so a column's data and type can
-never desync. `column(String)` is boundary sugar: the name is wrapped in a `ColumnName` (a
-policy-invalid name fails fast — it could never match a certified column).
+never desync.
 
 | Method                                      | Notes                                                    |
 |---------------------------------------------|----------------------------------------------------------|
 | `rowCount()`                                | Rows in this chunk                                       |
 | `columns()`                                 | `SequencedMap<ColumnName, Chunk.Column>`, schema order, unmodifiable |
-| `<T extends Array> column(String name)`     | Typed column lookup; throws `VortexException` if absent  |
-| `<T extends Array> column(ColumnName name)` | Same, for callers that validated early                   |
-| `as(String name, Class<T> domainType)`      | Extension column → typed `List<T>`                       |
+| `<T extends Array> column(ColumnName name)` | Typed column lookup; throws `VortexException` if absent  |
+| `as(ColumnName name, Class<T> domainType)` | Extension column → typed `List<T>`                       |
 | `isClosed()`                                | Whether `close()` has run                                |
 | `close()`                                   | Releases the chunk's arena. Idempotent.                  |
 
@@ -529,7 +527,7 @@ encoding policy.
 | Factory / builder                 | Notes                                               |
 |------------------------------------|-----------------------------------------------------|
 | `ExportOptions.defaults()`        | No projection, Hardwood's `WriterConfig.defaults()` |
-| `.withColumns(List<String>)`      | Project columns during export                       |
+| `.withColumns(List<ColumnName>)` | Project columns during export                       |
 | `.withProgressListener(listener)` | Progress callbacks                                  |
 | `.withWriterConfig(WriterConfig)` | Override Hardwood writer configuration              |
 

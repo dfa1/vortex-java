@@ -173,7 +173,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                assertThat(chunk.as("birthdays", java.time.LocalDate.class))
+                assertThat(chunk.as(ColumnName.of("birthdays"), java.time.LocalDate.class))
                         .containsExactlyElementsOf(dates);
             }
         }
@@ -207,7 +207,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             try (Chunk chunk = iter.next()) {
                 assertThat(chunk.rowCount()).isEqualTo(3);
-                assertThat(chunk.as("birthdays", java.time.LocalDate.class))
+                assertThat(chunk.as(ColumnName.of("birthdays"), java.time.LocalDate.class))
                         .containsExactlyElementsOf(dates);
             }
         }
@@ -275,7 +275,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                assertThat(chunk.as("clock", java.time.LocalTime.class))
+                assertThat(chunk.as(ColumnName.of("clock"), java.time.LocalTime.class))
                         .containsExactlyElementsOf(times);
             }
         }
@@ -304,7 +304,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                assertThat(chunk.as("events", java.time.Instant.class))
+                assertThat(chunk.as(ColumnName.of("events"), java.time.Instant.class))
                         .containsExactlyElementsOf(instants);
             }
         }
@@ -328,7 +328,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             try (Chunk chunk = iter.next()) {
                 // When / Then — the accessor must fail-fast, not return a wrongly-cast list
-                assertThatThrownBy(() -> chunk.as("birthdays", java.time.Instant.class))
+                assertThatThrownBy(() -> chunk.as(ColumnName.of("birthdays"), java.time.Instant.class))
                         .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                         .hasMessageContaining("decodes to LocalDate, not Instant");
             }
@@ -357,7 +357,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                assertThat(chunk.as("ids", java.util.UUID.class))
+                assertThat(chunk.as(ColumnName.of("ids"), java.util.UUID.class))
                         .containsExactlyElementsOf(ids);
             }
         }
@@ -394,7 +394,7 @@ class VortexWriterTest {
         try (var vf = VortexReader.open(cascadedFile, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.all())) {
             try (Chunk chunk = iter.next()) {
-                assertThat(chunk.as("events", java.time.Instant.class))
+                assertThat(chunk.as(ColumnName.of("events"), java.time.Instant.class))
                         .containsExactlyElementsOf(instants);
             }
         }
@@ -487,7 +487,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                LongArray idArray = chunk.column("id");
+                LongArray idArray = chunk.column(ColumnName.of("id"));
                 assertThat(idArray.length()).isEqualTo(3L);
                 assertThat(idArray.getLong(0)).isEqualTo(42L);
                 assertThat(idArray.getLong(1)).isEqualTo(100L);
@@ -514,7 +514,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                LongArray idArray = chunk.column("id");
+                LongArray idArray = chunk.column(ColumnName.of("id"));
 
                 // Then
                 assertThat(idArray.fold(0L, Long::sum)).isEqualTo(60L);
@@ -538,7 +538,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk sut = iter.next()) {
-                assertThatThrownBy(() -> sut.column("nonexistent"))
+                assertThatThrownBy(() -> sut.column(ColumnName.of("nonexistent")))
                         .hasMessageContaining("unknown column: nonexistent");
             }
         }
@@ -559,7 +559,7 @@ class VortexWriterTest {
         // Then
         var registry = ReadRegistry.loadAll();
         try (var vf = VortexReader.open(file, registry)) {
-            List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.columns("id"));
+            List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.columns(ColumnName.of("id")));
             assertThat(snapshots).hasSize(1);
             assertThat(snapshots.getFirst().columnNames()).contains("id");
             assertThat(snapshots.getFirst().columnNames()).doesNotContain("value");
@@ -615,7 +615,7 @@ class VortexWriterTest {
             try (var iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (var chunk = iter.next()) {
-                    io.github.dfa1.vortex.reader.array.MaskedArray col = chunk.column("bytes");
+                    io.github.dfa1.vortex.reader.array.MaskedArray col = chunk.column(ColumnName.of("bytes"));
                     io.github.dfa1.vortex.reader.array.VarBinArray values =
                             (io.github.dfa1.vortex.reader.array.VarBinArray) col.inner();
                     assertThat(values.getBytes(0)).isEqualTo(data[0]);
@@ -648,7 +648,7 @@ class VortexWriterTest {
             try (var iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (var chunk = iter.next()) {
-                    io.github.dfa1.vortex.reader.array.VarBinArray values = chunk.column("bytes");
+                    io.github.dfa1.vortex.reader.array.VarBinArray values = chunk.column(ColumnName.of("bytes"));
                     for (int i = 0; i < data.length; i++) {
                         assertThat(values.getBytes(i)).as("index %d", i).isEqualTo(data[i]);
                     }
@@ -684,7 +684,7 @@ class VortexWriterTest {
             try (var iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (var chunk = iter.next()) {
-                    io.github.dfa1.vortex.reader.array.MaskedArray col = chunk.column("bytes");
+                    io.github.dfa1.vortex.reader.array.MaskedArray col = chunk.column(ColumnName.of("bytes"));
                     io.github.dfa1.vortex.reader.array.VarBinArray values =
                             (io.github.dfa1.vortex.reader.array.VarBinArray) col.inner();
                     for (int i = 0; i < data.length; i++) {

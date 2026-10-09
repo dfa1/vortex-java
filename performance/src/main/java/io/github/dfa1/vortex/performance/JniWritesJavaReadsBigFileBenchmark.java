@@ -8,6 +8,7 @@ import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -183,10 +184,10 @@ public class JniWritesJavaReadsBigFileBenchmark {
     private long scanJava() throws IOException {
         long sum = 0L;
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("c0"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("c0")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    Array arr = c.column("c0");
+                    Array arr = c.column(ColumnName.of("c0"));
                     MemorySegment buf = arr.materialize(Arena.ofAuto());
                     long count = buf.byteSize() / Long.BYTES;
                     for (long i = 0; i < count; i++) {

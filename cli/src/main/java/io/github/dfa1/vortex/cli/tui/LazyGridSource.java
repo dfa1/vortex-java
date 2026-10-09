@@ -237,7 +237,7 @@ public final class LazyGridSource implements AutoCloseable {
         currentChunkIdx = chunkIdx;
         currentColumns = new Array[columns.size()];
         for (int c = 0; c < columns.size(); c++) {
-            currentColumns[c] = chunk.column(columns.get(c));
+            currentColumns[c] = chunk.column(ColumnName.of(columns.get(c)));
         }
     }
 

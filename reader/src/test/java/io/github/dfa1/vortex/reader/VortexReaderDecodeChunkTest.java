@@ -68,11 +68,11 @@ class VortexReaderDecodeChunkTest {
             // When — decode exactly that chunk in isolation
             List<Long> resultA;
             List<Long> resultB;
-            try (Chunk result = reader.decodeChunk(chunkIndex, List.of("a", "b"))) {
+            try (Chunk result = reader.decodeChunk(chunkIndex, List.of(ColumnName.of("a"), ColumnName.of("b")))) {
                 // Then — same length and same per-element values/nulls as the streamed chunk
                 assertThat(result.rowCount()).isEqualTo(CHUNK_ROWS[chunkIndex]);
-                resultA = values(result.column("a"));
-                resultB = values(result.column("b"));
+                resultA = values(result.column(ColumnName.of("a")));
+                resultB = values(result.column(ColumnName.of("b")));
             }
             assertThat(resultA).isEqualTo(streamed.get(chunkIndex).get("a"));
             assertThat(resultB).isEqualTo(streamed.get(chunkIndex).get("b"));
@@ -89,10 +89,10 @@ class VortexReaderDecodeChunkTest {
 
             // When
             List<Long> resultA;
-            try (Chunk result = reader.decodeChunk(chunkIndex, List.of("a"))) {
+            try (Chunk result = reader.decodeChunk(chunkIndex, List.of(ColumnName.of("a")))) {
                 // Then — only the projected column is present, and it matches the stream
                 assertThat(result.columns().keySet()).containsExactly(ColumnName.of("a"));
-                resultA = values(result.column("a"));
+                resultA = values(result.column(ColumnName.of("a")));
             }
             assertThat(resultA).isEqualTo(streamed.get(chunkIndex).get("a"));
         }
@@ -136,7 +136,7 @@ class VortexReaderDecodeChunkTest {
     void decodeChunk_negativeIndex_throwsVortexException(@TempDir Path tmp) throws Exception {
         // Given
         Path file = writeMultiChunkFile(tmp);
-        List<String> columns = List.of("a");
+        List<ColumnName> columns = List.of(ColumnName.of("a"));
         try (var reader = VortexReader.open(file, registry())) {
 
             // When / Then
@@ -150,7 +150,7 @@ class VortexReaderDecodeChunkTest {
     void decodeChunk_indexAtChunkCount_throwsVortexException(@TempDir Path tmp) throws Exception {
         // Given — chunkCount() is one past the last valid index
         Path file = writeMultiChunkFile(tmp);
-        List<String> columns = List.of("a");
+        List<ColumnName> columns = List.of(ColumnName.of("a"));
         try (var reader = VortexReader.open(file, registry())) {
             int oob = reader.chunkCount();
 
@@ -165,7 +165,7 @@ class VortexReaderDecodeChunkTest {
     void decodeChunk_unknownColumn_throwsVortexException(@TempDir Path tmp) throws Exception {
         // Given
         Path file = writeMultiChunkFile(tmp);
-        List<String> columns = List.of("nope");
+        List<ColumnName> columns = List.of(ColumnName.of("nope"));
         try (var reader = VortexReader.open(file, registry())) {
 
             // When / Then
@@ -180,8 +180,8 @@ class VortexReaderDecodeChunkTest {
         // Given — two separate decodes of the same chunk
         Path file = writeMultiChunkFile(tmp);
         try (var reader = VortexReader.open(file, registry())) {
-            Chunk first = reader.decodeChunk(1, List.of("a", "b"));
-            Chunk second = reader.decodeChunk(1, List.of("a", "b"));
+            Chunk first = reader.decodeChunk(1, List.of(ColumnName.of("a"), ColumnName.of("b")));
+            Chunk second = reader.decodeChunk(1, List.of(ColumnName.of("a"), ColumnName.of("b")));
 
             // When — closing the first chunk
             first.close();
@@ -189,7 +189,7 @@ class VortexReaderDecodeChunkTest {
             // Then — the second chunk is unaffected and still fully readable
             assertThat(first.isClosed()).isTrue();
             assertThat(second.isClosed()).isFalse();
-            assertThat(values(second.column("a"))).isEqualTo(List.of(12L, 13L, 14L));
+            assertThat(values(second.column(ColumnName.of("a")))).isEqualTo(List.of(12L, 13L, 14L));
             second.close();
         }
     }
@@ -204,12 +204,12 @@ class VortexReaderDecodeChunkTest {
 
             // When
             assertThat(reader.chunkCount()).isEqualTo(1);
-            try (Chunk result = reader.decodeChunk(0, List.of("a", "b"))) {
+            try (Chunk result = reader.decodeChunk(0, List.of(ColumnName.of("a"), ColumnName.of("b")))) {
 
                 // Then
                 assertThat(result.rowCount()).isEqualTo(3);
-                assertThat(values(result.column("a"))).isEqualTo(List.of(20L, 21L, 22L));
-                assertThat(values(result.column("b"))).isEqualTo(List.of(200L, 201L, 202L));
+                assertThat(values(result.column(ColumnName.of("a")))).isEqualTo(List.of(20L, 21L, 22L));
+                assertThat(values(result.column(ColumnName.of("b")))).isEqualTo(List.of(200L, 201L, 202L));
             }
         }
     }
@@ -243,23 +243,23 @@ class VortexReaderDecodeChunkTest {
             // When / Then — every chunk's shared-column slice matches the streamed slice (values,
             // nulls, and length), proving random-access decode == streaming for the shared branch.
             for (int k = 0; k < streamed.size(); k++) {
-                try (Chunk result = reader.decodeChunk(k, List.of("a", "c"))) {
+                try (Chunk result = reader.decodeChunk(k, List.of(ColumnName.of("a"), ColumnName.of("c")))) {
                     assertThat(result.rowCount()).isEqualTo(CHUNK_ROWS[k]);
-                    assertThat(values(result.column("a"))).isEqualTo(streamed.get(k).get("a"));
-                    assertThat(values(result.column("c"))).isEqualTo(streamed.get(k).get("c"));
+                    assertThat(values(result.column(ColumnName.of("a")))).isEqualTo(streamed.get(k).get("a"));
+                    assertThat(values(result.column(ColumnName.of("c")))).isEqualTo(streamed.get(k).get("c"));
                 }
             }
 
             // When — hold two chunks open at once; each decodeChunk's internal ScanIterator (and
             // its sharedArena) is already closed by the time the Chunk is handed back.
-            Chunk firstChunk = reader.decodeChunk(0, List.of("a", "c"));
-            Chunk secondChunk = reader.decodeChunk(2, List.of("a", "c"));
+            Chunk firstChunk = reader.decodeChunk(0, List.of(ColumnName.of("a"), ColumnName.of("c")));
+            Chunk secondChunk = reader.decodeChunk(2, List.of(ColumnName.of("a"), ColumnName.of("c")));
 
             // Then — reading the shared column AFTER decodeChunk returned still succeeds and is
             // correct, for the first chunk even after a second has been obtained: the Chunk owns
             // its buffers and holds no reference into any freed sharedArena.
-            List<Long> firstShared = values(firstChunk.column("c"));
-            List<Long> secondShared = values(secondChunk.column("c"));
+            List<Long> firstShared = values(firstChunk.column(ColumnName.of("c")));
+            List<Long> secondShared = values(secondChunk.column(ColumnName.of("c")));
             assertThat(firstShared).isEqualTo(streamed.get(0).get("c"));
             assertThat(secondShared).isEqualTo(streamed.get(2).get("c"));
 
@@ -303,8 +303,8 @@ class VortexReaderDecodeChunkTest {
                 var iter = reader.scan(ScanOptions.all())) {
             iter.forEachRemaining(chunk -> {
                 windowRowCounts.add(chunk.rowCount());
-                streamedA.addAll(values(chunk.column("a")));
-                streamedB.addAll(values(chunk.column("b")));
+                streamedA.addAll(values(chunk.column(ColumnName.of("a"))));
+                streamedB.addAll(values(chunk.column(ColumnName.of("b"))));
             });
         }
 
@@ -342,8 +342,8 @@ class VortexReaderDecodeChunkTest {
         try (var reader = VortexReader.open(file, registry());
                 var iter = reader.scan(ScanOptions.all())) {
             iter.forEachRemaining(chunk -> {
-                streamedA.addAll(values(chunk.column("a")));
-                io.github.dfa1.vortex.reader.array.StructArray s = chunk.column("s");
+                streamedA.addAll(values(chunk.column(ColumnName.of("a"))));
+                io.github.dfa1.vortex.reader.array.StructArray s = chunk.column(ColumnName.of("s"));
                 streamedX.addAll(fieldValues(s, 0));
                 streamedY.addAll(fieldValues(s, 1));
             });
@@ -376,8 +376,8 @@ class VortexReaderDecodeChunkTest {
                 var iter = reader.scan(ScanOptions.all())) {
             iter.forEachRemaining(chunk -> {
                 windowSizes.add(chunk.rowCount());
-                streamedA.addAll(values(chunk.column("a")));
-                Array nullCol = chunk.column("n");
+                streamedA.addAll(values(chunk.column(ColumnName.of("a"))));
+                Array nullCol = chunk.column(ColumnName.of("n"));
                 assertThat(nullCol).isInstanceOf(NullArray.class);
                 assertThat(nullCol.length()).isEqualTo(chunk.rowCount());
             });
@@ -411,7 +411,7 @@ class VortexReaderDecodeChunkTest {
         List<Map<String, List<Long>>> out = new ArrayList<>();
         try (var iter = reader.scan(ScanOptions.all())) {
             iter.forEachRemaining(chunk ->
-                    out.add(Map.of("a", values(chunk.column("a")), "b", values(chunk.column("b")))));
+                    out.add(Map.of("a", values(chunk.column(ColumnName.of("a"))), "b", values(chunk.column(ColumnName.of("b"))))));
         }
         return out;
     }
@@ -608,7 +608,7 @@ class VortexReaderDecodeChunkTest {
         List<Map<String, List<Long>>> out = new ArrayList<>();
         try (var iter = reader.scan(ScanOptions.all())) {
             iter.forEachRemaining(chunk ->
-                    out.add(Map.of("a", values(chunk.column("a")), "c", values(chunk.column("c")))));
+                    out.add(Map.of("a", values(chunk.column(ColumnName.of("a"))), "c", values(chunk.column(ColumnName.of("c"))))));
         }
         return out;
     }

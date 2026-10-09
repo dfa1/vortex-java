@@ -147,10 +147,10 @@ public sealed interface DType
     ///
     /// ```java
     /// DType.Struct schema = DType.structBuilder()
-    ///     .field("timestamp", DType.I64)
-    ///     .field("symbol",    DType.UTF8)
-    ///     .field("price",     DType.F64)
-    ///     .field("volume",    DType.I64.asNullable())
+    ///     .field(ColumnName.of("timestamp"), DType.I64)
+    ///     .field(ColumnName.of("symbol"),    DType.UTF8)
+    ///     .field(ColumnName.of("price"),     DType.F64)
+    ///     .field(ColumnName.of("volume"),    DType.I64.asNullable())
     ///     .build();
     /// ```
     ///
@@ -169,21 +169,6 @@ public sealed interface DType
         }
 
         /// Adds a named field to the struct under construction.
-        ///
-        /// Delegates to [ColumnName#of(String)], which enforces the policy: names must be
-        /// non-null and free of control characters. Blank names are wire-legal and accepted.
-        ///
-        /// @param name the field name; non-`null`, no control characters, not previously added
-        /// @param type the field type
-        /// @return this builder
-        /// @throws NullPointerException      if `name` is `null`
-        /// @throws IllegalArgumentException  if `name` contains a control character or duplicates
-        ///                                   a previously added field
-        public StructBuilder field(String name, DType type) {
-            return field(ColumnName.of(name), type);
-        }
-
-        /// Adds a named field using an already-validated [ColumnName].
         ///
         /// @param name the validated field name; must not have been previously added
         /// @param type the field type
@@ -290,8 +275,8 @@ public sealed interface DType
         /// @param name the field name to look up
         /// @return the [DType] of the named field
         /// @throws IllegalArgumentException if no field with that name exists
-        public DType field(String name) {
-            int i = fieldNames.indexOf(ColumnName.of(name));
+        public DType field(ColumnName name) {
+            int i = fieldNames.indexOf(name);
             if (i < 0) {
                 throw new IllegalArgumentException("unknown field: " + name);
             }

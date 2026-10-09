@@ -162,10 +162,10 @@ public class JavaVsJniAlpBenchmark {
     public double javaAlpDecode() throws IOException {
         double sum = 0.0;
         try (VortexReader vf = VortexReader.open(javaReadFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("price"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("price")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    DoubleArray price = c.column("price");
+                    DoubleArray price = c.column(ColumnName.of("price"));
                     sum += price.fold(0.0, Double::sum);
                 }
             }

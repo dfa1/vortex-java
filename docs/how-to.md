@@ -191,7 +191,7 @@ toggle terminal modes.
 **API:**
 
 ```java
-ScanOptions opts = ScanOptions.all().withColumns("symbol", "price");
+ScanOptions opts = ScanOptions.all().withColumns(ColumnName.of("symbol"), ColumnName.of("price"));
 
 try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
      var iter = vf.scan(opts)) {
@@ -216,7 +216,7 @@ java -jar cli/target/vortex-cli-*-all.jar select trades.vortex symbol price
 **API:**
 
 ```java
-RowFilter filter = RowFilter.gte("volume", 1_000_000);
+RowFilter filter = RowFilter.gte(ColumnName.of("volume"), 1_000_000);
 ScanOptions opts = ScanOptions.all().withFilter(filter);
 
 try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
@@ -232,8 +232,8 @@ try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
 Combine filters with `and()`:
 
 ```java
-RowFilter filter = RowFilter.gte("volume", 1_000_000)
-    .and(RowFilter.lte("price", 200.0));
+RowFilter filter = RowFilter.gte(ColumnName.of("volume"), 1_000_000)
+    .and(RowFilter.lte(ColumnName.of("price"), 200.0));
 ```
 
 For the supported predicate set and CLI operator syntax, see
@@ -339,10 +339,11 @@ ParquetExporter.exportParquet(
 Project specific columns during conversion:
 
 ```java
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.parquet.ExportOptions;
 
 ExportOptions opts = ExportOptions.defaults()
-    .withColumns(List.of("trip_distance", "fare_amount"));
+    .withColumns(List.of(ColumnName.of("trip_distance"), ColumnName.of("fare_amount")));
 
 ParquetExporter.exportParquet(Path.of("data.vortex"), Path.of("data.parquet"), opts);
 ```
@@ -561,14 +562,14 @@ try (var reader = VortexReader.open(Path.of("attrs.vortex"));
      var iter = reader.scan(ScanOptions.all())) {
     while (iter.hasNext()) {
         try (var chunk = iter.next()) {
-            MapArray map = chunk.column("attrs");
+            MapArray map = chunk.column(ColumnName.of("attrs"));
 
             // If the map itself is nullable, entries() is a MaskedArray; unwrap it first.
             var entries = map.entries() instanceof MaskedArray masked
                     ? (ListViewArray) masked.inner() : (ListViewArray) map.entries();
             StructArray entryStructs = (StructArray) entries.elements();
-            VarBinArray keys = (VarBinArray) entryStructs.field("key");
-            var values = entryStructs.field("value"); // MaskedArray, since the value type is nullable here
+            VarBinArray keys = (VarBinArray) entryStructs.field(ColumnName.of("key"));
+            var values = entryStructs.field(ColumnName.of("value")); // MaskedArray, since the value type is nullable here
             // A file written by vortex-java's own writer always emits I32 offsets/sizes; a file
             // from another producer (e.g. the Rust reference) may pick a narrower or wider integer
             // width, so switch on the concrete Array subtype there instead of casting to IntArray.

@@ -114,10 +114,10 @@ class WriterZoneMapTest {
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, numericStatsTableDtype(), 3, arena);
-                LongArray max = (LongArray) ((MaskedArray) stats.field("max")).inner();
-                LongArray min = (LongArray) ((MaskedArray) stats.field("min")).inner();
-                LongArray sum = (LongArray) ((MaskedArray) stats.field("sum")).inner();
-                LongArray nullCount = (LongArray) ((MaskedArray) stats.field("null_count")).inner();
+                LongArray max = (LongArray) ((MaskedArray) stats.field(ColumnName.of("max"))).inner();
+                LongArray min = (LongArray) ((MaskedArray) stats.field(ColumnName.of("min"))).inner();
+                LongArray sum = (LongArray) ((MaskedArray) stats.field(ColumnName.of("sum"))).inner();
+                LongArray nullCount = (LongArray) ((MaskedArray) stats.field(ColumnName.of("null_count"))).inner();
 
                 // Then min/max/sum per zone match the source data; the column is non-nullable so
                 // every zone reports zero nulls
@@ -159,8 +159,8 @@ class WriterZoneMapTest {
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, numericStatsTableDtype(), 2, arena);
-                LongArray nullCount = (LongArray) ((MaskedArray) stats.field("null_count")).inner();
-                LongArray sum = (LongArray) ((MaskedArray) stats.field("sum")).inner();
+                LongArray nullCount = (LongArray) ((MaskedArray) stats.field(ColumnName.of("null_count"))).inner();
+                LongArray sum = (LongArray) ((MaskedArray) stats.field(ColumnName.of("sum"))).inner();
 
                 // Then each zone's null count is recorded (1 and 2). Sum skips nulls (zero
                 // placeholders are sum-neutral): zone 0 = 10, zone 1 = 0
@@ -243,8 +243,8 @@ class WriterZoneMapTest {
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, numericStatsTableDtype(), 2, arena);
-                MaskedArray min = (MaskedArray) stats.field("min");
-                MaskedArray max = (MaskedArray) stats.field("max");
+                MaskedArray min = (MaskedArray) stats.field(ColumnName.of("min"));
+                MaskedArray max = (MaskedArray) stats.field(ColumnName.of("max"));
                 assertThat(min.isValid(0)).isTrue();
                 assertThat(max.isValid(0)).isTrue();
                 assertThat(((LongArray) min.inner()).getLong(0)).isEqualTo(1L);
@@ -282,8 +282,8 @@ class WriterZoneMapTest {
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats =
                         (StructArray) reader.decodeSegment(spec, utf8StatsTableDtype(), 2, arena);
-                VarBinArray max = (VarBinArray) ((MaskedArray) stats.field("max")).inner();
-                VarBinArray min = (VarBinArray) ((MaskedArray) stats.field("min")).inner();
+                VarBinArray max = (VarBinArray) ((MaskedArray) stats.field(ColumnName.of("max"))).inner();
+                VarBinArray min = (VarBinArray) ((MaskedArray) stats.field(ColumnName.of("min"))).inner();
                 assertThat(min.getString(0)).isEqualTo("apple");
                 assertThat(max.getString(0)).isEqualTo("banana");
                 assertThat(min.getString(1)).isEqualTo("cherry");
@@ -319,8 +319,8 @@ class WriterZoneMapTest {
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, statsTableDtype(), 2, arena);
-                LongArray max = (LongArray) ((MaskedArray) stats.field("max")).inner();
-                LongArray min = (LongArray) ((MaskedArray) stats.field("min")).inner();
+                LongArray max = (LongArray) ((MaskedArray) stats.field(ColumnName.of("max"))).inner();
+                LongArray min = (LongArray) ((MaskedArray) stats.field(ColumnName.of("min"))).inner();
                 assertThat(min.getLong(0)).isEqualTo(10);
                 assertThat(max.getLong(0)).isEqualTo(11);
                 assertThat(min.getLong(1)).isEqualTo(20);
@@ -358,8 +358,8 @@ class WriterZoneMapTest {
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats =
                         (StructArray) reader.decodeSegment(spec, utf8StatsTableDtype(), 2, arena);
-                VarBinArray max = (VarBinArray) ((MaskedArray) stats.field("max")).inner();
-                VarBinArray min = (VarBinArray) ((MaskedArray) stats.field("min")).inner();
+                VarBinArray max = (VarBinArray) ((MaskedArray) stats.field(ColumnName.of("max"))).inner();
+                VarBinArray min = (VarBinArray) ((MaskedArray) stats.field(ColumnName.of("min"))).inner();
                 assertThat(min.getString(0)).isEqualTo("a");
                 assertThat(max.getString(0)).isEqualTo("b");
                 assertThat(min.getString(1)).isEqualTo("a");
@@ -394,9 +394,9 @@ class WriterZoneMapTest {
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, numericStatsTableDtype(), 2, arena);
-                LongArray max = (LongArray) ((MaskedArray) stats.field("max")).inner();
-                LongArray min = (LongArray) ((MaskedArray) stats.field("min")).inner();
-                LongArray sum = (LongArray) ((MaskedArray) stats.field("sum")).inner();
+                LongArray max = (LongArray) ((MaskedArray) stats.field(ColumnName.of("max"))).inner();
+                LongArray min = (LongArray) ((MaskedArray) stats.field(ColumnName.of("min"))).inner();
+                LongArray sum = (LongArray) ((MaskedArray) stats.field(ColumnName.of("sum"))).inner();
                 assertThat(min.getLong(0)).isEqualTo(1);
                 assertThat(max.getLong(0)).isEqualTo(2);
                 assertThat(min.getLong(1)).isEqualTo(1);
@@ -433,9 +433,9 @@ class WriterZoneMapTest {
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, f64StatsTableDtype(), 3, arena);
-                DoubleArray max = (DoubleArray) ((MaskedArray) stats.field("max")).inner();
-                DoubleArray min = (DoubleArray) ((MaskedArray) stats.field("min")).inner();
-                DoubleArray sum = (DoubleArray) ((MaskedArray) stats.field("sum")).inner();
+                DoubleArray max = (DoubleArray) ((MaskedArray) stats.field(ColumnName.of("max"))).inner();
+                DoubleArray min = (DoubleArray) ((MaskedArray) stats.field(ColumnName.of("min"))).inner();
+                DoubleArray sum = (DoubleArray) ((MaskedArray) stats.field(ColumnName.of("sum"))).inner();
                 for (int z = 0; z < 3; z++) {
                     double base = z * 4.0;
                     assertThat(min.getDouble(z)).as("min zone %d", z).isEqualTo(base + 0.5);
@@ -469,8 +469,8 @@ class WriterZoneMapTest {
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, perTypeStatsTableDtype(ptype), 2, arena);
-                MemorySegment min = ((MaskedArray) stats.field("min")).inner().materialize(arena);
-                MemorySegment max = ((MaskedArray) stats.field("max")).inner().materialize(arena);
+                MemorySegment min = ((MaskedArray) stats.field(ColumnName.of("min"))).inner().materialize(arena);
+                MemorySegment max = ((MaskedArray) stats.field(ColumnName.of("max"))).inner().materialize(arena);
                 assertThat(readStat(min, ptype, 0)).as("min zone 0").isEqualTo(0.0);
                 assertThat(readStat(max, ptype, 0)).as("max zone 0").isEqualTo(1.0);
                 assertThat(readStat(min, ptype, 1)).as("min zone 1").isEqualTo(2.0);
@@ -497,7 +497,7 @@ class WriterZoneMapTest {
         // When reading the zone-map table's boxed stats back through the reader's public API
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(ScanOptions.all())) {
-            List<ArrayStats> zones = scan.columnZoneStats("v");
+            List<ArrayStats> zones = scan.columnZoneStats(ColumnName.of("v"));
 
             // Then each zone's max is the true unsigned magnitude, not the sign-extended bit pattern
             assertThat(zones.get(0).max()).isEqualTo(6L);

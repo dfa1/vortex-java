@@ -53,8 +53,8 @@ class AggregateWhereCleanPartitionTest {
     static void write() throws Exception {
         file = tmp.resolve("clustered.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field("id", DType.I64)
-                .field("val", DType.I64)
+                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("val"), DType.I64)
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the fold reads.
         WriteOptions opts = new WriteOptions(true, 0.90, 0, true, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);

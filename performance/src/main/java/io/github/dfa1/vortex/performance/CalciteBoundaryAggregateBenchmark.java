@@ -114,8 +114,8 @@ public class CalciteBoundaryAggregateBenchmark {
 
         table = new VortexTable(file);
         // BETWEEN lowers to `id >= lo AND id <= hi`; the same filter drives both paths.
-        filter = RowFilter.and(RowFilter.gte("id", lo), RowFilter.lte("id", hi));
-        baselineOptions = ScanOptions.columns("id", AGG_COLUMN).withFilter(filter);
+        filter = RowFilter.and(RowFilter.gte(ColumnName.of("id"), lo), RowFilter.lte(ColumnName.of("id"), hi));
+        baselineOptions = ScanOptions.columns(ColumnName.of("id"), ColumnName.of(AGG_COLUMN)).withFilter(filter);
 
         // Honesty check: the optimized fold and the full-scan baseline must agree before we time them.
         long folded = boundaryFold();
@@ -140,7 +140,7 @@ public class CalciteBoundaryAggregateBenchmark {
     /// @throws IOException if the fallback scan cannot read the file
     @Benchmark
     public long boundaryFold() throws IOException {
-        Optional<VortexTable.FilteredFold> fold = table.filteredFold(filter, AGG_COLUMN);
+        Optional<VortexTable.FilteredFold> fold = table.filteredFold(filter, ColumnName.of(AGG_COLUMN));
         if (fold.isEmpty()) {
             return fullScanBaseline();
         }
@@ -160,8 +160,8 @@ public class CalciteBoundaryAggregateBenchmark {
              var iter = reader.scan(baselineOptions)) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    LongArray id = c.column("id");
-                    LongArray val = c.column(AGG_COLUMN);
+                    LongArray id = c.column(ColumnName.of("id"));
+                    LongArray val = c.column(ColumnName.of(AGG_COLUMN));
                     long n = id.length();
                     for (long i = 0; i < n; i++) {
                         long key = id.getLong(i);
@@ -191,8 +191,8 @@ public class CalciteBoundaryAggregateBenchmark {
     /// the per-zone `SUM` the interior-zone fold reads.
     private static void writeFixture(Path file) throws IOException {
         DType.Struct schema = DType.structBuilder()
-                .field("id", DType.I64)
-                .field("val", DType.I64)
+                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("val"), DType.I64)
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the interior-zone fold reads.
         WriteOptions opts = new WriteOptions(true, 0.90, 0, true, false, MemorySize.ofMiB(256), Map.of());

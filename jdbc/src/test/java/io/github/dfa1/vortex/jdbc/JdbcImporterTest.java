@@ -76,19 +76,19 @@ class JdbcImporterTest {
                     try (Chunk chunk = iter.next()) {
                         assertThat(chunk.rowCount()).isEqualTo(2);
 
-                        LongArray ids = chunk.column("ID");
+                        LongArray ids = chunk.column(ColumnName.of("ID"));
                         assertThat(ids.getLong(0)).isEqualTo(1L);
                         assertThat(ids.getLong(1)).isEqualTo(2L);
 
-                        VarBinArray names = chunk.column("NAME");
+                        VarBinArray names = chunk.column(ColumnName.of("NAME"));
                         assertThat(names.getString(0)).isEqualTo("Alice");
                         assertThat(names.getString(1)).isEqualTo("Bob");
 
-                        DoubleArray scores = chunk.column("SCORE");
+                        DoubleArray scores = chunk.column(ColumnName.of("SCORE"));
                         assertThat(scores.getDouble(0)).isEqualTo(1.5);
                         assertThat(scores.getDouble(1)).isEqualTo(2.7);
 
-                        BoolArray active = chunk.column("ACTIVE");
+                        BoolArray active = chunk.column(ColumnName.of("ACTIVE"));
                         assertThat(active.getBoolean(0)).isTrue();
                         assertThat(active.getBoolean(1)).isFalse();
                     }
@@ -133,14 +133,14 @@ class JdbcImporterTest {
                         assertThat(chunk.rowCount()).isEqualTo(2);
 
                         assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE
-                                .decodeAll(chunk.column("D")))
+                                .decodeAll(chunk.column(ColumnName.of("D"))))
                                 .containsExactly(
                                         java.time.LocalDate.of(1996, 2, 12),
                                         java.time.LocalDate.of(2026, 6, 10));
 
                         DType.Extension tsDtype = (DType.Extension) schema.fieldTypes().get(3);
                         assertThat(io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder.INSTANCE
-                                .decodeAll(tsDtype, chunk.column("TS")))
+                                .decodeAll(tsDtype, chunk.column(ColumnName.of("TS"))))
                                 .containsExactly(
                                         java.sql.Timestamp.valueOf("2026-06-10 12:00:00").toInstant(),
                                         java.sql.Timestamp.valueOf("1970-01-01 00:00:00").toInstant());
@@ -188,10 +188,10 @@ class JdbcImporterTest {
                     try (Chunk chunk = iter.next()) {
                         assertThat(chunk.rowCount()).isEqualTo(3);
 
-                        io.github.dfa1.vortex.reader.array.Array dCol = chunk.column("D");
-                        io.github.dfa1.vortex.reader.array.Array tCol = chunk.column("T");
-                        io.github.dfa1.vortex.reader.array.Array tsCol = chunk.column("TS");
-                        io.github.dfa1.vortex.reader.array.Array uCol = chunk.column("U");
+                        io.github.dfa1.vortex.reader.array.Array dCol = chunk.column(ColumnName.of("D"));
+                        io.github.dfa1.vortex.reader.array.Array tCol = chunk.column(ColumnName.of("T"));
+                        io.github.dfa1.vortex.reader.array.Array tsCol = chunk.column(ColumnName.of("TS"));
+                        io.github.dfa1.vortex.reader.array.Array uCol = chunk.column(ColumnName.of("U"));
                         assertThat(dCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
                         assertThat(tCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
                         assertThat(tsCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
@@ -269,7 +269,7 @@ class JdbcImporterTest {
                     try (Chunk chunk = iter.next()) {
                         assertThat(chunk.rowCount()).isEqualTo(2);
                         assertThat(io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder.INSTANCE
-                                .decodeAll(chunk.column("U")))
+                                .decodeAll(chunk.column(ColumnName.of("U"))))
                                 .containsExactly(u1, u2);
                     }
                 }
@@ -298,7 +298,7 @@ class JdbcImporterTest {
                 List<Long> collected = new ArrayList<>();
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     iter.forEachRemaining(chunk -> {
-                        LongArray arr = chunk.column("N");
+                        LongArray arr = chunk.column(ColumnName.of("N"));
                         for (long r = 0; r < chunk.rowCount(); r++) {
                             collected.add(arr.getLong(r));
                         }
@@ -336,8 +336,8 @@ class JdbcImporterTest {
                 List<String> categories = new ArrayList<>();
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     iter.forEachRemaining(chunk -> {
-                        LongArray idCol = chunk.column("ID");
-                        VarBinArray categoryCol = chunk.column("CATEGORY");
+                        LongArray idCol = chunk.column(ColumnName.of("ID"));
+                        VarBinArray categoryCol = chunk.column(ColumnName.of("CATEGORY"));
                         for (long r = 0; r < chunk.rowCount(); r++) {
                             ids.add(idCol.getLong(r));
                             categories.add(categoryCol.getString(r));
@@ -382,8 +382,8 @@ class JdbcImporterTest {
                     while (iter.hasNext()) {
                         try (Chunk chunk = iter.next()) {
                             chunkCount++;
-                            LongArray idCol = chunk.column("ID");
-                            VarBinArray categoryCol = chunk.column("CATEGORY");
+                            LongArray idCol = chunk.column(ColumnName.of("ID"));
+                            VarBinArray categoryCol = chunk.column(ColumnName.of("CATEGORY"));
                             for (long r = 0; r < chunk.rowCount(); r++) {
                                 long id = idCol.getLong(r);
                                 assertThat(id).isEqualTo(totalRows + r);
@@ -447,8 +447,8 @@ class JdbcImporterTest {
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
                     try (Chunk chunk = iter.next()) {
-                        io.github.dfa1.vortex.reader.array.Array nCol = chunk.column("N");
-                        io.github.dfa1.vortex.reader.array.Array sCol = chunk.column("S");
+                        io.github.dfa1.vortex.reader.array.Array nCol = chunk.column(ColumnName.of("N"));
+                        io.github.dfa1.vortex.reader.array.Array sCol = chunk.column(ColumnName.of("S"));
                         assertThat(nCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
                         assertThat(sCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
 

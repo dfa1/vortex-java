@@ -87,9 +87,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     ///
     /// @param column the column name
     /// @return the column's aggregated statistics paired with the file's total row count
-    public ColumnStats statsAndRows(String column) {
+    public ColumnStats statsAndRows(ColumnName column) {
         try (VortexReader reader = VortexReader.open(file)) {
-            ArrayStats stats = reader.columnStats().getOrDefault(ColumnName.of(column), ArrayStats.empty());
+            ArrayStats stats = reader.columnStats().getOrDefault(column, ArrayStats.empty());
             return new ColumnStats(stats, countRows(reader));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read stats of " + file, e);
@@ -119,11 +119,11 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     ///
     /// @param column the numeric column name
     /// @return the folded sum with the null and row counts needed to interpret a zero
-    public ZoneSum zoneSum(String column) {
+    public ZoneSum zoneSum(ColumnName column) {
         try (VortexReader reader = VortexReader.open(file)) {
             Number sum = new ZoneReducer(reader).sum(column);
             Long nullCount = reader.columnStats()
-                    .getOrDefault(ColumnName.of(column), ArrayStats.empty()).nullCount();
+                    .getOrDefault(column, ArrayStats.empty()).nullCount();
             return new ZoneSum(sum, nullCount, countRows(reader));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read zone sum of " + file, e);
@@ -142,7 +142,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// Sums the chunk row counts of `reader` from chunk metadata, without decoding data — shared by
-    /// [#totalRows()] and [#zoneSum(String)] so both read the count from a single open reader.
+    /// [#totalRows()] and [#zoneSum(ColumnName)] so both read the count from a single open reader.
     private static long countRows(VortexReader reader) throws IOException {
         long total = 0;
         try (ScanIterator scan = reader.scan(ScanOptions.all())) {
@@ -154,7 +154,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// A fold of the rows a pushed `WHERE` filter selects, returned by
-    /// [#filteredFold(RowFilter, String)]. A zone the filter selects entirely is folded from its
+    /// [#filteredFold(RowFilter, ColumnName)]. A zone the filter selects entirely is folded from its
     /// statistics with no decode; a boundary zone the filter only partially selects is decoded and
     /// reduced under a row-level selection mask (ADR 0013 §6 tier-2). The aggregate rule reads the
     /// field its aggregate needs; the values cover exactly the rows the filter matches, so the fold
@@ -176,7 +176,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// footer statistics with no decode; a boundary zone the filter only partially selects is decoded
     /// for the aggregate and filter columns and reduced in one fused pass — the whole filter and the
     /// aggregate fold evaluated together via
-    /// [Compute#filteredAggregate(Chunk, RowFilter, String)], with no intermediate selection bitmap.
+    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)], with no intermediate selection bitmap.
     /// The two tiers combine into one fold, so the caller answers the filtered aggregate while decoding
     /// only the boundary zones.
     ///
@@ -198,15 +198,15 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param aggColumn the column to reduce over the selected rows, or `null` for a row-count-only
     ///                  fold
     /// @return the fold over the selected rows, or empty when it cannot be answered soundly
-    public Optional<FilteredFold> filteredFold(RowFilter filter, String aggColumn) {
-        java.util.LinkedHashSet<String> filterColumns = new java.util.LinkedHashSet<>();
+    public Optional<FilteredFold> filteredFold(RowFilter filter, ColumnName aggColumn) {
+        java.util.LinkedHashSet<ColumnName> filterColumns = new java.util.LinkedHashSet<>();
         RexFilterTranslator.collectColumns(filter, filterColumns);
-        java.util.LinkedHashSet<String> columns = new java.util.LinkedHashSet<>(filterColumns);
+        java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>(filterColumns);
         if (aggColumn != null) {
             columns.add(aggColumn);
         }
         try (VortexReader reader = VortexReader.open(file);
-             ScanIterator scan = reader.scan(ScanOptions.columns(columns.toArray(String[]::new)))) {
+             ScanIterator scan = reader.scan(ScanOptions.columns(columns.toArray(ColumnName[]::new)))) {
             // U8/U16/U32 zone-map stats zero-extend into a non-negative Long when read
             // (ScanIterator#boxedScalar), so compareStat's width-agnostic long compare already
             // orders them correctly against a filter literal (also a zero-extended Long) — no
@@ -219,15 +219,15 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             if (!(reader.dtype() instanceof DType.Struct struct)) {
                 return Optional.empty();
             }
-            for (String column : columns) {
+            for (ColumnName column : columns) {
                 if (isU64(struct, column)) {
                     return Optional.empty();
                 }
             }
             long[] rowCounts = scan.chunkRowCounts();
             int zones = rowCounts.length;
-            java.util.Map<String, List<ArrayStats>> zoneStats = new java.util.HashMap<>();
-            for (String column : columns) {
+            java.util.Map<ColumnName, List<ArrayStats>> zoneStats = new java.util.HashMap<>();
+            for (ColumnName column : columns) {
                 List<ArrayStats> perZone = scan.columnZoneStats(column);
                 if (perZone.size() != zones) {
                     return Optional.empty(); // zone-map zones don't align 1:1 with chunks — cannot classify
@@ -258,7 +258,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 return Optional.empty(); // every match is a boundary decode — no fold win over a scan
             }
 
-            List<String> decodeColumns = new ArrayList<>(columns);
+            List<ColumnName> decodeColumns = new ArrayList<>(columns);
             Fold fold = new Fold();
             for (int zone = 0; zone < zones; zone++) {
                 Match match = matches[zone];
@@ -295,13 +295,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     ///
     /// The whole filter — an n-ary `AND` of column-bound [Predicate] leaves — and the aggregate fold
     /// run in one fused pass over the chunk's rows via
-    /// [Compute#filteredAggregate(Chunk, RowFilter, String)], with no intermediate selection bitmap.
+    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)], with no intermediate selection bitmap.
     /// `SUM` is guarded: the fused kernel reports a `null` sum for a non-numeric aggregate column,
     /// which disables the sum (mirroring a zone that records no usable sum) rather than failing the
     /// whole fold — a `MIN`/`MAX` over the same column still folds. The aggregate column's null count
     /// among the selected rows is the selected count minus the non-null count.
-    private static void foldBoundaryZone(VortexReader reader, int zone, List<String> columns,
-                                         RowFilter filter, String aggColumn, Fold fold) {
+    private static void foldBoundaryZone(VortexReader reader, int zone, List<ColumnName> columns,                                         RowFilter filter, ColumnName aggColumn, Fold fold) {
         try (Chunk chunk = reader.decodeChunk(zone, columns)) {
             FilteredAggregate aggregate = Compute.filteredAggregate(chunk, filter, aggColumn);
             fold.keptRows += aggregate.selectedRows();
@@ -395,7 +394,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @return the conjoined filter, or empty when any predicate is not fully translatable
     public Optional<RowFilter> translatePushedFilters(List<RexNode> filters) {
         DType.Struct struct = struct();
-        List<String> names = struct.fieldNames().stream().map(ColumnName::value).toList();
+        List<ColumnName> names = struct.fieldNames();
         List<DType> types = struct.fieldTypes();
         return RexFilterTranslator.translateStrict(filters, names, types);
     }
@@ -411,7 +410,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// three-valued logic: a row that is `NULL` in a compared column does not match a comparison,
     /// so a zone is [Match#IN] for a comparison only when it also provably carries no nulls.
     private static Match classify(RowFilter filter, int zone,
-                                  java.util.Map<String, List<ArrayStats>> zoneStats, long rowCount,
+                                  java.util.Map<ColumnName, List<ArrayStats>> zoneStats, long rowCount,
                                   DType.Struct struct) {
         return switch (filter) {
             case RowFilter.And(var parts) -> {
@@ -428,7 +427,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 yield allIn ? Match.IN : Match.BOUNDARY;
             }
             case RowFilter.Column(var col, var predicate) -> classifyColumn(predicate,
-                    zoneStats.get(col.value()).get(zone), rowCount, isFloating(struct, col.value()));
+                    zoneStats.get(col).get(zone), rowCount, isFloating(struct, col));
         };
     }
 
@@ -547,10 +546,10 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// Whether `column` is `U64` — the one unsigned width with no wider box to zero-extend into, so
     /// its zone-map stat stays the raw 64-bit pattern and [#compareStat] cannot safely classify it
     /// (the fold abandons such columns to the scan). `U8`/`U16`/`U32` zero-extend into a
-    /// non-negative `Long` when read ([ScanIterator#columnZoneStats(String)]) and classify
+    /// non-negative `Long` when read ([ScanIterator#columnZoneStats(ColumnName)]) and classify
     /// correctly, so they are not included here.
-    private static boolean isU64(DType.Struct struct, String column) {
-        int idx = struct.fieldNames().indexOf(ColumnName.of(column));
+    private static boolean isU64(DType.Struct struct, ColumnName column) {
+        int idx = struct.fieldNames().indexOf(column);
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype() == PType.U64;
     }
 
@@ -558,8 +557,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// ArrayStats, long, boolean)] to downgrade an otherwise-[Match#IN] zone to [Match#BOUNDARY]:
     /// zone-map stats cannot reveal a hidden `NaN` (it is not `null`, so the null count misses it
     /// too), and a `NaN` row must never satisfy a value comparison.
-    private static boolean isFloating(DType.Struct struct, String column) {
-        int idx = struct.fieldNames().indexOf(ColumnName.of(column));
+    private static boolean isFloating(DType.Struct struct, ColumnName column) {
+        int idx = struct.fieldNames().indexOf(column);
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isFloating();
     }
 
@@ -636,13 +635,13 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     @Override
     public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters, int[] projects) {
         DType.Struct struct = struct();
-        List<String> allNames = struct.fieldNames().stream().map(ColumnName::value).toList();
+        List<ColumnName> allNames = struct.fieldNames();
         List<DType> allTypes = struct.fieldTypes();
 
         // Projection: the columns to decode and emit, in the order Calcite asked for. A null
         // projects array means "all columns".
         int[] cols = projects != null ? projects : allColumns(allNames.size());
-        String[] outNames = new String[cols.length];
+        ColumnName[] outNames = new ColumnName[cols.length];
         DType[] outTypes = new DType[cols.length];
         for (int i = 0; i < cols.length; i++) {
             outNames[i] = allNames.get(cols[i]);
@@ -675,12 +674,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
 
         // The scan must decode any column a filter needs — pruning or exact enforcement — even
         // when it is not projected. Output still emits only outNames.
-        java.util.LinkedHashSet<String> scanColumns = new java.util.LinkedHashSet<>(List.of(outNames));
+        java.util.LinkedHashSet<ColumnName> scanColumns = new java.util.LinkedHashSet<>(List.of(outNames));
         pushed.ifPresent(f -> RexFilterTranslator.collectColumns(f, scanColumns));
         if (exactFilter != null) {
             RexFilterTranslator.collectColumns(exactFilter, scanColumns);
         }
-        ScanOptions options = ScanOptions.columns(scanColumns.toArray(String[]::new));
+        ScanOptions options = ScanOptions.columns(scanColumns.toArray(ColumnName[]::new));
         if (pushed.isPresent()) {
             options = options.withFilter(pushed.get());
         }

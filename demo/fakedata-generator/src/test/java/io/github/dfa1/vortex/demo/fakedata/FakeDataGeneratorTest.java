@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.demo.fakedata;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -85,7 +86,7 @@ class FakeDataGeneratorTest {
         try (VortexReader vf = VortexReader.open(file); var iter = vf.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
                 try (var chunk = iter.next()) {
-                    LongArray array = chunk.column(column);
+                    LongArray array = chunk.column(ColumnName.of(column));
                     for (long i = 0; i < array.length(); i++) {
                         out.add(array.getLong(i));
                     }
@@ -100,7 +101,7 @@ class FakeDataGeneratorTest {
         try (VortexReader vf = VortexReader.open(file); var iter = vf.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
                 try (var chunk = iter.next()) {
-                    VarBinArray array = chunk.column(column);
+                    VarBinArray array = chunk.column(ColumnName.of(column));
                     for (long i = 0; i < array.length(); i++) {
                         out.add(new String(array.getBytes(i)));
                     }
@@ -115,7 +116,7 @@ class FakeDataGeneratorTest {
         try (VortexReader vf = VortexReader.open(file); var iter = vf.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
                 try (var chunk = iter.next()) {
-                    BoolArray array = chunk.column(column);
+                    BoolArray array = chunk.column(ColumnName.of(column));
                     for (long i = 0; i < array.length(); i++) {
                         out.add(array.getBoolean(i));
                     }

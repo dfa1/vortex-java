@@ -4,6 +4,7 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -153,9 +154,9 @@ class ParquetVariantInteropIntegrationTest {
     private static List<byte[]> readValues(Path file) throws IOException {
         List<byte[]> rows = new ArrayList<>(ROWS);
         try (var reader = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = reader.scan(ScanOptions.columns("v"))) {
+             var iter = reader.scan(ScanOptions.columns(ColumnName.of("v")))) {
             while (iter.hasNext()) {
-                Array column = iter.next().column("v");
+                Array column = iter.next().column(ColumnName.of("v"));
                 Array storage = ((VariantArray) column).coreStorage();
                 MaskedArray masked = storage instanceof MaskedArray m ? m : null;
                 StructArray struct = (StructArray) (masked != null ? masked.inner() : storage);
@@ -218,9 +219,9 @@ class ParquetVariantInteropIntegrationTest {
     private static List<String> readShredded(Path file) throws IOException {
         List<String> rows = new ArrayList<>(ROWS);
         try (var reader = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = reader.scan(ScanOptions.columns("v"))) {
+             var iter = reader.scan(ScanOptions.columns(ColumnName.of("v")))) {
             while (iter.hasNext()) {
-                VariantArray column = iter.next().column("v");
+                VariantArray column = iter.next().column(ColumnName.of("v"));
                 StructArray struct = (StructArray) column.coreStorage();
                 MaskedArray value = (MaskedArray) struct.field(1);
                 MaskedArray typed = (MaskedArray) column.shredded();

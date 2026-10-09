@@ -64,7 +64,7 @@ class NullCountPruningTest {
         Path file = write();
 
         // When / Then surviving chunk sizes are 2 (1-null) and 4 (all-null)
-        assertThat(scanRowCounts(file, RowFilter.isNull("v"))).containsExactly(2L, 4L);
+        assertThat(scanRowCounts(file, RowFilter.isNull(ColumnName.of("v")))).containsExactly(2L, 4L);
     }
 
     @Test
@@ -73,7 +73,7 @@ class NullCountPruningTest {
         Path file = write();
 
         // When / Then surviving chunk sizes are 3 (0-null) and 2 (1-null)
-        assertThat(scanRowCounts(file, RowFilter.isNotNull("v"))).containsExactly(3L, 2L);
+        assertThat(scanRowCounts(file, RowFilter.isNotNull(ColumnName.of("v")))).containsExactly(3L, 2L);
     }
 
     @Test

@@ -769,7 +769,7 @@ public final class VortexInspectorTui {
         private void runDataLoad(String columnName) {
             try {
                 DType declared = columnDtypeByName(columnName);
-                ScanOptions opts = ScanOptions.columns(columnName).withLimit(DATA_PREVIEW_ROWS);
+                ScanOptions opts = ScanOptions.columns(ColumnName.of(columnName)).withLimit(DATA_PREVIEW_ROWS);
                 try (ScanIterator it = handle.scan(opts)) {
                     if (!it.hasNext()) {
                         dataCache.put(columnName, new DataState.Loaded(List.of()));

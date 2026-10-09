@@ -104,7 +104,7 @@ final class DictFilter {
     }
 
     /// Attempts the dict code-scan lane for a count-only fold — the `COUNT(*)` shape of
-    /// [Compute#filteredAggregate(Chunk, RowFilter, String)] with no aggregate column.
+    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)] with no aggregate column.
     ///
     /// @param filterData the unwrapped driving filter array (possibly an offset slice over a dict array)
     /// @param fVal       the driving filter's validity bitmap, or `null` when every row is valid
@@ -130,7 +130,7 @@ final class DictFilter {
     }
 
     /// Attempts the dict code-scan lane for the full filtered-aggregate fold of
-    /// [Compute#filteredAggregate(Chunk, RowFilter, String)]: the selected row count, the
+    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]: the selected row count, the
     /// aggregate's non-null count among them, and its `SUM` / `MIN` / `MAX`, folded per matching
     /// row with the same domain semantics as the kernel's own lanes (wrapping [Long] sum and
     /// unsigned-aware order in the long domain, [Double#compare(double, double)] order and the

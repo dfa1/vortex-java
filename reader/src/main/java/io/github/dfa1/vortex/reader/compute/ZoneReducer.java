@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -12,7 +13,7 @@ import java.util.Objects;
 /// segment.
 ///
 /// This is the whole-zone tier of the aggregate push-down sketched in ADR 0013 §6: a reduction
-/// folds the per-zone rows surfaced by [ScanIterator#columnZoneStats(String)] instead of streaming
+/// folds the per-zone rows surfaced by [ScanIterator#columnZoneStats(ColumnName)] instead of streaming
 /// the column. The boundary (residual) tier — partially-selected zones under a predicate — is a
 /// later increment; today the reducer takes no predicate and folds every zone.
 ///
@@ -41,7 +42,7 @@ public final class ZoneReducer {
     ///
     /// @param column the numeric column name
     /// @return the column sum as a [Long] or [Double], or `null` if no zone carries a usable sum
-    public Number sum(String column) {
+    public Number sum(ColumnName column) {
         Objects.requireNonNull(column, "column");
         try (ScanIterator scan = reader.scan(ScanOptions.columns(column))) {
             List<ArrayStats> zones = scan.columnZoneStats(column);
