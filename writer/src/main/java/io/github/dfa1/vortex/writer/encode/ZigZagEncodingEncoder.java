@@ -21,6 +21,17 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
         return EncodingId.VORTEX_ZIGZAG;
     }
 
+    /// Rust's `ZigZagScheme` verdict (`vortex-btrblocks` `schemes/integer/zigzag.rs`): only
+    /// worth its cascaded child, and only for arrays with negatives; else defer to the sample.
+    @Override
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        if (ctx.finishedCascading() || !data.stats().minIsNegative(ptype)) {
+            return Estimate.SKIP;
+        }
+        return Estimate.COMPLETE;
+    }
+
     @Override
     public boolean accepts(DType dtype) {
         if (!(dtype instanceof DType.Primitive p)) {

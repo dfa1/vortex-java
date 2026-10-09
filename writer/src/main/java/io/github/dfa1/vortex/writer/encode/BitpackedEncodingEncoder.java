@@ -27,6 +27,14 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         return EncodingId.FASTLANES_BITPACKED;
     }
 
+    /// Rust's `BitPackingScheme` verdict (`vortex-btrblocks` `schemes/integer/bitpacking.rs`):
+    /// skip negative arrays, which bit-pack only at full width, else defer to the sample.
+    @Override
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        return data.stats().minIsNegative(ptype) ? Estimate.SKIP : Estimate.COMPLETE;
+    }
+
     @Override
     public boolean accepts(DType dtype) {
         if (!(dtype instanceof DType.Primitive p)) {

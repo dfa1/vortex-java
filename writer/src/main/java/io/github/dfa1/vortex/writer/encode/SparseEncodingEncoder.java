@@ -50,25 +50,25 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
-    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
-        ArrayStats stats = data.stats();
-        if (!(dtype instanceof DType.Primitive) || !stats.hasMostFrequent()) {
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        if (!(dtype instanceof DType.Primitive p)) {
             return Estimate.COMPLETE;
         }
-        // Capped scan: more than n/2 + 1 distinct values means no value can occur n/2 times
-        // (the rows outside such a value could not supply that many distinct ones), so the
-        // dominant-value test below cannot pass however the partial counts came out.
-        if (stats.distinctCapped()) {
+        // Rust's float sparse scheme only takes null-dominated arrays; nulls never reach a
+        // primitive here (validity is split off by vortex.masked), so floats never qualify.
+        if (p.ptype().isFloating()) {
             return Estimate.SKIP;
         }
+        // Rust's SparseScheme (schemes/integer/sparse.rs): the most frequent value, whatever it
+        // is, becomes the fill once it covers 90% of the array, and only the rest is stored. A
+        // capped scan proves no value reaches half, let alone 90%.
+        ArrayStats stats = data.stats();
         long n = stats.valueCount();
-        // Sparse stores fill scalar (hardcoded 0) + n - topFreq patches. Skip unless the
-        // dominant value's bit pattern is zero AND it covers more than half the array —
-        // otherwise the patch buffer dwarfs raw storage.
-        if (n == 0 || stats.mostFrequentBits() != 0L || stats.topFrequency() * 2 < n) {
+        long top = stats.topFrequency();
+        if (n == 0 || stats.distinctCapped() || top == n || (double) top / n < 0.9) {
             return Estimate.SKIP;
         }
-        return Estimate.COMPLETE;
+        return Estimate.ratio((double) n / (n - top));
     }
 
     /// Cascade gate: skip unless analytic sparse size beats raw-bitpacked size.
@@ -90,6 +90,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         if (n == 0) {
             return CascadeStep.notApplicable();
         }
+        long fill = fillBits(ptype, data);
         int elemBytes = ptype.byteSize();
         PType idxPtype = PType.narrowestUnsigned(n);
         int idxBytes = idxPtype.byteSize();
@@ -99,7 +100,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         List<Long> patchBits = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             long bits = readBits(data, ptype, i);
-            if (bits != 0L) {
+            if (bits != fill) {
                 if (patchIdx.size() >= maxPatches) {
                     return CascadeStep.notApplicable();
                 }
@@ -110,7 +111,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         int numPatches = patchIdx.size();
 
         // Owned buffers: fill scalar. idx and val moved to ChildSlot so cascade can bitpack.
-        ProtoScalarValue fillScalar = zeroScalar(ptype);
+        ProtoScalarValue fillScalar = scalar(ptype, fill);
         byte[] fillBytes = fillScalar.encode();
         MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
         MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
@@ -139,7 +140,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     }
 
     /// Encodes a boolean mask as `vortex.sparse`: fill = the majority value, patches = the minority
-    /// positions. Unlike the numeric path (hardcoded fill = 0, `expectedRatio`-gated) this always
+    /// positions. Unlike the numeric path (fill = most frequent value, `expectedRatio`-gated) this always
     /// builds the result — a two-valued domain has no "wrong" fill to guess, and the patch index
     /// array is run through the full [CascadingCompressor] so a clustered or regular null pattern
     /// (e.g. `fastlanes.delta` on a periodic run of nulls) can beat a raw 1-bit/row bitmap. Callers
@@ -207,12 +208,13 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         }
         PType ptype = p.ptype();
         int n = arrayLength(data, ptype);
+        long fill = n == 0 ? 0L : fillBits(ptype, data);
 
         List<Integer> patchIdx = new ArrayList<>();
         List<Long> patchBits = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             long bits = readBits(data, ptype, i);
-            if (bits != 0L) {
+            if (bits != fill) {
                 patchIdx.add(i);
                 patchBits.add(bits);
             }
@@ -221,7 +223,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         int numPatches = patchIdx.size();
         PType idxPtype = PType.narrowestUnsigned(n);
 
-        ProtoScalarValue fillScalar = zeroScalar(ptype);
+        ProtoScalarValue fillScalar = scalar(ptype, fill);
         byte[] fillBytes = fillScalar.encode();
         MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
         MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
@@ -274,12 +276,18 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static ProtoScalarValue zeroScalar(PType ptype) {
+    /// The fill: the most frequent value's bits, as Rust's sparse compress takes it from the
+    /// stats' `most_frequent_value`, widened the way [#readBits] widens.
+    private static long fillBits(PType ptype, Object data) {
+        return ArrayStats.compute(ptype, data, new StatsOptions(false, true)).mostFrequentBits();
+    }
+
+    private static ProtoScalarValue scalar(PType ptype, long bits) {
         return switch (ptype) {
-            case I8, I16, I32, I64 -> ProtoScalarValue.ofInt64Value(0L);
-            case U8, U16, U32, U64 -> ProtoScalarValue.ofUint64Value(0L);
-            case F32 -> ProtoScalarValue.ofF32Value(0.0f);
-            case F64 -> ProtoScalarValue.ofF64Value(0.0);
+            case I8, I16, I32, I64 -> ProtoScalarValue.ofInt64Value(bits);
+            case U8, U16, U32, U64 -> ProtoScalarValue.ofUint64Value(bits);
+            case F32 -> ProtoScalarValue.ofF32Value(Float.intBitsToFloat((int) bits));
+            case F64 -> ProtoScalarValue.ofF64Value(Double.longBitsToDouble(bits));
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
         };
     }

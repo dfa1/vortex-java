@@ -46,25 +46,40 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
-    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
-        ArrayStats stats = data.stats();
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
         // Stats path only covers Primitive (Utf8 still uses sample-encoded selection).
-        if (!(dtype instanceof DType.Primitive) || !stats.hasDistinctCount()) {
+        if (!(dtype instanceof DType.Primitive p)) {
             return Estimate.COMPLETE;
         }
+        ArrayStats stats = data.stats();
         long n = stats.valueCount();
-        long distinct = stats.distinctCount();
         if (n == 0) {
             return Estimate.SKIP;
         }
-        // Rust FloatDictScheme / IntDictScheme skip rule. Skip-only: the raw dict cost
-        // ignores cascade bitpacking on the codes child, so a raw ratio over-estimates
-        // dict's effectiveness vs encoders like ALP whose sample measure includes cascade.
-        // Defer to the sample-encoded path for the actual win.
-        if (distinct * 2 > n) {
+        // Rust's IntDictScheme / FloatDictScheme skip rule. A capped scan already proves
+        // distinct > n/2 + 1, so it skips too.
+        long distinct = stats.distinctCount();
+        if (stats.distinctCapped() || distinct > n / 2) {
             return Estimate.SKIP;
         }
-        return Estimate.COMPLETE;
+        if (p.ptype().isFloating()) {
+            // FloatDictScheme defers to the sample: a raw float dict cost would ignore the
+            // cascade ALP gets credit for in its own sampled measure.
+            return Estimate.COMPLETE;
+        }
+        return Estimate.ratio(integerDictRatio(p.ptype().bits(), n, distinct, stats.averageRunLength()));
+    }
+
+    /// Rust's `IntDictScheme` estimate (`vortex-compressor/src/builtins/dict/integer.rs`), in
+    /// bits: the values at full width, plus codes either bit-packed or, when the array is runny,
+    /// run-length encoded at 32 bits of run bookkeeping per run, whichever is smaller.
+    static double integerDictRatio(int bitWidth, long n, long distinct, long averageRunLength) {
+        long valuesSize = (long) bitWidth * distinct;
+        long codesWidth = Integer.SIZE - Integer.numberOfLeadingZeros((int) distinct);
+        long runs = n / averageRunLength;
+        long codesSize = Math.min(codesWidth * n, (codesWidth + 32) * runs);
+        long before = n * bitWidth;
+        return (double) before / (valuesSize + codesSize);
     }
 
     @Override

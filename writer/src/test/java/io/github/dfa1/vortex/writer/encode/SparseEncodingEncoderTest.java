@@ -108,6 +108,26 @@ class SparseEncodingEncoderTest {
             }
         }
 
+        @ParameterizedTest
+        @ValueSource(longs = {42L, -7L})
+        void encode_roundTrip_nonZeroFill_storesOnlyTheOtherValues(long fill) throws java.io.IOException {
+            // Given: the fill is the most frequent value, as in Rust, not a hardcoded 0 — and a
+            // negative one must survive the sign-extended widening both ways
+            long[] data = {fill, fill, 5L, fill, fill, fill, 0L, fill};
+            EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // When
+            Array result = decodeResult(encoded, DTypes.I64, data.length);
+
+            // Then
+            var metaSeg = encoded.rootNode().metadata();
+            assertThat(ProtoSparseMetadata.decode(metaSeg, 0, metaSeg.byteSize()).patches().len()).isEqualTo(2);
+            LongArray la = (LongArray) result;
+            for (int i = 0; i < data.length; i++) {
+                assertThat(la.getLong(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
         @Test
         void encode_roundTrip_f64() {
             // Given

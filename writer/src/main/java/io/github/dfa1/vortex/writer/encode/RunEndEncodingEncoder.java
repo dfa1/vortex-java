@@ -36,7 +36,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
     /// values, else defer to the sample. Needs no distinct count, so it declares no
     /// [StatsOptions], as Rust's scheme declares none.
     @Override
-    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Primitive)) {
             return Estimate.COMPLETE;
         }

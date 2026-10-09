@@ -33,6 +33,13 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return EncodingId.VORTEX_ALP;
     }
 
+    /// Rust's `ALPScheme` verdict (`vortex-btrblocks` `schemes/float/alp.rs`): only worth its
+    /// cascaded integer child, so skip once cascading is finished; else defer to the sample.
+    @Override
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        return ctx.finishedCascading() ? Estimate.SKIP : Estimate.COMPLETE;
+    }
+
     @Override
     public boolean accepts(DType dtype) {
         if (!(dtype instanceof DType.Primitive p)) {

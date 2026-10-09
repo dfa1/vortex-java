@@ -27,17 +27,23 @@ import java.lang.reflect.Array;
 ///                          `average_run_length` (integer division; floats compare as values, so
 ///                          `-0.0 == 0.0` and every NaN starts a run). Always computed, as in
 ///                          Rust: it is a single branch-free pass, never capped
+/// @param min               the smallest value of an integer array in its own order (unsigned for
+///                          U64, so read it with [#minIsNegative(PType)]); `0` for floats. Always
+///                          computed for integers, as Rust's `IntegerStats` always has min/max
+/// @param max               the largest value, likewise
 public record ArrayStats(
         long valueCount,
         long distinctCount,
         long mostFrequentBits,
         long topFrequency,
         boolean distinctCapped,
-        long averageRunLength
+        long averageRunLength,
+        long min,
+        long max
 ) {
 
     /// Sentinel stats for empty arrays.
-    public static final ArrayStats EMPTY = new ArrayStats(0, 0, 0, 0, false, 0);
+    public static final ArrayStats EMPTY = new ArrayStats(0, 0, 0, 0, false, 0, 0, 0);
 
     /// Value ranges narrower than this are always counted densely: Rust's
     /// `DENSE_DISTINCT_ALWAYS_RANGE` (covers every 8-bit array).
@@ -60,10 +66,7 @@ public record ArrayStats(
             return EMPTY;
         }
         long averageRunLength = n / runs(ptype, data, n);
-        if (!options.countDistinct() && !options.trackMostFrequent()) {
-            // Nothing to accumulate — the scan below would read every element and discard it.
-            return new ArrayStats(n, -1, 0, 0, false, averageRunLength);
-        }
+        boolean accumulate = options.countDistinct() || options.trackMostFrequent();
 
         // Stop once the distinct count passes half the rows: past that point every consumer's
         // verdict is already determined, so the remaining probes cannot change any decision.
@@ -80,7 +83,30 @@ public record ArrayStats(
         if (!ptype.isFloating()) {
             // Widened once (zero-copy for I64/U64) so one loop serves every integer width.
             long[] values = PrimitiveArrays.toLongs(data, ptype, EncodingId.VORTEX_PRIMITIVE);
-            return integerStats(values, n, cap, options.countDistinct(), averageRunLength);
+            long min = values[0];
+            long max = values[0];
+            for (int i = 0; i < n; i++) {
+                min = Math.min(min, values[i]);
+                max = Math.max(max, values[i]);
+            }
+            ArrayStats counted = accumulate
+                    ? integerStats(values, n, cap, options.countDistinct(), averageRunLength, min, max)
+                    : new ArrayStats(n, -1, 0, 0, false, averageRunLength, 0, 0);
+            if (ptype == PType.U64) {
+                // Narrower unsigned widths are zero-extended, so signed order is already theirs.
+                long unsignedMin = -1L;
+                long unsignedMax = 0L;
+                for (int i = 0; i < n; i++) {
+                    unsignedMin = Long.compareUnsigned(values[i], unsignedMin) < 0 ? values[i] : unsignedMin;
+                    unsignedMax = Long.compareUnsigned(values[i], unsignedMax) > 0 ? values[i] : unsignedMax;
+                }
+                return counted.withMinMax(unsignedMin, unsignedMax);
+            }
+            return counted.withMinMax(min, max);
+        }
+        if (!accumulate) {
+            // Nothing to accumulate — the scan below would read every element and discard it.
+            return new ArrayStats(n, -1, 0, 0, false, averageRunLength, 0, 0);
         }
 
         // Sized for the low-cardinality case and grown from there, NOT for the cap. Pre-sizing
@@ -111,14 +137,11 @@ public record ArrayStats(
     /// @param cap    distinct count past which the hashed scan may stop
     /// @param countDistinct whether [#distinctCount()] is reported
     /// @param averageRunLength the already computed [#averageRunLength()]
-    /// @return the stats
-    private static ArrayStats integerStats(long[] a, int n, long cap, boolean countDistinct, long averageRunLength) {
-        long min = a[0];
-        long max = a[0];
-        for (int i = 0; i < n; i++) {
-            min = Math.min(min, a[i]);
-            max = Math.max(max, a[i]);
-        }
+    /// @param min    the signed minimum of `a`
+    /// @param max    the signed maximum of `a`
+    /// @return the stats, min/max not yet set
+    private static ArrayStats integerStats(long[] a, int n, long cap, boolean countDistinct, long averageRunLength,
+                                           long min, long max) {
         // Signed difference: wraps negative exactly when the true range exceeds Long.MAX_VALUE.
         // U64 values above 2^63 sit at negative signed positions, but the signed interval still
         // bounds every value, so dense indexing stays correct; only Rust's choice of path (which
@@ -169,7 +192,7 @@ public record ArrayStats(
             }
         }
         return new ArrayStats(n, countDistinct ? distinct : -1L, min + topIndex, counts[topIndex], false,
-                averageRunLength);
+                averageRunLength, 0, 0);
     }
 
     private static ArrayStats fromCounts(int n, LongIntMap counts, boolean capped, boolean countDistinct,
@@ -178,7 +201,7 @@ public record ArrayStats(
         long topFreqBits = top == null ? 0L : top.key();
         int topFreq = top == null ? 0 : top.value();
         long distinct = countDistinct ? counts.size() : -1L;
-        return new ArrayStats(n, distinct, topFreqBits, topFreq, capped, averageRunLength);
+        return new ArrayStats(n, distinct, topFreqBits, topFreq, capped, averageRunLength, 0, 0);
     }
 
     /// Runs of equal values: 1 plus every change between neighbors. One loop per carrier with a
@@ -256,6 +279,37 @@ public record ArrayStats(
         return false;
     }
 
+
+    private ArrayStats withMinMax(long newMin, long newMax) {
+        return new ArrayStats(valueCount, distinctCount, mostFrequentBits, topFrequency, distinctCapped,
+                averageRunLength, newMin, newMax);
+    }
+
+    /// Rust's `ErasedStats::min_is_negative`: never for an unsigned type.
+    ///
+    /// @param ptype the integer type these stats were computed for
+    /// @return whether the minimum is below zero
+    public boolean minIsNegative(PType ptype) {
+        return !ptype.isUnsigned() && min < 0;
+    }
+
+    /// Rust's `ErasedStats::max_minus_min`, as an unsigned 64-bit value: exact for every integer
+    /// type, since the true difference of two 64-bit values is below 2^64.
+    ///
+    /// @return `max - min`, to be read unsigned
+    public long maxMinusMin() {
+        return max - min;
+    }
+
+    /// Rust's `ErasedStats::max_ilog2`: floor(log2) of the maximum reinterpreted as unsigned of
+    /// its own width, as bit-packing measures widths.
+    ///
+    /// @param ptype the integer type these stats were computed for
+    /// @return the log, or `-1` when the maximum is zero (Rust's `None`)
+    public int maxIlog2(PType ptype) {
+        long unsigned = max & (ptype.bits() == 64 ? -1L : (1L << ptype.bits()) - 1);
+        return 63 - Long.numberOfLeadingZeros(unsigned);
+    }
 
     /// @return whether [#distinctCount()] was computed during this scan
     public boolean hasDistinctCount() {

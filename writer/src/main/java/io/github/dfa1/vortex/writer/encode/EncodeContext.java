@@ -31,6 +31,9 @@ import java.util.Set;
 /// @param sampleSeed       random seed used for stratified sampling
 /// @param minSampleSize    minimum number of rows to include in a sample
 /// @param sampleFraction   fraction of rows to sample when the array is large
+/// @param sample           whether the array being encoded is a sample measured during the cascade's
+///                         competition rather than real output (Rust's `CompressorContext::is_sample`);
+///                         some verdicts only hold on one or the other
 public record EncodeContext(
         Arena arena,
         WriteRegistry registry,
@@ -38,7 +41,8 @@ public record EncodeContext(
         Set<EncodingId> excluded,
         long sampleSeed,
         int minSampleSize,
-        double sampleFraction
+        double sampleFraction,
+        boolean sample
 ) {
 
     /// Smallest sample the cost competition will measure on, matching the Rust reference's
@@ -69,7 +73,7 @@ public record EncodeContext(
     /// @param initialExcluded encoding ids excluded from consideration from the start
     /// @return a new [EncodeContext] ready for non-cascading encoding
     public static EncodeContext of(Arena arena, WriteRegistry registry, Set<EncodingId> initialExcluded) {
-        return new EncodeContext(arena, registry, 0, Set.copyOf(initialExcluded), 42L, MIN_SAMPLE_SIZE, SAMPLE_FRACTION);
+        return new EncodeContext(arena, registry, 0, Set.copyOf(initialExcluded), 42L, MIN_SAMPLE_SIZE, SAMPLE_FRACTION, false);
     }
 
     /// Creates a cascading context with the given depth and default sampling parameters.
@@ -96,14 +100,29 @@ public record EncodeContext(
     /// @param initialExcluded encoding ids excluded from consideration from the start
     /// @return a new [EncodeContext] ready for cascading compression
     public static EncodeContext ofDepth(int depth, Arena arena, WriteRegistry registry, Set<EncodingId> initialExcluded) {
-        return new EncodeContext(arena, registry, depth, Set.copyOf(initialExcluded), 42L, MIN_SAMPLE_SIZE, SAMPLE_FRACTION);
+        return new EncodeContext(arena, registry, depth, Set.copyOf(initialExcluded), 42L, MIN_SAMPLE_SIZE, SAMPLE_FRACTION, false);
     }
 
     /// Returns a copy of this context with the cascade depth decremented by one.
     ///
     /// @return a new [EncodeContext] with `allowedCascading` reduced by 1
     public EncodeContext withDecrementedDepth() {
-        return new EncodeContext(arena, registry, allowedCascading - 1, excluded, sampleSeed, minSampleSize, sampleFraction);
+        return new EncodeContext(arena, registry, allowedCascading - 1, excluded, sampleSeed, minSampleSize, sampleFraction, sample);
+    }
+
+    /// Returns a copy of this context marked as measuring a sample (Rust's `with_sampling`).
+    ///
+    /// @return a new [EncodeContext] with [#sample()] set
+    public EncodeContext withSampling() {
+        return new EncodeContext(arena, registry, allowedCascading, excluded, sampleSeed, minSampleSize, sampleFraction, true);
+    }
+
+    /// Whether no further cascade level is allowed (Rust's `finished_cascading`): encodings that
+    /// only pay off through a cascaded child skip themselves here.
+    ///
+    /// @return `true` when [#allowedCascading()] is exhausted
+    public boolean finishedCascading() {
+        return allowedCascading <= 0;
     }
 
     /// Returns a copy of this context with the given encoding id added to the excluded set.
@@ -125,7 +144,7 @@ public record EncodeContext(
         }
         Set<EncodingId> next = new HashSet<>(excluded);
         next.addAll(ids);
-        return new EncodeContext(arena, registry, allowedCascading, Collections.unmodifiableSet(next), sampleSeed, minSampleSize, sampleFraction);
+        return new EncodeContext(arena, registry, allowedCascading, Collections.unmodifiableSet(next), sampleSeed, minSampleSize, sampleFraction, sample);
     }
 
     /// Returns the encoder registered for `id`.
