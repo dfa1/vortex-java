@@ -16,8 +16,9 @@ commit message (`git show <sha>` or the GitHub commit page), not the changelog.
    `CHANGELOG.md` against `git log --oneline <last-documented-commit>..HEAD`. If unclear
    where the last-documented commit is, ask.
 2. For each notable commit, write **one bullet**:
-   - A single short sentence — what changed, fewest words that stay precise. No numbers,
-     no "why", no before/after prose — those live in the commit message.
+   - A single short sentence — what changed, fewest words that stay precise. A headline
+     figure is fine ("improve XXX by 10%"); no "why", no before/after tables or prose — those
+     live in the commit message.
    - End with the commit SHA(s), GitHub-auto-linked:
      `([abc1234](https://github.com/dfa1/vortex-java/commit/abc1234))`
    - One logical change spanning multiple commits: comma-separate SHAs, newest first.
