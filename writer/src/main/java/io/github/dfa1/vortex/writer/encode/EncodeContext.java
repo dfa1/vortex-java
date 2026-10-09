@@ -73,7 +73,7 @@ public record EncodeContext(
     /// @param initialExcluded encoding ids excluded from consideration from the start
     /// @return a new [EncodeContext] ready for non-cascading encoding
     public static EncodeContext of(Arena arena, WriteRegistry registry, Set<EncodingId> initialExcluded) {
-        return new EncodeContext(arena, registry, 0, Set.copyOf(initialExcluded), 42L, MIN_SAMPLE_SIZE, SAMPLE_FRACTION, false);
+        return new EncodeContext(arena, registry, 0, Set.copyOf(initialExcluded), SampleRng.RUST_SAMPLE_SEED, MIN_SAMPLE_SIZE, SAMPLE_FRACTION, false);
     }
 
     /// Creates a cascading context with the given depth and default sampling parameters.
@@ -100,7 +100,7 @@ public record EncodeContext(
     /// @param initialExcluded encoding ids excluded from consideration from the start
     /// @return a new [EncodeContext] ready for cascading compression
     public static EncodeContext ofDepth(int depth, Arena arena, WriteRegistry registry, Set<EncodingId> initialExcluded) {
-        return new EncodeContext(arena, registry, depth, Set.copyOf(initialExcluded), 42L, MIN_SAMPLE_SIZE, SAMPLE_FRACTION, false);
+        return new EncodeContext(arena, registry, depth, Set.copyOf(initialExcluded), SampleRng.RUST_SAMPLE_SEED, MIN_SAMPLE_SIZE, SAMPLE_FRACTION, false);
     }
 
     /// Returns a copy of this context with the cascade depth decremented by one.

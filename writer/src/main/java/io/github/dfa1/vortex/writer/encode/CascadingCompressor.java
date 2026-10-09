@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 import java.util.function.IntToLongFunction;
 import java.util.function.Supplier;
@@ -74,7 +73,7 @@ public final class CascadingCompressor {
     /// offsets, concatenated. Preserves local run structure (so RunEnd/RLE can win)
     /// while covering breadth (so cardinality-based encoders see realistic distinct counts).
     /// Falls back to first-N when the data is short enough for one stride to span it.
-    private static Object stratifiedSample(Object data, int sampleSize, long seed) {
+    static Object stratifiedSample(Object data, int sampleSize, long seed) {
         return switch (data) {
             case StructData(var fieldArrays) -> {
                 List<Object> sliced = fieldArrays.stream()
@@ -141,12 +140,12 @@ public final class CascadingCompressor {
     /// Rust-style partitioned stratified sample (vortex-compressor::sample::stratified_slices):
     /// divide [0, n) into `strideCount` contiguous partitions, draw one random contiguous
     /// slice from each. Strides cannot overlap or cluster — every region is represented.
-    @SuppressWarnings("java:S2245") // Deterministic PRNG is the contract: stratified sampling
-                                    // must be reproducible across builds for stable compression
-                                    // heuristics. No security boundary — output is sample indices.
+    ///
+    /// The draw is Rust's, bit for bit ([SampleRng]), including the draw for a partition with no
+    /// slack: the sample picks the winner on borderline arrays, so it has to be the same sample.
     private static void forEachStride(int n, int sampleSize, long seed, StrideCopy copier) {
         int strideCount = Math.max(1, sampleSize / SAMPLE_STRIDE);
-        Random rng = new Random(seed);
+        SampleRng rng = new SampleRng(seed);
         int dstOff = 0;
         int partRemainder = n % strideCount;
         int partShortStep = n / strideCount;
@@ -159,7 +158,7 @@ public final class CascadingCompressor {
             int partLen = s < partRemainder ? partLongStep : partShortStep;
             int sampleLen = s < sampleRemainder ? sampleLongStep : sampleShortStep;
             int maxStart = Math.max(0, partLen - sampleLen);
-            int offsetInPart = maxStart == 0 ? 0 : rng.nextInt(maxStart + 1);
+            int offsetInPart = rng.nextIntInclusive(0, maxStart);
             int srcOff = partStart + offsetInPart;
             copier.copy(srcOff, dstOff, sampleLen);
             dstOff += sampleLen;

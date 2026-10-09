@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ALP-RD trains its dictionary on the sample Rust's `alp` uses (64 spread runs of 64 values) and ranks ties as Rust does, so the cascade picks it where Rust does (klines `quote_volume` column −0.5 MB). ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - ALP-RD stores its exceptions as Rust does (narrowest unsigned index type, plain values, a constant when they are all equal) instead of bit-packing them, so its cost on a sample is no longer inflated and the cascade picks it where Rust does (klines `quote_volume` column −0.7 MB). ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - ALP writes its patches as Rust does: indices narrowed to the smallest unsigned type that holds them, plus the per-1024-value chunk offsets. ([#507](https://github.com/dfa1/vortex-java/issues/507))
+- The cascade draws the same compression sample as Rust (its ChaCha12 generator and fixed seed, ported bit for bit), so it picks the encodings Rust picks on borderline columns. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - A zone-map metadata varint whose 10th byte exceeds 1 is rejected instead of silently truncated. ([#504](https://github.com/dfa1/vortex-java/pull/504))
 
 ## [0.16.0] — 2026-10-09
