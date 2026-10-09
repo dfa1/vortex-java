@@ -28,61 +28,58 @@ no upgrade risk, and a supported LTS for users.
 
 ## Benchmarks
 
-JMH throughput (ops/s = full-file scans per second). Higher is better. Numbers
-re-measured 2026-07-24 against commit `4a170f1b`, vortex-jni 0.79.0.
+JMH throughput (ops/s = full-file scans or writes per second). Higher is better. Re-measured
+2026-10-09 on `main` after #464–#469, against vortex-jni 0.86.1.
 
-**Environment:** Apple M5, Zulu JDK 25.0.2, 3 forks (`-f 3`). Each suite was run on its
-own (not back-to-back) — sustained multi-suite runs thermally throttle the laptop and
-depress every absolute ~5× while leaving speedup ratios intact.
+**Environment:** Apple M5, Zulu JDK 25.0.2. Reads 3 forks (`-f 3`), writes 5 forks (`-f 5`):
+the cascading write varies ~±5% from fork to fork, so fewer forks cannot resolve it. Each
+suite ran on its own; sustained multi-suite runs thermally throttle the laptop.
 
-Absolute read throughput dropped versus the 2026-06-13 snapshot on the F64/ALP and
-I64/bitpacked columns, and dropped by a near-identical factor for _both_ the java and jni
-readers. The most likely cause is the vortex-jni 0.79 **writer** choosing denser on-disk
-encodings (ALP, bitpacked) that cost more to decode on either side — a single shared cause
-fits two readers moving together better than two independent reader regressions of the same
-size on the same columns. The varbin `symbol` column is stable across the change.
+### OHLC read — 10 M rows, 61.7 MB (Rust-written file, single-column projection)
 
-### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
+| Benchmark                     | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup   |
+|-------------------------------|---------------------|--------------------|-----------|
+| close (F64/ALP)               | 72.8 ± 0.4          | 46.3 ± 0.3         | **1.6×**  |
+| volume (I64/bitpacked)        | 106.1 ± 1.0         | 47.1 ± 1.1         | **2.3×**  |
+| symbol (Utf8)                 | 57.5 ± 19.4         | 14.8 ± 0.3         | **~3.9×** |
+| cascading (Java-written, volume) | 106.6 ± 0.5      | n/a                | —         |
 
-| Benchmark           | vortex-java (ops/s)  | vortex-jni (ops/s) | Speedup      |
-|---------------------|---------------|------------------|--------------|
-| close (F64/ALP)     | 58.1 ± 0.4    | 8.1 ± 1.4        | **7.2×**     |
-| volume (I64/bitpacked) | 17.6 ± 1.6 | 8.2 ± 0.4       | **2.1×**     |
-| symbol (Utf8/varbin) | 103.9 ± 14.3 | 9.6 ± 0.4       | **10.8×**    |
-| cascading (depth 3, volume) | 98.3 ± 0.5 | n/a         | —            |
+vortex-jni reads are 3–6× faster than in the 2026-07 snapshot (vortex-jni 0.79: `close` 8.1,
+`volume` 8.2, `symbol` 9.6 ops/s), so the gap narrowed from 2–11× to 1.6–4×. `symbol`'s
+error bar is wide because its forks are bimodal (per-fork JIT compilation); read it as
+"several times faster", not as 3.9× exactly.
 
-The `volume` row is the standout: plain `fastlanes.bitpacked` I64 decodes _slower_ (17.6)
-than the depth-3 cascade over the same column (98.3) and slower than F64/ALP `close` (58.1).
-JFR (`-prof stack`) puts ~70% of the read in the FastLanes bit-unpack compute
-(`BitpackedEncodingDecoder.unpackLoop64`), ~15% in the fold, and only ~6% in the 80 MB
-`Arena.allocate` for the materialized output. The cost is the unpacking itself, not the
-buffer-backed `MaterializedLongArray` it lands in.
+### OHLC write — 10 M rows, cascading depth 3 (`WriteOptions.defaults()`)
 
-That rules out the tempting micro-optimization: a lazy/fused fold (unpack-and-accumulate in
-one pass, skipping the intermediate segment) removes only the allocation and the intermediate
-write/read — a few ms of memory traffic on this hardware, ~1.2× at best — while the unpack
-loop, the actual wall, is untouched. The only lever that moves it is a vectorized (Vector API)
-FastLanes unpack, a larger change than the gain on this one writer-chosen encoding justifies
-today. The cascade is faster on the same column because it stores `volume` with less to
-unpack (a FoR reference leaves smaller bitpacked residuals), not because its fold is lazy.
+| Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Ratio |
+|-----------|---------------------|--------------------|-------|
+| write     | 0.881 ± 0.008       | 0.848 ± 0.005      | 1.04× |
 
-### OHLC write — 10 M rows
+| Output (bytes)          | vortex-java | vortex-jni |
+|-------------------------|-------------|------------|
+| OHLC 10 M rows          | 59,036,738  | 61,681,692 |
+| NYC taxi 2024-01 (2.96 M rows, 19 cols) | 42,338,902 | 44,463,892 |
 
-| Benchmark          | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup      |
-|--------------------|--------------|------------------|--------------|
-| write (plain)      | 2.42 ± 0.09  | 0.78 ± 0.00      | **3.1×**     |
-| write (cascade ×3) | 0.30 ± 0.01  | n/a              | —            |
+On par. vortex-jni's number includes ~280 ms per write of building Arrow vectors from Java
+arrays (#477), and Rust overlaps part of its compression on runtime threads while Java's
+writer is single-threaded (#474). On CPU, Java's encoder now does less work per write than
+Rust's (~1.18 s vs ~0.98 s plus the Arrow conversion), but more in bit-packing (#475) and
+compressor stats (#476).
 
-Plain Java write stays ~3× faster than the JNI writer but produces a much larger file
-(429 MB plain vs 56 MB at cascade depth 3); cascading trades ~8× write throughput for the
-7.6× smaller output. jni write (0.78) matches its 2026-06 value, confirming the machine
-was not throttled here.
+How it got here — porting the Rust compressor's decisions rather than tuning Java's own:
+2026-10-08 `main` wrote 0.433 ops/s and 6.9 GB allocated per write; #464–#469 brought it to
+0.881 ops/s and 2.5 GB. The large steps were Rust's verdict pass inside sample estimation plus
+its run-length skips (#465: +36%), its stats-only estimates for FoR / integer Dict (#466:
++22%), and the `alp` crate's 64-value exponent search (#469: +15%). The same ports took the
+taxi file from 59.9 MB to 42.3 MB, mostly `tip_amount` (20.2 → 4.6 MB): Rust's bit-packing
+verdict skips arrays with a negative minimum, which 1024-row samples of rare negative tips
+had hidden.
 
 ### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
 
-| Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup      |
-|-----------|--------------|------------------|--------------|
-| scan      | 17.1 ± 0.2   | 5.7 ± 0.1        | **3.0×**     |
+| Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup  |
+|-----------|---------------------|--------------------|----------|
+| scan      | 18.3 ± 0.2          | 5.3 ± 0.1          | **3.4×** |
 
 ### Parquet vs Vortex read — NYC Yellow Taxi 2024-01, 3 M rows, 19 columns
 
