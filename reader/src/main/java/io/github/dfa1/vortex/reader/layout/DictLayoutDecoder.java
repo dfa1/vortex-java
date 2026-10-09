@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.CanonicalArrays;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictDoubleArray;
@@ -82,7 +83,10 @@ final class DictLayoutDecoder implements LayoutDecoder {
             // than the claimed rowCount. Full-decode encodings (e.g. bitpacked) already
             // wrote n * elemBytes to the arena during decodeChild above, so their buffer
             // matches n.
-            MemorySegment codesSeg = codesData.materialize(arena);
+            // Canonical first: a segment-backed codes array comes back unchanged (the same buffer the
+            // guard below must see), a lazy one is decoded once for both the guard and the gather.
+            Array flatCodes = CanonicalArrays.of(codesData, arena);
+            MemorySegment codesSeg = flatCodes.materialize(arena);
             long bufferCodes = codesSeg.byteSize() / codesPType.byteSize();
             if (bufferCodes < n) {
                 throw new VortexException(EncodingId.VORTEX_DICT,
@@ -95,7 +99,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
             if (poolValidity == null) {
                 return new MaskedArray(dict, codesValidity);
             }
-            return new MaskedArray(dict, gatherRowValidity(codesData, codesValidity, poolValidity, n, arena));
+            return new MaskedArray(dict, gatherRowValidity(flatCodes, codesValidity, poolValidity, n, arena));
         }
         if (dtype instanceof DType.Primitive pDtype) {
             // Zip-bomb guard (lazy path): the codes Array has already been decoded above;
@@ -260,7 +264,10 @@ final class DictLayoutDecoder implements LayoutDecoder {
         BoolArray poolValidity = values instanceof MaskedArray mv ? mv.validity() : null;
         Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
         BoolArray codesValidity = codes instanceof MaskedArray mc ? mc.validity() : null;
-        Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;
+        Array lazyCodes = codes instanceof MaskedArray mc ? mc.inner() : codes;
+        // The pool-validity gather reads every code by index: decode lazy codes once up front so it
+        // (and the dict's own materialize) never re-resolves run-end or sparse codes per row.
+        Array codesData = poolValidity == null ? lazyCodes : CanonicalArrays.of(lazyCodes, arena);
         PType ptype = dtype.ptype();
         Array dict = switch (ptype) {
             case I64, U64 -> DictLongArray.of(dtype, n, (LongArray) valuesData, codesData);

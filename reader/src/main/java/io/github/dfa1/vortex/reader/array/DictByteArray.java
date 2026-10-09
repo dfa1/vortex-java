@@ -59,7 +59,7 @@ public record DictByteArray(DType dtype, long length, ByteArray values, Array co
         long n = length;
         MemorySegment dst = arena.allocate(n);
         ByteArray vals = values;
-        switch (codes) {
+        switch (CanonicalArrays.of(codes, arena)) {
             case ByteArray ba -> {
                 for (long i = 0; i < n; i++) {
                     dst.set(ValueLayout.JAVA_BYTE, i, vals.getByte(Byte.toUnsignedLong(ba.getByte(i))));

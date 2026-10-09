@@ -59,7 +59,7 @@ public record DictShortArray(DType dtype, long length, ShortArray values, Array 
         long n = length;
         MemorySegment dst = arena.allocate(n * 2L, 2);
         ShortArray vals = values;
-        switch (codes) {
+        switch (CanonicalArrays.of(codes, arena)) {
             case ByteArray ba -> {
                 for (long i = 0; i < n; i++) {
                     dst.setAtIndex(VortexFormat.LE_SHORT, i, vals.getShort(Byte.toUnsignedLong(ba.getByte(i))));

@@ -60,7 +60,7 @@ public record DictDoubleArray(DType dtype, long length, DoubleArray values, Arra
         long n = length;
         MemorySegment dst = arena.allocate(n * 8L, 8);
         DoubleArray vals = values;
-        switch (codes) {
+        switch (CanonicalArrays.of(codes, arena)) {
             case ByteArray ba -> {
                 for (long i = 0; i < n; i++) {
                     dst.setAtIndex(VortexFormat.LE_DOUBLE, i, vals.getDouble(Byte.toUnsignedLong(ba.getByte(i))));

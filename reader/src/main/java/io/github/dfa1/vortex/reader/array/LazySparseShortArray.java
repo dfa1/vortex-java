@@ -34,6 +34,14 @@ public record LazySparseShortArray(
     }
 
     @Override
+    public void forEachShort(ShortConsumer c) {
+        long numPatches = patchValues == null ? 0 : patchValues.length();
+        SparseArrays.walkPatches(patchIndices, numPatches, offset, offset + length,
+                () -> c.accept(fillValue),
+                p -> c.accept(patchValues.getShort(p)));
+    }
+
+    @Override
     public long fold(long identity, LongBinaryOperator op) {
         long numPatches = patchValues == null ? 0 : patchValues.length();
         return SparseArrays.foldInt(patchIndices, numPatches, offset, length,

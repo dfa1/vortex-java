@@ -237,28 +237,17 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     /// @param codes per-row codes
     /// @return the largest code, zero-extended
     private static long maxCode(Array codes) {
-        long n = codes.length();
-        long max = 0;
+        // Walks lazy codes (run-end, sparse, ...) through their own sequential forEach: indexed access
+        // re-resolves every row, a binary search per row for run-end codes.
+        long[] max = {0};
         switch (codes) {
-            case ByteArray ba -> {
-                for (long i = 0; i < n; i++) {
-                    max = Math.max(max, Byte.toUnsignedLong(ba.getByte(i)));
-                }
-            }
-            case ShortArray sa -> {
-                for (long i = 0; i < n; i++) {
-                    max = Math.max(max, Short.toUnsignedLong(sa.getShort(i)));
-                }
-            }
-            case IntArray ia -> {
-                for (long i = 0; i < n; i++) {
-                    max = Math.max(max, Integer.toUnsignedLong(ia.getInt(i)));
-                }
-            }
+            case ByteArray ba -> ba.forEachByte(c -> max[0] = Math.max(max[0], Byte.toUnsignedLong(c)));
+            case ShortArray sa -> sa.forEachShort(c -> max[0] = Math.max(max[0], Short.toUnsignedLong(c)));
+            case IntArray ia -> ia.forEachInt(c -> max[0] = Math.max(max[0], Integer.toUnsignedLong(c)));
             default -> throw new VortexException(EncodingId.VORTEX_DICT,
                     "unsupported codes array type: " + codes.getClass().getSimpleName());
         }
-        return max;
+        return max[0];
     }
 
     /// Rejects a child with no elements at all while the metadata claims rows.

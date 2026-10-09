@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.CanonicalArrays;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -822,9 +823,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (sharedFlats == null) {
             sharedFlats = new IdentityHashMap<>();
         }
+        // Canonicalized once, as Rust executes a chunk before slicing it per split: each window's
+        // slice then reads a flat buffer instead of re-resolving lazy composite children per row.
         return sharedFlats.computeIfAbsent(flat, f -> {
             Arena flatArena = Arena.ofConfined();
-            return new CachedFlat(flatArena, decodeLayout(f, dtype, flatArena));
+            return new CachedFlat(flatArena, CanonicalArrays.of(decodeLayout(f, dtype, flatArena), flatArena));
         }).array();
     }
 

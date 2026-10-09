@@ -2,6 +2,11 @@ package io.github.dfa1.vortex.reader.array;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.util.ArrayList;
+
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 import static io.github.dfa1.vortex.core.testing.DTypes.I64;
 import static io.github.dfa1.vortex.reader.array.TestArrays.ints;
 import static io.github.dfa1.vortex.reader.array.TestArrays.longs;
@@ -64,5 +69,42 @@ class LazyDateTimePartsLongArrayTest {
 
         // Then — 1*86400 + 2*86400 + 3*86400 = 6*86400
         assertThat(result).isEqualTo(6L * upd);
+    }
+
+    @Test
+    void materialize_runEndChild_matchesPerRowReassembly() {
+        // Given a run-end days child, the shape of real timestamp columns: materialize walks each
+        // child sequentially (no per-row run search) and must agree with per-row getLong
+        LongArray days = new LazyRunEndLongArray(I64, 4, longs(1L, 2L), ints(2, 4), 0L);
+        var sut = new LazyDateTimePartsLongArray(I64, 4, days, longs(10L, 20L, 30L, 40L),
+                ints(1, 2, 3, 4), 86_400L, 1L);
+
+        // When
+        long[] result = new long[4];
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = sut.materialize(arena);
+            for (int i = 0; i < 4; i++) {
+                result[i] = seg.getAtIndex(LE_LONG, i);
+            }
+        }
+
+        // Then
+        assertThat(result).containsExactly(sut.getLong(0), sut.getLong(1), sut.getLong(2), sut.getLong(3));
+        assertThat(result[2]).isEqualTo(2L * 86_400L + 30L + 3L);
+    }
+
+    @Test
+    void forEachLong_childLongerThanArray_fallsBackToPerRow() {
+        // Given a malformed child one row longer than the array: a full child walk would overrun a
+        // length-row buffer, so the sequential path must not be taken
+        var sut = new LazyDateTimePartsLongArray(I64, 2, longs(1L, 2L), longs(0L, 0L, 0L),
+                longs(5L, 6L), 86_400L, 1L);
+        var result = new ArrayList<Long>();
+
+        // When
+        sut.forEachLong(result::add);
+
+        // Then
+        assertThat(result).containsExactly(86_405L, 172_806L);
     }
 }

@@ -237,6 +237,53 @@ class LazySparseArrayTest {
     }
 
     @Nested
+    class SequentialNarrowWalk {
+
+        // Byte/short sparse arrays used to inherit the per-row forEach default, a patch binary
+        // search per row; a dict over sparse codes materialized through it. These pin that the
+        // sequential walk emits exactly the per-row values, including across the slice offset.
+
+        @Test
+        void forEachShort_withOffset_emitsFillAndPatchesInOrder() {
+            // Given patches at absolute 0, 2, 4 and offset 1: logical rows are absolute 1..4
+            ShortArray values = shorts((short) 10, (short) 20, (short) 30);
+            var sut = new LazySparseShortArray(I16, 4, (short) 1, 1, values, ints(0, 2, 4), 1L);
+            var result = new ArrayList<Short>();
+
+            // When
+            sut.forEachShort(result::add);
+
+            // Then
+            assertThat(result).containsExactly((short) 1, (short) 20, (short) 1, (short) 30);
+        }
+
+        @Test
+        void forEachByte_withOffset_emitsFillAndPatchesInOrder() {
+            // Given
+            ByteArray values = bytes((byte) 10, (byte) 20, (byte) 30);
+            var sut = new LazySparseByteArray(I8, 4, (byte) 1, 1, values, ints(0, 2, 4), 1L);
+            var result = new ArrayList<Byte>();
+
+            // When
+            sut.forEachByte(result::add);
+
+            // Then
+            assertThat(result).containsExactly((byte) 1, (byte) 20, (byte) 1, (byte) 30);
+        }
+
+        @Test
+        void forEachShort_unsortedPatchIndices_throwsVortexException() {
+            // Given a crafted file whose patch indices go backwards
+            ShortArray values = shorts((short) 10, (short) 20);
+            var sut = new LazySparseShortArray(I16, 4, (short) 1, 1, values, ints(2, 1), 0L);
+
+            // When / Then: the walk's ordering guard, not an IndexOutOfBoundsException downstream
+            assertThatThrownBy(() -> sut.forEachShort(v -> { }))
+                    .isInstanceOf(VortexException.class);
+        }
+    }
+
+    @Nested
     class Bool {
 
         @Test

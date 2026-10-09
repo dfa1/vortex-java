@@ -60,7 +60,7 @@ public record DictIntArray(DType dtype, long length, IntArray values, Array code
         long n = length;
         MemorySegment dst = arena.allocate(n * 4L, 4);
         IntArray vals = values;
-        switch (codes) {
+        switch (CanonicalArrays.of(codes, arena)) {
             case ByteArray ba -> {
                 for (long i = 0; i < n; i++) {
                     dst.setAtIndex(VortexFormat.LE_INT, i, vals.getInt(Byte.toUnsignedLong(ba.getByte(i))));
