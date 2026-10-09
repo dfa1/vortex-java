@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
+import io.github.dfa1.vortex.core.simd.VectorSupport;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -138,25 +139,13 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
             int basesOff = chunk * lanes;
             System.arraycopy(transposed, 0, basesAll, basesOff, lanes);
             System.arraycopy(basesAll, basesOff, chunkBases, 0, lanes);
-            deltaChunk(transposed, chunkBases, lanes, typeBits, mask, chunkDelta);
+            VectorSupport.operations().deltaChunk(transposed, chunkBases, lanes, typeBits, mask, chunkDelta);
             System.arraycopy(chunkDelta, 0, deltasAll, chunk * FastLanes.CHUNK, FastLanes.CHUNK);
         }
 
         byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
         byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
         return new Deltas(basesAll, deltasAll, paddedLen, statsMin, statsMax);
-    }
-
-    private static void deltaChunk(long[] transposed, long[] bases, int lanes, int typeBits, long mask, long[] out) {
-        for (int lane = 0; lane < lanes; lane++) {
-            long prev = bases[lane] & mask;
-            for (int row = 0; row < typeBits; row++) {
-                int idx = FastLanes.iterateIndex(row, lane);
-                long next = transposed[idx] & mask;
-                out[idx] = (next - prev) & mask;
-                prev = next;
-            }
-        }
     }
 
     private static byte[] statsBytes(PType ptype, long value) {

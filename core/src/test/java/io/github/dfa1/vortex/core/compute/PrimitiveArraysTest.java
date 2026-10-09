@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.core.compute;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Test;
@@ -129,6 +130,27 @@ class PrimitiveArraysTest {
             for (int i = 0; i < original.length; i++) {
                 assertThat(readElement(seg, ptype, i)).isEqualTo(original[i]);
             }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void fromLongs_matchesPTypeIoSetForEveryPType(PType ptype) {
+        // Given full-range values, so a wrong narrowing width or sign handling shows up in the bytes;
+        // PTypeIO.set is the per-element reference the hoisted per-width loops replaced
+        long[] values = {0L, -1L, 1L, 0x80L, 0x8000L, 0x80000000L, Long.MIN_VALUE, Long.MAX_VALUE, 0x123456789ABCDEFL};
+
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment expected = arena.allocate(values.length * ptype.byteSize());
+            for (int i = 0; i < values.length; i++) {
+                PTypeIO.set(expected, i * ptype.byteSize(), ptype, values[i]);
+            }
+
+            // When
+            MemorySegment result = PrimitiveArrays.fromLongs(values, ptype, arena);
+
+            // Then
+            assertThat(result.mismatch(expected)).isEqualTo(-1L);
         }
     }
 

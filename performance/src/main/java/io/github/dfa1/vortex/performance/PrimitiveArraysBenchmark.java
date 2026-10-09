@@ -15,6 +15,8 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -66,5 +68,13 @@ public class PrimitiveArraysBenchmark {
     @Benchmark
     public Object narrow() {
         return PrimitiveArrays.fromLongsArray(wideData, ptype, EncodingId.VORTEX_PRIMITIVE);
+    }
+
+    /// `PrimitiveArrays.fromLongs`: `long[]` -> little-endian off-heap segment.
+    ///
+    /// @return the written segment (returned so JMH keeps the work)
+    @Benchmark
+    public MemorySegment narrowToSegment() {
+        return PrimitiveArrays.fromLongs(wideData, ptype, Arena.ofAuto());
     }
 }

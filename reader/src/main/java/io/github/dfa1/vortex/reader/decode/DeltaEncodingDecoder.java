@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
+import io.github.dfa1.vortex.core.simd.VectorSupport;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
@@ -100,7 +101,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         for (long chunk = firstChunk; chunk <= lastChunk; chunk++) {
             readElements(basesSeg, ptype, basesCap, chunk * lanes, lanes, chunkBases);
             readElements(deltasSeg, ptype, deltasCap, chunk * FastLanes.CHUNK, FastLanes.CHUNK, chunkDeltas);
-            undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
+            VectorSupport.operations().undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
             scatterChunk(out, ptype, chunkUndelta, chunk * FastLanes.CHUNK - offset, rowCount);
         }
         return MaterializedArrays.of(ctx.dtype(), ptype, rowCount, out.asReadOnly());
@@ -159,18 +160,6 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
                 }
             }
             default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
-        }
-    }
-
-    private static void undeltaChunk(long[] deltas, long[] bases, int lanes, int typeBits, long mask, long[] out) {
-        for (int lane = 0; lane < lanes; lane++) {
-            long prev = bases[lane] & mask;
-            for (int row = 0; row < typeBits; row++) {
-                int idx = FastLanes.iterateIndex(row, lane);
-                long next = ((deltas[idx] & mask) + prev) & mask;
-                out[idx] = next;
-                prev = next;
-            }
         }
     }
 

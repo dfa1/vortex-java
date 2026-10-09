@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
+import io.github.dfa1.vortex.core.simd.VectorSupport;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -28,6 +29,7 @@ import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.Optional;
 
 /// Read-only decoder for `vortex.dict`.
 ///
@@ -95,7 +97,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         long poolLength = valuesBuf.byteSize() / valPType.byteSize();
         Array values = MaterializedArrays.of(ctx.dtype(), valPType, poolLength, valuesBuf);
         Array codes = MaterializedArrays.of(codesDtype, codePType, rowCount, codesBuf);
-        validateCodesInRange(codes, poolLength);
+        validateCodesInRange(codes, codePType, poolLength);
         return buildLazyDict(ctx.dtype(), valPType, rowCount, values, codes);
     }
 
@@ -130,7 +132,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
 
         rejectEmptyChildren(rowCount, physicalBytes(rawCodes), codePType.byteSize(),
                 physicalBytes(rawValues), valPType.byteSize());
-        validateCodesInRange(rawCodes, rawValues.length());
+        validateCodesInRange(rawCodes, codePType, rawValues.length());
 
         Array values = buildLazyDict(ctx.dtype(), valPType, rowCount, rawValues, rawCodes);
         BoolArray rowValidity = poolValidity == null
@@ -207,13 +209,35 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     /// three legal codes widths appear ([#requireUnsignedCodePType(PType)] runs first), so
     /// zero-extending each read covers the whole unsigned range.
     ///
+    /// A segment-backed codes array (the common case: bit-unpacked or plain codes) is scanned by
+    /// [io.github.dfa1.vortex.core.simd.SimdOperations#maxUnsigned(MemorySegment, long, PType)]; a broadcast buffer holds fewer
+    /// elements than rows but the same maximum, so only its physical elements are scanned.
+    ///
     /// @param codes      per-row codes
+    /// @param codePType  the codes' unsigned ptype
     /// @param poolLength number of entries in the values pool
-    private static void validateCodesInRange(Array codes, long poolLength) {
+    private static void validateCodesInRange(Array codes, PType codePType, long poolLength) {
         long n = codes.length();
         if (n == 0) {
             return;
         }
+        Optional<MemorySegment> segment = codes.segmentIfPresent();
+        long max = segment.isPresent()
+                ? VectorSupport.operations().maxUnsigned(segment.get(),
+                        Math.min(n, segment.get().byteSize() / codePType.byteSize()), codePType)
+                : maxCode(codes);
+        if (Long.compareUnsigned(max, poolLength) >= 0) {
+            throw new VortexException(EncodingId.VORTEX_DICT, "code " + Long.toUnsignedString(max)
+                    + " out of range for a values pool of " + poolLength + " element(s)");
+        }
+    }
+
+    /// Accessor fallback of [#validateCodesInRange(Array, PType, long)] for codes with no backing segment.
+    ///
+    /// @param codes per-row codes
+    /// @return the largest code, zero-extended
+    private static long maxCode(Array codes) {
+        long n = codes.length();
         long max = 0;
         switch (codes) {
             case ByteArray ba -> {
@@ -234,10 +258,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             default -> throw new VortexException(EncodingId.VORTEX_DICT,
                     "unsupported codes array type: " + codes.getClass().getSimpleName());
         }
-        if (Long.compareUnsigned(max, poolLength) >= 0) {
-            throw new VortexException(EncodingId.VORTEX_DICT, "code " + Long.toUnsignedString(max)
-                    + " out of range for a values pool of " + poolLength + " element(s)");
-        }
+        return max;
     }
 
     /// Rejects a child with no elements at all while the metadata claims rows.

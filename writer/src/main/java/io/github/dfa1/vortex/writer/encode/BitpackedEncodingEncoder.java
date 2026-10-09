@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.simd.SimdOperations;
+import io.github.dfa1.vortex.core.simd.VectorSupport;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -15,11 +17,11 @@ import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.Arrays;
 import java.util.List;
 
 /// Write-only encoder for `fastlanes.bitpacked`.
 public final class BitpackedEncodingEncoder implements EncodingEncoder {
-    private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
     @Override
     public EncodingId encodingId() {
@@ -193,45 +195,27 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         }
         int lanes = 1024 / typeBits;
         int blockCount = (n + 1023) / 1024;
-        long typeMask = FastLanes.lowMask(typeBits);
-        // Mask values to the chosen bit width so over-cap entries (handled separately as
-        // patches) don't spill into the next row's region in the packed layout.
-        long widthMask = bitWidth >= 64 ? -1L : (1L << bitWidth) - 1L;
         int wordsPerBlock = bitWidth * lanes;
         MemorySegment seg = arena.allocate((long) blockCount * 128 * bitWidth);
-        // One block's packed words, built in registers and stored once each: the segment is never
-        // read back, and the per-width store switch runs once per block, not once per word.
+        // One block's packed words, stored once each: the segment is never read back, and the
+        // per-width store switch runs once per block, not once per word.
         long[] words = new long[wordsPerBlock];
-        int[] rowOffset = new int[typeBits];
-        for (int row = 0; row < typeBits; row++) {
-            rowOffset[row] = FL_ORDER[row / 8] * 16 + (row % 8) * 128;
-        }
+        // The kernel packs full blocks only; a partial tail block is zero-padded into scratch.
+        long[] tail = null;
+        SimdOperations ops = VectorSupport.operations();
 
         for (int block = 0; block < blockCount; block++) {
             int blockStart = block * 1024;
-            boolean fullBlock = blockStart + 1024 <= n;
-            for (int lane = 0; lane < lanes; lane++) {
-                // FastLanes packs each lane's typeBits rows bit-contiguously into bitWidth words:
-                // a word is complete once its bits are filled, and a row straddling the word
-                // boundary carries its high bits into the next word.
-                long acc = 0L;
-                int shift = 0;
-                int word = 0;
-                for (int row = 0; row < typeBits; row++) {
-                    int idx = blockStart + rowOffset[row] + lane;
-                    long value = (fullBlock || idx < n) ? values[idx] & widthMask : 0L;
-                    acc |= value << shift;
-                    int filled = shift + bitWidth;
-                    if (filled >= typeBits) {
-                        words[word * lanes + lane] = acc & typeMask;
-                        word++;
-                        int carry = filled - typeBits;
-                        acc = carry > 0 ? value >>> (bitWidth - carry) : 0L;
-                        shift = carry;
-                    } else {
-                        shift = filled;
-                    }
+            if (blockStart + 1024 <= n) {
+                ops.packBlock(values, blockStart, bitWidth, typeBits, words);
+            } else {
+                if (tail == null) {
+                    tail = new long[1024];
                 }
+                int remaining = n - blockStart;
+                System.arraycopy(values, blockStart, tail, 0, remaining);
+                Arrays.fill(tail, remaining, 1024, 0L);
+                ops.packBlock(tail, 0, bitWidth, typeBits, words);
             }
             storeWords(seg, (long) block * 128 * bitWidth, words, typeBits);
         }
