@@ -285,12 +285,24 @@ sweep. A change touching public API, module structure, wire behavior, or policy 
 whichever apply: `docs/reference.md`, `docs/compatibility.md`, the CLAUDE.md module map /
 design decisions, and the CHANGELOG entry for the change. This includes the CHANGELOG itself —
 add the `## [Unreleased]` entry (terse, per the `changelog` skill's style) in the same commit as
-the fix/feature, not a separate trailing `docs:` commit. **CHANGELOG entries are one sentence + a link** to the PR/issue/commit, e.g.
-`- Bit-packing encodes about 45% faster. ([#475](…))`. A headline figure ("by 10%") is fine; the
-explanation, benchmark tables and rationale belong in the commit message and code, never the
-changelog. No `Highlights` prose, no tests/CI/build/docs-only entries. Historical records (`adr/`, released
-CHANGELOG sections) are exempt — they describe the past. Docs drift is a bug (2026-07-04: a
-single audit found phantom APIs, dead service files, and pre-refactor FQNs across four files).
+the fix/feature, not a separate trailing `docs:` commit. Historical records (`adr/`) are exempt —
+they describe the past. Docs drift is a bug (2026-07-04: a single audit found phantom APIs, dead
+service files, and pre-refactor FQNs across four files).
+
+### Changelog entries
+
+One sentence + a link to the PR/issue/commit, nothing else (the `changelog` skill has the full
+procedure):
+
+```
+- Bit-packing encodes about 45% faster. ([#475](https://github.com/dfa1/vortex-java/issues/475))
+```
+
+- A headline figure ("by 10%") is fine. Rationale, benchmark tables and before/after numbers belong
+  in the commit message and code, never the changelog.
+- No `Highlights` prose, and no tests/CI/build/docs-only entries.
+- Release notes are the version's CHANGELOG section verbatim; after rewriting a released section,
+  regenerate its GitHub release with `gh release edit vX.Y.Z --notes-file`.
 
 ## Code style
 

@@ -52,6 +52,11 @@ The numbers and rationale belong in the commit message, not duplicated in the ch
 
 ## Rules
 
+- No `### Highlights` section, intro paragraphs or tables: one-sentence bullets only.
+- Skip tests/CI/build/docs-only entries entirely.
+- After editing a **released** section, refresh its GitHub release (notes = the section body):
+  `gh release edit vX.Y.Z --notes-file <file>`. Edit, don't delete/recreate — tags and assets stay.
+
 - Never invent entries for commits that don't exist — the link is the receipt.
 - Never leave a bullet without a commit link.
 - One sentence per bullet. If it needs two sentences, split it into two bullets, or the
