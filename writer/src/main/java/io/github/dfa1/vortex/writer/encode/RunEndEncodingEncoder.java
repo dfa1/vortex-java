@@ -19,6 +19,9 @@ import java.util.Set;
 /// Write-only encoder for `vortex.runend`.
 public final class RunEndEncodingEncoder implements EncodingEncoder {
 
+    /// Rust's `RUN_END_THRESHOLD` (`vortex-btrblocks` `schemes/integer/runend.rs`).
+    private static final long RUN_END_THRESHOLD = 4;
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_RUNEND;
@@ -29,35 +32,15 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Primitive p && !p.ptype().isFloating();
     }
 
-    @Override
-    public StatsOptions statsOptions() {
-        return new StatsOptions(true, true);
-    }
-
+    /// Rust's `RunEndScheme` verdict: skip unless runs average at least [#RUN_END_THRESHOLD]
+    /// values, else defer to the sample. Needs no distinct count, so it declares no
+    /// [StatsOptions], as Rust's scheme declares none.
     @Override
     public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
-        ArrayStats stats = data.stats();
-        if (!(dtype instanceof DType.Primitive) || !stats.hasDistinctCount()) {
+        if (!(dtype instanceof DType.Primitive)) {
             return Estimate.COMPLETE;
         }
-        long n = stats.valueCount();
-        long distinct = stats.distinctCount();
-        if (n == 0) {
-            return Estimate.SKIP;
-        }
-        // The only consumer the capped scan does not settle: `distinct >= n` needs the exact
-        // count, and a capped scan only proves distinct > n/2 + 1. Defer to the sample instead
-        // of guessing — a 1024-row sample encode is far cheaper than the probes the cap saved.
-        if (stats.distinctCapped()) {
-            return Estimate.COMPLETE;
-        }
-        // Skip rule: if every value is distinct, each row is its own run — pure overhead.
-        // Defer to the sample-encoded path otherwise; RunEnd's actual compression depends
-        // on run-length distribution which is not summarized by distinct count alone.
-        if (distinct >= n) {
-            return Estimate.SKIP;
-        }
-        return Estimate.COMPLETE;
+        return data.stats().averageRunLength() < RUN_END_THRESHOLD ? Estimate.SKIP : Estimate.COMPLETE;
     }
 
     /// Encodes a boolean array as `vortex.runend`: consecutive equal values collapse into one run.

@@ -23,16 +23,21 @@ import java.lang.reflect.Array;
 ///                          `valueCount / 2 + 1`. [#distinctCount()] is then a lower bound and
 ///                          [#mostFrequentBits()] / [#topFrequency()] are partial — see
 ///                          [#distinctCapped()] for why every consumer can still decide
+/// @param averageRunLength  `valueCount` divided by the number of runs of equal values, as Rust's
+///                          `average_run_length` (integer division; floats compare as values, so
+///                          `-0.0 == 0.0` and every NaN starts a run). Always computed, as in
+///                          Rust: it is a single branch-free pass, never capped
 public record ArrayStats(
         long valueCount,
         long distinctCount,
         long mostFrequentBits,
         long topFrequency,
-        boolean distinctCapped
+        boolean distinctCapped,
+        long averageRunLength
 ) {
 
     /// Sentinel stats for empty arrays.
-    public static final ArrayStats EMPTY = new ArrayStats(0, 0, 0, 0, false);
+    public static final ArrayStats EMPTY = new ArrayStats(0, 0, 0, 0, false, 0);
 
     /// Value ranges narrower than this are always counted densely: Rust's
     /// `DENSE_DISTINCT_ALWAYS_RANGE` (covers every 8-bit array).
@@ -54,12 +59,10 @@ public record ArrayStats(
         if (n == 0) {
             return EMPTY;
         }
-        if (options == StatsOptions.NONE) {
-            return new ArrayStats(n, -1, 0, 0, false);
-        }
+        long averageRunLength = n / runs(ptype, data, n);
         if (!options.countDistinct() && !options.trackMostFrequent()) {
             // Nothing to accumulate — the scan below would read every element and discard it.
-            return new ArrayStats(n, -1, 0, 0, false);
+            return new ArrayStats(n, -1, 0, 0, false, averageRunLength);
         }
 
         // Stop once the distinct count passes half the rows: past that point every consumer's
@@ -77,7 +80,7 @@ public record ArrayStats(
         if (!ptype.isFloating()) {
             // Widened once (zero-copy for I64/U64) so one loop serves every integer width.
             long[] values = PrimitiveArrays.toLongs(data, ptype, EncodingId.VORTEX_PRIMITIVE);
-            return integerStats(values, n, cap, options.countDistinct());
+            return integerStats(values, n, cap, options.countDistinct(), averageRunLength);
         }
 
         // Sized for the low-cardinality case and grown from there, NOT for the cap. Pre-sizing
@@ -91,7 +94,7 @@ public record ArrayStats(
             case F32 -> scanF32((float[]) data, n, counts, cap);
             default -> scanF64((double[]) data, n, counts, cap);
         };
-        return fromCounts(n, counts, capped, options.countDistinct());
+        return fromCounts(n, counts, capped, options.countDistinct(), averageRunLength);
     }
 
     /// Integer stats as Rust's `typed_int_stats` (vortex-compressor #10037, #10041) computes
@@ -107,8 +110,9 @@ public record ArrayStats(
     /// @param n      element count, at least 1
     /// @param cap    distinct count past which the hashed scan may stop
     /// @param countDistinct whether [#distinctCount()] is reported
+    /// @param averageRunLength the already computed [#averageRunLength()]
     /// @return the stats
-    private static ArrayStats integerStats(long[] a, int n, long cap, boolean countDistinct) {
+    private static ArrayStats integerStats(long[] a, int n, long cap, boolean countDistinct, long averageRunLength) {
         long min = a[0];
         long max = a[0];
         for (int i = 0; i < n; i++) {
@@ -122,7 +126,7 @@ public record ArrayStats(
         long span = max - min;
         if (span >= 0 && (span < DENSE_ALWAYS_RANGE
                 || span < DENSE_MAX_RANGE && span < n)) {
-            return denseStats(a, n, min, (int) span + 1, countDistinct);
+            return denseStats(a, n, min, (int) span + 1, countDistinct, averageRunLength);
         }
 
         LongIntMap counts = new LongIntMap(Math.min(n, 2048));
@@ -133,7 +137,7 @@ public record ArrayStats(
             if (v != prev) {
                 counts.increment(prev, pending);
                 if (counts.size() > cap) {
-                    return fromCounts(n, counts, true, countDistinct);
+                    return fromCounts(n, counts, true, countDistinct, averageRunLength);
                 }
                 prev = v;
                 pending = 0;
@@ -141,11 +145,12 @@ public record ArrayStats(
             pending++;
         }
         counts.increment(prev, pending);
-        return fromCounts(n, counts, counts.size() > cap, countDistinct);
+        return fromCounts(n, counts, counts.size() > cap, countDistinct, averageRunLength);
     }
 
     /// Counts by `value - min` into an array: no hashing, and never capped.
-    private static ArrayStats denseStats(long[] a, int n, long min, int range, boolean countDistinct) {
+    private static ArrayStats denseStats(long[] a, int n, long min, int range, boolean countDistinct,
+                                         long averageRunLength) {
         int[] counts = new int[range];
         for (int i = 0; i < n; i++) {
             counts[(int) (a[i] - min)]++;
@@ -163,15 +168,62 @@ public record ArrayStats(
                 topIndex = i;
             }
         }
-        return new ArrayStats(n, countDistinct ? distinct : -1L, min + topIndex, counts[topIndex], false);
+        return new ArrayStats(n, countDistinct ? distinct : -1L, min + topIndex, counts[topIndex], false,
+                averageRunLength);
     }
 
-    private static ArrayStats fromCounts(int n, LongIntMap counts, boolean capped, boolean countDistinct) {
+    private static ArrayStats fromCounts(int n, LongIntMap counts, boolean capped, boolean countDistinct,
+                                         long averageRunLength) {
         LongIntMap.Entry top = counts.maxEntry();
         long topFreqBits = top == null ? 0L : top.key();
         int topFreq = top == null ? 0 : top.value();
         long distinct = countDistinct ? counts.size() : -1L;
-        return new ArrayStats(n, distinct, topFreqBits, topFreq, capped);
+        return new ArrayStats(n, distinct, topFreqBits, topFreq, capped, averageRunLength);
+    }
+
+    /// Runs of equal values: 1 plus every change between neighbors. One loop per carrier with a
+    /// branch-free body, so C2 vectorizes it (CLAUDE.md hot-loop rule).
+    private static long runs(PType ptype, Object data, int n) {
+        long changes = 0;
+        switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = (byte[]) data;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I16, U16, F16 -> {
+                short[] a = (short[]) data;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I32, U32 -> {
+                int[] a = (int[]) data;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I64, U64 -> {
+                long[] a = (long[]) data;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case F32 -> {
+                float[] a = (float[]) data;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) data;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+        }
+        return changes + 1;
     }
 
     private static boolean scanF16(short[] a, int n, LongIntMap counts, long cap) {

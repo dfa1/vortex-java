@@ -213,23 +213,31 @@ public final class CascadingCompressor {
         // excluded set so spliceResult's notApplicable retry can rotate to the next accepting
         // encoding (e.g. DateTimePartsEncoding → ExtEncoding when the input is raw storage rather
         // than DateTimePartsData).
-        if (!(dtype instanceof DType.Primitive p)) {
+        if (!(dtype instanceof DType.Primitive)) {
             return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
 
-        // Stats-first selection (Rust vortex-compressor pattern): merge every eligible
-        // encoder's StatsOptions so the one scan, run lazily by the first encoder whose
-        // expectedRatio() reads stats, satisfies every later one. ALWAYS_USE short-circuits;
-        // SKIP excludes; COMPLETE defers to the sample-encoded path below.
+        return competeAndEncode(dtype, withStats(dtype, data, ctx), ctx,
+                sampleSize -> primitiveBytes(dtype, sampleSize));
+    }
+
+    /// Bundles `data` with stats under the [StatsOptions] merged from every eligible encoder,
+    /// so the one scan, run lazily by the first encoder whose expectedRatio() reads stats,
+    /// satisfies every later one (Rust vortex-compressor pattern).
+    private ArrayAndStats withStats(DType dtype, Object data, EncodeContext ctx) {
         StatsOptions merged = StatsOptions.NONE;
         for (EncodingEncoder enc : encodings) {
             if (enc.accepts(dtype) && !ctx.excluded().contains(enc.encodingId())) {
                 merged = StatsOptions.merge(merged, enc.statsOptions());
             }
         }
+        return new ArrayAndStats(dtype, data, merged);
+    }
 
-        return competeAndEncode(dtype, new ArrayAndStats(p, data, merged), ctx,
-                sampleSize -> primitiveBytes(dtype, sampleSize));
+    /// Whether `dtype` goes through the competition ([#competeAndEncode]) rather than a
+    /// first-match dispatch — and so whether stats verdicts apply to it.
+    private static boolean competes(DType dtype) {
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
     /// Shared sample-and-measure competition: stats-based skip/always-use sweep, then a
@@ -317,11 +325,31 @@ public final class CascadingCompressor {
         return total;
     }
 
+    /// Smallest size any candidate encodes the (already sampled) child `data` to.
+    ///
+    /// Selects as Rust's `choose_best_scheme` does at every cascade level, not only at the top:
+    /// stats verdicts first, so a candidate whose verdict is SKIP is never trial-encoded. Without
+    /// it every accepting encoder was trial-encoded at every level, which was most of a cascading
+    /// write's CPU and allocation.
+    ///
+    /// Two sample-context rules from Rust's `compress` (`compressor/cascade.rs`): an empty array
+    /// is returned before any selection, so it costs nothing; and constant detection is skipped,
+    /// since a constant sample does not imply a constant array — so ALWAYS_USE does not settle the
+    /// child here, the candidate is only measured like the rest. Short-circuiting it made an
+    /// empty patch child of Sparse cost a constant node and flipped taxi's dict codes from Sparse
+    /// (Rust's choice) to bit-packing.
     private long measureBestChild(DType dtype, Object data, EncodeContext ctx) {
         int n = dataLength(data);
         long best = primitiveBytes(dtype, n);
+        if (n == 0) {
+            return best;
+        }
+        ArrayAndStats input = competes(dtype) ? withStats(dtype, data, ctx) : null;
         for (EncodingEncoder enc : encodings) {
             if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
+                continue;
+            }
+            if (input != null && enc.expectedRatio(dtype, input) == Estimate.SKIP) {
                 continue;
             }
             CascadeStep step = enc.encodeCascade(dtype, data, ctx);
