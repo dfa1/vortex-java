@@ -404,7 +404,7 @@ For bulk consumption with auto-close per element, `ScanIterator` overrides the s
 
 ```java
 try (var iter = reader.scan(opts)) {
-    iter.forEachRemaining(c -> sum += c.column("price").fold(0.0, Double::sum));
+    iter.forEachRemaining(c -> sum += c.column(ColumnName.of("price")).fold(0.0, Double::sum));
 }
 ```
 

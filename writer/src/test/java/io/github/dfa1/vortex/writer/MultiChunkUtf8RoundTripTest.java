@@ -55,12 +55,12 @@ class MultiChunkUtf8RoundTripTest {
         // Then — at least one scan chunk must surface a VarBinChunkedArray column. Values must
         // round-trip across the whole file regardless of how the writer chose to chunk.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(ScanOptions.columns("s"))) {
+             var iter = vf.scan(ScanOptions.columns(ColumnName.of("s")))) {
             var seen = new ArrayList<String>();
             boolean sawChunkedMode = false;
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    VarBinArray col = c.column("s");
+                    VarBinArray col = c.column(ColumnName.of("s"));
                     if (col instanceof VarBinChunkedArray) {
                         sawChunkedMode = true;
                     }
@@ -94,10 +94,10 @@ class MultiChunkUtf8RoundTripTest {
 
         // Then — column should be a leaf VarBinArray (VarBinOffsetArray or VarBinDictArray), not VarBinChunkedArray
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(ScanOptions.columns("s"))) {
+             var iter = vf.scan(ScanOptions.columns(ColumnName.of("s")))) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk c = iter.next()) {
-                VarBinArray col = c.column("s");
+                VarBinArray col = c.column(ColumnName.of("s"));
                 // Sanity: chunked single-chunk decoder bypasses the wrapper.
                 assertThat(col).isNotInstanceOf(VarBinChunkedArray.class);
                 assertThat(col.length()).isEqualTo(3);

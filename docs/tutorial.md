@@ -49,10 +49,10 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ColumnName;
 
 DType.Struct schema = DType.structBuilder()
-    .field("timestamp", DType.I64)                     // unix epoch millis
-    .field("symbol",    DType.UTF8)                    // ticker symbol
-    .field("price",     DType.F64)                     // trade price
-    .field("volume",    DType.I64.asNullable())        // shares traded, may be null
+    .field(ColumnName.of("timestamp"), DType.I64)                     // unix epoch millis
+    .field(ColumnName.of("symbol"),    DType.UTF8)                    // ticker symbol
+    .field(ColumnName.of("price"),     DType.F64)                     // trade price
+    .field(ColumnName.of("volume"),    DType.I64.asNullable())        // shares traded, may be null
     .build();
 ```
 
@@ -112,8 +112,8 @@ try (VortexReader vf = VortexReader.open(outPath);
     while (iter.hasNext()) {
         try (var chunk = iter.next()) {   // advances to the next batch
 
-            LongArray  ts     = chunk.column("timestamp");
-            DoubleArray price = chunk.column("price");
+            LongArray  ts     = chunk.column(ColumnName.of("timestamp"));
+            DoubleArray price = chunk.column(ColumnName.of("price"));
 
             for (long i = 0; i < chunk.rowCount(); i++) {
                 System.out.printf("%d  %.2f%n", ts.getLong(i), price.getDouble(i));
@@ -148,7 +148,7 @@ Reading every column is wasteful when you only need two. Use `withColumns` to pr
 
 ```java
 ScanOptions opts = ScanOptions.all()
-    .withColumns("symbol", "price")
+    .withColumns(ColumnName.of("symbol"), ColumnName.of("price"))
     .withLimit(2);
 
 try (VortexReader vf = VortexReader.open(outPath);

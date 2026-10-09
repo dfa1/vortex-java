@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
@@ -62,7 +63,7 @@ final class FusedFilterAggregate {
     ///                  only (`COUNT(*)`)
     /// @return the fold over the selected rows: the selected row count, the aggregate's non-null count
     ///         among them, and (when `aggColumn` is given) its `SUM` / `MIN` / `MAX`
-    static FilteredAggregate aggregate(Chunk chunk, RowFilter filter, String aggColumn) {
+    static FilteredAggregate aggregate(Chunk chunk, RowFilter filter, ColumnName aggColumn) {
         long n = chunk.rowCount();
         FilteredAggregate dictResult = tryDictLane(chunk, filter, aggColumn, n);
         if (dictResult != null) {
@@ -98,7 +99,7 @@ final class FusedFilterAggregate {
     /// @param aggColumn the aggregate column name, or `null` to count selected rows only
     /// @param n         the chunk's row count
     /// @return the fold, or `null` when the shape does not qualify for the dict lane
-    private static FilteredAggregate tryDictLane(Chunk chunk, RowFilter filter, String aggColumn, long n) {
+    private static FilteredAggregate tryDictLane(Chunk chunk, RowFilter filter, ColumnName aggColumn, long n) {
         List<RowFilter.Column> leaves = new ArrayList<>();
         flattenLeaves(filter, leaves);
         int driver = -1;

@@ -9,6 +9,7 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -204,10 +205,10 @@ class RustWritesJavaReadsIntegrationTest {
 
     private static long[] readJavaLongColumn(Path file, String column) throws IOException {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(column))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of(column)))) {
             var longs = new ArrayList<Long>();
             iter.forEachRemaining(c -> {
-                LongArray arr = c.column(column);
+                LongArray arr = c.column(ColumnName.of(column));
                 for (long i = 0; i < arr.length(); i++) {
                     longs.add(arr.getLong(i));
                 }
@@ -255,7 +256,7 @@ class RustWritesJavaReadsIntegrationTest {
         List<io.github.dfa1.vortex.reader.Zone> result;
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
-            result = iter.columnZones("id");
+            result = iter.columnZones(ColumnName.of("id"));
         }
 
         // Then
@@ -286,7 +287,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When
         long result = countChunks(file, io.github.dfa1.vortex.reader.ScanOptions.all()
-                .withFilter(io.github.dfa1.vortex.reader.RowFilter.eq("k", "key-00000005")));
+                .withFilter(io.github.dfa1.vortex.reader.RowFilter.eq(ColumnName.of("k"), "key-00000005")));
 
         // Then
         assertThat(totalChunks).isGreaterThan(1);
@@ -304,7 +305,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When
         long result = countChunks(file, io.github.dfa1.vortex.reader.ScanOptions.all()
-                .withFilter(io.github.dfa1.vortex.reader.RowFilter.eq("k", emoji)));
+                .withFilter(io.github.dfa1.vortex.reader.RowFilter.eq(ColumnName.of("k"), emoji)));
 
         // Then — the only chunk holds the match, so it must survive pruning
         assertThat(result).isEqualTo(1);
@@ -363,13 +364,13 @@ class RustWritesJavaReadsIntegrationTest {
         // When / Then — no zone carries a SUM statistic anymore
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
-            List<ArrayStats> zones = iter.columnZoneStats("id");
+            List<ArrayStats> zones = iter.columnZoneStats(ColumnName.of("id"));
             assertThat(zones).isNotEmpty().allSatisfy(z -> assertThat(z.sum()).isNull());
         }
 
         // When / Then — the reducer refuses to guess and tells the caller to stream instead
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            Number pushedDown = new io.github.dfa1.vortex.reader.compute.ZoneReducer(vf).sum("id");
+            Number pushedDown = new io.github.dfa1.vortex.reader.compute.ZoneReducer(vf).sum(ColumnName.of("id"));
             assertThat(pushedDown).isNull();
         }
 
@@ -425,8 +426,8 @@ class RustWritesJavaReadsIntegrationTest {
             var valList = new ArrayList<Double>();
             while (iter.hasNext() && rowsSeen < 10) {
                 try (var c = iter.next()) {
-                    LongArray idCol = c.column("id");
-                    DoubleArray valCol = c.column("value");
+                    LongArray idCol = c.column(ColumnName.of("id"));
+                    DoubleArray valCol = c.column(ColumnName.of("value"));
                     long take = Math.min(idCol.length(), 10 - rowsSeen);
                     for (long i = 0; i < take; i++) {
                         idList.add(idCol.getLong(i));
@@ -470,7 +471,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns("id"));
+            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("id")));
             assertThat(results).hasSize(1);
             assertThat(results.getFirst().columns()).containsKey("id");
             assertThat(results.getFirst().columns()).doesNotContainKey("value");
@@ -494,7 +495,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns("value"));
+            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("value")));
             long total = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(total).isEqualTo(n);
             double sum = 0;
@@ -566,7 +567,7 @@ class RustWritesJavaReadsIntegrationTest {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                io.github.dfa1.vortex.reader.array.DecimalArray arr = c.column("v");
+                io.github.dfa1.vortex.reader.array.DecimalArray arr = c.column(ColumnName.of("v"));
                 for (long i = 0; i < arr.length(); i++) {
                     result.add(arr.getDecimal(i));
                 }
@@ -617,7 +618,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then — must round-trip exactly
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns("v"));
+            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("v")));
             long total = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(total).isEqualTo(n);
             var got = new ArrayList<Short>();
@@ -669,7 +670,7 @@ class RustWritesJavaReadsIntegrationTest {
             long totalRows = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(totalRows).isEqualTo(n);
             assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
-            DType colDtype = ((DType.Struct) vf.dtype()).field("id");
+            DType colDtype = ((DType.Struct) vf.dtype()).field(ColumnName.of("id"));
             assertThat(colDtype.nullable()).isTrue();
             // null slots store 0 (bitpacked folds validity); non-null slot i stores i
             // sum(i for i in [0,10000) if i%5!=0) = 49995000 - 5*(0+5+…+9995) = 40000000
@@ -738,7 +739,7 @@ class RustWritesJavaReadsIntegrationTest {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                io.github.dfa1.vortex.reader.array.DecimalArray arr = c.column(decimalColumn);
+                io.github.dfa1.vortex.reader.array.DecimalArray arr = c.column(ColumnName.of(decimalColumn));
                 for (long i = 0; i < arr.length(); i++) {
                     result.add(arr.getDecimal(i));
                 }
@@ -809,7 +810,7 @@ class RustWritesJavaReadsIntegrationTest {
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             iter.forEachRemaining(c -> {
                 for (String name : jni.keySet()) {
-                    Array arr = c.column(name);
+                    Array arr = c.column(ColumnName.of(name));
                     var col = result.computeIfAbsent(name, k -> new ArrayList<>());
                     for (long i = 0; i < arr.length(); i++) {
                         col.add(arr instanceof MaskedArray m
@@ -861,7 +862,7 @@ class RustWritesJavaReadsIntegrationTest {
 
             // Then — correct dtype, correct values
             assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
-            assertThat(((DType.Struct) vf.dtype()).field("v"))
+            assertThat(((DType.Struct) vf.dtype()).field(ColumnName.of("v")))
                     .isEqualTo(DType.F16);
             assertThat(results).hasSize(1);
             // F16 column snapshots as a short[] (raw float16 bits)

@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 
-import java.util.Arrays;
 import java.util.List;
 
 /// Options controlling a file scan.
@@ -10,9 +9,8 @@ import java.util.List;
 /// Empty `columns` = read all columns.
 /// Null `rowFilter` = no zone-map pruning.
 ///
-/// Projection names are supplied as strings at the API boundary and validated into
-/// [ColumnName] on construction, so a blank or control-character projection name fails fast
-/// rather than silently matching nothing.
+/// Projection names are validated [ColumnName]s, so a control-character name fails at the
+/// call site rather than silently matching nothing.
 ///
 /// @param columns   projected column names; empty means all columns
 /// @param rowFilter zone-map pruning filter, or `null` for none
@@ -36,8 +34,8 @@ public record ScanOptions(
     ///
     /// @param names column names to project
     /// @return options projecting `names`
-    public static ScanOptions columns(String... names) {
-        return new ScanOptions(toColumnNames(names), null, NO_LIMIT);
+    public static ScanOptions columns(ColumnName... names) {
+        return new ScanOptions(List.of(names), null, NO_LIMIT);
     }
 
     /// Scans every column, capped at `limit` rows.
@@ -52,8 +50,8 @@ public record ScanOptions(
     ///
     /// @param names column names to project
     /// @return a copy with `names` projected
-    public ScanOptions withColumns(String... names) {
-        return new ScanOptions(toColumnNames(names), rowFilter, limit);
+    public ScanOptions withColumns(ColumnName... names) {
+        return new ScanOptions(List.of(names), rowFilter, limit);
     }
 
     /// Returns a copy with the given row limit.
@@ -85,9 +83,5 @@ public record ScanOptions(
     /// @return `true` if a row limit is set
     public boolean hasLimit() {
         return limit != NO_LIMIT;
-    }
-
-    private static List<ColumnName> toColumnNames(String... names) {
-        return Arrays.stream(names).map(ColumnName::of).toList();
     }
 }

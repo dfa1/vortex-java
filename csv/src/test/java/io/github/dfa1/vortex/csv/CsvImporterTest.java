@@ -43,10 +43,10 @@ class CsvImporterTest {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk chunk = iter.next()) {
                     assertThat(chunk.rowCount()).isEqualTo(2);
-                    LongArray ids = chunk.column("id");
+                    LongArray ids = chunk.column(ColumnName.of("id"));
                     assertThat(ids.getLong(0)).isEqualTo(1L);
                     assertThat(ids.getLong(1)).isEqualTo(2L);
-                    VarBinArray names = chunk.column("name");
+                    VarBinArray names = chunk.column(ColumnName.of("name"));
                     assertThat(names.getString(0)).isEqualTo("Alice");
                     assertThat(names.getString(1)).isEqualTo("Bob");
                 }
@@ -109,7 +109,7 @@ class CsvImporterTest {
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk chunk = iter.next()) {
-                    VarBinArray values = chunk.column("value");
+                    VarBinArray values = chunk.column(ColumnName.of("value"));
                     assertThat(values.getString(0)).isEqualTo("42");
                 }
             }

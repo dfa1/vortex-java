@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -22,7 +23,7 @@ final class VortexReads {
         var collected = new ArrayList<Integer>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                ((IntArray) c.column(col)).forEachInt(collected::add);
+                ((IntArray) c.column(ColumnName.of(col))).forEachInt(collected::add);
             });
         }
         return collected.stream().mapToInt(Integer::intValue).toArray();
@@ -32,7 +33,7 @@ final class VortexReads {
         var collected = new ArrayList<Long>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                ((LongArray) c.column(col)).forEachLong(collected::add);
+                ((LongArray) c.column(ColumnName.of(col))).forEachLong(collected::add);
             });
         }
         return collected.stream().mapToLong(Long::longValue).toArray();
@@ -42,7 +43,7 @@ final class VortexReads {
         var collected = new ArrayList<Double>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                DoubleArray arr = (DoubleArray) c.column(col);
+                DoubleArray arr = (DoubleArray) c.column(ColumnName.of(col));
                 arr.forEachDouble(collected::add);
             });
         }
@@ -53,7 +54,7 @@ final class VortexReads {
         var collected = new ArrayList<String>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                VarBinArray vb = (VarBinArray) c.column(col);
+                VarBinArray vb = (VarBinArray) c.column(ColumnName.of(col));
                 for (long i = 0; i < vb.length(); i++) {
                     collected.add(vb.getString(i));
                 }

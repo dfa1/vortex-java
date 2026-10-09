@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -40,11 +41,11 @@ class ZstdBuffersInteropIntegrationTest {
         // When
         List<String> result = new ArrayList<>(ROWS);
         try (var reader = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = reader.scan(ScanOptions.columns("ints", "strs"))) {
+             var iter = reader.scan(ScanOptions.columns(ColumnName.of("ints"), ColumnName.of("strs")))) {
             while (iter.hasNext()) {
                 Chunk chunk = iter.next();
-                Array ints = chunk.column("ints");
-                Array strs = chunk.column("strs");
+                Array ints = chunk.column(ColumnName.of("ints"));
+                Array strs = chunk.column(ColumnName.of("strs"));
                 for (long i = 0; i < chunk.rowCount(); i++) {
                     result.add(render(ints, i, true) + "|" + render(strs, i, false));
                 }

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -16,7 +17,7 @@ import java.util.Objects;
 ///
 /// Both kernels fold the filter and the reduce in a single pass with no intermediate selection bitmap:
 /// [#filteredSum(Array, Predicate, Array)] filters one column and totals a second; the multi-column
-/// [#filteredAggregate(Chunk, RowFilter, String)] evaluates a whole [RowFilter] and folds an
+/// [#filteredAggregate(Chunk, RowFilter, ColumnName)] evaluates a whole [RowFilter] and folds an
 /// aggregate column's `SUM` / `MIN` / `MAX` / non-null count over the rows it selects.
 /// [#matches(Chunk, RowFilter, long)] is the un-fused, per-row counterpart of the two: a plain
 /// boolean test with no aggregate at all, for a caller that needs to select rows rather than reduce
@@ -69,14 +70,14 @@ public final class Compute {
     /// @param filter    the whole chunk predicate to evaluate
     /// @param aggColumn the column to reduce over the selected rows, or `null` to count rows only
     /// @return the fold over the rows `filter` selects
-    public static FilteredAggregate filteredAggregate(Chunk chunk, RowFilter filter, String aggColumn) {
+    public static FilteredAggregate filteredAggregate(Chunk chunk, RowFilter filter, ColumnName aggColumn) {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(filter, "filter");
         return FusedFilterAggregate.aggregate(chunk, filter, aggColumn);
     }
 
     /// Evaluates `filter` against a single row of `chunk`'s already-decoded columns, the un-fused
-    /// counterpart of [#filteredAggregate(Chunk, RowFilter, String)] for a caller that needs one
+    /// counterpart of [#filteredAggregate(Chunk, RowFilter, ColumnName)] for a caller that needs one
     /// row's yes/no answer rather than a folded aggregate — for example, a downstream adapter that
     /// decodes a chunk once and streams only the rows a pushed filter selects, instead of returning
     /// every row for its caller to re-check row-by-row.

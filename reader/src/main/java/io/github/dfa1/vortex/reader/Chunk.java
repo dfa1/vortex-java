@@ -23,21 +23,19 @@ import java.util.function.Consumer;
 /// One decoded row group returned by [ScanIterator#next()].
 ///
 /// A `Chunk` owns a confined [Arena] holding the decoded columnar buffers. The
-/// [Array] views returned by [#column(String)] and [#columns()] are zero-copy
+/// [Array] views returned by [#column(ColumnName)] and [#columns()] are zero-copy
 /// references into that arena (or into the underlying mmap region), valid only
 /// while this `Chunk` is open.
 ///
 /// Columns are keyed by [ColumnName] — the validated name domain the file parser
 /// certifies at the read boundary, so every key here is policy-valid and unique.
-/// [#column(String)] keeps a string-sugar overload for callers that hold a raw
-/// name; it wraps the string in a [ColumnName] before looking it up.
 ///
 /// **Lifecycle.** `Chunk` is [AutoCloseable]. Always wrap consumption in
 /// try-with-resources:
 ///
 /// ```java
 /// try (Chunk chunk = iter.next()) {
-///     DoubleArray price = chunk.column("price");
+///     DoubleArray price = chunk.column(ColumnName.of("price"));
 ///     ...
 /// }
 /// ```
@@ -63,7 +61,7 @@ public final class Chunk implements AutoCloseable {
     }
 
     /// One decoded column: its zero-copy [Array] view and the [DType] it was declared with in the
-    /// file's schema. The dtype travels with the array so extension decoding (see [#as(String, Class)])
+    /// file's schema. The dtype travels with the array so extension decoding (see [#as(ColumnName, Class)])
     /// and dtype-aware tooling need no second lookup.
     ///
     /// @param array the decoded column values, valid only while the owning [Chunk] is open
@@ -95,20 +93,6 @@ public final class Chunk implements AutoCloseable {
         return columns;
     }
 
-    /// Looks up a column by its raw string name with a checked cast to the caller's expected
-    /// [Array] subtype. The name is validated through [ColumnName#of(String)] first, so a
-    /// policy-invalid query name fails fast with the policy's [IllegalArgumentException] — it
-    /// could never match a certified column anyway.
-    ///
-    /// @param name column name as declared in the file's [io.github.dfa1.vortex.core.model.DType] schema
-    /// @param <T>  expected concrete [Array] subtype
-    /// @return the column array
-    /// @throws IllegalArgumentException if `name` violates the column-name policy
-    /// @throws VortexException          if no column with the given name is present in this chunk
-    public <T extends Array> T column(String name) {
-        return column(ColumnName.of(name));
-    }
-
     /// Looks up a column by its validated [ColumnName] with a checked cast to the caller's
     /// expected [Array] subtype.
     ///
@@ -130,8 +114,8 @@ public final class Chunk implements AutoCloseable {
     /// Hides extension-decode boilerplate for the four spec extensions:
     ///
     /// ```java
-    /// List<LocalDate> dates = chunk.as("birthdays", LocalDate.class);
-    /// List<Instant>   ts    = chunk.as("events", Instant.class);
+    /// List<LocalDate> dates = chunk.as(ColumnName.of("birthdays"), LocalDate.class);
+    /// List<Instant>   ts    = chunk.as(ColumnName.of("events"), Instant.class);
     /// ```
     ///
     /// Third-party extensions call the extension's own typed methods directly —
@@ -144,11 +128,9 @@ public final class Chunk implements AutoCloseable {
     /// @return decoded values in row order
     /// @throws VortexException if `name` isn't present, isn't an extension column,
     ///         or the requested `domainType` doesn't match the column's extension id
-    /// @throws IllegalArgumentException if `name` violates the column-name policy
-    ///         ([io.github.dfa1.vortex.core.model.ColumnName]) — it could never match
     @SuppressWarnings("unchecked")
-    public <T> List<T> as(String name, Class<T> domainType) {
-        Column col = columns.get(ColumnName.of(name));
+    public <T> List<T> as(ColumnName name, Class<T> domainType) {
+        Column col = columns.get(name);
         if (col == null) {
             throw new VortexException("unknown column: " + name);
         }
@@ -179,7 +161,7 @@ public final class Chunk implements AutoCloseable {
         return (List<T>) result;
     }
 
-    private static void requireDomainType(String name, Class<?> requested, Class<?> expected) {
+    private static void requireDomainType(ColumnName name, Class<?> requested, Class<?> expected) {
         if (!requested.equals(expected)) {
             throw new VortexException("column '" + name + "' decodes to " + expected.getSimpleName()
                     + ", not " + requested.getSimpleName());

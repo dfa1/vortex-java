@@ -12,8 +12,8 @@ import java.util.Objects;
 /// against per-chunk statistics — min/max for the comparisons, null count for the null tests — so a
 /// chunk where no row can satisfy the filter is skipped entirely (ADR 0013 §5).
 ///
-/// Build filters through the static factories ([#eq(String, Object)], [#gt(String, Comparable)],
-/// [#isNull(String)], …); each wraps the column name and the matching [Predicate]. Conjoin with
+/// Build filters through the static factories ([#eq(ColumnName, Object)], [#gt(ColumnName, Comparable)],
+/// [#isNull(ColumnName)], …); each binds the column name to the matching [Predicate]. Conjoin with
 /// [#and(RowFilter...)] or the [#and(RowFilter)] instance method.
 public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
 
@@ -30,8 +30,8 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the value to compare against
     /// @return a `Column` bound to a [Predicate.Eq]
-    static RowFilter eq(String col, Object val) {
-        return new Column(ColumnName.of(col), new Predicate.Eq(val));
+    static RowFilter eq(ColumnName col, Object val) {
+        return new Column(col, new Predicate.Eq(val));
     }
 
     /// Builds a filter selecting rows where `col` differs from `val`.
@@ -39,8 +39,8 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the value to compare against
     /// @return a `Column` bound to a [Predicate.Neq]
-    static RowFilter neq(String col, Object val) {
-        return new Column(ColumnName.of(col), new Predicate.Neq(val));
+    static RowFilter neq(ColumnName col, Object val) {
+        return new Column(col, new Predicate.Neq(val));
     }
 
     /// Builds a filter selecting rows where `col` is strictly greater than `val`.
@@ -48,8 +48,8 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the exclusive lower bound
     /// @return a `Column` bound to a [Predicate.Gt]
-    static RowFilter gt(String col, Comparable<?> val) {
-        return new Column(ColumnName.of(col), new Predicate.Gt(val));
+    static RowFilter gt(ColumnName col, Comparable<?> val) {
+        return new Column(col, new Predicate.Gt(val));
     }
 
     /// Builds a filter selecting rows where `col` is greater than or equal to `val`.
@@ -57,8 +57,8 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the inclusive lower bound
     /// @return a `Column` bound to a [Predicate.Gte]
-    static RowFilter gte(String col, Comparable<?> val) {
-        return new Column(ColumnName.of(col), new Predicate.Gte(val));
+    static RowFilter gte(ColumnName col, Comparable<?> val) {
+        return new Column(col, new Predicate.Gte(val));
     }
 
     /// Builds a filter selecting rows where `col` is strictly less than `val`.
@@ -66,8 +66,8 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the exclusive upper bound
     /// @return a `Column` bound to a [Predicate.Lt]
-    static RowFilter lt(String col, Comparable<?> val) {
-        return new Column(ColumnName.of(col), new Predicate.Lt(val));
+    static RowFilter lt(ColumnName col, Comparable<?> val) {
+        return new Column(col, new Predicate.Lt(val));
     }
 
     /// Builds a filter selecting rows where `col` is less than or equal to `val`.
@@ -75,24 +75,24 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the inclusive upper bound
     /// @return a `Column` bound to a [Predicate.Lte]
-    static RowFilter lte(String col, Comparable<?> val) {
-        return new Column(ColumnName.of(col), new Predicate.Lte(val));
+    static RowFilter lte(ColumnName col, Comparable<?> val) {
+        return new Column(col, new Predicate.Lte(val));
     }
 
     /// Builds a filter selecting rows where `col` is null.
     ///
     /// @param col the column name
     /// @return a `Column` bound to a [Predicate.IsNull]
-    static RowFilter isNull(String col) {
-        return new Column(ColumnName.of(col), new Predicate.IsNull());
+    static RowFilter isNull(ColumnName col) {
+        return new Column(col, new Predicate.IsNull());
     }
 
     /// Builds a filter selecting rows where `col` is not null.
     ///
     /// @param col the column name
     /// @return a `Column` bound to a [Predicate.IsNotNull]
-    static RowFilter isNotNull(String col) {
-        return new Column(ColumnName.of(col), new Predicate.IsNotNull());
+    static RowFilter isNotNull(ColumnName col) {
+        return new Column(col, new Predicate.IsNotNull());
     }
 
     /// Conjoins this filter with `other` into a binary [RowFilter.And].

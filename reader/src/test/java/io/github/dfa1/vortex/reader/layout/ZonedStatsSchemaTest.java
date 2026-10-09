@@ -516,6 +516,28 @@ class ZonedStatsSchemaTest {
         }
 
         @Test
+        void bailsOnTenthVarintByteAboveOne() {
+            // Given — a tag varint whose 10th byte is 0x02: bit 64 does not fit a u64, so it must be
+            // rejected. Unchecked, the shift drops the bit and the low bits read as 0x78, a valid
+            // unknown varint field that the parser would skip, accepting a malformed file.
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            out.write(1); // envelope version
+            out.write(0xf8); // low 7 bits 0x78 = field 15, wire VARINT; continuation set
+            for (int i = 0; i < 8; i++) {
+                out.write(0x80);
+            }
+            out.write(0x02); // 10th byte: only bit 0 is legal here
+            out.write(0); // the unknown field's value
+
+            // When
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
+                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+
+            // Then
+            assertThat(result).isNull();
+        }
+
+        @Test
         void bailsOnOverflowTagInsideSpec() {
             // Given — a framed AggregateSpecProto whose first inner tag is a ten-byte overflow
             // varint. Inside readAggregateSpecId the tag reads as -1, so it must bail (the inner

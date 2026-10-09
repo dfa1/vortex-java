@@ -157,10 +157,10 @@ public class JavaVsJniRunEndBenchmark {
     public long javaRunEndDecode() throws IOException {
         long sum = 0L;
         try (VortexReader vf = VortexReader.open(javaReadFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("level"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("level")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    LongArray level = c.column("level");
+                    LongArray level = c.column(ColumnName.of("level"));
                     sum += level.fold(0L, Long::sum);
                 }
             }

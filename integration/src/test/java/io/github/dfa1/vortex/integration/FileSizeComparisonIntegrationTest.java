@@ -207,8 +207,8 @@ class FileSizeComparisonIntegrationTest {
         // Then — Java file is readable with correct row count
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
         try (VortexReader reader = VortexReader.open(javaFile, ReadRegistry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("volume"))) {
-            iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("volume")))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column(ColumnName.of("volume")).length()));
         }
         assertThat(totalRows.get()).isEqualTo(TOTAL_ROWS);
     }
@@ -237,8 +237,8 @@ class FileSizeComparisonIntegrationTest {
         // Then — Zstd file is readable with correct row count
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
         try (VortexReader reader = VortexReader.open(withZstd, ReadRegistry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("volume"))) {
-            iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("volume")))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column(ColumnName.of("volume")).length()));
         }
         assertThat(totalRows.get()).isEqualTo(TOTAL_ROWS);
     }
@@ -271,8 +271,8 @@ class FileSizeComparisonIntegrationTest {
         // Then — global dict file readable, row count matches
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
         try (VortexReader reader = VortexReader.open(globalDictFile, ReadRegistry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("symbol"))) {
-            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("symbol").length()));
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("symbol")))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column(ColumnName.of("symbol")).length()));
         }
         assertThat(totalRows.get()).isEqualTo(rows);
     }
@@ -411,8 +411,8 @@ class FileSizeComparisonIntegrationTest {
         // Then — Java file is readable, row count and null positions preserved
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
         try (VortexReader reader = VortexReader.open(javaFile, ReadRegistry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
-            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("s")))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column(ColumnName.of("s")).length()));
         }
         assertThat(totalRows.get()).isEqualTo(n);
     }
@@ -458,8 +458,8 @@ class FileSizeComparisonIntegrationTest {
         // Then — global dict file readable, row count matches.
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
         try (VortexReader reader = VortexReader.open(globalDictFile, ReadRegistry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
-            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("s")))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column(ColumnName.of("s")).length()));
         }
         assertThat(totalRows.get()).isEqualTo(rows);
     }
@@ -541,8 +541,8 @@ class FileSizeComparisonIntegrationTest {
         // Then — Java file is readable, row count preserved.
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
         try (VortexReader reader = VortexReader.open(javaFile, ReadRegistry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
-            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("s")))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column(ColumnName.of("s")).length()));
         }
         assertThat(totalRows.get()).isEqualTo(n);
     }
@@ -642,8 +642,8 @@ class FileSizeComparisonIntegrationTest {
         // Then — Java file is readable and row count matches
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
         try (VortexReader reader = VortexReader.open(javaFile, ReadRegistry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
-            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("s")))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column(ColumnName.of("s")).length()));
         }
         assertThat(totalRows.get()).isEqualTo(n);
     }

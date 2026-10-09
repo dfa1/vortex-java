@@ -8,6 +8,7 @@ import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.RowFilter;
@@ -143,8 +144,8 @@ public class JavaVsJniFilterBenchmark {
     /// every row in non-pruned chunks regardless of the filter outcome.
     @Benchmark
     public double javaFilterClose() throws IOException {
-        RowFilter filter = RowFilter.gt("close", threshold);
-        var opts = io.github.dfa1.vortex.reader.ScanOptions.columns("close")
+        RowFilter filter = RowFilter.gt(ColumnName.of("close"), threshold);
+        var opts = io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("close"))
                 .withFilter(filter);
 
         double sum = 0.0;
@@ -152,7 +153,7 @@ public class JavaVsJniFilterBenchmark {
              var iter = vf.scan(opts)) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    DoubleArray close = c.column("close");
+                    DoubleArray close = c.column(ColumnName.of("close"));
                     long n = close.length();
                     for (long i = 0; i < n; i++) {
                         double v = close.getDouble(i);
@@ -172,12 +173,12 @@ public class JavaVsJniFilterBenchmark {
     private double computeThreshold(double targetSelectivity) throws IOException {
         List<Double> sample = new ArrayList<>(100_000);
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("close"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("close")))) {
             int stride = 1000;
             int counter = 0;
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    DoubleArray close = c.column("close");
+                    DoubleArray close = c.column(ColumnName.of("close"));
                     long n = close.length();
                     for (long i = 0; i < n; i++) {
                         if (counter++ % stride == 0) {

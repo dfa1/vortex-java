@@ -450,19 +450,18 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// Like [#chunkRowCounts()], filter pruning and `ScanOptions.limit()` are not applied —
     /// the list reflects the raw layout shape.
     ///
-    /// @param column the column name
+    /// @param name the column name
     /// @return per-zone stats in zone order; empty list if the file has no chunks
-    public List<ArrayStats> columnZoneStats(String column) {
+    public List<ArrayStats> columnZoneStats(ColumnName name) {
         if (chunks == null) {
             initialize();
         }
-        ColumnName name = ColumnName.of(column);
         List<ArrayStats> fromTable = decodeZoneTable(name, false);
         if (fromTable != null) {
             return fromTable;
         }
         // No zone-map table — surface each chunk's embedded ArrayStats (sum absent).
-        return chunkStats(column);
+        return chunkStats(name);
     }
 
     /// Each scan window's exact embedded array stats for `column`, read from the covering chunk's
@@ -470,13 +469,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// the zone map only bounds a string column's min/max (Rust's `bounded_max`/`bounded_min`).
     /// A dictionary chunk reports its values pool's stats, which bound exactly the values it holds.
     ///
-    /// @param column the column name
+    /// @param name the column name
     /// @return per-window stats, positionally aligned with [#chunkRowCounts()]
-    List<ArrayStats> chunkStats(String column) {
+    List<ArrayStats> chunkStats(ColumnName name) {
         if (chunks == null) {
             initialize();
         }
-        ColumnName name = ColumnName.of(column);
         List<ArrayStats> out = new ArrayList<>(chunks.size());
         for (ChunkSpec spec : chunks) {
             Layout layout = spec.layoutFor(name);
@@ -490,13 +488,13 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     /// The column's zone-map table, one [Zone] per row, each carrying the range of column rows it
-    /// describes. Unlike [#columnZoneStats(String)] there is no fallback to per-chunk stats: an
+    /// describes. Unlike [#columnZoneStats(ColumnName)] there is no fallback to per-chunk stats: an
     /// empty list means the column has no zone map whose zones can be placed on its rows.
     ///
-    /// @param column the column name
+    /// @param name the column name
     /// @return the column's zones in row order; empty if it has no usable zone map
-    public List<Zone> columnZones(String column) {
-        List<Zone> zones = zonesFor(ColumnName.of(column), false);
+    public List<Zone> columnZones(ColumnName name) {
+        List<Zone> zones = zonesFor(name, false);
         return zones == null ? List.of() : zones;
     }
 
@@ -548,12 +546,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             if (!(decoded instanceof StructArray table)) {
                 return null;
             }
-            Array minA = fieldOrNull(table, "min");
-            Array maxA = fieldOrNull(table, "max");
+            Array minA = fieldOrNull(table, ZonedStatsSchema.Stat.MIN.fieldName());
+            Array maxA = fieldOrNull(table, ZonedStatsSchema.Stat.MAX.fieldName());
             Array boundedMinA = includeBounds ? fieldOrNull(table, ZonedStatsSchema.BOUNDED_MIN) : null;
             Array boundedMaxA = includeBounds ? fieldOrNull(table, ZonedStatsSchema.BOUNDED_MAX) : null;
-            Array sumA = fieldOrNull(table, "sum");
-            Array nullCountA = fieldOrNull(table, "null_count");
+            Array sumA = fieldOrNull(table, ZonedStatsSchema.Stat.SUM.fieldName());
+            Array nullCountA = fieldOrNull(table, ZonedStatsSchema.Stat.NULL_COUNT.fieldName());
             // Not pre-sized from nZones: it is bounded above only by Integer.MAX_VALUE (see the
             // guard above), and a single ArrayList allocation at that scale is itself an
             // OutOfMemoryError vector the security contract forbids. Growing incrementally keeps
@@ -620,9 +618,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return boxedScalar(fieldOrNull(struct, ZonedStatsSchema.BOUND), i);
     }
 
-    private static Array fieldOrNull(StructArray table, String field) {
-        if (((DType.Struct) table.dtype()).fieldNames().contains(ColumnName.of(field))) {
-            return table.field(field);
+    private static Array fieldOrNull(StructArray table, ColumnName name) {
+        if (((DType.Struct) table.dtype()).fieldNames().contains(name)) {
+            return table.field(name);
         }
         return null;
     }

@@ -7,6 +7,7 @@ import static io.github.dfa1.vortex.reader.MalformedFiles.buildFlatLayout;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildPostscript;
 import static io.github.dfa1.vortex.reader.MalformedFiles.slice;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 
@@ -55,7 +56,7 @@ class ZipBombSecurityTest {
         try (var reader = VortexReader.open(bomb, registry);
              var iter = reader.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
-            Array col = iter.next().column("_col");
+            Array col = iter.next().column(ColumnName.of("_col"));
 
             // Then — LazyConstantLongArray carries no buffer at all, only metadata,
             // so the O(rowCount) allocation the bomb would trigger cannot occur by

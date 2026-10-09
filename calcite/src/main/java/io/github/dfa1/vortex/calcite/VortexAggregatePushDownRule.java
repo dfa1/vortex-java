@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.RowFilter;
 
 import com.google.common.collect.ImmutableList;
@@ -35,7 +36,7 @@ import java.util.Optional;
 ///
 /// Fires only when it can answer *every* aggregate from statistics: no `GROUP BY`, and each call
 /// is `COUNT(*)`, `COUNT(col)`, `MIN(col)`, `MAX(col)` (numeric or `VARCHAR`/`CHAR`), or `SUM(col)`
-/// over a numeric column. `SUM` folds the per-zone `SUM` rows via [VortexTable#zoneSum(String)]; it
+/// over a numeric column. `SUM` folds the per-zone `SUM` rows via [VortexTable#zoneSum(ColumnName)]; it
 /// emits the SQL `NULL` of an all-null (or empty) column, and abandons (falling back to the scan)
 /// for a column whose zone-map table cannot answer it — no zone map, an overflowed zone, or a zero
 /// fold whose null count is unknown (a genuine zero is indistinguishable from all-null). Anything
@@ -128,7 +129,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
             pushedFilter = translated.get();
         }
         RelDataType scanRowType = scan.getRowType();
-        List<String> scanColumns = scanRowType.getFieldNames();
+        List<ColumnName> scanColumns = scanRowType.getFieldNames().stream().map(ColumnName::of).toList();
 
         RexBuilder rexBuilder = aggregate.getCluster().getRexBuilder();
         List<RelDataType> outTypes = aggregate.getRowType().getFieldList().stream()
@@ -157,7 +158,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     /// only if the filter partitions the zones cleanly — otherwise the fold is empty and the call
     /// abandons.
     private static RexLiteral evaluate(AggregateCall agg, RelDataType outType, VortexTable table,
-                                       List<String> scanColumns, RelDataType scanRowType,
+                                       List<ColumnName> scanColumns, RelDataType scanRowType,
                                        Project project, RexBuilder rexBuilder, RowFilter filter) {
         return switch (agg.getAggregation().getKind()) {
             case COUNT -> {
@@ -168,7 +169,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                     Optional<VortexTable.FilteredFold> fold = table.filteredFold(filter, null);
                     yield fold.map(f -> exact(rexBuilder, f.rows(), outType)).orElse(null);
                 }
-                String col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
+                ColumnName col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
                 if (col == null) {
                     yield null;
                 }
@@ -179,7 +180,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 // COUNT(col) = rows − nulls. Without a NULL_COUNT stat we cannot assume zero nulls
                 // for a nullable column (we would overcount), so abandon; a non-nullable column has
                 // no nulls and is safe.
-                if (fold.nullCount() == null && isNullable(scanRowType, col)) {
+                if (fold.nullCount() == null && isNullable(scanRowType, col.value())) {
                     yield null;
                 }
                 long nulls = fold.nullCount() == null ? 0L : fold.nullCount();
@@ -189,7 +190,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (agg.getArgList().size() != 1) {
                     yield null;
                 }
-                String col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
+                ColumnName col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
                 if (col == null) {
                     yield null;
                 }
@@ -212,7 +213,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (agg.getArgList().size() != 1) {
                     yield null;
                 }
-                String col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
+                ColumnName col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
                 if (col == null) {
                     yield null;
                 }
@@ -221,7 +222,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                     yield null;
                 }
                 yield sumLiteral(rexBuilder, outType, fold.sum(), fold.nullCount(), fold.rows(),
-                        isNullable(scanRowType, col));
+                        isNullable(scanRowType, col.value()));
             }
             default -> null;
         };
@@ -234,7 +235,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     private record ColumnFold(Number sum, Object min, Object max, Long nullCount, long rows) {
     }
 
-    private static ColumnFold columnFold(VortexTable table, String column, RowFilter filter) {
+    private static ColumnFold columnFold(VortexTable table, ColumnName column, RowFilter filter) {
         if (filter == null) {
             VortexTable.ColumnStats stats = table.statsAndRows(column);
             VortexTable.ZoneSum zoneSum = table.zoneSum(column);
@@ -277,7 +278,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
 
     /// Maps an aggregate input ordinal to a scan column name, looking through a `Project` of input
     /// refs when present. Returns `null` if the ordinal is a computed expression, not a column.
-    private static String resolveColumn(int aggInput, List<String> scanColumns, Project project) {
+    private static ColumnName resolveColumn(int aggInput, List<ColumnName> scanColumns, Project project) {
         if (project == null) {
             return aggInput < scanColumns.size() ? scanColumns.get(aggInput) : null;
         }

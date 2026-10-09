@@ -16,7 +16,7 @@ class RowFilterTest {
         @Test
         void gt_createsColumnBoundToGt() {
             // Given / When
-            RowFilter sut = RowFilter.gt("price", 100L);
+            RowFilter sut = RowFilter.gt(ColumnName.of("price"), 100L);
 
             // Then
             assertThat(sut).isEqualTo(new RowFilter.Column(ColumnName.of("price"), new Predicate.Gt(100L)));
@@ -25,7 +25,7 @@ class RowFilterTest {
         @Test
         void gte_createsColumnBoundToGte() {
             // Given / When
-            RowFilter sut = RowFilter.gte("price", 100L);
+            RowFilter sut = RowFilter.gte(ColumnName.of("price"), 100L);
 
             // Then
             assertThat(sut).isEqualTo(new RowFilter.Column(ColumnName.of("price"), new Predicate.Gte(100L)));
@@ -34,7 +34,7 @@ class RowFilterTest {
         @Test
         void lt_createsColumnBoundToLt() {
             // Given / When
-            RowFilter sut = RowFilter.lt("price", 500L);
+            RowFilter sut = RowFilter.lt(ColumnName.of("price"), 500L);
 
             // Then
             assertThat(sut).isEqualTo(new RowFilter.Column(ColumnName.of("price"), new Predicate.Lt(500L)));
@@ -43,7 +43,7 @@ class RowFilterTest {
         @Test
         void lte_createsColumnBoundToLte() {
             // Given / When
-            RowFilter sut = RowFilter.lte("price", 500L);
+            RowFilter sut = RowFilter.lte(ColumnName.of("price"), 500L);
 
             // Then
             assertThat(sut).isEqualTo(new RowFilter.Column(ColumnName.of("price"), new Predicate.Lte(500L)));
@@ -52,7 +52,7 @@ class RowFilterTest {
         @Test
         void eq_createsColumnBoundToEq() {
             // Given / When
-            RowFilter sut = RowFilter.eq("status", "open");
+            RowFilter sut = RowFilter.eq(ColumnName.of("status"), "open");
 
             // Then
             assertThat(sut).isEqualTo(new RowFilter.Column(ColumnName.of("status"), new Predicate.Eq("open")));
@@ -61,7 +61,7 @@ class RowFilterTest {
         @Test
         void neq_createsColumnBoundToNeq() {
             // Given / When
-            RowFilter sut = RowFilter.neq("status", "closed");
+            RowFilter sut = RowFilter.neq(ColumnName.of("status"), "closed");
 
             // Then
             assertThat(sut).isEqualTo(new RowFilter.Column(ColumnName.of("status"), new Predicate.Neq("closed")));
@@ -70,7 +70,7 @@ class RowFilterTest {
         @Test
         void isNull_createsColumnBoundToIsNull() {
             // Given / When
-            RowFilter sut = RowFilter.isNull("status");
+            RowFilter sut = RowFilter.isNull(ColumnName.of("status"));
 
             // Then
             assertThat(sut).isEqualTo(new RowFilter.Column(ColumnName.of("status"), new Predicate.IsNull()));
@@ -79,7 +79,7 @@ class RowFilterTest {
         @Test
         void isNotNull_createsColumnBoundToIsNotNull() {
             // Given / When
-            RowFilter sut = RowFilter.isNotNull("status");
+            RowFilter sut = RowFilter.isNotNull(ColumnName.of("status"));
 
             // Then
             assertThat(sut).isEqualTo(new RowFilter.Column(ColumnName.of("status"), new Predicate.IsNotNull()));
@@ -91,8 +91,8 @@ class RowFilterTest {
         @Test
         void and_instanceMethod_combinesTwoFilters() {
             // Given
-            RowFilter left = RowFilter.gte("price", 100L);
-            RowFilter right = RowFilter.lte("price", 500L);
+            RowFilter left = RowFilter.gte(ColumnName.of("price"), 100L);
+            RowFilter right = RowFilter.lte(ColumnName.of("price"), 500L);
 
             // When
             RowFilter sut = left.and(right);
@@ -105,9 +105,9 @@ class RowFilterTest {
         @Test
         void and_instanceMethod_chainsMultiple() {
             // Given / When
-            RowFilter sut = RowFilter.gte("price", 10L)
-                                    .and(RowFilter.lte("price", 500L))
-                                    .and(RowFilter.neq("status", "cancelled"));
+            RowFilter sut = RowFilter.gte(ColumnName.of("price"), 10L)
+                                    .and(RowFilter.lte(ColumnName.of("price"), 500L))
+                                    .and(RowFilter.neq(ColumnName.of("status"), "cancelled"));
 
             // Then — nested And(And(gte, lte), neq)
             assertThat(sut).isInstanceOf(RowFilter.And.class);
@@ -121,9 +121,9 @@ class RowFilterTest {
         @Test
         void and_staticMethod_combinesMultiple() {
             // Given
-            RowFilter a = RowFilter.gt("x", 0L);
-            RowFilter b = RowFilter.lt("x", 100L);
-            RowFilter c = RowFilter.neq("x", 50L);
+            RowFilter a = RowFilter.gt(ColumnName.of("x"), 0L);
+            RowFilter b = RowFilter.lt(ColumnName.of("x"), 100L);
+            RowFilter c = RowFilter.neq(ColumnName.of("x"), 50L);
 
             // When
             RowFilter sut = RowFilter.and(a, b, c);

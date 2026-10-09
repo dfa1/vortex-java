@@ -259,21 +259,21 @@ implementing the `ExtensionDecoder` interface, with typed decode methods on the 
 impl — grab the singleton directly:
 
 ```java
-DType.Extension dtype = (DType.Extension) schema.field("birthdays");
-List<LocalDate> values = DateExtensionDecoder.INSTANCE.decodeAll(chunk.column("birthdays"));
+DType.Extension dtype = (DType.Extension) schema.field(ColumnName.of("birthdays"));
+List<LocalDate> values = DateExtensionDecoder.INSTANCE.decodeAll(chunk.column(ColumnName.of("birthdays")));
 ```
 
 End-to-end round-trip — write a `List<LocalDate>`, read it back:
 
 ```java
 var schema = DType.structBuilder()
-        .field("birthdays", DateExtensionDecoder.INSTANCE.dtype(false))
+        .field(ColumnName.of("birthdays"), DateExtensionDecoder.INSTANCE.dtype(false))
         .build();
 writer.writeChunk(c -> c.put(ColumnName.of("birthdays"), dates));              // Collection auto-routed
 
 try (var iter = reader.scan(ScanOptions.all());
      Chunk chunk = iter.next()) {
-    List<LocalDate> back = chunk.as("birthdays", LocalDate.class);
+    List<LocalDate> back = chunk.as(ColumnName.of("birthdays"), LocalDate.class);
 }
 ```
 

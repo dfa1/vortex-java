@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.csv;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
+
 import java.util.List;
 
 /// Options controlling Vortex → CSV export.
@@ -11,7 +13,7 @@ import java.util.List;
 public record ExportOptions(
         char delimiter,
         boolean writeHeader,
-        List<String> columns,
+        List<ColumnName> columns,
         ProgressListener progressListener
 ) {
     /// Default options: comma delimiter, header row written, no projection, no progress listener.
@@ -25,7 +27,7 @@ public record ExportOptions(
     ///
     /// @param cols the column names to include, in output order
     /// @return a copy of this options with the projection applied
-    public ExportOptions withColumns(List<String> cols) {
+    public ExportOptions withColumns(List<ColumnName> cols) {
         return new ExportOptions(delimiter, writeHeader, List.copyOf(cols), progressListener);
     }
 

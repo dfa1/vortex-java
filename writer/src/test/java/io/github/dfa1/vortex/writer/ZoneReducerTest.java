@@ -53,7 +53,7 @@ class ZoneReducerTest {
 
         // When
         try (VortexReader reader = VortexReader.open(file, registry())) {
-            Number result = new ZoneReducer(reader).sum("id");
+            Number result = new ZoneReducer(reader).sum(ColumnName.of("id"));
 
             // Then — exact Long (not a Double widening), no data segment decoded
             assertThat(result).isInstanceOf(Long.class).isEqualTo(11325L);
@@ -71,7 +71,7 @@ class ZoneReducerTest {
 
         // When
         try (VortexReader reader = VortexReader.open(file, registry())) {
-            Number result = new ZoneReducer(reader).sum("v");
+            Number result = new ZoneReducer(reader).sum(ColumnName.of("v"));
 
             // Then
             assertThat(result).isInstanceOf(Double.class).isEqualTo(7.0);
@@ -90,7 +90,7 @@ class ZoneReducerTest {
 
         // When
         try (VortexReader reader = VortexReader.open(file, registry())) {
-            Number result = new ZoneReducer(reader).sum("id");
+            Number result = new ZoneReducer(reader).sum(ColumnName.of("id"));
 
             // Then — null signals "not answerable from zones", caller must stream
             assertThat(result).isNull();
@@ -111,7 +111,7 @@ class ZoneReducerTest {
 
         // When
         try (VortexReader reader = VortexReader.open(file, registry())) {
-            Number result = new ZoneReducer(reader).sum("id");
+            Number result = new ZoneReducer(reader).sum(ColumnName.of("id"));
 
             // Then — one unusable zone forces the whole fold to bail; no partial sum returned
             assertThat(result).isNull();

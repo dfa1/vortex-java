@@ -147,27 +147,27 @@ class ZoneMapPruningTest {
     // Per-operator filter factories (value boxed by the caller), so the parameterized groups can
     // drive every comparison operator through one shared body.
     private static Function<Object, RowFilter> gt(String col) {
-        return v -> RowFilter.gt(col, (Comparable<?>) v);
+        return v -> RowFilter.gt(ColumnName.of(col), (Comparable<?>) v);
     }
 
     private static Function<Object, RowFilter> gte(String col) {
-        return v -> RowFilter.gte(col, (Comparable<?>) v);
+        return v -> RowFilter.gte(ColumnName.of(col), (Comparable<?>) v);
     }
 
     private static Function<Object, RowFilter> lt(String col) {
-        return v -> RowFilter.lt(col, (Comparable<?>) v);
+        return v -> RowFilter.lt(ColumnName.of(col), (Comparable<?>) v);
     }
 
     private static Function<Object, RowFilter> lte(String col) {
-        return v -> RowFilter.lte(col, (Comparable<?>) v);
+        return v -> RowFilter.lte(ColumnName.of(col), (Comparable<?>) v);
     }
 
     private static Function<Object, RowFilter> eq(String col) {
-        return v -> RowFilter.eq(col, v);
+        return v -> RowFilter.eq(ColumnName.of(col), v);
     }
 
     private static Function<Object, RowFilter> neq(String col) {
-        return v -> RowFilter.neq(col, v);
+        return v -> RowFilter.neq(ColumnName.of(col), v);
     }
 
     @Test
@@ -176,7 +176,7 @@ class ZoneMapPruningTest {
         Path file = writeThreeChunks(tmp);
 
         // When
-        List<Long> rowCounts = scanRowCounts(file, RowFilter.gte("id", 75L));
+        List<Long> rowCounts = scanRowCounts(file, RowFilter.gte(ColumnName.of("id"), 75L));
 
         // Then
         assertThat(rowCounts).containsExactly(50L, 50L); // chunk 2, 3
@@ -188,7 +188,7 @@ class ZoneMapPruningTest {
         Path file = writeThreeChunks(tmp);
 
         // When
-        List<Long> rowCounts = scanRowCounts(file, RowFilter.lte("id", 75L));
+        List<Long> rowCounts = scanRowCounts(file, RowFilter.lte(ColumnName.of("id"), 75L));
 
         // Then
         assertThat(rowCounts).containsExactly(50L, 50L); // chunk 1, 2
@@ -202,7 +202,7 @@ class ZoneMapPruningTest {
         Path file = writeThreeChunks(tmp);
 
         // When
-        List<Long> rowCounts = scanRowCounts(file, RowFilter.eq("id", 75L));
+        List<Long> rowCounts = scanRowCounts(file, RowFilter.eq(ColumnName.of("id"), 75L));
 
         // Then
         assertThat(rowCounts).containsExactly(50L); // chunk 2
@@ -215,8 +215,8 @@ class ZoneMapPruningTest {
 
         // When
         List<Long> rowCounts = scanRowCounts(file, RowFilter.and(
-                RowFilter.gte("id", 51L),
-                RowFilter.lte("id", 100L)));
+                RowFilter.gte(ColumnName.of("id"), 51L),
+                RowFilter.lte(ColumnName.of("id"), 100L)));
 
         // Then
         assertThat(rowCounts).containsExactly(50L); // chunk 2
@@ -244,7 +244,7 @@ class ZoneMapPruningTest {
             // Given — id=75 lands in chunk 2 [51..100]; exactly one row matches
             Path file = writeThreeChunks(tmp);
             long predicate = 75L;
-            var opts = ScanOptions.columns("id").withFilter(RowFilter.eq("id", predicate));
+            var opts = ScanOptions.columns(ColumnName.of("id")).withFilter(RowFilter.eq(ColumnName.of("id"), predicate));
 
             // When
             List<Long> matched = collectMatching(file, opts, v -> v == predicate);
@@ -258,7 +258,7 @@ class ZoneMapPruningTest {
             // Given — threshold=75: chunks 2 and 3 survive zone-map; rows below 75 in chunk 2 must not appear
             Path file = writeThreeChunks(tmp);
             long threshold = 75L;
-            var opts = ScanOptions.columns("id").withFilter(RowFilter.gte("id", threshold));
+            var opts = ScanOptions.columns(ColumnName.of("id")).withFilter(RowFilter.gte(ColumnName.of("id"), threshold));
 
             // When
             List<Long> matched = collectMatching(file, opts, v -> v >= threshold);
@@ -272,8 +272,8 @@ class ZoneMapPruningTest {
             // Given — AND(id>=60, id<=90): only chunk 2 survives zone-map; 31 rows match
             Path file = writeThreeChunks(tmp);
             long lo = 60L, hi = 90L;
-            var opts = ScanOptions.columns("id").withFilter(
-                    RowFilter.and(RowFilter.gte("id", lo), RowFilter.lte("id", hi)));
+            var opts = ScanOptions.columns(ColumnName.of("id")).withFilter(
+                    RowFilter.and(RowFilter.gte(ColumnName.of("id"), lo), RowFilter.lte(ColumnName.of("id"), hi)));
 
             // When
             List<Long> matched = collectMatching(file, opts, v -> v >= lo && v <= hi);
@@ -290,7 +290,7 @@ class ZoneMapPruningTest {
                  var iter = vf.scan(opts)) {
                 while (iter.hasNext()) {
                     try (Chunk c = iter.next()) {
-                        LongArray col = c.column("id");
+                        LongArray col = c.column(ColumnName.of("id"));
                         for (long i = 0; i < col.length(); i++) {
                             long v = col.getLong(i);
                             if (predicate.test(v)) {
@@ -348,10 +348,10 @@ class ZoneMapPruningTest {
             // Two U64 chunks: low [10..20], high [2^63+10 .. 2^63+20]. A signed compare reads the
             // high chunk's bits as negative, so it would keep/drop the wrong chunk in each case.
             return Stream.of(
-                    arguments("gte 15 keeps both", RowFilter.gte("id", 15L), List.of(11L, 11L)),
-                    arguments("gt 2^63+15 keeps high only", RowFilter.gt("id", TWO_POW_63 + 15), List.of(11L)),
-                    arguments("lte 15 keeps low only", RowFilter.lte("id", 15L), List.of(11L)),
-                    arguments("eq 2^63+15 in high only", RowFilter.eq("id", TWO_POW_63 + 15), List.of(11L)));
+                    arguments("gte 15 keeps both", RowFilter.gte(ColumnName.of("id"), 15L), List.of(11L, 11L)),
+                    arguments("gt 2^63+15 keeps high only", RowFilter.gt(ColumnName.of("id"), TWO_POW_63 + 15), List.of(11L)),
+                    arguments("lte 15 keeps low only", RowFilter.lte(ColumnName.of("id"), 15L), List.of(11L)),
+                    arguments("eq 2^63+15 in high only", RowFilter.eq(ColumnName.of("id"), TWO_POW_63 + 15), List.of(11L)));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -390,7 +390,7 @@ class ZoneMapPruningTest {
             Path file = writeF32Chunks(tmp);
 
             // When
-            List<Long> rowCounts = scanRowCounts(file, RowFilter.gte("v", (Comparable<?>) value));
+            List<Long> rowCounts = scanRowCounts(file, RowFilter.gte(ColumnName.of("v"), (Comparable<?>) value));
 
             // Then — chunk 1 (max 50) pruned
             assertThat(rowCounts).containsExactly(50L, 50L);
@@ -409,7 +409,7 @@ class ZoneMapPruningTest {
             Path file = writeI64Chunk(tmp, max - 2, max - 1, max);
 
             // When — gt with a Double threshold of 2^53; only the row 2^53+1 satisfies it
-            List<Long> rowCounts = scanRowCounts(file, RowFilter.gt("id", (double) (1L << 53)));
+            List<Long> rowCounts = scanRowCounts(file, RowFilter.gt(ColumnName.of("id"), (double) (1L << 53)));
 
             // Then — chunk kept. A double-domain compare would round 2^53+1 down to 2^53 and wrongly
             // prune the chunk, dropping the one matching row.
@@ -489,7 +489,7 @@ class ZoneMapPruningTest {
         void neq_neverPrunesWhenSomeRowDiffers(@TempDir Path tmp) throws IOException {
             // Given — id != 75: every chunk holds a row different from 75, so none may be pruned
             Path file = writeThreeChunks(tmp);
-            RowFilter filter = RowFilter.neq("id", 75L);
+            RowFilter filter = RowFilter.neq(ColumnName.of("id"), 75L);
 
             // When / Then
             assertPrunesLikeOracle(file, filter, v -> v != 75);
@@ -499,7 +499,7 @@ class ZoneMapPruningTest {
         void gte_prunesOnlyChunksEntirelyBelow(@TempDir Path tmp) throws IOException {
             // Given — id >= 75: chunk 1 (max 50) is entirely below the threshold
             Path file = writeThreeChunks(tmp);
-            RowFilter filter = RowFilter.gte("id", 75L);
+            RowFilter filter = RowFilter.gte(ColumnName.of("id"), 75L);
 
             // When / Then
             assertPrunesLikeOracle(file, filter, v -> v >= 75);
@@ -509,7 +509,7 @@ class ZoneMapPruningTest {
         void lte_prunesOnlyChunksEntirelyAbove(@TempDir Path tmp) throws IOException {
             // Given — id <= 75: chunk 3 (min 101) is entirely above the threshold
             Path file = writeThreeChunks(tmp);
-            RowFilter filter = RowFilter.lte("id", 75L);
+            RowFilter filter = RowFilter.lte(ColumnName.of("id"), 75L);
 
             // When / Then
             assertPrunesLikeOracle(file, filter, v -> v <= 75);
@@ -566,11 +566,11 @@ class ZoneMapPruningTest {
             Path withoutDict = writeFourChunks(tmp, false);
 
             // When filtering on the value only the third chunk holds
-            List<Long> result = scanRowCounts(withDict, RowFilter.eq("s", "sym2"));
+            List<Long> result = scanRowCounts(withDict, RowFilter.eq(ColumnName.of("s"), "sym2"));
 
             // Then one chunk survives, exactly as for the non-dict shape
             assertThat(result).containsExactly(1_000L);
-            assertThat(result).isEqualTo(scanRowCounts(withoutDict, RowFilter.eq("s", "sym2")));
+            assertThat(result).isEqualTo(scanRowCounts(withoutDict, RowFilter.eq(ColumnName.of("s"), "sym2")));
         }
 
         @Test
@@ -581,9 +581,9 @@ class ZoneMapPruningTest {
             // When
             List<String> result = new ArrayList<>();
             try (var vf = VortexReader.open(file, registry());
-                 var iter = vf.scan(new ScanOptions(List.of(), RowFilter.eq("s", "sym2"), ScanOptions.NO_LIMIT))) {
+                 var iter = vf.scan(new ScanOptions(List.of(), RowFilter.eq(ColumnName.of("s"), "sym2"), ScanOptions.NO_LIMIT))) {
                 iter.forEachRemaining(c -> {
-                    VarBinArray values = (VarBinArray) c.column("s");
+                    VarBinArray values = (VarBinArray) c.column(ColumnName.of("s"));
                     for (long i = 0; i < values.length(); i++) {
                         result.add(values.getString(i));
                     }
@@ -622,11 +622,11 @@ class ZoneMapPruningTest {
             Path withoutDict = writeFourChunksWithANullChunk(tmp, false);
 
             // When
-            List<Long> result = scanRowCounts(withDict, RowFilter.isNotNull("s"));
+            List<Long> result = scanRowCounts(withDict, RowFilter.isNotNull(ColumnName.of("s")));
 
             // Then — the all-null chunk is skipped, exactly as for the non-dict shape
             assertThat(result).containsExactly(1_000L, 1_000L, 1_000L);
-            assertThat(result).isEqualTo(scanRowCounts(withoutDict, RowFilter.isNotNull("s")));
+            assertThat(result).isEqualTo(scanRowCounts(withoutDict, RowFilter.isNotNull(ColumnName.of("s"))));
         }
 
         @Test
@@ -635,7 +635,7 @@ class ZoneMapPruningTest {
             Path file = writeFourChunksWithANullChunk(tmp, true);
 
             // When / Then — only the all-null chunk can hold a null
-            assertThat(scanRowCounts(file, RowFilter.isNull("s"))).containsExactly(1_000L);
+            assertThat(scanRowCounts(file, RowFilter.isNull(ColumnName.of("s")))).containsExactly(1_000L);
         }
 
         @Test
@@ -644,7 +644,7 @@ class ZoneMapPruningTest {
             Path file = writeFourChunks(tmp, true);
 
             // When / Then — no chunk's zone can hold "nope", so nothing is decoded at all
-            assertThat(scanRowCounts(file, RowFilter.eq("s", "nope"))).isEmpty();
+            assertThat(scanRowCounts(file, RowFilter.eq(ColumnName.of("s"), "nope"))).isEmpty();
         }
     }
 }

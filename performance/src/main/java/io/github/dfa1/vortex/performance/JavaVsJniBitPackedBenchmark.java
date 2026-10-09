@@ -159,10 +159,10 @@ public class JavaVsJniBitPackedBenchmark {
     public long javaBitPackedDecode() throws IOException {
         long sum = 0L;
         try (VortexReader vf = VortexReader.open(javaReadFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("code"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("code")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    LongArray code = c.column("code");
+                    LongArray code = c.column(ColumnName.of("code"));
                     sum += code.fold(0L, Long::sum);
                 }
             }

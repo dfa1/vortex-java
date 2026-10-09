@@ -35,18 +35,18 @@ class VortexAdapterCoverageTest {
 
     // One column per logical type the adapter maps; three rows.
     private static final DType.Struct SCHEMA = DType.structBuilder()
-            .field("i8", DType.I8)
-            .field("i16", DType.I16)
-            .field("i32", DType.I32)
-            .field("i64", DType.I64)
-            .field("u8", DType.U8)
-            .field("u16", DType.U16)
-            .field("u32", DType.U32)
-            .field("u64", DType.U64)
-            .field("f32", DType.F32)
-            .field("f64", DType.F64)
-            .field("s", DType.UTF8)
-            .field("b", DType.BOOL)
+            .field(ColumnName.of("i8"), DType.I8)
+            .field(ColumnName.of("i16"), DType.I16)
+            .field(ColumnName.of("i32"), DType.I32)
+            .field(ColumnName.of("i64"), DType.I64)
+            .field(ColumnName.of("u8"), DType.U8)
+            .field(ColumnName.of("u16"), DType.U16)
+            .field(ColumnName.of("u32"), DType.U32)
+            .field(ColumnName.of("u64"), DType.U64)
+            .field(ColumnName.of("f32"), DType.F32)
+            .field(ColumnName.of("f64"), DType.F64)
+            .field(ColumnName.of("s"), DType.UTF8)
+            .field(ColumnName.of("b"), DType.BOOL)
             .build();
 
     @TempDir
@@ -133,7 +133,7 @@ class VortexAdapterCoverageTest {
         // Given / When / Then
         VortexTable table = new VortexTable(file);
         assertThat(table.totalRows()).isEqualTo(3);
-        VortexTable.ColumnStats columnStats = table.statsAndRows("i64");
+        VortexTable.ColumnStats columnStats = table.statsAndRows(ColumnName.of("i64"));
         assertThat(columnStats.stats()).isNotNull();
         assertThat(columnStats.totalRows()).isEqualTo(3);
     }
@@ -166,7 +166,7 @@ class VortexAdapterCoverageTest {
         @Test
         void statsAndRows_wrapsOpenFailure() {
             // When / Then
-            assertThatThrownBy(() -> table.statsAndRows("i64"))
+            assertThatThrownBy(() -> table.statsAndRows(ColumnName.of("i64")))
                     .isInstanceOf(java.io.UncheckedIOException.class);
         }
 
@@ -215,7 +215,7 @@ class VortexAdapterCoverageTest {
         void integerColumn_sumIsExactLong() throws Exception {
             // Given / When
             try (VortexReader reader = VortexReader.open(file, registry())) {
-                VortexAggregates.Summary s = VortexAggregates.of(reader, "i64");
+                VortexAggregates.Summary s = VortexAggregates.of(reader, ColumnName.of("i64"));
 
                 // Then — sum stays a Long (not promoted to Double), avg derived, min/max from stats
                 assertThat(s.sum()).isInstanceOf(Long.class).isEqualTo(6000L);
@@ -233,7 +233,7 @@ class VortexAdapterCoverageTest {
         void floatColumn_sumIsDouble() throws Exception {
             // Given / When
             try (VortexReader reader = VortexReader.open(file, registry())) {
-                VortexAggregates.Summary s = VortexAggregates.of(reader, "f64");
+                VortexAggregates.Summary s = VortexAggregates.of(reader, ColumnName.of("f64"));
 
                 // Then
                 assertThat(s.sum()).isInstanceOf(Double.class);
@@ -246,7 +246,7 @@ class VortexAdapterCoverageTest {
         void narrowIntColumn_sumsViaIntArrayIntoLong() throws Exception {
             // Given / When — i32 decodes to IntArray, summed into a long (exact)
             try (VortexReader reader = VortexReader.open(file, registry())) {
-                VortexAggregates.Summary s = VortexAggregates.of(reader, "i32");
+                VortexAggregates.Summary s = VortexAggregates.of(reader, ColumnName.of("i32"));
 
                 // Then
                 assertThat(s.sum()).isInstanceOf(Long.class).isEqualTo(600L); // 100+200+300
@@ -257,7 +257,7 @@ class VortexAdapterCoverageTest {
         void floatColumn_sumsViaFloatArrayIntoDouble() throws Exception {
             // Given / When — f32 decodes to FloatArray, accumulated into a double
             try (VortexReader reader = VortexReader.open(file, registry())) {
-                VortexAggregates.Summary s = VortexAggregates.of(reader, "f32");
+                VortexAggregates.Summary s = VortexAggregates.of(reader, ColumnName.of("f32"));
 
                 // Then
                 assertThat(s.sum()).isInstanceOf(Double.class);
@@ -269,7 +269,7 @@ class VortexAdapterCoverageTest {
         void nonNumericColumn_throws() throws Exception {
             // Given / When / Then — a UTF8 column has no numeric array branch
             try (VortexReader reader = VortexReader.open(file, registry())) {
-                assertThatThrownBy(() -> VortexAggregates.of(reader, "s"))
+                assertThatThrownBy(() -> VortexAggregates.of(reader, ColumnName.of("s")))
                         .isInstanceOf(IllegalArgumentException.class)
                         .hasMessageContaining("not a numeric column");
             }
@@ -299,7 +299,7 @@ class VortexAdapterCoverageTest {
 
             // When
             try (VortexReader reader = VortexReader.open(bare, registry())) {
-                VortexAggregates.Summary s = VortexAggregates.of(reader, "i64");
+                VortexAggregates.Summary s = VortexAggregates.of(reader, ColumnName.of("i64"));
 
                 // Then — sum still exact, but sourced from a streaming scan, not the (absent) zone map
                 assertThat(s.sum()).isInstanceOf(Long.class).isEqualTo(6000L);

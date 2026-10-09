@@ -403,7 +403,7 @@ class ParquetImporterTest {
                     // c_customer_sk is nullable I64, so it round-trips as a MaskedArray (validity
                     // + Primitive values child): a boxed Long[] buffer during import, so a null
                     // row is tracked instead of silently becoming 0. First three rows are non-null.
-                    MaskedArray sk = first.column("c_customer_sk");
+                    MaskedArray sk = first.column(ColumnName.of("c_customer_sk"));
                     LongArray skValues = (LongArray) sk.inner();
                     assertThat(skValues.getLong(0)).isEqualTo(100L);
                     assertThat(skValues.getLong(1)).isEqualTo(99L);
@@ -411,7 +411,7 @@ class ParquetImporterTest {
 
                     // c_first_name is nullable Utf8, so it round-trips as a MaskedArray (validity +
                     // VarBin values child), like nullable primitives. The first three rows are non-null.
-                    MaskedArray name = first.column("c_first_name");
+                    MaskedArray name = first.column(ColumnName.of("c_first_name"));
                     VarBinArray nameValues = (VarBinArray) name.inner();
                     assertThat(nameValues.getString(0)).isEqualTo("Jeannette");
                     assertThat(nameValues.getString(1)).isEqualTo("Austin");
@@ -437,7 +437,7 @@ class ParquetImporterTest {
                  ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk first = iter.next()) {
-                    MaskedArray birthDay = first.column("c_birth_day");
+                    MaskedArray birthDay = first.column(ColumnName.of("c_birth_day"));
                     assertThat(birthDay.isValid(65)).isTrue();
                     assertThat(birthDay.isValid(66)).isFalse();
                     assertThat(birthDay.isValid(67)).isTrue();

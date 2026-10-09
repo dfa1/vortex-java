@@ -151,10 +151,10 @@ class VortexHttpReaderIT {
             DType.Struct schema = (DType.Struct) sut.dtype();
             List<ColumnName> names = schema.fieldNames();
             List<DType> types = schema.fieldTypes();
-            String listColName = null;
+            ColumnName listColName = null;
             for (int i = 0; i < types.size(); i++) {
                 if (types.get(i) instanceof DType.List) {
-                    listColName = names.get(i).value();
+                    listColName = names.get(i);
                     break;
                 }
             }
@@ -189,10 +189,10 @@ class VortexHttpReaderIT {
             DType.Struct schema = (DType.Struct) sut.dtype();
             List<ColumnName> names = schema.fieldNames();
             List<DType> types = schema.fieldTypes();
-            String listColName = null;
+            ColumnName listColName = null;
             for (int i = 0; i < types.size(); i++) {
                 if (types.get(i) instanceof DType.List) {
-                    listColName = names.get(i).value();
+                    listColName = names.get(i);
                     break;
                 }
             }

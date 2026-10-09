@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.compute;
 
 /// The result of a fused multi-column filtered aggregation over one chunk, returned by
-/// [Compute#filteredAggregate(io.github.dfa1.vortex.reader.Chunk, io.github.dfa1.vortex.reader.RowFilter, String)].
+/// [Compute#filteredAggregate(io.github.dfa1.vortex.reader.Chunk, io.github.dfa1.vortex.reader.RowFilter, io.github.dfa1.vortex.core.model.ColumnName)].
 ///
 /// The fold covers exactly the rows the whole [io.github.dfa1.vortex.reader.RowFilter] selects. The
 /// aggregate fields are populated only when an aggregate column was given; with no aggregate column

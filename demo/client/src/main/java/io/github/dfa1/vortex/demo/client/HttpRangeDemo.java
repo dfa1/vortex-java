@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.demo.client;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.demo.server.VortexServer;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -226,8 +227,9 @@ public final class HttpRangeDemo {
 
     private static long scan(URI objectUri, String filterColumn, long filterMin, long filterMax, String projectColumn)
             throws IOException {
-        RowFilter filter = RowFilter.gte(filterColumn, filterMin).and(RowFilter.lte(filterColumn, filterMax));
-        ScanOptions opts = ScanOptions.all().withColumns(filterColumn, projectColumn).withFilter(filter);
+        ColumnName filterName = ColumnName.of(filterColumn);
+        RowFilter filter = RowFilter.gte(filterName, filterMin).and(RowFilter.lte(filterName, filterMax));
+        ScanOptions opts = ScanOptions.all().withColumns(filterName, ColumnName.of(projectColumn)).withFilter(filter);
 
         long rows = 0;
         try (VortexHttpReader vf = VortexHttpReader.open(objectUri);

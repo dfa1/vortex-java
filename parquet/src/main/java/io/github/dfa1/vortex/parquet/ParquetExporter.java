@@ -93,12 +93,12 @@ public final class ParquetExporter {
         }
         List<ColumnName> allNames = schema.fieldNames();
         List<DType> allTypes = schema.fieldTypes();
-        List<String> names = options.hasProjection() ? options.columns() : namesOf(allNames);
+        List<ColumnName> names = options.hasProjection() ? options.columns() : allNames;
         List<DType> types = resolveTypes(allNames, allTypes, names);
 
         FileSchema.Builder builder = FileSchema.builder("schema");
         for (int c = 0; c < names.size(); c++) {
-            addColumn(builder, names.get(c), types.get(c));
+            addColumn(builder, names.get(c).value(), types.get(c));
         }
         FileSchema parquetSchema = builder.build();
 
@@ -107,7 +107,7 @@ public final class ParquetExporter {
 
         try (ParquetFileWriter writer = ParquetFileWriter.create(
                 OutputFile.of(parquetPath), parquetSchema, options.writerConfig());
-             ScanIterator scan = vortex.scan(ScanOptions.columns(names.toArray(String[]::new)))) {
+             ScanIterator scan = vortex.scan(ScanOptions.columns(names.toArray(ColumnName[]::new)))) {
 
             ColumnWriter columnWriter = writer.columnWriter();
             while (scan.hasNext()) {
@@ -128,20 +128,12 @@ public final class ParquetExporter {
         }
     }
 
-    private static List<String> namesOf(List<ColumnName> names) {
-        List<String> result = new ArrayList<>(names.size());
-        for (ColumnName name : names) {
-            result.add(name.value());
-        }
-        return result;
-    }
-
     /// Resolves `names` (either every top-level column, or a caller-requested projection) to
     /// their declared dtypes, in the order given.
-    static List<DType> resolveTypes(List<ColumnName> allNames, List<DType> allTypes, List<String> names) {
+    static List<DType> resolveTypes(List<ColumnName> allNames, List<DType> allTypes, List<ColumnName> names) {
         List<DType> result = new ArrayList<>(names.size());
-        for (String name : names) {
-            int idx = allNames.indexOf(ColumnName.of(name));
+        for (ColumnName name : names) {
+            int idx = allNames.indexOf(name);
             if (idx < 0) {
                 throw new IllegalArgumentException("column not found in Vortex schema: " + name);
             }

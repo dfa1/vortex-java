@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
@@ -32,7 +33,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
 
     private final Path file;
     private final AtomicLong chunksScannedLastQuery;
-    private final String[] names;
+    private final ColumnName[] names;
     private final DType[] types;
     private final RowFilter exactFilter;
     private final VortexReader reader;
@@ -55,7 +56,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     ///                               exact — or `null` when every pushed predicate is still Calcite's to
     ///                               re-check
     VortexEnumerator(Path file, AtomicLong chunksScannedLastQuery, ScanOptions options,
-                      String[] names, DType[] types, RowFilter exactFilter) {
+                      ColumnName[] names, DType[] types, RowFilter exactFilter) {
         this.file = file;
         this.chunksScannedLastQuery = chunksScannedLastQuery;
         this.names = names;

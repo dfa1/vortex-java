@@ -889,7 +889,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file);
              var chunks = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             chunks.forEachRemaining(chunk -> {
-                io.github.dfa1.vortex.reader.array.Array array = chunk.column(column);
+                io.github.dfa1.vortex.reader.array.Array array = chunk.column(ColumnName.of(column));
                 for (long i = 0; i < array.length(); i++) {
                     values.add(switch (array) {
                         case io.github.dfa1.vortex.reader.array.MaskedArray m -> m.isValid(i)
@@ -1674,9 +1674,9 @@ class JavaWritesRustReadsIntegrationTest {
         var javaRead = new ArrayList<String>();
         try (var vf = io.github.dfa1.vortex.reader.VortexReader.open(file,
                 io.github.dfa1.vortex.reader.ReadRegistry.loadAll());
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("s")))) {
             iter.forEachRemaining(c -> {
-                io.github.dfa1.vortex.reader.array.Array arr = c.column("s");
+                io.github.dfa1.vortex.reader.array.Array arr = c.column(ColumnName.of("s"));
                 for (long i = 0; i < arr.length(); i++) {
                     javaRead.add(arr instanceof io.github.dfa1.vortex.reader.array.MaskedArray m
                             ? (m.isValid(i) ? ((io.github.dfa1.vortex.reader.array.VarBinArray) m.inner()).getString(i) : null)

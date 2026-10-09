@@ -70,10 +70,10 @@ class AlpRdCascadeSelectionIntegrationTest {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             double[] got = new double[rows];
             int[] idx = {0};
-            try (var iter = vf.scan(ScanOptions.columns("lat"))) {
+            try (var iter = vf.scan(ScanOptions.columns(ColumnName.of("lat")))) {
                 while (iter.hasNext()) {
                     try (var chunk = iter.next()) {
-                        DoubleArray col = chunk.column("lat");
+                        DoubleArray col = chunk.column(ColumnName.of("lat"));
                         long n = col.length();
                         for (long i = 0; i < n; i++) {
                             got[idx[0]++] = col.getDouble(i);

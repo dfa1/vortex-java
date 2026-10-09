@@ -42,11 +42,11 @@ class FilterPushDownTest {
 
     // Two chunks of three rows so the pushed RowFilter has chunks to (potentially) prune.
     private static final DType.Struct SCHEMA = DType.structBuilder()
-            .field("i64", DType.I64)
-            .field("i32", DType.I32)
-            .field("f64", DType.F64)
-            .field("s", DType.UTF8)
-            .field("b", DType.BOOL)
+            .field(ColumnName.of("i64"), DType.I64)
+            .field(ColumnName.of("i32"), DType.I32)
+            .field(ColumnName.of("f64"), DType.F64)
+            .field(ColumnName.of("s"), DType.UTF8)
+            .field(ColumnName.of("b"), DType.BOOL)
             .build();
 
     @TempDir

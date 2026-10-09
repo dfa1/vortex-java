@@ -98,7 +98,7 @@ class DictEncodingTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk c = iter.next()) {
-                Array a = c.column("category");
+                Array a = c.column(ColumnName.of("category"));
                 assertThat(a.length()).isEqualTo(7L);
                 MemorySegment result = a.materialize(Arena.ofAuto());
                 int[] expected = {10, 20, 10, 30, 10, 20, 30};

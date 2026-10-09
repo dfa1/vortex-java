@@ -217,9 +217,9 @@ class JavaRoundTripIntegrationTest {
     private static long[] readColumnBits(Path file, String column, long mask) throws IOException {
         var out = new ArrayList<Long>();
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(ScanOptions.columns(column))) {
+             var iter = vf.scan(ScanOptions.columns(ColumnName.of(column)))) {
             iter.forEachRemaining(c -> {
-                Array arr = c.column(column);
+                Array arr = c.column(ColumnName.of(column));
                 for (long i = 0; i < arr.length(); i++) {
                     out.add(switch (arr) {
                         case ByteArray a -> a.getByte(i) & mask;
@@ -237,10 +237,10 @@ class JavaRoundTripIntegrationTest {
     @SuppressWarnings("SameParameterValue")
     private static int[] readIntColumn(Path file, String column) throws IOException {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(ScanOptions.columns(column))) {
+             var iter = vf.scan(ScanOptions.columns(ColumnName.of(column)))) {
             var ints = new ArrayList<Integer>();
             iter.forEachRemaining(c -> {
-                IntArray arr = c.column(column);
+                IntArray arr = c.column(ColumnName.of(column));
                 for (long i = 0; i < arr.length(); i++) {
                     ints.add(arr.getInt(i));
                 }

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 
@@ -28,7 +29,7 @@ final class SelectCommand {
             System.err.println("file not found: " + path);
             return ExitStatus.FILE_NOT_FOUND;
         }
-        List<String> columns = Arrays.asList(args).subList(2, args.length);
+        List<ColumnName> columns = Arrays.stream(args).skip(2).map(ColumnName::of).toList();
         ExportOptions options = ExportOptions.defaults().withColumns(columns);
         try {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);

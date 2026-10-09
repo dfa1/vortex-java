@@ -97,7 +97,7 @@ class ColumnEncodingTest {
             List<Long> result = new ArrayList<>();
             try (var iter = vf.scan(ScanOptions.all())) {
                 iter.forEachRemaining(c -> {
-                    LongArray a = c.column("price");
+                    LongArray a = c.column(ColumnName.of("price"));
                     for (long i = 0; i < a.length(); i++) {
                         result.add(a.getLong(i));
                     }
@@ -171,7 +171,7 @@ class ColumnEncodingTest {
         List<Double> out = new ArrayList<>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                DoubleArray a = c.column("price");
+                DoubleArray a = c.column(ColumnName.of("price"));
                 for (long i = 0; i < a.length(); i++) {
                     out.add(a.getDouble(i));
                 }

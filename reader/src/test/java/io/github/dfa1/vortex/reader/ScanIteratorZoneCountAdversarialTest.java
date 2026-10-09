@@ -50,8 +50,8 @@ class ScanIteratorZoneCountAdversarialTest {
 
         // When
         List<ArrayStats> result;
-        try (ScanIterator sut = new ScanIterator(file, ScanOptions.columns("v"))) {
-            result = sut.columnZoneStats("v");
+        try (ScanIterator sut = new ScanIterator(file, ScanOptions.columns(ColumnName.of("v")))) {
+            result = sut.columnZoneStats(ColumnName.of("v"));
         }
 
         // Then — degrades to the per-chunk fallback (one empty entry per chunk), no raw exception
@@ -74,8 +74,8 @@ class ScanIteratorZoneCountAdversarialTest {
 
         // When
         List<ArrayStats> result;
-        try (ScanIterator sut = new ScanIterator(file, ScanOptions.columns("v"))) {
-            result = sut.columnZoneStats("v");
+        try (ScanIterator sut = new ScanIterator(file, ScanOptions.columns(ColumnName.of("v")))) {
+            result = sut.columnZoneStats(ColumnName.of("v"));
         }
 
         // Then — the guard only rejects implausible counts; this one reaches the normal decode

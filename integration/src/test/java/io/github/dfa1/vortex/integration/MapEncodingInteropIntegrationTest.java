@@ -186,7 +186,7 @@ class MapEncodingInteropIntegrationTest {
         // When
         DType result;
         try (var reader = VortexReader.open(file, ReadRegistry.loadAll())) {
-            result = ((DType.Struct) reader.dtype()).field("attrs");
+            result = ((DType.Struct) reader.dtype()).field(ColumnName.of("attrs"));
         }
 
         // Then
@@ -211,7 +211,7 @@ class MapEncodingInteropIntegrationTest {
         // When
         DType result;
         try (var reader = VortexReader.open(file, ReadRegistry.loadAll())) {
-            result = ((DType.Struct) reader.dtype()).field("attrs");
+            result = ((DType.Struct) reader.dtype()).field(ColumnName.of("attrs"));
         }
 
         // Then
@@ -326,10 +326,10 @@ class MapEncodingInteropIntegrationTest {
     private static List<Map<String, Long>> readMapColumnWithJava(Path file) throws IOException {
         List<Map<String, Long>> rows = new ArrayList<>();
         try (var reader = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("attrs"))) {
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("attrs")))) {
             while (iter.hasNext()) {
                 var chunk = iter.next();
-                MapArray map = chunk.column("attrs");
+                MapArray map = chunk.column(ColumnName.of("attrs"));
                 MaskedArray masked = map.entries() instanceof MaskedArray m ? m : null;
                 Array inner = masked != null ? masked.inner() : map.entries();
                 ListViewArray entries = (ListViewArray) inner;

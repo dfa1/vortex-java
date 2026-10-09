@@ -10,6 +10,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /// Reconstructs the per-zone statistics-table [DType] for a
 /// `vortex.stats` (Zoned) layout.
@@ -61,20 +62,20 @@ public final class ZonedStatsSchema {
         NAN_COUNT("nan_count");
 
         /// Trailing struct-field name added next to [#MAX] for truncated max indicators.
-        public static final String MAX_IS_TRUNCATED = "max_is_truncated";
+        public static final ColumnName MAX_IS_TRUNCATED = ColumnName.of("max_is_truncated");
         /// Trailing struct-field name added next to [#MIN] for truncated min indicators.
-        public static final String MIN_IS_TRUNCATED = "min_is_truncated";
+        public static final ColumnName MIN_IS_TRUNCATED = ColumnName.of("min_is_truncated");
 
-        private final String fieldName;
+        private final ColumnName fieldName;
 
         Stat(String fieldName) {
-            this.fieldName = fieldName;
+            this.fieldName = ColumnName.of(fieldName);
         }
 
         /// Stat field name as written in the stats table.
         ///
         /// @return the canonical struct field name for this stat
-        public String fieldName() {
+        public ColumnName fieldName() {
             return fieldName;
         }
     }
@@ -212,26 +213,27 @@ public final class ZonedStatsSchema {
         List<ColumnName> names = new ArrayList<>(aggregateIds.size());
         List<DType> types = new ArrayList<>(aggregateIds.size());
         for (String aggregateId : aggregateIds) {
-            String boundedField = boundedFieldName(aggregateId);
-            if (boundedField != null) {
+            Optional<Bounded> bounded = boundedForAggregate(aggregateId);
+            if (bounded.isPresent()) {
                 // Same supported dtypes as min/max (Rust's bounded supported_dtype delegates to
                 // MinMax), so an unsupported column drops the field exactly as it drops max/min.
                 DType boundDtype = statDtype(Stat.MAX, columnDtype);
                 if (boundDtype == null) {
                     continue;
                 }
-                names.add(ColumnName.of(boundedField));
+                names.add(bounded.get().fieldName);
                 // A truncated prefix is always a valid lower bound, so bounded_min's state is the
                 // plain nullable bound; only bounded_max can fail to find one and carries `unknown`.
-                types.add(boundedField.equals(BOUNDED_MAX) ? boundedMaxStateDtype(boundDtype) : boundDtype.withNullable(true));
+                types.add(bounded.get() == Bounded.MAX ? boundedMaxStateDtype(boundDtype) : boundDtype.withNullable(true));
                 continue;
             }
-            Stat stat = statForAggregate(aggregateId);
-            if (stat == null) {
+            Optional<Stat> statForAggregate = statForAggregate(aggregateId);
+            if (statForAggregate.isEmpty()) {
                 // Unknown aggregate — the encoded table has a field here we cannot describe, so
                 // any reconstruction would be positionally misaligned. Bail to the fallback path.
                 return null;
             }
+            Stat stat = statForAggregate.get();
             DType stype = statDtype(stat, columnDtype);
             if (stype == null) {
                 if (rustAlsoOmits(stat, columnDtype)) {
@@ -246,7 +248,7 @@ public final class ZonedStatsSchema {
                 // would misalign the positional decode, so bail to per-chunk stats.
                 return null;
             }
-            names.add(ColumnName.of(stat.fieldName()));
+            names.add(stat.fieldName());
             types.add(stype.withNullable(true));
         }
         return new DType.Struct(List.copyOf(names), List.copyOf(types), false);
@@ -294,13 +296,13 @@ public final class ZonedStatsSchema {
             if (stype == null) {
                 continue;
             }
-            names.add(ColumnName.of(stat.fieldName()));
+            names.add(stat.fieldName());
             types.add(stype.withNullable(true));
             if (stat == Stat.MAX) {
-                names.add(ColumnName.of(Stat.MAX_IS_TRUNCATED));
+                names.add(Stat.MAX_IS_TRUNCATED);
                 types.add(DType.BOOL);
             } else if (stat == Stat.MIN) {
-                names.add(ColumnName.of(Stat.MIN_IS_TRUNCATED));
+                names.add(Stat.MIN_IS_TRUNCATED);
                 types.add(DType.BOOL);
             }
         }
@@ -378,20 +380,32 @@ public final class ZonedStatsSchema {
     }
 
     /// Table field name of Rust's `vortex.bounded_max` state, an upper bound on the zone's max.
-    public static final String BOUNDED_MAX = "bounded_max";
+    public static final ColumnName BOUNDED_MAX = ColumnName.of("bounded_max");
     /// Table field name of Rust's `vortex.bounded_min` state: a lower bound on the zone's min, null
     /// when the zone has no non-null value.
-    public static final String BOUNDED_MIN = "bounded_min";
+    public static final ColumnName BOUNDED_MIN = ColumnName.of("bounded_min");
     /// Name of the bound field inside the `bounded_max` state struct.
-    public static final String BOUND = "bound";
+    public static final ColumnName BOUND = ColumnName.of("bound");
     /// Name of the flag inside the `bounded_max` state struct that marks the bound as unknown.
-    public static final String UNKNOWN = "unknown";
+    public static final ColumnName UNKNOWN = ColumnName.of("unknown");
 
-    private static String boundedFieldName(String aggregateId) {
+    /// The bounded min/max aggregates, each stored as one field of the zone-map table.
+    private enum Bounded {
+        MAX(BOUNDED_MAX),
+        MIN(BOUNDED_MIN);
+
+        private final ColumnName fieldName;
+
+        Bounded(ColumnName fieldName) {
+            this.fieldName = fieldName;
+        }
+    }
+
+    private static Optional<Bounded> boundedForAggregate(String aggregateId) {
         return switch (aggregateId) {
-            case "vortex.bounded_max" -> BOUNDED_MAX;
-            case "vortex.bounded_min" -> BOUNDED_MIN;
-            default -> null;
+            case "vortex.bounded_max" -> Optional.of(Bounded.MAX);
+            case "vortex.bounded_min" -> Optional.of(Bounded.MIN);
+            default -> Optional.empty();
         };
     }
 
@@ -400,7 +414,7 @@ public final class ZonedStatsSchema {
     /// means a value exists but no bound fits the aggregate's byte limit.
     private static DType boundedMaxStateDtype(DType boundDtype) {
         return new DType.Struct(
-                List.of(ColumnName.of(BOUND), ColumnName.of(UNKNOWN)),
+                List.of(BOUND, UNKNOWN),
                 List.of(boundDtype.withNullable(true), DType.BOOL),
                 true);
     }
@@ -409,21 +423,21 @@ public final class ZonedStatsSchema {
     private static final int AGGREGATE_METADATA_VERSION = 1;
 
     /// Maps a well-known aggregate-function id (Rust `AggregateFnId`) to the [Stat] whose stored
-    /// dtype and canonical field name it uses in the zone-map table, or `null` when the reader
+    /// dtype and canonical field name it uses in the zone-map table, or empty when the reader
     /// has no faithful mapping (functions not stored as a scalar stat; the bounded min/max
-    /// aggregates are handled separately by [#boundedFieldName(String)]).
-    private static Stat statForAggregate(String aggregateId) {
+    /// aggregates are handled separately by [#boundedForAggregate(String)]).
+    private static Optional<Stat> statForAggregate(String aggregateId) {
         return switch (aggregateId) {
-            case "vortex.max" -> Stat.MAX;
-            case "vortex.min" -> Stat.MIN;
-            case "vortex.sum" -> Stat.SUM;
-            case "vortex.null_count" -> Stat.NULL_COUNT;
-            case "vortex.nan_count" -> Stat.NAN_COUNT;
-            case "vortex.is_constant" -> Stat.IS_CONSTANT;
-            case "vortex.is_sorted" -> Stat.IS_SORTED;
-            case "vortex.is_strict_sorted" -> Stat.IS_STRICT_SORTED;
-            case "vortex.uncompressed_size_in_bytes" -> Stat.UNCOMPRESSED_SIZE_IN_BYTES;
-            default -> null;
+            case "vortex.max" -> Optional.of(Stat.MAX);
+            case "vortex.min" -> Optional.of(Stat.MIN);
+            case "vortex.sum" -> Optional.of(Stat.SUM);
+            case "vortex.null_count" -> Optional.of(Stat.NULL_COUNT);
+            case "vortex.nan_count" -> Optional.of(Stat.NAN_COUNT);
+            case "vortex.is_constant" -> Optional.of(Stat.IS_CONSTANT);
+            case "vortex.is_sorted" -> Optional.of(Stat.IS_SORTED);
+            case "vortex.is_strict_sorted" -> Optional.of(Stat.IS_STRICT_SORTED);
+            case "vortex.uncompressed_size_in_bytes" -> Optional.of(Stat.UNCOMPRESSED_SIZE_IN_BYTES);
+            default -> Optional.empty();
         };
     }
 
@@ -488,22 +502,21 @@ public final class ZonedStatsSchema {
             return pos < end;
         }
 
-        /// Reads a base-128 varint, or `-1` when it runs past the end or exceeds 64 bits.
+        /// Reads a base-128 varint, or `-1` when it runs past the end or does not fit 64 bits (a 10th
+        /// byte may only carry bit 0).
+        ///
+        /// `-1` is also the decoding of a valid `u64::MAX`; callers treat any negative result as an
+        /// error, which is right for tags and lengths, where such huge values are invalid anyway.
         long readVarint() {
             long result = 0;
-            int shift = 0;
-            while (pos < end) {
-                int b = segment.get(ValueLayout.JAVA_BYTE, pos) & 0xff;
-                pos++;
-                if (shift < 64) {
-                    result |= (long) (b & 0x7f) << shift;
+            for (int shift = 0; shift < 64 && pos < end; shift += 7) {
+                int b = segment.get(ValueLayout.JAVA_BYTE, pos++) & 0xff;
+                if (shift == 63 && b > 1) {
+                    return -1;
                 }
+                result |= (long) (b & 0x7f) << shift;
                 if ((b & 0x80) == 0) {
                     return result;
-                }
-                shift += 7;
-                if (shift > 63) {
-                    return -1;
                 }
             }
             return -1;

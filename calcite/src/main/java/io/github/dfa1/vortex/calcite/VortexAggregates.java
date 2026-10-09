@@ -19,7 +19,7 @@ import io.github.dfa1.vortex.reader.compute.ZoneReducer;
 ///
 /// `MIN` / `MAX` / `COUNT` are read from the per-segment zone-map statistics embedded in the
 /// file footer — no data segment is decoded. `SUM` (and therefore `AVG`) folds the per-zone
-/// `SUM` rows via [ZoneReducer#sum(String)] (ADR 0013 §6): when every zone carries a sum the
+/// `SUM` rows via [ZoneReducer#sum(ColumnName)] (ADR 0013 §6): when every zone carries a sum the
 /// answer is metadata-only too, with no data segment touched. Only when a zone lacks a sum — a
 /// column with no zone map, whose flat nodes do not retain it — does it fall back to a streaming
 /// scan.
@@ -47,7 +47,7 @@ public final class VortexAggregates {
     /// @param avg         mean (`sum / count`), or `null` if not computed
     /// @param minMaxSource source of `min`/`max`/`count`
     /// @param sumSource    source of `sum`/`avg`
-    public record Summary(String column, Object min, Object max, long count, Number sum, Double avg,
+    public record Summary(ColumnName column, Object min, Object max, long count, Number sum, Double avg,
                           Source minMaxSource, Source sumSource) {
     }
 
@@ -60,8 +60,8 @@ public final class VortexAggregates {
     /// @param reader an open reader over the file
     /// @param column the numeric column name
     /// @return the column's aggregate summary
-    public static Summary of(VortexReader reader, String column) {
-        ArrayStats stats = reader.columnStats().getOrDefault(ColumnName.of(column), ArrayStats.empty());
+    public static Summary of(VortexReader reader, ColumnName column) {
+        ArrayStats stats = reader.columnStats().getOrDefault(column, ArrayStats.empty());
         long totalRows = totalRows(reader);
         long nullCount = stats.nullCount() == null ? 0L : stats.nullCount();
         long count = totalRows - nullCount;
@@ -99,7 +99,7 @@ public final class VortexAggregates {
         }
     }
 
-    private static Number scanSum(VortexReader reader, String column) {
+    private static Number scanSum(VortexReader reader, ColumnName column) {
         long longSum = 0L;
         double doubleSum = 0.0;
         boolean isFloating = false;

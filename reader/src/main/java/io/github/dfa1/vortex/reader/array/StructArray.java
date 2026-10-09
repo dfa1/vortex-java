@@ -58,10 +58,10 @@ public final class StructArray implements Array {
     ///
     /// @param name the field name to look up
     /// @return the field array with the given name
-    public Array field(String name) {
+    public Array field(ColumnName name) {
         List<ColumnName> names = dtype.fieldNames();
         for (int i = 0; i < names.size(); i++) {
-            if (names.get(i).value().equals(name)) {
+            if (names.get(i).equals(name)) {
                 return fields.get(i);
             }
         }

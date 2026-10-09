@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.RowFilter;
 
@@ -39,7 +40,7 @@ final class RexFilterTranslator {
     /// @param names   the table's column names, by field index
     /// @param types   the table's column dtypes, by field index
     /// @return the conjoined filter capturing every translatable predicate, or empty if none is
-    static Optional<RowFilter> toRowFilter(List<RexNode> filters, List<String> names, List<DType> types) {
+    static Optional<RowFilter> toRowFilter(List<RexNode> filters, List<ColumnName> names, List<DType> types) {
         List<RowFilter> pushed = new ArrayList<>();
         for (RexNode node : filters) {
             // Calcite encodes BETWEEN / IN / range unions as SEARCH(ref, Sarg); expand back to a
@@ -68,7 +69,7 @@ final class RexFilterTranslator {
     /// @param names   the table's column names, by field index
     /// @param types   the table's column dtypes, by field index
     /// @return the conjoined filter, or empty when any predicate is not fully translatable
-    static Optional<RowFilter> translateStrict(List<RexNode> filters, List<String> names, List<DType> types) {
+    static Optional<RowFilter> translateStrict(List<RexNode> filters, List<ColumnName> names, List<DType> types) {
         List<RowFilter> translated = new ArrayList<>();
         for (RexNode node : filters) {
             RexNode expanded = RexUtil.expandSearch(REX_BUILDER, null, node);
@@ -92,10 +93,10 @@ final class RexFilterTranslator {
     ///
     /// @param filter the filter tree to walk
     /// @param out    the set to add every referenced column name into
-    static void collectColumns(RowFilter filter, Set<String> out) {
+    static void collectColumns(RowFilter filter, Set<ColumnName> out) {
         switch (filter) {
             case RowFilter.And(var parts) -> parts.forEach(f -> collectColumns(f, out));
-            case RowFilter.Column(var col, _) -> out.add(col.value());
+            case RowFilter.Column(var col, _) -> out.add(col);
         }
     }
 
@@ -103,7 +104,7 @@ final class RexFilterTranslator {
     /// conjunct) is simply dropped, since the scan re-checks every row so a partially captured filter
     /// is still correct, just less selective for zone-map pruning. Delegates to the shared
     /// [#comparison] dispatch with `strict = false`.
-    private static Optional<RowFilter> toComparison(RexNode node, List<String> names, List<DType> types) {
+    private static Optional<RowFilter> toComparison(RexNode node, List<ColumnName> names, List<DType> types) {
         return comparison(node, names, types, false);
     }
 
@@ -113,7 +114,7 @@ final class RexFilterTranslator {
     /// [#translateStrict] so aggregate push-down answers from stats only when the [RowFilter]
     /// captures the predicate in full. Delegates to the shared [#comparison] dispatch with
     /// `strict = true`.
-    private static Optional<RowFilter> strictComparison(RexNode node, List<String> names, List<DType> types) {
+    private static Optional<RowFilter> strictComparison(RexNode node, List<ColumnName> names, List<DType> types) {
         return comparison(node, names, types, true);
     }
 
@@ -133,7 +134,7 @@ final class RexFilterTranslator {
     /// @param strict `true` to fail-closed on any untranslatable node and accept null tests, `false`
     ///               to drop untranslatable nodes
     /// @return the translated filter, or empty per the `strict` policy above
-    private static Optional<RowFilter> comparison(RexNode node, List<String> names, List<DType> types,
+    private static Optional<RowFilter> comparison(RexNode node, List<ColumnName> names, List<DType> types,
                                                   boolean strict) {
         if (!(node instanceof RexCall call)) {
             return Optional.empty();
@@ -163,18 +164,18 @@ final class RexFilterTranslator {
     /// [RowFilter], which the zone-map fold answers from each zone's null count. Anything other than
     /// a direct [RexInputRef] operand (e.g. `IS NULL` over an expression) abandons the translation —
     /// fail-closed, mirroring [#binary].
-    private static Optional<RowFilter> nullCheck(RexCall call, List<String> names) {
+    private static Optional<RowFilter> nullCheck(RexCall call, List<ColumnName> names) {
         List<RexNode> ops = call.getOperands();
         if (ops.size() != 1 || !(ops.getFirst() instanceof RexInputRef ref)) {
             return Optional.empty();
         }
-        String col = names.get(ref.getIndex());
+        ColumnName col = names.get(ref.getIndex());
         return Optional.of(call.getKind() == SqlKind.IS_NULL
                 ? RowFilter.isNull(col)
                 : RowFilter.isNotNull(col));
     }
 
-    private static Optional<RowFilter> binary(RexCall call, List<String> names, List<DType> types) {
+    private static Optional<RowFilter> binary(RexCall call, List<ColumnName> names, List<DType> types) {
         List<RexNode> ops = call.getOperands();
         if (ops.size() != 2 || !(ops.get(0) instanceof RexInputRef ref) || !(ops.get(1) instanceof RexLiteral lit)) {
             return Optional.empty();
@@ -183,7 +184,7 @@ final class RexFilterTranslator {
         if (val == null) {
             return Optional.empty();
         }
-        String col = names.get(ref.getIndex());
+        ColumnName col = names.get(ref.getIndex());
         Comparable<?> cmp = (Comparable<?>) val;
         return Optional.of(switch (call.getKind()) {
             case EQUALS -> RowFilter.eq(col, val);

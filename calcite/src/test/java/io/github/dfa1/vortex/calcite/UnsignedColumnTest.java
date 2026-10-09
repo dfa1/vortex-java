@@ -35,8 +35,8 @@ class UnsignedColumnTest {
     private static final long U64_HIGH = Long.MIN_VALUE;
 
     private static final DType.Struct SCHEMA = DType.structBuilder()
-            .field("u32", DType.U32)
-            .field("u64", DType.U64)
+            .field(ColumnName.of("u32"), DType.U32)
+            .field(ColumnName.of("u64"), DType.U64)
             .build();
 
     @TempDir
@@ -76,7 +76,7 @@ class UnsignedColumnTest {
 
         // When
         try (VortexReader reader = VortexReader.open(file, registry())) {
-            VortexAggregates.Summary result = VortexAggregates.of(reader, "u32");
+            VortexAggregates.Summary result = VortexAggregates.of(reader, ColumnName.of("u32"));
 
             // Then — the U32 element widens via toUnsignedLong, not sign-extension
             assertThat(result.sumSource()).isEqualTo(VortexAggregates.Source.FULL_SCAN);
@@ -91,7 +91,7 @@ class UnsignedColumnTest {
 
         // When / Then — scanSum throws rather than corrupt the sum with a negative addend
         try (VortexReader reader = VortexReader.open(file, registry())) {
-            assertThatThrownBy(() -> VortexAggregates.of(reader, "u64"))
+            assertThatThrownBy(() -> VortexAggregates.of(reader, ColumnName.of("u64")))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("U64 value");
         }

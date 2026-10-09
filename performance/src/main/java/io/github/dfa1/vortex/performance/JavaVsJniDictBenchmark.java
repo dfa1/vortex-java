@@ -170,10 +170,10 @@ public class JavaVsJniDictBenchmark {
     public long javaDictDecode() throws IOException {
         long[] sum = {0L};
         try (VortexReader vf = VortexReader.open(javaReadFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("sym"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("sym")))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    VarBinArray sym = c.column("sym");
+                    VarBinArray sym = c.column(ColumnName.of("sym"));
                     sym.forEachByteLength(v -> sum[0] += v);
                 }
             }

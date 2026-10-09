@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.compute.Utf8Order;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -82,13 +83,14 @@ final class FilterCommand {
             throw invalid(expr);
         }
         Comparable<?> value = parseValue(rawValue);
+        ColumnName column = ColumnName.of(col);
         return switch (op) {
-            case ">" -> RowFilter.gt(col, value);
-            case ">=" -> RowFilter.gte(col, value);
-            case "<" -> RowFilter.lt(col, value);
-            case "<=" -> RowFilter.lte(col, value);
-            case "=", "==" -> RowFilter.eq(col, value);
-            case "!=" -> RowFilter.neq(col, value);
+            case ">" -> RowFilter.gt(column, value);
+            case ">=" -> RowFilter.gte(column, value);
+            case "<" -> RowFilter.lt(column, value);
+            case "<=" -> RowFilter.lte(column, value);
+            case "=", "==" -> RowFilter.eq(column, value);
+            case "!=" -> RowFilter.neq(column, value);
             default -> throw new IllegalArgumentException("unknown operator: " + op);
         };
     }
@@ -153,7 +155,7 @@ final class FilterCommand {
 
     private static RowPredicate toRowPredicate(RowFilter filter) {
         return switch (filter) {
-            case RowFilter.Column(var col, var predicate) -> columnPredicate(col.value(), predicate);
+            case RowFilter.Column(var col, var predicate) -> columnPredicate(col, predicate);
             case RowFilter.And(var filters) -> {
                 RowPredicate[] preds = filters.stream().map(FilterCommand::toRowPredicate).toArray(RowPredicate[]::new);
                 yield (chunk, rowIdx) -> {
@@ -174,7 +176,7 @@ final class FilterCommand {
     ///
     /// Package-private so the exhaustive switch's null-test and unsupported-composite arms — which
     /// the CLI grammar never reaches — can be exercised directly.
-    static RowPredicate columnPredicate(String col, Predicate predicate) {
+    static RowPredicate columnPredicate(ColumnName col, Predicate predicate) {
         return switch (predicate) {
             case Predicate.Gt(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) > 0;
             case Predicate.Gte(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) >= 0;
