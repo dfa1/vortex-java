@@ -2090,7 +2090,9 @@ class JavaWritesRustReadsIntegrationTest {
             assertThat(tree.root().children())
                     .filteredOn(n -> n.fieldName().equals(java.util.Optional.of("fee")))
                     .singleElement()
-                    .satisfies(n -> assertThat(hasDictLayout(n)).as("F64 column is a dict layout").isTrue());
+                    .satisfies(n -> assertThat(dictLayoutMetadata(n))
+                            .as("vortex-jni's Airport_fee dict metadata: U16 codes, non-nullable, all_values_referenced=false (#473)")
+                            .containsExactly(0x08, 0x01, 0x10, 0x00, 0x18, 0x00));
         }
         List<Object> full = readColumnFiltered(file, "fee", Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(0L)));
@@ -2098,6 +2100,19 @@ class JavaWritesRustReadsIntegrationTest {
         List<Object> filtered = readColumnFiltered(file, "fee", Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(1_500L)));
         assertThat(filtered).containsExactlyElementsOf(expected.subList(1_500, expected.size()));
+    }
+
+    private static byte[] dictLayoutMetadata(io.github.dfa1.vortex.inspect.InspectorTree.Node node) {
+        if (node.layout().isDict()) {
+            return node.layout().metadata().toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
+        }
+        for (var child : node.children()) {
+            byte[] meta = dictLayoutMetadata(child);
+            if (meta != null) {
+                return meta;
+            }
+        }
+        return null;
     }
 
     private static boolean hasDictLayout(io.github.dfa1.vortex.inspect.InspectorTree.Node node) {
