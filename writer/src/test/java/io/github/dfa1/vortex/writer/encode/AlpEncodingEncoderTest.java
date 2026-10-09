@@ -10,7 +10,10 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
+import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -212,6 +215,36 @@ class AlpEncodingEncoderTest {
             assertThat(result.getFloat(2)).isCloseTo(2.5f, within(1e-6f));
             assertThat(result.getFloat(3)).isInfinite();
             assertThat(result.getFloat(4)).isCloseTo(3.0f, within(1e-6f));
+        }
+
+        @Test
+        void encode_f64_patchesAreNarrowedWithChunkOffsets() throws java.io.IOException {
+            // Given: Rust's own test_chunk_offsets (encodings/alp compress.rs): three irrational
+            // values straddling the 1024-value chunk boundary of an otherwise ALP-friendly array
+            double[] values = new double[3_072];
+            java.util.Arrays.fill(values, 1.0);
+            values[1_023] = Math.PI;
+            values[1_024] = Math.E;
+            values[1_025] = Math.PI;
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+            var metaSeg = result.rootNode().metadata();
+            ProtoPatchesMetadata patches = ProtoALPMetadata.decode(metaSeg, 0, metaSeg.byteSize()).patches();
+
+            // Then: encoded, indices, values, chunk offsets; the offsets count the patches before
+            // each chunk ([0, 1, 3] as in Rust); positions and offsets as narrow as they fit (u16, u8)
+            assertThat(result.rootNode().children()).hasSize(4);
+            assertThat(patches.len()).isEqualTo(3);
+            assertThat(patches.indices_ptype()).isEqualTo(ProtoPType.fromValue(PType.U16.ordinal()));
+            assertThat(patches.chunk_offsets_len()).isEqualTo(3L);
+            assertThat(patches.chunk_offsets_ptype()).isEqualTo(ProtoPType.fromValue(PType.U8.ordinal()));
+            assertThat(patches.offset_within_chunk()).isEqualTo(0L);
+            MemorySegment indices = result.encodedBuffers().get(1).data();
+            MemorySegment offsets = result.encodedBuffers().get(3).data();
+            assertThat(new int[]{indices.get(VortexFormat.LE_SHORT, 0), indices.get(VortexFormat.LE_SHORT, 2),
+                    indices.get(VortexFormat.LE_SHORT, 4)}).containsExactly(1_023, 1_024, 1_025);
+            assertThat(offsets.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE)).containsExactly(0, 1, 3);
         }
 
         @Test

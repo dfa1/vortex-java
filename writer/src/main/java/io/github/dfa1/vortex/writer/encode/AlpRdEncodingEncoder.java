@@ -1,15 +1,14 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -327,9 +326,9 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             // values left as they are (a constant array when they are all equal), and none of it
             // bit-packed. Bit-packing pads to 1024-value blocks, which inflates the handful of
             // exceptions of a small sample and biases the cascade away from ALP-RD.
-            PType idxType = narrowestIndexType(excPosArr[excPosArr.length - 1]);
+            PType idxType = PatchBuffers.narrowestUnsigned(excPosArr[excPosArr.length - 1]);
             int idxOffset = allBuffers.size();
-            allBuffers.add(EncodedBuffer.of(indexBuffer(excPosArr, idxType, ctx), idxType));
+            allBuffers.add(EncodedBuffer.of(PatchBuffers.unsigned(excPosArr, idxType, ctx), idxType));
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, idxOffset);
 
             EncodeNode valNode;
@@ -363,30 +362,6 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         EncodeNode root = new EncodeNode(
             EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(metaBytes), children, new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), statsMin, statsMax);
-    }
-
-    private static PType narrowestIndexType(long maxIndex) {
-        if (maxIndex <= 0xFFL) {
-            return PType.U8;
-        }
-        if (maxIndex <= 0xFFFFL) {
-            return PType.U16;
-        }
-        return maxIndex <= 0xFFFF_FFFFL ? PType.U32 : PType.U64;
-    }
-
-    private static MemorySegment indexBuffer(long[] positions, PType type, EncodeContext ctx) {
-        int width = type.byteSize();
-        MemorySegment buffer = ctx.arena().allocate((long) positions.length * width, width);
-        for (int i = 0; i < positions.length; i++) {
-            switch (type) {
-                case U8 -> buffer.set(ValueLayout.JAVA_BYTE, i, (byte) positions[i]);
-                case U16 -> buffer.setAtIndex(VortexFormat.LE_SHORT, i, (short) positions[i]);
-                case U32 -> buffer.setAtIndex(VortexFormat.LE_INT, i, (int) positions[i]);
-                default -> buffer.setAtIndex(VortexFormat.LE_LONG, i, positions[i]);
-            }
-        }
-        return buffer;
     }
 
     private static boolean allEqual(short[] values) {

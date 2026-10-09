@@ -240,24 +240,25 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         }
 
         int numPatches = d.patchIndices().size();
-        MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
+        PatchBuffers patchBuffers = PatchBuffers.of(d.patchIndices(), n, ctx);
         MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 8, 8);
         for (int i = 0; i < numPatches; i++) {
-            idxBuf.setAtIndex(VortexFormat.LE_INT, i, d.patchIndices().get(i));
             valBuf.setAtIndex(VortexFormat.LE_DOUBLE, i, d.patchValues().get(i));
         }
 
-        ProtoPatchesMetadata patches = buildPatchesMeta(numPatches);
+        ProtoPatchesMetadata patches = patchBuffers.meta(numPatches);
         byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patches).encode();
 
         EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
+        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
             MemorySegment.ofArray(metaBytes),
-            new EncodeNode[]{encodedNode, idxNode, valNode},
+            new EncodeNode[]{encodedNode, idxNode, valNode, offsetsNode},
             new int[0]);
-        return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I64), EncodedBuffer.of(idxBuf, PType.U32),
-                EncodedBuffer.of(valBuf, PType.F64)), d.statsMin(), d.statsMax());
+        return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I64),
+                EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()), EncodedBuffer.of(valBuf, PType.F64),
+                EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())), d.statsMin(), d.statsMax());
     }
 
     private static CascadeStep encodeCascadeF64(double[] values, EncodeContext ctx) {
@@ -271,22 +272,23 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         }
 
         int numPatches = d.patchIndices().size();
-        MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
+        PatchBuffers patchBuffers = PatchBuffers.of(d.patchIndices(), values.length, ctx);
         MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 8, 8);
         for (int i = 0; i < numPatches; i++) {
-            idxBuf.setAtIndex(VortexFormat.LE_INT, i, d.patchIndices().get(i));
             valBuf.setAtIndex(VortexFormat.LE_DOUBLE, i, d.patchValues().get(i));
         }
 
-        ProtoPatchesMetadata patches = buildPatchesMeta(numPatches);
+        ProtoPatchesMetadata patches = patchBuffers.meta(numPatches);
         byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patches).encode();
 
         EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
-            MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
+            MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode, offsetsNode}, new int[0]);
         ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
-        return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(idxBuf, PType.U32), EncodedBuffer.of(valBuf, PType.F64)),
+        return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()),
+                EncodedBuffer.of(valBuf, PType.F64), EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())),
                 List.of(slot), d.statsMin(), d.statsMax(), true);
     }
 
@@ -417,36 +419,25 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         }
 
         int numPatches = patchIndices.size();
-        MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
+        PatchBuffers patchBuffers = PatchBuffers.of(patchIndices, n, ctx);
         MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 4, 4);
         for (int i = 0; i < numPatches; i++) {
-            idxBuf.setAtIndex(VortexFormat.LE_INT, i, patchIndices.get(i));
             valBuf.setAtIndex(VortexFormat.LE_FLOAT, i, patchValues.get(i));
         }
 
-        ProtoPatchesMetadata patches = new ProtoPatchesMetadata(
-                numPatches,
-                0L,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U32.ordinal()),
-                null, null, null);
+        ProtoPatchesMetadata patches = patchBuffers.meta(numPatches);
         byte[] metaBytes = new ProtoALPMetadata(expE, expF, patches).encode();
 
         EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
+        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
             MemorySegment.ofArray(metaBytes),
-            new EncodeNode[]{encodedNode, idxNode, valNode},
+            new EncodeNode[]{encodedNode, idxNode, valNode, offsetsNode},
             new int[0]);
-        return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I32), EncodedBuffer.of(idxBuf, PType.U32),
-                EncodedBuffer.of(valBuf, PType.F32)), statsMin, statsMax);
-    }
-
-    private static ProtoPatchesMetadata buildPatchesMeta(int numPatches) {
-        return new ProtoPatchesMetadata(
-                numPatches,
-                0L,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U32.ordinal()),
-                null, null, null);
+        return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I32),
+                EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()), EncodedBuffer.of(valBuf, PType.F32),
+                EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())), statsMin, statsMax);
     }
 
     private static byte[] scalarF64(double v) {
