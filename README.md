@@ -13,18 +13,6 @@ for zero-copy memory-mapped reads — good performance out of the box, without n
 Checked against the Rust reference in both directions (Rust writes, Java reads and vice versa),
 and against 172 real-world [Raincloud](docs/compatibility.md#real-world-conformance-the-raincloud-corpus) datasets, each matching its Parquet copy value for value.
 
-### At a glance (vs vortex-jni 0.86.1)
-
-| | vortex-java |
-|---|---|
-| Encodings | all 38 read, 35 written ([read-only](docs/compatibility.md): `vortex.union`, `vortex.parquet.variant`, `vortex.zstd_buffers`) |
-| Read | 1.6–2.3× vortex-jni on single numeric columns, ~4× on strings, 3.4× on a 3 GB full scan |
-| Write | 1.13× vortex-jni (cascading, 10 M OHLC rows from Java arrays: 0.95 vs 0.84 writes/s), choosing encodings as Rust's compressor does |
-| Size | NYC taxi 2024-01: 42.3 MB vs 44.5 MB; OHLC: 59.5 vs 61.7 MB |
-
-Measured on an Apple M5 with JDK 25; method, caveats and history in
-[docs/explanation.md](docs/explanation.md#benchmarks).
-
 ## Who is this for
 
 - JVM analytics engines and OLAP systems
