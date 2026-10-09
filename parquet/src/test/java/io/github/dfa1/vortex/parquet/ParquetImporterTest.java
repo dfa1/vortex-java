@@ -463,8 +463,9 @@ class ParquetImporterTest {
         }
 
         @Test
-        void smallChunkSize_splitsIntoMultipleChunks(@TempDir Path tmp) throws Exception {
-            // Given — chunk size 30 forces 4 chunks over 100 rows (exercises trim + chunk flush)
+        void smallChunkSize_preservesRowsAcrossBatches(@TempDir Path tmp) throws Exception {
+            // Given — chunk size 30 forces 4 writer batches over 100 rows (exercises trim + chunk
+            // flush); on disk they coalesce, as Rust's repartition does (#470)
             Path vortex = tmp.resolve("out.vortex");
             ImportOptions options = ImportOptions.defaults().withChunkSize(30);
 
@@ -474,16 +475,13 @@ class ParquetImporterTest {
             // Then — row count is preserved across the chunk boundaries
             try (VortexReader reader = VortexReader.open(vortex);
                  ScanIterator iter = reader.scan(ScanOptions.all())) {
-                long chunks = 0;
                 long rows = 0;
                 while (iter.hasNext()) {
                     try (Chunk c = iter.next()) {
-                        chunks++;
                         rows += c.rowCount();
                     }
                 }
                 assertThat(rows).isEqualTo(100L);
-                assertThat(chunks).isGreaterThan(1L);
             }
         }
 

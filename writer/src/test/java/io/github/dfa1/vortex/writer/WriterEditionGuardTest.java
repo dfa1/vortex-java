@@ -53,17 +53,19 @@ class WriterEditionGuardTest {
         long[] data = {100L, 105L, 110L, 115L, 120L};
         Map<ColumnName, Object> chunk = Map.of(ColumnName.of("ts"), data);
 
-        // When / Then
-        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.cascading(0),
-                     List.of(new DeltaEncodingEncoder()))) {
-            assertThatThrownBy(() -> sut.writeChunk(chunk))
+        // When / Then — the batch is buffered for repartitioning (#470), so the guard fires by close
+        assertThatThrownBy(() -> {
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.cascading(0),
+                         List.of(new DeltaEncodingEncoder()))) {
+                sut.writeChunk(chunk);
+            }
+        })
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("fastlanes.delta")
                     .hasMessageContaining("core2026.08.3")
                     .hasMessageContaining("not part of any edition")
                     .hasMessageContaining("withoutEditions");
-        }
     }
 
     @Test

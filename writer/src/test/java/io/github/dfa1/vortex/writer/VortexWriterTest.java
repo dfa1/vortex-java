@@ -431,8 +431,8 @@ class VortexWriterTest {
     }
 
     @Test
-    void writeAndRead_multipleChunks_returnsAllChunks(@TempDir Path tmp) throws IOException {
-        // Given
+    void writeAndRead_smallBatches_coalesceIntoOneChunk(@TempDir Path tmp) throws IOException {
+        // Given — two batches far below Rust's 1 MB repartition target (#470)
         Path file = tmp.resolve("multi.vtx");
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -446,9 +446,7 @@ class VortexWriterTest {
         var registry = ReadRegistry.loadAll();
         try (var vf = VortexReader.open(file, registry)) {
             List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.all());
-            assertThat(snapshots).hasSize(2);
-            assertThat(snapshots.get(0).rowCount()).isEqualTo(2L);
-            assertThat(snapshots.get(1).rowCount()).isEqualTo(3L);
+            assertThat(snapshots).singleElement().satisfies(s -> assertThat(s.rowCount()).isEqualTo(5L));
         }
     }
 

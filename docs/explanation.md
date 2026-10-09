@@ -205,8 +205,8 @@ self-describing tail. A reader bootstraps from the last 8 bytes — no scanning 
 ```
  byte 0
  ┌──────────────────────────────────────────────┐
- │  Buffer 0   (encoded segment)                │  ← column data, written by
- │  Buffer 1   (encoded segment)                │    each writeChunk() call.
+ │  Buffer 0   (encoded segment)                │  ← column data, coalesced
+ │  Buffer 1   (encoded segment)                │    into ~1 MB chunks per column.
  │  ...                                         │    Aligned, no per-buffer header.
  │  Buffer N-1 (encoded segment)                │
  ├──────────────────────────────────────────────┤

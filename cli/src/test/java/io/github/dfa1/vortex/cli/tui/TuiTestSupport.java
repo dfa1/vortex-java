@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -63,8 +64,11 @@ final class TuiTestSupport {
                         DType.BOOL,
                         DType.UTF8),
                 false);
+        // Two chunks for the chunk-boundary tests: the legacy edition keeps one chunk per batch,
+        // where the default coalesces small batches as Rust's repartition does (#470).
+        WriteOptions options = WriteOptions.defaults().withEdition(Editions.CORE_2025_10_0);
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+             VortexWriter writer = VortexWriter.create(ch, schema, options)) {
             writer.writeChunk(Map.of(
                     ColumnName.of("i"), new long[]{0, 1, 2},
                     ColumnName.of("d"), new double[]{0.5, 1.5, 2.5},
