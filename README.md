@@ -42,7 +42,7 @@ Measured on an Apple M5 with JDK 25; method, caveats and history in
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.15.2</version>
+  <version>0.16.0</version>
 </dependency>
 ```
 
@@ -75,7 +75,7 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-writer</artifactId>
-  <version>0.15.2</version>
+  <version>0.16.0</version>
 </dependency>
 ```
 

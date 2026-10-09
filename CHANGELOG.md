@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-09
+
+### Highlights
+
+- **Writes like Rust's writer by default.** Cascading to depth 3, Rust's `vortex.zoned` zone map, ~1 MB chunks of 8192-row blocks, the `core2026.08.3` edition and Rust's dictionary shape: NYC taxi 2024-01 writes 42.3 MB (vortex-jni: 44.5 MB), and a 10M-row OHLC write from Java arrays runs 1.13× vortex-jni ([#458](https://github.com/dfa1/vortex-java/issues/458), [#447](https://github.com/dfa1/vortex-java/issues/447), [#470](https://github.com/dfa1/vortex-java/issues/470)).
+- **Every encoding reads.** `DType::Union` with `vortex.union`, `vortex.parquet.variant` and `vortex.zstd_buffers` are now read: all 38 encodings ([#442](https://github.com/dfa1/vortex-java/issues/442), [#445](https://github.com/dfa1/vortex-java/issues/445), [#444](https://github.com/dfa1/vortex-java/issues/444)).
+- **Interop fixes.** 0.15.x could write float `vortex.sequence` that Rust cannot read, and filtered scans could miss rows of Rust-written string columns (UTF-8 order, bounded stats) ([#472](https://github.com/dfa1/vortex-java/issues/472), [#446](https://github.com/dfa1/vortex-java/issues/446)).
+- **Upgrading.** Files written by 0.16.0 read back identically with 0.15.2. Two API changes break compilation: the edition catalog (now Rust 0.86.1's) and `EncodingEncoder#expectedRatio`.
+
 ### Changed
 - Bit-packing encodes about 45% faster, to the same bytes: words are packed in registers, min/max and the bit-width histogram share one pass, and patches come from the histogram (10M-row OHLC cascading write 0.90 → 0.94 writes/s) ([#475](https://github.com/dfa1/vortex-java/issues/475)).
 - The writer repartitions each column into chunks of whole 8192-row blocks reaching 1 MB, as Rust's write strategy does, instead of one chunk per `writeChunk` batch; global-dict codes too (U16: 524 288 rows). The importers' `withChunkSize` now sets the batch size only. Nested columns and pre-`core2026.08.0` targets keep batch chunks. Files stay readable by 0.15.2 and by Rust ([#470](https://github.com/dfa1/vortex-java/issues/470)).
