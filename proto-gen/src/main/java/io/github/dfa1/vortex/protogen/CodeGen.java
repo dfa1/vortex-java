@@ -584,19 +584,6 @@ public final class CodeGen {
         };
     }
 
-    private static String writeStmtOnWriter(Ast.Scalar s, String writer, String value) {
-        return switch (s) {
-            case UINT32, INT32 -> writer + ".writeVarint32(" + value + ");";
-            case UINT64 -> writer + ".writeVarint64(" + value + ");";
-            case SINT64 -> writer + ".writeSint64(" + value + ");";
-            case BOOL -> writer + ".writeBool(" + value + ");";
-            case FLOAT -> writer + ".writeFloat(" + value + ");";
-            case DOUBLE -> writer + ".writeDouble(" + value + ");";
-            case STRING -> writer + ".writeString(" + value + ");";
-            case BYTES -> writer + ".writeBytes(" + value + ");";
-        };
-    }
-
     // ------------------------------------------------------------------
     // Enum emitters (wire type = VARINT)
     // ------------------------------------------------------------------
