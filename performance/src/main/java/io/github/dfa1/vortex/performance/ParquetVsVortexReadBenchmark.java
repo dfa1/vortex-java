@@ -7,6 +7,8 @@ import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnProjection;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -214,7 +216,7 @@ public class ParquetVsVortexReadBenchmark {
              var iter = vr.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("trip_distance"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    DoubleArray col = c.column("trip_distance");
+                    DoubleArray col = values(c, "trip_distance");
                     sum += col.fold(0.0, Double::sum);
                 }
             }
@@ -233,13 +235,20 @@ public class ParquetVsVortexReadBenchmark {
              var iter = vr.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("fare_amount", "PULocationID"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    DoubleArray fare = c.column("fare_amount");
-                    IntArray loc = c.column("PULocationID");
+                    DoubleArray fare = values(c, "fare_amount");
+                    IntArray loc = values(c, "PULocationID");
                     fareSum += fare.fold(0.0, Double::sum);
                     idSum += loc.fold(0, Integer::sum);
                 }
             }
         }
         return fareSum + idSum;
+    }
+
+    // Nullable taxi columns decode to a MaskedArray (null is a dictionary entry flagged invalid, as
+    // Rust writes it): fold the values under the mask, as the Parquet batch path folds its arrays.
+    @SuppressWarnings("unchecked")
+    private static <T extends Array> T values(Chunk chunk, String column) {
+        return (T) MaskedArray.unwrap(chunk.column(column)).inner();
     }
 }
