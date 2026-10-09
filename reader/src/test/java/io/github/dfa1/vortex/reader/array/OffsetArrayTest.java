@@ -3,10 +3,13 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.model.DType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -151,6 +154,40 @@ class OffsetArrayTest {
             assertThat(sut.getBoolean(0)).isTrue();  // inner[1]
             assertThat(sut.getBoolean(1)).isTrue();  // inner[2]
             assertThat(sut.length()).isEqualTo(2);
+        }
+
+        // Seeded windows over a flat bitmap, at every bit offset and length mod 8: the shifted
+        // byte copy must match the per-row getBoolean reference exactly, including the bits past
+        // length() in the last byte, which a consumer reading whole bytes would otherwise see
+        @ParameterizedTest
+        @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8})
+        void materialize_flatInner_matchesPerRowAtEveryBitOffset(int seed) {
+            // Given
+            Random random = new Random(seed);
+            boolean[] values = new boolean[40];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = random.nextBoolean();
+            }
+            BoolArray inner = TestArrays.bools(values);
+            long offset = random.nextInt(17);
+            long length = random.nextInt((int) (values.length - offset) + 1);
+            var sut = new OffsetBoolArray(DType.BOOL, length, inner, offset);
+            // the same window through a non-flat inner takes the forEachBoolean default
+            var reference = new OffsetBoolArray(DType.BOOL, length, new OffsetBoolArray(DType.BOOL, values.length, inner, 0), offset);
+
+            // When
+            MemorySegment result = sut.materialize(Arena.ofAuto());
+
+            // Then
+            assertThat(result.mismatch(reference.materialize(Arena.ofAuto()))).isEqualTo(-1L);
+            for (int i = 0; i < length; i++) {
+                boolean bit = (result.get(ValueLayout.JAVA_BYTE, i >>> 3) & (1 << (i & 7))) != 0;
+                assertThat(bit).as("row %d", i).isEqualTo(values[(int) offset + i]);
+            }
+            if (length % 8 != 0) {
+                int last = result.get(ValueLayout.JAVA_BYTE, length >>> 3) & 0xFF;
+                assertThat(last >>> (length % 8)).isZero();
+            }
         }
     }
 

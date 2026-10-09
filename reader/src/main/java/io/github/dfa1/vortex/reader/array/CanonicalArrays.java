@@ -17,9 +17,9 @@ public final class CanonicalArrays {
     private CanonicalArrays() {
     }
 
-    /// Returns `array` backed by a flat buffer: segment-backed and non-numeric arrays unchanged, a
+    /// Returns `array` backed by a flat buffer: segment-backed and non-primitive arrays unchanged, a
     /// [MaskedArray] with its inner array canonicalized and its validity kept, and any other numeric
-    /// array materialized into `allocator`.
+    /// or bool array materialized into `allocator` (bools as an LSB-first bitmap).
     ///
     /// @param array     the array to canonicalize
     /// @param allocator allocator for the materialized buffer, which must outlive the result
@@ -38,6 +38,7 @@ public final class CanonicalArrays {
             case FloatArray a -> new MaterializedFloatArray(a.dtype(), a.length(), a.materialize(allocator));
             case ShortArray a -> new MaterializedShortArray(a.dtype(), a.length(), a.materialize(allocator));
             case ByteArray a -> new MaterializedByteArray(a.dtype(), a.length(), a.materialize(allocator));
+            case BoolArray a -> new MaterializedBoolArray(a.dtype(), a.length(), a.materialize(allocator));
             default -> array;
         };
     }

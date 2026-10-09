@@ -40,8 +40,9 @@ public non-sealed interface BoolArray extends Array {
     /// Scalar fallback: packs every element through [#getBoolean(long)] into a fresh
     /// LSB-first bitmap (one byte per 8 elements), matching the on-disk and Arrow
     /// validity-buffer layout. Buffer-backed ([MaterializedBoolArray]) overrides with
-    /// a zero-copy path. The segment is allocated zero-filled, so only set bits are
-    /// written.
+    /// a zero-copy path. Walks [#forEachBoolean(BooleanConsumer)], so run-end, sparse and chunked
+    /// bools emit sequentially rather than resolving each row from scratch, and assembles each
+    /// output byte in a register, stored once, rather than read-modified-written per set bit.
     ///
     /// @param arena allocator for the output segment
     /// @return an LSB-first packed bitmap covering `length()` elements
@@ -49,12 +50,22 @@ public non-sealed interface BoolArray extends Array {
     default MemorySegment materialize(SegmentAllocator arena) {
         long n = length();
         MemorySegment dst = arena.allocate((n + 7) / 8);
-        for (long i = 0; i < n; i++) {
-            if (getBoolean(i)) {
-                long byteIndex = i >>> 3;
-                byte b = dst.get(ValueLayout.JAVA_BYTE, byteIndex);
-                dst.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) ((b & 0xff) | (1 << (i & 7))));
+        long[] state = {0, 0}; // [row, byte being assembled]
+        forEachBoolean(v -> {
+            long i = state[0]++;
+            if (i >= n) {
+                return; // a walk emitting more than length() rows must not write past the bitmap
             }
+            if (v) {
+                state[1] |= 1L << (i & 7);
+            }
+            if ((i & 7) == 7) {
+                dst.set(ValueLayout.JAVA_BYTE, i >>> 3, (byte) state[1]);
+                state[1] = 0;
+            }
+        });
+        if ((n & 7) != 0) {
+            dst.set(ValueLayout.JAVA_BYTE, n >>> 3, (byte) state[1]);
         }
         return dst;
     }
