@@ -2,6 +2,9 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+
 import java.util.function.LongBinaryOperator;
 
 /// Sliced view over a [ByteArray]: `getByte(i) = inner.getByte(i + offset)`.
@@ -30,5 +33,14 @@ public record OffsetByteArray(DType dtype, long length, ByteArray inner, long of
             acc = op.applyAsLong(acc, getByte(i));
         }
         return acc;
+    }
+
+    /// Zero-copy over a flat inner buffer (see `OffsetArrays#window`), else the per-row default.
+    ///
+    /// @param arena allocator for the per-row fallback
+    /// @return the window's little-endian values
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        return OffsetArrays.window(inner, offset, length, 1).orElseGet(() -> ByteArray.super.materialize(arena));
     }
 }

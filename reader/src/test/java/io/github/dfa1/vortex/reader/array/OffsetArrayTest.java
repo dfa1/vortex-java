@@ -192,6 +192,47 @@ class OffsetArrayTest {
     }
 
     @Nested
+    class FlatWindow {
+
+        // A scan window's slice of a canonicalized shared flat: materialize must return exactly the
+        // window, as a view of the flat buffer rather than a row-by-row copy through getX.
+
+        @Test
+        void materialize_flatInner_returnsZeroCopyWindow() {
+            // Given
+            LongArray inner = TestArrays.longs(5L, 6L, 7L, 8L);
+            var sut = new OffsetLongArray(DType.I64, 2, inner, 1L);
+
+            // When
+            MemorySegment result = sut.materialize(Arena.ofAuto());
+
+            // Then
+            assertThat(result.byteSize()).isEqualTo(16L);
+            assertThat(result.getAtIndex(ValueLayout.JAVA_LONG_UNALIGNED, 0)).isEqualTo(6L);
+            assertThat(result.getAtIndex(ValueLayout.JAVA_LONG_UNALIGNED, 1)).isEqualTo(7L);
+            assertThat(result.isReadOnly()).isTrue();
+            assertThat(inner.materialize(Arena.ofAuto()).asSlice(8, 16).address()).isEqualTo(result.address());
+        }
+
+        @Test
+        void materialize_broadcastInner_fallsBackToPerRowCopy() {
+            // Given a one-element broadcast buffer standing for 4 rows: it does not cover the
+            // window, so a zero-copy slice would read past it; the per-row path broadcasts instead
+            MemorySegment one = Arena.ofAuto().allocate(4, 4);
+            one.setAtIndex(ValueLayout.JAVA_INT_UNALIGNED, 0, 42);
+            IntArray inner = new MaterializedIntArray(DType.I32, 4, one);
+            var sut = new OffsetIntArray(DType.I32, 2, inner, 2L);
+
+            // When
+            MemorySegment result = sut.materialize(Arena.ofAuto());
+
+            // Then
+            assertThat(result.getAtIndex(ValueLayout.JAVA_INT_UNALIGNED, 0)).isEqualTo(42);
+            assertThat(result.getAtIndex(ValueLayout.JAVA_INT_UNALIGNED, 1)).isEqualTo(42);
+        }
+    }
+
+    @Nested
     class Int {
         @Test
         void getIntShiftsByOffset() {

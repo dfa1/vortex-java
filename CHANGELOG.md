@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently (4.4× on 8 threads). ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Changed
+- A scan window over a column shared by several windows materializes as a zero-copy view of the decoded column instead of a row-by-row copy (Raincloud full scans up to 51% faster: IMDB `title` 14.9 → 22.5 scans/s, Appian `order` 15.7 → 18.5) ([#502](https://github.com/dfa1/vortex-java/pull/502)).
 - Frame-of-reference columns over bit-packed data decode into one buffer instead of two: the reference is added in place to the freshly unpacked values, as Rust does, halving their decode memory (Raincloud full scans 3–9% faster) ([#500](https://github.com/dfa1/vortex-java/pull/500)).
 - Bool columns materialize 8 rows per step: a scan-window slice copies its bitmap with byte shifts instead of one lookup per row, and lazy run-end, sparse and chunked bools walk sequentially (Raincloud Appian `order` full scan 11.2 → 13.0 scans/s) ([#499](https://github.com/dfa1/vortex-java/pull/499)).
 - `vortex.onpair` strings decode up to 36% faster (Raincloud full scans: BI `corporations` 14.0 → 19.0 scans/s, TPC-H `orders` 69.6 → 85.9): each token is one fixed 16-byte over-copy, as Rust's `onpair` decoder does, and dictionaries are validated as Rust validates them (tokens 1–16 bytes, read padding after the last one) ([#498](https://github.com/dfa1/vortex-java/pull/498)).
