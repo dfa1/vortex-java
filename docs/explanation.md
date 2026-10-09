@@ -49,22 +49,33 @@ vortex-jni reads are 3–6× faster than in the 2026-07 snapshot (vortex-jni 0.7
 error bar is wide because its forks are bimodal (per-fork JIT compilation); read it as
 "several times faster", not as 3.9× exactly.
 
-### OHLC write — 10 M rows, cascading depth 3 (`WriteOptions.defaults()`)
+### OHLC write — 10 M rows
 
-| Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Ratio |
-|-----------|---------------------|--------------------|-------|
-| write     | 0.881 ± 0.008       | 0.848 ± 0.005      | 1.04× |
+Re-measured 2026-10-09 after #475, 5 forks. Both writers start from the same plain Java arrays.
+vortex-jni accepts only Arrow batches, so its number includes converting each batch to Arrow
+vectors (~280 ms per write), as any Java caller of vortex-jni pays; vortex-jni documents no
+faster path (#477).
+
+| Benchmark                               | vortex-java (ops/s) | vortex-jni (ops/s) | Ratio |
+|-----------------------------------------|---------------------|--------------------|-------|
+| write, cascading depth 3 (`defaults()`) | 0.951 ± 0.029       | 0.843 ± 0.006      | 1.13× |
+
+| vortex-java cascade depth | ops/s         | Output (bytes) |
+|---------------------------|---------------|----------------|
+| 0 (first match)           | 2.673 ± 0.075 | 460,424,918    |
+| 1                         | 0.856 ± 0.027 | 76,831,090     |
+| 2                         | 0.947 ± 0.028 | 59,461,778     |
+| 3 (default, Rust's)       | 0.951 ± 0.029 | 59,456,658     |
 
 | Output (bytes)          | vortex-java | vortex-jni |
 |-------------------------|-------------|------------|
-| OHLC 10 M rows          | 59,036,738  | 61,681,692 |
+| OHLC 10 M rows          | 59,456,658  | 61,681,692 |
 | NYC taxi 2024-01 (2.96 M rows, 19 cols) | 42,338,902 | 44,463,892 |
 
-On par. vortex-jni's number includes ~280 ms per write of building Arrow vectors from Java
-arrays (#477), and Rust overlaps part of its compression on runtime threads while Java's
-writer is single-threaded (#474). On CPU, Java's encoder now does less work per write than
-Rust's (~1.18 s vs ~0.98 s plus the Arrow conversion), but more in bit-packing (#475) and
-compressor stats (#476).
+Without the Arrow conversion, Rust's encoder alone writes ~15% faster than vortex-java
+(1.094 ± 0.004 ops/s): Rust overlaps part of its compression on runtime threads while Java's
+writer is single-threaded (#474), and Java still spends more CPU than Rust in compressor stats
+(#476).
 
 How it got here — porting the Rust compressor's decisions rather than tuning Java's own:
 2026-10-08 `main` wrote 0.433 ops/s and 6.9 GB allocated per write; #464–#469 brought it to

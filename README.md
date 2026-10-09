@@ -20,8 +20,8 @@ copy value for value.
 |---|---|
 | Encodings | all 37 read, 35 written ([gaps](docs/compatibility.md#known-wire-format-gaps): `DType::Union` unread) |
 | Read | 1.6–2.3× vortex-jni on single numeric columns, ~4× on strings, 3.4× on a 3 GB full scan |
-| Write | on par (cascading, 10 M OHLC rows: 0.88 vs 0.85 writes/s), choosing encodings as Rust's compressor does |
-| Size | NYC taxi 2024-01: 42.3 MB vs 44.5 MB; OHLC: 59.0 vs 61.7 MB |
+| Write | 1.13× vortex-jni (cascading, 10 M OHLC rows from Java arrays: 0.95 vs 0.84 writes/s), choosing encodings as Rust's compressor does |
+| Size | NYC taxi 2024-01: 42.3 MB vs 44.5 MB; OHLC: 59.5 vs 61.7 MB |
 
 Measured on an Apple M5 with JDK 25; method, caveats and history in
 [docs/explanation.md](docs/explanation.md#benchmarks).

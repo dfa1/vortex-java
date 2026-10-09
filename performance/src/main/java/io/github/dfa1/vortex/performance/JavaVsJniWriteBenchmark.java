@@ -28,6 +28,7 @@ import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -51,7 +52,12 @@ import java.util.concurrent.TimeUnit;
 ///
 /// Schema: date(I32/DATE32), symbol(Utf8), open/high/low/close(F64), volume(I64) — 7 columns.
 ///
-/// Data is pre-generated in @Setup so only encoding + I/O is measured.
+/// Data is pre-generated in @Setup as plain Java arrays, the input both writers start from.
+/// vortex-jni accepts only Arrow batches (`writeBatch` takes an Arrow C data array), so a Java
+/// caller converts its data on every write: `jniWrite` builds the Arrow vectors inside the
+/// measured loop, which is ~280 ms of its time per write (#477). vortex-jni's docs recommend no
+/// pre-built-Arrow shortcut, so none is taken. vortex-jni uses Rust's default writer; vortex-java
+/// runs at cascade depths 0–3, of which 3 (`WriteOptions.defaults()`) is the like-for-like one.
 /// Each invocation writes 10 M rows; the file size is returned as the benchmark result
 /// so the JVM cannot eliminate the write as dead code.
 ///
@@ -127,9 +133,30 @@ public class JavaVsJniWriteBenchmark {
     private long[][] batchVolume;
 
     private Path jniFile;
-    private Path javaFile;
-    private Path javaFileCascading;
     private BufferAllocator allocator;
+
+    /// The Java writer's cascade depth, on its own state so only [#javaWrite] is parameterized:
+    /// `0` is first-match encoding, `3` the default and Rust's `MAX_CASCADE`. Prints the file size
+    /// per depth, the trade-off the depth buys.
+    @State(Scope.Benchmark)
+    public static class Cascade {
+
+        @Param({"0", "1", "2", "3"})
+        public int depth;
+
+        Path file;
+
+        @Setup(Level.Trial)
+        public void setup() throws IOException {
+            file = Files.createTempFile("ohlc-java-write-cascade" + depth, ".vtx");
+        }
+
+        @TearDown(Level.Trial)
+        public void cleanup() throws IOException {
+            System.out.printf("[JavaVsJniWriteBenchmark] cascade %d: %,d B%n", depth, Files.size(file));
+            Files.deleteIfExists(file);
+        }
+    }
 
     private static double round(double v) {
         return Math.round(v * 100.0) / 100.0;
@@ -139,8 +166,6 @@ public class JavaVsJniWriteBenchmark {
     public void setup() throws IOException {
         allocator = ArrowAllocation.rootAllocator();
         jniFile = Files.createTempFile("ohlc-jni-write", ".vtx");
-        javaFile = Files.createTempFile("ohlc-java-write", ".vtx");
-        javaFileCascading = Files.createTempFile("ohlc-java-cascading-write", ".vtx");
 
         batchDates = new int[NUM_BATCHES][BATCH_SIZE];
         batchSymbols = new String[NUM_BATCHES][BATCH_SIZE];
@@ -183,35 +208,33 @@ public class JavaVsJniWriteBenchmark {
 
     @TearDown(Level.Trial)
     public void cleanup() throws IOException {
-        if (Files.exists(javaFile) && Files.exists(javaFileCascading)) {
-            long plain = Files.size(javaFile);
-            long cascading = Files.size(javaFileCascading);
-            System.out.printf("[JavaVsJniWriteBenchmark] cascading/plain size ratio: %.3f (%d B / %d B)%n",
-                    (double) cascading / plain, cascading, plain);
-        }
         Files.deleteIfExists(jniFile);
-        Files.deleteIfExists(javaFile);
-        Files.deleteIfExists(javaFileCascading);
     }
 
-    /// JNI write: encode and write 10 M rows via Rust VortexWriter.
+    /// JNI write: convert each batch to Arrow and write 10 M rows via Rust VortexWriter.
     @Benchmark
     public long jniWrite() throws IOException {
         try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.builder(
                 SESSION, jniFile.toAbsolutePath().toUri().toString(), JNI_SCHEMA, allocator).build()) {
             for (int b = 0; b < NUM_BATCHES; b++) {
-                flushJni(writer, b);
+                try (VectorSchemaRoot root = toArrow(b);
+                     ArrowArray arr = ArrowArray.allocateNew(allocator);
+                     ArrowSchema schema = ArrowSchema.allocateNew(allocator)) {
+                    Data.exportVectorSchemaRoot(allocator, root, null, arr, schema);
+                    writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+                }
             }
         }
         return Files.size(jniFile);
     }
 
-    /// Java write with cascading compression (depth 3): ALP → FOR → bitpacked.
+    /// Java write: encode and write 10 M rows via Java VortexWriter at each cascade depth; depth 3
+    /// is `WriteOptions.defaults()` and the one comparable with [#jniWrite].
     @Benchmark
-    public long javaWriteCascading() throws IOException {
-        try (FileChannel ch = FileChannel.open(javaFileCascading,
+    public long javaWrite(Cascade cascade) throws IOException {
+        try (FileChannel ch = FileChannel.open(cascade.file,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
-             VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.cascading(3))) {
+             VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.cascading(cascade.depth))) {
             for (int b = 0; b < NUM_BATCHES; b++) {
                 Map<ColumnName, Object> chunk = Map.of(
                         ColumnName.of("date"), batchDates[b],
@@ -225,66 +248,38 @@ public class JavaVsJniWriteBenchmark {
                 writer.writeChunk(chunk);
             }
         }
-        return Files.size(javaFileCascading);
+        return Files.size(cascade.file);
     }
 
-    /// Java write: encode and write 10 M rows via Java VortexWriter.
-    @Benchmark
-    public long javaWrite() throws IOException {
-        try (FileChannel ch = FileChannel.open(javaFile,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
-             VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.defaults())) {
-            for (int b = 0; b < NUM_BATCHES; b++) {
-                Map<ColumnName, Object> chunk = Map.of(
-                        ColumnName.of("date"), batchDates[b],
-                        ColumnName.of("symbol"), batchSymbols[b],
-                        ColumnName.of("open"), batchOpen[b],
-                        ColumnName.of("high"), batchHigh[b],
-                        ColumnName.of("low"), batchLow[b],
-                        ColumnName.of("close"), batchClose[b],
-                        ColumnName.of("volume"), batchVolume[b]
-                );
-                writer.writeChunk(chunk);
-            }
+    private VectorSchemaRoot toArrow(int b) {
+        VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, allocator);
+        DateDayVector dateVec = (DateDayVector) root.getVector("date");
+        VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
+        Float8Vector openVec = (Float8Vector) root.getVector("open");
+        Float8Vector highVec = (Float8Vector) root.getVector("high");
+        Float8Vector lowVec = (Float8Vector) root.getVector("low");
+        Float8Vector closeVec = (Float8Vector) root.getVector("close");
+        BigIntVector volVec = (BigIntVector) root.getVector("volume");
+
+        int n = batchDates[b].length;
+        dateVec.allocateNew(n);
+        symbolVec.allocateNew(n);
+        openVec.allocateNew(n);
+        highVec.allocateNew(n);
+        lowVec.allocateNew(n);
+        closeVec.allocateNew(n);
+        volVec.allocateNew(n);
+
+        for (int i = 0; i < n; i++) {
+            dateVec.setSafe(i, batchDates[b][i]);
+            symbolVec.setSafe(i, TICKER_BYTES[i % NASDAQ_TICKERS.length]);
+            openVec.setSafe(i, batchOpen[b][i]);
+            highVec.setSafe(i, batchHigh[b][i]);
+            lowVec.setSafe(i, batchLow[b][i]);
+            closeVec.setSafe(i, batchClose[b][i]);
+            volVec.setSafe(i, batchVolume[b][i]);
         }
-        return Files.size(javaFile);
-    }
-
-    private void flushJni(dev.vortex.api.VortexWriter writer, int b) throws IOException {
-        try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, allocator)) {
-            DateDayVector dateVec = (DateDayVector) root.getVector("date");
-            VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
-            Float8Vector openVec = (Float8Vector) root.getVector("open");
-            Float8Vector highVec = (Float8Vector) root.getVector("high");
-            Float8Vector lowVec = (Float8Vector) root.getVector("low");
-            Float8Vector closeVec = (Float8Vector) root.getVector("close");
-            BigIntVector volVec = (BigIntVector) root.getVector("volume");
-
-            int n = batchDates[b].length;
-            dateVec.allocateNew(n);
-            symbolVec.allocateNew(n);
-            openVec.allocateNew(n);
-            highVec.allocateNew(n);
-            lowVec.allocateNew(n);
-            closeVec.allocateNew(n);
-            volVec.allocateNew(n);
-
-            for (int i = 0; i < n; i++) {
-                dateVec.setSafe(i, batchDates[b][i]);
-                symbolVec.setSafe(i, TICKER_BYTES[i % NASDAQ_TICKERS.length]);
-                openVec.setSafe(i, batchOpen[b][i]);
-                highVec.setSafe(i, batchHigh[b][i]);
-                lowVec.setSafe(i, batchLow[b][i]);
-                closeVec.setSafe(i, batchClose[b][i]);
-                volVec.setSafe(i, batchVolume[b][i]);
-            }
-            root.setRowCount(n);
-
-            try (ArrowArray arr = ArrowArray.allocateNew(allocator);
-                 ArrowSchema schema = ArrowSchema.allocateNew(allocator)) {
-                Data.exportVectorSchemaRoot(allocator, root, null, arr, schema);
-                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-            }
-        }
+        root.setRowCount(n);
+        return root;
     }
 }
