@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -56,6 +58,29 @@ class SequenceEncodingEncoderTest {
         void accepts_primitive_true() {
             // Given / When / Then
             assertThat(ENCODER.accepts(DTypes.I32)).isTrue();
+        }
+
+        @ParameterizedTest
+        @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
+        void accepts_float_false(PType ptype) {
+            // Given Rust's SequenceArray rejects float ptypes, so a float sequence would be unreadable there
+            DType dtype = new DType.Primitive(ptype, false);
+
+            // When
+            boolean result = ENCODER.accepts(dtype);
+
+            // Then
+            assertThat(result).isFalse();
+        }
+
+        @Test
+        void encode_float_throwsVortexException() {
+            // Given
+            EncodeContext ctx = EncodeTestHelper.testCtx();
+
+            // When / Then
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.F64, new double[]{1.0, 1.5, 2.0}, ctx))
+                    .isInstanceOf(VortexException.class);
         }
 
         @Test
@@ -149,22 +174,6 @@ class SequenceEncodingEncoderTest {
         }
 
         @Test
-        void encode_f32_roundTrips() {
-            // Given
-            float[] data = {0.0f, 0.25f, 0.5f, 0.75f};
-
-            // When
-            EncodeResult resultEncoded = ENCODER.encode(DTypes.F32, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = encodeResultToCtx(resultEncoded, DTypes.F32, data.length);
-            FloatArray result = (FloatArray) DECODER.decode(ctx);
-
-            // Then
-            for (int i = 0; i < data.length; i++) {
-                assertThat(result.getFloat(i)).as("index %d", i).isEqualTo(data[i]);
-            }
-        }
-
-        @Test
         void encode_emptyArray_roundTripsToZeroLength() {
             // Given the n==0 branch: base and multiplier default to 0
             long[] data = {};
@@ -194,42 +203,6 @@ class SequenceEncodingEncoderTest {
         }
 
         @Test
-        void encode_nonArithmeticF32_throwsVortexException() {
-            // Given
-            float[] data = {1.0f, 2.0f, 4.0f};
-            EncodeContext ctx = EncodeTestHelper.testCtx();
-
-            // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DTypes.F32, data, ctx))
-                    .isInstanceOf(VortexException.class);
-        }
-
-        @Test
-        void encode_nonArithmeticF64_throwsVortexException() {
-            // Given
-            double[] data = {1.0, 2.0, 4.0};
-            EncodeContext ctx = EncodeTestHelper.testCtx();
-
-            // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DTypes.F64, data, ctx))
-                    .isInstanceOf(VortexException.class);
-        }
-
-        @Test
-        void encode_nonArithmeticF16_throwsVortexException() {
-            // Given
-            short[] data = {
-                    Float.floatToFloat16(1.0f),
-                    Float.floatToFloat16(2.0f),
-                    Float.floatToFloat16(4.0f)};
-            EncodeContext ctx = EncodeTestHelper.testCtx();
-
-            // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DTypes.F16, data, ctx))
-                    .isInstanceOf(VortexException.class);
-        }
-
-        @Test
         void encode_i64_roundTrips() {
             // Given
             long[] data = {10L, 12L, 14L, 16L};
@@ -242,38 +215,6 @@ class SequenceEncodingEncoderTest {
             // Then
             for (int i = 0; i < data.length; i++) {
                 assertThat(result.getLong(i)).as("index %d", i).isEqualTo(data[i]);
-            }
-        }
-
-        @Test
-        void encode_f64_roundTrips() {
-            // Given
-            double[] data = {1.0, 1.5, 2.0, 2.5};
-
-            // When
-            EncodeResult resultEncoded = ENCODER.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = encodeResultToCtx(resultEncoded, DTypes.F64, data.length);
-            DoubleArray result = (DoubleArray) DECODER.decode(ctx);
-
-            // Then
-            for (int i = 0; i < data.length; i++) {
-                assertThat(result.getDouble(i)).as("index %d", i).isEqualTo(data[i]);
-            }
-        }
-
-        @Test
-        void encode_f16_roundTrips() {
-            // Given
-            short[] data = {Float.floatToFloat16(0.0f), Float.floatToFloat16(1.0f), Float.floatToFloat16(2.0f)};
-
-            // When
-            EncodeResult resultEncoded = ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = encodeResultToCtx(resultEncoded, DTypes.F16, data.length);
-            Float16Array result = (Float16Array) DECODER.decode(ctx);
-
-            // Then
-            for (int i = 0; i < data.length; i++) {
-                assertThat(result.getFloat(i)).as("index %d", i).isEqualTo(Float.float16ToFloat(data[i]));
             }
         }
 
@@ -484,19 +425,6 @@ class SequenceEncodingEncoderTest {
             // Then
             assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
             assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(40L);
-        }
-
-        @Test
-        void encode_f64_reportsEndpointsAsMinMax() throws java.io.IOException {
-            // Given
-            double[] data = {1.5, 3.0, 4.5, 6.0};
-
-            // When
-            EncodeResult result = ENCODER.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
-
-            // Then
-            assertThat(scalar(result.statsMin()).f64_value()).isEqualTo(1.5);
-            assertThat(scalar(result.statsMax()).f64_value()).isEqualTo(6.0);
         }
 
         @Test
