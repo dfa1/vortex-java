@@ -21,9 +21,23 @@ public final class RleEncodingEncoder implements EncodingEncoder {
 
     private static final int FL_CHUNK_SIZE = 1024;
 
+    /// Rust's `RUN_LENGTH_THRESHOLD` (`vortex-btrblocks` `schemes/integer/mod.rs`), shared by its
+    /// integer and float RLE schemes.
+    private static final long RUN_LENGTH_THRESHOLD = 4;
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_RLE;
+    }
+
+    /// Rust's `RLEScheme`/`FloatRLEScheme` verdict: skip unless runs average at least
+    /// [#RUN_LENGTH_THRESHOLD] values, else defer to the sample.
+    @Override
+    public Estimate expectedRatio(DType dtype, ArrayAndStats data) {
+        if (!(dtype instanceof DType.Primitive)) {
+            return Estimate.COMPLETE;
+        }
+        return data.stats().averageRunLength() < RUN_LENGTH_THRESHOLD ? Estimate.SKIP : Estimate.COMPLETE;
     }
 
     @Override

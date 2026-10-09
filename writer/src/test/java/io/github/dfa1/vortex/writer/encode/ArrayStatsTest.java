@@ -217,6 +217,34 @@ class ArrayStatsTest {
         assertThat(result.mostFrequentBits()).isEqualTo(expectedTopBits);
     }
 
+    @Test
+    void compute_averageRunLength_isValueCountOverRuns() {
+        // Given: a date-like column, each value repeated 30 times, 100 runs
+        int[] data = new int[3_000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = i / 30;
+        }
+
+        // When: run length is reported even when no distinct stats are requested, as in Rust
+        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.NONE);
+
+        // Then
+        assertThat(result.averageRunLength()).isEqualTo(30);
+    }
+
+    @Test
+    void compute_averageRunLength_comparesFloatsAsValues() {
+        // Given: Rust's float stats compare with `!=`, so -0.0 continues a run of 0.0 and every
+        // NaN starts a new one: runs are [0.0, -0.0, 0.0] [NaN] [NaN] [1.0] -> 4 runs over 6 values
+        double[] data = {0.0, -0.0, 0.0, Double.NaN, Double.NaN, 1.0};
+
+        // When
+        ArrayStats result = ArrayStats.compute(PType.F64, data, StatsOptions.NONE);
+
+        // Then: integer division, as Rust's value_count / runs
+        assertThat(result.averageRunLength()).isEqualTo(1);
+    }
+
     private static long[] widen(byte[] a, boolean unsigned) {
         long[] out = new long[a.length];
         for (int i = 0; i < a.length; i++) {
