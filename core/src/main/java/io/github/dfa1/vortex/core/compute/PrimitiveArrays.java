@@ -3,8 +3,8 @@ package io.github.dfa1.vortex.core.compute;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.simd.VectorSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -156,67 +156,30 @@ public final class PrimitiveArrays {
     /// @throws VortexException if `ptype` is not an integer ptype
     public static void toLongsInto(MemorySegment seg, long fromElement, int count, PType ptype,
             EncodingId encoding, long[] out) {
-        switch (ptype) {
-            case I8 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = seg.get(ValueLayout.JAVA_BYTE, fromElement + i);
-                }
-            }
-            case U8 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, fromElement + i));
-                }
-            }
-            case I16 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = seg.getAtIndex(VortexFormat.LE_SHORT, fromElement + i);
-                }
-            }
-            case U16 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Short.toUnsignedLong(seg.getAtIndex(VortexFormat.LE_SHORT, fromElement + i));
-                }
-            }
-            case I32 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = seg.getAtIndex(VortexFormat.LE_INT, fromElement + i);
-                }
-            }
-            case U32 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = Integer.toUnsignedLong(seg.getAtIndex(VortexFormat.LE_INT, fromElement + i));
-                }
-            }
-            case I64, U64 -> {
-                for (int i = 0; i < count; i++) {
-                    out[i] = seg.getAtIndex(VortexFormat.LE_LONG, fromElement + i);
-                }
-            }
-            default -> throw new VortexException(encoding, "unsupported ptype: " + ptype);
+        if (ptype.isFloating()) {
+            throw new VortexException(encoding, "unsupported ptype: " + ptype);
         }
+        VectorSupport.operations().widenInto(seg, fromElement, count, ptype, out);
     }
 
     /// Writes a `long[]` to a freshly allocated little-endian off-heap segment whose element width
     /// is that of `ptype`, narrowing each element to the low bytes. Inverse of
-    /// [#toLongs(Object, PType, EncodingId)]. The I64/U64 case bulk-copies; narrower widths write
-    /// element by element through [PTypeIO#set(MemorySegment, long, PType, long)].
+    /// [#toLongs(Object, PType, EncodingId)]. Eight-byte types bulk-copy; narrower widths run one
+    /// specialized loop per width.
     ///
     /// @param longs the wide values to write
     /// @param ptype the target primitive width
     /// @param arena allocator for the output segment
     /// @return a little-endian segment of `longs.length` elements at `ptype`'s width
     public static MemorySegment fromLongs(long[] longs, PType ptype, SegmentAllocator arena) {
-        if (ptype == PType.I64 || ptype == PType.U64) {
+        if (ptype.byteSize() == 8) {
             MemorySegment dst = arena.allocate((long) longs.length * 8);
             MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L, dst, VortexFormat.LE_LONG, 0L, longs.length);
             return dst;
         }
         int n = longs.length;
-        long elemSize = ptype.byteSize();
-        MemorySegment seg = arena.allocate(n * elemSize);
-        for (int i = 0; i < n; i++) {
-            PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
-        }
+        MemorySegment seg = arena.allocate(n * ptype.byteSize());
+        VectorSupport.operations().narrowInto(longs, ptype, seg);
         return seg;
     }
 

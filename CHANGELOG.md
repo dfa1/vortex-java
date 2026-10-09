@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently, to the same bytes as a sequential write: 10M-row OHLC 0.99 → 4.34 writes/s on 8 threads ([#474](https://github.com/dfa1/vortex-java/issues/474)).
 
 ### Changed
+- Dictionary decode validates its codes 2.3–3.6× faster: the code bound check reduces in `int` with independent accumulators instead of a serial `long` max (1M codes: U8 322 → 139 µs, U32 436 → 120 µs) ([#484](https://github.com/dfa1/vortex-java/issues/484)).
+- Bit-packing is about 2.3× faster, to the same bytes: the FastLanes pack kernel runs lane-inner so the JIT can vectorize it (262144 elements: 8-bit 221 → 88 µs, 64-bit 241 → 109 µs) ([#484](https://github.com/dfa1/vortex-java/issues/484)).
+- Delta encode and decode are up to 2× faster, to the same bytes: the FastLanes chunk loop runs lane-inner so the JIT can vectorize it (262144 elements: 8-bit 136 → 69 µs, 64-bit 150 → 92 µs) ([#484](https://github.com/dfa1/vortex-java/issues/484)).
+- `PrimitiveArrays.fromLongs` narrows to I8/I16/I32 about 13× faster (4096-row column: 159 → 12 µs): one loop per width instead of a `MethodHandle` call per element; the Delta writer was its only caller ([#484](https://github.com/dfa1/vortex-java/issues/484)).
 - Cascading writes are about 9% faster and allocate 11% less, to the same bytes: the compressor's distinct-value counter hashes doubles 3× faster, and integer stats no longer copy the column to a `long[]`, take min/max on its own type, and count runs rather than rows, as Rust does (10M-row OHLC: 0.95 → 1.04 writes/s) ([#476](https://github.com/dfa1/vortex-java/issues/476)).
 - **Breaking:** `WriteOptions` is a final class instead of a record: same accessors and `withXxx` methods, but identity `equals` and no public canonical constructor, since its executor has no value equality ([#474](https://github.com/dfa1/vortex-java/issues/474)).
 

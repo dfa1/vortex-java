@@ -39,6 +39,8 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
           core.io       IoBounds, PTypeIO, VortexFormat
           core.error    VortexException
           core.compute  FastLanes, PrimitiveArrays, Utf8Order
+          core.simd     SimdOperations (kernels shared by reader+writer), VectorSupport (picks the impl);
+                        scalar only today, Vector API impl planned (ADR 0005, #483, #484)
           core.fbs / core.proto — generated wire codecs + their runtimes
 reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats, Zone,
           ScanOptions, RowFilter; file internals (Footer, Trailer, PostscriptParser, …)
