@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,8 +32,16 @@ final class DictColumnState {
     // columns (ALP/bitpacked codes beat U16 dict codes). Utf8/Binary is raised far higher — text columns
     // with thousands of repeated distinct values (street/place names) dictionary-compress well
     // (#299), and the per-chunk short[] code buffer holds codes 0..32767 (up to 32768 distinct)
-    // with no wider buffer; codePTypeForSize already emits U16 codes above 256.
+    // with no wider buffer; the codes are always U16 (CODES_PTYPE).
     static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
+
+    /// The codes ptype of every global dict: Rust's `DictLayoutConstraints` derive it from the
+    /// configured maximum dictionary length, not the actual one -- U8 only when `max_len <= 255`,
+    /// and the default `max_len` is `u16::MAX` -- so a default Rust global dict always has U16
+    /// codes. The width matters beyond the bytes on disk: the cascade scores candidates against
+    /// the codes' raw width, and on U8 codes Sparse's estimate beat bit-packing where on Rust's
+    /// U16 codes it does not (taxi Airport_fee).
+    static final PType CODES_PTYPE = PType.U16;
     static final int GLOBAL_DICT_MAX_CARDINALITY_UTF8 = 32_768;
 
     private static final int INDEX_MIN_CAPACITY = 64;
@@ -440,49 +449,44 @@ final class DictColumnState {
         };
     }
 
-    /// Emits one chunk's wire codes array (U8/U16/U32) from its buffered `short[]` first-seen codes,
-    /// optionally translated through a frequency remap (primitive path) and masking null slots to
-    /// code `0`. A null slot (validity[i] false) emits code `0` unconditionally, never remapped: the
-    /// reader ignores those slots because the codes child is masked by the same validity.
+    /// Emits one chunk's wire codes ([#CODES_PTYPE]) from its buffered `short[]` first-seen codes,
+    /// optionally translated through a frequency remap (primitive path). A null slot (validity[i]
+    /// false) emits `nullCode` unconditionally, never remapped: the primitive path points it at the
+    /// pool's invalid null entry, as Rust's dict builder does; the Utf8/Binary path passes `0`, which
+    /// the reader ignores because its codes child is masked by the same validity.
     ///
     /// @param buffered the buffered first-seen codes for one chunk
     /// @param remap    the first-seen -> frequency-rank remap, or `null` to emit codes unchanged
     /// @param validity per-row validity, or `null` when every row is valid
-    /// @param codePType the wire code ptype chosen from the dictionary size
-    /// @return a `byte[]`, `short[]`, or `int[]` codes array matching `codePType`
-    static Object emitCodes(short[] buffered, int[] remap, boolean[] validity, PType codePType) {
-        int len = buffered.length;
-        return switch (codePType) {
-            case U8 -> {
-                byte[] codes = new byte[len];
-                for (int i = 0; i < len; i++) {
-                    if (validity == null || validity[i]) {
-                        int fs = buffered[i] & 0xFFFF;
-                        codes[i] = (byte) (remap == null ? fs : remap[fs]);
-                    }
-                }
-                yield codes;
+    /// @param nullCode the code a null slot emits
+    /// @return the U16 codes
+    static short[] emitCodes(short[] buffered, int[] remap, boolean[] validity, int nullCode) {
+        short[] codes = new short[buffered.length];
+        for (int i = 0; i < buffered.length; i++) {
+            if (validity == null || validity[i]) {
+                int fs = buffered[i] & 0xFFFF;
+                codes[i] = (short) (remap == null ? fs : remap[fs]);
+            } else {
+                codes[i] = (short) nullCode;
             }
-            case U16 -> {
-                short[] codes = new short[len];
-                for (int i = 0; i < len; i++) {
-                    if (validity == null || validity[i]) {
-                        int fs = buffered[i] & 0xFFFF;
-                        codes[i] = (short) (remap == null ? fs : remap[fs]);
-                    }
-                }
-                yield codes;
-            }
-            default -> {
-                int[] codes = new int[len];
-                for (int i = 0; i < len; i++) {
-                    if (validity == null || validity[i]) {
-                        int fs = buffered[i] & 0xFFFF;
-                        codes[i] = remap == null ? fs : remap[fs];
-                    }
-                }
-                yield codes;
-            }
+        }
+        return codes;
+    }
+
+    /// The values pool with one more slot, for the invalid null entry Rust's dict builder adds
+    /// when it meets a null: the slot holds a zero placeholder and is masked off by the caller.
+    ///
+    /// @param values the frequency-ranked distinct values (a primitive array)
+    /// @return a copy one element longer
+    static Object withNullSlot(Object values) {
+        return switch (values) {
+            case long[] a -> Arrays.copyOf(a, a.length + 1);
+            case int[] a -> Arrays.copyOf(a, a.length + 1);
+            case short[] a -> Arrays.copyOf(a, a.length + 1);
+            case byte[] a -> Arrays.copyOf(a, a.length + 1);
+            case double[] a -> Arrays.copyOf(a, a.length + 1);
+            case float[] a -> Arrays.copyOf(a, a.length + 1);
+            default -> throw new IllegalStateException("not a primitive values pool: " + values.getClass());
         };
     }
 
@@ -615,16 +619,6 @@ final class DictColumnState {
             }
         }
         return distinct;
-    }
-
-    static PType codePTypeForSize(int dictSize) {
-        if (dictSize <= 256) {
-            return PType.U8;
-        }
-        if (dictSize <= 65_536) {
-            return PType.U16;
-        }
-        return PType.U32;
     }
 
     // The global-dict cardinality cap for a column, by whether it is Utf8/Binary (see the constants above).
