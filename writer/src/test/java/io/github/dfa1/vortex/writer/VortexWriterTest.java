@@ -75,6 +75,23 @@ class VortexWriterTest {
     }
 
     @Test
+    void withExecutor_concurrentCompression_writesSameBytesAsSequential() throws IOException {
+        // Given batches that repartition into several segments per column, with a global-dict
+        // string column and a nullable column, so compression runs as many concurrent tasks.
+        // Segments must still land in submission order with the same encoding-table order:
+        // any reordering shifts offsets and changes the bytes.
+        WriteOptions sequential = WriteOptions.defaults();
+        WriteOptions concurrent = sequential.withExecutor(java.util.concurrent.ForkJoinPool.commonPool());
+
+        // When
+        byte[] expected = writeMixedColumns(sequential);
+        byte[] result = writeMixedColumns(concurrent);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
+    @Test
     void create_duplicateFieldNames_throwsIllegalArgumentException(@TempDir Path tmp) throws IOException {
         // Given — a duplicate-name schema built via the DType.Struct record, which validates
         // nothing (only StructBuilder rejects duplicates). The reference writer refuses such
@@ -679,5 +696,31 @@ class VortexWriterTest {
                 }
             }
         }
+    }
+    private static byte[] writeMixedColumns(WriteOptions options) throws IOException {
+        var schema = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("price"), ColumnName.of("symbol"), ColumnName.of("qty")),
+                List.of(DType.I64, DType.F64, DType.UTF8, new DType.Primitive(PType.I32, true)),
+                false);
+        var out = new java.io.ByteArrayOutputStream();
+        var random = new java.util.Random(42);
+        try (var sut = VortexWriter.create(java.nio.channels.Channels.newChannel(out), schema, options)) {
+            for (int b = 0; b < 8; b++) {
+                int n = 50_000;
+                long[] id = new long[n];
+                double[] price = new double[n];
+                String[] symbol = new String[n];
+                Integer[] qty = new Integer[n];
+                for (int i = 0; i < n; i++) {
+                    id[i] = (long) b * n + i;
+                    price[i] = Math.round(random.nextGaussian() * 10_000) / 100.0;
+                    symbol[i] = "S" + random.nextInt(30);
+                    qty[i] = i % 7 == 0 ? null : random.nextInt(1_000);
+                }
+                sut.writeChunk(Map.of(ColumnName.of("id"), id, ColumnName.of("price"), price,
+                        ColumnName.of("symbol"), symbol, ColumnName.of("qty"), qty));
+            }
+        }
+        return out.toByteArray();
     }
 }

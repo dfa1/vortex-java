@@ -67,6 +67,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.WritableByteChannel;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -75,6 +76,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
 /// Writes a Vortex file.
@@ -167,16 +170,17 @@ public final class VortexWriter implements Closeable {
     // vortex.stats zone map is built from colChunks/dictColRefs at close.
     private final boolean zonedLayout;
     private final Map<ColumnName, ZoneAccumulator> zoneAccumulators = new LinkedHashMap<>();
+    // Each column's zone stats accumulate on the executor, chained so a column's batches still
+    // arrive in order; flushZoneMaps waits for every chain.
+    private final Map<ColumnName, CompletableFuture<Void>> zoneTails = new LinkedHashMap<>();
     // WriteOptions.columnEncodings resolved to the encoder each overridden column is written with.
     private final Map<ColumnName, EncodingEncoder> columnEncoders = new LinkedHashMap<>();
     // Rust's repartition: each column's batches coalesce into ~1 MB chunks of 8192-row multiples.
     private final Map<ColumnName, Repartitioner> repartitioners = new LinkedHashMap<>();
-    // Stats (ProtoScalarValue bytes) of the most recently written segment, captured for ChunkRef.
-    private byte[] lastStatsMin;
-    private byte[] lastStatsMax;
-    private byte[] lastStatsSum;
-    // Null count of the most recently written segment's input data (0 for dense arrays).
-    private long lastNullCount;
+    // Segments encoding on WriteOptions#executor(), written to the channel in submission order so
+    // segment indexes are known at submit time and the file bytes do not depend on the executor.
+    private final ArrayDeque<CompletableFuture<EncodedSegment>> pending = new ArrayDeque<>();
+    private int submittedSegments = 0;
 
     private VortexWriter(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings
@@ -541,8 +545,10 @@ public final class VortexWriter implements Closeable {
             }
 
             if (zonedLayout) {
-                zoneAccumulators.computeIfAbsent(colName, _ -> new ZoneAccumulator(colDtype))
-                        .add(data, arrayLength(data));
+                ZoneAccumulator acc = zoneAccumulators.computeIfAbsent(colName, _ -> new ZoneAccumulator(colDtype));
+                Object batch = data;
+                zoneTails.put(colName, zoneTails.getOrDefault(colName, CompletableFuture.completedFuture(null))
+                        .thenRunAsync(() -> acc.add(batch, arrayLength(batch)), options.executor()));
             }
 
             if (!firstChunkSeen && options.globalDict() && !columnEncoders.containsKey(colName)) {
@@ -617,7 +623,7 @@ public final class VortexWriter implements Closeable {
     private void writeDataChunk(ColumnName colName, DType colDtype, Object data) throws IOException {
         long rowCount = arrayLength(data);
         int segIdx = writeSegment(colDtype, data, columnEncoders.get(colName));
-        colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastStatsSum, lastNullCount));
+        colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
     }
 
     /// Writes every column's pending rows as its last chunk.
@@ -635,6 +641,7 @@ public final class VortexWriter implements Closeable {
         flushRepartitioners();
         flushDictColumns();
         flushZoneMaps();
+        drainSegments(0);
         ByteBuffer footerBuf = buildFooter();
         long footerOff = bytesWritten;
         write(footerBuf);
@@ -687,29 +694,98 @@ public final class VortexWriter implements Closeable {
     /// @throws IOException if writing to the channel fails
     private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride,
             Set<EncodingId> excludedFromCascade) throws IOException {
-        // Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncodingEncoder here.
-        // FbsExtension columns route through ExtEncodingEncoder.encode which itself delegates to
-        // MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
-        // Exception: a configured encoder that embeds validity itself (acceptsNullable, e.g.
-        // vortex.zstd) takes the NullableData straight, so no masked wrapper is inserted.
-        // Map columns bypass both: the container encoding is structural rather than a
-        // compressible primitive codec (same reason Variant does below), and their validity is
-        // delegated to the entries child's own validity slot, so no masked wrapper belongs here.
+        EncodingEncoder override = resolveOverride(dtype, data, encodingOverride);
+        pending.add(CompletableFuture.supplyAsync(
+                () -> encodeSegment(dtype, data, override, excludedFromCascade), options.executor()));
+        int segIdx = submittedSegments++;
+        drainSegments(MAX_IN_FLIGHT_SEGMENTS);
+        return segIdx;
+    }
+
+    // ponytail: fixed in-flight window bounds memory to ~2 chunks per core; make it a WriteOptions
+    // knob if a caller needs a tighter memory bound or a deeper pipeline.
+    private static final int MAX_IN_FLIGHT_SEGMENTS = 2 * Runtime.getRuntime().availableProcessors();
+
+    /// Writes completed segments from the head of the queue, in submission order, blocking on the
+    /// head while more than `keep` are still in flight. `drainSegments(0)` writes them all.
+    private void drainSegments(int keep) throws IOException {
+        while (!pending.isEmpty() && (pending.size() > keep || pending.peek().isDone())) {
+            EncodedSegment encoded;
+            try {
+                encoded = pending.poll().join();
+            } catch (CompletionException e) {
+                discardPending();
+                // Encoders throw only unchecked exceptions: rethrow them as the sequential path did.
+                switch (e.getCause()) {
+                    case RuntimeException re -> throw re;
+                    case Error err -> throw err;
+                    default -> throw new IOException(e.getCause());
+                }
+            }
+            try (Arena _ = encoded.arena()) {
+                writeEncoded(encoded);
+            }
+        }
+    }
+
+    private void joinZoneTails() throws IOException {
+        try {
+            CompletableFuture.allOf(zoneTails.values().toArray(CompletableFuture[]::new)).join();
+        } catch (CompletionException e) {
+            switch (e.getCause()) {
+                case RuntimeException re -> throw re;
+                case Error err -> throw err;
+                default -> throw new IOException(e.getCause());
+            }
+        }
+    }
+
+    /// Waits out every in-flight segment after a failure so none of their arenas leaks.
+    private void discardPending() {
+        while (!pending.isEmpty()) {
+            pending.poll().handle((encoded, _) -> {
+                if (encoded != null) {
+                    encoded.arena().close();
+                }
+                return null;
+            }).join();
+        }
+    }
+
+    /// Picks the structural encoder a segment is forced through, or `encodingOverride` unchanged.
+    /// Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncodingEncoder here.
+    /// FbsExtension columns route through ExtEncodingEncoder.encode which itself delegates to
+    /// MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
+    /// Exception: a configured encoder that embeds validity itself (acceptsNullable, e.g.
+    /// vortex.zstd) takes the NullableData straight, so no masked wrapper is inserted.
+    /// Map columns bypass both: the container encoding is structural rather than a
+    /// compressible primitive codec (same reason Variant does below), and their validity is
+    /// delegated to the entries child's own validity slot, so no masked wrapper belongs here.
+    private EncodingEncoder resolveOverride(DType dtype, Object data, EncodingEncoder encodingOverride) {
         if (encodingOverride == null && dtype instanceof DType.Map) {
-            encodingOverride = new io.github.dfa1.vortex.writer.encode.MapEncodingEncoder();
+            return new io.github.dfa1.vortex.writer.encode.MapEncodingEncoder();
         }
         if (encodingOverride == null
                 && data instanceof io.github.dfa1.vortex.writer.encode.NullableData
                 && !(dtype instanceof DType.Extension)) {
             EncodingEncoder nullableCapable = nullableCapableEncoder(dtype);
-            encodingOverride = nullableCapable != null ? nullableCapable : new MaskedEncodingEncoder();
+            return nullableCapable != null ? nullableCapable : new MaskedEncodingEncoder();
         }
         // Variant columns bypass the cascade: the container encoding is structural, not a
         // compressible primitive codec, so route straight to the dedicated encoder.
         if (encodingOverride == null && dtype instanceof DType.Variant) {
-            encodingOverride = new io.github.dfa1.vortex.writer.encode.VariantEncodingEncoder();
+            return new io.github.dfa1.vortex.writer.encode.VariantEncodingEncoder();
         }
-        try (Arena arena = Arena.ofConfined()) {
+        return encodingOverride;
+    }
+
+    /// Encodes one segment and computes its stats: the CPU-bound half of a segment write, run on
+    /// [WriteOptions#executor()]. Touches only immutable writer state; the returned arena is shared
+    /// so the writing thread can read and close it.
+    private EncodedSegment encodeSegment(DType dtype, Object data, EncodingEncoder encodingOverride,
+            Set<EncodingId> excludedFromCascade) {
+        Arena arena = Arena.ofShared();
+        try {
             EncodeResult result;
             if (encodingOverride != null) {
                 // Give overrides the cascade registry + depth when cascading is enabled, so
@@ -736,55 +812,62 @@ public final class VortexWriter implements Closeable {
                 EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry, editionExcluded);
                 result = encoder.encode(dtype, data, encodeCtx);
             }
-            // Register all encoding IDs found in the node tree
-            registerEncodingIds(result.rootNode());
-
-            // Align segment start to 64 bytes so each buffer is Arrow-compatible
-            long prePad = (64 - bytesWritten % 64) % 64;
-            if (prePad > 0) {
-                writePadding((int) prePad);
-            }
-
-            int segIdx = segs.size();
-            long offset = bytesWritten;
-
-            long segNullCount = data instanceof NullableData nd ? countNulls(nd.validity()) : 0L;
-            List<EncodedBuffer> buffers = result.encodedBuffers();
-            int[] paddings = bufferPaddings(buffers);
-            ByteBuffer fbBuf = buildArrayFlatBuffer(result, paddings, segNullCount);
-
-            // Segment format: [padding, buffer]... [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
-            int fbLen = fbBuf.remaining();
-            for (int i = 0; i < buffers.size(); i++) {
-                if (paddings[i] > 0) {
-                    writePadding(paddings[i]);
-                }
-                write(buffers.get(i).data());
-            }
-            write(fbBuf);
-            var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
-            sizeBuf.flip();
-            channel.write(sizeBuf);
-            bytesWritten += 4;
-
-            segs.add(new SegRef(offset, bytesWritten - offset));
+            long nullCount = data instanceof NullableData nd ? countNulls(nd.validity()) : 0L;
             // The winning encoder's own stats win when present (a cheaper override, e.g.
             // vortex.constant already knows its value is both extremes) -- otherwise the generic
             // fallback computes them from the untouched input, independent of which encoder ran.
             // This is what makes stats coverage an encoder-independent guarantee rather than a
             // per-encoder convention every new encoder has to remember (ADR 0025).
+            byte[] min;
+            byte[] max;
             if (result.hasStats()) {
-                lastStatsMin = result.statsMin();
-                lastStatsMax = result.statsMax();
+                min = result.statsMin();
+                max = result.statsMax();
             } else {
                 byte[][] fallback = ZoneMapStatCodec.columnMinMax(dtype, data);
-                lastStatsMin = fallback != null ? fallback[0] : null;
-                lastStatsMax = fallback != null ? fallback[1] : null;
+                min = fallback != null ? fallback[0] : null;
+                max = fallback != null ? fallback[1] : null;
             }
-            lastStatsSum = ZoneMapStatCodec.columnSum(dtype, data);
-            lastNullCount = segNullCount;
-            return segIdx;
+            SegmentStats stats = new SegmentStats(min, max, ZoneMapStatCodec.columnSum(dtype, data), nullCount);
+            return new EncodedSegment(result, arena, stats);
+        } catch (RuntimeException | Error e) {
+            arena.close();
+            throw e;
         }
+    }
+
+    /// Appends one encoded segment to the channel: the ordered, I/O half of a segment write.
+    private void writeEncoded(EncodedSegment encoded) throws IOException {
+        EncodeResult result = encoded.result();
+        // Register all encoding IDs found in the node tree
+        registerEncodingIds(result.rootNode());
+
+        // Align segment start to 64 bytes so each buffer is Arrow-compatible
+        long prePad = (64 - bytesWritten % 64) % 64;
+        if (prePad > 0) {
+            writePadding((int) prePad);
+        }
+
+        long offset = bytesWritten;
+        List<EncodedBuffer> buffers = result.encodedBuffers();
+        int[] paddings = bufferPaddings(buffers);
+        ByteBuffer fbBuf = buildArrayFlatBuffer(result, paddings, encoded.stats().nullCount());
+
+        // Segment format: [padding, buffer]... [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
+        int fbLen = fbBuf.remaining();
+        for (int i = 0; i < buffers.size(); i++) {
+            if (paddings[i] > 0) {
+                writePadding(paddings[i]);
+            }
+            write(buffers.get(i).data());
+        }
+        write(fbBuf);
+        var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
+        sizeBuf.flip();
+        channel.write(sizeBuf);
+        bytesWritten += 4;
+
+        segs.add(new SegRef(offset, bytesWritten - offset, encoded.stats()));
     }
 
     private void registerEncodingIds(EncodeNode node) {
@@ -962,7 +1045,10 @@ public final class VortexWriter implements Closeable {
         if (!options.enableZoneMaps()) {
             return;
         }
+        // The legacy zone map below reads each chunk's stats off its written segment.
+        drainSegments(0);
         if (zonedLayout) {
+            joinZoneTails();
             for (Map.Entry<ColumnName, ZoneAccumulator> e : zoneAccumulators.entrySet()) {
                 ZoneAccumulator acc = e.getValue();
                 acc.finish();
@@ -984,13 +1070,14 @@ public final class VortexWriter implements Closeable {
             DType minMaxDtype = ZoneMapStatCodec.zoneMinMaxDtype(colDtype);
             DType sumDtype = ZoneMapStatCodec.zoneSumDtype(colDtype);
             long[] nullCounts = new long[chunks.size()];
+            List<SegmentStats> stats = chunks.stream().map(c -> segs.get(c.segIdx()).stats()).toList();
             for (int i = 0; i < chunks.size(); i++) {
-                nullCounts[i] = chunks.get(i).nullCount();
+                nullCounts[i] = stats.get(i).nullCount();
             }
             emitZoneMap(colName, minMaxDtype,
-                    chunks.stream().map(ChunkRef::statsMin).toList(),
-                    chunks.stream().map(ChunkRef::statsMax).toList(),
-                    sumDtype, chunks.stream().map(ChunkRef::statsSum).toList(),
+                    stats.stream().map(SegmentStats::min).toList(),
+                    stats.stream().map(SegmentStats::max).toList(),
+                    sumDtype, stats.stream().map(SegmentStats::sum).toList(),
                     nullCounts, chunks.stream().mapToLong(ChunkRef::rowCount).toArray());
         }
         // Dict-encoded columns (one zone per code chunk). MIN/MAX/SUM come from each chunk's logical
@@ -1421,14 +1508,19 @@ public final class VortexWriter implements Closeable {
                 state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
     }
 
-    private record SegRef(long offset, long len) {
+    private record SegRef(long offset, long len, SegmentStats stats) {
     }
 
-    // S6218: the byte[] stat components are never value-compared — ChunkRef instances are only
-    // collected in per-column lists and read positionally, so the default identity equals is fine.
+    // S6218: the byte[] stat components are never value-compared — SegmentStats instances are only
+    // read positionally, so the default identity equals is fine.
     @SuppressWarnings("java:S6218")
-    private record ChunkRef(int segIdx, long rowCount, byte[] statsMin, byte[] statsMax,
-            byte[] statsSum, long nullCount) {
+    private record SegmentStats(byte[] min, byte[] max, byte[] sum, long nullCount) {
+    }
+
+    private record EncodedSegment(EncodeResult result, Arena arena, SegmentStats stats) {
+    }
+
+    private record ChunkRef(int segIdx, long rowCount) {
     }
 
     /// Per-column zone-map: the flat segment holding the per-zone stats table, the zone

@@ -9,88 +9,155 @@ import io.github.dfa1.vortex.core.model.MemorySize;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Executor;
 
-/// Tuning knobs for the Vortex writer.
+/// Tuning knobs for the Vortex writer: an immutable configuration built from [#defaults()] or
+/// [#cascading(int)] and adjusted with the `withXxx` methods, each returning a copy.
 ///
-/// @param enableZoneMaps            write per-chunk min/max statistics for zone-map pruning
-/// @param compressionRatioThreshold minimum compression ratio for an encoding to be accepted (0–1)
-/// @param allowedCascading          maximum recursive cascade depth; 0 = no cascading
-/// @param globalDict                build one shared dictionary across all chunks for low-cardinality columns
-/// @param enableZstd                add Zstandard to the cascade codec list
-///                                  When `true`, Zstd competes with structural encodings (ALP, bitpack, etc.)
-///                                  on every chunk and wins when it produces smaller output — typically reducing
-///                                  file size by 10–15% on real-world datasets compared to ALP+bitpack alone.
-///                                  Trade-off: Zstd decompression is ~6× slower than ALP decode;
-///                                  prefer the default (`false`) for read-heavy workloads.
-///                                  Requires `allowedCascading > 0`: Zstd only ever competes inside the
-///                                  cascade, so `true` at depth 0 would be a silent no-op — the compact
-///                                  constructor rejects that combination instead.
-/// @param globalDictMaxRetainedBytes aggregate byte budget for the buffered per-chunk code arrays all
-///                                  global-dictionary candidate columns may retain in the heap while
-///                                  waiting for `close()` (default 1 GB). A shared dictionary must see
-///                                  every chunk before it can be built; buffering is cardinality
-///                                  -bounded (ADR 0021), so each candidate holds a capped value-to-code
-///                                  map plus cheap ~2 B/row code arrays rather than raw values. This
-///                                  budget is a secondary safety net over the aggregate code-array
-///                                  bytes: when the running total across all candidate columns crosses
-///                                  it, the largest-retained columns are demoted to per-chunk encoding
-///                                  until back under it. Because codes are ~35–45× smaller than raw
-///                                  strings, this rarely fires at the 1 GB default; the primary
-///                                  demotion signal is now a column's actual cardinality exceeding the
-///                                  cap. Trade-off: demoted columns lose the shared-dictionary size
-///                                  benefit; raise the budget on memory-rich hosts to keep more wide,
-///                                  low-cardinality columns dictionary-encoded.
-/// @param editions                  the [Edition] enabled per family, gating which
-///                                  encodings this writer may emit — see [#withEdition(Edition)]. Defaults to
-///                                  the newest frozen `core` edition ([Editions#CORE_2026_08_3]), the edition
-///                                  Rust's default session enables, so a default write may emit exactly what
-///                                  Rust's default writer may. Empty means the guard is off
-///                                  ([#withoutEditions()]): every encoding is permitted, including those in
-///                                  no edition at all (`fastlanes.delta`, `vortex.patched`).
-/// @param columnEncodings           per-column overrides of the default encoder selection — see
-///                                  [#withColumnEncoding(ColumnName, ColumnEncoding)]; empty by default
-public record WriteOptions(
-        boolean enableZoneMaps,
-        double compressionRatioThreshold,
-        int allowedCascading,
-        boolean globalDict,
-        boolean enableZstd,
-        MemorySize globalDictMaxRetainedBytes,
-        Map<EditionFamily, Edition> editions,
-        Map<ColumnName, ColumnEncoding> columnEncodings
-) {
-    /// Defensively copies `editions` into an immutable map and rejects a Zstd flag that could
-    /// never take effect.
+/// A plain class rather than a record: it is configuration, not a value — the [#executor()] it
+/// carries has no meaningful equality, so neither do the options.
+public final class WriteOptions {
+    private final boolean enableZoneMaps;
+    private final double compressionRatioThreshold;
+    private final int allowedCascading;
+    private final boolean globalDict;
+    private final boolean enableZstd;
+    private final MemorySize globalDictMaxRetainedBytes;
+    private final Map<EditionFamily, Edition> editions;
+    private final Map<ColumnName, ColumnEncoding> columnEncodings;
+    private final Executor executor;
+
+    /// Options with no per-column encoding overrides, compressing on the calling thread.
     ///
+    /// @param enableZoneMaps             see [#enableZoneMaps()]
+    /// @param compressionRatioThreshold  see [#compressionRatioThreshold()]
+    /// @param allowedCascading           see [#allowedCascading()]
+    /// @param globalDict                 see [#globalDict()]
+    /// @param enableZstd                 see [#enableZstd()]
+    /// @param globalDictMaxRetainedBytes see [#globalDictMaxRetainedBytes()]
+    /// @param editions                   see [#editions()]
     /// @throws IllegalArgumentException if `enableZstd` is `true` while `allowedCascading` is `0`:
-    ///                                  Zstd only ever competes inside the cascade
-    ///                                  (`VortexWriter` only builds a `CascadingCompressor`, which
-    ///                                  is where the Zstd codec is added, when `allowedCascading >
-    ///                                  0`); at depth 0 the flag would be silently ignored.
-    public WriteOptions {
+    ///                                  Zstd only ever competes inside the cascade, so at depth 0
+    ///                                  the flag would be silently ignored
+    public WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
+                        boolean globalDict, boolean enableZstd, MemorySize globalDictMaxRetainedBytes,
+                        Map<EditionFamily, Edition> editions) {
+        this(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
+                globalDictMaxRetainedBytes, editions, Map.of(), CALLER_RUNS);
+    }
+
+    private WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
+                         boolean globalDict, boolean enableZstd, MemorySize globalDictMaxRetainedBytes,
+                         Map<EditionFamily, Edition> editions, Map<ColumnName, ColumnEncoding> columnEncodings,
+                         Executor executor) {
         if (enableZstd && allowedCascading == 0) {
             throw new IllegalArgumentException(
                     "enableZstd requires allowedCascading > 0 (Zstd only competes inside the cascade); "
                             + "use WriteOptions.cascading(depth).withZstd(true)");
         }
-        editions = Map.copyOf(editions);
-        columnEncodings = Map.copyOf(columnEncodings);
+        this.enableZoneMaps = enableZoneMaps;
+        this.compressionRatioThreshold = compressionRatioThreshold;
+        this.allowedCascading = allowedCascading;
+        this.globalDict = globalDict;
+        this.enableZstd = enableZstd;
+        this.globalDictMaxRetainedBytes = globalDictMaxRetainedBytes;
+        this.editions = Map.copyOf(editions);
+        this.columnEncodings = Map.copyOf(columnEncodings);
+        this.executor = Objects.requireNonNull(executor, "executor");
     }
 
-    /// Options with no per-column encoding overrides.
+    /// Whether the writer emits per-chunk min/max statistics for zone-map pruning.
     ///
-    /// @param enableZoneMaps             see the record components
-    /// @param compressionRatioThreshold  see the record components
-    /// @param allowedCascading           see the record components
-    /// @param globalDict                 see the record components
-    /// @param enableZstd                 see the record components
-    /// @param globalDictMaxRetainedBytes see the record components
-    /// @param editions                   see the record components
-    public WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
-                        boolean globalDict, boolean enableZstd, MemorySize globalDictMaxRetainedBytes,
-                        Map<EditionFamily, Edition> editions) {
-        this(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
-                globalDictMaxRetainedBytes, editions, Map.of());
+    /// @return `true` if zone maps are written
+    public boolean enableZoneMaps() {
+        return enableZoneMaps;
+    }
+
+    /// The minimum compression ratio (0–1) for an encoding to be accepted.
+    ///
+    /// @return the compression-ratio threshold
+    public double compressionRatioThreshold() {
+        return compressionRatioThreshold;
+    }
+
+    /// The maximum recursive cascade depth; `0` disables cascading.
+    ///
+    /// @return the cascade depth
+    public int allowedCascading() {
+        return allowedCascading;
+    }
+
+    /// Whether low-cardinality columns share one dictionary across all chunks.
+    ///
+    /// @return `true` if global dictionary encoding is enabled
+    public boolean globalDict() {
+        return globalDict;
+    }
+
+    /// Whether Zstandard competes in the cascade — see [#withZstd(boolean)] for the trade-off.
+    ///
+    /// @return `true` if Zstd is a cascade candidate
+    public boolean enableZstd() {
+        return enableZstd;
+    }
+
+    /// The aggregate heap budget for the code arrays global-dictionary candidate columns buffer until
+    /// `close()` — see [#withGlobalDictMaxRetainedBytes(MemorySize)].
+    ///
+    /// @return the global-dict retention budget
+    public MemorySize globalDictMaxRetainedBytes() {
+        return globalDictMaxRetainedBytes;
+    }
+
+    /// The [Edition] enabled per family, gating which encodings the writer may emit — see
+    /// [#withEdition(Edition)]. Defaults to the newest frozen `core` edition
+    /// ([Editions#CORE_2026_08_3]), the one Rust's default session enables. Empty means the guard is
+    /// off ([#withoutEditions()]).
+    ///
+    /// @return the enabled editions, immutable
+    public Map<EditionFamily, Edition> editions() {
+        return editions;
+    }
+
+    /// Per-column overrides of the default encoder selection — see
+    /// [#withColumnEncoding(ColumnName, ColumnEncoding)]; empty by default.
+    ///
+    /// @return the overrides, immutable
+    public Map<ColumnName, ColumnEncoding> columnEncodings() {
+        return columnEncodings;
+    }
+
+    /// The executor segment compression runs on — see [#withExecutor(Executor)]; by default the
+    /// thread calling the writer.
+    ///
+    /// @return the compression executor
+    public Executor executor() {
+        return executor;
+    }
+
+    /// Runs each task on the calling thread: the writer compresses sequentially.
+    private static final Executor CALLER_RUNS = Runnable::run;
+
+    /// Returns a copy of these options compressing segments on `executor`.
+    ///
+    /// Columns, and chunks within a column, compress independently, so a multi-threaded executor
+    /// encodes them concurrently while the writer still appends them to the channel in order: the
+    /// file is byte-identical to a sequential write. [java.util.concurrent.ForkJoinPool#commonPool()]
+    /// is the natural choice:
+    ///
+    /// ```java
+    /// WriteOptions.defaults().withExecutor(ForkJoinPool.commonPool())
+    /// ```
+    ///
+    /// The writer owns the arrays passed to `writeChunk` until `close()` returns — a caller must not
+    /// modify them, as they may still be compressing on another thread. The writer itself stays
+    /// single-threaded: call it from one thread at a time.
+    ///
+    /// @param executor runs the compression tasks; the writer never shuts it down
+    /// @return a new `WriteOptions` with the executor set
+    public WriteOptions withExecutor(Executor executor) {
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+                enableZstd, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options choosing `column`'s encodings by `encoding` instead of the
@@ -103,7 +170,7 @@ public record WriteOptions(
         Map<ColumnName, ColumnEncoding> updated = new HashMap<>(columnEncodings);
         updated.put(Objects.requireNonNull(column, "column"), Objects.requireNonNull(encoding, "encoding"));
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, editions, updated);
+                enableZstd, globalDictMaxRetainedBytes, editions, updated, executor);
     }
 
     /// Default aggregate retention budget (2 GB) for the buffered per-chunk code arrays of global
@@ -148,7 +215,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the zone-map flag updated
     public WriteOptions withZoneMaps(boolean enabled) {
         return new WriteOptions(enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
-                globalDictMaxRetainedBytes, editions, columnEncodings);
+                globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with global dictionary encoding set to `enabled`.
@@ -157,7 +224,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the global dict flag updated
     public WriteOptions withGlobalDict(boolean enabled) {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, enableZstd,
-                globalDictMaxRetainedBytes, editions, columnEncodings);
+                globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with Zstandard compression set to `enabled`.
@@ -178,7 +245,7 @@ public record WriteOptions(
     /// @throws IllegalArgumentException if `enabled` is `true` and `allowedCascading()` is `0`
     public WriteOptions withZstd(boolean enabled) {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled,
-                globalDictMaxRetainedBytes, editions, columnEncodings);
+                globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with the global-dictionary retention budget set to `budget`.
@@ -193,7 +260,7 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with the global-dict retention budget updated
     public WriteOptions withGlobalDictMaxRetainedBytes(MemorySize budget) {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, budget, editions, columnEncodings);
+                enableZstd, budget, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with `edition` enabled, replacing any edition already
@@ -212,7 +279,7 @@ public record WriteOptions(
         Map<EditionFamily, Edition> updated = new HashMap<>(editions);
         updated.put(edition.id().family(), edition);
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, updated, columnEncodings);
+                enableZstd, globalDictMaxRetainedBytes, updated, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with the edition guard turned off, the counterpart of Rust's
@@ -225,6 +292,6 @@ public record WriteOptions(
     /// @return a new `WriteOptions` with no edition enabled
     public WriteOptions withoutEditions() {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, Map.of(), columnEncodings);
+                enableZstd, globalDictMaxRetainedBytes, Map.of(), columnEncodings, executor);
     }
 }

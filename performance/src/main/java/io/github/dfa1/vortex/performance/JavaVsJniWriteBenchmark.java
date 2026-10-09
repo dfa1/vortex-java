@@ -46,6 +46,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 
 /// Write benchmark: Java writer vs JNI (Rust) writer on the same OHLC dataset.
@@ -158,6 +159,30 @@ public class JavaVsJniWriteBenchmark {
         }
     }
 
+    /// Compression threads for [#javaWriteConcurrent], at the default cascade depth: `1` measures
+    /// the executor hand-off overhead against [#javaWrite], the rest how compression scales (#474).
+    @State(Scope.Benchmark)
+    public static class Threads {
+
+        @Param({"1", "2", "4", "8"})
+        public int threads;
+
+        Path file;
+        ForkJoinPool pool;
+
+        @Setup(Level.Trial)
+        public void setup() throws IOException {
+            file = Files.createTempFile("ohlc-java-write-threads" + threads, ".vtx");
+            pool = new ForkJoinPool(threads);
+        }
+
+        @TearDown(Level.Trial)
+        public void cleanup() throws IOException {
+            pool.close();
+            Files.deleteIfExists(file);
+        }
+    }
+
     private static double round(double v) {
         return Math.round(v * 100.0) / 100.0;
     }
@@ -249,6 +274,28 @@ public class JavaVsJniWriteBenchmark {
             }
         }
         return Files.size(cascade.file);
+    }
+
+    /// Java write at the default cascade depth, compressing segments on a pool of
+    /// [Threads#threads] threads via `WriteOptions#withExecutor`.
+    @Benchmark
+    public long javaWriteConcurrent(Threads threads) throws IOException {
+        try (FileChannel ch = FileChannel.open(threads.file,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+             VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA,
+                     WriteOptions.defaults().withExecutor(threads.pool))) {
+            for (int b = 0; b < NUM_BATCHES; b++) {
+                writer.writeChunk(Map.of(
+                        ColumnName.of("date"), batchDates[b],
+                        ColumnName.of("symbol"), batchSymbols[b],
+                        ColumnName.of("open"), batchOpen[b],
+                        ColumnName.of("high"), batchHigh[b],
+                        ColumnName.of("low"), batchLow[b],
+                        ColumnName.of("close"), batchClose[b],
+                        ColumnName.of("volume"), batchVolume[b]));
+            }
+        }
+        return Files.size(threads.file);
     }
 
     private VectorSchemaRoot toArrow(int b) {
