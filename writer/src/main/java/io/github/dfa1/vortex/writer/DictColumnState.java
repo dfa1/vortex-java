@@ -452,8 +452,7 @@ final class DictColumnState {
     /// Emits one chunk's wire codes ([#CODES_PTYPE]) from its buffered `short[]` first-seen codes,
     /// optionally translated through a frequency remap (primitive path). A null slot (validity[i]
     /// false) emits `nullCode` unconditionally, never remapped: the primitive path points it at the
-    /// pool's invalid null entry, as Rust's dict builder does; the Utf8/Binary path passes `0`, which
-    /// the reader ignores because its codes child is masked by the same validity.
+    /// pool's invalid null entry, as Rust's dict builder does.
     ///
     /// @param buffered the buffered first-seen codes for one chunk
     /// @param remap    the first-seen -> frequency-rank remap, or `null` to emit codes unchanged
@@ -474,9 +473,10 @@ final class DictColumnState {
     }
 
     /// The values pool with one more slot, for the invalid null entry Rust's dict builder adds
-    /// when it meets a null: the slot holds a zero placeholder and is masked off by the caller.
+    /// when it meets a null: the slot holds a zero (or `null`) placeholder and is masked off by the
+    /// caller.
     ///
-    /// @param values the frequency-ranked distinct values (a primitive array)
+    /// @param values the distinct values (a primitive array, `String[]` or `byte[][]`)
     /// @return a copy one element longer
     static Object withNullSlot(Object values) {
         return switch (values) {
@@ -486,7 +486,10 @@ final class DictColumnState {
             case byte[] a -> Arrays.copyOf(a, a.length + 1);
             case double[] a -> Arrays.copyOf(a, a.length + 1);
             case float[] a -> Arrays.copyOf(a, a.length + 1);
-            default -> throw new IllegalStateException("not a primitive values pool: " + values.getClass());
+            // Utf8/Binary: the null slot holds a real null, as ChunkImpl leaves it at invalid rows
+            case String[] a -> Arrays.copyOf(a, a.length + 1);
+            case byte[][] a -> Arrays.copyOf(a, a.length + 1);
+            default -> throw new IllegalStateException("not a values pool: " + values.getClass());
         };
     }
 
