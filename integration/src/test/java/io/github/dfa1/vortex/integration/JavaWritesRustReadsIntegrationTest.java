@@ -574,6 +574,47 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(range).containsExactlyElementsOf(slice(Arrays.stream(times).boxed(), 1_501, 70_333));
     }
 
+    @Test
+    void javaWriter_jniReader_floatDictWithCompressedValues_fullFilteredAndRowRange(@TempDir Path tmp) throws IOException {
+        // Given — 500 distinct full-precision prices over 100,000 rows: ALP cannot encode them, so
+        // the cascade writes a dictionary. Its value pool is a cascade child too (Rust compresses
+        // both the codes and the values), so vortex-jni must read a dictionary whose values are
+        // not a plain primitive
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("p")), List.of(DType.F64), false);
+        java.util.Random random = new java.util.Random(507);
+        double[] pool = new double[500];
+        for (int i = 0; i < pool.length; i++) {
+            pool[i] = 1.0 + random.nextDouble() * 99.0;
+        }
+        double[] prices = new double[100_000];
+        for (int i = 0; i < prices.length; i++) {
+            prices[i] = pool[random.nextInt(pool.length)];
+        }
+        Path file = tmp.resolve("java_float_dict.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults().withGlobalDict(false))) {
+            sut.writeChunk(Map.of(ColumnName.of("p"), prices));
+        }
+        double threshold = 50.0;
+
+        // When
+        double[] full = readDoubleColumn(file, "p");
+        List<Object> filtered = readColumnFiltered(file, "p", Expression.binary(Expression.BinaryOp.GTE,
+                Expression.column("p"), Expression.literal(threshold)));
+        List<Object> range = readRowRange(file, "p", 1_501, 70_333);
+
+        // Then
+        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file,
+                io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
+            assertThat(reader.footer().arraySpecs())
+                    .contains(io.github.dfa1.vortex.core.model.EncodingId.VORTEX_DICT);
+        }
+        assertBitwiseEqualsF64(full, prices);
+        assertThat(filtered).containsExactlyElementsOf(
+                Arrays.stream(prices).filter(price -> price >= threshold).boxed().map(Object.class::cast).toList());
+        assertThat(range).containsExactlyElementsOf(slice(Arrays.stream(prices).boxed(), 1_501, 70_333));
+    }
+
     private static List<Object> slice(java.util.stream.Stream<?> values, int begin, int end) {
         return values.skip(begin).limit((long) end - begin).map(Object.class::cast).toList();
     }

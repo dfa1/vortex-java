@@ -30,6 +30,29 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     private static final Set<EncodingId> CODES_EXCLUDED =
             Set.of(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
 
+    private final boolean integers;
+
+    /// A dictionary encoder for every primitive and string dtype.
+    public DictEncodingEncoder() {
+        this(true);
+    }
+
+    private DictEncodingEncoder(boolean integers) {
+        this.integers = integers;
+    }
+
+    /// The dictionary encoder of the writer's data cascade: Rust's file writer excludes
+    /// `IntDictScheme` from the data compressor (`vortex-file` `strategy.rs`: a dictionary over
+    /// the columns that suit one is applied once, as a layout, so a per-chunk integer dictionary
+    /// would only redundantly dictionary-encode the codes), so integers never get a dictionary
+    /// inside the cascade. Floats and strings still do, as `FloatDictScheme` and the string
+    /// schemes stay in.
+    ///
+    /// @return an encoder that accepts floats and strings but not integers
+    public static DictEncodingEncoder forDataCascade() {
+        return new DictEncodingEncoder(false);
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DICT;
@@ -37,7 +60,10 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8;
+        if (dtype instanceof DType.Primitive p) {
+            return integers || p.ptype().isFloating();
+        }
+        return dtype instanceof DType.Utf8;
     }
 
     @Override
@@ -123,18 +149,21 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         DictData d = buildDictData(dtype, data);
         PType codePType = d.codePType();
 
-        // Same [codes, values] wire shape as the terminal path above.
+        // Same [codes, values] wire shape as the terminal path above, with both children left open:
+        // Rust's dict schemes compress the codes (child 1) and the values (child 0) through the
+        // cascade, so a float pool goes through ALP and bit-packing instead of being written raw.
+        // The values child bars `vortex.dict` (a dictionary of a dictionary's values).
         MemorySegment meta = MemorySegment.ofArray(dictMetadata(d));
-        EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_DICT, meta,
-                new EncodeNode[]{null, valuesNode},
+                new EncodeNode[]{null, null},
                 new int[0]);
 
         DType codesDtype = new DType.Primitive(codePType, false);
-        ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 0, CODES_EXCLUDED);
         byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
-        return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(d.valuesBuf(), ((DType.Primitive) dtype).ptype())), List.of(slot),
+        return new CascadeStep(partialRoot, List.of(),
+                List.of(new ChildSlot(codesDtype, d.codesArr(), 0, CODES_EXCLUDED),
+                        new ChildSlot(dtype, d.valuesArr(), 1, Set.of(EncodingId.VORTEX_DICT))),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
     }
 
@@ -373,7 +402,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
 
         Object codesArr = PrimitiveArrays.fromIntsArray(codes, codePType, EncodingId.VORTEX_DICT);
-        return new DictData(valuesBuf, codesArr, codePType, len, dictSize);
+        return new DictData(valuesBuf, uniqueArray, codesArr, codePType, len, dictSize);
     }
 
     private static PType codePType(int dictSize) {
@@ -457,6 +486,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         ).encode();
     }
 
-    private record DictData(MemorySegment valuesBuf, Object codesArr, PType codePType, int len, int dictSize) {
+    private record DictData(MemorySegment valuesBuf, Object valuesArr, Object codesArr, PType codePType, int len,
+                            int dictSize) {
     }
 }

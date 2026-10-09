@@ -328,7 +328,11 @@ public final class VortexWriter implements Closeable {
         codecs.add(new SparseEncodingEncoder());
         // Rust's SequenceScheme: an exact integer arithmetic sequence costs two scalars (#507).
         codecs.add(new SequenceEncodingEncoder());
-        codecs.add(new DictEncodingEncoder());
+        // Rust's file writer keeps integers out of the data cascade because its DictStrategy
+        // dictionary-encodes suitable columns as a layout. That is our global dictionary: with it
+        // off (a streaming CSV import cannot buffer a whole column), an integer chunk keeps its
+        // per-chunk dictionary, or a low-cardinality integer column loses its dictionary entirely.
+        codecs.add(options.globalDict() ? DictEncodingEncoder.forDataCascade() : new DictEncodingEncoder());
         codecs.add(new BitpackedEncodingEncoder());
         // Decimals: byte-parts (precision <= 18) cascades its i64 mantissa through FoR/bit-packing;
         // plain vortex.decimal covers every width. The competition keeps the smaller.

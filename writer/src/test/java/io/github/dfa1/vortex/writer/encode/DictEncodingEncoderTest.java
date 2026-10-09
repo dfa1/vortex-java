@@ -26,9 +26,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.stream.Stream;
 
-import org.assertj.core.api.InstanceOfAssertFactories;
 
-import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DictEncodingEncoderTest {
@@ -254,19 +252,38 @@ class DictEncodingEncoderTest {
     }
 
     @Test
-    void encodeCascade_primitive_codesSlot_barsDictAndSequence() {
+    void encodeCascade_primitive_codesAndValuesSlots_carryDifferentPolicies() {
         // Given — cardinality 3 over 6 rows, so the dict gate admits the column
         int[] data = {10, 20, 30, 10, 20, 30};
 
         // When
         CascadeStep result = ENCODER.encodeCascade(DTypes.I32, data, EncodeTestHelper.testCtx());
 
-        // Then — the codes child carries its own policy: no dictionary of codes, and no sequence
-        // over them either (codes are dictionary positions, so an arithmetic description of them
-        // adds a level without compressing anything — issue #410)
-        assertThat(result.openChildren()).singleElement()
-                .extracting(ChildSlot::excluded, as(InstanceOfAssertFactories.iterable(EncodingId.class)))
+        // Then — both children are open, as in Rust (`compress_child` for the values and the codes),
+        // so a float pool goes through ALP instead of being written raw. The codes bar a dictionary
+        // of codes and a sequence over them (codes are dictionary positions, so an arithmetic
+        // description adds a level without compressing anything — issue #410); the values only bar
+        // a second dictionary
+        assertThat(result.ownedBytes()).isZero();
+        assertThat(result.openChildren()).hasSize(2);
+        assertThat(result.openChildren().get(0).excluded())
                 .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
+        assertThat(result.openChildren().get(1).excluded())
+                .containsExactly(EncodingId.VORTEX_DICT);
+        assertThat((int[]) result.openChildren().get(1).childData()).containsExactly(10, 20, 30);
+    }
+
+    @Test
+    void forDataCascade_acceptsFloatsAndStringsButNotIntegers() {
+        // Given: Rust's file writer excludes IntDictScheme from the data compressor
+        DictEncodingEncoder sut = DictEncodingEncoder.forDataCascade();
+
+        // When / Then
+        assertThat(sut.accepts(DType.F64)).isTrue();
+        assertThat(sut.accepts(DType.UTF8)).isTrue();
+        assertThat(sut.accepts(DType.I64)).isFalse();
+        assertThat(sut.accepts(DTypes.I32)).isFalse();
+        assertThat(ENCODER.accepts(DType.I64)).isTrue();
     }
 
     @Test
