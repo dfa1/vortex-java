@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -71,20 +72,60 @@ class OnPairEncodingDecoderTest {
     }
 
     @Test
-    void decode_dictOffsetsPastBuffer_throws() {
-        // Given — last token ends at 9, the dictionary buffer holds 5 bytes
+    void decode_outputLongerThanMaxToken_overCopyBatchAndExactTailAgree() {
+        // Given one 20-byte row ("abde" x 5): the first tokens take the 16-byte over-copy batch and
+        // the rest the exact tail; an over-copy that advanced by 16 instead of the token length, or
+        // a tail that over-stored, would garble the result
+        short[] codes = {0, 2, 0, 2, 0, 2, 0, 2, 0, 2};
+
+        // When
+        Array result = decode(DICT_OFFSETS, codes, new int[]{0, 10}, new int[]{20});
+
+        // Then
+        assertThat(strings((VarBinArray) result)).containsExactly("abde".repeat(5));
+    }
+
+    @Test
+    void decode_lastTokenWithoutReadPadding_throws() {
+        // Given the last token starts at 10, so a 16-byte read from it needs 26 bytes; the padded
+        // buffer holds 21. Rust rejects this (CompactDictionary::validate_safety), and the
+        // over-copy would read past the buffer
+        int[] offsets = {0, 2, 10, 12};
 
         // When / Then
-        assertThatThrownBy(() -> decode(new int[]{0, 2, 3, 9}, new short[]{0}, new int[]{0, 1}, new int[]{2}))
+        assertThatThrownBy(() -> decode(offsets, new short[]{0}, new int[]{0, 1}, new int[]{2}))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("exceeds dictionary size");
+                .hasMessageContaining("read padding");
+    }
+
+    @Test
+    void decode_tokenLongerThanMaxTokenSize_throws() {
+        // Given token 2 spans 3..20, 17 bytes: the 16-byte over-copy would silently truncate it
+        int[] offsets = {0, 2, 3, 20};
+
+        // When / Then
+        assertThatThrownBy(() -> decode(offsets, new short[]{0}, new int[]{0, 1}, new int[]{2}))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("must be 1 to 16");
+    }
+
+    @Test
+    void decode_emptyToken_throws() {
+        // Given token 1 spans 2..2: Rust rejects empty tokens (each code emits 1 to 16 bytes)
+        int[] offsets = {0, 2, 2, 5};
+
+        // When / Then
+        assertThatThrownBy(() -> decode(offsets, new short[]{0}, new int[]{0, 1}, new int[]{2}))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("must be 1 to 16");
     }
 
     private static Array decode(int[] dictOffsets, short[] codes, int[] codesOffsets, int[] lengths) {
         var meta = new ProtoOnPairMetadata(ProtoPType.U32, dictOffsets.length - 1, codes.length,
                 ProtoPType.U32, ProtoPType.U16, ProtoPType.U32);
         MemorySegment[] segments = {
-            MemorySegment.ofArray(DICT.getBytes(StandardCharsets.UTF_8)),
+            // Read-padded past the last token start, as Rust and our writer lay the dictionary out
+            MemorySegment.ofArray(Arrays.copyOf(DICT.getBytes(StandardCharsets.UTF_8), DICT.length() + 16)),
             TestSegments.leInts(dictOffsets), TestSegments.leShorts(codes),
             TestSegments.leInts(codesOffsets), TestSegments.leInts(lengths)};
         ArrayNode[] children = new ArrayNode[4];

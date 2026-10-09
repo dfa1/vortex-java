@@ -16,6 +16,9 @@ import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
 
 /// Read-only decoder for `vortex.onpair` (edition `core2026.08.1`).
 ///
@@ -30,6 +33,9 @@ import java.lang.foreign.ValueLayout;
 public final class OnPairEncodingDecoder implements EncodingDecoder {
 
     private static final EncodingId ID = EncodingId.VORTEX_ONPAIR;
+    /// Longest dictionary token, Rust's `onpair::MAX_TOKEN_SIZE`; also the dictionary's read padding.
+    private static final int MAX_TOKEN_SIZE = 16;
+    private static final VarHandle LE_LONG = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
 
     @Override
     public EncodingId encodingId() {
@@ -85,15 +91,32 @@ public final class OnPairEncodingDecoder implements EncodingDecoder {
 
             byte[] dict = dictBytes.toArray(ValueLayout.JAVA_BYTE);
             byte[] out = new byte[IoBounds.toIntSize(total)];
-            int pos = 0;
             int numTokens = dictOffsets.length - 1;
-            for (int c = (int) codeStart; c < codeEnd; c++) {
-                long token = codes[c];
-                if (token < 0 || token >= numTokens) {
-                    throw new VortexException(ID, "code " + token + " out of range for " + numTokens + " tokens");
+            int pos = 0;
+            int c = (int) codeStart;
+            // Rust's `try_decode_into`: batches of fixed 16-byte over-copies. `batch` is the most
+            // tokens provably within `out` from the cursor (each advances it by at most
+            // MAX_TOKEN_SIZE), so the inner loop needs no per-token output check; the validated
+            // read padding makes the 16-byte source read in bounds for every token.
+            while (c < codeEnd) {
+                int batch = (out.length - pos) / MAX_TOKEN_SIZE;
+                if (batch == 0) {
+                    break;
                 }
-                int start = (int) dictOffsets[(int) token];
-                int len = (int) dictOffsets[(int) token + 1] - start;
+                int end = (int) Math.min(codeEnd, (long) c + batch);
+                for (; c < end; c++) {
+                    int token = token(codes[c], numTokens);
+                    int start = (int) dictOffsets[token];
+                    LE_LONG.set(out, pos, (long) LE_LONG.get(dict, start));
+                    LE_LONG.set(out, pos + 8, (long) LE_LONG.get(dict, start + 8));
+                    pos += (int) dictOffsets[token + 1] - start;
+                }
+            }
+            // Tail: under MAX_TOKEN_SIZE bytes left, exact copies that fail once a token won't fit.
+            for (; c < codeEnd; c++) {
+                int token = token(codes[c], numTokens);
+                int start = (int) dictOffsets[token];
+                int len = (int) dictOffsets[token + 1] - start;
                 if (len > out.length - pos) {
                     throw new VortexException(ID, "codes decode to more bytes than uncompressed_lengths records");
                 }
@@ -129,21 +152,35 @@ public final class OnPairEncodingDecoder implements EncodingDecoder {
             }
         }
 
-        /// Offsets must start at 0, be nondecreasing and stay inside the dictionary buffer, so every
-        /// token slice read below is in bounds.
+        /// Rust's `CompactDictionary::validate_safety`: offsets start at 0 and are nondecreasing,
+        /// every token is 1 to [#MAX_TOKEN_SIZE] bytes, and the buffer is read-padded so a
+        /// MAX_TOKEN_SIZE-byte read from the last token start stays inside it. Together these make
+        /// every token's fixed-width over-copy in the decode loop in bounds and exact.
         private static void validateDictionary(long[] offsets, long dictSize) {
             if (offsets[0] != 0) {
                 throw new VortexException(ID, "dict_offsets must start at 0, got " + offsets[0]);
             }
             for (int i = 1; i < offsets.length; i++) {
-                if (offsets[i] < offsets[i - 1]) {
+                long len = offsets[i] - offsets[i - 1];
+                if (len < 0) {
                     throw new VortexException(ID, "dict_offsets must be nondecreasing at " + i);
                 }
+                if (len == 0 || len > MAX_TOKEN_SIZE) {
+                    throw new VortexException(ID, "dictionary token " + (i - 1) + " is " + len
+                            + " bytes, must be 1 to " + MAX_TOKEN_SIZE);
+                }
             }
-            if (offsets[offsets.length - 1] > dictSize) {
-                throw new VortexException(ID, "dict_offsets end " + offsets[offsets.length - 1]
-                        + " exceeds dictionary size " + dictSize);
+            if (offsets.length > 1 && offsets[offsets.length - 2] + MAX_TOKEN_SIZE > dictSize) {
+                throw new VortexException(ID, "dictionary of " + dictSize + " bytes lacks the "
+                        + MAX_TOKEN_SIZE + "-byte read padding after its last token");
             }
+        }
+
+        private static int token(long code, int numTokens) {
+            if (code < 0 || code >= numTokens) {
+                throw new VortexException(ID, "code " + code + " out of range for " + numTokens + " tokens");
+            }
+            return (int) code;
         }
 
         /// Decodes integer child `i` (of `count` elements) and widens it to `long[]`, expanding a
