@@ -178,7 +178,7 @@ public final class PrimitiveArrays {
             return dst;
         }
         int n = longs.length;
-        MemorySegment seg = arena.allocate(n * ptype.byteSize());
+        MemorySegment seg = arena.allocate((long) n * ptype.byteSize());
         VectorSupport.operations().narrowInto(longs, ptype, seg);
         return seg;
     }

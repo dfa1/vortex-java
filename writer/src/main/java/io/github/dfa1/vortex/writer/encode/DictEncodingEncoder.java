@@ -75,7 +75,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     /// run-length encoded at 32 bits of run bookkeeping per run, whichever is smaller.
     static double integerDictRatio(int bitWidth, long n, long distinct, long averageRunLength) {
         long valuesSize = bitWidth * distinct;
-        long codesWidth = Long.SIZE - Long.numberOfLeadingZeros(distinct);
+        long codesWidth = (long) Long.SIZE - Long.numberOfLeadingZeros(distinct);
         long runs = n / averageRunLength;
         long codesSize = Math.min(codesWidth * n, (codesWidth + 32) * runs);
         long before = n * bitWidth;
