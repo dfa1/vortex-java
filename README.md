@@ -18,7 +18,7 @@ copy value for value.
 
 | | vortex-java |
 |---|---|
-| Encodings | all 37 read, 35 written ([gaps](docs/compatibility.md#known-wire-format-gaps): `DType::Union` unread) |
+| Encodings | all 38 read, 35 written ([read-only](docs/compatibility.md): `vortex.union`, `vortex.parquet.variant`, `vortex.zstd_buffers`) |
 | Read | 1.6–2.3× vortex-jni on single numeric columns, ~4× on strings, 3.4× on a 3 GB full scan |
 | Write | 1.13× vortex-jni (cascading, 10 M OHLC rows from Java arrays: 0.95 vs 0.84 writes/s), choosing encodings as Rust's compressor does |
 | Size | NYC taxi 2024-01: 42.3 MB vs 44.5 MB; OHLC: 59.5 vs 61.7 MB |
@@ -125,6 +125,7 @@ Docs follow the [Diátaxis](https://diataxis.fr/) framework.
 |---------------------------------------------------------------------|----------|-----------------------------------------|
 | [vortex-data/vortex](https://github.com/vortex-data/vortex)         | Rust     | Reference implementation + JNI bindings |
 | [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
+| [Evariops/Vorticity](https://github.com/Evariops/Vorticity)         | C#       | Pure .NET, dependency-free              |
 | **dfa1/vortex-java**                                                | **Java** | **This library**                        |
 
 ## Contributing
