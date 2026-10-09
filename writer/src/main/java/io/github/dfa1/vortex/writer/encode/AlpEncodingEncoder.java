@@ -22,11 +22,25 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
     private static final int MAX_EXPONENT_F64 = 18;
     private static final int MAX_EXPONENT_F32 = 10;
-    // Wider than Rust's SAMPLE_SIZE=32: at small samples, IEEE precision drift at high
-    // `(expE, expF)` can hide as a 0-patch tie in the size estimate, then explode into
-    // thousands of patches when the full chunk is encoded. A larger sample is more likely to
-    // include drift-triggering values, letting the search penalise such combinations correctly.
-    private static final int SAMPLE_SIZE = 512;
+
+    /// Rust's `fast_round` constant, `2^52 + 2^51`: `(x + SWEET) - SWEET` rounds `x` to the nearest
+    /// integer (ties to even) in two IEEE additions, which Java evaluates bit-for-bit as Rust does.
+    private static final double SWEET_F64 = (double) (1L << 52) + (double) (1L << 51);
+    /// `2^23 + 2^22`, the f32 counterpart of [#SWEET_F64].
+    private static final float SWEET_F32 = (float) (1 << 23) + (float) (1 << 22);
+
+    /// The exponent search runs on at most this many values, `SAMPLE_BLOCK`-long runs spread
+    /// evenly over the array: Rust's `alp` crate (0.0.4, as vortex 0.86.1 pins it) `SAMPLE_SIZE`.
+    /// The search is the dominant cost of every ALP encode and trial encode, so its sample size
+    /// sets ALP's cost.
+    private static final int SAMPLE_SIZE = 64;
+    /// Rust's `SAMPLE_BLOCK`.
+    private static final int SAMPLE_BLOCK = 8;
+
+    /// Bytes an exception costs in the size estimate: the value plus a `u16` position (Rust's
+    /// `patch_bytes`).
+    private static final int PATCH_BYTES_F64 = Double.BYTES + Short.BYTES;
+    private static final int PATCH_BYTES_F32 = Float.BYTES + Short.BYTES;
 
     @Override
     public EncodingId encodingId() {
@@ -67,94 +81,96 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return CascadeStep.terminal(encode(dtype, data, ctx));
     }
 
-    /// Picks `(expE, expF)` by minimizing the estimated post-cascade byte size
-    /// (FoR + bitpack on the encoded integers, plus per-exception patch overhead) on a
-    /// stratified sample, breaking ties in favor of the smaller `e - f` gap.
-    /// Mirrors Rust's `ALPFloat::find_best_exponents`.
-    ///
-    /// The previous heuristic (minimize exception count) picked combinations like
-    /// `(e=14, f=0)` that produced few exceptions but huge encoded mantissas, forcing
-    /// the cascade into Dict+FoR+BitPacked instead of a clean ALP→BitPacked chain.
-    private static int[] findExponentsF64(double[] values) {
+    // Rust's `encode_single_unchecked`: `(value * 10^e * 10^-f).fast_round() as i64`, the cast
+    // saturating (and NaN -> 0) exactly as Rust's `as` does.
+    private static long encodeF64(double v, int e, int f) {
+        return (long) ((v * F10_F64[e] * IF10_F64[f] + SWEET_F64) - SWEET_F64);
+    }
+
+    // Rust's `decode_single`: `encoded as f64 * 10^f * 10^-e`.
+    private static double decodeF64(long encoded, int e, int f) {
+        return encoded * F10_F64[f] * IF10_F64[e];
+    }
+
+    /// Rust's `SamplePlan::subsample`: the whole array when it is short, else
+    /// `SAMPLE_SIZE / SAMPLE_BLOCK` runs of `SAMPLE_BLOCK` values, evenly spaced from the start
+    /// to the end.
+    private static double[] sampleF64(double[] values) {
         int n = values.length;
-        if (n == 0) {
-            return new int[]{0, 0};
+        if (n <= SAMPLE_SIZE) {
+            return values;
         }
-        int sampleLen = Math.min(SAMPLE_SIZE, n);
-        double[] sample = new double[sampleLen];
-        long stride = Math.max(1, (long) n / sampleLen);
-        for (int i = 0; i < sampleLen; i++) {
-            sample[i] = values[(int) Math.min(i * stride, (long) n - 1)];
+        int blocks = SAMPLE_SIZE / SAMPLE_BLOCK;
+        int spacing = (n - SAMPLE_BLOCK) / (blocks - 1);
+        double[] sample = new double[blocks * SAMPLE_BLOCK];
+        for (int i = 0; i < blocks; i++) {
+            System.arraycopy(values, i * spacing, sample, i * SAMPLE_BLOCK, SAMPLE_BLOCK);
         }
+        return sample;
+    }
 
-        int bestExpE = 0;
-        int bestExpF = 0;
-        long bestSize = Long.MAX_VALUE;
-        long[] encoded = new long[sampleLen];
-
-        // Iterate e ascending and f ascending so the first-encountered minimum has the smallest
-        // e (and smallest e-f for that e). With strict less-than replacement, ties resolve to
-        // the smaller exponent — important because IEEE precision of `F10[f] * IF10[e]`
-        // tends to drift at high (e, f), and Rust's sample-of-32 sometimes detects this drift
-        // as exceptions while ours does not (sample bias). Preferring smaller e protects us.
-        for (int expE = 1; expE < MAX_EXPONENT_F64; expE++) {
-            for (int expF = 0; expF < expE; expF++) {
-                long size = estimateEncodedSizeF64(sample, expE, expF, encoded);
-                if (size < bestSize) {
+    /// Rust's `find_best_exponents` (`alp` 0.0.4): every `f <= e`, `e` descending, scored by
+    /// [#estimateEncodedSizeF64]; a tie goes to the smaller `e - f`.
+    private static int[] findExponentsF64(double[] values) {
+        double[] sample = sampleF64(values);
+        int bestE = 0;
+        int bestF = 0;
+        long bestSize = estimateEncodedSizeF64(sample, 0, 0, Long.MAX_VALUE);
+        for (int e = MAX_EXPONENT_F64 - 1; e >= 0; e--) {
+            for (int f = 0; f <= e; f++) {
+                long size = estimateEncodedSizeF64(sample, e, f, bestSize);
+                if (size >= 0 && (size < bestSize || size == bestSize && e - f < bestE - bestF)) {
                     bestSize = size;
-                    bestExpE = expE;
-                    bestExpF = expF;
+                    bestE = e;
+                    bestF = f;
                 }
             }
         }
-        return new int[]{bestExpE, bestExpF};
+        return new int[]{bestE, bestF};
     }
 
-    /// Estimates the post-cascade byte cost of encoding `sample` at `(expE, expF)`.
-    /// Cost model matches Rust: encoded = FoR + bitpack at `ceil(log2(range)+1)` bits/value,
-    /// plus `patchCount * (8 bytes value + 2 bytes index)` for exceptions.
+    /// Rust's `estimate_encoded_size_within`: the encoded values frame-of-referenced and bit-packed
+    /// at the width of the round-tripping values' range (all values' when none round-trips), plus
+    /// [#PATCH_BYTES_F64] per exception.
     ///
-    /// Encoded byte count is computed over the full sample length (not just the cleanly encoded
-    /// values) to mirror Rust's `estimate_encoded_size`: patch positions are filled with the
-    /// first non-patched encoded value, so they still consume bitpacked space.
-    private static long estimateEncodedSizeF64(double[] sample, int expE, int expF, long[] encoded) {
-        double ef = F10_F64[expE];
-        double iff = IF10_F64[expF];
-        double df = F10_F64[expF];
-        double de = IF10_F64[expE];
-        long minEnc = Long.MAX_VALUE;
-        long maxEnc = Long.MIN_VALUE;
-        int patchCount = 0;
-        int encodedCount = 0;
-        for (double v : sample) {
-            double enc = v * ef * iff;
-            if (!Double.isFinite(enc)) {
-                patchCount++;
-                continue;
-            }
-            long e = Math.round(enc);
-            if (e * df * de != v) {
-                patchCount++;
-                continue;
-            }
-            encoded[encodedCount++] = e;
-            if (e < minEnc) {
-                minEnc = e;
-            }
-            if (e > maxEnc) {
-                maxEnc = e;
+    /// @return the estimate, or `-1` once the exceptions alone cost more than `limit`
+    private static long estimateEncodedSizeF64(double[] values, int e, int f, long limit) {
+        long keptMin = Long.MAX_VALUE;
+        long keptMax = Long.MIN_VALUE;
+        long allMin = Long.MAX_VALUE;
+        long allMax = Long.MIN_VALUE;
+        int patches = 0;
+        for (double v : values) {
+            long encoded = encodeF64(v, e, f);
+            allMin = Math.min(allMin, encoded);
+            allMax = Math.max(allMax, encoded);
+            if (Double.doubleToRawLongBits(decodeF64(encoded, e, f)) == Double.doubleToRawLongBits(v)) {
+                keptMin = Math.min(keptMin, encoded);
+                keptMax = Math.max(keptMax, encoded);
+            } else {
+                patches++;
+                if ((long) patches * PATCH_BYTES_F64 > limit) {
+                    return -1;
+                }
             }
         }
-        int bitsPerEncoded;
-        if (encodedCount == 0) {
-            bitsPerEncoded = 64;
-        } else {
-            long range = maxEnc - minEnc;
-            bitsPerEncoded = range <= 0 ? 0 : (64 - Long.numberOfLeadingZeros(range));
+        boolean allPatched = patches == values.length;
+        int bits = bitsForRange(allPatched ? allMin : keptMin, allPatched ? allMax : keptMax, Long.SIZE);
+        return ((long) values.length * bits + 7) / 8 + (long) patches * PATCH_BYTES_F64;
+    }
+
+    /// Bits to bit-pack `[min, max]` after frame of reference: `ilog2(max - min) + 1`, `0` for a
+    /// single value, and `typeBits` for an empty range or one whose difference overflows (Rust's
+    /// `checked_sub` failing).
+    private static int bitsForRange(long min, long max, int typeBits) {
+        if (min > max) {
+            return typeBits;
         }
-        long encodedBytes = ((long) sample.length * bitsPerEncoded + 7L) / 8L;
-        long patchBytes = (long) patchCount * (Double.BYTES + Short.BYTES);
-        return encodedBytes + patchBytes;
+        long diff = max - min;
+        if (((max ^ min) & (max ^ diff)) < 0) {
+            return typeBits;
+        }
+        return Long.SIZE - Long.numberOfLeadingZeros(diff);
     }
 
     private static AlpF64Data computeF64(double[] values) {
@@ -162,10 +178,6 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         int[] exps = findExponentsF64(values);
         int expE = exps[0];
         int expF = exps[1];
-        double ef = F10_F64[expE];
-        double iff = IF10_F64[expF];
-        double df = F10_F64[expF];
-        double de = IF10_F64[expE];
 
         long[] encodedArr = new long[n];
         var patchIndices = new ArrayList<Integer>();
@@ -173,27 +185,34 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
         double min = Double.MAX_VALUE;
         double max = -Double.MAX_VALUE;
+        long fill = 0L;
+        boolean haveFill = false;
         for (int i = 0; i < n; i++) {
             double v = values[i];
-            double enc = v * ef * iff;
-            long encoded;
-            // Bit-exact, not ==: v == -0.0 makes candidate * df * de (always +0.0, since a
-            // rounded-to-long encoding has no sign to reconstruct from) compare equal to v under
-            // ==, but reconstructing it loses the sign bit. Route -0.0 through the patch/exception
-            // path instead, so it round-trips losslessly like any other unencodable value.
-            if (Double.isFinite(enc) && Double.doubleToRawLongBits((encoded = Math.round(enc)) * df * de)
-                    == Double.doubleToRawLongBits(v)) {
-                encodedArr[i] = encoded;
-            } else {
-                encodedArr[i] = 0L;
+            long encoded = encodeF64(v, expE, expF);
+            encodedArr[i] = encoded;
+            // Bit-exact, as Rust's is_eq: -0.0 encodes to 0 and decodes to +0.0, so it is an
+            // exception like any other value that does not round-trip.
+            if (Double.doubleToRawLongBits(decodeF64(encoded, expE, expF)) != Double.doubleToRawLongBits(v)) {
                 patchIndices.add(i);
                 patchValues.add(v);
+            } else if (!haveFill) {
+                fill = encoded;
+                haveFill = true;
             }
             if (v < min) {
                 min = v;
             }
             if (v > max) {
                 max = v;
+            }
+        }
+        // Rust's encode fills every exception's slot with the first value that did encode, so the
+        // encoded child keeps its range (a 0 there widened prices' frame of reference); with no
+        // such value the raw encodings stay, as in Rust.
+        if (haveFill) {
+            for (int idx : patchIndices) {
+                encodedArr[idx] = fill;
             }
         }
 
@@ -271,75 +290,75 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
                 List.of(slot), d.statsMin(), d.statsMax(), true);
     }
 
-    /// Size-based exponent search for F32. See [#findExponentsF64(double[])] for cost model.
-    private static int[] findExponentsF32(float[] values) {
+    private static int encodeF32(float v, int e, int f) {
+        return (int) ((v * F10_F32[e] * IF10_F32[f] + SWEET_F32) - SWEET_F32);
+    }
+
+    private static float decodeF32(int encoded, int e, int f) {
+        return encoded * F10_F32[f] * IF10_F32[e];
+    }
+
+    /// See [#sampleF64(double[])].
+    private static float[] sampleF32(float[] values) {
         int n = values.length;
-        if (n == 0) {
-            return new int[]{0, 0};
+        if (n <= SAMPLE_SIZE) {
+            return values;
         }
-        int sampleLen = Math.min(SAMPLE_SIZE, n);
-        float[] sample = new float[sampleLen];
-        long stride = Math.max(1, (long) n / sampleLen);
-        for (int i = 0; i < sampleLen; i++) {
-            sample[i] = values[(int) Math.min(i * stride, (long) n - 1)];
+        int blocks = SAMPLE_SIZE / SAMPLE_BLOCK;
+        int spacing = (n - SAMPLE_BLOCK) / (blocks - 1);
+        float[] sample = new float[blocks * SAMPLE_BLOCK];
+        for (int i = 0; i < blocks; i++) {
+            System.arraycopy(values, i * spacing, sample, i * SAMPLE_BLOCK, SAMPLE_BLOCK);
         }
+        return sample;
+    }
 
-        int bestExpE = 0;
-        int bestExpF = 0;
-        long bestSize = Long.MAX_VALUE;
-        int[] encoded = new int[sampleLen];
-
-        for (int expE = 1; expE < MAX_EXPONENT_F32; expE++) {
-            for (int expF = 0; expF < expE; expF++) {
-                long size = estimateEncodedSizeF32(sample, expE, expF, encoded);
-                if (size < bestSize) {
+    /// See [#findExponentsF64(double[])].
+    private static int[] findExponentsF32(float[] values) {
+        float[] sample = sampleF32(values);
+        int bestE = 0;
+        int bestF = 0;
+        long bestSize = estimateEncodedSizeF32(sample, 0, 0, Long.MAX_VALUE);
+        for (int e = MAX_EXPONENT_F32 - 1; e >= 0; e--) {
+            for (int f = 0; f <= e; f++) {
+                long size = estimateEncodedSizeF32(sample, e, f, bestSize);
+                if (size >= 0 && (size < bestSize || size == bestSize && e - f < bestE - bestF)) {
                     bestSize = size;
-                    bestExpE = expE;
-                    bestExpF = expF;
+                    bestE = e;
+                    bestF = f;
                 }
             }
         }
-        return new int[]{bestExpE, bestExpF};
+        return new int[]{bestE, bestF};
     }
 
-    private static long estimateEncodedSizeF32(float[] sample, int expE, int expF, int[] encoded) {
-        float ef = F10_F32[expE];
-        float iff = IF10_F32[expF];
-        float df = F10_F32[expF];
-        float de = IF10_F32[expE];
-        int minEnc = Integer.MAX_VALUE;
-        int maxEnc = Integer.MIN_VALUE;
-        int patchCount = 0;
-        int encodedCount = 0;
-        for (float v : sample) {
-            float enc = v * ef * iff;
-            if (!Float.isFinite(enc)) {
-                patchCount++;
-                continue;
-            }
-            int e = Math.round(enc);
-            if (e * df * de != v) {
-                patchCount++;
-                continue;
-            }
-            encoded[encodedCount++] = e;
-            if (e < minEnc) {
-                minEnc = e;
-            }
-            if (e > maxEnc) {
-                maxEnc = e;
+    /// See [#estimateEncodedSizeF64(double[], int, int, long)]; the range is over `i32`.
+    private static long estimateEncodedSizeF32(float[] values, int e, int f, long limit) {
+        int keptMin = Integer.MAX_VALUE;
+        int keptMax = Integer.MIN_VALUE;
+        int allMin = Integer.MAX_VALUE;
+        int allMax = Integer.MIN_VALUE;
+        int patches = 0;
+        for (float v : values) {
+            int encoded = encodeF32(v, e, f);
+            allMin = Math.min(allMin, encoded);
+            allMax = Math.max(allMax, encoded);
+            if (Float.floatToRawIntBits(decodeF32(encoded, e, f)) == Float.floatToRawIntBits(v)) {
+                keptMin = Math.min(keptMin, encoded);
+                keptMax = Math.max(keptMax, encoded);
+            } else {
+                patches++;
+                if ((long) patches * PATCH_BYTES_F32 > limit) {
+                    return -1;
+                }
             }
         }
-        int bitsPerEncoded;
-        if (encodedCount == 0) {
-            bitsPerEncoded = 32;
-        } else {
-            int range = maxEnc - minEnc;
-            bitsPerEncoded = range <= 0 ? 0 : (32 - Integer.numberOfLeadingZeros(range));
-        }
-        long encodedBytes = ((long) sample.length * bitsPerEncoded + 7L) / 8L;
-        long patchBytes = (long) patchCount * (Float.BYTES + Short.BYTES);
-        return encodedBytes + patchBytes;
+        boolean allPatched = patches == values.length;
+        int min = allPatched ? allMin : keptMin;
+        int max = allPatched ? allMax : keptMax;
+        // An i32 difference never overflows a long, so only the empty range needs the type width.
+        int bits = min > max ? Integer.SIZE : Long.SIZE - Long.numberOfLeadingZeros((long) max - min);
+        return ((long) values.length * bits + 7) / 8 + (long) patches * PATCH_BYTES_F32;
     }
 
     private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
@@ -347,35 +366,36 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         int[] exps = findExponentsF32(values);
         int expE = exps[0];
         int expF = exps[1];
-        float ef = F10_F32[expE];
-        float iff = IF10_F32[expF];
-        float df = F10_F32[expF];
-        float de = IF10_F32[expE];
-
         int[] encodedArr = new int[n];
         var patchIndices = new ArrayList<Integer>();
         var patchValues = new ArrayList<Float>();
 
         float min = Float.MAX_VALUE;
         float max = -Float.MAX_VALUE;
+        int fill = 0;
+        boolean haveFill = false;
         for (int i = 0; i < n; i++) {
             float v = values[i];
-            float enc = v * ef * iff;
-            int encoded;
-            // Bit-exact, not ==: see the F64 path above for why (-0.0 vs +0.0).
-            if (Float.isFinite(enc) && Float.floatToRawIntBits((encoded = Math.round(enc)) * df * de)
-                    == Float.floatToRawIntBits(v)) {
-                encodedArr[i] = encoded;
-            } else {
-                encodedArr[i] = 0;
+            int encoded = encodeF32(v, expE, expF);
+            encodedArr[i] = encoded;
+            // Bit-exact: see the F64 path above for why (-0.0 vs +0.0).
+            if (Float.floatToRawIntBits(decodeF32(encoded, expE, expF)) != Float.floatToRawIntBits(v)) {
                 patchIndices.add(i);
                 patchValues.add(v);
+            } else if (!haveFill) {
+                fill = encoded;
+                haveFill = true;
             }
             if (v < min) {
                 min = v;
             }
             if (v > max) {
                 max = v;
+            }
+        }
+        if (haveFill) {
+            for (int idx : patchIndices) {
+                encodedArr[idx] = fill;
             }
         }
 
