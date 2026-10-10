@@ -206,9 +206,8 @@ final class RexFilterTranslator {
         return switch (type) {
             case DType.Utf8 _ -> lit.getValueAs(String.class);
             case DType.Primitive p -> switch (p.ptype()) {
-                case F64, F32 -> lit.getValueAs(Double.class);
+                case F64, F32, F16 -> lit.getValueAs(Double.class);
                 case I64, U64, I32, U32, I16, U16, I8, U8 -> lit.getValueAs(Long.class);
-                default -> null;
             };
             default -> null;
         };

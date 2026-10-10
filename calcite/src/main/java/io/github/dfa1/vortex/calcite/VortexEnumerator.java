@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -151,6 +152,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
                 // REAL is a java.lang.Float to Calcite's generated code: a Double here made every SQL
                 // query that read an F32 column fail with a ClassCastException
                 case F32 -> ((FloatArray) array).getFloat(r);
+                case F16 -> ((Float16Array) array).getFloat(r);
                 case I64 -> ((LongArray) array).getLong(r);
                 // U64 maps to signed BIGINT (no wider SQL integer exists): values with the high bit
                 // set have no signed-long representation, so fail loud rather than surface a
@@ -164,7 +166,6 @@ final class VortexEnumerator implements Enumerator<Object[]> {
                 case I32 -> ((IntArray) array).getInt(r);
                 case I16, U16 -> ((ShortArray) array).getInt(r);
                 case I8, U8 -> ((ByteArray) array).getInt(r);
-                default -> throw new IllegalStateException("unsupported ptype: " + p.ptype());
             };
             case DType.Utf8 _ -> ((VarBinArray) array).getString(r);
             case DType.Bool _ -> ((BoolArray) array).getBoolean(r);
