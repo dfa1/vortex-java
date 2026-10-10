@@ -217,7 +217,8 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_unsupportedPtype_throws() {
-            DecodeContext ctx = ctxWith(validMetaBuffer(), DType.F16, 0,
+            // pco has no 8-bit number type (it did not have an F16 one here until #515)
+            DecodeContext ctx = ctxWith(validMetaBuffer(), DType.I8, 0,
                     new MemorySegment[0]);
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -225,7 +226,7 @@ class PcoEncodingDecoderTest {
         }
 
         @ParameterizedTest
-        @EnumSource(value = PType.class, names = {"I16", "U16", "I32", "U32", "F32", "I64", "U64", "F64"})
+        @EnumSource(value = PType.class, names = {"I16", "U16", "F16", "I32", "U32", "F32", "I64", "U64", "F64"})
         void decode_zeroChunks_returnsEmptyArray(PType ptype) {
             DecodeContext ctx = ctxWith(validMetaBuffer(), new DType.Primitive(ptype, false), 0, new MemorySegment[0]);
             var result = SUT.decode(ctx);

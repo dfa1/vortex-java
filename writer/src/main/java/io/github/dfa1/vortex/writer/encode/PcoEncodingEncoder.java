@@ -53,8 +53,8 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return false;
         }
         return switch (p.ptype()) {
-            case I16, U16, I32, U32, F32, I64, U64, F64 -> true;
-            default -> false;
+            case I16, U16, F16, I32, U32, F32, I64, U64, F64 -> true;
+            case I8, U8 -> false;
         };
     }
 
@@ -590,6 +590,17 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                     System.arraycopy(arr, 0, l, 0, arr.length);
                     yield l;
                 }
+                case F16 -> {
+                    // The half's 16 raw bits, ordered like F32's: a set sign bit flips everything,
+                    // otherwise only the sign (pco's impl_float_number for f16).
+                    short[] arr = (short[]) data;
+                    long[] l = new long[arr.length];
+                    for (int i = 0; i < arr.length; i++) {
+                        int bits = Short.toUnsignedInt(arr[i]);
+                        l[i] = (bits & 0x8000) != 0 ? (~bits) & 0xFFFFL : (bits ^ 0x8000) & 0xFFFFL;
+                    }
+                    yield l;
+                }
                 case F32 -> {
                     float[] arr = (float[]) data;
                     long[] l = new long[arr.length];
@@ -610,7 +621,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                     }
                     yield l;
                 }
-                default -> throw new VortexException(EncodingId.VORTEX_PCO, "unsupported ptype: " + ptype);
+                case I8, U8 -> throw new VortexException(EncodingId.VORTEX_PCO, "unsupported ptype: " + ptype);
             };
         }
 
@@ -618,10 +629,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
         private static int dtypeSize(PType ptype) {
             return switch (ptype) {
-                case I16, U16 -> 16;
+                case I16, U16, F16 -> 16;
                 case I32, U32, F32 -> 32;
                 case I64, U64, F64 -> 64;
-                default -> throw new VortexException(EncodingId.VORTEX_PCO, "unsupported ptype: " + ptype);
+                case I8, U8 -> throw new VortexException(EncodingId.VORTEX_PCO, "unsupported ptype: " + ptype);
             };
         }
 

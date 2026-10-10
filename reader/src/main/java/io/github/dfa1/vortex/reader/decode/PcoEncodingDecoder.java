@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedFloat16Array;
 import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
@@ -465,6 +466,10 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
     private static long fromLatentOrdered(long latent, PType ptype) {
         return switch (ptype) {
             case I16 -> latent ^ 0x8000L;
+            case F16 -> {
+                long l16 = latent & 0xFFFFL;
+                yield (l16 & 0x8000L) != 0 ? l16 ^ 0x8000L : l16 ^ 0xFFFFL;
+            }
             case I32 -> latent ^ 0x80000000L;
             case I64 -> latent ^ Long.MIN_VALUE;
             case F32 -> {
@@ -519,10 +524,10 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
 
     private static int dtypeSize(PType ptype) {
         return switch (ptype) {
-            case I16, U16 -> 16;
+            case I16, U16, F16 -> 16;
             case I32, U32, F32 -> 32;
             case I64, U64, F64 -> 64;
-            default -> throw new VortexException(EncodingId.VORTEX_PCO,
+            case I8, U8 -> throw new VortexException(EncodingId.VORTEX_PCO,
                     "pco: unsupported ptype " + ptype);
         };
     }
@@ -541,11 +546,12 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         PType ptype = ((DType.Primitive) dtype).ptype();
         return switch (ptype) {
             case I16, U16 -> new MaterializedShortArray(dtype, n, out);
+            case F16 -> new MaterializedFloat16Array(dtype, n, out);
             case I32, U32 -> new MaterializedIntArray(dtype, n, out);
             case F32 -> new MaterializedFloatArray(dtype, n, out);
             case I64, U64 -> new MaterializedLongArray(dtype, n, out);
             case F64 -> new MaterializedDoubleArray(dtype, n, out);
-            default -> throw new VortexException(EncodingId.VORTEX_PCO,
+            case I8, U8 -> throw new VortexException(EncodingId.VORTEX_PCO,
                     "pco: unsupported ptype " + ptype);
         };
     }
@@ -569,6 +575,26 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         return negative ? -absFloat : absFloat;
     }
 
+    /// Pco's `int_float_from_latent` for f16: the latents count the half-precision "integer floats"
+    /// (exact integers up to 2^11, then continuing in bit space), sign-symmetric around `0x8000`.
+    private static float intFloatFromLatentF16(long l) {
+        boolean negative = l < 0x8000L;
+        long absInt = negative ? (0x7FFFL - l) : (l ^ 0x8000L);
+        long gpi = 1L << 11;
+        float absFloat = absInt < gpi
+                ? (float) absInt
+                // 0x6800 is 2048.0 as a half, the first integer float past the exact range
+                : Float.float16ToFloat((short) (0x6800 + (absInt - gpi)));
+        return negative ? -absFloat : absFloat;
+    }
+
+    /// A half-precision product, rounded to nearest-even like `half::f16`'s `Mul`: two 11-bit
+    /// significands multiply exactly in `float`, so rounding once to half is the correct result.
+    private static long toLatentOrderedF16(float f) {
+        int bits = Short.toUnsignedInt(Float.floatToFloat16(f));
+        return (bits & 0x8000) != 0 ? (~bits) & 0xFFFFL : (bits ^ 0x8000) & 0xFFFFL;
+    }
+
     private static long toLatentOrderedF32(float f) {
         int bits = Float.floatToRawIntBits(f);
         if ((bits & 0x80000000) != 0) {
@@ -589,50 +615,71 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
 
     private static void combineFloatMult(PType ptype, long baseLatent, int chunkN,
             MemorySegment rawLatents, long multsOffset, MemorySegment rawAdjs) {
-        if (ptype == PType.F32) {
-            float baseFloat = Float.intBitsToFloat((int) fromLatentOrdered(baseLatent, PType.F32));
-            for (int i = 0; i < chunkN; i++) {
-                long off = multsOffset + (long) i * Long.BYTES;
-                long mult = rawLatents.get(LE_LONG, off);
-                long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
-                long unadjusted = toLatentOrderedF32(intFloatFromLatentF32(mult) * baseFloat);
-                rawLatents.set(LE_LONG, off, (unadjusted + adj) & 0xFFFFFFFFL);
+        switch (ptype) {
+            case F16 -> {
+                float baseFloat = Float.float16ToFloat((short) fromLatentOrdered(baseLatent, PType.F16));
+                for (int i = 0; i < chunkN; i++) {
+                    long off = multsOffset + (long) i * Long.BYTES;
+                    long mult = rawLatents.get(LE_LONG, off);
+                    long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                    long unadjusted = toLatentOrderedF16(intFloatFromLatentF16(mult) * baseFloat);
+                    rawLatents.set(LE_LONG, off, (unadjusted + adj) & 0xFFFFL);
+                }
             }
-        } else {
-            double baseDouble = Double.longBitsToDouble(fromLatentOrdered(baseLatent, PType.F64));
-            for (int i = 0; i < chunkN; i++) {
-                long off = multsOffset + (long) i * Long.BYTES;
-                long mult = rawLatents.get(LE_LONG, off);
-                long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
-                long unadjusted = toLatentOrderedF64(intFloatFromLatentF64(mult) * baseDouble);
-                rawLatents.set(LE_LONG, off, unadjusted + adj);
+            case F32 -> {
+                float baseFloat = Float.intBitsToFloat((int) fromLatentOrdered(baseLatent, PType.F32));
+                for (int i = 0; i < chunkN; i++) {
+                    long off = multsOffset + (long) i * Long.BYTES;
+                    long mult = rawLatents.get(LE_LONG, off);
+                    long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                    long unadjusted = toLatentOrderedF32(intFloatFromLatentF32(mult) * baseFloat);
+                    rawLatents.set(LE_LONG, off, (unadjusted + adj) & 0xFFFFFFFFL);
+                }
             }
+            case F64 -> {
+                double baseDouble = Double.longBitsToDouble(fromLatentOrdered(baseLatent, PType.F64));
+                for (int i = 0; i < chunkN; i++) {
+                    long off = multsOffset + (long) i * Long.BYTES;
+                    long mult = rawLatents.get(LE_LONG, off);
+                    long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                    long unadjusted = toLatentOrderedF64(intFloatFromLatentF64(mult) * baseDouble);
+                    rawLatents.set(LE_LONG, off, unadjusted + adj);
+                }
+            }
+            default -> throw new VortexException(EncodingId.VORTEX_PCO,
+                    "pco FloatMult on a non-float ptype " + ptype);
         }
     }
 
     private static void combineFloatQuant(PType ptype, int k, int chunkN,
             MemorySegment rawLatents, long multsOffset, MemorySegment rawAdjs) {
-        if (ptype == PType.F32) {
-            long signCutoff = 0x80000000L >>> k;
-            long lowestKBitsMax = (1L << k) - 1L;
-            for (int i = 0; i < chunkN; i++) {
-                long off = multsOffset + (long) i * Long.BYTES;
-                long quantum = rawLatents.get(LE_LONG, off);
-                long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
-                long lowestKBits = (quantum >= signCutoff) ? adj : (lowestKBitsMax - adj);
-                rawLatents.set(LE_LONG, off, (quantum << k) + lowestKBits);
+        long lowestKBitsMax = (1L << k) - 1L;
+        switch (ptype) {
+            case F16, F32 -> {
+                // the sign cutoff and the result mask both follow the latent width
+                long signBit = ptype == PType.F16 ? 0x8000L : 0x80000000L;
+                long signCutoff = signBit >>> k;
+                for (int i = 0; i < chunkN; i++) {
+                    long off = multsOffset + (long) i * Long.BYTES;
+                    long quantum = rawLatents.get(LE_LONG, off);
+                    long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                    long lowestKBits = (quantum >= signCutoff) ? adj : (lowestKBitsMax - adj);
+                    rawLatents.set(LE_LONG, off, (quantum << k) + lowestKBits);
+                }
             }
-        } else {
-            long signCutoff = Long.MIN_VALUE >>> k;
-            long lowestKBitsMax = (1L << k) - 1L;
-            for (int i = 0; i < chunkN; i++) {
-                long off = multsOffset + (long) i * Long.BYTES;
-                long quantum = rawLatents.get(LE_LONG, off);
-                long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
-                boolean isPos = Long.compareUnsigned(quantum, signCutoff) >= 0;
-                long lowestKBits = isPos ? adj : (lowestKBitsMax - adj);
-                rawLatents.set(LE_LONG, off, (quantum << k) + lowestKBits);
+            case F64 -> {
+                long signCutoff = Long.MIN_VALUE >>> k;
+                for (int i = 0; i < chunkN; i++) {
+                    long off = multsOffset + (long) i * Long.BYTES;
+                    long quantum = rawLatents.get(LE_LONG, off);
+                    long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                    boolean isPos = Long.compareUnsigned(quantum, signCutoff) >= 0;
+                    long lowestKBits = isPos ? adj : (lowestKBitsMax - adj);
+                    rawLatents.set(LE_LONG, off, (quantum << k) + lowestKBits);
+                }
             }
+            default -> throw new VortexException(EncodingId.VORTEX_PCO,
+                    "pco FloatQuant on a non-float ptype " + ptype);
         }
     }
 

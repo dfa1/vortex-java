@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// #515: F16 had no case in the constant, dict, rle and sparse encodings, so some F16 columns
 /// could not be written and others were written but could not be read back. Every shape below is
-/// written with the default cascade and with each of those encodings forced, then compared as raw
+/// written with the default and compact cascades and with each of those encodings (and Pco) forced, then compared as raw
 /// half-precision bits, so a NaN payload rounded through `float` or a `-0.0` turned into `0.0`
 /// fails too.
 class Float16EncodingsRoundTripTest {
@@ -46,8 +46,9 @@ class Float16EncodingsRoundTripTest {
     static Stream<Arguments> optionsAndShapes() {
         Map<String, WriteOptions> options = new java.util.LinkedHashMap<>();
         options.put("default cascade", WriteOptions.defaults());
+        options.put("compact cascade", WriteOptions.defaults().withCompact(true));
         for (EncodingId id : List.of(EncodingId.VORTEX_CONSTANT, EncodingId.VORTEX_DICT,
-                EncodingId.FASTLANES_RLE, EncodingId.VORTEX_SPARSE)) {
+                EncodingId.FASTLANES_RLE, EncodingId.VORTEX_SPARSE, EncodingId.VORTEX_PCO)) {
             options.put(id.toString(), WriteOptions.defaults().withoutEditions()
                     .withColumnEncoding(COLUMN, ColumnEncoding.candidates(id)));
         }
