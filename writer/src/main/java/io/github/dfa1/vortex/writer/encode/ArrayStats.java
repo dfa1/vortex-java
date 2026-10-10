@@ -1,8 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.reflect.Array;
@@ -248,46 +246,7 @@ public record ArrayStats(
     /// @return how many values were copied
     private static int widen(PType ptype, Object data, int from, int n, long[] chunk) {
         int len = Math.min(chunk.length, n - from);
-        switch (ptype) {
-            case I8 -> {
-                byte[] a = (byte[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i];
-                }
-            }
-            case U8 -> {
-                byte[] a = (byte[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i] & 0xFFL;
-                }
-            }
-            case I16 -> {
-                short[] a = (short[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i];
-                }
-            }
-            case U16 -> {
-                short[] a = (short[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i] & 0xFFFFL;
-                }
-            }
-            case I32 -> {
-                int[] a = (int[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i];
-                }
-            }
-            case U32 -> {
-                int[] a = (int[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i] & 0xFFFF_FFFFL;
-                }
-            }
-            case I64, U64 -> System.arraycopy((long[]) data, from, chunk, 0, len);
-            default -> throw new VortexException(EncodingId.VORTEX_PRIMITIVE, "not an integer ptype: " + ptype);
-        }
+        SimdOperationsSupport.preferred().widenArrayInto(data, from, len, ptype, chunk);
         return len;
     }
 

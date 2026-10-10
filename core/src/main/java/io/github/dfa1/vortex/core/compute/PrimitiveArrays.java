@@ -34,58 +34,15 @@ public final class PrimitiveArrays {
     /// @return a `long[]` holding every element of `data` widened to 64 bits
     /// @throws VortexException if `ptype` is not an integer ptype
     public static long[] toLongs(Object data, PType ptype, EncodingId encoding) {
-        return switch (ptype) {
-            case I8 -> {
-                byte[] arr = (byte[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U8 -> {
-                byte[] arr = (byte[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Byte.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I16 -> {
-                short[] arr = (short[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U16 -> {
-                short[] arr = (short[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Short.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I32 -> {
-                int[] arr = (int[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U32 -> {
-                int[] arr = (int[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Integer.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I64, U64 -> (long[]) data;
-            default -> throw new VortexException(encoding, "unsupported ptype: " + ptype);
-        };
+        if (ptype.isFloating()) {
+            throw new VortexException(encoding, "unsupported ptype: " + ptype);
+        }
+        if (ptype == PType.I64 || ptype == PType.U64) {
+            return (long[]) data;
+        }
+        long[] result = new long[Array.getLength(data)];
+        SimdOperationsSupport.preferred().widenArrayInto(data, 0, result.length, ptype, result);
+        return result;
     }
 
     /// Throws unless `ptype` is one of the four unsigned integer types. Several wire fields (run

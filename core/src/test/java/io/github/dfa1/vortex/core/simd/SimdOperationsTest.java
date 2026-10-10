@@ -52,6 +52,37 @@ class SimdOperationsTest {
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void widenArrayInto_matchesSegmentWiden(PType ptype) {
+        // Given the same full-range values as a heap array and as the equivalent segment
+        Object values = randomArray(ptype, 100, new Random(ptype.ordinal()));
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment segment = PrimitiveArrays.toSegment(values, ptype, arena);
+            long[] expected = new long[60];
+            sut.widenInto(segment, 17, 60, ptype, expected);
+
+            // When widened from the same element, into an oversized out
+            long[] result = new long[61];
+            sut.widenArrayInto(values, 17, 60, ptype, result);
+
+            // Then the heap path agrees with the segment path, and leaves the tail untouched
+            assertThat(result).startsWith(expected);
+            assertThat(result[60]).isZero();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
+    void widenArrayInto_floatingPType_throws(PType ptype) {
+        // Given
+        long[] out = new long[1];
+
+        // When / Then
+        assertThatThrownBy(() -> sut.widenArrayInto(new double[]{1.0}, 0, 1, ptype, out))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
     void minMax_matchesWidenedSignedReference(PType ptype) {
         // Given seeded-random arrays of full-range values, so a wrong width or sign/zero extension
         // changes the answer; lengths straddle the vector lane counts

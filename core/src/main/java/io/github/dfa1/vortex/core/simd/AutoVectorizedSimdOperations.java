@@ -56,6 +56,50 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
     }
 
     @Override
+    public void widenArrayInto(Object values, int from, int count, PType ptype, long[] out) {
+        switch (ptype) {
+            case I8 -> {
+                byte[] a = (byte[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i];
+                }
+            }
+            case U8 -> {
+                byte[] a = (byte[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i] & 0xFFL;
+                }
+            }
+            case I16 -> {
+                short[] a = (short[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i];
+                }
+            }
+            case U16 -> {
+                short[] a = (short[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i] & 0xFFFFL;
+                }
+            }
+            case I32 -> {
+                int[] a = (int[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i];
+                }
+            }
+            case U32 -> {
+                int[] a = (int[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i] & 0xFFFF_FFFFL;
+                }
+            }
+            case I64, U64 -> System.arraycopy((long[]) values, from, out, 0, count);
+            default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
+        }
+    }
+
+    @Override
     public void narrowInto(long[] values, PType ptype, MemorySegment dst) {
         int n = values.length;
         switch (ptype) {

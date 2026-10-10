@@ -24,6 +24,17 @@ public interface SimdOperations {
     /// @throws IllegalArgumentException if `ptype` is not an integer type
     void widenInto(MemorySegment src, long fromElement, int count, PType ptype, long[] out);
 
+    /// The heap-array counterpart of [#widenInto]: widens `count` elements of a primitive array
+    /// starting at index `from` into `out[0, count)`, with the same sign and zero extension.
+    ///
+    /// @param values a `byte[]`, `short[]`, `int[]` or `long[]` matching `ptype`'s carrier
+    /// @param from   starting element index within `values`
+    /// @param count  number of elements to widen
+    /// @param ptype  the elements' physical type, an integer type
+    /// @param out    destination array, at least `count` long
+    /// @throws IllegalArgumentException if `ptype` is not an integer type
+    void widenArrayInto(Object values, int from, int count, PType ptype, long[] out);
+
     /// Narrows `values` to the width of `ptype`, keeping the low bytes, and writes them
     /// little-endian into `dst` starting at byte 0. Handles the 1-, 2- and 4-byte types; the
     /// 8-byte types are a plain bulk copy that needs no kernel.
