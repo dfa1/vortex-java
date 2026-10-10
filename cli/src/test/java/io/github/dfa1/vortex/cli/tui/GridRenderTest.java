@@ -58,6 +58,8 @@ class GridRenderTest {
             assertThat(GridRender.formatCell(ArrayFixtures.bytes(arena, (byte) 8), 0, I64)).isEqualTo("8");
             assertThat(GridRender.formatCell(ArrayFixtures.doubles(arena, 0.25), 0, F64)).isEqualTo("0.25");
             assertThat(GridRender.formatCell(ArrayFixtures.floats(arena, 1.25f), 0, F64)).isEqualTo("1.25");
+            // 0x3E00 is 1.5 in half precision; it printed as the "<MaterializedFloat16Array>" placeholder (#515)
+            assertThat(GridRender.formatCell(ArrayFixtures.halves(arena, (short) 0x3E00), 0, F64)).isEqualTo("1.5");
             assertThat(GridRender.formatCell(ArrayFixtures.bools(arena, true), 0, BOOL)).isEqualTo("true");
         }
     }

@@ -18,11 +18,17 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import io.github.dfa1.vortex.writer.VortexWriter;
+import io.github.dfa1.vortex.writer.WriteOptions;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static io.github.dfa1.vortex.cli.CliTestSupport.capture;
@@ -186,6 +192,26 @@ class FilterCommandTest {
         // Then
         assertThat(result.status()).isEqualTo(ExitStatus.OK);
         assertThat(result.stdout()).startsWith("id");
+    }
+
+    @Test
+    void filtersF16Column_keepsOnlyMatchingRows() throws IOException {
+        // Given an F16 column [1.5, 2.5, 3.5] (#515: filter on it threw "filter not supported for column type")
+        Path half = tmp.resolve("half.vortex");
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("h")), List.of(DType.F16), false);
+        try (FileChannel ch = FileChannel.open(half, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("h"), new short[]{
+                    Float.floatToFloat16(1.5f), Float.floatToFloat16(2.5f), Float.floatToFloat16(3.5f)}));
+        }
+
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", half.toString(), "h", ">", "2.0"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout().lines().toList()).containsExactly("h", "2.5", "3.5");
     }
 
     @Test

@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -235,6 +236,7 @@ final class FilterCommand {
             case ByteArray ba -> compareNumeric(ba.getInt(rowIdx), false, value);
             case DoubleArray da -> compareDouble(da.getDouble(rowIdx), value);
             case FloatArray fa -> compareDouble(fa.getFloat(rowIdx), value);
+            case Float16Array ha -> compareDouble(ha.getFloat(rowIdx), value);
             case BoolArray ba -> Boolean.compare(ba.getBoolean(rowIdx), (Boolean) value);
             case VarBinArray va -> {
                 String v = va.getString(rowIdx);

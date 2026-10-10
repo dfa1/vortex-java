@@ -5,12 +5,14 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedFloat16Array;
 import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
@@ -114,6 +116,15 @@ final class ArrayFixtures {
             seg.setAtIndex(ValueLayout.JAVA_FLOAT, i, vs[i]);
         }
         return new MaterializedFloatArray(DType.F32, vs.length, seg.asReadOnly());
+    }
+
+    /// An F16 array from raw half-precision bits.
+    static Float16Array halves(Arena arena, short... bits) {
+        MemorySegment seg = arena.allocate(bits.length * 2L, 2);
+        for (int i = 0; i < bits.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_SHORT, i, bits[i]);
+        }
+        return new MaterializedFloat16Array(DType.F16, bits.length, seg.asReadOnly());
     }
 
     static BoolArray bools(Arena arena, boolean... vs) {
