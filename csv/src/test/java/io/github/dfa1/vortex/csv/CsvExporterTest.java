@@ -108,6 +108,25 @@ class CsvExporterTest {
     }
 
     @Test
+    void rendersF16AsDecimal(@TempDir Path tmp) throws Exception {
+        // Given an F16 column (#515: the exporter threw "unsupported array type"): 1.5, -0.0, +Inf, NaN
+        Path vortex = tmp.resolve("data.vortex");
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("h")), List.of(DType.F16), false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("h"), new short[]{
+                    Float.floatToFloat16(1.5f), (short) 0x8000, (short) 0x7C00, (short) 0x7E00}));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then
+        assertThat(Files.readAllLines(csv)).containsExactly("h", "1.5", "-0.0", "Infinity", "NaN");
+    }
+
+    @Test
     void suppressesHeaderWhenConfigured(@TempDir Path tmp) throws Exception {
         // Given
         Path vortex = tmp.resolve("data.vortex");

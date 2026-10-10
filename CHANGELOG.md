@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `WriteOptions` is a final class instead of a record. ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Fixed
+- CSV export writes `F16` columns; it failed with `unsupported array type for CSV export`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - A chunked `F16` column decodes; it failed with `unsupported ptype for chunked layout: F16`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - A filter on an `F16` column prunes chunks with the zone map, and `columnStats()` reports its min and max; both were empty. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - `F16` files written by vortex-java can be read by vortex-jni: min/max statistics were written as `f32` scalars, which Rust rejects with `expected F32 dtype for F32Value, got f16`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
