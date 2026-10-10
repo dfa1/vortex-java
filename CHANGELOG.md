@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `WriteOptions` is a final class instead of a record. ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Fixed
+- Pco handles `F16` columns, so Rust's compact preset round-trips them in both directions; both sides rejected half-precision floats. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - A table with an `F16` column can be queried through the Calcite adapter (as `REAL`); it failed with `unsupported ptype: F16`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - A SQL query that reads an `F32` column through the Calcite adapter works; it failed with a `ClassCastException` (`Double` cannot be cast to `Float`). ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - `vortex filter` works on `F16` columns, and `vortex view`/`tui` show their values instead of `<MaterializedFloat16Array>`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
