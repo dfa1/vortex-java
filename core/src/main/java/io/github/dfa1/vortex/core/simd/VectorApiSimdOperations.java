@@ -21,15 +21,30 @@ import java.util.OptionalLong;
 
 /// The [SimdOperations] written with the incubating Vector API: explicit vector loops over the
 /// preferred species of the CPU, each with a scalar tail for the elements that do not fill a vector.
+/// The Vector API does the work, including the reductions; no kernel is forced back to a scalar loop
+/// to protect an ordering, with the two exceptions below.
 ///
 /// Only [SimdOperationsSupport] instantiates it, and only when `jdk.incubator.vector` is on the
 /// module graph (`--add-modules jdk.incubator.vector`); without it this class fails to link and the
-/// [AutoVectorizedSimdOperations] stays in effect. The contract is identical results for every
-/// input, enforced by a differential test against that implementation.
+/// [AutoVectorizedSimdOperations] stays in effect. A differential test pins every kernel to that
+/// implementation, which follows the Rust reference.
 ///
-/// Two kernels are plain loops by contract, not by choice: [#sumFloating] adds strictly left to
-/// right, and the `I64`/`U64` [#sum] checks overflow per addition. Lane-wise accumulation would
-/// reassociate both and change their results.
+/// ## Where it differs from Rust (a deliberate decision)
+///
+/// - **Floating-point sums** accumulate lane-wise and reduce once, so they add in a different order
+///   from Rust's sequential `f64` sum. The result can differ in its last bits, and the JDK documents
+///   `reduceLanes(ADD)` on floats as using "an arbitrary order of operations, which may even vary over
+///   time", so it may also differ between runs and between CPUs with different vector widths. Integer
+///   results are exact.
+/// - **`I64`/`U64` sums** detect overflow on each lane's running sum, not on the sequential prefix Rust
+///   checks (a checked add per element). Both can report an overflow the other does not, on arrays whose
+///   partial sums approach the limits: for example `[MAX, 1, -1]` overflows Rust's prefix but not the
+///   total.
+/// - **`F16`** sums and min/max are scalar loops: the Vector API has no half-float lanes.
+///
+/// Outputs derived from these (the zone-map sum statistic) therefore depend on whether the module is
+/// enabled; the auto-vectorized implementation, used without the flag, is the Rust-parity one. See
+/// `docs/compatibility.md`.
 ///
 /// The shape follows Hardwood's `VectorOperations` (Apache-2.0, hardwood-hq/hardwood): the
 /// preferred species, a main loop over whole vectors, and a scalar tail.
@@ -548,44 +563,29 @@ final class VectorApiSimdOperations implements SimdOperations {
         return new long[]{lo, hi};
     }
 
-    // Compare-and-blend instead of min/max: a comparison with NaN is false, which skips NaN, whereas
-    // the lane-wise min/max would propagate it. The lane merge cannot keep "the first zero" the scalar
-    // order gives (Math.min prefers -0.0), so a zero result is looked up in the array.
+    // Masked lane-wise min/max: a NaN lane is left out of the reduction (Rust's `skip_nans`), and the
+    // lane-wise and cross-lane min/max follow Math.min/Math.max, which order -0.0 before 0.0 exactly as
+    // Rust's total order does.
     private static long[] minMax(float[] a) {
         FloatVector min = FloatVector.broadcast(FLOATS, Float.POSITIVE_INFINITY);
         FloatVector max = FloatVector.broadcast(FLOATS, Float.NEGATIVE_INFINITY);
         int i = 0;
         for (; i + FLOATS.length() <= a.length; i += FLOATS.length()) {
             FloatVector v = FloatVector.fromArray(FLOATS, a, i);
-            VectorMask<Float> lower = v.compare(VectorOperators.LT, min);
-            VectorMask<Float> higher = v.compare(VectorOperators.GT, max);
-            min = min.blend(v, lower);
-            max = max.blend(v, higher);
+            VectorMask<Float> ordered = v.test(VectorOperators.IS_NAN).not();
+            min = min.lanewise(VectorOperators.MIN, v, ordered);
+            max = max.lanewise(VectorOperators.MAX, v, ordered);
         }
         float lo = min.reduceLanes(VectorOperators.MIN);
         float hi = max.reduceLanes(VectorOperators.MAX);
         for (; i < a.length; i++) {
-            if (a[i] < lo) {
-                lo = a[i];
-            }
-            if (a[i] > hi) {
-                hi = a[i];
+            if (a[i] == a[i]) {
+                lo = Math.min(lo, a[i]);
+                hi = Math.max(hi, a[i]);
             }
         }
-        if (lo > hi) {
-            return new long[0];
-        }
-        return new long[]{Float.floatToRawIntBits(lo == 0f ? firstZero(a) : lo) & 0xFFFF_FFFFL,
-                Float.floatToRawIntBits(hi == 0f ? firstZero(a) : hi) & 0xFFFF_FFFFL};
-    }
-
-    private static float firstZero(float[] a) {
-        for (float v : a) {
-            if (v == 0f) {
-                return v;
-            }
-        }
-        throw new IllegalStateException("a zero extreme has a zero element");
+        return lo > hi ? new long[0]
+                : new long[]{Float.floatToRawIntBits(lo) & 0xFFFF_FFFFL, Float.floatToRawIntBits(hi) & 0xFFFF_FFFFL};
     }
 
     private static long[] minMax(double[] a) {
@@ -594,55 +594,51 @@ final class VectorApiSimdOperations implements SimdOperations {
         int i = 0;
         for (; i + DOUBLES.length() <= a.length; i += DOUBLES.length()) {
             DoubleVector v = DoubleVector.fromArray(DOUBLES, a, i);
-            VectorMask<Double> lower = v.compare(VectorOperators.LT, min);
-            VectorMask<Double> higher = v.compare(VectorOperators.GT, max);
-            min = min.blend(v, lower);
-            max = max.blend(v, higher);
+            VectorMask<Double> ordered = v.test(VectorOperators.IS_NAN).not();
+            min = min.lanewise(VectorOperators.MIN, v, ordered);
+            max = max.lanewise(VectorOperators.MAX, v, ordered);
         }
         double lo = min.reduceLanes(VectorOperators.MIN);
         double hi = max.reduceLanes(VectorOperators.MAX);
         for (; i < a.length; i++) {
-            if (a[i] < lo) {
-                lo = a[i];
-            }
-            if (a[i] > hi) {
-                hi = a[i];
+            if (a[i] == a[i]) {
+                lo = Math.min(lo, a[i]);
+                hi = Math.max(hi, a[i]);
             }
         }
-        if (lo > hi) {
-            return new long[0];
-        }
-        return new long[]{Double.doubleToRawLongBits(lo == 0d ? firstZero(a) : lo),
-                Double.doubleToRawLongBits(hi == 0d ? firstZero(a) : hi)};
+        return lo > hi ? new long[0] : new long[]{Double.doubleToRawLongBits(lo), Double.doubleToRawLongBits(hi)};
     }
 
-    private static double firstZero(double[] a) {
-        for (double v : a) {
-            if (v == 0d) {
-                return v;
-            }
-        }
-        throw new IllegalStateException("a zero extreme has a zero element");
-    }
-
-    // The Vector API has no half-float lanes, so this is a plain loop.
+    // The Vector API has no half-float lanes, so this is a plain loop, the same as the reference.
     private static long[] minMaxHalf(short[] a) {
-        float lo = Float.POSITIVE_INFINITY;
-        float hi = Float.NEGATIVE_INFINITY;
+        float lo = 0f;
+        float hi = 0f;
         short loBits = 0;
         short hiBits = 0;
+        boolean seen = false;
         for (short v : a) {
             float f = Float.float16ToFloat(v);
-            if (f < lo) {
+            if (f != f) {
+                continue;
+            }
+            if (!seen) {
+                lo = f;
+                hi = f;
+                loBits = v;
+                hiBits = v;
+                seen = true;
+                continue;
+            }
+            if (Float.compare(f, lo) < 0) {
                 lo = f;
                 loBits = v;
             }
-            if (f > hi) {
+            if (Float.compare(f, hi) > 0) {
                 hi = f;
                 hiBits = v;
             }
         }
-        return lo > hi ? new long[0] : new long[]{Short.toUnsignedLong(loBits), Short.toUnsignedLong(hiBits)};
+        return seen ? new long[]{Short.toUnsignedLong(loBits), Short.toUnsignedLong(hiBits)} : new long[0];
     }
 
     // ---- allEqual ----
@@ -965,33 +961,72 @@ final class VectorApiSimdOperations implements SimdOperations {
         return total;
     }
 
-    /// Adds the lanes as `long`s: the `int` lane sum itself could wrap even when every lane is in range.
+    /// Adds the lanes of an `int` accumulator as `long`s: reducing in `int` would wrap even when every
+    /// lane is in range (`reduceLanesToLong` casts after the `int` reduction, so it would wrap too).
     private static long laneSum(IntVector acc) {
         long total = 0;
-        for (int lane : acc.toArray()) {
-            total += lane;
+        int parts = INTS.length() / LONGS.length();
+        for (int part = 0; part < parts; part++) {
+            total += ((LongVector) acc.convertShape(VectorOperators.I2L, LONGS, part)).reduceLanes(VectorOperators.ADD);
         }
         return total;
     }
 
-    // A plain loop by contract: Rust drops the sum when any partial sum overflows, so the additions
-    // must be checked in order.
+    // Overflow is detected on each lane's running sum (the sign bit of (acc ^ sum) & (v ^ sum) is set
+    // when the addition overflowed), not on the sequential prefix Rust checks, so the two can disagree
+    // in both directions on arrays whose partial sums approach the limits. The lanes and the scalar
+    // tail are then combined with exact checked adds.
     private static OptionalLong sumSigned(long[] a) {
+        LongVector acc = LongVector.zero(LONGS);
+        LongVector overflow = LongVector.zero(LONGS);
+        int i = 0;
+        for (; i + LONGS.length() <= a.length; i += LONGS.length()) {
+            LongVector v = LongVector.fromArray(LONGS, a, i);
+            LongVector next = acc.add(v);
+            overflow = overflow.or(acc.lanewise(VectorOperators.XOR, next).and(v.lanewise(VectorOperators.XOR, next)));
+            acc = next;
+        }
+        if (overflow.compare(VectorOperators.LT, 0L).anyTrue()) {
+            return OptionalLong.empty();
+        }
         long total = 0;
-        for (long v : a) {
-            try {
-                total = Math.addExact(total, v);
-            } catch (ArithmeticException _) {
-                return OptionalLong.empty();
+        try {
+            for (long lane : acc.toArray()) {
+                total = Math.addExact(total, lane);
             }
+            for (; i < a.length; i++) {
+                total = Math.addExact(total, a[i]);
+            }
+        } catch (ArithmeticException _) {
+            return OptionalLong.empty();
         }
         return OptionalLong.of(total);
     }
 
     private static OptionalLong sumUnsigned(long[] a) {
+        LongVector acc = LongVector.zero(LONGS);
+        LongVector flip = LongVector.broadcast(LONGS, Long.MIN_VALUE);
+        VectorMask<Long> carry = LongVector.zero(LONGS).compare(VectorOperators.LT, 0L);
+        int i = 0;
+        for (; i + LONGS.length() <= a.length; i += LONGS.length()) {
+            LongVector next = acc.add(LongVector.fromArray(LONGS, a, i));
+            // An unsigned add wrapped when the sum is below an addend; XOR with the sign bit orders unsigned as signed
+            carry = carry.or(next.lanewise(VectorOperators.XOR, flip).compare(VectorOperators.LT, acc.lanewise(VectorOperators.XOR, flip)));
+            acc = next;
+        }
+        if (carry.anyTrue()) {
+            return OptionalLong.empty();
+        }
         long total = 0;
-        for (long v : a) {
-            long next = total + v;
+        for (long lane : acc.toArray()) {
+            long next = total + lane;
+            if (Long.compareUnsigned(next, total) < 0) {
+                return OptionalLong.empty();
+            }
+            total = next;
+        }
+        for (; i < a.length; i++) {
+            long next = total + a[i];
             if (Long.compareUnsigned(next, total) < 0) {
                 return OptionalLong.empty();
             }
@@ -1000,29 +1035,54 @@ final class VectorApiSimdOperations implements SimdOperations {
         return OptionalLong.of(total);
     }
 
-    // A plain loop by contract: reassociating a float sum changes its rounding.
+    // Lane-wise accumulation, reduced once at the end. The order of additions therefore differs from
+    // Rust's sequential f64 sum (and the JDK says reduceLanes(ADD) on floats may use "an arbitrary order
+    // of operations, which may even vary over time"), so the last bits of the result can differ from
+    // Rust's and from the auto-vectorized implementation's. F16 has no vector lanes: a plain loop.
     @Override
     public double sumFloating(Object values, PType ptype) {
-        double s = 0;
-        switch (ptype) {
+        return switch (ptype) {
+            case F32 -> sum((float[]) values);
+            case F64 -> sum((double[]) values);
             case F16 -> {
+                double s = 0;
                 for (short v : (short[]) values) {
                     s += Float.float16ToFloat(v);
                 }
-            }
-            case F32 -> {
-                for (float v : (float[]) values) {
-                    s += v;
-                }
-            }
-            case F64 -> {
-                for (double v : (double[]) values) {
-                    s += v;
-                }
+                yield s;
             }
             default -> throw new IllegalArgumentException("not a floating-point ptype: " + ptype);
+        };
+    }
+
+    private static double sum(float[] a) {
+        int parts = FLOATS.length() / DOUBLES.length();
+        DoubleVector acc = DoubleVector.zero(DOUBLES);
+        int i = 0;
+        for (; i + FLOATS.length() <= a.length; i += FLOATS.length()) {
+            FloatVector v = FloatVector.fromArray(FLOATS, a, i);
+            for (int part = 0; part < parts; part++) {
+                acc = acc.add((DoubleVector) v.convertShape(VectorOperators.F2D, DOUBLES, part));
+            }
         }
-        return s;
+        double total = acc.reduceLanes(VectorOperators.ADD);
+        for (; i < a.length; i++) {
+            total += a[i];
+        }
+        return total;
+    }
+
+    private static double sum(double[] a) {
+        DoubleVector acc = DoubleVector.zero(DOUBLES);
+        int i = 0;
+        for (; i + DOUBLES.length() <= a.length; i += DOUBLES.length()) {
+            acc = acc.add(DoubleVector.fromArray(DOUBLES, a, i));
+        }
+        double total = acc.reduceLanes(VectorOperators.ADD);
+        for (; i < a.length; i++) {
+            total += a[i];
+        }
+        return total;
     }
 
     // ---- FastLanes ----

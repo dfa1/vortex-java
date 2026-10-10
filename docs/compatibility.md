@@ -44,6 +44,35 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 | Duplicate struct field names | Rust writer rejects ("StructLayout must have unique field names"); Rust reader tolerates foreign files (first-match access) | ⚠️ Deliberate divergence on read: Java rejects such files with `VortexException("duplicate field name in file schema")` instead of tolerating them — the name-keyed `Chunk` API cannot represent both columns, and silent column loss is worse than a loud failure on a file the reference writer refuses to produce. Java's writer mirrors the Rust writer's rejection. |
 | Blank / control-character field names | Wire-legal; the Rust writer produces `""` and whitespace-only names. NUL (`U+0000`) additionally aborts the Rust toolchain: Arrow FFI schema export hits a panic-cannot-unwind in `arrow-rs` (`ffi_stream::get_schema`) and SIGABRTs the process (measured against vortex-jni 0.75.0) | ⚠️ Deliberate strictness BOTH ways: vortex-java's writer refuses blank and control-character field names (`IllegalArgumentException`), and its reader rejects files carrying them (`VortexException` naming the producing pipeline as the likely bug) — the JSON-`""`-key principle: wire-legal is a floor, not a policy. Printable names of any shape (`$`-runs, spaces inside, emoji) are legal and round-trip intact both directions (measured; pinned by `ColumnNameEdgeCasesIntegrationTest`). |
 
+## SIMD kernels and the Vector API
+
+Bulk loops (min/max, sums, run counting, widening, bit-packing, ...) live behind `SimdOperations`.
+Two implementations exist: the default, plain Java loops shaped for C2's auto-vectorizer, and one written
+with the incubating Vector API, selected only when the JVM is launched with
+`--add-modules jdk.incubator.vector` (omitting the flag is the opt-out; the JVM prints
+`WARNING: Using incubator modules` once). The default follows Rust. **The Vector API implementation is a
+deliberate, documented departure in the cases below**, because forcing a scalar loop to keep Rust's exact
+order would defeat the point of using the Vector API.
+
+| Kernel | Rust | Vector API implementation | Effect |
+|--------|------|---------------------------|--------|
+| Floating-point sum (zone-map `Sum`) | Sequential `f64` accumulation | Lane-wise accumulation, one reduction at the end. The JDK documents `reduceLanes(ADD)` on floats as using "an arbitrary order of operations, which may even vary over time" | The sum can differ in its last bits from Rust's and from the default implementation, and between CPUs of different vector width. Integer sums are exact. |
+| `I64` / `U64` sum | A checked add per element: any overflowing prefix drops the sum | Overflow detected on each lane's running sum, then lanes and tail combined with checked adds | Can report an overflow Rust does not, or the reverse, when partial sums approach the limits (`[MAX, 1, -1]` overflows Rust's prefix but not the total). Narrower integer sums are exact in both. |
+| `F16` sum and min/max | Scalar | Scalar | The Vector API has no half-float lanes. No difference. |
+
+Statistics derived from these (the zone-map sum) therefore depend on whether the module is enabled. The
+other kernels give identical results in both implementations, pinned by a differential test.
+
+Separate from the Vector API, found while comparing against the Rust source:
+
+- Float min/max statistics now order `-0.0` before `0.0` and skip `NaN`, as Rust's `total_compare` with
+  `skip_nans` does. Before, the first zero met in array order was kept.
+- `U64` min/max and the dense-counter span in `ArrayStats` are computed in unsigned order, as Rust's
+  `typed_int_stats` does.
+- **Open divergence:** Rust binds the zoned `Min`, `Max` **and `Sum`** aggregates with `skip_nans()`, so a
+  float zone's sum ignores `NaN`. Java's float sum adds `NaN` and so becomes `NaN`. This predates the
+  Vector API work and is not changed by it ([#523](https://github.com/dfa1/vortex-java/issues/523)).
+
 ## Real-world conformance: the Raincloud corpus
 
 Cross-implementation conformance against [Raincloud](https://github.com/spiraldb/raincloud)

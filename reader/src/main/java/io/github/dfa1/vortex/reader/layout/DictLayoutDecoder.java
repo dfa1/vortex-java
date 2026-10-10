@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.reader.layout;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
-import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
@@ -31,6 +30,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -183,22 +183,13 @@ final class DictLayoutDecoder implements LayoutDecoder {
         long max = -1;
         long min = 0;
         switch (codesPType) {
-            case U8 -> {
-                for (long i = 0; i < n; i++) {
-                    long code = Byte.toUnsignedLong(codesSeg.get(ValueLayout.JAVA_BYTE, i));
-                    max = Math.max(max, code);
-                }
-            }
-            case U16 -> {
-                for (long i = 0; i < n; i++) {
-                    long code = Short.toUnsignedLong(codesSeg.getAtIndex(LE_SHORT, i));
-                    max = Math.max(max, code);
-                }
-            }
-            case U32 -> {
-                for (long i = 0; i < n; i++) {
-                    long code = Integer.toUnsignedLong(codesSeg.getAtIndex(LE_INT, i));
-                    max = Math.max(max, code);
+            // An unsigned code past Long.MAX_VALUE reads back negative, which the min test rejects: it
+            // is out of range for any pool a file can actually hold anyway.
+            case U8, U16, U32, U64 -> {
+                if (n > 0) {
+                    long largest = SimdOperationsSupport.preferred().maxUnsigned(codesSeg, n, codesPType);
+                    max = Math.max(largest, 0L);
+                    min = Math.min(largest, 0L);
                 }
             }
             case I32 -> {
@@ -208,9 +199,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
                     min = Math.min(min, code);
                 }
             }
-            // A u64 code past Long.MAX_VALUE reads back negative, which the min test rejects —
-            // it is out of range for any pool a file can actually hold anyway.
-            case I64, U64 -> {
+            case I64 -> {
                 for (long i = 0; i < n; i++) {
                     long code = codesSeg.getAtIndex(LE_LONG, i);
                     max = Math.max(max, code);

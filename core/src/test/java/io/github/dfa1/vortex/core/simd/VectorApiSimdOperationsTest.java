@@ -151,9 +151,16 @@ class VectorApiSimdOperationsTest {
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
     void sum_matchesReference(PType ptype) {
-        // Given random full-range data at every length
+        // Given random data at every length; the 64-bit types hold values below 2^40 so no partial sum
+        // overflows, which is the case where lane-wise and sequential overflow checks must agree
         for (int length : LENGTHS) {
             Object values = arrayWithRuns(ptype, length, 1, new Random(length * 13L));
+            if (values instanceof long[] longs) {
+                for (int i = 0; i < longs.length; i++) {
+                    longs[i] >>= 24;
+                    longs[i] = ptype == PType.U64 ? longs[i] & 0xFF_FFFF_FFFFL : longs[i];
+                }
+            }
 
             // When / Then
             assertThat(sut.sum(values, ptype)).as("%s length=%d", ptype, length).isEqualTo(reference.sum(values, ptype));
@@ -310,24 +317,84 @@ class VectorApiSimdOperationsTest {
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
-    void sumFloating_matchesReference(PType ptype) {
-        // Given values whose sum depends on the order of addition
+    void sumFloating_agreesWithTheReferenceToRoundingError(PType ptype) {
+        // Given values small enough that the sum is well inside the double range. The Vector API sums
+        // lane-wise, so the last bits legitimately differ from the sequential reference.
         for (int length : LENGTHS) {
             Object values = arrayWithRuns(ptype, length, 1, new Random(length * 19L));
             if (values instanceof float[] f) {
                 for (int i = 0; i < f.length; i++) {
-                    f[i] = (float) (f[i] % 1e6);
+                    f[i] = Float.isFinite(f[i]) ? (float) (f[i] % 1e6) : 1f;
                 }
             } else if (values instanceof double[] d) {
                 for (int i = 0; i < d.length; i++) {
-                    d[i] = d[i] % 1e12;
+                    d[i] = Double.isFinite(d[i]) ? d[i] % 1e12 : 1d;
+                }
+            } else if (values instanceof short[] h) {
+                for (int i = 0; i < h.length; i++) {
+                    h[i] = Float.isFinite(Float.float16ToFloat(h[i])) ? h[i] : Float.floatToFloat16(1f);
                 }
             }
+            double expected = reference.sumFloating(values, ptype);
 
-            // When / Then bit for bit, since the order is the contract
-            assertThat(Double.doubleToRawLongBits(sut.sumFloating(values, ptype))).as("%s length=%d", ptype, length)
-                    .isEqualTo(Double.doubleToRawLongBits(reference.sumFloating(values, ptype)));
+            // When
+            double result = sut.sumFloating(values, ptype);
+
+            // Then within a relative 1e-9 of the sum of the magnitudes (the error scale of reordering)
+            double scale = Math.max(1.0, magnitude(values, ptype));
+            assertThat(result).as("%s length=%d", ptype, length).isCloseTo(expected,
+                    org.assertj.core.data.Offset.offset(scale * 1e-9));
         }
+    }
+
+    @Test
+    void sumFloating_exactlyRepresentableValues_areEqualWhateverTheOrder() {
+        // Given small integers, whose sum is exact in any order
+        double[] doubles = new Random(3).doubles(1000, 0, 100).map(Math::floor).toArray();
+        float[] floats = new float[1000];
+        for (int i = 0; i < floats.length; i++) {
+            floats[i] = (float) doubles[i];
+        }
+
+        // When / Then
+        assertThat(sut.sumFloating(doubles, PType.F64)).isEqualTo(reference.sumFloating(doubles, PType.F64));
+        assertThat(sut.sumFloating(floats, PType.F32)).isEqualTo(reference.sumFloating(floats, PType.F32));
+    }
+
+    @Test
+    void sum_signed64_clearOverflowIsReportedLikeTheReference() {
+        // Given enough Long.MAX_VALUEs that every lane and every order overflows
+        long[] values = new long[100];
+        java.util.Arrays.fill(values, Long.MAX_VALUE);
+
+        // When / Then
+        assertThat(sut.sum(values, PType.I64)).isEmpty();
+        assertThat(reference.sum(values, PType.I64)).isEmpty();
+    }
+
+    @Test
+    void sum_unsigned64_clearOverflowIsReportedLikeTheReference() {
+        // Given enough -1s (2^64 - 1 each) that every lane and every order carries
+        long[] values = new long[100];
+        java.util.Arrays.fill(values, -1L);
+
+        // When / Then
+        assertThat(sut.sum(values, PType.U64)).isEmpty();
+        assertThat(reference.sum(values, PType.U64)).isEmpty();
+    }
+
+    @Test
+    void sum_signed64_oppositeHugeValuesInOneLane_overflowPerLane_unlikeTheSequentialReference() {
+        // Given alternating huge values of opposite sign. Every vector length is even, so every positive
+        // value lands in the same lane: that lane's running sum overflows although the total is zero
+        long[] values = new long[64];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i % 2 == 0 ? Long.MAX_VALUE / 2 : -(Long.MAX_VALUE / 2);
+        }
+
+        // When / Then the documented difference from Rust: lane-wise overflow detection (docs/compatibility.md)
+        assertThat(reference.sum(values, PType.I64)).hasValue(0L);
+        assertThat(sut.sum(values, PType.I64)).isEmpty();
     }
 
     @Test
@@ -524,5 +591,29 @@ class VectorApiSimdOperationsTest {
             case F32 -> new float[length];
             case F64 -> new double[length];
         };
+    }
+
+    /// The sum of the absolute values: the scale of the rounding error a reordered float sum can have.
+    private static double magnitude(Object values, PType ptype) {
+        double total = 0;
+        switch (values) {
+            case float[] f -> {
+                for (float v : f) {
+                    total += Math.abs(v);
+                }
+            }
+            case double[] d -> {
+                for (double v : d) {
+                    total += Math.abs(v);
+                }
+            }
+            case short[] h -> {
+                for (short v : h) {
+                    total += Math.abs(Float.float16ToFloat(v));
+                }
+            }
+            default -> throw new IllegalArgumentException(ptype.toString());
+        }
+        return total;
     }
 }

@@ -65,8 +65,8 @@ public interface SimdOperations {
 
     /// Returns the smallest and largest element in the ptype's natural order, widened as
     /// [#widenArrayInto] does (a float contributes its raw bits). Integers compare as their type
-    /// does, `U64` unsigned. Floating-point values skip `NaN`, as Rust's `min`/`max` do, and `-0.0`
-    /// equals `0.0`: among equal zeros the first one in array order is the result.
+    /// does, `U64` unsigned. Floating-point values skip `NaN` (Rust's `skip_nans`) and follow the total
+    /// order for zeros, `-0.0` before `0.0`, as Rust does.
     ///
     /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`)
     /// @param ptype  the elements' physical type

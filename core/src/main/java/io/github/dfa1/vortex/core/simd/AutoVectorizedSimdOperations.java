@@ -349,38 +349,48 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                 }
                 yield new long[]{min ^ Long.MIN_VALUE, max ^ Long.MIN_VALUE};
             }
-            // The floating-point loops compare with `<` and `>` starting from the infinities: every
-            // comparison with NaN is false, which skips NaN without a per-element branch, and an equal
-            // zero never replaces the first one. An all-NaN array ends with min > max.
+            // Floating-point: NaN is skipped (Rust's `skip_nans`), and Math.min/Math.max give Rust's total
+            // order for zeros, -0.0 before 0.0. Starting from the infinities, an array with no ordered
+            // element ends with min > max.
             case F16 -> {
                 short[] a = (short[]) values;
-                float min = Float.POSITIVE_INFINITY;
-                float max = Float.NEGATIVE_INFINITY;
+                float min = 0f;
+                float max = 0f;
                 short minBits = 0;
                 short maxBits = 0;
+                boolean seen = false;
                 for (short v : a) {
                     float f = Float.float16ToFloat(v);
-                    if (f < min) {
+                    if (f != f) {
+                        continue;
+                    }
+                    if (!seen) {
+                        min = f;
+                        max = f;
+                        minBits = v;
+                        maxBits = v;
+                        seen = true;
+                        continue;
+                    }
+                    if (Float.compare(f, min) < 0) {
                         min = f;
                         minBits = v;
                     }
-                    if (f > max) {
+                    if (Float.compare(f, max) > 0) {
                         max = f;
                         maxBits = v;
                     }
                 }
-                yield min > max ? new long[0] : new long[]{Short.toUnsignedLong(minBits), Short.toUnsignedLong(maxBits)};
+                yield seen ? new long[]{Short.toUnsignedLong(minBits), Short.toUnsignedLong(maxBits)} : new long[0];
             }
             case F32 -> {
                 float[] a = (float[]) values;
                 float min = Float.POSITIVE_INFINITY;
                 float max = Float.NEGATIVE_INFINITY;
                 for (float v : a) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
+                    if (v == v) {
+                        min = Math.min(min, v);
+                        max = Math.max(max, v);
                     }
                 }
                 yield min > max ? new long[0] : new long[]{
@@ -391,11 +401,9 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                 double min = Double.POSITIVE_INFINITY;
                 double max = Double.NEGATIVE_INFINITY;
                 for (double v : a) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
+                    if (v == v) {
+                        min = Math.min(min, v);
+                        max = Math.max(max, v);
                     }
                 }
                 yield min > max ? new long[0] : new long[]{Double.doubleToRawLongBits(min), Double.doubleToRawLongBits(max)};

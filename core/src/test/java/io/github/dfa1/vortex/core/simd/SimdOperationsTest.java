@@ -355,21 +355,45 @@ class SimdOperationsTest {
     }
 
     @Test
-    void minMax_floats_skipNaN_andKeepTheFirstZero() {
+    void minMax_floats_skipNaN_andOrderNegativeZeroFirst() {
         // Given NaN around the extremes, and zeros of both signs
         float[] floats = {Float.NaN, 3f, -0.0f, 0.0f, -2f, Float.NaN, 7f};
         double[] zeros = {0.0, -0.0, 5.0};
         double[] negativeZeros = {-0.0, 0.0, -5.0};
         short[] halves = {(short) 0x7E00, 0x4200, (short) 0xC000};
 
-        // When / Then NaN never wins, and an equal zero never replaces the first one
+        // When / Then NaN never wins, and -0.0 sorts before 0.0 (Rust's total order)
         assertThat(sut.minMax(floats, PType.F32)).containsExactly(
                 Float.floatToRawIntBits(-2f) & 0xFFFF_FFFFL, Float.floatToRawIntBits(7f) & 0xFFFF_FFFFL);
         assertThat(sut.minMax(zeros, PType.F64)).containsExactly(
-                Double.doubleToRawLongBits(0.0), Double.doubleToRawLongBits(5.0));
+                Double.doubleToRawLongBits(-0.0), Double.doubleToRawLongBits(5.0));
         assertThat(sut.minMax(negativeZeros, PType.F64)).containsExactly(
-                Double.doubleToRawLongBits(-5.0), Double.doubleToRawLongBits(-0.0));
+                Double.doubleToRawLongBits(-5.0), Double.doubleToRawLongBits(0.0));
         assertThat(sut.minMax(halves, PType.F16)).containsExactly(0xC000L, 0x4200L);
+    }
+
+    @Test
+    void minMax_floatZerosOnly_pickNegativeZeroAsMinAndPositiveZeroAsMax() {
+        // Given only zeros of both signs
+        double[] zeros = {0.0, -0.0, 0.0};
+
+        // When
+        long[] result = sut.minMax(zeros, PType.F64);
+
+        // Then
+        assertThat(result).containsExactly(Double.doubleToRawLongBits(-0.0), Double.doubleToRawLongBits(0.0));
+    }
+
+    @Test
+    void minMax_halfAllPositiveInfinity_returnsInfinityNotZero() {
+        // Given F16 +Infinity (0x7C00), which a bit-tracking loop seeded with zeros would lose
+        short[] halves = {0x7C00, 0x7C00};
+
+        // When
+        long[] result = sut.minMax(halves, PType.F16);
+
+        // Then
+        assertThat(result).containsExactly(0x7C00L, 0x7C00L);
     }
 
     @Test

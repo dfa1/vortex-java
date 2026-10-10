@@ -40,7 +40,7 @@ public class SimdVectorApiBenchmark {
     @Param({"4096", "262144"})
     public int size;
 
-    @Param({"I8", "I16", "I32", "I64", "F64"})
+    @Param({"I8", "I16", "I32", "I64", "F32", "F64"})
     public PType ptype;
 
     private SimdOperations ops;
@@ -79,6 +79,9 @@ public class SimdVectorApiBenchmark {
             case I8 -> new byte[size];
             case I16 -> new short[size];
             case I32 -> new int[size];
+            case I64 -> new long[size];
+            case F32 -> new float[size];
+            case F64 -> new double[size];
             default -> null;
         };
         narrowSegment = Arena.ofAuto().allocate((long) size * 8);
@@ -119,6 +122,7 @@ public class SimdVectorApiBenchmark {
             case I8 -> PType.U8;
             case I16 -> PType.U16;
             case I32 -> PType.U32;
+            case I64 -> PType.U64;
             default -> throw new IllegalArgumentException(ptype.toString());
         };
         return ops.maxUnsigned(codes, size, unsigned);
