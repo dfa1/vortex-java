@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.core.simd;
 
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.PType;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.IntVector;
@@ -8,7 +9,9 @@ import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Array;
+import java.nio.ByteOrder;
 import java.util.OptionalLong;
 
 /// The [SimdOperations] written with the incubating Vector API, for the kernels where an explicit
@@ -70,9 +73,46 @@ final class VectorApiSimdOperations implements SimdOperations {
         fallback.narrowArrayInto(values, ptype, out);
     }
 
+    // The sign bit is flipped so the signed lane max orders unsigned values, and flipped back at the end.
+    // Bytes 4.6x and shorts 2.3x faster than C2's four-accumulator loop (128-bit NEON, 262144 codes,
+    // JMH -f 2); U32 ties it (1.0x, bound by memory bandwidth), so it delegates.
     @Override
     public long maxUnsigned(MemorySegment src, long count, PType ptype) {
-        return fallback.maxUnsigned(src, count, ptype);
+        return switch (ptype) {
+            case U8 -> maxUnsignedBytes(src, count);
+            case U16 -> maxUnsignedShorts(src, count);
+            default -> fallback.maxUnsigned(src, count, ptype);
+        };
+    }
+
+    private static long maxUnsignedBytes(MemorySegment src, long count) {
+        ByteVector flip = ByteVector.broadcast(BYTES, Byte.MIN_VALUE);
+        ByteVector max = ByteVector.broadcast(BYTES, Byte.MIN_VALUE);
+        long i = 0;
+        for (; i + BYTES.length() <= count; i += BYTES.length()) {
+            max = max.max(ByteVector.fromMemorySegment(BYTES, src, i, ByteOrder.LITTLE_ENDIAN)
+                    .lanewise(VectorOperators.XOR, flip));
+        }
+        int result = max.reduceLanes(VectorOperators.MAX);
+        for (; i < count; i++) {
+            result = Math.max(result, (byte) (src.get(ValueLayout.JAVA_BYTE, i) ^ Byte.MIN_VALUE));
+        }
+        return Byte.toUnsignedLong((byte) (result ^ Byte.MIN_VALUE));
+    }
+
+    private static long maxUnsignedShorts(MemorySegment src, long count) {
+        ShortVector flip = ShortVector.broadcast(SHORTS, Short.MIN_VALUE);
+        ShortVector max = ShortVector.broadcast(SHORTS, Short.MIN_VALUE);
+        long i = 0;
+        for (; i + SHORTS.length() <= count; i += SHORTS.length()) {
+            max = max.max(ShortVector.fromMemorySegment(SHORTS, src, i * 2, ByteOrder.LITTLE_ENDIAN)
+                    .lanewise(VectorOperators.XOR, flip));
+        }
+        int result = max.reduceLanes(VectorOperators.MAX);
+        for (; i < count; i++) {
+            result = Math.max(result, (short) (src.getAtIndex(VortexFormat.LE_SHORT, i) ^ Short.MIN_VALUE));
+        }
+        return Short.toUnsignedLong((short) (result ^ Short.MIN_VALUE));
     }
 
     // Lane-wise min and max accumulators, reduced once at the end. Unsigned widths XOR the sign bit

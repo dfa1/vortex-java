@@ -13,6 +13,9 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -43,6 +46,7 @@ public class SimdVectorApiBenchmark {
     private Object runsMany;
     private Object constant;
     private boolean[] constantFlags;
+    private MemorySegment codes;
 
     @Setup
     public void setup() {
@@ -56,6 +60,11 @@ public class SimdVectorApiBenchmark {
         runsFew = array(ptype, size, 64, new Random(2));
         constant = array(ptype, size, Integer.MAX_VALUE, new Random(3));
         constantFlags = new boolean[size];
+        codes = Arena.ofAuto().allocate((long) size * 8);
+        Random fill = new Random(4);
+        for (long b = 0; b < codes.byteSize(); b++) {
+            codes.set(ValueLayout.JAVA_BYTE, b, (byte) fill.nextInt(256));
+        }
     }
 
     /// Counts runs over data with no runs at all: every neighbor pair differs.
@@ -68,6 +77,18 @@ public class SimdVectorApiBenchmark {
     @Benchmark
     public long runs_longRuns() {
         return ops.runs(runsFew, ptype);
+    }
+
+    /// The dictionary code bound check: the largest unsigned code (the I8/I16/I32 params run it as U8/U16/U32).
+    @Benchmark
+    public long maxUnsigned() {
+        PType unsigned = switch (ptype) {
+            case I8 -> PType.U8;
+            case I16 -> PType.U16;
+            case I32 -> PType.U32;
+            default -> throw new IllegalArgumentException(ptype.toString());
+        };
+        return ops.maxUnsigned(codes, size, unsigned);
     }
 
     /// Finds the smallest and largest element of random full-range data (integer ptypes only).

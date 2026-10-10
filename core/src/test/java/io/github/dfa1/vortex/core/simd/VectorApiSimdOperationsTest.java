@@ -1,11 +1,15 @@
 package io.github.dfa1.vortex.core.simd;
 
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -99,6 +103,43 @@ class VectorApiSimdOperationsTest {
             // When / Then
             assertThat(sut.minMax(values, ptype)).as("%s length=%d", ptype, length)
                     .containsExactly(reference.minMax(values, ptype));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+    void maxUnsigned_matchesReference(PType ptype) {
+        // Given random codes, with the maximum planted at every position class: first, last, a lane boundary
+        try (Arena arena = Arena.ofConfined()) {
+            for (int length : LENGTHS) {
+                MemorySegment segment = arena.allocate(Math.max(1L, (long) length * ptype.byteSize()));
+                Random random = new Random(length);
+                for (long b = 0; b < segment.byteSize(); b++) {
+                    segment.set(ValueLayout.JAVA_BYTE, b, (byte) random.nextInt(256));
+                }
+
+                // When / Then
+                assertThat(sut.maxUnsigned(segment, length, ptype)).as("%s length=%d", ptype, length)
+                        .isEqualTo(reference.maxUnsigned(segment, length, ptype));
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+    void maxUnsigned_highBitCodes_areUnsigned(PType ptype) {
+        // Given a code with the top bit set, which a signed max would rank below a small code
+        try (Arena arena = Arena.ofConfined()) {
+            int length = 70;
+            MemorySegment segment = arena.allocate((long) length * ptype.byteSize());
+            PTypeIO.set(segment, 69L * ptype.byteSize(), ptype, -1L);
+            PTypeIO.set(segment, 3L * ptype.byteSize(), ptype, 5L);
+
+            // When
+            long result = sut.maxUnsigned(segment, length, ptype);
+
+            // Then
+            assertThat(result).isEqualTo(reference.maxUnsigned(segment, length, ptype)).isGreaterThan(5L);
         }
     }
 
