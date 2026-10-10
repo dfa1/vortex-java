@@ -13,6 +13,9 @@ import java.lang.reflect.Array;
 /// body is uniform.
 final class AutoVectorizedSimdOperations implements SimdOperations {
 
+    /// Elements compared per branch-free block of [#allEqual(Object, PType)].
+    private static final int EQUAL_BLOCK = 256;
+
     @Override
     public void widenInto(MemorySegment src, long fromElement, int count, PType ptype, long[] out) {
         switch (ptype) {
@@ -264,6 +267,133 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
             }
             default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
         };
+    }
+
+    // Block-wise: each block ORs the XOR against the first element, which is branch-free and so
+    // vectorizes, and the early exit happens between blocks. A non-constant array, the common case,
+    // is rejected after one block; a per-element exit would stop C2 from vectorizing the body.
+    @Override
+    public boolean allEqual(Object values, PType ptype) {
+        if (Array.getLength(values) == 0) {
+            return true;
+        }
+        return switch (ptype) {
+            case I8, U8 -> allEqualBytes((byte[]) values);
+            case I16, U16, F16 -> allEqualShorts((short[]) values);
+            case I32, U32 -> allEqualInts((int[]) values);
+            case I64, U64 -> allEqualLongs((long[]) values);
+            case F32 -> allEqualFloatBits((float[]) values);
+            case F64 -> allEqualDoubleBits((double[]) values);
+        };
+    }
+
+    @Override
+    public boolean allEqual(boolean[] values) {
+        if (values.length == 0) {
+            return true;
+        }
+        boolean first = values[0];
+        for (int base = 0; base < values.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, values.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= values[i] != first ? 1 : 0;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualBytes(byte[] a) {
+        byte first = a[0];
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= a[i] ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualShorts(short[] a) {
+        short first = a[0];
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= a[i] ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualInts(int[] a) {
+        int first = a[0];
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= a[i] ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualLongs(long[] a) {
+        long first = a[0];
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            long diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= a[i] ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualFloatBits(float[] a) {
+        int first = Float.floatToRawIntBits(a[0]);
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= Float.floatToRawIntBits(a[i]) ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualDoubleBits(double[] a) {
+        long first = Double.doubleToRawLongBits(a[0]);
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            long diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= Double.doubleToRawLongBits(a[i]) ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Only the result is masked: the low typeBits bits of a sum or difference depend on the operands'

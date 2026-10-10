@@ -13,6 +13,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.reflect.Array;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +49,55 @@ class SimdOperationsTest {
             }
             assertThat(result[VALUES.length - 1]).isZero();
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void allEqual_integerArrays(PType ptype) {
+        // Given lengths around the 256-element block edge, where a block-boundary slip would hide a mismatch
+        for (int length : new int[]{1, 2, 255, 256, 257, 600}) {
+            Object constant = constantArray(ptype, length);
+
+            // When / Then a constant array is equal, and so is the empty one
+            assertThat(sut.allEqual(constant, ptype)).isTrue();
+
+            // And changing any single element, first or last of a block included, breaks it
+            for (int position : new int[]{0, length / 2, length - 1, Math.min(256, length - 1)}) {
+                Object changed = constantArray(ptype, length);
+                bump(changed, position);
+                assertThat(sut.allEqual(changed, ptype)).as("%s[%d] differs at %d", ptype, length, position)
+                        .isEqualTo(length == 1);
+            }
+        }
+        assertThat(sut.allEqual(constantArray(ptype, 0), ptype)).isTrue();
+    }
+
+    @Test
+    void allEqual_floatsCompareRawBits() {
+        // Given arrays equal under ==/Double.equals-ish rules but not bit for bit
+        float[] zeros = {0.0f, -0.0f};
+        double[] nans = {Double.longBitsToDouble(0x7ff8000000000000L), Double.longBitsToDouble(0x7ff8000000000001L)};
+        float[] sameNan = {Float.NaN, Float.NaN};
+
+        // When / Then
+        assertThat(sut.allEqual(zeros, PType.F32)).isFalse();
+        assertThat(sut.allEqual(nans, PType.F64)).isFalse();
+        assertThat(sut.allEqual(sameNan, PType.F32)).isTrue();
+        assertThat(sut.allEqual(new short[]{1, 1, 1}, PType.F16)).isTrue();
+        assertThat(sut.allEqual(new short[]{1, 1, 2}, PType.F16)).isFalse();
+    }
+
+    @Test
+    void allEqual_booleans() {
+        // Given
+        boolean[] longTail = new boolean[600];
+        longTail[599] = true;
+
+        // When / Then
+        assertThat(sut.allEqual(new boolean[0])).isTrue();
+        assertThat(sut.allEqual(new boolean[]{true, true})).isTrue();
+        assertThat(sut.allEqual(new boolean[]{false, true})).isFalse();
+        assertThat(sut.allEqual(longTail)).isFalse();
     }
 
     @ParameterizedTest
@@ -355,5 +405,24 @@ class SimdOperationsTest {
             }
             default -> throw new IllegalArgumentException(ptype.toString());
         };
+    }
+
+    private static Object constantArray(PType ptype, int length) {
+        Object a = randomArray(ptype, 1, new Random(7));
+        Object result = Array.newInstance(a.getClass().getComponentType(), length);
+        for (int i = 0; i < length; i++) {
+            Array.set(result, i, Array.get(a, 0));
+        }
+        return result;
+    }
+
+    private static void bump(Object array, int index) {
+        switch (array) {
+            case byte[] a -> a[index]++;
+            case short[] a -> a[index]++;
+            case int[] a -> a[index]++;
+            case long[] a -> a[index]++;
+            default -> throw new IllegalArgumentException(array.getClass().toString());
+        }
     }
 }

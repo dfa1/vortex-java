@@ -66,6 +66,21 @@ public interface SimdOperations {
     /// @throws IllegalArgumentException if `ptype` is not an integer type, or `values` is empty
     long[] minMax(Object values, PType ptype);
 
+    /// Returns whether every element of `values` equals the first, comparing floating-point values by
+    /// their raw bits: distinct NaN payloads, and `-0.0` against `0.0`, are not equal. An empty array
+    /// is trivially equal.
+    ///
+    /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`)
+    /// @param ptype  the elements' physical type
+    /// @return `true` if all elements are equal
+    boolean allEqual(Object values, PType ptype);
+
+    /// Returns whether every element of `values` equals the first; an empty array is trivially equal.
+    ///
+    /// @param values the flags
+    /// @return `true` if all elements are equal
+    boolean allEqual(boolean[] values);
+
     /// Reverses the FastLanes delta transform of one 1024-element chunk. Each of the `lanes`
     /// independent lanes is a prefix sum over `typeBits` rows, wrapping at the element width.
     /// Element `(row, lane)` sits at index `FastLanes.iterateIndex(row, lane)` in both `deltas` and `out`.

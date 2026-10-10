@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
@@ -85,7 +86,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
             return CascadeStep.terminal(encode(dtype, data, encodeCtx));
         }
         if (dtype instanceof DType.Bool bool) {
-            if (!isConstantBool((boolean[]) data)) {
+            if (!SimdOperationsSupport.preferred().allEqual((boolean[]) data)) {
                 return CascadeStep.notApplicable();
             }
             return CascadeStep.terminal(encode(bool, data, encodeCtx));
@@ -116,7 +117,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
     }
 
     private static EncodeResult encodeBool(boolean[] data) {
-        if (!isConstantBool(data)) {
+        if (!SimdOperationsSupport.preferred().allEqual(data)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
         }
         boolean value = data.length == 0 || data[0];
@@ -124,91 +125,25 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalar.encode())));
     }
 
-    private static boolean isConstantBool(boolean[] data) {
-        if (data.length == 0) {
-            return true;
-        }
-        boolean first = data[0];
-        for (boolean b : data) {
-            if (b != first) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     // The raw bits of the one repeated value, or empty if the array is not constant. An empty array
-    // is constant (bits 0), as `expectedRatio` already treats valueCount 0. One typed loop per width,
-    // the ptype switch hoisted out (CLAUDE.md hot-loop rule) and the first element read once
-    // outside the loop. Floats compare raw bits, so distinct NaN payloads or -0.0 vs 0.0 are not
-    // constant.
+    // is constant (bits 0), as `expectedRatio` already treats valueCount 0. Floats compare raw bits,
+    // so distinct NaN payloads or -0.0 vs 0.0 are not constant.
     private static OptionalLong constantBits(Object data, PType ptype) {
         if (Array.getLength(data) == 0) {
             return OptionalLong.of(0L);
         }
+        if (!SimdOperationsSupport.preferred().allEqual(data, ptype)) {
+            return OptionalLong.empty();
+        }
         // No default: every PType is handled, so a new one fails to compile here instead of at write time
-        return switch (ptype) {
-            case I8, U8 -> {
-                byte[] a = (byte[]) data;
-                byte first = a[0];
-                for (int i = 1; i < a.length; i++) {
-                    if (a[i] != first) {
-                        yield OptionalLong.empty();
-                    }
-                }
-                yield OptionalLong.of(first);
-            }
-            case I16, U16, F16 -> {
-                short[] a = (short[]) data;
-                short first = a[0];
-                for (int i = 1; i < a.length; i++) {
-                    if (a[i] != first) {
-                        yield OptionalLong.empty();
-                    }
-                }
-                yield OptionalLong.of(first);
-            }
-            case I32, U32 -> {
-                int[] a = (int[]) data;
-                int first = a[0];
-                for (int i = 1; i < a.length; i++) {
-                    if (a[i] != first) {
-                        yield OptionalLong.empty();
-                    }
-                }
-                yield OptionalLong.of(first);
-            }
-            case I64, U64 -> {
-                long[] a = (long[]) data;
-                long first = a[0];
-                for (int i = 1; i < a.length; i++) {
-                    if (a[i] != first) {
-                        yield OptionalLong.empty();
-                    }
-                }
-                yield OptionalLong.of(first);
-            }
-            case F32 -> {
-                float[] a = (float[]) data;
-                int first = Float.floatToRawIntBits(a[0]);
-                for (int i = 1; i < a.length; i++) {
-                    if (Float.floatToRawIntBits(a[i]) != first) {
-                        yield OptionalLong.empty();
-                    }
-                }
-                yield OptionalLong.of(first);
-            }
-            case F64 -> {
-                double[] a = (double[]) data;
-                long first = Double.doubleToRawLongBits(a[0]);
-                for (int i = 1; i < a.length; i++) {
-                    if (Double.doubleToRawLongBits(a[i]) != first) {
-                        yield OptionalLong.empty();
-                    }
-                }
-                yield OptionalLong.of(first);
-            }
-        };
+        return OptionalLong.of(switch (ptype) {
+            case I8, U8 -> ((byte[]) data)[0];
+            case I16, U16, F16 -> ((short[]) data)[0];
+            case I32, U32 -> ((int[]) data)[0];
+            case I64, U64 -> ((long[]) data)[0];
+            case F32 -> Float.floatToRawIntBits(((float[]) data)[0]);
+            case F64 -> Double.doubleToRawLongBits(((double[]) data)[0]);
+        });
     }
 
     private static ProtoScalarValue buildScalar(PType ptype, long rawBits) {
