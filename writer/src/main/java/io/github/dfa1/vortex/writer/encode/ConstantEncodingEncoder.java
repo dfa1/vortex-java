@@ -71,7 +71,8 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         byte[] scalarBytes = scalar.encode();
         // A constant array's min and max are both the one repeated value, by construction -- no
         // scan needed. Empty arrays report no stats, matching every other encoder's convention.
-        byte[] stats = Array.getLength(data) > 0 ? scalarBytes : null;
+        // F16 min/max travel as f32 scalars, as PrimitiveEncodingEncoder writes them.
+        byte[] stats = Array.getLength(data) > 0 ? statsScalar(ptype, firstRaw, scalarBytes) : null;
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)), stats, stats);
     }
 
@@ -146,78 +147,85 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         if (Array.getLength(data) == 0) {
             return OptionalLong.of(0L);
         }
-        switch (ptype) {
+        // No default: every PType is handled, so a new one fails to compile here instead of at write time
+        return switch (ptype) {
             case I8, U8 -> {
                 byte[] a = (byte[]) data;
                 byte first = a[0];
                 for (int i = 1; i < a.length; i++) {
                     if (a[i] != first) {
-                        return OptionalLong.empty();
+                        yield OptionalLong.empty();
                     }
                 }
-                return OptionalLong.of(first);
+                yield OptionalLong.of(first);
             }
-            case I16, U16 -> {
+            case I16, U16, F16 -> {
                 short[] a = (short[]) data;
                 short first = a[0];
                 for (int i = 1; i < a.length; i++) {
                     if (a[i] != first) {
-                        return OptionalLong.empty();
+                        yield OptionalLong.empty();
                     }
                 }
-                return OptionalLong.of(first);
+                yield OptionalLong.of(first);
             }
             case I32, U32 -> {
                 int[] a = (int[]) data;
                 int first = a[0];
                 for (int i = 1; i < a.length; i++) {
                     if (a[i] != first) {
-                        return OptionalLong.empty();
+                        yield OptionalLong.empty();
                     }
                 }
-                return OptionalLong.of(first);
+                yield OptionalLong.of(first);
             }
             case I64, U64 -> {
                 long[] a = (long[]) data;
                 long first = a[0];
                 for (int i = 1; i < a.length; i++) {
                     if (a[i] != first) {
-                        return OptionalLong.empty();
+                        yield OptionalLong.empty();
                     }
                 }
-                return OptionalLong.of(first);
+                yield OptionalLong.of(first);
             }
             case F32 -> {
                 float[] a = (float[]) data;
                 int first = Float.floatToRawIntBits(a[0]);
                 for (int i = 1; i < a.length; i++) {
                     if (Float.floatToRawIntBits(a[i]) != first) {
-                        return OptionalLong.empty();
+                        yield OptionalLong.empty();
                     }
                 }
-                return OptionalLong.of(first);
+                yield OptionalLong.of(first);
             }
             case F64 -> {
                 double[] a = (double[]) data;
                 long first = Double.doubleToRawLongBits(a[0]);
                 for (int i = 1; i < a.length; i++) {
                     if (Double.doubleToRawLongBits(a[i]) != first) {
-                        return OptionalLong.empty();
+                        yield OptionalLong.empty();
                     }
                 }
-                return OptionalLong.of(first);
+                yield OptionalLong.of(first);
             }
-            default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
+        };
+    }
+
+    private static byte[] statsScalar(PType ptype, long rawBits, byte[] scalarBytes) {
+        if (ptype != PType.F16) {
+            return scalarBytes;
         }
+        return ProtoScalarValue.ofF32Value(Float.float16ToFloat((short) rawBits)).encode();
     }
 
     private static ProtoScalarValue buildScalar(PType ptype, long rawBits) {
         return switch (ptype) {
             case U8, U16, U32, U64 -> ProtoScalarValue.ofUint64Value(rawBits);
             case I8, I16, I32, I64 -> ProtoScalarValue.ofInt64Value(rawBits);
+            case F16 -> ProtoScalarValue.ofF16Value(rawBits & 0xFFFFL);
             case F32 -> ProtoScalarValue.ofF32Value(Float.intBitsToFloat((int) rawBits));
             case F64 -> ProtoScalarValue.ofF64Value(Double.longBitsToDouble(rawBits));
-            default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
         };
     }
 }

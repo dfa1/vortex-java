@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantFloat16Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
@@ -105,6 +106,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             case I32, U32 -> new LazyConstantIntArray(outDtype, n, (int) rawBits);
             case F64 -> new LazyConstantDoubleArray(outDtype, n, Double.longBitsToDouble(rawBits));
             case F32 -> new LazyConstantFloatArray(outDtype, n, Float.intBitsToFloat((int) rawBits));
+            case F16 -> new LazyConstantFloat16Array(outDtype, n, (short) rawBits);
             case I16, U16 -> new LazyConstantShortArray(outDtype, n, (short) rawBits);
             case I8, U8 -> new LazyConstantByteArray(outDtype, n, (byte) rawBits);
             default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
@@ -153,6 +155,10 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         }
         if (scalar.uint64_value() != null) {
             return scalar.uint64_value();
+        }
+        if (scalar.f16_value() != null) {
+            // Rust writes an f16 as its 16 bits in a u64; the legacy uint64_value form is read above
+            return scalar.f16_value();
         }
         if (scalar.f32_value() != null) {
             return Float.floatToRawIntBits(scalar.f32_value());

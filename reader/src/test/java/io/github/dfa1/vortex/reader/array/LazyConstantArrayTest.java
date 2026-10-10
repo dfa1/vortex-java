@@ -105,6 +105,44 @@ class LazyConstantArrayTest {
     }
 
     @Nested
+    class Float16Constant {
+        private static final short ONE_AND_A_HALF = (short) 0x3E00;
+
+        @Test
+        void getFloat_widensTheBroadcastValue() {
+            LazyConstantFloat16Array sut = new LazyConstantFloat16Array(DType.F16, 3, ONE_AND_A_HALF);
+            assertThat(sut.getFloat(0)).isEqualTo(1.5f);
+            assertThat(sut.getFloat(2)).isEqualTo(1.5f);
+        }
+
+        @Test
+        void getFloat_outOfBounds_throws() {
+            LazyConstantFloat16Array sut = new LazyConstantFloat16Array(DType.F16, 3, ONE_AND_A_HALF);
+            assertThatThrownBy(() -> sut.getFloat(-1)).isInstanceOf(IndexOutOfBoundsException.class);
+            assertThatThrownBy(() -> sut.getFloat(3)).isInstanceOf(IndexOutOfBoundsException.class);
+        }
+
+        @Test
+        void limited_shrinksTheLengthOnly() {
+            LazyConstantFloat16Array sut = new LazyConstantFloat16Array(DType.F16, 10, ONE_AND_A_HALF);
+            assertThat(sut.limited(4)).isEqualTo(new LazyConstantFloat16Array(DType.F16, 4, ONE_AND_A_HALF));
+            assertThat(sut.limited(10)).isSameAs(sut);
+        }
+
+        @Test
+        void materialize_writesEveryRowLittleEndian() {
+            try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
+                java.lang.foreign.MemorySegment seg =
+                        new LazyConstantFloat16Array(DType.F16, 3, ONE_AND_A_HALF).materialize(arena);
+                assertThat(seg.byteSize()).isEqualTo(6L);
+                for (int i = 0; i < 3; i++) {
+                    assertThat(seg.get(io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT, i * 2L)).isEqualTo(ONE_AND_A_HALF);
+                }
+            }
+        }
+    }
+
+    @Nested
     class ShortConstant {
         private static final short RAW = (short) 0xFF00; // high bit set
 
