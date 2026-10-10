@@ -483,6 +483,48 @@ matching JDBC getter; other SQL types map to the closest `DType.Primitive`/`Utf8
 
 ---
 
+## Start the CLI faster (JDK 25 AOT cache)
+
+A short CLI command spends most of its time warming up the JVM: loading classes, then running code that the JIT has not
+compiled yet. On JDK 25 you can record that work once in an *ahead-of-time cache* (JEP 483, with the one-step creation
+of JEP 514 and the method profiles of JEP 515) and reuse it. Build the cache by running a representative command once:
+
+```bash
+java -XX:AOTCacheOutput=vortex-cli.aot \
+     -jar cli/target/vortex-cli-*-all.jar select trades.vortex ts price --where "symbol = BTCUSDT"
+```
+
+Then pass it to later runs:
+
+```bash
+java -XX:AOTCache=vortex-cli.aot \
+     -jar cli/target/vortex-cli-*-all.jar select trades.vortex ts price --where "symbol = BTCUSDT" --timing
+```
+
+Measured with [`--timing`](#time-a-cli-command) on a 127 MB, 4.2-million-row file (five runs each, JDK 25.0.2):
+
+| Command | default | with the AOT cache |
+|---|---|---|
+| `count` | 33 ms | 13 ms |
+| `select … --where` (one hour of one pair) | 148 ms | 73 ms |
+
+The whole process for the second command went from 0.18 s to 0.10 s. The cache is about 15 to 17 MB. Notes:
+
+- **Rebuild the cache every time you rebuild the JAR.** In our tests the JVM did *not* check the cache against the JAR it
+  was given: after the JAR at the same path was replaced by a different build, the old cache kept supplying its own
+  classes, and the command ran the *old* code, with no message. Delete the cache whenever the JAR changes, and do not
+  ship or share one. To see where classes come from, run with `-Xlog:class+load` and look for `source: shared objects
+  file` against a `file:` path.
+- **A missing cache file is not fatal.** The JVM logs an error and runs normally.
+- **It only helps short runs.** A long `import` or `export` spends its time in hot, compiled code, so the cache gains
+  little there. We did not measure that.
+- **The training run matters.** The cache holds what the training run used, so train it on the commands you run.
+  Our numbers come from a cache trained on the very command we then timed, which is the best case.
+- `-XX:TieredStopAtLevel=1` (C1 only) takes the query down further, to about 64 ms, but gives up the optimizing
+  compiler, so use it only for short commands.
+
+---
+
 ## Query a Vortex file with SQL (Calcite)
 
 **API:**
