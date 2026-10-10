@@ -8,9 +8,11 @@ import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantFloat16Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -142,6 +144,68 @@ class ConstantEncodingEncoderTest {
             assertThat(result.length()).isEqualTo(data.length);
             assertThat(result).isInstanceOf(LazyConstantLongArray.class);
             assertThat(((LazyConstantLongArray) result).value()).isEqualTo(data[0]);
+        }
+
+        @ParameterizedTest
+        @ValueSource(shorts = {0x3E00, (short) 0x8000, 0x7C01, 0x0001, (short) 0xFFFF})
+        void encodeDecode_f16_keepsTheRawBits(short bits) {
+            // Given — 1.5, -0.0, a NaN payload, the smallest subnormal and the top NaN: every one
+            // must come back bit for bit, so the value is compared as raw bits, not as a number
+            short[] data = {bits, bits, bits};
+
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.F16, REGISTRY);
+            Array result = DECODER.decode(ctx);
+
+            // Then
+            assertThat(result).isInstanceOf(LazyConstantFloat16Array.class);
+            assertThat(((LazyConstantFloat16Array) result).bits()).isEqualTo(bits);
+            // Float.compare, not isEqualTo(float): the NaN cases are never == themselves
+            assertThat(Float.compare(((Float16Array) result).getFloat(2), Float.float16ToFloat(bits))).isZero();
+        }
+
+        @Test
+        void encode_f16_writesRustsF16ScalarField() throws java.io.IOException {
+            // Given — Rust reads an F16 constant from the f16_value field (the half bits as a u64)
+            short[] data = {Float.floatToFloat16(1.5f), Float.floatToFloat16(1.5f)};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
+
+            // Then
+            MemorySegment seg = result.encodedBuffers().getFirst().data();
+            ProtoScalarValue scalar = ProtoScalarValue.decode(seg, 0, seg.byteSize());
+            assertThat(scalar.f16_value()).isEqualTo(0x3E00L);
+        }
+
+        @Test
+        void decode_f16_acceptsTheLegacyUint64Scalar() {
+            // Given — older Rust writers stored an f16 as uint64_value (its bits)
+            EncodeResult encoded = ENCODER.encode(DTypes.F16, new short[]{0}, EncodeTestHelper.testCtx());
+            byte[] legacy = ProtoScalarValue.ofUint64Value(0x3E00L).encode();
+            EncodeResult swapped = EncodeResult.simple(EncodingId.VORTEX_CONSTANT,
+                    EncodedBuffer.bytes(MemorySegment.ofArray(legacy)), null, null);
+
+            // When
+            Array result = DECODER.decode(DecodeTestHelper.toDecodeContext(swapped, 4, DTypes.F16, REGISTRY));
+
+            // Then
+            assertThat(((Float16Array) result).getFloat(3)).isEqualTo(1.5f);
+            assertThat(encoded).isNotNull();
+        }
+
+        @Test
+        void encodeCascade_f16WithNegativeZeroAndZero_notApplicable() {
+            // Given — +0.0 and -0.0 compare equal as numbers but not as bits; a constant would
+            // make every row the first one's sign
+            short[] data = {0, (short) 0x8000};
+
+            // When
+            CascadeStep step = ENCODER.encodeCascade(DTypes.F16, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(step.applicable()).isFalse();
         }
     }
 
@@ -350,6 +414,19 @@ class ConstantEncodingEncoderTest {
             // Then
             assertThat(scalar(result.statsMin()).f64_value()).isEqualTo(constant);
             assertThat(scalar(result.statsMax()).f64_value()).isEqualTo(constant);
+        }
+
+        @Test
+        void encode_f16_reportsValueAsF32MinAndMax() throws java.io.IOException {
+            // Given — F16 min/max travel as f32 scalars, as PrimitiveEncodingEncoder writes them
+            short[] data = {Float.floatToFloat16(2.5f), Float.floatToFloat16(2.5f)};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(scalar(result.statsMin()).f32_value()).isEqualTo(2.5f);
+            assertThat(scalar(result.statsMax()).f32_value()).isEqualTo(2.5f);
         }
 
         @Test
