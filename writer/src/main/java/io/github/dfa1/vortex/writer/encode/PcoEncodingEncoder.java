@@ -139,7 +139,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             long[] sortKeys = toSortKeys(latents);
 
             long[] sortedKeys = sortKeys.clone();
-            Arrays.sort(sortedKeys);
+            LongRadixSort.sort(sortedKeys);
             int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 1));
             List<PcoHistBin> histBins = buildHistogram(sortedKeys, n, nBinsLog);
 
@@ -158,7 +158,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             if (n > 1) {
                 deltas = consecutiveDeltas(latents, dtypeSize);
                 long[] deltaSorted = toSortKeys(deltas).clone();
-                Arrays.sort(deltaSorted);
+                LongRadixSort.sort(deltaSorted);
                 int dNBinsLog = Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 2));
                 List<PcoHistBin> deltaHist = buildHistogram(deltaSorted, n - 1, dNBinsLog);
                 int dMaxSizeLog = Math.min(Math.min(dNBinsLog + 2, 12), nLogCeil);
@@ -207,14 +207,14 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
             long[] multSortKeys = toSortKeys(mults);
             long[] multSorted = multSortKeys.clone();
-            Arrays.sort(multSorted);
+            LongRadixSort.sort(multSorted);
             List<PcoHistBin> multHist = buildHistogram(multSorted, n, nBinsLog);
             List<PcoBinOptimizer.Bin> multBins = PcoBinOptimizer.optimize(multHist, maxSizeLog, dtypeSize);
             PcoWeightQuantizer.Result multQ = quantize(multBins, n, maxSizeLog);
 
             long[] adjSortKeys = toSortKeys(adjs);
             long[] adjSorted = adjSortKeys.clone();
-            Arrays.sort(adjSorted);
+            LongRadixSort.sort(adjSorted);
             List<PcoHistBin> adjHist = buildHistogram(adjSorted, n, nBinsLog);
             List<PcoBinOptimizer.Bin> adjBins = PcoBinOptimizer.optimize(adjHist, maxSizeLog, dtypeSize);
             PcoWeightQuantizer.Result adjQ = quantize(adjBins, n, maxSizeLog);
@@ -243,7 +243,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int n = latents.length;
             long[] sortKeys = toSortKeys(latents);
             long[] sorted = sortKeys.clone();
-            Arrays.sort(sorted);
+            LongRadixSort.sort(sorted);
             int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 1));
             List<PcoHistBin> hist = buildHistogram(sorted, n, nBinsLog);
             List<PcoBinOptimizer.Bin> bins = PcoBinOptimizer.optimize(hist, maxSizeLog, dtypeSize);
@@ -254,7 +254,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             }
             long[] deltas = consecutiveDeltas(latents, dtypeSize);
             long[] dSorted = toSortKeys(deltas).clone();
-            Arrays.sort(dSorted);
+            LongRadixSort.sort(dSorted);
             int dNBinsLog = Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 2));
             List<PcoHistBin> dHist = buildHistogram(dSorted, n - 1, dNBinsLog);
             List<PcoBinOptimizer.Bin> dBins = PcoBinOptimizer.optimize(dHist, maxSizeLog, dtypeSize);
@@ -508,18 +508,17 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             }
         }
 
+        // The last bin whose lower bound is <= sortKey. Branch-free: the key is random against the bins,
+        // so a branchy search mispredicts about once per step.
         private static int findBin(long sortKey, long[] binLowers) {
-            int lo = 0;
-            int hi = binLowers.length - 1;
-            while (lo < hi) {
-                int mid = (lo + hi + 1) >>> 1;
-                if (binLowers[mid] <= sortKey) {
-                    lo = mid;
-                } else {
-                    hi = mid - 1;
-                }
+            int base = 0;
+            int len = binLowers.length;
+            while (len > 1) {
+                int half = len >>> 1;
+                base = binLowers[base + half] <= sortKey ? base + half : base;
+                len -= half;
             }
-            return lo;
+            return base;
         }
 
         // ── DP cost estimate ─────────────────────────────────────────────────
