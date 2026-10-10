@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.DictFloat16Array;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictIntArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
@@ -174,16 +175,18 @@ class DictEncodingDecoderTest {
         }
 
         @Test
-        void unsupportedValuePType_throws() {
-            // Given — F16 expands fine (2 bytes) but typedArray has no F16 mapping
-            MemorySegment codes = u8Codes(0, 1);
-            MemorySegment values = TestSegments.leShorts((short) 1, (short) 2);
-            DType dtype = DType.F16;
+        void f16Values_decodeToDictFloat16Array() {
+            // Given — F16 had no dict array, so the cascade wrote a dict the reader then rejected (#515)
+            MemorySegment codes = u8Codes(1, 0);
+            MemorySegment values = TestSegments.leShorts(Float.floatToFloat16(1.5f), Float.floatToFloat16(2.5f));
 
-            // When / Then
-            assertThatThrownBy(() -> decodeProtoSegments(dtype, PType.U8, codes, values, 2, 2))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("unsupported ptype");
+            // When
+            Array result = decodeProtoSegments(DType.F16, PType.U8, codes, values, 2, 2);
+
+            // Then
+            assertThat(result).isInstanceOf(DictFloat16Array.class);
+            assertThat(((DictFloat16Array) result).getFloat(0)).isEqualTo(2.5f);
+            assertThat(((DictFloat16Array) result).getFloat(1)).isEqualTo(1.5f);
         }
 
         @Test

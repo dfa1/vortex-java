@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.testing.TestSegments;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +12,7 @@ import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 
 import static io.github.dfa1.vortex.core.testing.DTypes.BOOL;
+import static io.github.dfa1.vortex.core.testing.DTypes.F16;
 import static io.github.dfa1.vortex.core.testing.DTypes.F32;
 import static io.github.dfa1.vortex.core.testing.DTypes.F64;
 import static io.github.dfa1.vortex.core.testing.DTypes.I16;
@@ -311,6 +314,76 @@ class LazySparseArrayTest {
 
             // Then
             assertThat(seen).containsExactly(false, false, true, false);
+        }
+    }
+
+    @Nested
+    class Float16 {
+
+        private static final short ONE_AND_A_HALF = (short) 0x3E00;
+        private static final short TWO_AND_A_HALF = (short) 0x4100;
+        private static final short NINE = (short) 0x4880;
+        private static final short NAN_PAYLOAD = (short) 0x7C01;
+
+        @Test
+        void patchAndFillDispatch() {
+            // Given
+            Float16Array values = float16s(ONE_AND_A_HALF, TWO_AND_A_HALF);
+            var sut = new LazySparseFloat16Array(F16, 3, NINE, values, ints(0, 2), 0L);
+
+            // When / Then
+            assertThat(sut.getFloat(0)).isEqualTo(1.5f);
+            assertThat(sut.getFloat(1)).isEqualTo(9.0f);
+            assertThat(sut.getFloat(2)).isEqualTo(2.5f);
+        }
+
+        @Test
+        void materialize_keepsFillAndPatchBitsAndHonorsOffset() {
+            // Given length 3 covering abs [4..7): fill is a NaN payload, patches at abs 4 and 6
+            Float16Array values = float16s(ONE_AND_A_HALF, TWO_AND_A_HALF, NINE);
+            var sut = new LazySparseFloat16Array(F16, 3, NAN_PAYLOAD, values, ints(1, 4, 6), 4L);
+
+            // When
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment result = sut.materialize(arena);
+
+                // Then bits, not widened floats: the payload would not survive a round trip
+                assertThat(result.byteSize()).isEqualTo(6L);
+                assertThat(result.getAtIndex(VortexFormat.LE_SHORT, 0)).isEqualTo(TWO_AND_A_HALF);
+                assertThat(result.getAtIndex(VortexFormat.LE_SHORT, 1)).isEqualTo(NAN_PAYLOAD);
+                assertThat(result.getAtIndex(VortexFormat.LE_SHORT, 2)).isEqualTo(NINE);
+            }
+        }
+
+        @Test
+        void nullPatchesIsAllFill() {
+            // Given patchValues == null, the no-patch fast path
+            var sut = new LazySparseFloat16Array(F16, 3, NINE, null, null, 0L);
+
+            // When / Then
+            assertThat(sut.getFloat(2)).isEqualTo(9.0f);
+            try (Arena arena = Arena.ofConfined()) {
+                assertThat(sut.materialize(arena).getAtIndex(VortexFormat.LE_SHORT, 1)).isEqualTo(NINE);
+            }
+        }
+
+        @Test
+        void limited_cutsTheRowCountOnly() {
+            // Given
+            Float16Array values = float16s(ONE_AND_A_HALF);
+            var sut = new LazySparseFloat16Array(F16, 5, NINE, values, ints(1), 0L);
+
+            // When
+            Array result = sut.limited(2);
+
+            // Then
+            assertThat(result.length()).isEqualTo(2L);
+            assertThat(((Float16Array) result).getFloat(1)).isEqualTo(1.5f);
+            assertThat(sut.limited(5)).isSameAs(sut);
+        }
+
+        private static Float16Array float16s(short... bits) {
+            return new MaterializedFloat16Array(F16, bits.length, TestSegments.leShorts(bits));
         }
     }
 

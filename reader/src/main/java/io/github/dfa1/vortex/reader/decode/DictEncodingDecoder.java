@@ -12,11 +12,13 @@ import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictDoubleArray;
+import io.github.dfa1.vortex.reader.array.DictFloat16Array;
 import io.github.dfa1.vortex.reader.array.DictFloatArray;
 import io.github.dfa1.vortex.reader.array.DictIntArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DictShortArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -169,8 +171,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 case I8, U8 -> DictByteArray.of(dtype, n, (ByteArray) values, codes);
                 case F64 -> DictDoubleArray.of(dtype, n, (DoubleArray) values, codes);
                 case F32 -> DictFloatArray.of(dtype, n, (FloatArray) values, codes);
-                // F16 has no Array subtype yet, matching DictLayoutDecoder.
-                default -> throw new VortexException(EncodingId.VORTEX_DICT, "unsupported ptype " + valPType);
+                case F16 -> DictFloat16Array.of(dtype, n, (Float16Array) values, codes);
             };
         } catch (ClassCastException e) {
             // The values child is untrusted and may decode to any Array family regardless of

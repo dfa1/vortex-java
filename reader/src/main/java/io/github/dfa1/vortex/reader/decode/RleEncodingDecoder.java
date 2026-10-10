@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantFloat16Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
@@ -18,6 +19,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
 import io.github.dfa1.vortex.reader.array.LazyRleBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyRleByteArray;
 import io.github.dfa1.vortex.reader.array.LazyRleDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyRleFloat16Array;
 import io.github.dfa1.vortex.reader.array.LazyRleFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyRleIntArray;
 import io.github.dfa1.vortex.reader.array.LazyRleLongArray;
@@ -134,7 +136,8 @@ public final class RleEncodingDecoder implements EncodingDecoder {
                     indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
             case F32 -> new LazyRleFloatArray(ctx.dtype(), rowCount, values,
                     indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
-            default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported ptype " + ptype);
+            case F16 -> new LazyRleFloat16Array(ctx.dtype(), rowCount, values,
+                    indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
         };
 
         if (indicesValidity == null) {
@@ -154,7 +157,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             case I8, U8 -> new LazyConstantByteArray(dt, 0L, (byte) 0);
             case F64 -> new LazyConstantDoubleArray(dt, 0L, 0.0);
             case F32 -> new LazyConstantFloatArray(dt, 0L, 0.0f);
-            default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported ptype " + ptype);
+            case F16 -> new LazyConstantFloat16Array(dt, 0L, (short) 0);
         };
     }
 

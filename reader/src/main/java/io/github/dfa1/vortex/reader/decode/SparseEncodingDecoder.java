@@ -11,11 +11,13 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazySparseBoolArray;
 import io.github.dfa1.vortex.reader.array.LazySparseByteArray;
 import io.github.dfa1.vortex.reader.array.LazySparseDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazySparseFloat16Array;
 import io.github.dfa1.vortex.reader.array.LazySparseFloatArray;
 import io.github.dfa1.vortex.reader.array.LazySparseIntArray;
 import io.github.dfa1.vortex.reader.array.LazySparseLongArray;
@@ -158,6 +160,8 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                     checkedCast(valData, DoubleArray.class, ROLE_VALUES), idxData, offset);
             case F32 -> new LazySparseFloatArray(ctx.dtype(), n, Float.intBitsToFloat((int) fillBits),
                     checkedCast(valData, FloatArray.class, ROLE_VALUES), idxData, offset);
+            case F16 -> new LazySparseFloat16Array(ctx.dtype(), n, (short) fillBits,
+                    checkedCast(valData, Float16Array.class, ROLE_VALUES), idxData, offset);
             case I16 -> new LazySparseShortArray(ctx.dtype(), n, (short) fillBits, (short) fillBits,
                     checkedCast(valData, ShortArray.class, ROLE_VALUES), idxData, offset);
             case U16 -> new LazySparseShortArray(ctx.dtype(), n, (short) fillBits, (int) (fillBits & 0xFFFFL),
@@ -166,7 +170,6 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                     checkedCast(valData, ByteArray.class, ROLE_VALUES), idxData, offset);
             case U8 -> new LazySparseByteArray(ctx.dtype(), n, (byte) fillBits, (int) (fillBits & 0xFFL),
                     checkedCast(valData, ByteArray.class, ROLE_VALUES), idxData, offset);
-            default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
         };
         return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
     }
@@ -329,6 +332,10 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         }
         if (scalar.uint64_value() != null) {
             return scalar.uint64_value();
+        }
+        if (scalar.f16_value() != null) {
+            // Rust writes an f16 as its 16 bits in a u64; the legacy uint64_value form is read above
+            return scalar.f16_value();
         }
         if (scalar.f32_value() != null) {
             return Float.floatToRawIntBits(scalar.f32_value());

@@ -21,6 +21,7 @@ class DictRecordSmokeTest {
     private static final DType I32 = DType.I32;
     private static final DType F64 = DType.F64;
     private static final DType F32 = DType.F32;
+    private static final DType F16 = DType.F16;
     private static final DType U8 = DType.U8;
     private static final DType U16 = DType.U16;
     private static final DType U32 = DType.U32;
@@ -381,6 +382,65 @@ class DictRecordSmokeTest {
                 assertThatThrownBy(() -> sut.forEachDouble(v -> { }))
                         .isInstanceOf(VortexException.class);
                 assertThatThrownBy(() -> sut.fold(0.0, Double::sum))
+                        .isInstanceOf(VortexException.class);
+            }
+        }
+    }
+
+    @Nested
+    class DictFloat16 {
+
+        // 1.5, 2.5 and a NaN with a payload: the payload only survives if the gather copies bits
+        private static final short[] POOL = {(short) 0x3E00, (short) 0x4100, (short) 0x7C01};
+
+        @Test
+        void allCodeTypes_getAndMaterialize() {
+            try (Arena arena = Arena.ofConfined()) {
+                Float16Array values = float16Array(arena, POOL);
+                short[] expectedBits = {POOL[2], POOL[0], POOL[1]};
+                List<Array> codeVariants = List.of(
+                        byteArray(arena, (byte) 2, (byte) 0, (byte) 1),
+                        shortArray(arena, U16, (short) 2, (short) 0, (short) 1),
+                        intArray(arena, U32, 2, 0, 1),
+                        longArray(arena, U64, 2L, 0L, 1L));
+
+                for (Array codes : codeVariants) {
+                    DictFloat16Array sut = DictFloat16Array.of(F16, 3, values, codes);
+                    String label = codes.getClass().getSimpleName();
+
+                    assertThat(sut.getFloat(1)).as(label).isEqualTo(1.5f);
+                    assertThat(sut.getFloat(2)).as(label).isEqualTo(2.5f);
+                    MemorySegment m = sut.materialize(arena);
+                    for (int i = 0; i < 3; i++) {
+                        assertThat(m.getAtIndex(VortexFormat.LE_SHORT, i)).as(label).isEqualTo(expectedBits[i]);
+                    }
+                }
+            }
+        }
+
+        @Test
+        void limited_keepsThePoolAndCutsTheCodes() {
+            try (Arena arena = Arena.ofConfined()) {
+                Float16Array values = float16Array(arena, POOL);
+                DictFloat16Array sut = DictFloat16Array.of(F16, 3, values, byteArray(arena, (byte) 1, (byte) 0, (byte) 1));
+
+                Array result = sut.limited(2);
+
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(((Float16Array) result).getFloat(0)).isEqualTo(2.5f);
+                assertThat(((Float16Array) result).getFloat(1)).isEqualTo(1.5f);
+                assertThat(sut.limited(3)).isSameAs(sut);
+            }
+        }
+
+        @Test
+        void invalidCodes_throw() {
+            try (Arena arena = Arena.ofConfined()) {
+                Float16Array values = float16Array(arena, POOL);
+
+                assertThatThrownBy(() -> DictFloat16Array.of(F16, 2, values, byteArray(arena, (byte) 0)))
+                        .isInstanceOf(VortexException.class).hasMessageContaining("length");
+                assertThatThrownBy(() -> new DictFloat16Array(F16, 1, values, doubleArray(arena, 0.0)).materialize(arena))
                         .isInstanceOf(VortexException.class);
             }
         }
@@ -757,6 +817,14 @@ class DictRecordSmokeTest {
             seg.setAtIndex(ValueLayout.JAVA_FLOAT, i, values[i]);
         }
         return new MaterializedFloatArray(F32, values.length, seg.asReadOnly());
+    }
+
+    private static Float16Array float16Array(Arena arena, short... bits) {
+        MemorySegment seg = arena.allocate(bits.length * 2L, 2);
+        for (int i = 0; i < bits.length; i++) {
+            seg.setAtIndex(VortexFormat.LE_SHORT, i, bits[i]);
+        }
+        return new MaterializedFloat16Array(F16, bits.length, seg.asReadOnly());
     }
 
     private static ShortArray shortArray(Arena arena, DType dtype, short... values) {
