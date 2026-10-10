@@ -21,6 +21,18 @@ class SimdOperationsSupportTest {
     }
 
     @Test
+    void preferred_withoutTheVectorModule_isTheAutoVectorizedImplementation() {
+        // Given a JVM launched without --add-modules jdk.incubator.vector (the without-vector-module pass)
+        assumeTrue(ModuleLayer.boot().findModule("jdk.incubator.vector").isEmpty(), "run with the module");
+
+        // When
+        SimdOperations result = SimdOperationsSupport.preferred();
+
+        // Then the fallback works: the Vector API class is never loaded, so nothing fails to link
+        assertThat(result).isInstanceOf(AutoVectorizedSimdOperations.class);
+    }
+
+    @Test
     void preferred_isTheSameInstanceEveryCall() {
         // Given / When
         SimdOperations first = SimdOperationsSupport.preferred();

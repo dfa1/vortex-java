@@ -1,0 +1,78 @@
+name: SIMD benchmark
+
+# Informational, never a gate: single-fork JMH numbers on shared runners are noisy. It exists to put the
+# Vector API kernels next to the auto-vectorized ones on more than one architecture (ADR 0005 asks for
+# two), as a table in the job summary. Runs on demand and when the SIMD code or this workflow changes.
+on:
+  workflow_dispatch:
+    inputs:
+      forks:
+        description: 'JMH forks per benchmark (3 for numbers worth recording)'
+        required: false
+        default: '1'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'core/src/main/java/io/github/dfa1/vortex/core/simd/**'
+      - 'performance/src/main/java/io/github/dfa1/vortex/core/simd/**'
+      - 'scripts/simd-benchmark.sh'
+      - '.github/workflows/simd-benchmark.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # x86-64 Linux, 64-bit ARM Linux and Apple silicon: three vector units to compare
+        os: [ ubuntu-latest, ubuntu-24.04-arm, macos-latest ]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Azul Zulu JDK 25
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: zulu
+          java-version: '25'
+
+      - name: Cache Maven repository
+        uses: actions/cache@v6
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-${{ runner.arch }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-maven-
+
+      - name: Build the benchmarks jar
+        run: ./mvnw --batch-mode -q package -DskipTests -DskipShade=false -pl performance -am
+
+      - name: Report the vector unit
+        run: |
+          {
+            echo "### ${{ matrix.os }} (${{ runner.arch }})"
+            echo
+            echo -n "Preferred int vector: "
+            echo 'System.out.println(jdk.incubator.vector.IntVector.SPECIES_PREFERRED)' \
+              | jshell --add-modules jdk.incubator.vector -s - 2>/dev/null | tail -1
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Run the benchmarks
+        env:
+          FORKS: ${{ inputs.forks || '1' }}
+        run: |
+          scripts/simd-benchmark.sh performance/target/simd-benchmark > table.md
+          { echo; cat table.md; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simd-benchmark-${{ matrix.os }}
+          path: |
+            performance/target/simd-benchmark/*.json
+            table.md
