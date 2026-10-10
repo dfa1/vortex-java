@@ -62,7 +62,7 @@ final class PcoHistogram {
         } else {
             incompleteLower = lowerTight ? lower : min(v, from, to);
             incompleteUpper = upperTight ? upper : max(v, from, to);
-            incompleteCount = to - from;
+            incompleteCount = (long) to - from;
             hasIncomplete = true;
         }
         nApplied += to - from;
@@ -81,7 +81,7 @@ final class PcoHistogram {
     private void applyConstantRun(long[] v, int from, int to) {
         int start = nApplied;
         int len = to - from;
-        int binIdx = binIdx(start + len / 2);
+        int binIdx = binIdx((long) start + len / 2);
         if (binIdx > nextAvailBinIdx) {
             // the previous bin is free: complete the pending one there, or start this run in it
             int spareBinIdx = binIdx - 1;

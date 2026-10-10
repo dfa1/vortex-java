@@ -68,6 +68,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
     private static final class Encoder {
 
+        @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
         private record ChunkResult(MemorySegment chunkMeta, List<MemorySegment> pages, int[] pageNs) {
         }
 
@@ -244,7 +245,8 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             long metaBits = CLASSIC_MODE_MAX_BITS + DELTA_ENCODING_MAX_BITS + 4 + 15 + binBits;
             long pageMetaBits = (long) ansSizeLog * ANS_INTERLEAVING + (long) dtypeSize * order;
             long bodyBits = (long) Math.ceil(values.length * avgBits);
-            return ceilBytes(metaBits) + ceilBytes(pageMetaBits) + ceilBytes(bodyBits);
+            long totalBytes = ceilBytes(metaBits) + ceilBytes(pageMetaBits) + ceilBytes(bodyBits);
+            return totalBytes;
         }
 
         private static long ceilBytes(long bits) {
