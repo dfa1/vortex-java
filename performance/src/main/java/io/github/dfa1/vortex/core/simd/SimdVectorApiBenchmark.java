@@ -41,6 +41,8 @@ public class SimdVectorApiBenchmark {
     private SimdOperations ops;
     private Object runsFew;
     private Object runsMany;
+    private Object constant;
+    private boolean[] constantFlags;
 
     @Setup
     public void setup() {
@@ -52,6 +54,8 @@ public class SimdVectorApiBenchmark {
         };
         runsMany = array(ptype, size, 1, new Random(1));
         runsFew = array(ptype, size, 64, new Random(2));
+        constant = array(ptype, size, Integer.MAX_VALUE, new Random(3));
+        constantFlags = new boolean[size];
     }
 
     /// Counts runs over data with no runs at all: every neighbor pair differs.
@@ -64,6 +68,18 @@ public class SimdVectorApiBenchmark {
     @Benchmark
     public long runs_longRuns() {
         return ops.runs(runsFew, ptype);
+    }
+
+    /// Checks an all-equal array, the worst case for an early exit: every element is compared.
+    @Benchmark
+    public boolean allEqual_constant() {
+        return ops.allEqual(constant, ptype);
+    }
+
+    /// Checks an all-equal flag array.
+    @Benchmark
+    public boolean allEqual_booleans() {
+        return ops.allEqual(constantFlags);
     }
 
     private static Object array(PType ptype, int n, int runLength, Random random) {

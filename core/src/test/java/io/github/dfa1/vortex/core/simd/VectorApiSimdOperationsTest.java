@@ -46,6 +46,64 @@ class VectorApiSimdOperationsTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void allEqual_matchesReference(PType ptype) {
+        // Given a constant array at every length, and the same array with one element changed at the
+        // first, a middle, the last and the first-tail position
+        for (int length : LENGTHS) {
+            Object constant = arrayWithRuns(ptype, length, Integer.MAX_VALUE, new Random(length));
+            assertThat(sut.allEqual(constant, ptype)).as("%s constant length=%d", ptype, length)
+                    .isEqualTo(reference.allEqual(constant, ptype));
+            for (int position : new int[]{0, length / 2, length - 1, length - length % 16 - 1}) {
+                if (position < 0 || position >= length) {
+                    continue;
+                }
+                Object changed = arrayWithRuns(ptype, length, Integer.MAX_VALUE, new Random(length));
+                flip(changed, position);
+
+                // When / Then
+                assertThat(sut.allEqual(changed, ptype)).as("%s length=%d differs at %d", ptype, length, position)
+                        .isEqualTo(reference.allEqual(changed, ptype));
+            }
+        }
+    }
+
+    @Test
+    void allEqual_floatsCompareRawBits() {
+        // Given arrays equal under == but not bit for bit, long enough for the vector loop
+        float[] zeros = new float[40];
+        zeros[39] = -0.0f;
+        double[] nans = new double[40];
+        java.util.Arrays.fill(nans, Double.NaN);
+        nans[20] = Double.longBitsToDouble(0x7ff8000000000001L);
+
+        // When / Then
+        assertThat(sut.allEqual(zeros, PType.F32)).isFalse().isEqualTo(reference.allEqual(zeros, PType.F32));
+        assertThat(sut.allEqual(nans, PType.F64)).isFalse().isEqualTo(reference.allEqual(nans, PType.F64));
+    }
+
+    @Test
+    void allEqual_booleans_matchReference() {
+        // Given
+        for (int length : LENGTHS) {
+            boolean[] constant = new boolean[length];
+            java.util.Arrays.fill(constant, true);
+            assertThat(sut.allEqual(constant)).as("constant length=%d", length).isEqualTo(reference.allEqual(constant));
+            for (int position : new int[]{0, length / 2, length - 1}) {
+                if (position < 0 || position >= length) {
+                    continue;
+                }
+                boolean[] changed = constant.clone();
+                changed[position] = false;
+
+                // When / Then
+                assertThat(sut.allEqual(changed)).as("length=%d differs at %d", length, position)
+                        .isEqualTo(reference.allEqual(changed));
+            }
+        }
+    }
+
     @Test
     void runs_floatsWithNaNAndSignedZero_matchReference() {
         // Given NaN, which always differs from itself, and 0.0 / -0.0, which compare equal
@@ -105,5 +163,18 @@ class VectorApiSimdOperationsTest {
                 yield a;
             }
         };
+    }
+
+    /// Changes one element so that it differs from its neighbors in the raw bits.
+    private static void flip(Object array, int index) {
+        switch (array) {
+            case byte[] a -> a[index] ^= 0x55;
+            case short[] a -> a[index] ^= 0x5555;
+            case int[] a -> a[index] ^= 0x55555555;
+            case long[] a -> a[index] ^= 0x5555555555555555L;
+            case float[] a -> a[index] = Float.intBitsToFloat(Float.floatToRawIntBits(a[index]) ^ 1);
+            case double[] a -> a[index] = Double.longBitsToDouble(Double.doubleToRawLongBits(a[index]) ^ 1L);
+            default -> throw new IllegalArgumentException(array.getClass().toString());
+        }
     }
 }
