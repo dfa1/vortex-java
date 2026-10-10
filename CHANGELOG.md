@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Every `vortex` subcommand takes `--timing`, which prints the elapsed time to stderr without counting the JVM's start-up. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - `vortex select` takes `--where "<expr>"` (repeatable) to print only some columns of the rows that match, e.g. one price column over a time interval. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently (4.4× on 8 threads). ([#474](https://github.com/dfa1/vortex-java/issues/474))
 

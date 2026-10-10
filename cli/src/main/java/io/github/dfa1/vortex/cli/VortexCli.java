@@ -1,6 +1,9 @@
 package io.github.dfa1.vortex.cli;
 
 import java.io.PrintStream;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -17,12 +20,34 @@ public final class VortexCli {
     private VortexCli() {
     }
 
+    /// Global flag, accepted anywhere on the command line: prints how long the operation took.
+    private static final String TIMING_FLAG = "--timing";
+
     public static void main(String[] args) {
+        System.exit(execute(args));
+    }
+
+    /// Runs the command and returns its exit status. With `--timing` it then prints the elapsed time to
+    /// standard error, so data on standard output stays clean in a pipeline. The clock starts here, once
+    /// the JVM is up, so it measures the command and not the runtime's start-up.
+    static int execute(String[] args) {
+        long start = System.nanoTime();
+        boolean timing = Arrays.asList(args).contains(TIMING_FLAG);
+        String[] commandArgs = Arrays.stream(args).filter(arg -> !TIMING_FLAG.equals(arg)).toArray(String[]::new);
+        int exit = dispatch(commandArgs);
+        if (timing) {
+            Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+            System.err.printf(Locale.ROOT, "elapsed: %.1f ms%n", elapsed.toNanos() / 1_000_000.0);
+        }
+        return exit;
+    }
+
+    private static int dispatch(String[] args) {
         if (args.length == 0) {
             printUsage(System.err);
-            System.exit(ExitStatus.USAGE_ERROR);
+            return ExitStatus.USAGE_ERROR;
         }
-        int exit = switch (args[0]) {
+        return switch (args[0]) {
             case "inspect" -> InspectCommand.run(args);
             case "tui" -> TuiCommand.run(args);
             case "view" -> ViewCommand.run(args);
@@ -39,11 +64,10 @@ public final class VortexCli {
                 yield ExitStatus.USAGE_ERROR;
             }
         };
-        System.exit(exit);
     }
 
     static void printUsage(PrintStream out) {
-        out.println("Usage: java -jar vortex-cli-<version>-all.jar <subcommand> [args]");
+        out.println("Usage: java -jar vortex-cli-<version>-all.jar <subcommand> [args] [--timing]");
         out.println("  inspect [--html] <file|url>         print file structure; --html writes an HTML report");
         out.println("  tui     <file|url>                  open interactive inspector; url is http(s)://");
         out.println("  view    <file|url>                  open scrollable data grid; url is http(s)://");
@@ -55,5 +79,6 @@ public final class VortexCli {
         out.println("  select  <file.vortex> <col> [...] [--where <expr>]  project columns to CSV on stdout, optionally filtered");
         out.println("  stats   <file.vortex>               print per-column min/max statistics");
         out.println("  filter  <file.vortex> <expr>        filter rows to CSV (e.g. \"price >= 100\")");
+        out.println("Any subcommand also takes --timing: print the elapsed time to stderr, JVM start-up excluded.");
     }
 }

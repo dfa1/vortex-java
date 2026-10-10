@@ -644,6 +644,10 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
 | `import`   | `import [--delimiter <char>] <file.csv\|file.parquet\|url> [out.vortex\|out.parquet]` | CSV or Parquet (local or remote) source to Vortex; a `.parquet` output is CSV-only (chains through a temp Vortex file internally) — a Parquet source always produces Vortex, `.parquet` output is rejected |
 
+Any subcommand also takes `--timing`, anywhere on the command line: it prints `elapsed: <n> ms` to **stderr** when the
+command ends, so data on stdout stays clean in a pipeline. The clock starts when `main` starts, so it leaves out JVM
+start-up (which dominates short commands such as `count`).
+
 ### `filter` expression syntax
 
 ```
