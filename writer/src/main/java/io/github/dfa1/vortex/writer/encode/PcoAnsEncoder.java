@@ -17,13 +17,17 @@ final class PcoAnsEncoder {
     private final int tableSize;
     private final int[] minRenormBits;
     private final int[] renormBitCutoff;
-    private final int[][] nextStates; // nextStates[sym][k] = Rust state for k-th occurrence
+    // nextStates[nextStateBase[sym] + xS] = Rust state for the (xS - w)-th occurrence of sym; one
+    // flat table, so an encode step is one indexed load rather than two dependent ones
+    private final int[] nextStateBase;
+    private final int[] nextStates;
 
     private PcoAnsEncoder(int tableSize,
-            int[] minRenormBits, int[] renormBitCutoff, int[][] nextStates) {
+            int[] minRenormBits, int[] renormBitCutoff, int[] nextStateBase, int[] nextStates) {
         this.tableSize = tableSize;
         this.minRenormBits = minRenormBits;
         this.renormBitCutoff = renormBitCutoff;
+        this.nextStateBase = nextStateBase;
         this.nextStates = nextStates;
     }
 
@@ -38,28 +42,28 @@ final class PcoAnsEncoder {
 
         int[] minR = new int[nSymbols];
         int[] cutoff = new int[nSymbols];
-        int[][] nextSt = new int[nSymbols][];
+        int[] base = new int[nSymbols];
+        int[] firstIdx = new int[nSymbols];
 
+        int start = 0;
         for (int sym = 0; sym < nSymbols; sym++) {
             int w = weights[sym];
             int maxXS = 2 * w - 1;
             int mr = sizeLog - (31 - Integer.numberOfLeadingZeros(maxXS));
             minR[sym] = mr;
             cutoff[sym] = 2 * w * (1 << mr);
-            nextSt[sym] = new int[w];
+            firstIdx[sym] = start;
+            base[sym] = start - w;
+            start += w;
         }
 
+        int[] nextSt = new int[start];
         int[] stateSymbols = spreadStateSymbols(weights, tableSize);
-        int[] symbolXs = weights.clone();
         for (int stateIdx = 0; stateIdx < tableSize; stateIdx++) {
-            int sym = stateSymbols[stateIdx];
-            int w = weights[sym];
-            int k = symbolXs[sym] - w; // 0-based position into next_states[sym]
-            nextSt[sym][k] = tableSize + stateIdx;
-            symbolXs[sym]++;
+            nextSt[firstIdx[stateSymbols[stateIdx]]++] = tableSize + stateIdx;
         }
 
-        return new PcoAnsEncoder(tableSize, minR, cutoff, nextSt);
+        return new PcoAnsEncoder(tableSize, minR, cutoff, base, nextSt);
     }
 
     /// Encode one symbol. Caller writes the low [Step#numBits()] bits of
@@ -69,13 +73,10 @@ final class PcoAnsEncoder {
     /// @param symbol bin symbol index
     /// @return encode step
     Step encode(int state, int symbol) {
-        int w = nextStates[symbol].length;
-        int renormBits = state >= renormBitCutoff[symbol]
-                ? minRenormBits[symbol] + 1
-                : minRenormBits[symbol];
+        int renormBits = minRenormBits[symbol] + (state >= renormBitCutoff[symbol] ? 1 : 0);
         int bitsVal = state & ((1 << renormBits) - 1);
         int xS = state >>> renormBits; // in [w, 2w)
-        int newState = nextStates[symbol][xS - w];
+        int newState = nextStates[nextStateBase[symbol] + xS];
         return new Step(newState, bitsVal, renormBits);
     }
 
