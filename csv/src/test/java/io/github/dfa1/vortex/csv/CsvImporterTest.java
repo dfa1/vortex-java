@@ -14,6 +14,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.ForkJoinPool;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -114,5 +116,25 @@ class CsvImporterTest {
                 }
             }
         }
+    }
+
+    @Test
+    void buildChunkOnAnExecutorKeepsTheColumnsAndTheirOrder() {
+        // Given: a column of each kind, so every conversion path runs off the caller thread
+        DType.Struct schema = DType.structBuilder()
+                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("price"), DType.F64)
+                .field(ColumnName.of("name"), DType.UTF8)
+                .build();
+        List<String[]> rows = List.of(new String[]{"1", "1.5", "a"}, new String[]{"2", "2.5", "b"});
+
+        // When
+        var result = CsvImporter.buildChunk(schema, rows, ForkJoinPool.commonPool());
+
+        // Then
+        assertThat(result.keySet()).extracting(ColumnName::value).containsExactly("id", "price", "name");
+        assertThat((long[]) result.get(ColumnName.of("id"))).containsExactly(1L, 2L);
+        assertThat((double[]) result.get(ColumnName.of("price"))).containsExactly(1.5, 2.5);
+        assertThat((String[]) result.get(ColumnName.of("name"))).containsExactly("a", "b");
     }
 }

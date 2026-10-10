@@ -4,7 +4,10 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.LongStream;
@@ -103,5 +106,42 @@ class RepartitionerTest {
 
     private static long[] concat(List<Object> chunks) {
         return chunks.stream().flatMapToLong(c -> LongStream.of((long[]) c)).toArray();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "ascii", "caf\u00e9", "\u20ac uro", "\uD83D\uDE00 emoji", "lone \uD83D high", "lone \uDE00 low", "\uD83D", "\uDE00\uD83D"})
+    void utf8LengthMatchesTheEncoder(String text) {
+        // Given: ASCII, 2/3/4-byte characters and unpaired surrogates, which getBytes encodes as '?'
+        int expected = text.getBytes(StandardCharsets.UTF_8).length;
+
+        // When
+        int result = Repartitioner.utf8Length(text);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
+    @Test
+    void addWithPresizedPiecesCutsTheSameChunks() {
+        // Given: strings long enough that a batch crosses the 1 MiB block target, so cuts depend on the sizes
+        String[] batch = new String[50_000];
+        for (int i = 0; i < batch.length; i++) {
+            batch[i] = "x".repeat(10 + i % 40) + (i % 7 == 0 ? "\u20ac" : "");
+        }
+        Repartitioner sizer = new Repartitioner(DType.UTF8);
+        Repartitioner direct = new Repartitioner(DType.UTF8);
+        Repartitioner presized = new Repartitioner(DType.UTF8);
+        long[] sizes = sizer.sizePieces(batch, batch.length);
+
+        // When
+        List<Object> expected = direct.add(batch, batch.length);
+        List<Object> result = presized.add(batch, batch.length, sizes);
+
+        // Then
+        assertThat(result).hasSameSizeAs(expected);
+        for (int i = 0; i < result.size(); i++) {
+            assertThat((String[]) result.get(i)).containsExactly((String[]) expected.get(i));
+        }
+        assertThat((String[]) presized.finish()).containsExactly((String[]) direct.finish());
     }
 }

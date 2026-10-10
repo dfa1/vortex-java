@@ -71,6 +71,7 @@ import java.nio.channels.WritableByteChannel;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -178,6 +179,8 @@ public final class VortexWriter implements Closeable {
     private final Map<ColumnName, EncodingEncoder> columnEncoders = new LinkedHashMap<>();
     // Rust's repartition: each column's batches coalesce into ~1 MB chunks of 8192-row multiples.
     private final Map<ColumnName, Repartitioner> repartitioners = new LinkedHashMap<>();
+    // The batch being written: its columns' piece sizes, measured on the executor ahead of appendChunk.
+    private final Map<ColumnName, CompletableFuture<long[]>> pieceSizes = new HashMap<>();
     // Segments encoding on WriteOptions#executor(), written to the channel in submission order so
     // segment indexes are known at submit time and the file bytes do not depend on the executor.
     private final ArrayDeque<CompletableFuture<EncodedSegment>> pending = new ArrayDeque<>();
@@ -531,6 +534,8 @@ public final class VortexWriter implements Closeable {
             }
         }
 
+        pieceSizes.clear();
+        // Route extension columns first, so the columns' batches can be sized in parallel below.
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             ColumnName colName = schema.fieldNames().get(i);
             DType colDtype = schema.fieldTypes().get(i);
@@ -548,8 +553,27 @@ public final class VortexWriter implements Closeable {
                                 .orElse(null);
                 if (impl != null) {
                     data = impl.encodeAll(extDtype, coll);
+                    adapted.put(colName, data);
                 }
             }
+
+            // Sizing a string batch reads every string and was the caller thread's largest cost
+            // of an import. Columns are independent, so the pool sizes them all at once.
+            if (zonedLayout && Repartitioner.supports(colDtype) && Repartitioner.sizeReadsValues(data)
+                    && !dictCandidates.contains(colName)) {
+                // Not the column's own Repartitioner: creating that here would change the order
+                // flushRepartitioners writes the last chunks in.
+                Repartitioner sizer = new Repartitioner(colDtype);
+                Object batch = data;
+                pieceSizes.put(colName, CompletableFuture.supplyAsync(
+                        () -> sizer.sizePieces(batch, arrayLength(batch)), options.executor()));
+            }
+        }
+
+        for (int i = 0; i < schema.fieldNames().size(); i++) {
+            ColumnName colName = schema.fieldNames().get(i);
+            DType colDtype = schema.fieldTypes().get(i);
+            Object data = adapted.get(colName);
 
             if (zonedLayout) {
                 ZoneAccumulator acc = zoneAccumulators.computeIfAbsent(colName, _ -> new ZoneAccumulator(colDtype));
@@ -622,7 +646,8 @@ public final class VortexWriter implements Closeable {
             return;
         }
         Repartitioner repartitioner = repartitioners.computeIfAbsent(colName, _ -> new Repartitioner(colDtype));
-        for (Object chunk : repartitioner.add(data, arrayLength(data))) {
+        CompletableFuture<long[]> sizes = pieceSizes.remove(colName);
+        for (Object chunk : repartitioner.add(data, arrayLength(data), sizes != null ? sizes.join() : null)) {
             writeDataChunk(colName, colDtype, chunk);
         }
     }

@@ -21,6 +21,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /// Parses a CSV file and writes a Vortex file.
 ///
@@ -190,7 +192,7 @@ public final class CsvImporter {
     /// @return the row count written so far (the first chunk's size)
     private static long writeFirstChunk(VortexWriter writer, FirstChunk firstChunk, ImportOptions options)
             throws IOException {
-        writer.writeChunk(buildChunk(firstChunk.schema(), firstChunk.rows()));
+        writer.writeChunk(buildChunk(firstChunk.schema(), firstChunk.rows(), options.writeOptions().executor()));
         long totalRows = firstChunk.rows().size();
         reportProgress(options, totalRows);
         return totalRows;
@@ -208,7 +210,7 @@ public final class CsvImporter {
             chunk.add(csvRecord.getFields().toArray(String[]::new));
             totalRows++;
             if (chunk.size() == chunkSize) {
-                writer.writeChunk(buildChunk(schema, chunk));
+                writer.writeChunk(buildChunk(schema, chunk, options.writeOptions().executor()));
                 chunk.clear();
             }
             if (totalRows - lastReported >= PROGRESS_BATCH) {
@@ -217,7 +219,7 @@ public final class CsvImporter {
             }
         }
         if (!chunk.isEmpty()) {
-            writer.writeChunk(buildChunk(schema, chunk));
+            writer.writeChunk(buildChunk(schema, chunk, options.writeOptions().executor()));
         }
         if (totalRows > lastReported) {
             reportProgress(options, totalRows);
@@ -305,10 +307,22 @@ public final class CsvImporter {
     }
 
     static Map<ColumnName, Object> buildChunk(DType.Struct schema, List<String[]> rows) {
+        return buildChunk(schema, rows, Runnable::run);
+    }
+
+    /// Converts the text of each column on `executor`: the columns are independent, and with the
+    /// parse this was the caller thread's work ahead of the (parallel) compression.
+    static Map<ColumnName, Object> buildChunk(DType.Struct schema, List<String[]> rows, Executor executor) {
         int n = rows.size();
-        Map<ColumnName, Object> chunk = new LinkedHashMap<>();
+        List<CompletableFuture<Object>> columns = new ArrayList<>();
         for (int c = 0; c < schema.fieldNames().size(); c++) {
-            chunk.put(schema.fieldNames().get(c), buildColumn(schema.fieldTypes().get(c), rows, c, n));
+            DType dtype = schema.fieldTypes().get(c);
+            int colIdx = c;
+            columns.add(CompletableFuture.supplyAsync(() -> buildColumn(dtype, rows, colIdx, n), executor));
+        }
+        Map<ColumnName, Object> chunk = new LinkedHashMap<>();
+        for (int c = 0; c < columns.size(); c++) {
+            chunk.put(schema.fieldNames().get(c), columns.get(c).join());
         }
         return chunk;
     }
