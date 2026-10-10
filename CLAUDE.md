@@ -81,6 +81,7 @@ and merge commits are disabled): squash a PR's commits locally into one, force-p
 ./mvnw verify -pl integration -am          # integration (failsafe, NOT surefire)
 ./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#method"
 ./bench JavaVsJniReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
+scripts/simd-benchmark.sh                  # auto-vectorized vs Vector API kernels, table of speedups (also a CI job)
 scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conformance corpus (#205), then:
 ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test="RaincloudConformanceIntegrationTest"
 ./mvnw test -pl fuzz -am -Dvortex.fuzz.excludedGroups=                # Jazzer regression mode (ADR 0020)
