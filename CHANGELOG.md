@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Opt-in Vector API kernels for min/max, sums, run counting, widening and bit-packing, enabled by `--add-modules jdk.incubator.vector` (over 10× faster on byte and short columns); float sums and 64-bit overflow checks differ slightly from Rust's order, see `docs/compatibility.md`. ([#516](https://github.com/dfa1/vortex-java/issues/516))
+
 ### Changed
 - Float min/max statistics order `-0.0` before `0.0` and skip `NaN`, and `U64` min/max compare unsigned, as Rust does. ([#516](https://github.com/dfa1/vortex-java/issues/516))
 
