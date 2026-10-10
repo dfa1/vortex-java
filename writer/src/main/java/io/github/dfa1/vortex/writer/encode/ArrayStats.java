@@ -1,8 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.reflect.Array;
 
@@ -76,7 +75,7 @@ public record ArrayStats(
         if (n == 0) {
             return EMPTY;
         }
-        long averageRunLength = n / runs(ptype, data, n);
+        long averageRunLength = n / SimdOperationsSupport.preferred().runs(data, ptype);
         boolean accumulate = options.countDistinct() || options.trackMostFrequent();
 
         // Stop once the distinct count passes half the rows: past that point every consumer's
@@ -96,23 +95,12 @@ public record ArrayStats(
             // width without copying the whole array to a long[] (8 bytes per row of garbage on
             // every int[] column, #476).
             long[] buffer = new long[BUFFER];
-            long[] minMax = minMax(ptype, data);
+            long[] minMax = SimdOperationsSupport.preferred().minMax(data, ptype);
             long min = minMax[0];
             long max = minMax[1];
             ArrayStats counted = accumulate
                     ? integerStats(ptype, data, n, buffer, cap, options.countDistinct(), averageRunLength, min, max)
                     : new ArrayStats(n, -1, 0, 0, false, averageRunLength, 0, 0);
-            if (ptype == PType.U64) {
-                // Narrower unsigned widths are zero-extended, so signed order is already theirs.
-                long[] values = (long[]) data;
-                long unsignedMin = -1L;
-                long unsignedMax = 0L;
-                for (int i = 0; i < n; i++) {
-                    unsignedMin = Long.compareUnsigned(values[i], unsignedMin) < 0 ? values[i] : unsignedMin;
-                    unsignedMax = Long.compareUnsigned(values[i], unsignedMax) > 0 ? values[i] : unsignedMax;
-                }
-                return counted.withMinMax(unsignedMin, unsignedMax);
-            }
             return counted.withMinMax(min, max);
         }
         if (!accumulate) {
@@ -241,137 +229,13 @@ public record ArrayStats(
                 averageRunLength, 0, 0);
     }
 
-    /// Signed min and max of the widened values, computed on the array's own carrier: NEON has
-    /// no 64-bit integer min/max, so C2 vectorizes these loops for `int`, `short` and `byte`
-    /// but not over a widened `long` buffer, where this pass measured ~8% of a write (#476).
-    /// Unsigned widths are masked in the loop, which keeps them in their carrier's lanes.
-    ///
-    /// @return `{min, max}`
-    private static long[] minMax(PType ptype, Object data) {
-        return switch (ptype) {
-            case I8 -> {
-                byte[] a = (byte[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (byte v : a) {
-                    min = Math.min(min, v);
-                    max = Math.max(max, v);
-                }
-                yield new long[]{min, max};
-            }
-            case U8 -> {
-                byte[] a = (byte[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (byte v : a) {
-                    min = Math.min(min, v & 0xFF);
-                    max = Math.max(max, v & 0xFF);
-                }
-                yield new long[]{min, max};
-            }
-            case I16 -> {
-                short[] a = (short[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (short v : a) {
-                    min = Math.min(min, v);
-                    max = Math.max(max, v);
-                }
-                yield new long[]{min, max};
-            }
-            case U16 -> {
-                short[] a = (short[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (short v : a) {
-                    min = Math.min(min, v & 0xFFFF);
-                    max = Math.max(max, v & 0xFFFF);
-                }
-                yield new long[]{min, max};
-            }
-            case I32 -> {
-                int[] a = (int[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (int v : a) {
-                    min = Math.min(min, v);
-                    max = Math.max(max, v);
-                }
-                yield new long[]{min, max};
-            }
-            case U32 -> {
-                // Flipping the sign bit maps unsigned order onto signed order, so the loop stays
-                // a plain int min/max.
-                int[] a = (int[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (int v : a) {
-                    min = Math.min(min, v ^ Integer.MIN_VALUE);
-                    max = Math.max(max, v ^ Integer.MIN_VALUE);
-                }
-                yield new long[]{Integer.toUnsignedLong(min ^ Integer.MIN_VALUE),
-                        Integer.toUnsignedLong(max ^ Integer.MIN_VALUE)};
-            }
-            case I64, U64 -> {
-                long[] a = (long[]) data;
-                long min = Long.MAX_VALUE;
-                long max = Long.MIN_VALUE;
-                for (long v : a) {
-                    min = Math.min(min, v);
-                    max = Math.max(max, v);
-                }
-                yield new long[]{min, max};
-            }
-            default -> throw new VortexException(EncodingId.VORTEX_PRIMITIVE, "not an integer ptype: " + ptype);
-        };
-    }
-
     /// Copies up to `chunk.length` values of `data` from `from` into `chunk`, sign-extending the signed
     /// widths and zero-extending the unsigned ones; one switch per chunk, not per value.
     ///
     /// @return how many values were copied
     private static int widen(PType ptype, Object data, int from, int n, long[] chunk) {
         int len = Math.min(chunk.length, n - from);
-        switch (ptype) {
-            case I8 -> {
-                byte[] a = (byte[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i];
-                }
-            }
-            case U8 -> {
-                byte[] a = (byte[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i] & 0xFFL;
-                }
-            }
-            case I16 -> {
-                short[] a = (short[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i];
-                }
-            }
-            case U16 -> {
-                short[] a = (short[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i] & 0xFFFFL;
-                }
-            }
-            case I32 -> {
-                int[] a = (int[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i];
-                }
-            }
-            case U32 -> {
-                int[] a = (int[]) data;
-                for (int i = 0; i < len; i++) {
-                    chunk[i] = a[from + i] & 0xFFFF_FFFFL;
-                }
-            }
-            case I64, U64 -> System.arraycopy((long[]) data, from, chunk, 0, len);
-            default -> throw new VortexException(EncodingId.VORTEX_PRIMITIVE, "not an integer ptype: " + ptype);
-        }
+        SimdOperationsSupport.preferred().widenArrayInto(data, from, len, ptype, chunk);
         return len;
     }
 
@@ -382,51 +246,6 @@ public record ArrayStats(
         int topFreq = top == null ? 0 : top.value();
         long distinct = countDistinct ? counts.size() : -1L;
         return new ArrayStats(n, distinct, topFreqBits, topFreq, capped, averageRunLength, 0, 0);
-    }
-
-    /// Runs of equal values: 1 plus every change between neighbors. One loop per carrier with a
-    /// branch-free body, so C2 vectorizes it (CLAUDE.md hot-loop rule).
-    private static long runs(PType ptype, Object data, int n) {
-        long changes = 0;
-        switch (ptype) {
-            case I8, U8 -> {
-                byte[] a = (byte[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case I16, U16, F16 -> {
-                short[] a = (short[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case I32, U32 -> {
-                int[] a = (int[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case I64, U64 -> {
-                long[] a = (long[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case F32 -> {
-                float[] a = (float[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case F64 -> {
-                double[] a = (double[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-        }
-        return changes + 1;
     }
 
     private static boolean scanF16(short[] a, int n, LongIntMap counts, long cap) {

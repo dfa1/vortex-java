@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.core.simd;
 import io.github.dfa1.vortex.core.model.PType;
 
 import java.lang.foreign.MemorySegment;
+import java.util.OptionalLong;
 
 /// The vectorizable kernels shared by the reader and the writer: the tight loops where a SIMD
 /// implementation can replace the auto-vectorized one without changing a single output byte.
@@ -13,36 +14,112 @@ import java.lang.foreign.MemorySegment;
 /// assume well-formed input and throw only [IllegalArgumentException] for a `ptype` they do not cover.
 public interface SimdOperations {
 
-    /// Widens `count` contiguous little-endian integer elements starting at element index
-    /// `fromElement` into `out[0, count)`, zero-extending unsigned ptypes and sign-extending signed ones.
+    /// Widens `count` contiguous little-endian elements starting at element index `fromElement`
+    /// into `out[0, count)`: signed integers are sign-extended, unsigned integers zero-extended, and
+    /// floating-point values contribute their raw bits, zero-extended.
     ///
     /// @param src         the source segment
     /// @param fromElement starting element index (not byte offset) within `src`
     /// @param count       number of elements to widen
-    /// @param ptype       the elements' physical type, an integer type
+    /// @param ptype       the elements' physical type
     /// @param out         destination array, at least `count` long
-    /// @throws IllegalArgumentException if `ptype` is not an integer type
     void widenInto(MemorySegment src, long fromElement, int count, PType ptype, long[] out);
 
+    /// The heap-array counterpart of [#widenInto]: widens `count` elements of a primitive array
+    /// starting at index `from` into `out[0, count)`, with the same extension rules.
+    ///
+    /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`)
+    /// @param from   starting element index within `values`
+    /// @param count  number of elements to widen
+    /// @param ptype  the elements' physical type
+    /// @param out    destination array, at least `count` long
+    void widenArrayInto(Object values, int from, int count, PType ptype, long[] out);
+
     /// Narrows `values` to the width of `ptype`, keeping the low bytes, and writes them
-    /// little-endian into `dst` starting at byte 0. Handles the 1-, 2- and 4-byte types; the
-    /// 8-byte types are a plain bulk copy that needs no kernel.
+    /// little-endian into `dst` starting at byte 0. Floating-point types keep their raw bits, and the
+    /// 8-byte types are written as they are.
     ///
     /// @param values the wide values
-    /// @param ptype  the target physical type, 1 to 4 bytes wide (floats keep their raw bits)
+    /// @param ptype  the target physical type
     /// @param dst    destination segment, at least `values.length * ptype.byteSize()` bytes
-    /// @throws IllegalArgumentException if `ptype` is 8 bytes wide
     void narrowInto(long[] values, PType ptype, MemorySegment dst);
+
+    /// The heap-array counterpart of [#narrowInto]: narrows `values` to the width of `ptype`, keeping
+    /// the low bytes, into the primitive array `out`. Floating-point carriers are rebuilt from the raw
+    /// bits, the inverse of [#widenArrayInto].
+    ///
+    /// @param values the wide values
+    /// @param ptype  the target physical type
+    /// @param out    an array matching `ptype`'s carrier (`short[]` for `F16`), at least `values.length` long
+    void narrowArrayInto(long[] values, PType ptype, Object out);
 
     /// Returns the largest of `count` contiguous little-endian unsigned elements of `src`, zero when
     /// `count` is zero: the dictionary code bound check (Rust's `vmaxq_u8` small-table guard).
     ///
     /// @param src   the source segment, at least `count * ptype.byteSize()` bytes
     /// @param count number of elements to scan
-    /// @param ptype the elements' physical type: `U8`, `U16` or `U32`
-    /// @return the maximum, zero-extended
-    /// @throws IllegalArgumentException if `ptype` is not `U8`, `U16` or `U32`
+    /// @param ptype the elements' physical type: `U8`, `U16`, `U32` or `U64`
+    /// @return the maximum, zero-extended (as its bit pattern for `U64`)
+    /// @throws IllegalArgumentException if `ptype` is not an unsigned integer type
     long maxUnsigned(MemorySegment src, long count, PType ptype);
+
+    /// Returns the smallest and largest element in the ptype's natural order, widened as
+    /// [#widenArrayInto] does (a float contributes its raw bits). Integers compare as their type
+    /// does, `U64` unsigned. Floating-point values skip `NaN` (Rust's `skip_nans`) and follow the total
+    /// order for zeros, `-0.0` before `0.0`, as Rust does.
+    ///
+    /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`)
+    /// @param ptype  the elements' physical type
+    /// @return `{min, max}`; for a floating-point array with no non-`NaN` element (including an
+    ///         empty one) an empty array
+    /// @throws IllegalArgumentException if `values` is empty and `ptype` is an integer type
+    long[] minMax(Object values, PType ptype);
+
+    /// Returns whether every element of `values` equals the first, comparing floating-point values by
+    /// their raw bits: distinct NaN payloads, and `-0.0` against `0.0`, are not equal. An empty array
+    /// is trivially equal.
+    ///
+    /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`)
+    /// @param ptype  the elements' physical type
+    /// @return `true` if all elements are equal
+    boolean allEqual(Object values, PType ptype);
+
+    /// Returns whether every element of `values` equals the first; an empty array is trivially equal.
+    ///
+    /// @param values the flags
+    /// @return `true` if all elements are equal
+    boolean allEqual(boolean[] values);
+
+    /// Sums an integer array in Rust's widened shape: signed types as a signed `long`, unsigned types
+    /// as an unsigned one (returned as its bit pattern). Overflow is checked per addition, in order,
+    /// so a partial sum that overflows reports overflow even if later terms would bring the total
+    /// back in range (Rust's `checked_add`). Only `I64` and `U64` can overflow: the narrower widths
+    /// cannot, for any array that fits in memory.
+    ///
+    /// @param values an array matching `ptype`'s carrier; empty sums to zero
+    /// @param ptype  the elements' physical type, an integer type
+    /// @return the sum, or empty on overflow
+    /// @throws IllegalArgumentException if `ptype` is not an integer type
+    OptionalLong sum(Object values, PType ptype);
+
+    /// Sums a floating-point array into a `double`, strictly left to right. The order is part of the
+    /// contract: reassociating a float sum changes its rounding, and with it the stats bits we write.
+    ///
+    /// @param values a `short[]` (`F16`), `float[]` (`F32`) or `double[]` (`F64`)
+    /// @param ptype  the elements' physical type, a floating-point type
+    /// @return the sum, zero for an empty array
+    /// @throws IllegalArgumentException if `ptype` is not a floating-point type
+    double sumFloating(Object values, PType ptype);
+
+    /// Counts the runs of equal neighbors: one plus every position whose element differs from its
+    /// predecessor, and zero for an empty array. Floating-point elements are compared by value, as
+    /// `!=`: a `NaN` always differs from its neighbor, and `0.0` equals `-0.0`. That is unlike
+    /// [#allEqual(Object, PType)], which compares raw bits.
+    ///
+    /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`, compared as raw bits)
+    /// @param ptype  the elements' physical type
+    /// @return the number of runs
+    long runs(Object values, PType ptype);
 
     /// Reverses the FastLanes delta transform of one 1024-element chunk. Each of the `lanes`
     /// independent lanes is a prefix sum over `typeBits` rows, wrapping at the element width.

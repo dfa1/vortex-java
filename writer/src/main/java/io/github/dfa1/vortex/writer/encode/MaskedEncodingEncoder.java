@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -136,7 +137,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// @param ctx      the encode context
     /// @return the encoded validity child
     static EncodeResult encodeValidity(boolean[] validity, EncodeContext ctx) {
-        if (isConstantValidity(validity)) {
+        if (SimdOperationsSupport.preferred().allEqual(validity)) {
             return new ConstantEncodingEncoder().encode(DType.BOOL, validity, ctx);
         }
         EncodeResult best = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
@@ -164,19 +165,6 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
             total += buf.byteSize();
         }
         return total;
-    }
-
-    private static boolean isConstantValidity(boolean[] validity) {
-        if (validity.length == 0) {
-            return true;
-        }
-        boolean first = validity[0];
-        for (boolean b : validity) {
-            if (b != first) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /// Returns `values` unchanged, except a `String[]`/`byte[][]` with null elements is copied

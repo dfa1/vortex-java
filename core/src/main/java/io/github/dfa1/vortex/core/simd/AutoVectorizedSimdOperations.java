@@ -6,11 +6,16 @@ import io.github.dfa1.vortex.core.model.PType;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.reflect.Array;
+import java.util.OptionalLong;
 
 /// The auto-vectorized [SimdOperations]: plain Java loops that rely on C2 auto-vectorization, with one
 /// specialized loop per width and the `ptype` switch hoisted out (CLAUDE.md hot-loop rule), so each
 /// body is uniform.
 final class AutoVectorizedSimdOperations implements SimdOperations {
+
+    /// Elements compared per branch-free block of [#allEqual(Object, PType)].
+    private static final int EQUAL_BLOCK = 256;
 
     @Override
     public void widenInto(MemorySegment src, long fromElement, int count, PType ptype, long[] out) {
@@ -30,7 +35,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     out[i] = src.getAtIndex(VortexFormat.LE_SHORT, fromElement + i);
                 }
             }
-            case U16 -> {
+            case U16, F16 -> {
                 for (int i = 0; i < count; i++) {
                     out[i] = Short.toUnsignedLong(src.getAtIndex(VortexFormat.LE_SHORT, fromElement + i));
                 }
@@ -40,17 +45,71 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     out[i] = src.getAtIndex(VortexFormat.LE_INT, fromElement + i);
                 }
             }
-            case U32 -> {
+            case U32, F32 -> {
                 for (int i = 0; i < count; i++) {
                     out[i] = Integer.toUnsignedLong(src.getAtIndex(VortexFormat.LE_INT, fromElement + i));
                 }
             }
-            case I64, U64 -> {
+            case I64, U64, F64 -> {
                 for (int i = 0; i < count; i++) {
                     out[i] = src.getAtIndex(VortexFormat.LE_LONG, fromElement + i);
                 }
             }
-            default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
+        }
+    }
+
+    @Override
+    public void widenArrayInto(Object values, int from, int count, PType ptype, long[] out) {
+        switch (ptype) {
+            case I8 -> {
+                byte[] a = (byte[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i];
+                }
+            }
+            case U8 -> {
+                byte[] a = (byte[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i] & 0xFFL;
+                }
+            }
+            case I16 -> {
+                short[] a = (short[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i];
+                }
+            }
+            case U16, F16 -> {
+                short[] a = (short[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i] & 0xFFFFL;
+                }
+            }
+            case I32 -> {
+                int[] a = (int[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i];
+                }
+            }
+            case U32 -> {
+                int[] a = (int[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = a[from + i] & 0xFFFF_FFFFL;
+                }
+            }
+            case I64, U64 -> System.arraycopy((long[]) values, from, out, 0, count);
+            case F32 -> {
+                float[] a = (float[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = Float.floatToRawIntBits(a[from + i]) & 0xFFFF_FFFFL;
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = Double.doubleToRawLongBits(a[from + i]);
+                }
+            }
         }
     }
 
@@ -73,7 +132,55 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     dst.setAtIndex(VortexFormat.LE_INT, i, (int) values[i]);
                 }
             }
-            default -> throw new IllegalArgumentException("not a 1-4 byte ptype: " + ptype);
+            case I64, U64, F64 -> {
+                for (int i = 0; i < n; i++) {
+                    dst.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void narrowArrayInto(long[] values, PType ptype, Object out) {
+        int n = values.length;
+        switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = (byte[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = (byte) values[i];
+                }
+            }
+            case I16, U16 -> {
+                short[] a = (short[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = (short) values[i];
+                }
+            }
+            case I32, U32 -> {
+                int[] a = (int[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = (int) values[i];
+                }
+            }
+            case I64, U64 -> System.arraycopy(values, 0, (long[]) out, 0, n);
+            case F16 -> {
+                short[] a = (short[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = (short) values[i];
+                }
+            }
+            case F32 -> {
+                float[] a = (float[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = Float.intBitsToFloat((int) values[i]);
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = Double.longBitsToDouble(values[i]);
+                }
+            }
         }
     }
 
@@ -87,7 +194,8 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
             case U8 -> maxU8(src, count);
             case U16 -> maxU16(src, count);
             case U32 -> maxU32(src, count);
-            default -> throw new IllegalArgumentException("not a U8/U16/U32 ptype: " + ptype);
+            case U64 -> maxU64(src, count);
+            default -> throw new IllegalArgumentException("not an unsigned integer ptype: " + ptype);
         };
     }
 
@@ -127,12 +235,451 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
         return Math.max(Math.max(m0, m1), Math.max(m2, m3));
     }
 
+    // Flipping the sign bit orders the signed max as unsigned; NEON has no 64-bit max, so this is a
+    // scalar compare-and-select loop whatever the flip.
+    private static long maxU64(MemorySegment src, long count) {
+        long max = Long.MIN_VALUE;
+        for (long i = 0; i < count; i++) {
+            max = Math.max(max, src.getAtIndex(VortexFormat.LE_LONG, i) ^ Long.MIN_VALUE);
+        }
+        return max ^ Long.MIN_VALUE;
+    }
+
     private static long maxU32(MemorySegment src, long count) {
         int max = Integer.MIN_VALUE;
         for (long i = 0; i < count; i++) {
             max = Math.max(max, src.getAtIndex(VortexFormat.LE_INT, i) ^ Integer.MIN_VALUE);
         }
         return Integer.toUnsignedLong(max ^ Integer.MIN_VALUE);
+    }
+
+    // Reduced in the int domain: NEON has no 64-bit integer min/max, so C2 vectorizes these loops for
+    // `int`, `short` and `byte` but not over a widened `long` buffer (#476). Unsigned widths are masked
+    // in the loop, which keeps them in their carrier's lanes.
+    @Override
+    public long[] minMax(Object values, PType ptype) {
+        if (Array.getLength(values) == 0) {
+            if (ptype.isFloating()) {
+                return new long[0];
+            }
+            throw new IllegalArgumentException("empty array has no min/max");
+        }
+        return switch (ptype) {
+            case I8 -> {
+                byte[] a = (byte[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (byte v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U8 -> {
+                byte[] a = (byte[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (byte v : a) {
+                    min = Math.min(min, v & 0xFF);
+                    max = Math.max(max, v & 0xFF);
+                }
+                yield new long[]{min, max};
+            }
+            case I16 -> {
+                short[] a = (short[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (short v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U16 -> {
+                short[] a = (short[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (short v : a) {
+                    min = Math.min(min, v & 0xFFFF);
+                    max = Math.max(max, v & 0xFFFF);
+                }
+                yield new long[]{min, max};
+            }
+            case I32 -> {
+                int[] a = (int[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (int v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U32 -> {
+                // Flipping the sign bit maps unsigned order onto signed order, so the loop stays
+                // a plain int min/max.
+                int[] a = (int[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (int v : a) {
+                    min = Math.min(min, v ^ Integer.MIN_VALUE);
+                    max = Math.max(max, v ^ Integer.MIN_VALUE);
+                }
+                yield new long[]{Integer.toUnsignedLong(min ^ Integer.MIN_VALUE),
+                        Integer.toUnsignedLong(max ^ Integer.MIN_VALUE)};
+            }
+            case I64 -> {
+                long[] a = (long[]) values;
+                long min = Long.MAX_VALUE;
+                long max = Long.MIN_VALUE;
+                for (long v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U64 -> {
+                // Flipping the sign bit maps unsigned order onto signed order
+                long[] a = (long[]) values;
+                long min = Long.MAX_VALUE;
+                long max = Long.MIN_VALUE;
+                for (long v : a) {
+                    min = Math.min(min, v ^ Long.MIN_VALUE);
+                    max = Math.max(max, v ^ Long.MIN_VALUE);
+                }
+                yield new long[]{min ^ Long.MIN_VALUE, max ^ Long.MIN_VALUE};
+            }
+            // Floating-point: NaN is skipped (Rust's `skip_nans`), and Math.min/Math.max give Rust's total
+            // order for zeros, -0.0 before 0.0. Starting from the infinities, an array with no ordered
+            // element ends with min > max.
+            case F16 -> {
+                short[] a = (short[]) values;
+                float min = 0f;
+                float max = 0f;
+                short minBits = 0;
+                short maxBits = 0;
+                boolean seen = false;
+                for (short v : a) {
+                    float f = Float.float16ToFloat(v);
+                    if (f != f) {
+                        continue;
+                    }
+                    if (!seen) {
+                        min = f;
+                        max = f;
+                        minBits = v;
+                        maxBits = v;
+                        seen = true;
+                        continue;
+                    }
+                    if (Float.compare(f, min) < 0) {
+                        min = f;
+                        minBits = v;
+                    }
+                    if (Float.compare(f, max) > 0) {
+                        max = f;
+                        maxBits = v;
+                    }
+                }
+                yield seen ? new long[]{Short.toUnsignedLong(minBits), Short.toUnsignedLong(maxBits)} : new long[0];
+            }
+            case F32 -> {
+                float[] a = (float[]) values;
+                float min = Float.POSITIVE_INFINITY;
+                float max = Float.NEGATIVE_INFINITY;
+                for (float v : a) {
+                    if (v == v) {
+                        min = Math.min(min, v);
+                        max = Math.max(max, v);
+                    }
+                }
+                yield min > max ? new long[0] : new long[]{
+                        Float.floatToRawIntBits(min) & 0xFFFF_FFFFL, Float.floatToRawIntBits(max) & 0xFFFF_FFFFL};
+            }
+            case F64 -> {
+                double[] a = (double[]) values;
+                double min = Double.POSITIVE_INFINITY;
+                double max = Double.NEGATIVE_INFINITY;
+                for (double v : a) {
+                    if (v == v) {
+                        min = Math.min(min, v);
+                        max = Math.max(max, v);
+                    }
+                }
+                yield min > max ? new long[0] : new long[]{Double.doubleToRawLongBits(min), Double.doubleToRawLongBits(max)};
+            }
+        };
+    }
+
+    // Block-wise: each block ORs the XOR against the first element, which is branch-free and so
+    // vectorizes, and the early exit happens between blocks. A non-constant array, the common case,
+    // is rejected after one block; a per-element exit would stop C2 from vectorizing the body.
+    @Override
+    public boolean allEqual(Object values, PType ptype) {
+        if (Array.getLength(values) == 0) {
+            return true;
+        }
+        return switch (ptype) {
+            case I8, U8 -> allEqualBytes((byte[]) values);
+            case I16, U16, F16 -> allEqualShorts((short[]) values);
+            case I32, U32 -> allEqualInts((int[]) values);
+            case I64, U64 -> allEqualLongs((long[]) values);
+            case F32 -> allEqualFloatBits((float[]) values);
+            case F64 -> allEqualDoubleBits((double[]) values);
+        };
+    }
+
+    @Override
+    public boolean allEqual(boolean[] values) {
+        if (values.length == 0) {
+            return true;
+        }
+        boolean first = values[0];
+        for (int base = 0; base < values.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, values.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= values[i] != first ? 1 : 0;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualBytes(byte[] a) {
+        byte first = a[0];
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= a[i] ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualShorts(short[] a) {
+        short first = a[0];
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= a[i] ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualInts(int[] a) {
+        int first = a[0];
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= a[i] ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualLongs(long[] a) {
+        long first = a[0];
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            long diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= a[i] ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualFloatBits(float[] a) {
+        int first = Float.floatToRawIntBits(a[0]);
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            int diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= Float.floatToRawIntBits(a[i]) ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean allEqualDoubleBits(double[] a) {
+        long first = Double.doubleToRawLongBits(a[0]);
+        for (int base = 0; base < a.length; base += EQUAL_BLOCK) {
+            int end = Math.min(base + EQUAL_BLOCK, a.length);
+            long diff = 0;
+            for (int i = base; i < end; i++) {
+                diff |= Double.doubleToRawLongBits(a[i]) ^ first;
+            }
+            if (diff != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public OptionalLong sum(Object values, PType ptype) {
+        return switch (ptype) {
+            case I8 -> {
+                long s = 0;
+                for (byte v : (byte[]) values) {
+                    s += v;
+                }
+                yield OptionalLong.of(s);
+            }
+            case I16 -> {
+                long s = 0;
+                for (short v : (short[]) values) {
+                    s += v;
+                }
+                yield OptionalLong.of(s);
+            }
+            case I32 -> {
+                long s = 0;
+                for (int v : (int[]) values) {
+                    s += v;
+                }
+                yield OptionalLong.of(s);
+            }
+            case I64 -> {
+                long s = 0;
+                for (long v : (long[]) values) {
+                    try {
+                        s = Math.addExact(s, v);
+                    } catch (ArithmeticException _) {
+                        yield OptionalLong.empty();
+                    }
+                }
+                yield OptionalLong.of(s);
+            }
+            case U8 -> {
+                long s = 0;
+                for (byte v : (byte[]) values) {
+                    s += Byte.toUnsignedLong(v);
+                }
+                yield OptionalLong.of(s);
+            }
+            case U16 -> {
+                long s = 0;
+                for (short v : (short[]) values) {
+                    s += Short.toUnsignedLong(v);
+                }
+                yield OptionalLong.of(s);
+            }
+            case U32 -> {
+                long s = 0;
+                for (int v : (int[]) values) {
+                    s += Integer.toUnsignedLong(v);
+                }
+                yield OptionalLong.of(s);
+            }
+            case U64 -> {
+                long s = 0;
+                for (long v : (long[]) values) {
+                    long next = s + v;
+                    if (Long.compareUnsigned(next, s) < 0) {
+                        yield OptionalLong.empty();
+                    }
+                    s = next;
+                }
+                yield OptionalLong.of(s);
+            }
+            default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
+        };
+    }
+
+    @Override
+    public double sumFloating(Object values, PType ptype) {
+        double s = 0;
+        switch (ptype) {
+            case F16 -> {
+                for (short v : (short[]) values) {
+                    s += Float.float16ToFloat(v);
+                }
+            }
+            case F32 -> {
+                for (float v : (float[]) values) {
+                    s += v;
+                }
+            }
+            case F64 -> {
+                for (double v : (double[]) values) {
+                    s += v;
+                }
+            }
+            default -> throw new IllegalArgumentException("not a floating-point ptype: " + ptype);
+        }
+        return s;
+    }
+
+    // Branch-free body per carrier, so C2 vectorizes it (CLAUDE.md hot-loop rule).
+    @Override
+    public long runs(Object values, PType ptype) {
+        int n = Array.getLength(values);
+        if (n == 0) {
+            return 0;
+        }
+        long changes = 0;
+        switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = (byte[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I16, U16, F16 -> {
+                short[] a = (short[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I32, U32 -> {
+                int[] a = (int[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I64, U64 -> {
+                long[] a = (long[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case F32 -> {
+                float[] a = (float[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+        }
+        return changes + 1;
     }
 
     // Only the result is masked: the low typeBits bits of a sum or difference depend on the operands'

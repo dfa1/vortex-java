@@ -44,6 +44,18 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 | Duplicate struct field names | Rust writer rejects ("StructLayout must have unique field names"); Rust reader tolerates foreign files (first-match access) | ⚠️ Deliberate divergence on read: Java rejects such files with `VortexException("duplicate field name in file schema")` instead of tolerating them — the name-keyed `Chunk` API cannot represent both columns, and silent column loss is worse than a loud failure on a file the reference writer refuses to produce. Java's writer mirrors the Rust writer's rejection. |
 | Blank / control-character field names | Wire-legal; the Rust writer produces `""` and whitespace-only names. NUL (`U+0000`) additionally aborts the Rust toolchain: Arrow FFI schema export hits a panic-cannot-unwind in `arrow-rs` (`ffi_stream::get_schema`) and SIGABRTs the process (measured against vortex-jni 0.75.0) | ⚠️ Deliberate strictness BOTH ways: vortex-java's writer refuses blank and control-character field names (`IllegalArgumentException`), and its reader rejects files carrying them (`VortexException` naming the producing pipeline as the likely bug) — the JSON-`""`-key principle: wire-legal is a floor, not a policy. Printable names of any shape (`$`-runs, spaces inside, emoji) are legal and round-trip intact both directions (measured; pinned by `ColumnNameEdgeCasesIntegrationTest`). |
 
+## Primitive statistics (min, max, sum)
+
+The bulk loops behind the min, max and sum statistics live in `SimdOperations`. Compared with the Rust source:
+
+- Float min/max statistics order `-0.0` before `0.0` and skip `NaN`, as Rust's `total_compare` with
+  `skip_nans` does. Before, the first zero met in array order was kept.
+- `U64` min/max and the dense-counter span in `ArrayStats` are computed in unsigned order, as Rust's
+  `typed_int_stats` does.
+- **Open divergence:** Rust binds the zoned `Min`, `Max` **and `Sum`** aggregates with `skip_nans()`, so a
+  float zone's sum ignores `NaN`. Java's float sum adds `NaN` and so becomes `NaN`
+  ([#523](https://github.com/dfa1/vortex-java/issues/523)).
+
 ## Real-world conformance: the Raincloud corpus
 
 Cross-implementation conformance against [Raincloud](https://github.com/spiraldb/raincloud)

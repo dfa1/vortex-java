@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Set;
@@ -95,13 +96,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
     }
 
     private static long computeRef(long[] longs, int n) {
-        long ref = n > 0 ? longs[0] : 0L;
-        for (long v : longs) {
-            if (v < ref) {
-                ref = v;
-            }
-        }
-        return ref;
+        return n > 0 ? SimdOperationsSupport.preferred().minMax(longs, PType.I64)[0] : 0L;
     }
 
     private static MemorySegment buildForMeta(long ref, PType ptype) {
