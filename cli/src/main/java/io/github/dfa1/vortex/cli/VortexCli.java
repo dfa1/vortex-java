@@ -52,7 +52,7 @@ public final class VortexCli {
         out.println("                                       convert CSV or Parquet (local or url) to Vortex or Parquet");
         out.println("  schema  <file.vortex>               print dtype (machine-readable)");
         out.println("  count   <file.vortex>               print row count");
-        out.println("  select  <file.vortex> <col> [...]   project columns to CSV on stdout");
+        out.println("  select  <file.vortex> <col> [...] [--where <expr>]  project columns to CSV on stdout, optionally filtered");
         out.println("  stats   <file.vortex>               print per-column min/max statistics");
         out.println("  filter  <file.vortex> <expr>        filter rows to CSV (e.g. \"price >= 100\")");
     }

@@ -209,6 +209,14 @@ try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
 java -jar cli/target/vortex-cli-*-all.jar select trades.vortex symbol price
 ```
 
+Add `--where` (repeatable, all conditions must hold) to keep only some rows. It takes the same expressions as
+`filter`, and the filtered column does not have to be printed. An interval is two conditions:
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar select trades.vortex ts price \
+    --where "symbol = BTCUSDT" --where "ts >= 1718452800000" --where "ts < 1718456400000"
+```
+
 ---
 
 ## Filter rows

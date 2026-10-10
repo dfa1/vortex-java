@@ -640,7 +640,7 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | `count`    | `count <file.vortex>`                          | Total row count                                  |
 | `stats`    | `stats <file.vortex>`                          | Per-column min/max                               |
 | `export`   | `export <file.vortex\|url> [out.csv\|out.parquet\|-]` | All columns to CSV (default) or Parquet, by output extension; `-` for CSV on stdout. A `url` source requires an explicit `out.parquet` path — CSV/stdout from a URL isn't supported |
-| `select`   | `select <file.vortex> <col> [col2 ...]`        | Project columns to CSV                           |
+| `select`   | `select <file.vortex> <col> [col2 ...] [--where "<expr>" ...]` | Project columns to CSV; each `--where` is a `filter` expression and all must hold (the filtered columns need not be printed) |
 | `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
 | `import`   | `import [--delimiter <char>] <file.csv\|file.parquet\|url> [out.vortex\|out.parquet]` | CSV or Parquet (local or remote) source to Vortex; a `.parquet` output is CSV-only (chains through a temp Vortex file internally) — a Parquet source always produces Vortex, `.parquet` output is rejected |
 

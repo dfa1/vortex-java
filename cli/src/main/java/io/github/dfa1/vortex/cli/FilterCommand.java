@@ -69,7 +69,7 @@ final class FilterCommand {
         }
     }
 
-    private static RowFilter parseFilter(String expr) {
+    static RowFilter parseFilter(String expr) {
         String trimmed = expr.trim();
         int opStart = indexOfOperator(trimmed);
         if (opStart <= 0) {
@@ -153,7 +153,15 @@ final class FilterCommand {
         return raw;
     }
 
-    private static RowPredicate toRowPredicate(RowFilter filter) {
+    /// The columns a filter reads, so a projecting scan can include them even when the output omits them.
+    static List<ColumnName> filterColumns(RowFilter filter) {
+        return switch (filter) {
+            case RowFilter.Column(var col, _) -> List.of(col);
+            case RowFilter.And(var filters) -> filters.stream().flatMap(f -> filterColumns(f).stream()).toList();
+        };
+    }
+
+    static RowPredicate toRowPredicate(RowFilter filter) {
         return switch (filter) {
             case RowFilter.Column(var col, var predicate) -> columnPredicate(col, predicate);
             case RowFilter.And(var filters) -> {
