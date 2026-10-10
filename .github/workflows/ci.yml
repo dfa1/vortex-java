@@ -33,6 +33,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      # The integration tests download Rust-written fixtures from S3 (a snapshot pinned to the
+      # vortex-jni version) and LocalHttpCache keeps them here, so a cache hit takes the S3 round
+      # trips, and their occasional connection resets, out of the run. Windows skips integration.
+      - name: Cache downloaded test fixtures
+        if: runner.os != 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: /tmp/vortex-compat-fixtures
+          key: fixtures-${{ runner.os }}-${{ hashFiles('integration/src/test/java/io/github/dfa1/vortex/integration/RustFixtures.java') }}
+
       # vortex-jni 0.74.0 ships native libs for darwin-aarch64 + linux-aarch64
       # + linux-amd64 only. No Windows binary, so the modules that pull vortex-jni
       # (integration, performance) are skipped on Windows. Being the only Vortex
