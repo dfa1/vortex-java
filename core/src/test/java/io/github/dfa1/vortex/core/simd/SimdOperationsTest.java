@@ -211,6 +211,34 @@ class SimdOperationsTest {
     }
 
     @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32"})
+    void narrowArrayInto_keepsTheLowBytes_andWidenRestoresThem(PType ptype) {
+        // Given full-range wide values, so the dropped high bytes are not all zero
+        Object carrier = randomArray(ptype, VALUES.length, new Random(1));
+        long[] result = VALUES.clone();
+
+        // When narrowed into an array and widened back
+        sut.narrowArrayInto(VALUES, ptype, carrier);
+        sut.widenArrayInto(carrier, 0, VALUES.length, ptype, result);
+
+        // Then each value equals the original truncated to the width and re-extended
+        for (int i = 0; i < VALUES.length; i++) {
+            long truncated = ptype.isSigned()
+                    ? VALUES[i] << (64 - 8 * ptype.byteSize()) >> (64 - 8 * ptype.byteSize())
+                    : VALUES[i] & (-1L >>> (64 - 8 * ptype.byteSize()));
+            assertThat(result[i]).as("%s[%d]", ptype, i).isEqualTo(truncated);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I64", "U64", "F16", "F32", "F64"})
+    void narrowArrayInto_unsupportedPType_throws(PType ptype) {
+        // Given / When / Then
+        assertThatThrownBy(() -> sut.narrowArrayInto(VALUES, ptype, new int[VALUES.length]))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
     void widenArrayInto_matchesSegmentWiden(PType ptype) {
         // Given the same full-range values as a heap array and as the equivalent segment

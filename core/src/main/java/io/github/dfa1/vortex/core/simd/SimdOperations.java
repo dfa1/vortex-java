@@ -46,6 +46,15 @@ public interface SimdOperations {
     /// @throws IllegalArgumentException if `ptype` is 8 bytes wide
     void narrowInto(long[] values, PType ptype, MemorySegment dst);
 
+    /// The heap-array counterpart of [#narrowInto]: narrows `values` to the width of `ptype`, keeping
+    /// the low bytes, into the primitive array `out`.
+    ///
+    /// @param values the wide values
+    /// @param ptype  the target physical type, an integer type of 1 to 4 bytes
+    /// @param out    a `byte[]`, `short[]` or `int[]` matching `ptype`'s carrier, at least `values.length` long
+    /// @throws IllegalArgumentException if `ptype` is not an integer type of 1 to 4 bytes
+    void narrowArrayInto(long[] values, PType ptype, Object out);
+
     /// Returns the largest of `count` contiguous little-endian unsigned elements of `src`, zero when
     /// `count` is zero: the dictionary code bound check (Rust's `vmaxq_u8` small-table guard).
     ///

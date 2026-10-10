@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.simd.SimdOperations;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
@@ -177,26 +178,21 @@ public final class PrimitiveArrays {
     /// @throws VortexException for floating-point or other non-integer types
     public static Object fromLongsArray(long[] longs, PType ptype, EncodingId encoding) {
         int n = longs.length;
+        SimdOperations ops = SimdOperationsSupport.preferred();
         return switch (ptype) {
             case I8, U8 -> {
                 byte[] r = new byte[n];
-                for (int i = 0; i < n; i++) {
-                    r[i] = (byte) longs[i];
-                }
+                ops.narrowArrayInto(longs, ptype, r);
                 yield r;
             }
             case I16, U16 -> {
                 short[] r = new short[n];
-                for (int i = 0; i < n; i++) {
-                    r[i] = (short) longs[i];
-                }
+                ops.narrowArrayInto(longs, ptype, r);
                 yield r;
             }
             case I32, U32 -> {
                 int[] r = new int[n];
-                for (int i = 0; i < n; i++) {
-                    r[i] = (int) longs[i];
-                }
+                ops.narrowArrayInto(longs, ptype, r);
                 yield r;
             }
             case I64, U64 -> longs;

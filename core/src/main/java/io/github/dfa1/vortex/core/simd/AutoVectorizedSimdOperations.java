@@ -126,6 +126,32 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
         }
     }
 
+    @Override
+    public void narrowArrayInto(long[] values, PType ptype, Object out) {
+        int n = values.length;
+        switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = (byte[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = (byte) values[i];
+                }
+            }
+            case I16, U16 -> {
+                short[] a = (short[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = (short) values[i];
+                }
+            }
+            case I32, U32 -> {
+                int[] a = (int[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = (int) values[i];
+                }
+            }
+            default -> throw new IllegalArgumentException("not a 1-4 byte integer ptype: " + ptype);
+        }
+    }
+
     // Reduced in the int domain: NEON has no 64-bit integer max, so a long accumulator keeps C2 from
     // vectorizing on aarch64. U32 flips the sign bit so a signed int max orders it unsigned, and C2
     // vectorizes it. C2 does not vectorize a U8/U16 reduction (widening to int), so those run four
