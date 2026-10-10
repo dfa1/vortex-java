@@ -158,7 +158,7 @@ public final class CsvImporter {
         int chunkSize = options.chunkSize();
         String[] headers = null;
         List<String[]> rows = new ArrayList<>(chunkSize);
-        boolean expectHeader = options.hasHeader();
+        boolean expectHeader = options.header();
 
         for (CsvRecord csvRecord : reader) {
             if (expectHeader) {

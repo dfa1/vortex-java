@@ -34,7 +34,7 @@ class RunLengthVerdictTest {
         }
 
         // When
-        Estimate result = sut.expectedRatio(DType.I64, new ArrayAndStats(DType.I64, data, StatsOptions.NONE),
+        Estimate result = sut.expectedRatio(DType.I64, new ArrayAndStats(DType.I64, data, StatsOptions.defaults()),
                 EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.builder().registerDefaults().build()));
 
         // Then

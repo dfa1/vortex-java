@@ -46,7 +46,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
 
     @Override
     public StatsOptions statsOptions() {
-        return new StatsOptions(false, true);
+        return StatsOptions.defaults().withTrackMostFrequent(true);
     }
 
     @Override
@@ -279,7 +279,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     /// The fill: the most frequent value's bits, as Rust's sparse compress takes it from the
     /// stats' `most_frequent_value`, widened the way [#readBits] widens.
     private static long fillBits(PType ptype, Object data) {
-        return ArrayStats.compute(ptype, data, new StatsOptions(false, true)).mostFrequentBits();
+        return ArrayStats.compute(ptype, data, StatsOptions.defaults().withTrackMostFrequent(true)).mostFrequentBits();
     }
 
     private static ProtoScalarValue scalar(PType ptype, long bits) {

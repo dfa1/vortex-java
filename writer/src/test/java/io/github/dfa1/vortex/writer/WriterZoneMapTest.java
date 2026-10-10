@@ -8,7 +8,7 @@ import java.lang.foreign.ValueLayout;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.ArrayStats;
@@ -44,7 +44,7 @@ class WriterZoneMapTest {
 
     // Three zones of four rows: [0..3], [4..7], [8..11].
     private static Path write(Path tmp, boolean zoneMaps) throws IOException {
-        WriteOptions opts = new WriteOptions(zoneMaps, 0.90, 0, true, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(zoneMaps).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("zoned-" + zoneMaps + ".vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {
@@ -143,7 +143,7 @@ class WriterZoneMapTest {
         // zone 1 = [null, null]
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.I64, true)), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("nullable.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -180,7 +180,7 @@ class WriterZoneMapTest {
         // every one gets a vortex.stats layout — exercising each per-ptype stat-column arm.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")), List.of(new DType.Primitive(ptype, false)), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("ptype-" + ptype + ".vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -200,7 +200,7 @@ class WriterZoneMapTest {
     void noChunks_emitsNoZoneMap(@TempDir Path tmp) throws IOException {
         // Given a file closed without any writeChunk: the column has no chunks, so flushZoneMaps
         // skips it (the empty-chunks guard) and emits no zone-map.
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("empty.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {
@@ -223,7 +223,7 @@ class WriterZoneMapTest {
         // for every other chunk in the column.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")), List.of(DType.I64), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("partial.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -262,7 +262,7 @@ class WriterZoneMapTest {
         // the zone-map carries MAX+MIN+NULL_COUNT (string min/max), not null_count alone.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("utf8.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -300,7 +300,7 @@ class WriterZoneMapTest {
         DType ext = new DType.Extension(
                 "test.ext", DType.I64, null, false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("t")), List.of(ext), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("ext.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -337,7 +337,7 @@ class WriterZoneMapTest {
         // zone 1 = a..c → MAX+MIN+NULL_COUNT, with the column wrapped as vortex.stats over the dict.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("dict.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -374,7 +374,7 @@ class WriterZoneMapTest {
         // Zone-map min/max are computed on the logical I64 values: zone 0 = 1..2, zone 1 = 1..3.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")), List.of(DType.I64), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("primdict.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -414,7 +414,7 @@ class WriterZoneMapTest {
         // a decode that returned 0.0 or read the wrong scalar field would slip through. Fractional
         // .5 values also make a truncating (int) decode observable.
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.F64), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("zoned-f64.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -455,7 +455,7 @@ class WriterZoneMapTest {
         // F32 statColumn arms (and the f32 scalar field read in scalarDouble), which the I64/F64
         // value tests never reach.
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(new DType.Primitive(ptype, false)), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("ptype-stats-" + ptype + ".vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
@@ -486,7 +486,7 @@ class WriterZoneMapTest {
         // zero-extended magnitude) would then compare against backwards.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.U32, false)), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.OPTIONS.editions());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("unsigned-zone-stats.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {

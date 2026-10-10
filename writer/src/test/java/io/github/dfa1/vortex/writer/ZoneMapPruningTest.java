@@ -62,7 +62,7 @@ class ZoneMapPruningTest {
 
     /// Returns one entry per surviving chunk: its row count after filter pruning.
     private static List<Long> scanRowCounts(Path file, RowFilter filter) throws IOException {
-        var opts = new ScanOptions(List.of(), filter, ScanOptions.NO_LIMIT);
+        var opts = ScanOptions.all().withFilter(filter);
         var registry = registry();
         var rowCounts = new ArrayList<Long>();
         try (var vf = VortexReader.open(file, registry);
@@ -581,7 +581,7 @@ class ZoneMapPruningTest {
             // When
             List<String> result = new ArrayList<>();
             try (var vf = VortexReader.open(file, registry());
-                 var iter = vf.scan(new ScanOptions(List.of(), RowFilter.eq(ColumnName.of("s"), "sym2"), ScanOptions.NO_LIMIT))) {
+                 var iter = vf.scan(ScanOptions.all().withFilter(RowFilter.eq(ColumnName.of("s"), "sym2")))) {
                 iter.forEachRemaining(c -> {
                     VarBinArray values = (VarBinArray) c.column(ColumnName.of("s"));
                     for (long i = 0; i < values.length(); i++) {

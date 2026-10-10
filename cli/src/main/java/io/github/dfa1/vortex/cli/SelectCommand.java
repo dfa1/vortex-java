@@ -61,7 +61,7 @@ final class SelectCommand {
                 // chunks, so a column that is only filtered on must be there even if it is not printed.
                 Set<ColumnName> scanned = new LinkedHashSet<>(parsed.columns());
                 scanned.addAll(FilterCommand.filterColumns(filter));
-                ScanOptions scanOptions = new ScanOptions(List.copyOf(scanned), filter, ScanOptions.NO_LIMIT);
+                ScanOptions scanOptions = ScanOptions.columns(scanned.toArray(ColumnName[]::new)).withFilter(filter);
                 CsvExporter.exportCsvFiltered(path, stdout, options, scanOptions, FilterCommand.toRowPredicate(filter));
             }
             stdout.flush();

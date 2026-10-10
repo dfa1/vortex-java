@@ -27,7 +27,7 @@ class ArrayStatsTest {
         int[] data = {};
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.DISTINCT_AND_TOP);
+        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.distinctAndTop());
 
         // Then
         assertThat(result).isEqualTo(ArrayStats.EMPTY);
@@ -39,7 +39,7 @@ class ArrayStatsTest {
         int[] data = {1, 2, 3};
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.NONE);
+        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.defaults());
 
         // Then
         assertThat(result.valueCount()).isEqualTo(3);
@@ -52,7 +52,7 @@ class ArrayStatsTest {
         int[] data = {5, 5, 5, 7, 7, 9};
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.DISTINCT_AND_TOP);
+        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.distinctAndTop());
 
         // Then
         assertThat(result.distinctCount()).isEqualTo(3);
@@ -74,7 +74,7 @@ class ArrayStatsTest {
         }
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.DISTINCT_AND_TOP);
+        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.distinctAndTop());
 
         // Then — the count is a lower bound past the cap, never the exact n
         assertThat(result.distinctCapped()).isTrue();
@@ -95,7 +95,7 @@ class ArrayStatsTest {
         }
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.DISTINCT_AND_TOP);
+        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.distinctAndTop());
 
         // Then
         assertThat(result.distinctCapped()).isFalse();
@@ -110,7 +110,7 @@ class ArrayStatsTest {
         long[] data = new long[1000];
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.DISTINCT_AND_TOP);
+        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.distinctAndTop());
 
         // Then
         assertThat(result.distinctCount()).isEqualTo(1);
@@ -141,7 +141,7 @@ class ArrayStatsTest {
         }
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.DISTINCT_AND_TOP);
+        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.distinctAndTop());
 
         // Then
         assertThat(result.distinctCount()).isEqualTo(reference.size());
@@ -230,7 +230,7 @@ class ArrayStatsTest {
                 .mapToLong(Map.Entry::getKey).min().orElseThrow();
 
         // When
-        ArrayStats result = ArrayStats.compute(ptype, data, StatsOptions.DISTINCT_AND_TOP);
+        ArrayStats result = ArrayStats.compute(ptype, data, StatsOptions.distinctAndTop());
 
         // Then
         assertThat(result.distinctCapped()).isFalse();
@@ -248,7 +248,7 @@ class ArrayStatsTest {
         }
 
         // When: run length is reported even when no distinct stats are requested, as in Rust
-        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.NONE);
+        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.defaults());
 
         // Then
         assertThat(result.averageRunLength()).isEqualTo(30);
@@ -261,7 +261,7 @@ class ArrayStatsTest {
         double[] data = {0.0, -0.0, 0.0, Double.NaN, Double.NaN, 1.0};
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.F64, data, StatsOptions.NONE);
+        ArrayStats result = ArrayStats.compute(PType.F64, data, StatsOptions.defaults());
 
         // Then: integer division, as Rust's value_count / runs
         assertThat(result.averageRunLength()).isEqualTo(1);

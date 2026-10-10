@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -53,7 +52,7 @@ class WriterZoneMapHttpPruningTest {
         // Given a plain (non-cascading) I64 column across 4 chunks of 2 rows, each chunk in a
         // disjoint value range: [0,1], [10,11], [20,21], [30,31].
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withoutEditions();
         Path file = tmp.resolve("pruning.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {

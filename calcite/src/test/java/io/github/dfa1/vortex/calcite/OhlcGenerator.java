@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
-import io.github.dfa1.vortex.core.model.MemorySize;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.testing.OhlcData;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -21,7 +21,7 @@ final class OhlcGenerator {
     }
 
     static void write(Path file, int totalRows, int chunkSize) throws IOException {
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, OhlcData.SCHEMA, opts)) {
             for (OhlcData.Batch batch : OhlcData.generate(totalRows, chunkSize)) {

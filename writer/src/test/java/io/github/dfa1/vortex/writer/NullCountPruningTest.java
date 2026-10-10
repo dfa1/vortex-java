@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -34,8 +34,7 @@ class NullCountPruningTest {
     // sizes and null patterns: 3 rows / 0 nulls, 2 rows / 1 null, 4 rows / all null.
     private Path write() throws IOException {
         Path file = tmp.resolve("nulls.vtx");
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256),
-                Map.of(io.github.dfa1.vortex.core.model.EditionFamily.CORE, io.github.dfa1.vortex.core.model.Editions.CORE_2025_10_0));
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {
             sut.writeChunk(Map.of(ColumnName.of("v"), new NullableData(
@@ -49,7 +48,7 @@ class NullCountPruningTest {
     }
 
     private List<Long> scanRowCounts(Path file, RowFilter filter) throws IOException {
-        var opts = new ScanOptions(List.of(), filter, ScanOptions.NO_LIMIT);
+        var opts = ScanOptions.all().withFilter(filter);
         var counts = new ArrayList<Long>();
         try (VortexReader reader = VortexReader.open(file);
              var iter = reader.scan(opts)) {

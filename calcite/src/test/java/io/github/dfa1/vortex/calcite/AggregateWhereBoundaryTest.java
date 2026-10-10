@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -58,7 +58,7 @@ class AggregateWhereBoundaryTest {
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the tier-1 fold reads and the
         // classify() step uses to find the boundary zones.
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             for (int c = 0; c < CHUNKS; c++) {
@@ -459,7 +459,7 @@ class AggregateWhereBoundaryTest {
     private static void writeChunks(Path file, DType.Struct schema, Map<ColumnName, Object> chunk0,
                                     Map<ColumnName, Object> chunk1) throws Exception {
         // chunkSize large so each writeChunk is exactly one chunk (one zone).
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
             writer.writeChunk(chunk0);

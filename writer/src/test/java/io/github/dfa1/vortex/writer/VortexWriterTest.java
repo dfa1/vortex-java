@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -54,7 +53,7 @@ class VortexWriterTest {
         // VortexWriter pads before each segment so every buffer starts 64-aligned (Arrow-compatible);
         // a broken pad — wrong modulus arithmetic or a skipped writePadding — leaves a segment offset
         // off a 64-byte boundary.
-        WriteOptions opts = new WriteOptions(false, 0.90, 0, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(false).withGlobalDict(false).withoutEditions();
         Path file = tmp.resolve("aligned.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {

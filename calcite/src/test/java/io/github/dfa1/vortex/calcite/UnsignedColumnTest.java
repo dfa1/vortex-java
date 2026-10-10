@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.calcite;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -111,7 +110,7 @@ class UnsignedColumnTest {
     private static WriteOptions noZoneMaps() {
         // Same shape as the adapter coverage test's zone-maps-off options: the second flag disables
         // zone maps so no per-zone SUM exists and VortexAggregates falls back to scanSum.
-        return new WriteOptions(false, 0.90, 0, true, MemorySize.ofMiB(256), Map.of());
+        return WriteOptions.cascading(0).withZoneMaps(false).withGlobalDict(true).withoutEditions();
     }
 
     private static ReadRegistry registry() {

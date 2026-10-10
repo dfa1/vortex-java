@@ -267,6 +267,11 @@ When stuck on encode/decode behavior, consult **in this order**:
   loudly (`VortexException`, Rust default; no allowUnknown for layouts). Scope: the layout SPI covers
   full-column subtree decode; zone-map pruning, filtered scans, and chunk planning recognize the
   built-in layouts only.
+- **Options types are plain final classes with a private constructor** (`WriteOptions`, `ScanOptions`,
+  and the CSV/Parquet/JDBC import and export options): a `defaults()` or named factory returns the
+  starting point and `withXxx` methods return copies. Never a record and never a public
+  constructor — they hold callbacks or executors with no meaningful `equals`, and a constructor
+  freezes the field list as API.
 - **Small public APIs.** Don't expose internals — when in doubt, leave it out or make it private.
 - **POM deps** grouped with comments: `<!-- production -->` then `<!-- testing -->`, each with
   project-internal (`io.github.dfa1.vortex:*`) deps first, then external. Omit empty sections.
