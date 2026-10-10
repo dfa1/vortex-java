@@ -7,9 +7,10 @@ import io.github.dfa1.vortex.core.model.PType;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/// The scalar [SimdOperations]: one specialized loop per width with the `ptype` switch hoisted
-/// out (CLAUDE.md hot-loop rule), so each body is uniform and left to C2 superword.
-final class ScalarOperations implements SimdOperations {
+/// The auto-vectorized [SimdOperations]: plain Java loops that rely on C2 auto-vectorization, with one
+/// specialized loop per width and the `ptype` switch hoisted out (CLAUDE.md hot-loop rule), so each
+/// body is uniform.
+final class AutoVectorizedSimdOperations implements SimdOperations {
 
     @Override
     public void widenInto(MemorySegment src, long fromElement, int count, PType ptype, long[] out) {
