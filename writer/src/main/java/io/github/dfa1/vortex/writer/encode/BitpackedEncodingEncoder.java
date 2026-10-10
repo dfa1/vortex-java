@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.simd.SimdOperations;
-import io.github.dfa1.vortex.core.simd.VectorSupport;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -202,7 +202,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         long[] words = new long[wordsPerBlock];
         // The kernel packs full blocks only; a partial tail block is zero-padded into scratch.
         long[] tail = null;
-        SimdOperations ops = VectorSupport.operations();
+        SimdOperations ops = SimdOperationsSupport.preferred();
 
         for (int block = 0; block < blockCount; block++) {
             int blockStart = block * 1024;

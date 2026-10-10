@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.performance;
 
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.simd.SimdOperations;
-import io.github.dfa1.vortex.core.simd.VectorSupport;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -34,7 +34,7 @@ public class SimdKernelBenchmark {
     @Param({"8", "16", "32", "64"})
     public int typeBits;
 
-    private final SimdOperations ops = VectorSupport.operations();
+    private final SimdOperations ops = SimdOperationsSupport.preferred();
     private long[] input;
     private long[] bases;
     private long[] out;

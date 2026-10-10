@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.simd.VectorSupport;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -159,7 +159,7 @@ public final class PrimitiveArrays {
         if (ptype.isFloating()) {
             throw new VortexException(encoding, "unsupported ptype: " + ptype);
         }
-        VectorSupport.operations().widenInto(seg, fromElement, count, ptype, out);
+        SimdOperationsSupport.preferred().widenInto(seg, fromElement, count, ptype, out);
     }
 
     /// Writes a `long[]` to a freshly allocated little-endian off-heap segment whose element width
@@ -179,7 +179,7 @@ public final class PrimitiveArrays {
         }
         int n = longs.length;
         MemorySegment seg = arena.allocate((long) n * ptype.byteSize());
-        VectorSupport.operations().narrowInto(longs, ptype, seg);
+        SimdOperationsSupport.preferred().narrowInto(longs, ptype, seg);
         return seg;
     }
 

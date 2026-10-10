@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.performance;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.simd.SimdOperations;
-import io.github.dfa1.vortex.core.simd.VectorSupport;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -39,7 +39,7 @@ public class MaxUnsignedBenchmark {
     @Param({"U8", "U16", "U32"})
     public PType ptype;
 
-    private final SimdOperations ops = VectorSupport.operations();
+    private final SimdOperations ops = SimdOperationsSupport.preferred();
     private Arena arena;
     private MemorySegment codes;
 

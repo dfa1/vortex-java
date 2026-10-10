@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
-import io.github.dfa1.vortex.core.simd.VectorSupport;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -224,7 +224,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         }
         Optional<MemorySegment> segment = codes.segmentIfPresent();
         long max = segment.isPresent()
-                ? VectorSupport.operations().maxUnsigned(segment.get(),
+                ? SimdOperationsSupport.preferred().maxUnsigned(segment.get(),
                         Math.min(n, segment.get().byteSize() / codePType.byteSize()), codePType)
                 : maxCode(codes);
         if (Long.compareUnsigned(max, poolLength) >= 0) {

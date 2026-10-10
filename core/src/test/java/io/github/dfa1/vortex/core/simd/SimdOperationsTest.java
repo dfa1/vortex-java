@@ -24,7 +24,7 @@ class SimdOperationsTest {
     private static final long[] VALUES = {0L, -1L, 1L, 0x80L, 0xFFL, 0x8000L, 0xFFFFL, 0x80000000L,
             0xFFFFFFFFL, Long.MIN_VALUE, Long.MAX_VALUE, 0x123456789ABCDEFL};
 
-    private final SimdOperations sut = VectorSupport.operations();
+    private final SimdOperations sut = SimdOperationsSupport.preferred();
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
