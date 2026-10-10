@@ -64,7 +64,7 @@ public final class ChunkedArrayCombiner {
     /// @param totalRows the total logical row count across all chunks
     /// @param chunks    the decoded per-chunk arrays, in row order
     /// @return the combined primitive view
-    /// @throws VortexException for a ptype with no chunked view (F16)
+    /// @throws VortexException on empty input, a chunk of the wrong array family, or a row-count mismatch
     public static Array combinePrimitive(PType ptype, DType dtype, long totalRows,
             List<Array> chunks) {
         return switch (ptype) {
@@ -72,9 +72,9 @@ public final class ChunkedArrayCombiner {
             case I32, U32 -> ChunkedIntArray.of(dtype, totalRows, chunks);
             case F64 -> ChunkedDoubleArray.of(dtype, totalRows, chunks);
             case F32 -> ChunkedFloatArray.of(dtype, totalRows, chunks);
+            case F16 -> ChunkedFloat16Array.of(dtype, totalRows, chunks);
             case I16, U16 -> ChunkedShortArray.of(dtype, totalRows, chunks);
             case I8, U8 -> ChunkedByteArray.of(dtype, totalRows, chunks);
-            default -> throw new VortexException("unsupported ptype for chunked layout: " + ptype);
         };
     }
 

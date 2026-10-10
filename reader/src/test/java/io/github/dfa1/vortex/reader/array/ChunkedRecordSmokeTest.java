@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.testing.TestSegments;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static io.github.dfa1.vortex.core.testing.DTypes.BOOL;
+import static io.github.dfa1.vortex.core.testing.DTypes.F16;
 import static io.github.dfa1.vortex.core.testing.DTypes.F32;
 import static io.github.dfa1.vortex.core.testing.DTypes.F64;
 import static io.github.dfa1.vortex.core.testing.DTypes.I16;
@@ -550,6 +552,76 @@ class ChunkedRecordSmokeTest {
         void emptyRejected() {
             assertThatThrownBy(() -> ChunkedFloatArray.of(F32, 0, List.of()))
                     .isInstanceOf(VortexException.class);
+        }
+    }
+
+    @Nested
+    class ChunkedFloat16Full {
+
+        private static final short ONE_AND_A_HALF = (short) 0x3E00;
+        private static final short TWO_AND_A_HALF = (short) 0x4100;
+        private static final short NAN_PAYLOAD = (short) 0x7C01;
+
+        @Test
+        void getAcrossChunkBoundaryAndMaterializeKeepsBits() {
+            // Given two chunks, the second holding a NaN payload that float widening would lose
+            ChunkedFloat16Array sut = ChunkedFloat16Array.of(F16, 3,
+                    List.of(half(ONE_AND_A_HALF, TWO_AND_A_HALF), half(NAN_PAYLOAD)));
+
+            // When / Then
+            assertThat(sut.getFloat(1)).isEqualTo(2.5f);
+            assertThat(sut.getFloat(2)).isNaN();
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment m = sut.materialize(arena);
+                assertThat(m.byteSize()).isEqualTo(6L);
+                assertThat(m.getAtIndex(VortexFormat.LE_SHORT, 0)).isEqualTo(ONE_AND_A_HALF);
+                assertThat(m.getAtIndex(VortexFormat.LE_SHORT, 2)).isEqualTo(NAN_PAYLOAD);
+            }
+        }
+
+        @Test
+        void limitedKeepsLeadingRows() {
+            ChunkedFloat16Array sut = ChunkedFloat16Array.of(F16, 4,
+                    List.of(half(ONE_AND_A_HALF, TWO_AND_A_HALF), half(ONE_AND_A_HALF, TWO_AND_A_HALF)));
+
+            Float16Array limited = (Float16Array) sut.limited(3);
+
+            assertThat(limited.length()).isEqualTo(3);
+            assertThat(limited.getFloat(2)).isEqualTo(1.5f);
+        }
+
+        @Test
+        void ofFlattensNestedValidatesAndRejectsWrongType() {
+            ChunkedFloat16Array nested = ChunkedFloat16Array.of(F16, 3,
+                    List.of(half(ONE_AND_A_HALF, ONE_AND_A_HALF), half(ONE_AND_A_HALF)));
+            ChunkedFloat16Array sut = ChunkedFloat16Array.of(F16, 5, List.of(nested, half(TWO_AND_A_HALF, TWO_AND_A_HALF)));
+            assertThat(sut.children()).hasSize(3);
+
+            List<Float16Array> oneChunk = List.of(half(ONE_AND_A_HALF));
+            List<LongArray> oneLongChunk = List.of(longs(1L));
+            assertThatThrownBy(() -> ChunkedFloat16Array.of(F16, 99, oneChunk)).isInstanceOf(VortexException.class);
+            assertThatThrownBy(() -> ChunkedFloat16Array.of(F16, 1, oneLongChunk)).isInstanceOf(VortexException.class);
+            assertThatThrownBy(() -> ChunkedFloat16Array.of(F16, 0, List.of())).isInstanceOf(VortexException.class);
+
+            // a masked chunk flattens to its inner values
+            var masked = ChunkedFloat16Array.of(F16, 2,
+                    List.of(new MaskedArray(half(ONE_AND_A_HALF, TWO_AND_A_HALF), bools(true, true))));
+            assertThat(masked.getFloat(1)).isEqualTo(2.5f);
+        }
+
+        @Test
+        void combinerBuildsAChunkedViewForF16() {
+            // Given the combiner a F16 column (it used to throw "unsupported ptype for chunked layout")
+            Array result = ChunkedArrayCombiner.combinePrimitive(io.github.dfa1.vortex.core.model.PType.F16, F16, 3,
+                    List.of(half(ONE_AND_A_HALF), half(TWO_AND_A_HALF, ONE_AND_A_HALF)));
+
+            // Then
+            assertThat(result).isInstanceOf(ChunkedFloat16Array.class);
+            assertThat(((Float16Array) result).getFloat(1)).isEqualTo(2.5f);
+        }
+
+        private static Float16Array half(short... bits) {
+            return new MaterializedFloat16Array(F16, bits.length, TestSegments.leShorts(bits));
         }
     }
 }
