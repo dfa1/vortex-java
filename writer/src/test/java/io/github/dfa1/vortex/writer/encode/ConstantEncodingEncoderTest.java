@@ -64,8 +64,10 @@ class ConstantEncodingEncoderTest {
         // Given
         String[] data = {"a", "b"};
 
+        EncodeContext ctx = EncodeTestHelper.testCtx();
+
         // When / Then
-        assertThatThrownBy(() -> ENCODER.encode(DType.UTF8, data, EncodeTestHelper.testCtx()))
+        assertThatThrownBy(() -> ENCODER.encode(DType.UTF8, data, ctx))
                 .isInstanceOf(VortexException.class);
     }
 

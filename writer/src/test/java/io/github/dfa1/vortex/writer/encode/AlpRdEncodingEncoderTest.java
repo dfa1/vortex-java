@@ -110,7 +110,7 @@ class AlpRdEncodingEncoderTest {
     }
 
     @Test
-    void encode_f64_trainsTheDictionaryOnRunsSpreadOverTheArray() throws IOException {
+    void encode_f64_trainsTheDictionaryOnRunsSpreadOverTheArray() {
         // Given: 131072 values whose exponent changes every 64 rows, with 1.0 at every 256th row.
         // A sample taken every 256th row sees only 1.0, builds a one-entry dictionary, and sends
         // every other value to the exceptions (the klines quote_volume column paid 70-120 KB a
@@ -160,7 +160,7 @@ class AlpRdEncodingEncoderTest {
     }
 
     @Test
-    void encode_f64_patchValuesStayPrimitiveWhenTheyDiffer() throws IOException {
+    void encode_f64_patchValuesStayPrimitiveWhenTheyDiffer() {
         // Given: as above, but the outliers have two different exponents, so the exceptions differ
         Random random = new Random(11);
         double[] values = new double[2_000];

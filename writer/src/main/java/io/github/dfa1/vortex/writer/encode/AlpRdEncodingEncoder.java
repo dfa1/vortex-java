@@ -97,10 +97,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     }
 
     /// Rust's `SamplePlan::subsample` (`alp` crate): the whole input when it has at most
-    /// [#MAX_SAMPLE] values, else [#MAX_SAMPLE] values as evenly spread [#SAMPLE_BLOCK]-value runs.
+    /// [#MAX_SAMPLE] values (no run starts: the caller uses it as is), else [#MAX_SAMPLE] values as evenly spread
+    /// [#SAMPLE_BLOCK]-value runs.
     private static int[] sampleStarts(int n) {
         if (n <= MAX_SAMPLE) {
-            return null;
+            return new int[0];
         }
         int blocks = MAX_SAMPLE / SAMPLE_BLOCK;
         int spacing = (n - SAMPLE_BLOCK) / (blocks - 1);
@@ -113,7 +114,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
     private static double[] sampleF64(double[] values) {
         int[] starts = sampleStarts(values.length);
-        if (starts == null) {
+        if (starts.length == 0) {
             return values;
         }
         double[] sample = new double[starts.length * SAMPLE_BLOCK];
@@ -125,7 +126,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
     private static float[] sampleF32(float[] values) {
         int[] starts = sampleStarts(values.length);
-        if (starts == null) {
+        if (starts.length == 0) {
             return values;
         }
         float[] sample = new float[starts.length * SAMPLE_BLOCK];

@@ -75,7 +75,7 @@ class SequenceCascadeTest {
         return file;
     }
 
-    private static long[] readLongs(VortexReader reader) throws IOException {
+    private static long[] readLongs(VortexReader reader) {
         List<Long> out = new java.util.ArrayList<>();
         try (var iter = reader.scan(ScanOptions.all())) {
             iter.forEachRemaining(chunk -> {

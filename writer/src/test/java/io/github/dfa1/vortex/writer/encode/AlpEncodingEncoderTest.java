@@ -239,7 +239,7 @@ class AlpEncodingEncoderTest {
             assertThat(patches.indices_ptype()).isEqualTo(ProtoPType.fromValue(PType.U16.ordinal()));
             assertThat(patches.chunk_offsets_len()).isEqualTo(3L);
             assertThat(patches.chunk_offsets_ptype()).isEqualTo(ProtoPType.fromValue(PType.U8.ordinal()));
-            assertThat(patches.offset_within_chunk()).isEqualTo(0L);
+            assertThat(patches.offset_within_chunk()).isZero();
             MemorySegment indices = result.encodedBuffers().get(1).data();
             MemorySegment offsets = result.encodedBuffers().get(3).data();
             assertThat(new int[]{indices.get(VortexFormat.LE_SHORT, 0), indices.get(VortexFormat.LE_SHORT, 2),
