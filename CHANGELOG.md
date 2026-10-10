@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `WriteOptions` is a final class instead of a record. ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Fixed
-- A constant `F16` column can be written and read; it failed with `unsupported ptype: F16` ([#515](https://github.com/dfa1/vortex-java/issues/515)).
+- `F16` columns with constant, low-cardinality, run-heavy or mostly-one-value data can be written and read back; they failed with `unsupported ptype: F16` or wrote files the reader rejected. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - Pco columns follow Rust: 2^18-value chunks of 8192-value pages, Rust's IntMult filter, delta sample and histogram; integer columns are byte-identical to pco 1.0.1. ([#513](https://github.com/dfa1/vortex-java/pull/513))
 - Integer columns that are an exact arithmetic sequence (timestamps at a fixed step) are written as `vortex.sequence` instead of bit-packed, as Rust does (a 4.2M-row klines file 155 → 128 MB). ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - ALP-RD trains its dictionary on the sample Rust's `alp` uses (64 spread runs of 64 values) and ranks ties as Rust does, so the cascade picks it where Rust does (klines `quote_volume` column −0.5 MB). ([#507](https://github.com/dfa1/vortex-java/issues/507))

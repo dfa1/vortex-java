@@ -252,12 +252,11 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     private static int arrayLength(Object data, PType ptype) {
         return switch (ptype) {
             case I8, U8 -> ((byte[]) data).length;
-            case I16, U16 -> ((short[]) data).length;
+            case I16, U16, F16 -> ((short[]) data).length;
             case I32, U32 -> ((int[]) data).length;
             case I64, U64 -> ((long[]) data).length;
             case F32 -> ((float[]) data).length;
             case F64 -> ((double[]) data).length;
-            default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
         };
     }
 
@@ -266,13 +265,12 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             case I8 -> ((byte[]) data)[i];
             case U8 -> Byte.toUnsignedLong(((byte[]) data)[i]);
             case I16 -> ((short[]) data)[i];
-            case U16 -> Short.toUnsignedLong(((short[]) data)[i]);
+            case U16, F16 -> Short.toUnsignedLong(((short[]) data)[i]);
             case I32 -> ((int[]) data)[i];
             case U32 -> Integer.toUnsignedLong(((int[]) data)[i]);
             case I64, U64 -> ((long[]) data)[i];
             case F32 -> Float.floatToRawIntBits(((float[]) data)[i]);
             case F64 -> Double.doubleToRawLongBits(((double[]) data)[i]);
-            default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
         };
     }
 
@@ -286,9 +284,9 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         return switch (ptype) {
             case I8, I16, I32, I64 -> ProtoScalarValue.ofInt64Value(bits);
             case U8, U16, U32, U64 -> ProtoScalarValue.ofUint64Value(bits);
+            case F16 -> ProtoScalarValue.ofF16Value(Short.toUnsignedLong((short) bits));
             case F32 -> ProtoScalarValue.ofF32Value(Float.intBitsToFloat((int) bits));
             case F64 -> ProtoScalarValue.ofF64Value(Double.longBitsToDouble(bits));
-            default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
         };
     }
 

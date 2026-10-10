@@ -31,6 +31,7 @@ class LazyRleArrayTest {
     private static final DType I16 = DType.I16;
     private static final DType F64 = DType.F64;
     private static final DType F32 = DType.F32;
+    private static final DType F16 = DType.F16;
 
     @Nested
     class LongDispatch {
@@ -521,6 +522,89 @@ class LazyRleArrayTest {
             var zeros = new ArrayList<Double>();
             empty.forEachDouble(zeros::add);
             assertThat(zeros).containsExactly(0.0, 0.0);
+        }
+    }
+
+    /// F16 RLE columns follow the F32 layout with a 2-byte value child (#515); the pool stays in
+    /// half-precision bits, so a NaN payload survives materialize.
+    @Nested
+    class Float16Dispatch {
+
+        private static final short ONE_AND_A_HALF = (short) 0x3E00;
+        private static final short TWO_AND_A_HALF = (short) 0x4100;
+        private static final short NAN_PAYLOAD = (short) 0x7C01;
+
+        @Test
+        void singleChunkWithIndices_perRowLookup() {
+            // Given one chunk with 3 distinct halves in a 0,1,2 cycle; a wrong-width read
+            // (4 bytes per value) would shift every later value
+            var sut = new LazyRleFloat16Array(F16, 6,
+                    TestSegments.leShorts(ONE_AND_A_HALF, TWO_AND_A_HALF, NAN_PAYLOAD),
+                    u8Indices(1024, 0, 1, 2, 0, 1, 2), false, new long[]{0L}, 0L, 3L, 1, 0);
+
+            // When / Then
+            assertThat(sut.getFloat(0)).isEqualTo(1.5f);
+            assertThat(sut.getFloat(4)).isEqualTo(2.5f);
+            assertThat(sut.getFloat(5)).isNaN();
+        }
+
+        @Test
+        void constantRunAndEmptyChunk() {
+            // Given a constant chunk (1 distinct value) and an empty chunk (0 distinct values)
+            var constant = new LazyRleFloat16Array(F16, 3, TestSegments.leShorts(TWO_AND_A_HALF),
+                    u8Indices(1024), false, new long[]{0L}, 0L, 1L, 1, 0);
+            var empty = new LazyRleFloat16Array(F16, 2, TestSegments.leShorts(),
+                    u8Indices(1024), false, new long[]{0L}, 0L, 0L, 1, 0);
+
+            // When / Then
+            assertThat(constant.getFloat(2)).isEqualTo(2.5f);
+            assertThat(empty.getFloat(0)).isZero();
+        }
+
+        @Test
+        void indexOverrun_clampsToTheLastValue() {
+            // Given index[2] past the pool
+            var sut = new LazyRleFloat16Array(F16, 3,
+                    TestSegments.leShorts(ONE_AND_A_HALF, TWO_AND_A_HALF),
+                    u8Indices(1024, 0, 1, 9), false, new long[]{0L}, 0L, 2L, 1, 0);
+
+            // When / Then
+            assertThat(sut.getFloat(2)).isEqualTo(2.5f);
+        }
+
+        @Test
+        void materialize_keepsTheHalfBitsOfEveryRow() {
+            // Given an indexed chunk holding a NaN payload and a constant chunk after it
+            var sut = new LazyRleFloat16Array(F16, 1026,
+                    TestSegments.leShorts(ONE_AND_A_HALF, NAN_PAYLOAD, TWO_AND_A_HALF),
+                    u8Indices(2 * 1024, 0, 1, 0), false, new long[]{0L, 2L}, 0L, 3L, 2, 0);
+
+            // When
+            try (var arena = Arena.ofConfined()) {
+                var result = sut.materialize(arena);
+
+                // Then widening and narrowing again would have changed the payload
+                assertThat(result.byteSize()).isEqualTo(2052L);
+                assertThat(result.getAtIndex(VortexFormat.LE_SHORT, 0)).isEqualTo(ONE_AND_A_HALF);
+                assertThat(result.getAtIndex(VortexFormat.LE_SHORT, 1)).isEqualTo(NAN_PAYLOAD);
+                assertThat(result.getAtIndex(VortexFormat.LE_SHORT, 1025)).isEqualTo(TWO_AND_A_HALF);
+            }
+        }
+
+        @Test
+        void limited_cutsTheRowCountOnly() {
+            // Given
+            var sut = new LazyRleFloat16Array(F16, 6,
+                    TestSegments.leShorts(ONE_AND_A_HALF, TWO_AND_A_HALF),
+                    u8Indices(1024, 0, 1, 0, 1, 0, 1), false, new long[]{0L}, 0L, 2L, 1, 0);
+
+            // When
+            Array result = sut.limited(2);
+
+            // Then
+            assertThat(result.length()).isEqualTo(2L);
+            assertThat(((Float16Array) result).getFloat(1)).isEqualTo(2.5f);
+            assertThat(sut.limited(6)).isSameAs(sut);
         }
     }
 

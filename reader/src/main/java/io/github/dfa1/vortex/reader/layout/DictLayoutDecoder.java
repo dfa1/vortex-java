@@ -15,11 +15,13 @@ import io.github.dfa1.vortex.reader.array.CanonicalArrays;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictDoubleArray;
+import io.github.dfa1.vortex.reader.array.DictFloat16Array;
 import io.github.dfa1.vortex.reader.array.DictFloatArray;
 import io.github.dfa1.vortex.reader.array.DictIntArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DictShortArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -276,9 +278,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
             case I8, U8 -> DictByteArray.of(dtype, n, (ByteArray) valuesData, codesData);
             case F64 -> DictDoubleArray.of(dtype, n, (DoubleArray) valuesData, codesData);
             case F32 -> DictFloatArray.of(dtype, n, (FloatArray) valuesData, codesData);
-            // F16 has no Array subtype yet
-            default -> throw new VortexException(EncodingId.VORTEX_DICT,
-                    "layout: unsupported ptype for lazy dict: " + ptype);
+            case F16 -> DictFloat16Array.of(dtype, n, (Float16Array) valuesData, codesData);
         };
         if (poolValidity == null && codesValidity == null) {
             return dict;

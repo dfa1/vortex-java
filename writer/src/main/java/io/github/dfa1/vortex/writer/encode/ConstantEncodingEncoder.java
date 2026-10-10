@@ -223,7 +223,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         return switch (ptype) {
             case U8, U16, U32, U64 -> ProtoScalarValue.ofUint64Value(rawBits);
             case I8, I16, I32, I64 -> ProtoScalarValue.ofInt64Value(rawBits);
-            case F16 -> ProtoScalarValue.ofF16Value(rawBits & 0xFFFFL);
+            case F16 -> ProtoScalarValue.ofF16Value(Short.toUnsignedLong((short) rawBits));
             case F32 -> ProtoScalarValue.ofF32Value(Float.intBitsToFloat((int) rawBits));
             case F64 -> ProtoScalarValue.ofF64Value(Double.longBitsToDouble(rawBits));
         };
