@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 
 import java.lang.reflect.Array;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,10 +57,49 @@ final class Repartitioner {
     /// @param rows the batch's row count
     /// @return the chunks to write, possibly none
     List<Object> add(Object data, long rows) {
+        return add(data, rows, null);
+    }
+
+    /// Sizes the [#BLOCK_ROWS]-row pieces of a batch ahead of [#add(Object,long,long[])], so a caller
+    /// can measure the columns of a batch in parallel: columns are independent, and measuring a
+    /// string column reads every one of its strings.
+    ///
+    /// @param data the batch, as it will be handed to [#add(Object,long,long[])]
+    /// @param rows the batch's row count
+    /// @return the byte count of each piece, in order
+    long[] sizePieces(Object data, long rows) {
+        int len = (int) rows;
+        long[] sizes = new long[(len + BLOCK_ROWS - 1) / BLOCK_ROWS];
+        for (int i = 0; i < sizes.length; i++) {
+            int off = i * BLOCK_ROWS;
+            sizes[i] = nbytes(data, off, Math.min(BLOCK_ROWS, len - off));
+        }
+        return sizes;
+    }
+
+    /// Whether sizing a batch of `data` reads its values, as for strings and binaries -- the
+    /// only batches worth [#sizePieces(Object,long)] ahead of time.
+    ///
+    /// @param data the batch
+    /// @return `true` for a variable-width batch
+    static boolean sizeReadsValues(Object data) {
+        return values(data) instanceof Object[];
+    }
+
+    /// Adds one batch whose pieces were already sized by [#sizePieces(Object,long)].
+    ///
+    /// @param data       the batch, as handed to the column's encoder
+    /// @param rows       the batch's row count
+    /// @param pieceSizes the batch's [#sizePieces(Object,long)], or `null` to size it here
+    /// @return the chunks to write, possibly none
+    List<Object> add(Object data, long rows, long[] pieceSizes) {
         List<Object> out = new ArrayList<>();
         int len = (int) rows;
         for (int off = 0; off < len; off += BLOCK_ROWS) {
-            pushBack(piece(data, off, Math.min(BLOCK_ROWS, len - off)));
+            int length = Math.min(BLOCK_ROWS, len - off);
+            pushBack(pieceSizes != null
+                    ? new Piece(data, off, length, pieceSizes[off / BLOCK_ROWS])
+                    : piece(data, off, length));
             if (pendingBytes >= BLOCK_BYTES && pendingRows >= BLOCK_ROWS) {
                 out.add(collectExactBlocks());
             }
@@ -136,7 +174,7 @@ final class Repartitioner {
             case String[] a -> {
                 long n = 16L * rows;
                 for (int i = offset; i < offset + rows; i++) {
-                    n += a[i] == null ? 0 : a[i].getBytes(StandardCharsets.UTF_8).length;
+                    n += a[i] == null ? 0 : utf8Length(a[i]);
                 }
                 yield n;
             }
@@ -150,6 +188,30 @@ final class Repartitioner {
             case boolean[] _ -> (rows + 7L) / 8;
             default -> (long) rows * elementBytes();
         };
+    }
+
+    /// The length of `s` in UTF-8, counted without encoding it: sizing a batch must not cost a copy
+    /// of every string, as it runs on the caller's thread, ahead of the parallel compression.
+    /// An unpaired surrogate is one byte, as `getBytes` encodes it (`?`).
+    static int utf8Length(String s) {
+        int n = s.length();
+        int bytes = n;
+        for (int i = 0; i < n; i++) {
+            char c = s.charAt(i);
+            if (c >= 0x800) {
+                if (Character.isHighSurrogate(c) && i + 1 < n && Character.isLowSurrogate(s.charAt(i + 1))) {
+                    bytes += 2;
+                    i++;
+                } else if (Character.isSurrogate(c)) {
+                    continue;
+                } else {
+                    bytes += 2;
+                }
+            } else if (c >= 0x80) {
+                bytes++;
+            }
+        }
+        return bytes;
     }
 
     private long elementBytes() {

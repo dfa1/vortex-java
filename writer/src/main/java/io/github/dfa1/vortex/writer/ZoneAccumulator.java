@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
+import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -352,19 +353,42 @@ final class ZoneAccumulator {
             case UTF8, BINARY -> {
                 byte[] lo = null;
                 byte[] hi = null;
-                for (int i = 0; i < len; i++) {
-                    Object raw = values instanceof String[] s ? s[off + i] : ((byte[][]) values)[off + i];
-                    if (raw == null || (validity != null && !validity[off + i])) {
-                        nulls++;
-                        continue;
+                if (values instanceof String[] strings) {
+                    // Compare as UTF-8 order without encoding every value (Rust orders by bytes, not
+                    // UTF-16); only the two winners are encoded.
+                    String loString = null;
+                    String hiString = null;
+                    for (int i = 0; i < len; i++) {
+                        String v = strings[off + i];
+                        if (v == null || (validity != null && !validity[off + i])) {
+                            nulls++;
+                            continue;
+                        }
+                        if (loString == null || Utf8Order.compare(v, loString) < 0) {
+                            loString = v;
+                        }
+                        if (hiString == null || Utf8Order.compare(v, hiString) > 0) {
+                            hiString = v;
+                        }
                     }
-                    // Rust orders strings by their UTF-8 bytes, not by UTF-16 (String#compareTo).
-                    byte[] v = raw instanceof String str ? str.getBytes(StandardCharsets.UTF_8) : (byte[]) raw;
-                    if (lo == null || Arrays.compareUnsigned(v, lo) < 0) {
-                        lo = v;
+                    if (loString != null) {
+                        lo = loString.getBytes(StandardCharsets.UTF_8);
+                        hi = hiString.getBytes(StandardCharsets.UTF_8);
                     }
-                    if (hi == null || Arrays.compareUnsigned(v, hi) > 0) {
-                        hi = v;
+                } else {
+                    byte[][] binaries = (byte[][]) values;
+                    for (int i = 0; i < len; i++) {
+                        byte[] v = binaries[off + i];
+                        if (v == null || (validity != null && !validity[off + i])) {
+                            nulls++;
+                            continue;
+                        }
+                        if (lo == null || Arrays.compareUnsigned(v, lo) < 0) {
+                            lo = v;
+                        }
+                        if (hi == null || Arrays.compareUnsigned(v, hi) > 0) {
+                            hi = v;
+                        }
                     }
                 }
                 if (lo != null) {
