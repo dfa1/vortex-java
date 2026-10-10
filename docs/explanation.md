@@ -148,7 +148,9 @@ collapses from 235 to 40 ops/s (6×), falling below Parquet batch (166.5 ops/s).
 
 The smaller file is not worth the read regression. `ZstdEncoding` is retained in the
 codec registry for `Utf8`/`Binary` columns where no faster structural alternative exists,
-but it is not a candidate in the numeric cascade.
+but it is not a candidate in the numeric cascade by default. `WriteOptions#withCompact` opts
+into Rust's compact preset instead: Zstandard competes for strings and binary, and Pco (not Zstandard)
+for integers and floats, trading read speed for size.
 
 ## Architecture: fewer layers = faster
 
