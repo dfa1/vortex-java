@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.core.simd;
 import io.github.dfa1.vortex.core.model.PType;
 
 import java.lang.foreign.MemorySegment;
+import java.util.OptionalLong;
 
 /// The vectorizable kernels shared by the reader and the writer: the tight loops where a SIMD
 /// implementation can replace the auto-vectorized one without changing a single output byte.
@@ -80,6 +81,27 @@ public interface SimdOperations {
     /// @param values the flags
     /// @return `true` if all elements are equal
     boolean allEqual(boolean[] values);
+
+    /// Sums an integer array in Rust's widened shape: signed types as a signed `long`, unsigned types
+    /// as an unsigned one (returned as its bit pattern). Overflow is checked per addition, in order,
+    /// so a partial sum that overflows reports overflow even if later terms would bring the total
+    /// back in range (Rust's `checked_add`). Only `I64` and `U64` can overflow: the narrower widths
+    /// cannot, for any array that fits in memory.
+    ///
+    /// @param values an array matching `ptype`'s carrier; empty sums to zero
+    /// @param ptype  the elements' physical type, an integer type
+    /// @return the sum, or empty on overflow
+    /// @throws IllegalArgumentException if `ptype` is not an integer type
+    OptionalLong sum(Object values, PType ptype);
+
+    /// Sums a floating-point array into a `double`, strictly left to right. The order is part of the
+    /// contract: reassociating a float sum changes its rounding, and with it the stats bits we write.
+    ///
+    /// @param values a `short[]` (`F16`), `float[]` (`F32`) or `double[]` (`F64`)
+    /// @param ptype  the elements' physical type, a floating-point type
+    /// @return the sum, zero for an empty array
+    /// @throws IllegalArgumentException if `ptype` is not a floating-point type
+    double sumFloating(Object values, PType ptype);
 
     /// Reverses the FastLanes delta transform of one 1024-element chunk. Each of the `lanes`
     /// independent lanes is a prefix sum over `typeBits` rows, wrapping at the element width.

@@ -5,10 +5,12 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.simd.SimdOperations;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
+import java.util.OptionalLong;
 
 /// Write-only encoder for `vortex.primitive` — raw little-endian primitive arrays.
 public final class PrimitiveEncodingEncoder implements EncodingEncoder {
@@ -165,136 +167,20 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     /// @param data  the raw primitive array
     /// @return the encoded sum scalar, or `null` on overflow or empty input
     public static byte[] sumStat(PType ptype, Object data) {
+        if (Array.getLength(data) == 0) {
+            return null;
+        }
+        SimdOperations ops = SimdOperationsSupport.preferred();
         return switch (ptype) {
-            case I8 -> {
-                byte[] a = (byte[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (byte v : a) {
-                    s += v;
-                }
-                yield scalarI64(s);
+            case I8, I16, I32, I64 -> {
+                OptionalLong sum = ops.sum(data, ptype);
+                yield sum.isEmpty() ? null : scalarI64(sum.getAsLong());
             }
-            case I16 -> {
-                short[] a = (short[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (short v : a) {
-                    s += v;
-                }
-                yield scalarI64(s);
+            case U8, U16, U32, U64 -> {
+                OptionalLong sum = ops.sum(data, ptype);
+                yield sum.isEmpty() ? null : scalarU64(sum.getAsLong());
             }
-            case I32 -> {
-                int[] a = (int[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (int v : a) {
-                    s += v;
-                }
-                yield scalarI64(s);
-            }
-            case I64 -> {
-                long[] a = (long[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (long v : a) {
-                    try {
-                        s = Math.addExact(s, v);
-                    } catch (ArithmeticException _) {
-                        yield null;
-                    }
-                }
-                yield scalarI64(s);
-            }
-            case U8 -> {
-                byte[] a = (byte[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (byte v : a) {
-                    s += Byte.toUnsignedLong(v);
-                }
-                yield scalarU64(s);
-            }
-            case U16 -> {
-                short[] a = (short[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (short v : a) {
-                    s += Short.toUnsignedLong(v);
-                }
-                yield scalarU64(s);
-            }
-            case U32 -> {
-                int[] a = (int[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (int v : a) {
-                    s += Integer.toUnsignedLong(v);
-                }
-                yield scalarU64(s);
-            }
-            case U64 -> {
-                long[] a = (long[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (long v : a) {
-                    long next = s + v;
-                    if (Long.compareUnsigned(next, s) < 0) {
-                        yield null;
-                    }
-                    s = next;
-                }
-                yield scalarU64(s);
-            }
-            case F32 -> {
-                float[] a = (float[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                double s = 0;
-                for (float v : a) {
-                    s += v;
-                }
-                yield scalarF64(s);
-            }
-            case F64 -> {
-                double[] a = (double[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                double s = 0;
-                for (double v : a) {
-                    s += v;
-                }
-                yield scalarF64(s);
-            }
-            case F16 -> {
-                short[] a = (short[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                double s = 0;
-                for (short v : a) {
-                    s += Float.float16ToFloat(v);
-                }
-                yield scalarF64(s);
-            }
+            case F16, F32, F64 -> scalarF64(ops.sumFloating(data, ptype));
         };
     }
 

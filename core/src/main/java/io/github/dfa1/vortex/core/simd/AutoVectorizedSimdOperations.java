@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Array;
+import java.util.OptionalLong;
 
 /// The auto-vectorized [SimdOperations]: plain Java loops that rely on C2 auto-vectorization, with one
 /// specialized loop per width and the `ptype` switch hoisted out (CLAUDE.md hot-loop rule), so each
@@ -394,6 +395,101 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
             }
         }
         return true;
+    }
+
+    @Override
+    public OptionalLong sum(Object values, PType ptype) {
+        return switch (ptype) {
+            case I8 -> {
+                long s = 0;
+                for (byte v : (byte[]) values) {
+                    s += v;
+                }
+                yield OptionalLong.of(s);
+            }
+            case I16 -> {
+                long s = 0;
+                for (short v : (short[]) values) {
+                    s += v;
+                }
+                yield OptionalLong.of(s);
+            }
+            case I32 -> {
+                long s = 0;
+                for (int v : (int[]) values) {
+                    s += v;
+                }
+                yield OptionalLong.of(s);
+            }
+            case I64 -> {
+                long s = 0;
+                for (long v : (long[]) values) {
+                    try {
+                        s = Math.addExact(s, v);
+                    } catch (ArithmeticException _) {
+                        yield OptionalLong.empty();
+                    }
+                }
+                yield OptionalLong.of(s);
+            }
+            case U8 -> {
+                long s = 0;
+                for (byte v : (byte[]) values) {
+                    s += Byte.toUnsignedLong(v);
+                }
+                yield OptionalLong.of(s);
+            }
+            case U16 -> {
+                long s = 0;
+                for (short v : (short[]) values) {
+                    s += Short.toUnsignedLong(v);
+                }
+                yield OptionalLong.of(s);
+            }
+            case U32 -> {
+                long s = 0;
+                for (int v : (int[]) values) {
+                    s += Integer.toUnsignedLong(v);
+                }
+                yield OptionalLong.of(s);
+            }
+            case U64 -> {
+                long s = 0;
+                for (long v : (long[]) values) {
+                    long next = s + v;
+                    if (Long.compareUnsigned(next, s) < 0) {
+                        yield OptionalLong.empty();
+                    }
+                    s = next;
+                }
+                yield OptionalLong.of(s);
+            }
+            default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
+        };
+    }
+
+    @Override
+    public double sumFloating(Object values, PType ptype) {
+        double s = 0;
+        switch (ptype) {
+            case F16 -> {
+                for (short v : (short[]) values) {
+                    s += Float.float16ToFloat(v);
+                }
+            }
+            case F32 -> {
+                for (float v : (float[]) values) {
+                    s += v;
+                }
+            }
+            case F64 -> {
+                for (double v : (double[]) values) {
+                    s += v;
+                }
+            }
+            default -> throw new IllegalArgumentException("not a floating-point ptype: " + ptype);
+        }
+        return s;
     }
 
     // Only the result is masked: the low typeBits bits of a sum or difference depend on the operands'

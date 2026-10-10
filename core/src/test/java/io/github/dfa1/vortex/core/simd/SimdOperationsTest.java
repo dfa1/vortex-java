@@ -14,6 +14,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
+import java.util.OptionalLong;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -98,6 +99,86 @@ class SimdOperationsTest {
         assertThat(sut.allEqual(new boolean[]{true, true})).isTrue();
         assertThat(sut.allEqual(new boolean[]{false, true})).isFalse();
         assertThat(sut.allEqual(longTail)).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32"})
+    void sum_narrowIntegers_matchWidenedSum(PType ptype) {
+        // Given full-range values; the narrow widths cannot overflow a long
+        Object values = randomArray(ptype, 1000, new Random(ptype.ordinal()));
+        long expected = 0;
+        for (long v : PrimitiveArrays.toLongs(values, ptype, EncodingId.VORTEX_PRIMITIVE)) {
+            expected += v;
+        }
+
+        // When
+        OptionalLong result = sut.sum(values, ptype);
+
+        // Then
+        assertThat(result).hasValue(expected);
+    }
+
+    @Test
+    void sum_i64_overflowOfAPartialSumIsOverflowEvenIfTheTotalFits() {
+        // Given a prefix sum past Long.MAX_VALUE that the last term brings back: Rust's checked_add
+        // drops the sum, while a final-total check would not notice
+        long[] values = {Long.MAX_VALUE, 1L, -1L};
+
+        // When
+        OptionalLong result = sut.sum(values, PType.I64);
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void sum_i64_fitsAtTheBoundary() {
+        // Given
+        long[] values = {Long.MAX_VALUE, -1L, 1L};
+
+        // When / Then
+        assertThat(sut.sum(values, PType.I64)).hasValue(Long.MAX_VALUE);
+        assertThat(sut.sum(new long[]{Long.MIN_VALUE, -1L}, PType.I64)).isEmpty();
+    }
+
+    @Test
+    void sum_u64_overflowPastTwoToThe64IsEmpty_andLargeUnsignedSumsFit() {
+        // Given
+        long[] fits = {Long.MIN_VALUE, Long.MAX_VALUE};   // 2^63 + (2^63 - 1) = 2^64 - 1
+        long[] overflows = {-1L, 1L};                      // 2^64 - 1 + 1
+
+        // When / Then
+        assertThat(sut.sum(fits, PType.U64)).hasValue(-1L);
+        assertThat(sut.sum(overflows, PType.U64)).isEmpty();
+    }
+
+    @Test
+    void sum_emptyArray_isZero() {
+        // Given / When / Then
+        assertThat(sut.sum(new int[0], PType.I32)).hasValue(0L);
+        assertThat(sut.sumFloating(new double[0], PType.F64)).isZero();
+    }
+
+    @Test
+    void sum_floatingPType_throws() {
+        // Given / When / Then
+        assertThatThrownBy(() -> sut.sum(new float[]{1f}, PType.F32)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> sut.sumFloating(new int[]{1}, PType.I32)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void sumFloating_addsStrictlyLeftToRight() {
+        // Given terms where reassociation changes the result: (1e16 + 1) + 1 = 1e16, but 1e16 + (1 + 1) is larger
+        double[] values = {1e16, 1.0, 1.0};
+
+        // When
+        double result = sut.sumFloating(values, PType.F64);
+
+        // Then the sequential result, not the reassociated one
+        assertThat(result).isEqualTo(1e16);
+        assertThat(sut.sumFloating(new float[]{0.5f, 0.25f}, PType.F32)).isEqualTo(0.75);
+        assertThat(sut.sumFloating(new short[]{Float.floatToFloat16(1.5f), Float.floatToFloat16(2.0f)}, PType.F16))
+                .isEqualTo(3.5);
     }
 
     @ParameterizedTest
