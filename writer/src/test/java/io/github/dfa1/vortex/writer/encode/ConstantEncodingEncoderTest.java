@@ -417,16 +417,16 @@ class ConstantEncodingEncoderTest {
         }
 
         @Test
-        void encode_f16_reportsValueAsF32MinAndMax() throws java.io.IOException {
-            // Given — F16 min/max travel as f32 scalars, as PrimitiveEncodingEncoder writes them
+        void encode_f16_reportsValueAsF16MinAndMax() throws java.io.IOException {
+            // Given — Rust types an F16 column's min/max as F16 scalars; an f32 one is rejected on read
             short[] data = {Float.floatToFloat16(2.5f), Float.floatToFloat16(2.5f)};
 
             // When
             EncodeResult result = ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).f32_value()).isEqualTo(2.5f);
-            assertThat(scalar(result.statsMax()).f32_value()).isEqualTo(2.5f);
+            assertThat(scalar(result.statsMin()).f16_value()).isEqualTo(0x4100L);
+            assertThat(scalar(result.statsMax()).f16_value()).isEqualTo(0x4100L);
         }
 
         @Test
