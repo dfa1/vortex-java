@@ -358,7 +358,7 @@ java -jar cli/target/vortex-cli-*-all.jar import https://example.com/data.parque
 
 ## Convert Vortex to Parquet
 
-Flat schemas only (`Bool`, non-`F16` `Primitive`, `Utf8`, `Binary`, `vortex.timestamp`); a
+Flat schemas only (`Bool`, `Primitive` including `F16`, `Utf8`, `Binary`, `vortex.timestamp`); a
 `Struct`/`List`/`Map` top-level column throws `UnsupportedOperationException`.
 
 **API:**

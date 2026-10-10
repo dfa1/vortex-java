@@ -501,7 +501,7 @@ Record: `(int chunkSize, List<String> columns, ProgressListener progressListener
 
 ### `ParquetExporter` (`io.github.dfa1.vortex.parquet.ParquetExporter`)
 
-Supports flat schemas only: `Bool`, non-`F16` `Primitive`, `Utf8`, `Binary`, and the
+Supports flat schemas only: `Bool`, `Primitive` (`F16` as Parquet's `FLOAT16`), `Utf8`, `Binary`, and the
 `vortex.timestamp` extension over MILLIS/MICROS/NANOS resolution. `Struct`/`List`/`Map` top-level
 columns throw `UnsupportedOperationException` — the inverse of `ParquetImporter`'s nested
 `LIST`/`STRUCT` support does not exist yet.

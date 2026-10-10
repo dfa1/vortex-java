@@ -46,10 +46,11 @@ import java.util.Set;
 /// - INT64 (no annotation / IntType 64, signed or unsigned) → I64/U64
 /// - FLOAT → F32
 /// - DOUBLE → F64
+/// - FIXED_LEN_BYTE_ARRAY(2) annotated FLOAT16 → F16
 /// - BYTE_ARRAY annotated STRING, ENUM, or JSON → Utf8
 /// - BYTE_ARRAY with no logical-type annotation → Binary
 ///
-/// All other physical types (INT96, FIXED_LEN_BYTE_ARRAY, annotated-but-unsupported BYTE_ARRAY,
+/// All other physical types (INT96, FIXED_LEN_BYTE_ARRAY without the FLOAT16 annotation, annotated-but-unsupported BYTE_ARRAY,
 /// DECIMAL, DATE, TIME, TIMESTAMP) throw [UnsupportedOperationException].
 public final class ParquetImporter {
 
@@ -223,9 +224,21 @@ public final class ParquetImporter {
             case FLOAT -> new DType.Primitive(PType.F32, nullable);
             case DOUBLE -> new DType.Primitive(PType.F64, nullable);
             case BYTE_ARRAY -> mapByteArray(logical, nullable, name);
+            case FIXED_LEN_BYTE_ARRAY -> mapFixedLenByteArray(logical, nullable, name);
             default -> throw new UnsupportedOperationException(
                     "unsupported Parquet physical type: " + type + " (column: " + name + ")");
         };
+    }
+
+    /// Only Parquet's `FLOAT16` annotation (a 2-byte little-endian half) maps; any other
+    /// fixed-length byte array has no Vortex counterpart here.
+    private static DType mapFixedLenByteArray(LogicalType logical, boolean nullable, String name) {
+        if (logical instanceof LogicalType.Float16Type) {
+            return new DType.Primitive(PType.F16, nullable);
+        }
+        throw new UnsupportedOperationException(
+                "unsupported Parquet physical type: FIXED_LEN_BYTE_ARRAY without the FLOAT16 annotation (column: "
+                        + name + ")");
     }
 
     private static DType mapInt32(LogicalType logical, boolean nullable) {
@@ -319,7 +332,7 @@ public final class ParquetImporter {
                 case I64, U64 -> nullable ? new Long[chunkSize] : new long[chunkSize];
                 case F32 -> nullable ? new Float[chunkSize] : new float[chunkSize];
                 case F64 -> nullable ? new Double[chunkSize] : new double[chunkSize];
-                case F16 -> throw new UnsupportedOperationException("F16 columns are not supported");
+                case F16 -> nullable ? new Short[chunkSize] : new short[chunkSize];
             };
             default -> throw new UnsupportedOperationException("unsupported type: " + type);
         };
@@ -341,6 +354,11 @@ public final class ParquetImporter {
                 // null under a REQUIRED column) throws from the getter below instead, caught and
                 // rethrown with a clear message by the catch below.
                 boolean isNull = types.get(c).nullable() && reader.isNull(name);
+                if (types.get(c) instanceof DType.Primitive p && p.ptype() == PType.F16) {
+                    // Same carrier as I16, but the value is a 2-byte FIXED_LEN_BYTE_ARRAY, not an INT32
+                    putHalf(buffers[c], pos, isNull ? null : reader.getBinary(name));
+                    continue;
+                }
                 switch (buffers[c]) {
                     case boolean[] arr -> arr[pos] = reader.getBoolean(name);
                     case Boolean[] arr -> arr[pos] = isNull ? null : reader.getBoolean(name);
@@ -367,6 +385,21 @@ public final class ParquetImporter {
                                 + rowIndex + " is null; the file's data violates its own schema. Source file: "
                                 + sourceName, e);
             }
+        }
+    }
+
+    /// Stores a FLOAT16 value, a little-endian half in two bytes, in the row's slot: its raw bits,
+    /// not a `float`, so a NaN payload or `-0.0` survives.
+    private static void putHalf(Object buffer, int pos, byte[] bytes) {
+        if (bytes != null && bytes.length != 2) {
+            throw new IllegalArgumentException("FLOAT16 value must be 2 bytes, got " + bytes.length);
+        }
+        short bits = bytes == null ? 0 : (short) ((bytes[0] & 0xFF) | (bytes[1] << 8));
+        switch (buffer) {
+            case short[] arr -> arr[pos] = bits;
+            case Short[] arr -> arr[pos] = bytes == null ? null : bits;
+            default -> throw new UnsupportedOperationException(
+                    "unexpected buffer type for FLOAT16: " + buffer.getClass().getSimpleName());
         }
     }
 
