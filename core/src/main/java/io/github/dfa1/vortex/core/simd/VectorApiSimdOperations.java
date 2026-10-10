@@ -75,9 +75,90 @@ final class VectorApiSimdOperations implements SimdOperations {
         return fallback.maxUnsigned(src, count, ptype);
     }
 
+    // Lane-wise min and max accumulators, reduced once at the end. Unsigned widths XOR the sign bit
+    // first, which maps unsigned order onto signed order so the loop stays a plain signed min/max.
+    // Wins over C2 (128-bit NEON, 262144 elements, JMH -f 2): bytes 12x, shorts 5.6-5.9x, U32 2.8x
+    // (C2's sign-flipped int loop is 3x slower than its plain one). I32 is 0.92x and I64 1.0x of C2,
+    // so those delegate.
     @Override
     public long[] minMax(Object values, PType ptype) {
-        return fallback.minMax(values, ptype);
+        if (Array.getLength(values) == 0) {
+            throw new IllegalArgumentException("empty array has no min/max");
+        }
+        return switch (ptype) {
+            case I8 -> minMax((byte[]) values, (byte) 0);
+            case U8 -> unsigned(minMax((byte[]) values, Byte.MIN_VALUE), 0xFFL, Byte.MIN_VALUE);
+            case I16 -> minMax((short[]) values, (short) 0);
+            case U16 -> unsigned(minMax((short[]) values, Short.MIN_VALUE), 0xFFFFL, Short.MIN_VALUE);
+            case U32 -> unsigned(minMax((int[]) values, Integer.MIN_VALUE), 0xFFFF_FFFFL, Integer.MIN_VALUE);
+            case I32, I64, U64 -> fallback.minMax(values, ptype);
+            case F16, F32, F64 -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
+        };
+    }
+
+    /// Undoes the sign-bit flip of a minimum and maximum found in flipped space.
+    private static long[] unsigned(long[] flipped, long mask, long signBit) {
+        return new long[]{(flipped[0] ^ signBit) & mask, (flipped[1] ^ signBit) & mask};
+    }
+
+    private static long[] minMax(byte[] a, byte flip) {
+        ByteVector flipVector = ByteVector.broadcast(BYTES, flip);
+        ByteVector min = ByteVector.broadcast(BYTES, Byte.MAX_VALUE);
+        ByteVector max = ByteVector.broadcast(BYTES, Byte.MIN_VALUE);
+        int i = 0;
+        for (; i + BYTES.length() <= a.length; i += BYTES.length()) {
+            ByteVector v = ByteVector.fromArray(BYTES, a, i).lanewise(VectorOperators.XOR, flipVector);
+            min = min.min(v);
+            max = max.max(v);
+        }
+        int lo = min.reduceLanes(VectorOperators.MIN);
+        int hi = max.reduceLanes(VectorOperators.MAX);
+        for (; i < a.length; i++) {
+            int v = (byte) (a[i] ^ flip);
+            lo = Math.min(lo, v);
+            hi = Math.max(hi, v);
+        }
+        return new long[]{lo, hi};
+    }
+
+    private static long[] minMax(short[] a, short flip) {
+        ShortVector flipVector = ShortVector.broadcast(SHORTS, flip);
+        ShortVector min = ShortVector.broadcast(SHORTS, Short.MAX_VALUE);
+        ShortVector max = ShortVector.broadcast(SHORTS, Short.MIN_VALUE);
+        int i = 0;
+        for (; i + SHORTS.length() <= a.length; i += SHORTS.length()) {
+            ShortVector v = ShortVector.fromArray(SHORTS, a, i).lanewise(VectorOperators.XOR, flipVector);
+            min = min.min(v);
+            max = max.max(v);
+        }
+        int lo = min.reduceLanes(VectorOperators.MIN);
+        int hi = max.reduceLanes(VectorOperators.MAX);
+        for (; i < a.length; i++) {
+            int v = (short) (a[i] ^ flip);
+            lo = Math.min(lo, v);
+            hi = Math.max(hi, v);
+        }
+        return new long[]{lo, hi};
+    }
+
+    private static long[] minMax(int[] a, int flip) {
+        IntVector flipVector = IntVector.broadcast(INTS, flip);
+        IntVector min = IntVector.broadcast(INTS, Integer.MAX_VALUE);
+        IntVector max = IntVector.broadcast(INTS, Integer.MIN_VALUE);
+        int i = 0;
+        for (; i + INTS.length() <= a.length; i += INTS.length()) {
+            IntVector v = IntVector.fromArray(INTS, a, i).lanewise(VectorOperators.XOR, flipVector);
+            min = min.min(v);
+            max = max.max(v);
+        }
+        int lo = min.reduceLanes(VectorOperators.MIN);
+        int hi = max.reduceLanes(VectorOperators.MAX);
+        for (; i < a.length; i++) {
+            int v = a[i] ^ flip;
+            lo = Math.min(lo, v);
+            hi = Math.max(hi, v);
+        }
+        return new long[]{lo, hi};
     }
 
     // Each vector is compared with the first element broadcast. Only the 1- and 2-byte carriers: C2

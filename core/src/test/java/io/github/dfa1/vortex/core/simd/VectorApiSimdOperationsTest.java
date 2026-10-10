@@ -69,6 +69,46 @@ class VectorApiSimdOperationsTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void minMax_matchesReference(PType ptype) {
+        // Given random full-range data at every length: values near the sign boundary, where the
+        // unsigned flip would swap min and max if wrong
+        for (int length : LENGTHS) {
+            if (length == 0) {
+                continue;
+            }
+            Object values = arrayWithRuns(ptype, length, 1, new Random(length * 17L));
+
+            // When
+            long[] result = sut.minMax(values, ptype);
+
+            // Then
+            assertThat(result).as("%s length=%d", ptype, length).containsExactly(reference.minMax(values, ptype));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void minMax_extremes_matchReference(PType ptype) {
+        // Given arrays holding only the extremes of the carrier, in a vector-length run and a tail
+        for (int length : new int[]{1, 5, 17, 64, 70}) {
+            Object values = arrayWithRuns(ptype, length, 1, new Random(1));
+            extremes(values);
+
+            // When / Then
+            assertThat(sut.minMax(values, ptype)).as("%s length=%d", ptype, length)
+                    .containsExactly(reference.minMax(values, ptype));
+        }
+    }
+
+    @Test
+    void minMax_emptyArray_throws() {
+        // Given / When / Then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sut.minMax(new int[0], PType.I32))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test
     void allEqual_floatsCompareRawBits() {
         // Given arrays equal under == but not bit for bit, long enough for the vector loop
@@ -175,6 +215,41 @@ class VectorApiSimdOperationsTest {
             case float[] a -> a[index] = Float.intBitsToFloat(Float.floatToRawIntBits(a[index]) ^ 1);
             case double[] a -> a[index] = Double.longBitsToDouble(Double.doubleToRawLongBits(a[index]) ^ 1L);
             default -> throw new IllegalArgumentException(array.getClass().toString());
+        }
+    }
+
+    /// Overwrites every other element with the carrier's minimum and maximum bit patterns.
+    private static void extremes(Object array) {
+        switch (array) {
+            case byte[] a -> fill(a);
+            case short[] a -> fill(a);
+            case int[] a -> fill(a);
+            case long[] a -> fill(a);
+            default -> throw new IllegalArgumentException(array.getClass().toString());
+        }
+    }
+
+    private static void fill(byte[] a) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] = i % 3 == 0 ? Byte.MIN_VALUE : i % 3 == 1 ? Byte.MAX_VALUE : (byte) -1;
+        }
+    }
+
+    private static void fill(short[] a) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] = i % 3 == 0 ? Short.MIN_VALUE : i % 3 == 1 ? Short.MAX_VALUE : (short) -1;
+        }
+    }
+
+    private static void fill(int[] a) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] = i % 3 == 0 ? Integer.MIN_VALUE : i % 3 == 1 ? Integer.MAX_VALUE : -1;
+        }
+    }
+
+    private static void fill(long[] a) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] = i % 3 == 0 ? Long.MIN_VALUE : i % 3 == 1 ? Long.MAX_VALUE : -1L;
         }
     }
 }

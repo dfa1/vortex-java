@@ -70,6 +70,12 @@ public class SimdVectorApiBenchmark {
         return ops.runs(runsFew, ptype);
     }
 
+    /// Finds the smallest and largest element of random full-range data (integer ptypes only).
+    @Benchmark
+    public long[] minMax() {
+        return ops.minMax(runsMany, ptype);
+    }
+
     /// Checks an all-equal array, the worst case for an early exit: every element is compared.
     @Benchmark
     public boolean allEqual_constant() {
