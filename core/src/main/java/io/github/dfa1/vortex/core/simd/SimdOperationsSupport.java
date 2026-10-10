@@ -33,7 +33,7 @@ public final class SimdOperationsSupport {
                 LOG.log(System.Logger.Level.DEBUG, "SIMD: auto-vectorized (preferred vectors narrower than 128 bits)");
                 return autoVectorized;
             }
-            SimdOperations vectorApi = new VectorApiSimdOperations(autoVectorized);
+            SimdOperations vectorApi = new VectorApiSimdOperations();
             LOG.log(System.Logger.Level.DEBUG, "SIMD: Vector API, {0}-bit vectors", VectorApiSimdOperations.vectorBitSize());
             return vectorApi;
         } catch (LinkageError e) {

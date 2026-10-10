@@ -14,45 +14,43 @@ import java.util.OptionalLong;
 /// assume well-formed input and throw only [IllegalArgumentException] for a `ptype` they do not cover.
 public interface SimdOperations {
 
-    /// Widens `count` contiguous little-endian integer elements starting at element index
-    /// `fromElement` into `out[0, count)`, zero-extending unsigned ptypes and sign-extending signed ones.
+    /// Widens `count` contiguous little-endian elements starting at element index `fromElement`
+    /// into `out[0, count)`: signed integers are sign-extended, unsigned integers zero-extended, and
+    /// floating-point values contribute their raw bits, zero-extended.
     ///
     /// @param src         the source segment
     /// @param fromElement starting element index (not byte offset) within `src`
     /// @param count       number of elements to widen
-    /// @param ptype       the elements' physical type, an integer type
+    /// @param ptype       the elements' physical type
     /// @param out         destination array, at least `count` long
-    /// @throws IllegalArgumentException if `ptype` is not an integer type
     void widenInto(MemorySegment src, long fromElement, int count, PType ptype, long[] out);
 
     /// The heap-array counterpart of [#widenInto]: widens `count` elements of a primitive array
-    /// starting at index `from` into `out[0, count)`, with the same sign and zero extension.
+    /// starting at index `from` into `out[0, count)`, with the same extension rules.
     ///
-    /// @param values a `byte[]`, `short[]`, `int[]` or `long[]` matching `ptype`'s carrier
+    /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`)
     /// @param from   starting element index within `values`
     /// @param count  number of elements to widen
-    /// @param ptype  the elements' physical type, an integer type
+    /// @param ptype  the elements' physical type
     /// @param out    destination array, at least `count` long
-    /// @throws IllegalArgumentException if `ptype` is not an integer type
     void widenArrayInto(Object values, int from, int count, PType ptype, long[] out);
 
     /// Narrows `values` to the width of `ptype`, keeping the low bytes, and writes them
-    /// little-endian into `dst` starting at byte 0. Handles the 1-, 2- and 4-byte types; the
-    /// 8-byte types are a plain bulk copy that needs no kernel.
+    /// little-endian into `dst` starting at byte 0. Floating-point types keep their raw bits, and the
+    /// 8-byte types are written as they are.
     ///
     /// @param values the wide values
-    /// @param ptype  the target physical type, 1 to 4 bytes wide (floats keep their raw bits)
+    /// @param ptype  the target physical type
     /// @param dst    destination segment, at least `values.length * ptype.byteSize()` bytes
-    /// @throws IllegalArgumentException if `ptype` is 8 bytes wide
     void narrowInto(long[] values, PType ptype, MemorySegment dst);
 
     /// The heap-array counterpart of [#narrowInto]: narrows `values` to the width of `ptype`, keeping
-    /// the low bytes, into the primitive array `out`.
+    /// the low bytes, into the primitive array `out`. Floating-point carriers are rebuilt from the raw
+    /// bits, the inverse of [#widenArrayInto].
     ///
     /// @param values the wide values
-    /// @param ptype  the target physical type, an integer type of 1 to 4 bytes
-    /// @param out    a `byte[]`, `short[]` or `int[]` matching `ptype`'s carrier, at least `values.length` long
-    /// @throws IllegalArgumentException if `ptype` is not an integer type of 1 to 4 bytes
+    /// @param ptype  the target physical type
+    /// @param out    an array matching `ptype`'s carrier (`short[]` for `F16`), at least `values.length` long
     void narrowArrayInto(long[] values, PType ptype, Object out);
 
     /// Returns the largest of `count` contiguous little-endian unsigned elements of `src`, zero when
@@ -60,20 +58,21 @@ public interface SimdOperations {
     ///
     /// @param src   the source segment, at least `count * ptype.byteSize()` bytes
     /// @param count number of elements to scan
-    /// @param ptype the elements' physical type: `U8`, `U16` or `U32`
-    /// @return the maximum, zero-extended
-    /// @throws IllegalArgumentException if `ptype` is not `U8`, `U16` or `U32`
+    /// @param ptype the elements' physical type: `U8`, `U16`, `U32` or `U64`
+    /// @return the maximum, zero-extended (as its bit pattern for `U64`)
+    /// @throws IllegalArgumentException if `ptype` is not an unsigned integer type
     long maxUnsigned(MemorySegment src, long count, PType ptype);
 
-    /// Returns the smallest and largest of the elements of a non-empty integer array, compared as
-    /// signed `long` values after widening as [#widenInto] does: unsigned widths below 64 bits are
-    /// zero-extended, so their signed order is their natural order, while `U64` is ordered as if
-    /// signed.
+    /// Returns the smallest and largest element in the ptype's natural order, widened as
+    /// [#widenArrayInto] does (a float contributes its raw bits). Integers compare as their type
+    /// does, `U64` unsigned. Floating-point values skip `NaN`, as Rust's `min`/`max` do, and `-0.0`
+    /// equals `0.0`: among equal zeros the first one in array order is the result.
     ///
-    /// @param values a `byte[]`, `short[]`, `int[]` or `long[]` matching `ptype`'s carrier, at least one element
-    /// @param ptype  the elements' physical type, an integer type
-    /// @return `{min, max}`
-    /// @throws IllegalArgumentException if `ptype` is not an integer type, or `values` is empty
+    /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`)
+    /// @param ptype  the elements' physical type
+    /// @return `{min, max}`; for a floating-point array with no non-`NaN` element (including an
+    ///         empty one) an empty array
+    /// @throws IllegalArgumentException if `values` is empty and `ptype` is an integer type
     long[] minMax(Object values, PType ptype);
 
     /// Returns whether every element of `values` equals the first, comparing floating-point values by

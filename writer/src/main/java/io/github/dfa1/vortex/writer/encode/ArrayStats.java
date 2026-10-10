@@ -101,17 +101,6 @@ public record ArrayStats(
             ArrayStats counted = accumulate
                     ? integerStats(ptype, data, n, buffer, cap, options.countDistinct(), averageRunLength, min, max)
                     : new ArrayStats(n, -1, 0, 0, false, averageRunLength, 0, 0);
-            if (ptype == PType.U64) {
-                // Narrower unsigned widths are zero-extended, so signed order is already theirs.
-                long[] values = (long[]) data;
-                long unsignedMin = -1L;
-                long unsignedMax = 0L;
-                for (int i = 0; i < n; i++) {
-                    unsignedMin = Long.compareUnsigned(values[i], unsignedMin) < 0 ? values[i] : unsignedMin;
-                    unsignedMax = Long.compareUnsigned(values[i], unsignedMax) > 0 ? values[i] : unsignedMax;
-                }
-                return counted.withMinMax(unsignedMin, unsignedMax);
-            }
             return counted.withMinMax(min, max);
         }
         if (!accumulate) {

@@ -212,20 +212,21 @@ public final class PrimitiveArrays {
     /// @throws VortexException for a type with no primitive carrier
     public static Object fromBitsArray(long[] bits, PType ptype, EncodingId encoding) {
         int n = bits.length;
+        SimdOperations ops = SimdOperationsSupport.preferred();
         return switch (ptype) {
-            case F16 -> fromLongsArray(bits, PType.U16, encoding);
+            case F16 -> {
+                short[] r = new short[n];
+                ops.narrowArrayInto(bits, ptype, r);
+                yield r;
+            }
             case F32 -> {
                 float[] r = new float[n];
-                for (int i = 0; i < n; i++) {
-                    r[i] = Float.intBitsToFloat((int) bits[i]);
-                }
+                ops.narrowArrayInto(bits, ptype, r);
                 yield r;
             }
             case F64 -> {
                 double[] r = new double[n];
-                for (int i = 0; i < n; i++) {
-                    r[i] = Double.longBitsToDouble(bits[i]);
-                }
+                ops.narrowArrayInto(bits, ptype, r);
                 yield r;
             }
             default -> fromLongsArray(bits, ptype, encoding);

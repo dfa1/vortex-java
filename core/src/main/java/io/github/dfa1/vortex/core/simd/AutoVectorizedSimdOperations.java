@@ -35,7 +35,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     out[i] = src.getAtIndex(VortexFormat.LE_SHORT, fromElement + i);
                 }
             }
-            case U16 -> {
+            case U16, F16 -> {
                 for (int i = 0; i < count; i++) {
                     out[i] = Short.toUnsignedLong(src.getAtIndex(VortexFormat.LE_SHORT, fromElement + i));
                 }
@@ -45,17 +45,16 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     out[i] = src.getAtIndex(VortexFormat.LE_INT, fromElement + i);
                 }
             }
-            case U32 -> {
+            case U32, F32 -> {
                 for (int i = 0; i < count; i++) {
                     out[i] = Integer.toUnsignedLong(src.getAtIndex(VortexFormat.LE_INT, fromElement + i));
                 }
             }
-            case I64, U64 -> {
+            case I64, U64, F64 -> {
                 for (int i = 0; i < count; i++) {
                     out[i] = src.getAtIndex(VortexFormat.LE_LONG, fromElement + i);
                 }
             }
-            default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
         }
     }
 
@@ -80,7 +79,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     out[i] = a[from + i];
                 }
             }
-            case U16 -> {
+            case U16, F16 -> {
                 short[] a = (short[]) values;
                 for (int i = 0; i < count; i++) {
                     out[i] = a[from + i] & 0xFFFFL;
@@ -99,7 +98,18 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                 }
             }
             case I64, U64 -> System.arraycopy((long[]) values, from, out, 0, count);
-            default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
+            case F32 -> {
+                float[] a = (float[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = Float.floatToRawIntBits(a[from + i]) & 0xFFFF_FFFFL;
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) values;
+                for (int i = 0; i < count; i++) {
+                    out[i] = Double.doubleToRawLongBits(a[from + i]);
+                }
+            }
         }
     }
 
@@ -122,7 +132,11 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     dst.setAtIndex(VortexFormat.LE_INT, i, (int) values[i]);
                 }
             }
-            default -> throw new IllegalArgumentException("not a 1-4 byte ptype: " + ptype);
+            case I64, U64, F64 -> {
+                for (int i = 0; i < n; i++) {
+                    dst.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
+                }
+            }
         }
     }
 
@@ -148,7 +162,25 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     a[i] = (int) values[i];
                 }
             }
-            default -> throw new IllegalArgumentException("not a 1-4 byte integer ptype: " + ptype);
+            case I64, U64 -> System.arraycopy(values, 0, (long[]) out, 0, n);
+            case F16 -> {
+                short[] a = (short[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = (short) values[i];
+                }
+            }
+            case F32 -> {
+                float[] a = (float[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = Float.intBitsToFloat((int) values[i]);
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) out;
+                for (int i = 0; i < n; i++) {
+                    a[i] = Double.longBitsToDouble(values[i]);
+                }
+            }
         }
     }
 
@@ -162,7 +194,8 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
             case U8 -> maxU8(src, count);
             case U16 -> maxU16(src, count);
             case U32 -> maxU32(src, count);
-            default -> throw new IllegalArgumentException("not a U8/U16/U32 ptype: " + ptype);
+            case U64 -> maxU64(src, count);
+            default -> throw new IllegalArgumentException("not an unsigned integer ptype: " + ptype);
         };
     }
 
@@ -202,6 +235,16 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
         return Math.max(Math.max(m0, m1), Math.max(m2, m3));
     }
 
+    // Flipping the sign bit orders the signed max as unsigned; NEON has no 64-bit max, so this is a
+    // scalar compare-and-select loop whatever the flip.
+    private static long maxU64(MemorySegment src, long count) {
+        long max = Long.MIN_VALUE;
+        for (long i = 0; i < count; i++) {
+            max = Math.max(max, src.getAtIndex(VortexFormat.LE_LONG, i) ^ Long.MIN_VALUE);
+        }
+        return max ^ Long.MIN_VALUE;
+    }
+
     private static long maxU32(MemorySegment src, long count) {
         int max = Integer.MIN_VALUE;
         for (long i = 0; i < count; i++) {
@@ -216,6 +259,9 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
     @Override
     public long[] minMax(Object values, PType ptype) {
         if (Array.getLength(values) == 0) {
+            if (ptype.isFloating()) {
+                return new long[0];
+            }
             throw new IllegalArgumentException("empty array has no min/max");
         }
         return switch (ptype) {
@@ -282,7 +328,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                 yield new long[]{Integer.toUnsignedLong(min ^ Integer.MIN_VALUE),
                         Integer.toUnsignedLong(max ^ Integer.MIN_VALUE)};
             }
-            case I64, U64 -> {
+            case I64 -> {
                 long[] a = (long[]) values;
                 long min = Long.MAX_VALUE;
                 long max = Long.MIN_VALUE;
@@ -292,7 +338,68 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                 }
                 yield new long[]{min, max};
             }
-            default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
+            case U64 -> {
+                // Flipping the sign bit maps unsigned order onto signed order
+                long[] a = (long[]) values;
+                long min = Long.MAX_VALUE;
+                long max = Long.MIN_VALUE;
+                for (long v : a) {
+                    min = Math.min(min, v ^ Long.MIN_VALUE);
+                    max = Math.max(max, v ^ Long.MIN_VALUE);
+                }
+                yield new long[]{min ^ Long.MIN_VALUE, max ^ Long.MIN_VALUE};
+            }
+            // The floating-point loops compare with `<` and `>` starting from the infinities: every
+            // comparison with NaN is false, which skips NaN without a per-element branch, and an equal
+            // zero never replaces the first one. An all-NaN array ends with min > max.
+            case F16 -> {
+                short[] a = (short[]) values;
+                float min = Float.POSITIVE_INFINITY;
+                float max = Float.NEGATIVE_INFINITY;
+                short minBits = 0;
+                short maxBits = 0;
+                for (short v : a) {
+                    float f = Float.float16ToFloat(v);
+                    if (f < min) {
+                        min = f;
+                        minBits = v;
+                    }
+                    if (f > max) {
+                        max = f;
+                        maxBits = v;
+                    }
+                }
+                yield min > max ? new long[0] : new long[]{Short.toUnsignedLong(minBits), Short.toUnsignedLong(maxBits)};
+            }
+            case F32 -> {
+                float[] a = (float[]) values;
+                float min = Float.POSITIVE_INFINITY;
+                float max = Float.NEGATIVE_INFINITY;
+                for (float v : a) {
+                    if (v < min) {
+                        min = v;
+                    }
+                    if (v > max) {
+                        max = v;
+                    }
+                }
+                yield min > max ? new long[0] : new long[]{
+                        Float.floatToRawIntBits(min) & 0xFFFF_FFFFL, Float.floatToRawIntBits(max) & 0xFFFF_FFFFL};
+            }
+            case F64 -> {
+                double[] a = (double[]) values;
+                double min = Double.POSITIVE_INFINITY;
+                double max = Double.NEGATIVE_INFINITY;
+                for (double v : a) {
+                    if (v < min) {
+                        min = v;
+                    }
+                    if (v > max) {
+                        max = v;
+                    }
+                }
+                yield min > max ? new long[0] : new long[]{Double.doubleToRawLongBits(min), Double.doubleToRawLongBits(max)};
+            }
         };
     }
 

@@ -1,11 +1,14 @@
 package io.github.dfa1.vortex.core.simd;
 
+import io.github.dfa1.vortex.core.compute.FastLanes;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -30,7 +33,7 @@ class VectorApiSimdOperationsTest {
     void setUp() {
         assumeTrue(ModuleLayer.boot().findModule("jdk.incubator.vector").isPresent(), "run without the module");
         assumeTrue(VectorApiSimdOperations.isUsable(), "CPU vectors narrower than 128 bits");
-        sut = new VectorApiSimdOperations(reference);
+        sut = new VectorApiSimdOperations();
     }
 
     @ParameterizedTest
@@ -75,12 +78,12 @@ class VectorApiSimdOperationsTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    @EnumSource(PType.class)
     void minMax_matchesReference(PType ptype) {
         // Given random full-range data at every length: values near the sign boundary, where the
         // unsigned flip would swap min and max if wrong
         for (int length : LENGTHS) {
-            if (length == 0) {
+            if (length == 0 && !ptype.isFloating()) {
                 continue;
             }
             Object values = arrayWithRuns(ptype, length, 1, new Random(length * 17L));
@@ -108,7 +111,7 @@ class VectorApiSimdOperationsTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+    @EnumSource(value = PType.class, names = {"U8", "U16", "U32", "U64"})
     void maxUnsigned_matchesReference(PType ptype) {
         // Given random codes, with the maximum planted at every position class: first, last, a lane boundary
         try (Arena arena = Arena.ofConfined()) {
@@ -127,7 +130,7 @@ class VectorApiSimdOperationsTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+    @EnumSource(value = PType.class, names = {"U8", "U16", "U32", "U64"})
     void maxUnsigned_highBitCodes_areUnsigned(PType ptype) {
         // Given a code with the top bit set, which a signed max would rank below a small code
         try (Arena arena = Arena.ofConfined()) {
@@ -140,7 +143,8 @@ class VectorApiSimdOperationsTest {
             long result = sut.maxUnsigned(segment, length, ptype);
 
             // Then
-            assertThat(result).isEqualTo(reference.maxUnsigned(segment, length, ptype)).isGreaterThan(5L);
+            assertThat(result).isEqualTo(reference.maxUnsigned(segment, length, ptype));
+            assertThat(Long.compareUnsigned(result, 5L)).isPositive();
         }
     }
 
@@ -171,6 +175,182 @@ class VectorApiSimdOperationsTest {
 
         // Then
         assertThat(result).isEqualTo(reference.sum(values, ptype));
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void widenArrayInto_matchesReference(PType ptype) {
+        // Given full-range data widened from several start offsets, so the vector body starts unaligned
+        for (int length : LENGTHS) {
+            Object values = arrayWithRuns(ptype, length + 5, 1, new Random(length * 7L));
+            for (int from : new int[]{0, 1, 5}) {
+                long[] expected = new long[length + 1];
+                long[] result = new long[length + 1];
+
+                // When
+                reference.widenArrayInto(values, from, length, ptype, expected);
+                sut.widenArrayInto(values, from, length, ptype, result);
+
+                // Then, including the untouched slot past count
+                assertThat(result).as("%s length=%d from=%d", ptype, length, from).containsExactly(expected);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void widenInto_matchesReference(PType ptype) {
+        // Given full-range data in a segment, widened from several start elements
+        try (Arena arena = Arena.ofConfined()) {
+            for (int length : LENGTHS) {
+                Object values = arrayWithRuns(ptype, length + 5, 1, new Random(length * 11L));
+                MemorySegment segment = PrimitiveArrays.toSegment(values, ptype, arena);
+                for (long from : new long[]{0, 1, 5}) {
+                    long[] expected = new long[length + 1];
+                    long[] result = new long[length + 1];
+
+                    // When
+                    reference.widenInto(segment, from, length, ptype, expected);
+                    sut.widenInto(segment, from, length, ptype, result);
+
+                    // Then
+                    assertThat(result).as("%s length=%d from=%d", ptype, length, from).containsExactly(expected);
+                }
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void narrowArrayInto_matchesReference(PType ptype) {
+        // Given full-range wide values at every length
+        for (int length : LENGTHS) {
+            long[] values = new Random(length * 3L).longs(length).toArray();
+            Object expected = narrowCarrier(ptype, length);
+            Object result = narrowCarrier(ptype, length);
+
+            // When
+            reference.narrowArrayInto(values, ptype, expected);
+            sut.narrowArrayInto(values, ptype, result);
+
+            // Then
+            assertThat(result).as("%s length=%d", ptype, length).isEqualTo(expected);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void narrowInto_matchesReference(PType ptype) {
+        // Given full-range wide values written into segments of exactly the narrowed size
+        try (Arena arena = Arena.ofConfined()) {
+            for (int length : LENGTHS) {
+                long[] values = new Random(length * 5L).longs(length).toArray();
+                MemorySegment expected = arena.allocate(Math.max(1L, (long) length * ptype.byteSize()));
+                MemorySegment result = arena.allocate(Math.max(1L, (long) length * ptype.byteSize()));
+
+                // When
+                reference.narrowInto(values, ptype, expected);
+                sut.narrowInto(values, ptype, result);
+
+                // Then
+                assertThat(result.mismatch(expected)).as("%s length=%d", ptype, length).isEqualTo(-1L);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {8, 16, 32, 64})
+    void undeltaAndDeltaChunk_matchReference(int typeBits) {
+        // Given a random chunk and bases
+        int lanes = FastLanes.CHUNK / typeBits;
+        long mask = FastLanes.lowMask(typeBits);
+        Random random = new Random(typeBits);
+        long[] chunk = new long[FastLanes.CHUNK];
+        for (int i = 0; i < chunk.length; i++) {
+            chunk[i] = random.nextLong() & mask;
+        }
+        long[] bases = new long[lanes];
+        for (int i = 0; i < lanes; i++) {
+            bases[i] = random.nextLong() & mask;
+        }
+        long[] expectedUndelta = new long[FastLanes.CHUNK];
+        long[] resultUndelta = new long[FastLanes.CHUNK];
+        long[] expectedDelta = new long[FastLanes.CHUNK];
+        long[] resultDelta = new long[FastLanes.CHUNK];
+
+        // When
+        reference.undeltaChunk(chunk, bases, lanes, typeBits, mask, expectedUndelta);
+        sut.undeltaChunk(chunk, bases, lanes, typeBits, mask, resultUndelta);
+        reference.deltaChunk(chunk, bases, lanes, typeBits, mask, expectedDelta);
+        sut.deltaChunk(chunk, bases, lanes, typeBits, mask, resultDelta);
+
+        // Then
+        assertThat(resultUndelta).as("undelta %d", typeBits).containsExactly(expectedUndelta);
+        assertThat(resultDelta).as("delta %d", typeBits).containsExactly(expectedDelta);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {8, 16, 32, 64})
+    void packBlock_matchesReference_atEveryBitWidth(int typeBits) {
+        // Given a random block, including bits above the width (which packBlock must mask off)
+        Random random = new Random(typeBits * 101L);
+        long[] values = random.longs(FastLanes.CHUNK + 7).toArray();
+        for (int bitWidth = 1; bitWidth <= typeBits; bitWidth++) {
+            long[] expected = new long[bitWidth * (FastLanes.CHUNK / typeBits)];
+            long[] result = new long[expected.length];
+
+            // When
+            reference.packBlock(values, 7, bitWidth, typeBits, expected);
+            sut.packBlock(values, 7, bitWidth, typeBits, result);
+
+            // Then
+            assertThat(result).as("typeBits=%d bitWidth=%d", typeBits, bitWidth).containsExactly(expected);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
+    void sumFloating_matchesReference(PType ptype) {
+        // Given values whose sum depends on the order of addition
+        for (int length : LENGTHS) {
+            Object values = arrayWithRuns(ptype, length, 1, new Random(length * 19L));
+            if (values instanceof float[] f) {
+                for (int i = 0; i < f.length; i++) {
+                    f[i] = (float) (f[i] % 1e6);
+                }
+            } else if (values instanceof double[] d) {
+                for (int i = 0; i < d.length; i++) {
+                    d[i] = d[i] % 1e12;
+                }
+            }
+
+            // When / Then bit for bit, since the order is the contract
+            assertThat(Double.doubleToRawLongBits(sut.sumFloating(values, ptype))).as("%s length=%d", ptype, length)
+                    .isEqualTo(Double.doubleToRawLongBits(reference.sumFloating(values, ptype)));
+        }
+    }
+
+    @Test
+    void minMax_floatsWithNaNAndZerosOfBothSigns_matchReference() {
+        // Given every arrangement of NaN, +0.0, -0.0 and ordinary values, long enough for the vector
+        // body, so the lane merge sees a zero of each sign in different lanes
+        float[] pool = {Float.NaN, 0.0f, -0.0f, 1f, -1f, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY};
+        Random random = new Random(42);
+        for (int trial = 0; trial < 200; trial++) {
+            int length = 1 + random.nextInt(70);
+            float[] floats = new float[length];
+            double[] doubles = new double[length];
+            for (int i = 0; i < length; i++) {
+                floats[i] = pool[random.nextInt(pool.length)];
+                doubles[i] = floats[i];
+            }
+
+            // When / Then
+            assertThat(sut.minMax(floats, PType.F32)).as("F32 %s", java.util.Arrays.toString(floats))
+                    .containsExactly(reference.minMax(floats, PType.F32));
+            assertThat(sut.minMax(doubles, PType.F64)).as("F64 %s", java.util.Arrays.toString(doubles))
+                    .containsExactly(reference.minMax(doubles, PType.F64));
+        }
     }
 
     @Test
@@ -332,5 +512,17 @@ class VectorApiSimdOperationsTest {
             case int[] a -> java.util.Arrays.fill(a, -1);
             default -> throw new IllegalArgumentException(array.getClass().toString());
         }
+    }
+
+    private static Object narrowCarrier(PType ptype, int length) {
+        return switch (ptype) {
+            case I8, U8 -> new byte[length];
+            case I16, U16 -> new short[length];
+            case I32, U32 -> new int[length];
+            case I64, U64 -> new long[length];
+            case F16 -> new short[length];
+            case F32 -> new float[length];
+            case F64 -> new double[length];
+        };
     }
 }

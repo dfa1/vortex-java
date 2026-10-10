@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.core.simd;
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Test;
@@ -230,13 +231,29 @@ class SimdOperationsTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"I64", "U64", "F16", "F32", "F64"})
-    void narrowArrayInto_unsupportedPType_throws(PType ptype) {
-        // Given / When / Then
-        assertThatThrownBy(() -> sut.narrowArrayInto(VALUES, ptype, new int[VALUES.length]))
-                .isInstanceOf(IllegalArgumentException.class);
+    @Test
+    void narrowArrayInto_eightByteTypes_copy_andFloatCarriersAreRebuiltFromRawBits() {
+        // Given the full-range wide values
+        long[] copied = new long[VALUES.length];
+        short[] halves = new short[VALUES.length];
+        float[] floats = new float[VALUES.length];
+        double[] doubles = new double[VALUES.length];
+
+        // When
+        sut.narrowArrayInto(VALUES, PType.U64, copied);
+        sut.narrowArrayInto(VALUES, PType.F16, halves);
+        sut.narrowArrayInto(VALUES, PType.F32, floats);
+        sut.narrowArrayInto(VALUES, PType.F64, doubles);
+
+        // Then the 8-byte types are unchanged and each float carrier holds the low bits of the value
+        assertThat(copied).containsExactly(VALUES);
+        for (int i = 0; i < VALUES.length; i++) {
+            assertThat(halves[i]).isEqualTo((short) VALUES[i]);
+            assertThat(Float.floatToRawIntBits(floats[i])).isEqualTo((int) VALUES[i]);
+            assertThat(Double.doubleToRawLongBits(doubles[i])).isEqualTo(VALUES[i]);
+        }
     }
+
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
@@ -258,31 +275,41 @@ class SimdOperationsTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
-    void widenArrayInto_floatingPType_throws(PType ptype) {
-        // Given
-        long[] out = new long[1];
+    @Test
+    void widenArrayInto_floats_contributeTheirRawBitsZeroExtended() {
+        // Given a negative float, whose sign bit must not be sign-extended
+        float[] floats = {-1.5f, 2.5f};
+        double[] doubles = {-1.5, 2.5};
+        short[] halves = {(short) 0xBE00, 0x4100};
+        long[] out = new long[2];
 
         // When / Then
-        assertThatThrownBy(() -> sut.widenArrayInto(new double[]{1.0}, 0, 1, ptype, out))
-                .isInstanceOf(IllegalArgumentException.class);
+        sut.widenArrayInto(floats, 0, 2, PType.F32, out);
+        assertThat(out).containsExactly(Float.floatToRawIntBits(-1.5f) & 0xFFFF_FFFFL, Float.floatToRawIntBits(2.5f) & 0xFFFF_FFFFL);
+        sut.widenArrayInto(doubles, 0, 2, PType.F64, out);
+        assertThat(out).containsExactly(Double.doubleToRawLongBits(-1.5), Double.doubleToRawLongBits(2.5));
+        sut.widenArrayInto(halves, 0, 2, PType.F16, out);
+        assertThat(out).containsExactly(0xBE00L, 0x4100L);
     }
+
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
-    void minMax_matchesWidenedSignedReference(PType ptype) {
+    void minMax_matchesWidenedReference(PType ptype) {
         // Given seeded-random arrays of full-range values, so a wrong width or sign/zero extension
         // changes the answer; lengths straddle the vector lane counts
         Random random = new Random(ptype.ordinal());
         for (int length : new int[]{1, 2, 7, 33, 1000}) {
             Object values = randomArray(ptype, length, random);
             long[] widened = PrimitiveArrays.toLongs(values, ptype, EncodingId.VORTEX_PRIMITIVE);
-            long expectedMin = Long.MAX_VALUE;
-            long expectedMax = Long.MIN_VALUE;
+            long expectedMin = widened[0];
+            long expectedMax = widened[0];
             for (long v : widened) {
-                expectedMin = Math.min(expectedMin, v);
-                expectedMax = Math.max(expectedMax, v);
+                // U64 is ordered unsigned; the narrower widths are zero-extended, so signed order is theirs
+                boolean lower = ptype == PType.U64 ? Long.compareUnsigned(v, expectedMin) < 0 : v < expectedMin;
+                boolean higher = ptype == PType.U64 ? Long.compareUnsigned(v, expectedMax) > 0 : v > expectedMax;
+                expectedMin = lower ? v : expectedMin;
+                expectedMax = higher ? v : expectedMax;
             }
 
             // When
@@ -306,16 +333,17 @@ class SimdOperationsTest {
     }
 
     @Test
-    void minMax_u64AboveSignedRange_isOrderedAsSigned() {
+    void minMax_u64AboveSignedRange_isOrderedUnsigned() {
         // Given a U64 value with the top bit set, which sits at a negative signed position
-        long[] values = {1L, -1L};
+        long[] values = {1L, -1L, 5L};
 
         // When
         long[] result = sut.minMax(values, PType.U64);
 
-        // Then the contract is signed order over the widened values (ArrayStats' dense span relies on it)
-        assertThat(result).containsExactly(-1L, 1L);
+        // Then the natural unsigned order: 2^64 - 1 is the maximum
+        assertThat(result).containsExactly(1L, -1L);
     }
+
 
     @Test
     void minMax_emptyArray_throws() {
@@ -326,15 +354,35 @@ class SimdOperationsTest {
         assertThatThrownBy(() -> sut.minMax(values, PType.I32)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
-    void minMax_floatingPType_throws(PType ptype) {
-        // Given
-        Object values = ptype == PType.F64 ? new double[]{1.0} : ptype == PType.F32 ? new float[]{1f} : new short[]{1};
+    @Test
+    void minMax_floats_skipNaN_andKeepTheFirstZero() {
+        // Given NaN around the extremes, and zeros of both signs
+        float[] floats = {Float.NaN, 3f, -0.0f, 0.0f, -2f, Float.NaN, 7f};
+        double[] zeros = {0.0, -0.0, 5.0};
+        double[] negativeZeros = {-0.0, 0.0, -5.0};
+        short[] halves = {(short) 0x7E00, 0x4200, (short) 0xC000};
+
+        // When / Then NaN never wins, and an equal zero never replaces the first one
+        assertThat(sut.minMax(floats, PType.F32)).containsExactly(
+                Float.floatToRawIntBits(-2f) & 0xFFFF_FFFFL, Float.floatToRawIntBits(7f) & 0xFFFF_FFFFL);
+        assertThat(sut.minMax(zeros, PType.F64)).containsExactly(
+                Double.doubleToRawLongBits(0.0), Double.doubleToRawLongBits(5.0));
+        assertThat(sut.minMax(negativeZeros, PType.F64)).containsExactly(
+                Double.doubleToRawLongBits(-5.0), Double.doubleToRawLongBits(-0.0));
+        assertThat(sut.minMax(halves, PType.F16)).containsExactly(0xC000L, 0x4200L);
+    }
+
+    @Test
+    void minMax_floatsWithoutAnOrderedElement_haveNoMinMax() {
+        // Given only NaN, and no elements at all
+        float[] nans = {Float.NaN, Float.NaN};
 
         // When / Then
-        assertThatThrownBy(() -> sut.minMax(values, ptype)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(sut.minMax(nans, PType.F32)).isEmpty();
+        assertThat(sut.minMax(new double[0], PType.F64)).isEmpty();
+        assertThat(sut.minMax(new short[0], PType.F16)).isEmpty();
     }
+
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "F16", "I32", "U32", "F32"})
@@ -397,7 +445,7 @@ class SimdOperationsTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"I8", "I16", "I32", "U64", "F32"})
+    @EnumSource(value = PType.class, names = {"I8", "I16", "I32", "I64", "F32"})
     void maxUnsigned_nonCodePType_throws(PType ptype) {
         // When / Then
         assertThatThrownBy(() -> sut.maxUnsigned(MemorySegment.NULL, 0, ptype))
@@ -406,19 +454,66 @@ class SimdOperationsTest {
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
-    void widenInto_floatingPType_throws(PType ptype) {
-        // When / Then
-        assertThatThrownBy(() -> sut.widenInto(MemorySegment.NULL, 0, 0, ptype, new long[0]))
-                .isInstanceOf(IllegalArgumentException.class);
+    void widenInto_floats_readLikeTheUnsignedTypeOfTheSameWidth(PType ptype) {
+        // Given a segment of full-range bits
+        PType unsigned = switch (ptype) {
+            case F16 -> PType.U16;
+            case F32 -> PType.U32;
+            default -> PType.U64;
+        };
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment src = arena.allocate(VALUES.length * ptype.byteSize());
+            for (int i = 0; i < VALUES.length; i++) {
+                PTypeIO.set(src, i * ptype.byteSize(), unsigned, VALUES[i]);
+            }
+            long[] expected = new long[VALUES.length];
+            long[] result = new long[VALUES.length];
+
+            // When
+            sut.widenInto(src, 0, VALUES.length, unsigned, expected);
+            sut.widenInto(src, 0, VALUES.length, ptype, result);
+
+            // Then
+            assertThat(result).containsExactly(expected);
+        }
     }
+
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I64", "U64", "F64"})
-    void narrowInto_eightByteType_throws(PType ptype) {
-        // When / Then
-        assertThatThrownBy(() -> sut.narrowInto(new long[0], ptype, MemorySegment.NULL))
-                .isInstanceOf(IllegalArgumentException.class);
+    void narrowInto_eightByteTypes_writeTheValuesLittleEndian(PType ptype) {
+        // Given
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment dst = arena.allocate(VALUES.length * 8L);
+
+            // When
+            sut.narrowInto(VALUES, ptype, dst);
+
+            // Then
+            for (int i = 0; i < VALUES.length; i++) {
+                assertThat(dst.getAtIndex(VortexFormat.LE_LONG, i)).isEqualTo(VALUES[i]);
+            }
+        }
     }
+
+    @Test
+    void maxUnsigned_u64_ordersTheHighBitAboveEverything() {
+        // Given a code with the top bit set among small ones
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment src = arena.allocate(4 * 8L);
+            long[] codes = {5L, -2L, 7L, 1L};
+            for (int i = 0; i < codes.length; i++) {
+                src.setAtIndex(VortexFormat.LE_LONG, i, codes[i]);
+            }
+
+            // When
+            long result = sut.maxUnsigned(src, 4, PType.U64);
+
+            // Then
+            assertThat(result).isEqualTo(-2L);
+        }
+    }
+
 
     @ParameterizedTest
     @ValueSource(ints = {8, 16, 32, 64})

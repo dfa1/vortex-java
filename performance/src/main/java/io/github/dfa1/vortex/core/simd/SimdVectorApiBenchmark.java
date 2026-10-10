@@ -35,6 +35,8 @@ public class SimdVectorApiBenchmark {
     @Param({"auto", "vector"})
     public String impl;
 
+    private static final int CHUNKS = 256;
+
     @Param({"4096", "262144"})
     public int size;
 
@@ -48,13 +50,23 @@ public class SimdVectorApiBenchmark {
     private boolean[] constantFlags;
     private MemorySegment codes;
     private long[] widened;
+    private long[] wide;
+    private Object narrowed;
+    private MemorySegment narrowSegment;
+    private long[] chunk;
+    private long[] bases;
+    private long[] chunkOut;
+    private long[] words;
+    private long chunkMask;
+    private int lanes;
+    private int typeBits;
 
     @Setup
     public void setup() {
         SimdOperations auto = new AutoVectorizedSimdOperations();
         ops = switch (impl) {
             case "auto" -> auto;
-            case "vector" -> new VectorApiSimdOperations(auto);
+            case "vector" -> new VectorApiSimdOperations();
             default -> throw new IllegalArgumentException(impl);
         };
         runsMany = array(ptype, size, 1, new Random(1));
@@ -62,6 +74,25 @@ public class SimdVectorApiBenchmark {
         constant = array(ptype, size, Integer.MAX_VALUE, new Random(3));
         constantFlags = new boolean[size];
         widened = new long[size];
+        wide = new Random(5).longs(size).toArray();
+        narrowed = switch (ptype) {
+            case I8 -> new byte[size];
+            case I16 -> new short[size];
+            case I32 -> new int[size];
+            default -> null;
+        };
+        narrowSegment = Arena.ofAuto().allocate((long) size * 8);
+        typeBits = ptype.byteSize() * 8;
+        lanes = io.github.dfa1.vortex.core.compute.FastLanes.CHUNK / typeBits;
+        chunkMask = io.github.dfa1.vortex.core.compute.FastLanes.lowMask(typeBits);
+        Random fastLanes = new Random(6);
+        chunk = new long[io.github.dfa1.vortex.core.compute.FastLanes.CHUNK * CHUNKS];
+        for (int i = 0; i < chunk.length; i++) {
+            chunk[i] = fastLanes.nextLong() & chunkMask;
+        }
+        bases = new long[lanes];
+        chunkOut = new long[io.github.dfa1.vortex.core.compute.FastLanes.CHUNK];
+        words = new long[typeBits * lanes];
         codes = Arena.ofAuto().allocate((long) size * 8);
         Random fill = new Random(4);
         for (long b = 0; b < codes.byteSize(); b++) {
@@ -111,6 +142,53 @@ public class SimdVectorApiBenchmark {
     public long[] widenSegment() {
         ops.widenInto(codes, 0, size, ptype, widened);
         return widened;
+    }
+
+    /// Narrows random longs into a heap array of the target width (I8, I16, I32).
+    @Benchmark
+    public Object narrowArray() {
+        ops.narrowArrayInto(wide, ptype, narrowed);
+        return narrowed;
+    }
+
+    /// Narrows random longs into a segment, as the writer does (I8, I16, I32).
+    @Benchmark
+    public MemorySegment narrowSegment() {
+        ops.narrowInto(wide, ptype, narrowSegment);
+        return narrowSegment;
+    }
+
+    /// Undeltas 256 FastLanes chunks (I8, I16, I32, I64).
+    @Benchmark
+    public long[] undelta() {
+        for (int c = 0; c < CHUNKS; c++) {
+            ops.undeltaChunk(chunk, bases, lanes, typeBits, chunkMask, chunkOut);
+        }
+        return chunkOut;
+    }
+
+    /// Deltas 256 FastLanes chunks (I8, I16, I32, I64).
+    @Benchmark
+    public long[] delta() {
+        for (int c = 0; c < CHUNKS; c++) {
+            ops.deltaChunk(chunk, bases, lanes, typeBits, chunkMask, chunkOut);
+        }
+        return chunkOut;
+    }
+
+    /// Bit-packs 256 FastLanes blocks at half the type width (I8, I16, I32, I64).
+    @Benchmark
+    public long[] pack() {
+        for (int c = 0; c < CHUNKS; c++) {
+            ops.packBlock(chunk, c * 1024, typeBits / 2, typeBits, words);
+        }
+        return words;
+    }
+
+    /// Sums floats strictly left to right (the F64 param).
+    @Benchmark
+    public double sumFloating() {
+        return ops.sumFloating(runsMany, ptype);
     }
 
     /// Finds the smallest and largest element of random full-range data (integer ptypes only).

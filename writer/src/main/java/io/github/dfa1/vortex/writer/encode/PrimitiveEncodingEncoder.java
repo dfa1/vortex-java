@@ -51,89 +51,23 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     /// @param data  the raw primitive array (e.g. `long[]`, `int[]`, `String`-free)
     /// @return a two-element `{min, max}` array of encoded scalars, or `null` if `data` is empty
     public static byte[][] minMaxStats(PType ptype, Object data) {
+        if (Array.getLength(data) == 0) {
+            return null;
+        }
+        // Floating-point arrays skip NaN, so an all-NaN one has no min/max: the kernel returns nothing
+        long[] minMax = SimdOperationsSupport.preferred().minMax(data, ptype);
+        if (minMax.length == 0) {
+            return null;
+        }
         return switch (ptype) {
-            case I8, I16, I32, I64 -> {
-                if (Array.getLength(data) == 0) {
-                    yield null;
-                }
-                long[] minMax = SimdOperationsSupport.preferred().minMax(data, ptype);
-                yield new byte[][]{scalarI64(minMax[0]), scalarI64(minMax[1])};
-            }
-            // Zero-extended, so the kernel's signed order is their natural order
-            case U8, U16, U32 -> {
-                if (Array.getLength(data) == 0) {
-                    yield null;
-                }
-                long[] minMax = SimdOperationsSupport.preferred().minMax(data, ptype);
-                yield new byte[][]{scalarU64(minMax[0]), scalarU64(minMax[1])};
-            }
-            case U64 -> {
-                long[] arr = (long[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = arr[0];
-                long max = arr[0];
-                for (long v : arr) {
-                    if (Long.compareUnsigned(v, min) < 0) {
-                        min = v;
-                    }
-                    if (Long.compareUnsigned(v, max) > 0) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarU64(min), scalarU64(max)};
-            }
-            case F32 -> {
-                float[] arr = (float[]) data;
-                // NaN-skipping, as Rust's min/max (skip_nans): every comparison with NaN is false, so
-                // starting from the infinities skips NaN without a per-element branch; an all-NaN
-                // (or empty) array ends with min > max and has no min/max.
-                float min = Float.POSITIVE_INFINITY;
-                float max = Float.NEGATIVE_INFINITY;
-                for (float v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield min > max ? null : new byte[][]{scalarF32(min), scalarF32(max)};
-            }
-            case F64 -> {
-                double[] arr = (double[]) data;
-                // NaN-skipping, as Rust's min/max (skip_nans): every comparison with NaN is false, so
-                // starting from the infinities skips NaN without a per-element branch; an all-NaN
-                // (or empty) array ends with min > max and has no min/max.
-                double min = Double.POSITIVE_INFINITY;
-                double max = Double.NEGATIVE_INFINITY;
-                for (double v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield min > max ? null : new byte[][]{scalarF64(min), scalarF64(max)};
-            }
-            case F16 -> {
-                short[] arr = (short[]) data;
-                // NaN-skipping like F32/F64 above.
-                float min = Float.POSITIVE_INFINITY;
-                float max = Float.NEGATIVE_INFINITY;
-                for (short v : arr) {
-                    float fv = Float.float16ToFloat(v);
-                    if (fv < min) {
-                        min = fv;
-                    }
-                    if (fv > max) {
-                        max = fv;
-                    }
-                }
-                yield min > max ? null : new byte[][]{scalarF16(min), scalarF16(max)};
-            }
+            case I8, I16, I32, I64 -> new byte[][]{scalarI64(minMax[0]), scalarI64(minMax[1])};
+            case U8, U16, U32, U64 -> new byte[][]{scalarU64(minMax[0]), scalarU64(minMax[1])};
+            case F16 -> new byte[][]{scalarF16(Float.float16ToFloat((short) minMax[0])),
+                    scalarF16(Float.float16ToFloat((short) minMax[1]))};
+            case F32 -> new byte[][]{scalarF32(Float.intBitsToFloat((int) minMax[0])),
+                    scalarF32(Float.intBitsToFloat((int) minMax[1]))};
+            case F64 -> new byte[][]{scalarF64(Double.longBitsToDouble(minMax[0])),
+                    scalarF64(Double.longBitsToDouble(minMax[1]))};
         };
     }
 
