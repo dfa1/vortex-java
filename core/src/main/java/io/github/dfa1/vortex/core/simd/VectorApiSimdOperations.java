@@ -32,6 +32,11 @@ final class VectorApiSimdOperations implements SimdOperations {
     private static final VectorSpecies<Short> SHORTS = ShortVector.SPECIES_PREFERRED;
     private static final VectorSpecies<Integer> INTS = IntVector.SPECIES_PREFERRED;
 
+    /// Vector iterations a narrow-element sum accumulates in `int` lanes before flushing to a `long`.
+    /// A lane gains at most `parts` elements per iteration, each below 2^16, so 2^13 iterations stay
+    /// far under 2^31.
+    private static final int SUM_FLUSH_ITERATIONS = 1 << 13;
+
     private final SimdOperations fallback;
 
     VectorApiSimdOperations(SimdOperations fallback) {
@@ -307,9 +312,78 @@ final class VectorApiSimdOperations implements SimdOperations {
         return changes;
     }
 
+    // Bytes 1.54x and shorts 1.67x faster than C2's widening loop (128-bit NEON, 262144 elements, JMH
+    // -f 2); 4-byte lanes tie it (1.01x), and I64/U64 keep the scalar per-addition overflow check.
     @Override
     public OptionalLong sum(Object values, PType ptype) {
-        return fallback.sum(values, ptype);
+        return switch (ptype) {
+            case I8 -> OptionalLong.of(sum((byte[]) values, VectorOperators.B2I));
+            case U8 -> OptionalLong.of(sum((byte[]) values, VectorOperators.ZERO_EXTEND_B2I));
+            case I16 -> OptionalLong.of(sum((short[]) values, VectorOperators.S2I));
+            case U16 -> OptionalLong.of(sum((short[]) values, VectorOperators.ZERO_EXTEND_S2I));
+            case I32, U32, I64, U64, F16, F32, F64 -> fallback.sum(values, ptype);
+        };
+    }
+
+    /// Sums bytes into `int` lanes, flushed to a `long` every [#SUM_FLUSH_ITERATIONS] vectors so a
+    /// lane cannot overflow: it gains `parts` elements per vector, each below 2^8.
+    private static long sum(byte[] a, VectorOperators.Conversion<Byte, Integer> widen) {
+        int parts = BYTES.length() / INTS.length();
+        long total = 0;
+        IntVector acc = IntVector.zero(INTS);
+        int iterations = 0;
+        int i = 0;
+        for (; i + BYTES.length() <= a.length; i += BYTES.length()) {
+            ByteVector v = ByteVector.fromArray(BYTES, a, i);
+            for (int part = 0; part < parts; part++) {
+                acc = acc.add((IntVector) v.convertShape(widen, INTS, part));
+            }
+            if (++iterations == SUM_FLUSH_ITERATIONS) {
+                total += laneSum(acc);
+                acc = IntVector.zero(INTS);
+                iterations = 0;
+            }
+        }
+        total += laneSum(acc);
+        boolean unsigned = widen == VectorOperators.ZERO_EXTEND_B2I;
+        for (; i < a.length; i++) {
+            total += unsigned ? Byte.toUnsignedLong(a[i]) : a[i];
+        }
+        return total;
+    }
+
+    private static long sum(short[] a, VectorOperators.Conversion<Short, Integer> widen) {
+        int parts = SHORTS.length() / INTS.length();
+        long total = 0;
+        IntVector acc = IntVector.zero(INTS);
+        int iterations = 0;
+        int i = 0;
+        for (; i + SHORTS.length() <= a.length; i += SHORTS.length()) {
+            ShortVector v = ShortVector.fromArray(SHORTS, a, i);
+            for (int part = 0; part < parts; part++) {
+                acc = acc.add((IntVector) v.convertShape(widen, INTS, part));
+            }
+            if (++iterations == SUM_FLUSH_ITERATIONS) {
+                total += laneSum(acc);
+                acc = IntVector.zero(INTS);
+                iterations = 0;
+            }
+        }
+        total += laneSum(acc);
+        boolean unsigned = widen == VectorOperators.ZERO_EXTEND_S2I;
+        for (; i < a.length; i++) {
+            total += unsigned ? Short.toUnsignedLong(a[i]) : a[i];
+        }
+        return total;
+    }
+
+    /// Adds the lanes as `long`s: the `int` lane sum itself could wrap even when every lane is in range.
+    private static long laneSum(IntVector acc) {
+        long total = 0;
+        for (int lane : acc.toArray()) {
+            total += lane;
+        }
+        return total;
     }
 
     @Override

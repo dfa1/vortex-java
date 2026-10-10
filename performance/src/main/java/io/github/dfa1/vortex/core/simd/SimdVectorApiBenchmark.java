@@ -91,6 +91,12 @@ public class SimdVectorApiBenchmark {
         return ops.maxUnsigned(codes, size, unsigned);
     }
 
+    /// Sums random full-range integers into a long (I8, I16, I32; I64 keeps its per-add overflow check).
+    @Benchmark
+    public java.util.OptionalLong sum() {
+        return ops.sum(runsMany, ptype);
+    }
+
     /// Finds the smallest and largest element of random full-range data (integer ptypes only).
     @Benchmark
     public long[] minMax() {

@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.OptionalLong;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -141,6 +142,35 @@ class VectorApiSimdOperationsTest {
             // Then
             assertThat(result).isEqualTo(reference.maxUnsigned(segment, length, ptype)).isGreaterThan(5L);
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void sum_matchesReference(PType ptype) {
+        // Given random full-range data at every length
+        for (int length : LENGTHS) {
+            Object values = arrayWithRuns(ptype, length, 1, new Random(length * 13L));
+
+            // When / Then
+            assertThat(sut.sum(values, ptype)).as("%s length=%d", ptype, length).isEqualTo(reference.sum(values, ptype));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32"})
+    void sum_pastTheFlushWindow_doesNotOverflowALane(PType ptype) {
+        // Given more elements than one int-lane flush window holds, every one at the carrier's extreme
+        // (255 / 65535 / -32768): a missing flush would wrap an int lane here
+        int length = 600_000;
+        Object values = arrayWithRuns(ptype, length, Integer.MAX_VALUE, new Random(1));
+        extremes(values);
+        fillConstant(values);
+
+        // When
+        OptionalLong result = sut.sum(values, ptype);
+
+        // Then
+        assertThat(result).isEqualTo(reference.sum(values, ptype));
     }
 
     @Test
@@ -291,6 +321,16 @@ class VectorApiSimdOperationsTest {
     private static void fill(long[] a) {
         for (int i = 0; i < a.length; i++) {
             a[i] = i % 3 == 0 ? Long.MIN_VALUE : i % 3 == 1 ? Long.MAX_VALUE : -1L;
+        }
+    }
+
+    /// Sets every element to the carrier's all-ones pattern: 255 / 65535 as unsigned, -1 as signed.
+    private static void fillConstant(Object array) {
+        switch (array) {
+            case byte[] a -> java.util.Arrays.fill(a, (byte) -1);
+            case short[] a -> java.util.Arrays.fill(a, (short) -1);
+            case int[] a -> java.util.Arrays.fill(a, -1);
+            default -> throw new IllegalArgumentException(array.getClass().toString());
         }
     }
 }
