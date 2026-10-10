@@ -79,19 +79,18 @@ final class VectorApiSimdOperations implements SimdOperations {
 
     // ---- widen ----
 
+    // Narrow lanes widen in stages (byte to int to long, short to int to long): the Vector API does not
+    // intrinsify a direct conversion across a lane ratio of four or more into 64-bit lanes, and that
+    // direct form measured about 40x slower than the staged one (JMH, 128-bit NEON). The ratios of the
+    // stages (4 and 2, 2 and 2) are fixed by the types, so they hold at any vector width.
     @Override
     public void widenInto(MemorySegment src, long fromElement, int count, PType ptype, long[] out) {
         switch (ptype) {
             case I8, U8 -> {
-                VectorOperators.Conversion<Byte, Long> widen = ptype == PType.U8
-                        ? VectorOperators.ZERO_EXTEND_B2L : VectorOperators.B2L;
-                int parts = BYTES.length() / LONGS.length();
                 int i = 0;
                 for (; i + BYTES.length() <= count; i += BYTES.length()) {
-                    ByteVector v = ByteVector.fromMemorySegment(BYTES, src, fromElement + i, ByteOrder.LITTLE_ENDIAN);
-                    for (int part = 0; part < parts; part++) {
-                        ((LongVector) v.convertShape(widen, LONGS, part)).intoArray(out, i + part * LONGS.length());
-                    }
+                    widenBytes(ByteVector.fromMemorySegment(BYTES, src, fromElement + i, ByteOrder.LITTLE_ENDIAN),
+                            ptype == PType.U8, out, i);
                 }
                 for (; i < count; i++) {
                     long v = src.get(ValueLayout.JAVA_BYTE, fromElement + i);
@@ -99,15 +98,10 @@ final class VectorApiSimdOperations implements SimdOperations {
                 }
             }
             case I16, U16, F16 -> {
-                VectorOperators.Conversion<Short, Long> widen = ptype == PType.I16
-                        ? VectorOperators.S2L : VectorOperators.ZERO_EXTEND_S2L;
-                int parts = SHORTS.length() / LONGS.length();
                 int i = 0;
                 for (; i + SHORTS.length() <= count; i += SHORTS.length()) {
-                    ShortVector v = ShortVector.fromMemorySegment(SHORTS, src, (fromElement + i) * 2, ByteOrder.LITTLE_ENDIAN);
-                    for (int part = 0; part < parts; part++) {
-                        ((LongVector) v.convertShape(widen, LONGS, part)).intoArray(out, i + part * LONGS.length());
-                    }
+                    widenShorts(ShortVector.fromMemorySegment(SHORTS, src, (fromElement + i) * 2, ByteOrder.LITTLE_ENDIAN),
+                            ptype != PType.I16, out, i);
                 }
                 for (; i < count; i++) {
                     long v = src.getAtIndex(VortexFormat.LE_SHORT, fromElement + i);
@@ -115,31 +109,18 @@ final class VectorApiSimdOperations implements SimdOperations {
                 }
             }
             case I32, U32, F32 -> {
-                VectorOperators.Conversion<Integer, Long> widen = ptype == PType.I32
-                        ? VectorOperators.I2L : VectorOperators.ZERO_EXTEND_I2L;
-                int parts = INTS.length() / LONGS.length();
                 int i = 0;
                 for (; i + INTS.length() <= count; i += INTS.length()) {
-                    IntVector v = IntVector.fromMemorySegment(INTS, src, (fromElement + i) * 4, ByteOrder.LITTLE_ENDIAN);
-                    for (int part = 0; part < parts; part++) {
-                        ((LongVector) v.convertShape(widen, LONGS, part)).intoArray(out, i + part * LONGS.length());
-                    }
+                    widenInts(IntVector.fromMemorySegment(INTS, src, (fromElement + i) * 4, ByteOrder.LITTLE_ENDIAN),
+                            ptype != PType.I32, out, i);
                 }
                 for (; i < count; i++) {
                     long v = src.getAtIndex(VortexFormat.LE_INT, fromElement + i);
                     out[i] = ptype == PType.I32 ? v : v & 0xFFFF_FFFFL;
                 }
             }
-            case I64, U64, F64 -> {
-                int i = 0;
-                for (; i + LONGS.length() <= count; i += LONGS.length()) {
-                    LongVector.fromMemorySegment(LONGS, src, (fromElement + i) * 8, ByteOrder.LITTLE_ENDIAN)
-                            .intoArray(out, i);
-                }
-                for (; i < count; i++) {
-                    out[i] = src.getAtIndex(VortexFormat.LE_LONG, fromElement + i);
-                }
-            }
+            // A copy is a copy: the JDK's bulk copy is what a vector loop would be at best
+            case I64, U64, F64 -> MemorySegment.copy(src, VortexFormat.LE_LONG, fromElement * 8, out, 0, count);
         }
     }
 
@@ -148,15 +129,9 @@ final class VectorApiSimdOperations implements SimdOperations {
         switch (ptype) {
             case I8, U8 -> {
                 byte[] a = (byte[]) values;
-                VectorOperators.Conversion<Byte, Long> widen = ptype == PType.U8
-                        ? VectorOperators.ZERO_EXTEND_B2L : VectorOperators.B2L;
-                int parts = BYTES.length() / LONGS.length();
                 int i = 0;
                 for (; i + BYTES.length() <= count; i += BYTES.length()) {
-                    ByteVector v = ByteVector.fromArray(BYTES, a, from + i);
-                    for (int part = 0; part < parts; part++) {
-                        ((LongVector) v.convertShape(widen, LONGS, part)).intoArray(out, i + part * LONGS.length());
-                    }
+                    widenBytes(ByteVector.fromArray(BYTES, a, from + i), ptype == PType.U8, out, i);
                 }
                 for (; i < count; i++) {
                     out[i] = ptype == PType.U8 ? a[from + i] & 0xFFL : a[from + i];
@@ -164,15 +139,9 @@ final class VectorApiSimdOperations implements SimdOperations {
             }
             case I16, U16, F16 -> {
                 short[] a = (short[]) values;
-                VectorOperators.Conversion<Short, Long> widen = ptype == PType.I16
-                        ? VectorOperators.S2L : VectorOperators.ZERO_EXTEND_S2L;
-                int parts = SHORTS.length() / LONGS.length();
                 int i = 0;
                 for (; i + SHORTS.length() <= count; i += SHORTS.length()) {
-                    ShortVector v = ShortVector.fromArray(SHORTS, a, from + i);
-                    for (int part = 0; part < parts; part++) {
-                        ((LongVector) v.convertShape(widen, LONGS, part)).intoArray(out, i + part * LONGS.length());
-                    }
+                    widenShorts(ShortVector.fromArray(SHORTS, a, from + i), ptype != PType.I16, out, i);
                 }
                 for (; i < count; i++) {
                     out[i] = ptype == PType.I16 ? a[from + i] : a[from + i] & 0xFFFFL;
@@ -180,40 +149,20 @@ final class VectorApiSimdOperations implements SimdOperations {
             }
             case I32, U32 -> {
                 int[] a = (int[]) values;
-                VectorOperators.Conversion<Integer, Long> widen = ptype == PType.U32
-                        ? VectorOperators.ZERO_EXTEND_I2L : VectorOperators.I2L;
-                int parts = INTS.length() / LONGS.length();
                 int i = 0;
                 for (; i + INTS.length() <= count; i += INTS.length()) {
-                    IntVector v = IntVector.fromArray(INTS, a, from + i);
-                    for (int part = 0; part < parts; part++) {
-                        ((LongVector) v.convertShape(widen, LONGS, part)).intoArray(out, i + part * LONGS.length());
-                    }
+                    widenInts(IntVector.fromArray(INTS, a, from + i), ptype == PType.U32, out, i);
                 }
                 for (; i < count; i++) {
                     out[i] = ptype == PType.U32 ? a[from + i] & 0xFFFF_FFFFL : a[from + i];
                 }
             }
-            case I64, U64 -> {
-                long[] a = (long[]) values;
-                int i = 0;
-                for (; i + LONGS.length() <= count; i += LONGS.length()) {
-                    LongVector.fromArray(LONGS, a, from + i).intoArray(out, i);
-                }
-                for (; i < count; i++) {
-                    out[i] = a[from + i];
-                }
-            }
+            case I64, U64 -> System.arraycopy((long[]) values, from, out, 0, count);
             case F32 -> {
                 float[] a = (float[]) values;
-                int parts = INTS.length() / LONGS.length();
                 int i = 0;
                 for (; i + FLOATS.length() <= count; i += FLOATS.length()) {
-                    IntVector v = FloatVector.fromArray(FLOATS, a, from + i).reinterpretAsInts();
-                    for (int part = 0; part < parts; part++) {
-                        ((LongVector) v.convertShape(VectorOperators.ZERO_EXTEND_I2L, LONGS, part))
-                                .intoArray(out, i + part * LONGS.length());
-                    }
+                    widenInts(FloatVector.fromArray(FLOATS, a, from + i).reinterpretAsInts(), true, out, i);
                 }
                 for (; i < count; i++) {
                     out[i] = Float.floatToRawIntBits(a[from + i]) & 0xFFFF_FFFFL;
@@ -229,6 +178,29 @@ final class VectorApiSimdOperations implements SimdOperations {
                     out[i] = Double.doubleToRawLongBits(a[from + i]);
                 }
             }
+        }
+    }
+
+    /// Widens a byte vector to `BYTES.length()` longs at `out[at]`: byte to int (four parts), int to long.
+    private static void widenBytes(ByteVector v, boolean unsigned, long[] out, int at) {
+        VectorOperators.Conversion<Byte, Integer> toInt = unsigned ? VectorOperators.ZERO_EXTEND_B2I : VectorOperators.B2I;
+        for (int part = 0; part < BYTES.length() / INTS.length(); part++) {
+            widenInts((IntVector) v.convertShape(toInt, INTS, part), false, out, at + part * INTS.length());
+        }
+    }
+
+    private static void widenShorts(ShortVector v, boolean unsigned, long[] out, int at) {
+        VectorOperators.Conversion<Short, Integer> toInt = unsigned ? VectorOperators.ZERO_EXTEND_S2I : VectorOperators.S2I;
+        for (int part = 0; part < SHORTS.length() / INTS.length(); part++) {
+            widenInts((IntVector) v.convertShape(toInt, INTS, part), false, out, at + part * INTS.length());
+        }
+    }
+
+    /// Widens an int vector to `INTS.length()` longs at `out[at]`, sign- or zero-extending the lanes.
+    private static void widenInts(IntVector v, boolean unsigned, long[] out, int at) {
+        VectorOperators.Conversion<Integer, Long> toLong = unsigned ? VectorOperators.ZERO_EXTEND_I2L : VectorOperators.I2L;
+        for (int part = 0; part < INTS.length() / LONGS.length(); part++) {
+            ((LongVector) v.convertShape(toLong, LONGS, part)).intoArray(out, at + part * LONGS.length());
         }
     }
 
@@ -265,15 +237,7 @@ final class VectorApiSimdOperations implements SimdOperations {
                     dst.setAtIndex(VortexFormat.LE_INT, i, (int) values[i]);
                 }
             }
-            case I64, U64, F64 -> {
-                int i = 0;
-                for (; i + LONGS.length() <= n; i += LONGS.length()) {
-                    LongVector.fromArray(LONGS, values, i).intoMemorySegment(dst, i * 8L, ByteOrder.LITTLE_ENDIAN);
-                }
-                for (; i < n; i++) {
-                    dst.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
-                }
-            }
+            case I64, U64, F64 -> MemorySegment.copy(values, 0, dst, VortexFormat.LE_LONG, 0, n);
         }
     }
 
@@ -291,7 +255,7 @@ final class VectorApiSimdOperations implements SimdOperations {
                     a[i] = (byte) values[i];
                 }
             }
-            case I16, U16 -> {
+            case I16, U16, F16 -> {
                 short[] a = (short[]) out;
                 int i = 0;
                 for (; i + SHORTS.length() <= n; i += SHORTS.length()) {
@@ -312,16 +276,6 @@ final class VectorApiSimdOperations implements SimdOperations {
                 }
             }
             case I64, U64 -> System.arraycopy(values, 0, (long[]) out, 0, n);
-            case F16 -> {
-                short[] a = (short[]) out;
-                int i = 0;
-                for (; i + SHORTS.length() <= n; i += SHORTS.length()) {
-                    narrowToShorts(values, i).intoArray(a, i);
-                }
-                for (; i < n; i++) {
-                    a[i] = (short) values[i];
-                }
-            }
             case F32 -> {
                 float[] a = (float[]) out;
                 int i = 0;
@@ -345,34 +299,30 @@ final class VectorApiSimdOperations implements SimdOperations {
         }
     }
 
-    /// One byte vector from `BYTES.length()` longs: each long vector contracts into its own slice of
-    /// the result (part `-k`), the other lanes zero, so the slices are combined with an OR.
+    // Narrowing mirrors widening: two long vectors contract into one int vector (parts 0 and -1), and
+    // 4 (bytes) or 2 (shorts) int vectors contract into one byte or short vector, each into its own slice
+    // of the result (part -k) with the other lanes zero, combined with an OR. A direct long to byte
+    // contraction measured about 25x slower than this staged form.
+    private static IntVector narrowToInts(long[] values, int from) {
+        return ((IntVector) LongVector.fromArray(LONGS, values, from).convertShape(VectorOperators.L2I, INTS, 0))
+                .or((IntVector) LongVector.fromArray(LONGS, values, from + LONGS.length())
+                        .convertShape(VectorOperators.L2I, INTS, -1));
+    }
+
     private static ByteVector narrowToBytes(long[] values, int from) {
         ByteVector result = ByteVector.zero(BYTES);
-        int parts = BYTES.length() / LONGS.length();
-        for (int part = 0; part < parts; part++) {
-            result = result.or((ByteVector) LongVector.fromArray(LONGS, values, from + part * LONGS.length())
-                    .convertShape(VectorOperators.L2B, BYTES, -part));
+        for (int part = 0; part < BYTES.length() / INTS.length(); part++) {
+            result = result.or((ByteVector) narrowToInts(values, from + part * INTS.length())
+                    .convertShape(VectorOperators.I2B, BYTES, -part));
         }
         return result;
     }
 
     private static ShortVector narrowToShorts(long[] values, int from) {
         ShortVector result = ShortVector.zero(SHORTS);
-        int parts = SHORTS.length() / LONGS.length();
-        for (int part = 0; part < parts; part++) {
-            result = result.or((ShortVector) LongVector.fromArray(LONGS, values, from + part * LONGS.length())
-                    .convertShape(VectorOperators.L2S, SHORTS, -part));
-        }
-        return result;
-    }
-
-    private static IntVector narrowToInts(long[] values, int from) {
-        IntVector result = IntVector.zero(INTS);
-        int parts = INTS.length() / LONGS.length();
-        for (int part = 0; part < parts; part++) {
-            result = result.or((IntVector) LongVector.fromArray(LONGS, values, from + part * LONGS.length())
-                    .convertShape(VectorOperators.L2I, INTS, -part));
+        for (int part = 0; part < SHORTS.length() / INTS.length(); part++) {
+            result = result.or((ShortVector) narrowToInts(values, from + part * INTS.length())
+                    .convertShape(VectorOperators.I2S, SHORTS, -part));
         }
         return result;
     }
@@ -643,7 +593,13 @@ final class VectorApiSimdOperations implements SimdOperations {
 
     // ---- allEqual ----
 
-    // Each vector is compared with the first element broadcast; floats by their raw bits.
+    /// Vectors compared per early-exit check of [#allEqual(Object, PType)]. Each block ORs the XOR against
+    /// the first element and tests the accumulator once, so the loop body has no branch; a non-constant
+    /// array is still rejected after one block.
+    private static final int EQUAL_BLOCK_VECTORS = 16;
+
+    // The differences from the first element are ORed over a block and tested once per block; floats by
+    // their raw bits.
     @Override
     public boolean allEqual(Object values, PType ptype) {
         if (Array.getLength(values) == 0) {
@@ -665,9 +621,14 @@ final class VectorApiSimdOperations implements SimdOperations {
             return true;
         }
         ByteVector first = ByteVector.broadcast(BYTES, (byte) (values[0] ? 1 : 0));
+        int step = BYTES.length();
         int i = 0;
-        for (; i + BYTES.length() <= values.length; i += BYTES.length()) {
-            if (ByteVector.fromBooleanArray(BYTES, values, i).compare(VectorOperators.NE, first).anyTrue()) {
+        while (i + step * EQUAL_BLOCK_VECTORS <= values.length) {
+            ByteVector diff = ByteVector.zero(BYTES);
+            for (int end = i + step * EQUAL_BLOCK_VECTORS; i < end; i += step) {
+                diff = diff.or(ByteVector.fromBooleanArray(BYTES, values, i).lanewise(VectorOperators.XOR, first));
+            }
+            if (diff.compare(VectorOperators.NE, (byte) 0).anyTrue()) {
                 return false;
             }
         }
@@ -681,9 +642,14 @@ final class VectorApiSimdOperations implements SimdOperations {
 
     private static boolean allEqual(byte[] a) {
         ByteVector first = ByteVector.broadcast(BYTES, a[0]);
+        int step = BYTES.length();
         int i = 0;
-        for (; i + BYTES.length() <= a.length; i += BYTES.length()) {
-            if (ByteVector.fromArray(BYTES, a, i).compare(VectorOperators.NE, first).anyTrue()) {
+        while (i + step * EQUAL_BLOCK_VECTORS <= a.length) {
+            ByteVector diff = ByteVector.zero(BYTES);
+            for (int end = i + step * EQUAL_BLOCK_VECTORS; i < end; i += step) {
+                diff = diff.or(ByteVector.fromArray(BYTES, a, i).lanewise(VectorOperators.XOR, first));
+            }
+            if (diff.compare(VectorOperators.NE, (byte) 0).anyTrue()) {
                 return false;
             }
         }
@@ -697,9 +663,14 @@ final class VectorApiSimdOperations implements SimdOperations {
 
     private static boolean allEqual(short[] a) {
         ShortVector first = ShortVector.broadcast(SHORTS, a[0]);
+        int step = SHORTS.length();
         int i = 0;
-        for (; i + SHORTS.length() <= a.length; i += SHORTS.length()) {
-            if (ShortVector.fromArray(SHORTS, a, i).compare(VectorOperators.NE, first).anyTrue()) {
+        while (i + step * EQUAL_BLOCK_VECTORS <= a.length) {
+            ShortVector diff = ShortVector.zero(SHORTS);
+            for (int end = i + step * EQUAL_BLOCK_VECTORS; i < end; i += step) {
+                diff = diff.or(ShortVector.fromArray(SHORTS, a, i).lanewise(VectorOperators.XOR, first));
+            }
+            if (diff.compare(VectorOperators.NE, (short) 0).anyTrue()) {
                 return false;
             }
         }
@@ -713,9 +684,14 @@ final class VectorApiSimdOperations implements SimdOperations {
 
     private static boolean allEqual(int[] a) {
         IntVector first = IntVector.broadcast(INTS, a[0]);
+        int step = INTS.length();
         int i = 0;
-        for (; i + INTS.length() <= a.length; i += INTS.length()) {
-            if (IntVector.fromArray(INTS, a, i).compare(VectorOperators.NE, first).anyTrue()) {
+        while (i + step * EQUAL_BLOCK_VECTORS <= a.length) {
+            IntVector diff = IntVector.zero(INTS);
+            for (int end = i + step * EQUAL_BLOCK_VECTORS; i < end; i += step) {
+                diff = diff.or(IntVector.fromArray(INTS, a, i).lanewise(VectorOperators.XOR, first));
+            }
+            if (diff.compare(VectorOperators.NE, 0).anyTrue()) {
                 return false;
             }
         }
@@ -729,9 +705,14 @@ final class VectorApiSimdOperations implements SimdOperations {
 
     private static boolean allEqual(long[] a) {
         LongVector first = LongVector.broadcast(LONGS, a[0]);
+        int step = LONGS.length();
         int i = 0;
-        for (; i + LONGS.length() <= a.length; i += LONGS.length()) {
-            if (LongVector.fromArray(LONGS, a, i).compare(VectorOperators.NE, first).anyTrue()) {
+        while (i + step * EQUAL_BLOCK_VECTORS <= a.length) {
+            LongVector diff = LongVector.zero(LONGS);
+            for (int end = i + step * EQUAL_BLOCK_VECTORS; i < end; i += step) {
+                diff = diff.or(LongVector.fromArray(LONGS, a, i).lanewise(VectorOperators.XOR, first));
+            }
+            if (diff.compare(VectorOperators.NE, 0L).anyTrue()) {
                 return false;
             }
         }
@@ -746,9 +727,14 @@ final class VectorApiSimdOperations implements SimdOperations {
     private static boolean allEqual(float[] a) {
         int firstBits = Float.floatToRawIntBits(a[0]);
         IntVector first = IntVector.broadcast(INTS, firstBits);
+        int step = FLOATS.length();
         int i = 0;
-        for (; i + FLOATS.length() <= a.length; i += FLOATS.length()) {
-            if (FloatVector.fromArray(FLOATS, a, i).reinterpretAsInts().compare(VectorOperators.NE, first).anyTrue()) {
+        while (i + step * EQUAL_BLOCK_VECTORS <= a.length) {
+            IntVector diff = IntVector.zero(INTS);
+            for (int end = i + step * EQUAL_BLOCK_VECTORS; i < end; i += step) {
+                diff = diff.or(FloatVector.fromArray(FLOATS, a, i).reinterpretAsInts().lanewise(VectorOperators.XOR, first));
+            }
+            if (diff.compare(VectorOperators.NE, 0).anyTrue()) {
                 return false;
             }
         }
@@ -763,9 +749,14 @@ final class VectorApiSimdOperations implements SimdOperations {
     private static boolean allEqual(double[] a) {
         long firstBits = Double.doubleToRawLongBits(a[0]);
         LongVector first = LongVector.broadcast(LONGS, firstBits);
+        int step = DOUBLES.length();
         int i = 0;
-        for (; i + DOUBLES.length() <= a.length; i += DOUBLES.length()) {
-            if (DoubleVector.fromArray(DOUBLES, a, i).reinterpretAsLongs().compare(VectorOperators.NE, first).anyTrue()) {
+        while (i + step * EQUAL_BLOCK_VECTORS <= a.length) {
+            LongVector diff = LongVector.zero(LONGS);
+            for (int end = i + step * EQUAL_BLOCK_VECTORS; i < end; i += step) {
+                diff = diff.or(DoubleVector.fromArray(DOUBLES, a, i).reinterpretAsLongs().lanewise(VectorOperators.XOR, first));
+            }
+            if (diff.compare(VectorOperators.NE, 0L).anyTrue()) {
                 return false;
             }
         }
@@ -822,13 +813,17 @@ final class VectorApiSimdOperations implements SimdOperations {
         return changes;
     }
 
+    // The comparison masks are accumulated as -1 lanes and reduced once, instead of counting each mask
+    // with trueCount(), a cross-lane operation per vector. A lane gains at most one per vector, so the
+    // 32-bit counters hold any array that fits in memory.
     private static long changes(int[] a) {
-        long changes = 0;
+        IntVector count = IntVector.zero(INTS);
         int i = 1;
         for (; i + INTS.length() <= a.length; i += INTS.length()) {
-            changes += IntVector.fromArray(INTS, a, i)
-                    .compare(VectorOperators.NE, IntVector.fromArray(INTS, a, i - 1)).trueCount();
+            count = count.sub(IntVector.fromArray(INTS, a, i)
+                    .compare(VectorOperators.NE, IntVector.fromArray(INTS, a, i - 1)).toVector());
         }
+        long changes = laneSum(count);
         for (; i < a.length; i++) {
             changes += a[i] != a[i - 1] ? 1 : 0;
         }
@@ -836,12 +831,13 @@ final class VectorApiSimdOperations implements SimdOperations {
     }
 
     private static long changes(long[] a) {
-        long changes = 0;
+        LongVector count = LongVector.zero(LONGS);
         int i = 1;
         for (; i + LONGS.length() <= a.length; i += LONGS.length()) {
-            changes += LongVector.fromArray(LONGS, a, i)
-                    .compare(VectorOperators.NE, LongVector.fromArray(LONGS, a, i - 1)).trueCount();
+            count = count.sub(LongVector.fromArray(LONGS, a, i)
+                    .compare(VectorOperators.NE, LongVector.fromArray(LONGS, a, i - 1)).toVector());
         }
+        long changes = count.reduceLanes(VectorOperators.ADD);
         for (; i < a.length; i++) {
             changes += a[i] != a[i - 1] ? 1 : 0;
         }
@@ -849,12 +845,13 @@ final class VectorApiSimdOperations implements SimdOperations {
     }
 
     private static long changes(float[] a) {
-        long changes = 0;
+        IntVector count = IntVector.zero(INTS);
         int i = 1;
         for (; i + FLOATS.length() <= a.length; i += FLOATS.length()) {
-            changes += FloatVector.fromArray(FLOATS, a, i)
-                    .compare(VectorOperators.NE, FloatVector.fromArray(FLOATS, a, i - 1)).trueCount();
+            count = count.sub(FloatVector.fromArray(FLOATS, a, i)
+                    .compare(VectorOperators.NE, FloatVector.fromArray(FLOATS, a, i - 1)).cast(INTS).toVector());
         }
+        long changes = laneSum(count);
         for (; i < a.length; i++) {
             changes += a[i] != a[i - 1] ? 1 : 0;
         }
@@ -862,12 +859,13 @@ final class VectorApiSimdOperations implements SimdOperations {
     }
 
     private static long changes(double[] a) {
-        long changes = 0;
+        LongVector count = LongVector.zero(LONGS);
         int i = 1;
         for (; i + DOUBLES.length() <= a.length; i += DOUBLES.length()) {
-            changes += DoubleVector.fromArray(DOUBLES, a, i)
-                    .compare(VectorOperators.NE, DoubleVector.fromArray(DOUBLES, a, i - 1)).trueCount();
+            count = count.sub(DoubleVector.fromArray(DOUBLES, a, i)
+                    .compare(VectorOperators.NE, DoubleVector.fromArray(DOUBLES, a, i - 1)).cast(LONGS).toVector());
         }
+        long changes = count.reduceLanes(VectorOperators.ADD);
         for (; i < a.length; i++) {
             changes += a[i] != a[i - 1] ? 1 : 0;
         }

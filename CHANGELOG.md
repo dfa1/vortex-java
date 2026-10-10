@@ -8,12 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Opt-in Vector API kernels for min/max, sums, run counting, widening and bit-packing, enabled by `--add-modules jdk.incubator.vector` (up to 14× faster on byte and short columns); float sums and 64-bit overflow checks differ slightly from Rust's order, see `docs/compatibility.md`. ([#516](https://github.com/dfa1/vortex-java/issues/516))
 - `vortex import --compact` and `WriteOptions#withCompact` follow Rust's compact preset: Zstandard for text and Pco for numbers compete in the cascade, e.g. a 4.6M-row ClinVar summary 392 → 251 MB. ([#510](https://github.com/dfa1/vortex-java/pull/510))
 - Every `vortex` subcommand takes `--timing`, which prints the elapsed time to stderr without counting the JVM's start-up. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - `vortex select` takes `--where "<expr>"` (repeatable) to print only some columns of the rows that match, e.g. one price column over a time interval. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently (4.4× on 8 threads). ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Changed
+- Float min/max statistics order `-0.0` before `0.0` and skip `NaN`, and `U64` min/max compare unsigned, as Rust does. ([#516](https://github.com/dfa1/vortex-java/issues/516))
 - **Breaking:** all options types (`WriteOptions`, `ScanOptions`, and the CSV, Parquet and JDBC import and export options) have a private constructor: start from `defaults()` (or `ScanOptions.all()`) and adjust with `withXxx`; `ScanOptions` and the import/export options are classes, not records. ([#514](https://github.com/dfa1/vortex-java/pull/514))
 - **Breaking:** `WriteOptions#withZstd`, `enableZstd()` and the constructor's `enableZstd` argument are removed: Zstandard now competes for text, with Pco for numbers, through `withCompact` (Rust's compact preset); `withColumnEncoding` still forces `vortex.zstd` on one column. ([#510](https://github.com/dfa1/vortex-java/pull/510))
 - `vortex import` of a string-heavy file is about 25% faster (a 4.6M-row, 43-column TSV 14.7 → 10.9 s): the columns of a chunk are sized and converted concurrently; the file is byte-identical. ([#508](https://github.com/dfa1/vortex-java/issues/508))

@@ -47,6 +47,7 @@ public class SimdVectorApiBenchmark {
     private Object runsFew;
     private Object runsMany;
     private Object constant;
+    private Object sumData;
     private boolean[] constantFlags;
     private MemorySegment codes;
     private long[] widened;
@@ -72,6 +73,8 @@ public class SimdVectorApiBenchmark {
         runsMany = array(ptype, size, 1, new Random(1));
         runsFew = array(ptype, size, 64, new Random(2));
         constant = array(ptype, size, Integer.MAX_VALUE, new Random(3));
+        // 64-bit sums need values small enough that no partial sum overflows, or they return at once
+        sumData = ptype == PType.I64 ? new Random(7).longs(size, 0, 1 << 20).toArray() : runsMany;
         constantFlags = new boolean[size];
         widened = new long[size];
         wide = new Random(5).longs(size).toArray();
@@ -131,7 +134,7 @@ public class SimdVectorApiBenchmark {
     /// Sums random full-range integers into a long (I8, I16, I32; I64 keeps its per-add overflow check).
     @Benchmark
     public java.util.OptionalLong sum() {
-        return ops.sum(runsMany, ptype);
+        return ops.sum(sumData, ptype);
     }
 
     /// Widens a heap array of random full-range integers to longs (I8, I16, I32).
