@@ -75,7 +75,7 @@ public record ArrayStats(
         if (n == 0) {
             return EMPTY;
         }
-        long averageRunLength = n / runs(ptype, data, n);
+        long averageRunLength = n / SimdOperationsSupport.preferred().runs(data, ptype);
         boolean accumulate = options.countDistinct() || options.trackMostFrequent();
 
         // Stop once the distinct count passes half the rows: past that point every consumer's
@@ -257,51 +257,6 @@ public record ArrayStats(
         int topFreq = top == null ? 0 : top.value();
         long distinct = countDistinct ? counts.size() : -1L;
         return new ArrayStats(n, distinct, topFreqBits, topFreq, capped, averageRunLength, 0, 0);
-    }
-
-    /// Runs of equal values: 1 plus every change between neighbors. One loop per carrier with a
-    /// branch-free body, so C2 vectorizes it (CLAUDE.md hot-loop rule).
-    private static long runs(PType ptype, Object data, int n) {
-        long changes = 0;
-        switch (ptype) {
-            case I8, U8 -> {
-                byte[] a = (byte[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case I16, U16, F16 -> {
-                short[] a = (short[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case I32, U32 -> {
-                int[] a = (int[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case I64, U64 -> {
-                long[] a = (long[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case F32 -> {
-                float[] a = (float[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-            case F64 -> {
-                double[] a = (double[]) data;
-                for (int i = 1; i < n; i++) {
-                    changes += a[i] != a[i - 1] ? 1 : 0;
-                }
-            }
-        }
-        return changes + 1;
     }
 
     private static boolean scanF16(short[] a, int n, LongIntMap counts, long cap) {

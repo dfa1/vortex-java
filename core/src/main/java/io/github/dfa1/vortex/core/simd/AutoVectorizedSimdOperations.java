@@ -492,6 +492,55 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
         return s;
     }
 
+    // Branch-free body per carrier, so C2 vectorizes it (CLAUDE.md hot-loop rule).
+    @Override
+    public long runs(Object values, PType ptype) {
+        int n = Array.getLength(values);
+        if (n == 0) {
+            return 0;
+        }
+        long changes = 0;
+        switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = (byte[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I16, U16, F16 -> {
+                short[] a = (short[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I32, U32 -> {
+                int[] a = (int[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case I64, U64 -> {
+                long[] a = (long[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case F32 -> {
+                float[] a = (float[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+            case F64 -> {
+                double[] a = (double[]) values;
+                for (int i = 1; i < n; i++) {
+                    changes += a[i] != a[i - 1] ? 1 : 0;
+                }
+            }
+        }
+        return changes + 1;
+    }
+
     // Only the result is masked: the low typeBits bits of a sum or difference depend on the operands'
     // low bits alone, so masking each operand too would be redundant work.
     // Rows outer, lanes inner: lanes are independent and contiguous (iterateIndex(row, lane) is

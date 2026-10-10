@@ -103,6 +103,16 @@ public interface SimdOperations {
     /// @throws IllegalArgumentException if `ptype` is not a floating-point type
     double sumFloating(Object values, PType ptype);
 
+    /// Counts the runs of equal neighbors: one plus every position whose element differs from its
+    /// predecessor, and zero for an empty array. Floating-point elements are compared by value, as
+    /// `!=`: a `NaN` always differs from its neighbor, and `0.0` equals `-0.0`. That is unlike
+    /// [#allEqual(Object, PType)], which compares raw bits.
+    ///
+    /// @param values an array matching `ptype`'s carrier (`short[]` for `F16`, compared as raw bits)
+    /// @param ptype  the elements' physical type
+    /// @return the number of runs
+    long runs(Object values, PType ptype);
+
     /// Reverses the FastLanes delta transform of one 1024-element chunk. Each of the `lanes`
     /// independent lanes is a prefix sum over `typeBits` rows, wrapping at the element width.
     /// Element `(row, lane)` sits at index `FastLanes.iterateIndex(row, lane)` in both `deltas` and `out`.

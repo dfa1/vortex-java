@@ -183,6 +183,35 @@ class SimdOperationsTest {
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void runs_countsChangesBetweenNeighbors(PType ptype) {
+        // Given a constant array and then one with a change at known positions
+        Object constant = constantArray(ptype, 500);
+        Object twoChanges = constantArray(ptype, 500);
+        bump(twoChanges, 100);
+        bump(twoChanges, 101);
+
+        // When / Then a constant array is one run; bumping 100 and 101 to the same new value
+        // adds a change into it and one out of it
+        assertThat(sut.runs(constant, ptype)).isEqualTo(1);
+        assertThat(sut.runs(twoChanges, ptype)).isEqualTo(3);
+        assertThat(sut.runs(constantArray(ptype, 1), ptype)).isEqualTo(1);
+        assertThat(sut.runs(constantArray(ptype, 0), ptype)).isZero();
+    }
+
+    @Test
+    void runs_floatsCompareByValue() {
+        // Given NaN, which never equals itself, and a signed zero pair, which compares equal
+        float[] nans = {Float.NaN, Float.NaN, Float.NaN};
+        double[] zeros = {0.0, -0.0, 0.0};
+
+        // When / Then (unlike allEqual, which compares raw bits)
+        assertThat(sut.runs(nans, PType.F32)).isEqualTo(3);
+        assertThat(sut.runs(zeros, PType.F64)).isEqualTo(1);
+        assertThat(sut.runs(new short[]{1, 1, 2, 2, 3}, PType.F16)).isEqualTo(3);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
     void widenArrayInto_matchesSegmentWiden(PType ptype) {
         // Given the same full-range values as a heap array and as the equivalent segment
         Object values = randomArray(ptype, 100, new Random(ptype.ordinal()));
