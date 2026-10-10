@@ -44,6 +44,17 @@ public interface SimdOperations {
     /// @throws IllegalArgumentException if `ptype` is not `U8`, `U16` or `U32`
     long maxUnsigned(MemorySegment src, long count, PType ptype);
 
+    /// Returns the smallest and largest of the elements of a non-empty integer array, compared as
+    /// signed `long` values after widening as [#widenInto] does: unsigned widths below 64 bits are
+    /// zero-extended, so their signed order is their natural order, while `U64` is ordered as if
+    /// signed.
+    ///
+    /// @param values a `byte[]`, `short[]`, `int[]` or `long[]` matching `ptype`'s carrier, at least one element
+    /// @param ptype  the elements' physical type, an integer type
+    /// @return `{min, max}`
+    /// @throws IllegalArgumentException if `ptype` is not an integer type, or `values` is empty
+    long[] minMax(Object values, PType ptype);
+
     /// Reverses the FastLanes delta transform of one 1024-element chunk. Each of the `lanes`
     /// independent lanes is a prefix sum over `typeBits` rows, wrapping at the element width.
     /// Element `(row, lane)` sits at index `FastLanes.iterateIndex(row, lane)` in both `deltas` and `out`.

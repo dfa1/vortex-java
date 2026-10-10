@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.model.PType;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.reflect.Array;
 
 /// The auto-vectorized [SimdOperations]: plain Java loops that rely on C2 auto-vectorization, with one
 /// specialized loop per width and the `ptype` switch hoisted out (CLAUDE.md hot-loop rule), so each
@@ -133,6 +134,92 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
             max = Math.max(max, src.getAtIndex(VortexFormat.LE_INT, i) ^ Integer.MIN_VALUE);
         }
         return Integer.toUnsignedLong(max ^ Integer.MIN_VALUE);
+    }
+
+    // Reduced in the int domain: NEON has no 64-bit integer min/max, so C2 vectorizes these loops for
+    // `int`, `short` and `byte` but not over a widened `long` buffer (#476). Unsigned widths are masked
+    // in the loop, which keeps them in their carrier's lanes.
+    @Override
+    public long[] minMax(Object values, PType ptype) {
+        if (Array.getLength(values) == 0) {
+            throw new IllegalArgumentException("empty array has no min/max");
+        }
+        return switch (ptype) {
+            case I8 -> {
+                byte[] a = (byte[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (byte v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U8 -> {
+                byte[] a = (byte[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (byte v : a) {
+                    min = Math.min(min, v & 0xFF);
+                    max = Math.max(max, v & 0xFF);
+                }
+                yield new long[]{min, max};
+            }
+            case I16 -> {
+                short[] a = (short[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (short v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U16 -> {
+                short[] a = (short[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (short v : a) {
+                    min = Math.min(min, v & 0xFFFF);
+                    max = Math.max(max, v & 0xFFFF);
+                }
+                yield new long[]{min, max};
+            }
+            case I32 -> {
+                int[] a = (int[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (int v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            case U32 -> {
+                // Flipping the sign bit maps unsigned order onto signed order, so the loop stays
+                // a plain int min/max.
+                int[] a = (int[]) values;
+                int min = Integer.MAX_VALUE;
+                int max = Integer.MIN_VALUE;
+                for (int v : a) {
+                    min = Math.min(min, v ^ Integer.MIN_VALUE);
+                    max = Math.max(max, v ^ Integer.MIN_VALUE);
+                }
+                yield new long[]{Integer.toUnsignedLong(min ^ Integer.MIN_VALUE),
+                        Integer.toUnsignedLong(max ^ Integer.MIN_VALUE)};
+            }
+            case I64, U64 -> {
+                long[] a = (long[]) values;
+                long min = Long.MAX_VALUE;
+                long max = Long.MIN_VALUE;
+                for (long v : a) {
+                    min = Math.min(min, v);
+                    max = Math.max(max, v);
+                }
+                yield new long[]{min, max};
+            }
+            default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
+        };
     }
 
     // Only the result is masked: the low typeBits bits of a sum or difference depend on the operands'

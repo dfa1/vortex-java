@@ -5,8 +5,10 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.reflect.Array;
 
 /// Write-only encoder for `vortex.primitive` — raw little-endian primitive arrays.
 public final class PrimitiveEncodingEncoder implements EncodingEncoder {
@@ -48,127 +50,20 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     /// @return a two-element `{min, max}` array of encoded scalars, or `null` if `data` is empty
     public static byte[][] minMaxStats(PType ptype, Object data) {
         return switch (ptype) {
-            case I8 -> {
-                byte[] arr = (byte[]) data;
-                if (arr.length == 0) {
+            case I8, I16, I32, I64 -> {
+                if (Array.getLength(data) == 0) {
                     yield null;
                 }
-                long min = arr[0];
-                long max = arr[0];
-                for (byte v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarI64(min), scalarI64(max)};
+                long[] minMax = SimdOperationsSupport.preferred().minMax(data, ptype);
+                yield new byte[][]{scalarI64(minMax[0]), scalarI64(minMax[1])};
             }
-            case I16 -> {
-                short[] arr = (short[]) data;
-                if (arr.length == 0) {
+            // Zero-extended, so the kernel's signed order is their natural order
+            case U8, U16, U32 -> {
+                if (Array.getLength(data) == 0) {
                     yield null;
                 }
-                long min = arr[0];
-                long max = arr[0];
-                for (short v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarI64(min), scalarI64(max)};
-            }
-            case I32 -> {
-                int[] arr = (int[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = arr[0];
-                long max = arr[0];
-                for (int v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarI64(min), scalarI64(max)};
-            }
-            case I64 -> {
-                long[] arr = (long[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = arr[0];
-                long max = arr[0];
-                for (long v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarI64(min), scalarI64(max)};
-            }
-            case U8 -> {
-                byte[] arr = (byte[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = Byte.toUnsignedInt(arr[0]);
-                long max = Byte.toUnsignedInt(arr[0]);
-                for (byte v : arr) {
-                    long uv = Byte.toUnsignedInt(v);
-                    if (uv < min) {
-                        min = uv;
-                    }
-                    if (uv > max) {
-                        max = uv;
-                    }
-                }
-                yield new byte[][]{scalarU64(min), scalarU64(max)};
-            }
-            case U16 -> {
-                short[] arr = (short[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = Short.toUnsignedInt(arr[0]);
-                long max = Short.toUnsignedInt(arr[0]);
-                for (short v : arr) {
-                    long uv = Short.toUnsignedInt(v);
-                    if (uv < min) {
-                        min = uv;
-                    }
-                    if (uv > max) {
-                        max = uv;
-                    }
-                }
-                yield new byte[][]{scalarU64(min), scalarU64(max)};
-            }
-            case U32 -> {
-                int[] arr = (int[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = Integer.toUnsignedLong(arr[0]);
-                long max = Integer.toUnsignedLong(arr[0]);
-                for (int v : arr) {
-                    long uv = Integer.toUnsignedLong(v);
-                    if (uv < min) {
-                        min = uv;
-                    }
-                    if (uv > max) {
-                        max = uv;
-                    }
-                }
-                yield new byte[][]{scalarU64(min), scalarU64(max)};
+                long[] minMax = SimdOperationsSupport.preferred().minMax(data, ptype);
+                yield new byte[][]{scalarU64(minMax[0]), scalarU64(minMax[1])};
             }
             case U64 -> {
                 long[] arr = (long[]) data;

@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.reflect.Array;
 
@@ -96,7 +97,7 @@ public record ArrayStats(
             // width without copying the whole array to a long[] (8 bytes per row of garbage on
             // every int[] column, #476).
             long[] buffer = new long[BUFFER];
-            long[] minMax = minMax(ptype, data);
+            long[] minMax = SimdOperationsSupport.preferred().minMax(data, ptype);
             long min = minMax[0];
             long max = minMax[1];
             ArrayStats counted = accumulate
@@ -239,91 +240,6 @@ public record ArrayStats(
         }
         return new ArrayStats(n, countDistinct ? distinct : -1L, min + topIndex, counts[topIndex], false,
                 averageRunLength, 0, 0);
-    }
-
-    /// Signed min and max of the widened values, computed on the array's own carrier: NEON has
-    /// no 64-bit integer min/max, so C2 vectorizes these loops for `int`, `short` and `byte`
-    /// but not over a widened `long` buffer, where this pass measured ~8% of a write (#476).
-    /// Unsigned widths are masked in the loop, which keeps them in their carrier's lanes.
-    ///
-    /// @return `{min, max}`
-    private static long[] minMax(PType ptype, Object data) {
-        return switch (ptype) {
-            case I8 -> {
-                byte[] a = (byte[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (byte v : a) {
-                    min = Math.min(min, v);
-                    max = Math.max(max, v);
-                }
-                yield new long[]{min, max};
-            }
-            case U8 -> {
-                byte[] a = (byte[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (byte v : a) {
-                    min = Math.min(min, v & 0xFF);
-                    max = Math.max(max, v & 0xFF);
-                }
-                yield new long[]{min, max};
-            }
-            case I16 -> {
-                short[] a = (short[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (short v : a) {
-                    min = Math.min(min, v);
-                    max = Math.max(max, v);
-                }
-                yield new long[]{min, max};
-            }
-            case U16 -> {
-                short[] a = (short[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (short v : a) {
-                    min = Math.min(min, v & 0xFFFF);
-                    max = Math.max(max, v & 0xFFFF);
-                }
-                yield new long[]{min, max};
-            }
-            case I32 -> {
-                int[] a = (int[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (int v : a) {
-                    min = Math.min(min, v);
-                    max = Math.max(max, v);
-                }
-                yield new long[]{min, max};
-            }
-            case U32 -> {
-                // Flipping the sign bit maps unsigned order onto signed order, so the loop stays
-                // a plain int min/max.
-                int[] a = (int[]) data;
-                int min = Integer.MAX_VALUE;
-                int max = Integer.MIN_VALUE;
-                for (int v : a) {
-                    min = Math.min(min, v ^ Integer.MIN_VALUE);
-                    max = Math.max(max, v ^ Integer.MIN_VALUE);
-                }
-                yield new long[]{Integer.toUnsignedLong(min ^ Integer.MIN_VALUE),
-                        Integer.toUnsignedLong(max ^ Integer.MIN_VALUE)};
-            }
-            case I64, U64 -> {
-                long[] a = (long[]) data;
-                long min = Long.MAX_VALUE;
-                long max = Long.MIN_VALUE;
-                for (long v : a) {
-                    min = Math.min(min, v);
-                    max = Math.max(max, v);
-                }
-                yield new long[]{min, max};
-            }
-            default -> throw new VortexException(EncodingId.VORTEX_PRIMITIVE, "not an integer ptype: " + ptype);
-        };
     }
 
     /// Copies up to `chunk.length` values of `data` from `from` into `chunk`, sign-extending the signed

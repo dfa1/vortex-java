@@ -51,6 +51,73 @@ class SimdOperationsTest {
     }
 
     @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void minMax_matchesWidenedSignedReference(PType ptype) {
+        // Given seeded-random arrays of full-range values, so a wrong width or sign/zero extension
+        // changes the answer; lengths straddle the vector lane counts
+        Random random = new Random(ptype.ordinal());
+        for (int length : new int[]{1, 2, 7, 33, 1000}) {
+            Object values = randomArray(ptype, length, random);
+            long[] widened = PrimitiveArrays.toLongs(values, ptype, EncodingId.VORTEX_PRIMITIVE);
+            long expectedMin = Long.MAX_VALUE;
+            long expectedMax = Long.MIN_VALUE;
+            for (long v : widened) {
+                expectedMin = Math.min(expectedMin, v);
+                expectedMax = Math.max(expectedMax, v);
+            }
+
+            // When
+            long[] result = sut.minMax(values, ptype);
+
+            // Then the signed min and max of the widened values
+            assertThat(result).containsExactly(expectedMin, expectedMax);
+        }
+    }
+
+    @Test
+    void minMax_u32AboveSignedRange_isZeroExtended() {
+        // Given U32 values straddling 2^31, where sign-bit handling would swap min and max
+        int[] values = {0x8000_0000, 5, 0xFFFF_FFFF};
+
+        // When
+        long[] result = sut.minMax(values, PType.U32);
+
+        // Then
+        assertThat(result).containsExactly(5L, 0xFFFF_FFFFL);
+    }
+
+    @Test
+    void minMax_u64AboveSignedRange_isOrderedAsSigned() {
+        // Given a U64 value with the top bit set, which sits at a negative signed position
+        long[] values = {1L, -1L};
+
+        // When
+        long[] result = sut.minMax(values, PType.U64);
+
+        // Then the contract is signed order over the widened values (ArrayStats' dense span relies on it)
+        assertThat(result).containsExactly(-1L, 1L);
+    }
+
+    @Test
+    void minMax_emptyArray_throws() {
+        // Given
+        int[] values = {};
+
+        // When / Then
+        assertThatThrownBy(() -> sut.minMax(values, PType.I32)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
+    void minMax_floatingPType_throws(PType ptype) {
+        // Given
+        Object values = ptype == PType.F64 ? new double[]{1.0} : ptype == PType.F32 ? new float[]{1f} : new short[]{1};
+
+        // When / Then
+        assertThatThrownBy(() -> sut.minMax(values, ptype)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "F16", "I32", "U32", "F32"})
     void narrowInto_matchesPTypeIoSet(PType ptype) {
         // Given
@@ -225,5 +292,37 @@ class SimdOperationsTest {
 
         // Then
         assertThat(result).isEqualTo(expected);
+    }
+
+    private static Object randomArray(PType ptype, int length, Random random) {
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = new byte[length];
+                random.nextBytes(a);
+                yield a;
+            }
+            case I16, U16 -> {
+                short[] a = new short[length];
+                for (int i = 0; i < length; i++) {
+                    a[i] = (short) random.nextInt();
+                }
+                yield a;
+            }
+            case I32, U32 -> {
+                int[] a = new int[length];
+                for (int i = 0; i < length; i++) {
+                    a[i] = random.nextInt();
+                }
+                yield a;
+            }
+            case I64, U64 -> {
+                long[] a = new long[length];
+                for (int i = 0; i < length; i++) {
+                    a[i] = random.nextLong();
+                }
+                yield a;
+            }
+            default -> throw new IllegalArgumentException(ptype.toString());
+        };
     }
 }
