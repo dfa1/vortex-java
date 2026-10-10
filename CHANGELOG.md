@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-10
+
 ### Added
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently (4.4× on 8 threads). ([#474](https://github.com/dfa1/vortex-java/issues/474))
 - `vortex import --compact` and `WriteOptions#withCompact` follow Rust's compact preset: Zstandard for text and Pco for numbers compete in the cascade, e.g. a 4.6M-row ClinVar summary 392 → 251 MB. ([#510](https://github.com/dfa1/vortex-java/pull/510))
