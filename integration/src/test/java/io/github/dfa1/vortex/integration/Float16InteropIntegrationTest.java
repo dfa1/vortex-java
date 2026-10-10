@@ -181,6 +181,213 @@ class Float16InteropIntegrationTest {
         assertThat(result).containsExactly(data);
     }
 
+    /// Every 7th row null, written in three chunks: Rust must read the validity and the values.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nullableCases")
+    void javaWriter_jniReader_nullableColumnInSeveralChunks(String label, WriteOptions options, short[] data,
+                                                           @TempDir Path tmp) throws IOException {
+        // Given
+        boolean[] valid = everySeventhNull(data.length);
+        DType.Struct schema = new DType.Struct(List.of(COLUMN), List.of(new DType.Primitive(
+                io.github.dfa1.vortex.core.model.PType.F16, true)), false);
+        Path file = tmp.resolve("java_f16_nullable.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, options)) {
+            int step = data.length / 3;
+            for (int from = 0; from < data.length; from += step) {
+                short[] part = java.util.Arrays.copyOfRange(data, from, from + step);
+                boolean[] partValid = java.util.Arrays.copyOfRange(valid, from, from + step);
+                for (int i = 0; i < part.length; i++) {
+                    part[i] = partValid[i] ? part[i] : 0;
+                }
+                sut.writeChunk(Map.of(COLUMN, new io.github.dfa1.vortex.writer.encode.NullableData(part, partValid)));
+            }
+        }
+
+        // When
+        Object[] result = readWithJniWithValidity(file);
+
+        // Then
+        assertValuesAndValidity(label, result, data, valid);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("shapeArguments")
+    void jniWriter_javaReader_nullableColumnInSeveralBatches(String shape, short[] data, @TempDir Path tmp)
+            throws IOException {
+        // Given Rust writes the shape in three batches with every 7th row null
+        boolean[] valid = everySeventhNull(data.length);
+        Path file = tmp.resolve("jni_f16_nullable.vtx");
+        writeWithJniWithValidity(file, data, valid, 3);
+
+        // When
+        Object[] result = readWithJavaWithValidity(file);
+
+        // Then
+        assertValuesAndValidity(shape, result, data, valid);
+    }
+
+    /// Zone-map pruning on a half-precision column (#515: it decoded to no stats, so nothing was
+    /// ever pruned). Both writers' zone maps must yield every matching row, and Java's must prune.
+    @ParameterizedTest(name = "written by {0}")
+    @ValueSource(strings = {"java", "jni"})
+    void filteredScan_returnsEveryMatchingRow_whoeverWroteTheFile(String writer, @TempDir Path tmp) throws IOException {
+        // Given 40000 rows ascending 0..1250 in 4 chunks, so a high threshold excludes the early chunks
+        short[] data = new short[40_000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = Float.floatToFloat16(i / 32f);
+        }
+        Path file = tmp.resolve(writer + "_f16_sorted.vtx");
+        if (writer.equals("java")) {
+            DType.Struct schema = new DType.Struct(List.of(COLUMN), List.of(DType.F16), false);
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema,
+                         WriteOptions.defaults().withEdition(io.github.dfa1.vortex.core.model.Editions.CORE_2025_10_0))) {
+                for (int from = 0; from < data.length; from += 10_000) {
+                    sut.writeChunk(Map.of(COLUMN, java.util.Arrays.copyOfRange(data, from, from + 10_000)));
+                }
+            }
+        } else {
+            writeWithJniWithValidity(file, data, null, 4);
+        }
+        long expected = 0;
+        for (short bits : data) {
+            expected += Float.float16ToFloat(bits) > 1000.0f ? 1 : 0;
+        }
+
+        // When
+        long[] rowsRead = {0};
+        long[] matching = {0};
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
+            reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()
+                    .withFilter(io.github.dfa1.vortex.reader.RowFilter.gt(COLUMN, 1000.0f))).forEachRemaining(chunk -> {
+                Float16Array column = chunk.column(COLUMN);
+                rowsRead[0] += column.length();
+                for (long i = 0; i < column.length(); i++) {
+                    matching[0] += column.getFloat(i) > 1000.0f ? 1 : 0;
+                }
+            });
+        }
+
+        // Then no matching row is lost, and Java's one-zone-per-chunk map drops the chunks below 1000
+        assertThat(matching[0]).isEqualTo(expected);
+        if (writer.equals("java")) {
+            assertThat(rowsRead[0]).isLessThan(data.length);
+        }
+    }
+
+    static Stream<Arguments> nullableCases() {
+        Map<String, short[]> shapes = shapes();
+        List<Arguments> cases = new ArrayList<>();
+        List.of("low cardinality", "runs", "mostly one value", "random").forEach(shape -> {
+            cases.add(Arguments.of("default cascade / " + shape, WriteOptions.defaults(), shapes.get(shape)));
+            cases.add(Arguments.of("compact cascade / " + shape, WriteOptions.defaults().withCompact(true), shapes.get(shape)));
+        });
+        return cases.stream();
+    }
+
+    private static boolean[] everySeventhNull(int rows) {
+        boolean[] valid = new boolean[rows];
+        for (int i = 0; i < rows; i++) {
+            valid[i] = i % 7 != 0;
+        }
+        return valid;
+    }
+
+    private static void assertValuesAndValidity(String label, Object[] read, short[] data, boolean[] valid) {
+        short[] values = (short[]) read[0];
+        boolean[] isValid = (boolean[]) read[1];
+        assertThat(values).as(label).hasSameSizeAs(data);
+        assertThat(isValid).as(label + " validity").containsExactly(valid);
+        for (int i = 0; i < data.length; i++) {
+            if (valid[i]) {
+                assertThat(values[i]).as("%s row %d", label, i).isEqualTo(data[i]);
+            }
+        }
+    }
+
+    private static void writeWithJniWithValidity(Path file, short[] data, boolean[] valid, int batches) throws IOException {
+        boolean nullable = valid != null;
+        Schema schema = new Schema(List.of(nullable
+                ? Field.nullable("v", new ArrowType.FloatingPoint(FloatingPointPrecision.HALF))
+                : Field.notNullable("v", new ArrowType.FloatingPoint(FloatingPointPrecision.HALF))));
+        int step = data.length / batches;
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build()) {
+            for (int from = 0; from < data.length; from += step) {
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+                    Float2Vector vec = (Float2Vector) root.getVector("v");
+                    vec.allocateNew(step);
+                    for (int i = 0; i < step; i++) {
+                        if (nullable && !valid[from + i]) {
+                            vec.setNull(i);
+                        } else {
+                            vec.setSafe(i, data[from + i]);
+                        }
+                    }
+                    root.setRowCount(step);
+                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                         ArrowSchema exported = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, exported);
+                        writer.writeBatch(arr.memoryAddress(), exported.memoryAddress());
+                    }
+                }
+            }
+        }
+    }
+
+    private static Object[] readWithJavaWithValidity(Path file) throws IOException {
+        List<Short> bits = new ArrayList<>();
+        List<Boolean> valid = new ArrayList<>();
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
+             Arena arena = Arena.ofConfined()) {
+            reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()).forEachRemaining(chunk -> {
+                io.github.dfa1.vortex.reader.array.Array array = chunk.column(COLUMN);
+                io.github.dfa1.vortex.reader.array.MaskedArray.Unwrapped unwrapped =
+                        io.github.dfa1.vortex.reader.array.MaskedArray.unwrap(array);
+                Float16Array inner = (Float16Array) unwrapped.inner();
+                MemorySegment segment = inner.materialize(arena);
+                for (long i = 0; i < inner.length(); i++) {
+                    bits.add(segment.getAtIndex(VortexFormat.LE_SHORT, i));
+                    valid.add(unwrapped.validity() == null || unwrapped.validity().getBoolean(i));
+                }
+            });
+        }
+        return pack(bits, valid);
+    }
+
+    private static Object[] readWithJniWithValidity(Path file) throws IOException {
+        ScanOptions options = ScanOptions.builder()
+                .projection(Expression.select(new String[]{"v"}, Expression.root())).build();
+        List<Short> bits = new ArrayList<>();
+        List<Boolean> valid = new ArrayList<>();
+        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(options);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    Float2Vector vec = (Float2Vector) root.getVector("v");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        boolean isValid = !vec.isNull(i);
+                        valid.add(isValid);
+                        bits.add(isValid ? vec.get(i) : 0);
+                    }
+                }
+            }
+        }
+        return pack(bits, valid);
+    }
+
+    private static Object[] pack(List<Short> bits, List<Boolean> valid) {
+        short[] values = toArray(bits);
+        boolean[] flags = new boolean[valid.size()];
+        for (int i = 0; i < flags.length; i++) {
+            flags[i] = valid.get(i);
+        }
+        return new Object[]{values, flags};
+    }
+
     private static void writeWithJni(Path file, short[] data) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         try (VortexWriter writer = VortexWriter.builder(SESSION, uri, ARROW_SCHEMA, ALLOCATOR).build();
