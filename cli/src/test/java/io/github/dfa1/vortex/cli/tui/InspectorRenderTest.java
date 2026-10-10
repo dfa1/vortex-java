@@ -46,6 +46,8 @@ class InspectorRenderTest {
                         .isEqualTo("1.5");
                 assertThat(InspectorRender.formatValue(ArrayFixtures.floats(arena, 2.5f), 0, I64))
                         .isEqualTo("2.5");
+                assertThat(InspectorRender.formatValue(ArrayFixtures.halves(arena, (short) 0x4100), 0, I64))
+                        .isEqualTo("2.5");
                 assertThat(InspectorRender.formatValue(ArrayFixtures.bools(arena, true, false), 1, I64))
                         .isEqualTo("false");
             }

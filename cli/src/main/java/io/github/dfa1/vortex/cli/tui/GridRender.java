@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -73,6 +74,7 @@ final class GridRender {
                 case ByteArray a -> Integer.toString(a.getInt(i));
                 case DoubleArray a -> Double.toString(a.getDouble(i));
                 case FloatArray a -> Float.toString(a.getFloat(i));
+                case Float16Array a -> Float.toString(a.getFloat(i));
                 case BoolArray a -> Boolean.toString(a.getBoolean(i));
                 case VarBinArray a -> a.dtype() instanceof DType.Utf8
                         ? a.getString(i)
