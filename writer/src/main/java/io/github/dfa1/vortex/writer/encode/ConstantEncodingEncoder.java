@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
+import java.util.OptionalLong;
 
 /// Write-only encoder for `vortex.constant`.
 public final class ConstantEncodingEncoder implements EncodingEncoder {
@@ -64,10 +65,8 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive or Bool dtype, got " + dtype);
         }
         PType ptype = p.ptype();
-        if (!isConstant(data, ptype)) {
-            throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
-        }
-        long firstRaw = readFirstRaw(data, ptype);
+        long firstRaw = constantBits(data, ptype)
+                .orElseThrow(() -> new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array"));
         ProtoScalarValue scalar = buildScalar(ptype, firstRaw);
         byte[] scalarBytes = scalar.encode();
         // A constant array's min and max are both the one repeated value, by construction -- no
@@ -91,7 +90,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
             }
             return CascadeStep.terminal(encode(bool, data, encodeCtx));
         }
-        if (!isConstant(data, ((DType.Primitive) dtype).ptype())) {
+        if (constantBits(data, ((DType.Primitive) dtype).ptype()).isEmpty()) {
             return CascadeStep.notApplicable();
         }
         return CascadeStep.terminal(encode(dtype, data, encodeCtx));
@@ -138,73 +137,78 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         return true;
     }
 
-    private static long readFirstRaw(Object data, PType ptype) {
-        return switch (ptype) {
-            case I8, U8 -> ((byte[]) data).length > 0 ? ((byte[]) data)[0] : 0L;
-            case I16, U16 -> ((short[]) data).length > 0 ? ((short[]) data)[0] : 0L;
-            case I32, U32 -> ((int[]) data).length > 0 ? ((int[]) data)[0] : 0L;
-            case I64, U64 -> ((long[]) data).length > 0 ? ((long[]) data)[0] : 0L;
-            case F32 -> ((float[]) data).length > 0 ? Float.floatToRawIntBits(((float[]) data)[0]) : 0L;
-            case F64 -> ((double[]) data).length > 0 ? Double.doubleToRawLongBits(((double[]) data)[0]) : 0L;
-            default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
-        };
-    }
-
-    // One typed loop per width, the ptype switch hoisted out (CLAUDE.md hot-loop rule). Floats
-    // compare raw bits, so distinct NaN payloads or -0.0 vs 0.0 are not constant.
-    private static boolean isConstant(Object data, PType ptype) {
+    // The raw bits of the one repeated value, or empty if the array is not constant. An empty array
+    // is constant (bits 0), as `expectedRatio` already treats valueCount 0. One typed loop per width,
+    // the ptype switch hoisted out (CLAUDE.md hot-loop rule) and the first element read once
+    // outside the loop. Floats compare raw bits, so distinct NaN payloads or -0.0 vs 0.0 are not
+    // constant.
+    private static OptionalLong constantBits(Object data, PType ptype) {
+        if (Array.getLength(data) == 0) {
+            return OptionalLong.of(0L);
+        }
         switch (ptype) {
             case I8, U8 -> {
                 byte[] a = (byte[]) data;
+                byte first = a[0];
                 for (int i = 1; i < a.length; i++) {
-                    if (a[i] != a[0]) {
-                        return false;
+                    if (a[i] != first) {
+                        return OptionalLong.empty();
                     }
                 }
+                return OptionalLong.of(first);
             }
             case I16, U16 -> {
                 short[] a = (short[]) data;
+                short first = a[0];
                 for (int i = 1; i < a.length; i++) {
-                    if (a[i] != a[0]) {
-                        return false;
+                    if (a[i] != first) {
+                        return OptionalLong.empty();
                     }
                 }
+                return OptionalLong.of(first);
             }
             case I32, U32 -> {
                 int[] a = (int[]) data;
+                int first = a[0];
                 for (int i = 1; i < a.length; i++) {
-                    if (a[i] != a[0]) {
-                        return false;
+                    if (a[i] != first) {
+                        return OptionalLong.empty();
                     }
                 }
+                return OptionalLong.of(first);
             }
             case I64, U64 -> {
                 long[] a = (long[]) data;
+                long first = a[0];
                 for (int i = 1; i < a.length; i++) {
-                    if (a[i] != a[0]) {
-                        return false;
+                    if (a[i] != first) {
+                        return OptionalLong.empty();
                     }
                 }
+                return OptionalLong.of(first);
             }
             case F32 -> {
                 float[] a = (float[]) data;
+                int first = Float.floatToRawIntBits(a[0]);
                 for (int i = 1; i < a.length; i++) {
-                    if (Float.floatToRawIntBits(a[i]) != Float.floatToRawIntBits(a[0])) {
-                        return false;
+                    if (Float.floatToRawIntBits(a[i]) != first) {
+                        return OptionalLong.empty();
                     }
                 }
+                return OptionalLong.of(first);
             }
             case F64 -> {
                 double[] a = (double[]) data;
+                long first = Double.doubleToRawLongBits(a[0]);
                 for (int i = 1; i < a.length; i++) {
-                    if (Double.doubleToRawLongBits(a[i]) != Double.doubleToRawLongBits(a[0])) {
-                        return false;
+                    if (Double.doubleToRawLongBits(a[i]) != first) {
+                        return OptionalLong.empty();
                     }
                 }
+                return OptionalLong.of(first);
             }
             default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
         }
-        return true;
     }
 
     private static ProtoScalarValue buildScalar(PType ptype, long rawBits) {
