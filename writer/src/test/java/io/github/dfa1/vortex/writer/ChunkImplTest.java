@@ -143,6 +143,8 @@ class ChunkImplTest {
             assertValidity(putGet(prim(PType.I64, true), new Long[]{1L, null}));
             assertValidity(putGet(prim(PType.F32, true), new Float[]{1f, null}));
             assertValidity(putGet(prim(PType.F64, true), new Double[]{1.0, null}));
+            // #515: F16 took only short[], so a nullable half column could not be given as boxed halves
+            assertValidity(putGet(prim(PType.F16, true), new Short[]{1, null}));
         }
 
         @Test
@@ -155,6 +157,7 @@ class ChunkImplTest {
             assertRejectsBoxed(prim(PType.I64, false), new Long[]{1L});
             assertRejectsBoxed(prim(PType.F32, false), new Float[]{1f});
             assertRejectsBoxed(prim(PType.F64, false), new Double[]{1.0});
+            assertRejectsBoxed(prim(PType.F16, false), new Short[]{1});
         }
 
         private void assertRejectsBoxed(DType dtype, Object boxed) {

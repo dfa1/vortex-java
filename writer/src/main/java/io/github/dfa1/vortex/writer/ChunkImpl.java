@@ -112,7 +112,9 @@ final class ChunkImpl implements Chunk {
                 default -> throw typeMismatch(column, ptype, value);
             };
             case F16 -> switch (value) {
+                // the shorts are the halves' raw bits, so the boxed form works as for I16
                 case short[] a -> a;
+                case Short[] a -> nullable ? boxedToNullableShorts(a) : rejectNullable(column, ptype);
                 default -> throw typeMismatch(column, ptype, value);
             };
         };
