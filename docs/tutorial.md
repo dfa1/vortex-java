@@ -168,7 +168,7 @@ try (VortexReader vf = VortexReader.open(outPath);
 
 You now have a working write-then-read flow. From here:
 
-- [how-to.md](how-to.md) — task recipes: filter rows, project columns, convert Parquet, use the CLI
+- [how-to.md](how-to.md) — task recipes: filter rows, project columns, convert Parquet, use the CLI (`select --where`, `--timing`), query with DuckDB
 - [reference.md](reference.md) — API surface, CLI subcommands, operator tables
 - [compatibility.md](compatibility.md) — which encodings are supported
 - [explanation.md](explanation.md) — memory model, testing strategy, benchmarks

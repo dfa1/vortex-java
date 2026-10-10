@@ -644,9 +644,11 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
 | `import`   | `import [--delimiter <char>] <file.csv\|file.parquet\|url> [out.vortex\|out.parquet]` | CSV or Parquet (local or remote) source to Vortex; a `.parquet` output is CSV-only (chains through a temp Vortex file internally) — a Parquet source always produces Vortex, `.parquet` output is rejected |
 
-Any subcommand also takes `--timing`, anywhere on the command line: it prints `elapsed: <n> ms` to **stderr** when the
-command ends, so data on stdout stays clean in a pipeline. The clock starts when `main` starts, so it leaves out JVM
-start-up (which dominates short commands such as `count`).
+Any subcommand also takes `--timing`, anywhere on the command line, including before the subcommand: it prints
+`elapsed: <n> ms` to **stderr** when the command ends, so data on stdout stays clean in a pipeline. The time is printed
+even if the command fails, and the exit status is unchanged. The clock starts when `main` starts, so it leaves out the
+JVM's start-up (roughly half of a short command such as `count`: 33 ms of work in a 60 ms process on a 127 MB file).
+For the interactive `tui` and `view` it includes the time you spend in them.
 
 ### `filter` expression syntax
 
@@ -661,7 +663,18 @@ start-up (which dominates short commands such as `count`).
 | `=`, `==` | Equal                          |
 | `!=`      | Not equal                      |
 
-Values are parsed as integer, double, boolean, or string (in that order).
+Values are parsed as integer, double, boolean, or string (in that order). A string is written **unquoted**
+(`symbol = BTCUSDT`): quote characters are not stripped, so `symbol = 'BTCUSDT'` compares against the text `'BTCUSDT'`
+(quotes included) and matches no row, without an error.
+
+`filter` takes one comparison. For several conditions (all must hold) and to print only some columns, use `select` with
+`--where`, repeated once per condition; an interval is two conditions:
+
+```
+select <file.vortex> open_time close --where "symbol = BTCUSDT" --where "open_time >= 1718452800000" --where "open_time < 1718456400000"
+```
+
+A `--where` column does not have to be among the printed columns. CSV output uses `\r\n` line endings.
 
 ---
 

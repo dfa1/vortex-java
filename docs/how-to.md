@@ -254,6 +254,34 @@ and [reference.md#filter-expression-syntax](reference.md#filter-expression-synta
 java -jar cli/target/vortex-cli-*-all.jar filter trades.vortex "volume >= 1000000"
 ```
 
+`filter` prints every column of the matching rows. To print only some columns, or to combine several conditions, use
+`select ... --where` (see [Project columns](#project-columns)).
+
+---
+
+## Time a CLI command
+
+Add `--timing` to any `vortex` subcommand to see how long the operation took. The time goes to **stderr**, so the data
+on stdout is untouched, and it leaves out the JVM's start-up:
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar count trades.vortex --timing
+```
+
+```
+4216320
+elapsed: 33.7 ms
+```
+
+It works in a pipeline too, where only the data is passed on and the time still appears on your terminal:
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar select trades.vortex ts price \
+    --where "symbol = BTCUSDT" --timing | head -3
+```
+
+Compare it with `time java -jar ...`, which also counts the JVM's own start-up (about 25 to 30 ms here).
+
 ---
 
 ## Preview the first N rows
@@ -494,6 +522,34 @@ segment is decoded — on files with the legacy `vortex.stats` zone map (written
 `interval`) still need back-ticks: `` select `date` from vtx.ohlc ``. See
 [reference.md#calcite-sql-adapter](reference.md#calcite-sql-adapter) for the full lexical/parser
 policy.
+
+---
+
+## Query a Vortex file with DuckDB
+
+[DuckDB](https://duckdb.org) reads Vortex files through its `vortex` extension, which is built from the Rust reference
+implementation (the `vortex-duckdb` crate). Files written by vortex-java are read back by it, so you can use it for
+ad-hoc SQL without writing any Java:
+
+```sql
+INSTALL vortex;
+LOAD vortex;
+
+SELECT open_time, close
+FROM read_vortex('trades.vortex')
+WHERE symbol = 'BTCUSDT'
+  AND open_time >= 1718452800000 AND open_time < 1718456400000
+ORDER BY open_time;
+```
+
+String literals are quoted here, unlike in the vortex CLI's `--where`. As a check of the round trip, hash every value of
+every column in the original CSV and in the Vortex file and compare the sums (this was done with DuckDB 1.5.6 on a
+4,216,320-row, 13-column file):
+
+```sql
+SELECT count(*), sum(hash(symbol)::HUGEINT), sum(hash(close)::HUGEINT) /* ... one per column */
+FROM read_csv('data.csv', header = true);          -- and the same over read_vortex('data.vortex')
+```
 
 ---
 
