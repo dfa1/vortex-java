@@ -10,10 +10,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LongRadixSortTest {
 
-    // Sizes straddle MIN_LENGTH so both the comparison and the radix path run; the bounds are the
+    // Sizes straddle MIN_LENGTH so both the comparison and the radix path run, and span every digit width (8 to 13 bits); the bounds are the
     // value widths, where a constant byte is skipped (8 and 28 bits) and where none is (64).
     @ParameterizedTest
-    @ValueSource(ints = {0, 1, 2, 511, 512, 513, 5_000, 70_000})
+    @ValueSource(ints = {0, 1, 2, 511, 512, 513, 2_048, 5_000, 70_000, 300_000})
     void sort_matchesArraysSort_acrossValueWidths(int length) {
         // Given
         Random random = new Random(length);
