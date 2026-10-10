@@ -387,7 +387,7 @@
                              {@code net.bytebuddy:byte-buddy-agent:jar} is resolved to an absolute path
                              by {@code maven-dependency-plugin:properties} (declared in build/plugins);
                              loading it as a javaagent suppresses the Mockito self-attach warning. -->
-                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
+                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED --add-modules jdk.incubator.vector</argLine>
                     </configuration>
                 </plugin>
                 <plugin>
