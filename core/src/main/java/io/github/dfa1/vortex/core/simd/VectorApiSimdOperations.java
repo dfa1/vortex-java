@@ -3,8 +3,12 @@ package io.github.dfa1.vortex.core.simd;
 import io.github.dfa1.vortex.core.model.PType;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.IntVector;
+import jdk.incubator.vector.ShortVector;
+import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.VectorSpecies;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.reflect.Array;
 import java.util.OptionalLong;
 
 /// The [SimdOperations] written with the incubating Vector API, for the kernels where an explicit
@@ -21,6 +25,10 @@ import java.util.OptionalLong;
 /// preferred species of the CPU, a main loop over whole vectors, and a scalar tail for the rest.
 final class VectorApiSimdOperations implements SimdOperations {
 
+    private static final VectorSpecies<Byte> BYTES = ByteVector.SPECIES_PREFERRED;
+    private static final VectorSpecies<Short> SHORTS = ShortVector.SPECIES_PREFERRED;
+    private static final VectorSpecies<Integer> INTS = IntVector.SPECIES_PREFERRED;
+
     private final SimdOperations fallback;
 
     VectorApiSimdOperations(SimdOperations fallback) {
@@ -32,14 +40,14 @@ final class VectorApiSimdOperations implements SimdOperations {
     ///
     /// @return `true` if the preferred species holds at least four ints and sixteen bytes
     static boolean isUsable() {
-        return IntVector.SPECIES_PREFERRED.length() >= 4 && ByteVector.SPECIES_PREFERRED.length() >= 16;
+        return INTS.length() >= 4 && BYTES.length() >= 16;
     }
 
     /// The width of the vectors in use, for diagnostics.
     ///
     /// @return the preferred vector size in bits
     static int vectorBitSize() {
-        return IntVector.SPECIES_PREFERRED.vectorBitSize();
+        return INTS.vectorBitSize();
     }
 
     @Override
@@ -82,9 +90,44 @@ final class VectorApiSimdOperations implements SimdOperations {
         return fallback.allEqual(values);
     }
 
+    // Each vector is compared against the same elements shifted by one, so the changes are counted
+    // without a dependency between iterations. Only the 1- and 2-byte carriers: C2 does not vectorize
+    // their widening `long` accumulate, and this wins 3-6x (bytes) and 1.9-3x (shorts) over it, while
+    // for 4- and 8-byte lanes C2 already vectorizes the scalar loop and this loses (0.7x ints,
+    // 0.4x longs/doubles on 128-bit NEON; 262144 elements, JMH -f 2).
     @Override
     public long runs(Object values, PType ptype) {
-        return fallback.runs(values, ptype);
+        return switch (ptype) {
+            case I8, U8 -> Array.getLength(values) == 0 ? 0 : 1 + changes((byte[]) values);
+            case I16, U16, F16 -> Array.getLength(values) == 0 ? 0 : 1 + changes((short[]) values);
+            case I32, U32, I64, U64, F32, F64 -> fallback.runs(values, ptype);
+        };
+    }
+
+    private static long changes(byte[] a) {
+        long changes = 0;
+        int i = 1;
+        for (; i + BYTES.length() <= a.length; i += BYTES.length()) {
+            changes += ByteVector.fromArray(BYTES, a, i)
+                    .compare(VectorOperators.NE, ByteVector.fromArray(BYTES, a, i - 1)).trueCount();
+        }
+        for (; i < a.length; i++) {
+            changes += a[i] != a[i - 1] ? 1 : 0;
+        }
+        return changes;
+    }
+
+    private static long changes(short[] a) {
+        long changes = 0;
+        int i = 1;
+        for (; i + SHORTS.length() <= a.length; i += SHORTS.length()) {
+            changes += ShortVector.fromArray(SHORTS, a, i)
+                    .compare(VectorOperators.NE, ShortVector.fromArray(SHORTS, a, i - 1)).trueCount();
+        }
+        for (; i < a.length; i++) {
+            changes += a[i] != a[i - 1] ? 1 : 0;
+        }
+        return changes;
     }
 
     @Override
