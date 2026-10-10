@@ -13,7 +13,7 @@ class ArrayAndStatsTest {
     @Test
     void stats_computedOnce_andSharedByEveryCaller() {
         // Given
-        ArrayAndStats sut = new ArrayAndStats(DType.I64, new long[]{7, 7, 9}, StatsOptions.DISTINCT_AND_TOP);
+        ArrayAndStats sut = new ArrayAndStats(DType.I64, new long[]{7, 7, 9}, StatsOptions.distinctAndTop());
 
         // When
         ArrayStats result = sut.stats();
@@ -28,7 +28,7 @@ class ArrayAndStatsTest {
     @Test
     void stats_nonPrimitive_isEmpty() {
         // Given: strings go through the same competition, but no stats consumer reads them
-        ArrayAndStats sut = new ArrayAndStats(DType.UTF8, new String[]{"a", "b"}, StatsOptions.DISTINCT_AND_TOP);
+        ArrayAndStats sut = new ArrayAndStats(DType.UTF8, new String[]{"a", "b"}, StatsOptions.distinctAndTop());
 
         // When
         ArrayStats result = sut.stats();

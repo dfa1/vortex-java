@@ -5,12 +5,47 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 import java.util.List;
 
 /// Options controlling Parquet → Vortex import.
-public record ImportOptions(
-        int chunkSize,
-        List<String> columns,
-        ProgressListener progressListener,
-        WriteOptions writeOptions
-) {
+public final class ImportOptions {
+    private final int chunkSize;
+    private final List<String> columns;
+    private final ProgressListener progressListener;
+    private final WriteOptions writeOptions;
+
+    private ImportOptions(int chunkSize, List<String> columns, ProgressListener progressListener, WriteOptions writeOptions) {
+        this.chunkSize = chunkSize;
+        this.columns = columns;
+        this.progressListener = progressListener;
+        this.writeOptions = writeOptions;
+    }
+
+    /// The number of physical rows per Vortex chunk.
+    ///
+    /// @return the chunk size
+    public int chunkSize() {
+        return chunkSize;
+    }
+
+    /// The columns to import.
+    ///
+    /// @return the projected columns; empty means all columns
+    public List<String> columns() {
+        return columns;
+    }
+
+    /// The progress callback.
+    ///
+    /// @return the listener, or `null`
+    public ProgressListener progressListener() {
+        return progressListener;
+    }
+
+    /// The writer options used to encode the resulting Vortex file.
+    ///
+    /// @return the write options
+    public WriteOptions writeOptions() {
+        return writeOptions;
+    }
+
     public static ImportOptions defaults() {
         // 65536 physical rows per chunk, matching WriteOptions' default and the Rust reference's
         // 32k-64k granularity. This was briefly raised to 131072 for a size win (962520ac), but the

@@ -203,7 +203,7 @@ public final class CascadingCompressor {
         // (VarBinEncodingEncoder unconditionally accepts both, so a winner always exists in
         // practice).
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-            return competeAndEncode(dtype, new ArrayAndStats(dtype, data, StatsOptions.NONE), ctx,
+            return competeAndEncode(dtype, new ArrayAndStats(dtype, data, StatsOptions.defaults()), ctx,
                     sampleSize -> Long.MAX_VALUE);
         }
 
@@ -225,7 +225,7 @@ public final class CascadingCompressor {
     /// so the one scan, run lazily by the first encoder whose expectedRatio() reads stats,
     /// satisfies every later one (Rust vortex-compressor pattern).
     private ArrayAndStats withStats(DType dtype, Object data, EncodeContext ctx) {
-        StatsOptions merged = StatsOptions.NONE;
+        StatsOptions merged = StatsOptions.defaults();
         for (EncodingEncoder enc : encodings) {
             if (enc.accepts(dtype) && !ctx.excluded().contains(enc.encodingId())) {
                 merged = StatsOptions.merge(merged, enc.statsOptions());

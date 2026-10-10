@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -108,7 +108,7 @@ class AggregatePushDownTest {
         // at all, so it would abandon regardless of this fix.
         Path stringsFile = localTmp.resolve("strings.vortex");
         DType.Struct stringsSchema = DType.structBuilder().field(ColumnName.of("symbol"), DType.UTF8).build();
-        WriteOptions stringsOpts = new WriteOptions(true, 0.90, 0, false, MemorySize.ofMiB(256), LegacyZoneMaps.EDITIONS);
+        WriteOptions stringsOpts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         try (var ch = FileChannel.open(stringsFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, stringsSchema, stringsOpts)) {
             writer.writeChunk(Map.of(ColumnName.of("symbol"), new String[]{"AAPL", "MSFT", "NVDA", "TSLA"}));

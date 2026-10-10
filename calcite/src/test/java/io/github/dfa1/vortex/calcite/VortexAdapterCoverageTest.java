@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.calcite;
 import io.github.dfa1.vortex.core.model.ColumnName;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -279,7 +278,7 @@ class VortexAdapterCoverageTest {
         void noZoneMap_sumFallsBackToFullScan(@TempDir Path noStats) throws Exception {
             // Given — a file written with zone maps off, so no per-zone SUM exists to fold
             Path bare = noStats.resolve("nostats.vortex");
-            WriteOptions noZoneMaps = new WriteOptions(false, 0.90, 0, true, MemorySize.ofMiB(256), Map.of());
+            WriteOptions noZoneMaps = WriteOptions.cascading(0).withZoneMaps(false).withGlobalDict(true).withoutEditions();
             try (var ch = FileChannel.open(bare, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var w = VortexWriter.create(ch, SCHEMA, noZoneMaps)) {
                 w.writeChunk(Map.ofEntries(

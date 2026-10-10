@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.performance;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.calcite.VortexTable;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -195,7 +194,7 @@ public class CalciteBoundaryAggregateBenchmark {
                 .field(ColumnName.of("val"), DType.I64)
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the interior-zone fold reads.
-        WriteOptions opts = new WriteOptions(true, 0.90, 0, true, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withoutEditions();
         java.util.Random rng = new java.util.Random(SEED);
         try (FileChannel ch = FileChannel.open(file,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);

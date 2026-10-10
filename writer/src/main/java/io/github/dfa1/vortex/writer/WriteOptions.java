@@ -27,21 +27,6 @@ public final class WriteOptions {
     private final Map<ColumnName, ColumnEncoding> columnEncodings;
     private final Executor executor;
 
-    /// Options with no per-column encoding overrides, compressing on the calling thread.
-    ///
-    /// @param enableZoneMaps             see [#enableZoneMaps()]
-    /// @param compressionRatioThreshold  see [#compressionRatioThreshold()]
-    /// @param allowedCascading           see [#allowedCascading()]
-    /// @param globalDict                 see [#globalDict()]
-    /// @param globalDictMaxRetainedBytes see [#globalDictMaxRetainedBytes()]
-    /// @param editions                   see [#editions()]
-    public WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
-                        boolean globalDict, MemorySize globalDictMaxRetainedBytes,
-                        Map<EditionFamily, Edition> editions) {
-        this(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, false,
-                globalDictMaxRetainedBytes, editions, Map.of(), CALLER_RUNS);
-    }
-
     private WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
                          boolean globalDict, boolean compact,
                          MemorySize globalDictMaxRetainedBytes,
@@ -180,8 +165,8 @@ public final class WriteOptions {
     /// [#withGlobalDictMaxRetainedBytes(MemorySize)].
     private static final MemorySize DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES = MemorySize.ofGiB(2);
 
-    /// The default edition guard: only the latest frozen `core` edition enabled. See the `editions`
-    /// parameter's javadoc above for the safety rationale.
+    /// The default edition guard: only the latest frozen `core` edition enabled. See [#editions()]
+    /// for the safety rationale.
     private static final Map<EditionFamily, Edition> DEFAULT_EDITIONS = Map.of(EditionFamily.CORE, Editions.CORE_2026_08_3);
 
     /// Default cascade depth: Rust's `MAX_CASCADE`. The Rust writer always runs its cascading
@@ -202,8 +187,8 @@ public final class WriteOptions {
     /// @param depth maximum cascade depth
     /// @return `WriteOptions` with cascading enabled at the given depth
     public static WriteOptions cascading(int depth) {
-        return new WriteOptions(true, 0.90, depth, true, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
-                DEFAULT_EDITIONS);
+        return new WriteOptions(true, 0.90, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
+                DEFAULT_EDITIONS, Map.of(), CALLER_RUNS);
     }
 
     /// Returns a copy of these options with zone-map statistics set to `enabled`.

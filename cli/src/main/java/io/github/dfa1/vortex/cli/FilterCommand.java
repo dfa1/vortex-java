@@ -53,7 +53,7 @@ final class FilterCommand {
             System.err.println("error: " + e.getMessage());
             return ExitStatus.USAGE_ERROR;
         }
-        ScanOptions scanOptions = new ScanOptions(List.of(), filter, ScanOptions.NO_LIMIT);
+        ScanOptions scanOptions = ScanOptions.all().withFilter(filter);
         RowPredicate rowPred = toRowPredicate(filter);
         try {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);

@@ -62,7 +62,7 @@ class ColumnZoneStatsTest {
 
     private static List<ArrayStats> zoneStats(Path file, String column) throws IOException {
         try (VortexReader vf = VortexReader.open(file, registry());
-             var iter = vf.scan(new ScanOptions(List.of(), null, ScanOptions.NO_LIMIT))) {
+             var iter = vf.scan(ScanOptions.all())) {
             return iter.columnZoneStats(ColumnName.of(column));
         }
     }

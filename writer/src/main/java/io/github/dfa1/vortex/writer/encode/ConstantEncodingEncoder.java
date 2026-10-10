@@ -24,7 +24,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
 
     @Override
     public StatsOptions statsOptions() {
-        return new StatsOptions(true, false);
+        return StatsOptions.defaults().withCountDistinct(true);
     }
 
     @Override

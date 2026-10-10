@@ -59,7 +59,7 @@ public interface EncodingEncoder {
     ///
     /// @return stats requested for cascade selection; default is no stats
     default StatsOptions statsOptions() {
-        return StatsOptions.NONE;
+        return StatsOptions.defaults();
     }
 
     /// Estimate compression effectiveness on `data` from its stats, as Rust's

@@ -85,7 +85,7 @@ public final class CsvExporter {
         List<ColumnName> colNames = options.hasProjection() ? options.columns() : schema.fieldNames();
         int colCount = colNames.size();
 
-        if (options.writeHeader()) {
+        if (options.header()) {
             csvWriter.writeRecord(colNames.stream().map(ColumnName::value).toList());
         }
 

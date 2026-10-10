@@ -23,7 +23,7 @@ class SchemeVerdictTest {
     private static final EncodeContext FINISHED = EncodeContext.ofDepth(0, Arena.ofAuto(), REGISTRY);
 
     private static ArrayAndStats longs(long... values) {
-        return new ArrayAndStats(DType.I64, values, StatsOptions.DISTINCT_AND_TOP);
+        return new ArrayAndStats(DType.I64, values, StatsOptions.distinctAndTop());
     }
 
     @Nested
@@ -58,7 +58,7 @@ class SchemeVerdictTest {
         @Test
         void neverTreatsAnUnsigned64AboveTwoToThe63AsNegative() {
             // Given: raw bits negative as a signed long, but U64 has no negatives
-            ArrayAndStats data = new ArrayAndStats(DType.U64, new long[]{-1L, 3}, StatsOptions.NONE);
+            ArrayAndStats data = new ArrayAndStats(DType.U64, new long[]{-1L, 3}, StatsOptions.defaults());
 
             // When
             Estimate result = sut.expectedRatio(DType.U64, data, REAL);
@@ -107,7 +107,7 @@ class SchemeVerdictTest {
         void skipsOnceCascadingIsFinished() {
             // Given
             AlpEncodingEncoder sut = new AlpEncodingEncoder();
-            ArrayAndStats data = new ArrayAndStats(DType.F64, new double[]{1.5, 2.25}, StatsOptions.NONE);
+            ArrayAndStats data = new ArrayAndStats(DType.F64, new double[]{1.5, 2.25}, StatsOptions.defaults());
 
             // When
             Estimate result = sut.expectedRatio(DType.F64, data, FINISHED);
@@ -182,7 +182,7 @@ class SchemeVerdictTest {
             // Given: a column whose every row is the same symbol, as the klines `symbol` chunks.
             // Rust's compressor short-circuits any constant leaf, strings included
             ConstantEncodingEncoder sut = new ConstantEncodingEncoder();
-            ArrayAndStats data = new ArrayAndStats(DType.UTF8, new String[]{"BTCUSDT", "BTCUSDT", "BTCUSDT"}, StatsOptions.NONE);
+            ArrayAndStats data = new ArrayAndStats(DType.UTF8, new String[]{"BTCUSDT", "BTCUSDT", "BTCUSDT"}, StatsOptions.defaults());
 
             // When
             Estimate real = sut.expectedRatio(DType.UTF8, data, REAL);
@@ -197,8 +197,8 @@ class SchemeVerdictTest {
         void skipsStringsThatDifferOrAreEmpty() {
             // Given
             ConstantEncodingEncoder sut = new ConstantEncodingEncoder();
-            ArrayAndStats different = new ArrayAndStats(DType.UTF8, new String[]{"a", "a", "b"}, StatsOptions.NONE);
-            ArrayAndStats empty = new ArrayAndStats(DType.UTF8, new String[0], StatsOptions.NONE);
+            ArrayAndStats different = new ArrayAndStats(DType.UTF8, new String[]{"a", "a", "b"}, StatsOptions.defaults());
+            ArrayAndStats empty = new ArrayAndStats(DType.UTF8, new String[0], StatsOptions.defaults());
 
             // When / Then
             assertThat(sut.expectedRatio(DType.UTF8, different, REAL)).isEqualTo(Estimate.SKIP);
@@ -295,7 +295,7 @@ class SchemeVerdictTest {
         @Test
         void floatsDeferToTheSample() {
             // Given: Rust's FloatDictScheme samples rather than estimating
-            ArrayAndStats data = new ArrayAndStats(DType.F64, new double[]{1.5, 1.5, 2.5, 2.5}, StatsOptions.DISTINCT_AND_TOP);
+            ArrayAndStats data = new ArrayAndStats(DType.F64, new double[]{1.5, 1.5, 2.5, 2.5}, StatsOptions.distinctAndTop());
 
             // When
             Estimate result = sut.expectedRatio(DType.F64, data, REAL);
@@ -322,7 +322,7 @@ class SchemeVerdictTest {
         @Test
         void estimatesANonZeroDominantValue() {
             // Given: 95 of 100 values are 42 — Java used to require the fill to be 0
-            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 5), StatsOptions.DISTINCT_AND_TOP);
+            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 5), StatsOptions.distinctAndTop());
 
             // When
             Estimate result = sut.expectedRatio(DType.I64, data, REAL);
@@ -334,7 +334,7 @@ class SchemeVerdictTest {
         @Test
         void skipsBelowNinetyPercent() {
             // Given: 89 of 100
-            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 11), StatsOptions.DISTINCT_AND_TOP);
+            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 11), StatsOptions.distinctAndTop());
 
             // When
             Estimate result = sut.expectedRatio(DType.I64, data, REAL);
@@ -348,7 +348,7 @@ class SchemeVerdictTest {
             // Given: Rust's float sparse scheme only takes null-dominated arrays
             double[] values = new double[100];
             values[3] = 1.5;
-            ArrayAndStats data = new ArrayAndStats(DType.F64, values, StatsOptions.DISTINCT_AND_TOP);
+            ArrayAndStats data = new ArrayAndStats(DType.F64, values, StatsOptions.distinctAndTop());
 
             // When
             Estimate result = sut.expectedRatio(DType.F64, data, REAL);
@@ -367,7 +367,7 @@ class SchemeVerdictTest {
             long[] data = {-1L, 7, 3};
 
             // When
-            ArrayStats result = ArrayStats.compute(PType.U64, data, StatsOptions.NONE);
+            ArrayStats result = ArrayStats.compute(PType.U64, data, StatsOptions.defaults());
 
             // Then
             assertThat(result.min()).isEqualTo(3);
@@ -382,7 +382,7 @@ class SchemeVerdictTest {
             int[] data = {-5, -1};
 
             // When
-            ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.NONE);
+            ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.defaults());
 
             // Then
             assertThat(result.maxIlog2(PType.I32)).isEqualTo(31);

@@ -4,7 +4,9 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 
 import java.util.List;
 
-/// Options controlling a file scan.
+/// Options controlling a file scan: an immutable configuration built from [#all()],
+/// [#columns(ColumnName...)] or [#limit(long)] and adjusted with the `withXxx` methods, each
+/// returning a copy.
 ///
 /// Empty `columns` = read all columns.
 /// Null `rowFilter` = no zone-map pruning.
@@ -12,16 +14,41 @@ import java.util.List;
 /// Projection names are validated [ColumnName]s, so a control-character name fails at the
 /// call site rather than silently matching nothing.
 ///
-/// @param columns   projected column names; empty means all columns
-/// @param rowFilter zone-map pruning filter, or `null` for none
-/// @param limit     row limit, or [#NO_LIMIT]
-public record ScanOptions(
-        List<ColumnName> columns,
-        RowFilter rowFilter,
-        long limit
-) {
+/// A plain class rather than a record, like `WriteOptions`: it is configuration, not a value.
+public final class ScanOptions {
     /// Sentinel limit meaning "no row limit".
     public static final long NO_LIMIT = Long.MAX_VALUE;
+
+    private final List<ColumnName> columns;
+    private final RowFilter rowFilter;
+    private final long limit;
+
+    private ScanOptions(List<ColumnName> columns, RowFilter rowFilter, long limit) {
+        this.columns = List.copyOf(columns);
+        this.rowFilter = rowFilter;
+        this.limit = limit;
+    }
+
+    /// The projected column names.
+    ///
+    /// @return the projected columns; empty means all columns
+    public List<ColumnName> columns() {
+        return columns;
+    }
+
+    /// The zone-map pruning filter.
+    ///
+    /// @return the row filter, or `null` for none
+    public RowFilter rowFilter() {
+        return rowFilter;
+    }
+
+    /// The row limit.
+    ///
+    /// @return the maximum rows to read, or [#NO_LIMIT]
+    public long limit() {
+        return limit;
+    }
 
     /// Scans every column with no filter or limit.
     ///
