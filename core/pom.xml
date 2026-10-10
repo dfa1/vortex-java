@@ -35,6 +35,18 @@
 
     <build>
         <plugins>
+            <!-- VectorApiSimdOperations compiles against the incubating Vector API. Nothing needs the
+                 flag at runtime: without it SimdOperationsSupport keeps the auto-vectorized kernels. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs combine.children="append">
+                        <arg>--add-modules</arg>
+                        <arg>jdk.incubator.vector</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
             <!-- Ratchet: core's javadoc is warning-free today, so keep it that way. The
                  parent leaves failOnWarnings off because 313 warnings predate the check in
                  other modules; nothing stops the already-clean ones from holding the line. -->
