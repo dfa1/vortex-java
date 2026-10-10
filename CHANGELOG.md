@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Parquet import and export handle `F16` columns, as Parquet's `FLOAT16` (a 2-byte `FIXED_LEN_BYTE_ARRAY`); nested `F16` in a list or struct is still unsupported. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - `vortex import --compact` and `WriteOptions#withCompact` follow Rust's compact preset: Zstandard for text and Pco for numbers compete in the cascade, e.g. a 4.6M-row ClinVar summary 392 → 251 MB. ([#510](https://github.com/dfa1/vortex-java/pull/510))
 - Every `vortex` subcommand takes `--timing`, which prints the elapsed time to stderr without counting the JVM's start-up. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - `vortex select` takes `--where "<expr>"` (repeatable) to print only some columns of the rows that match, e.g. one price column over a time interval. ([#507](https://github.com/dfa1/vortex-java/issues/507))
@@ -34,16 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `WriteOptions` is a final class instead of a record. ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Fixed
-- A nullable `F16` column accepts boxed `Short[]` with `null` for the missing rows, like every other primitive; it took only `short[]`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- Pco handles `F16` columns, so Rust's compact preset round-trips them in both directions; both sides rejected half-precision floats. ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- A table with an `F16` column can be queried through the Calcite adapter (as `REAL`); it failed with `unsupported ptype: F16`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- A SQL query that reads an `F32` column through the Calcite adapter works; it failed with a `ClassCastException` (`Double` cannot be cast to `Float`). ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- `vortex filter` works on `F16` columns, and `vortex view`/`tui` show their values instead of `<MaterializedFloat16Array>`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- CSV export writes `F16` columns; it failed with `unsupported array type for CSV export`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- A chunked `F16` column decodes; it failed with `unsupported ptype for chunked layout: F16`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- A filter on an `F16` column prunes chunks with the zone map, and `columnStats()` reports its min and max; both were empty. ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- `F16` files written by vortex-java can be read by vortex-jni: min/max statistics were written as `f32` scalars, which Rust rejects with `expected F32 dtype for F32Value, got f16`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
-- `F16` columns with constant, low-cardinality, run-heavy or mostly-one-value data can be written and read back; they failed with `unsupported ptype: F16` or wrote files the reader rejected. ([#515](https://github.com/dfa1/vortex-java/issues/515))
+- `F16` columns work end to end: vortex-jni reads the files vortex-java writes (min/max statistics were `f32` scalars, which Rust rejects), and the constant, dictionary, run-length, sparse and Pco encodings, zone-map pruning, chunked layouts, boxed `Short[]`, CSV and Parquet (`FLOAT16`) export, Parquet import, `vortex filter`/`view`/`tui` and the Calcite adapter (`REAL`) handle them. ([#515](https://github.com/dfa1/vortex-java/issues/515), [f71932c8](https://github.com/dfa1/vortex-java/commit/f71932c8), [cf4ea08f](https://github.com/dfa1/vortex-java/commit/cf4ea08f), [46784db0](https://github.com/dfa1/vortex-java/commit/46784db0), [c2549d75](https://github.com/dfa1/vortex-java/commit/c2549d75), [034a8115](https://github.com/dfa1/vortex-java/commit/034a8115), [908ebc50](https://github.com/dfa1/vortex-java/commit/908ebc50), [6f60cb08](https://github.com/dfa1/vortex-java/commit/6f60cb08), [112ada1d](https://github.com/dfa1/vortex-java/commit/112ada1d), [c9eb9bc2](https://github.com/dfa1/vortex-java/commit/c9eb9bc2), [cd5f039d](https://github.com/dfa1/vortex-java/commit/cd5f039d), [496353ae](https://github.com/dfa1/vortex-java/commit/496353ae))
+- A SQL query that reads an `F32` column through the Calcite adapter works; it failed with a `ClassCastException` (`Double` cannot be cast to `Float`). ([2fd785a7](https://github.com/dfa1/vortex-java/commit/2fd785a7))
 - Pco columns follow Rust: 2^18-value chunks of 8192-value pages, Rust's IntMult filter, delta sample and histogram; integer columns are byte-identical to pco 1.0.1. ([#513](https://github.com/dfa1/vortex-java/pull/513))
 - Integer columns that are an exact arithmetic sequence (timestamps at a fixed step) are written as `vortex.sequence` instead of bit-packed, as Rust does (a 4.2M-row klines file 155 → 128 MB). ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - ALP-RD trains its dictionary on the sample Rust's `alp` uses (64 spread runs of 64 values) and ranks ties as Rust does, so the cascade picks it where Rust does (klines `quote_volume` column −0.5 MB). ([#507](https://github.com/dfa1/vortex-java/issues/507))
