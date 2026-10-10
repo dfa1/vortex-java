@@ -8,11 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `vortex import --compact` and `WriteOptions#withCompact` follow Rust's compact preset: Zstandard for text and Pco for numbers compete in the cascade, e.g. a 4.6M-row ClinVar summary 392 → 251 MB. ([#510](https://github.com/dfa1/vortex-java/pull/510))
 - Every `vortex` subcommand takes `--timing`, which prints the elapsed time to stderr without counting the JVM's start-up. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - `vortex select` takes `--where "<expr>"` (repeatable) to print only some columns of the rows that match, e.g. one price column over a time interval. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - `WriteOptions#withExecutor(Executor)` compresses columns and chunks concurrently (4.4× on 8 threads). ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Changed
+- **Breaking:** `WriteOptions#withZstd`, `enableZstd()` and the constructor's `enableZstd` argument are removed: Zstandard now competes for text, with Pco for numbers, through `withCompact` (Rust's compact preset); `withColumnEncoding` still forces `vortex.zstd` on one column. ([#510](https://github.com/dfa1/vortex-java/pull/510))
 - `vortex import` of a string-heavy file is about 25% faster (a 4.6M-row, 43-column TSV 14.7 → 10.9 s): the columns of a chunk are sized and converted concurrently; the file is byte-identical. ([#508](https://github.com/dfa1/vortex-java/issues/508))
 - Pco encoding is about twice as fast (a 4.6M-row coordinate column pair 2.2 → 1.0 s): chunks are radix-sorted, bins are found without branches and bits are written a word at a time; the file is byte-identical. ([#511](https://github.com/dfa1/vortex-java/pull/511))
 - `vortex import` compresses on the common pool while it parses, about 20% faster (a 4.2M-row CSV 5.2 → 4.2 s); the file is byte-identical. ([#507](https://github.com/dfa1/vortex-java/issues/507))

@@ -179,18 +179,18 @@ than rounded. Every precision Rust supports (1–76, i8 … i256 storage) and ne
 
 ### `WriteOptions` (`io.github.dfa1.vortex.writer.WriteOptions`)
 
-Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading, boolean globalDict, boolean enableZstd, MemorySize globalDictMaxRetainedBytes, Map<EditionFamily, Edition> editions)`.
+Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading, boolean globalDict, MemorySize globalDictMaxRetainedBytes, Map<EditionFamily, Edition> editions)`.
 
 | Factory                         | Defaults                                                                                          |
 |---------------------------------|---------------------------------------------------------------------------------------------------|
-| `WriteOptions.defaults()`       | `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=3` (Rust's `MAX_CASCADE`), `globalDict=true`, `enableZstd=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_3}` |
+| `WriteOptions.defaults()`       | `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=3` (Rust's `MAX_CASCADE`), `globalDict=true`, `compact=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_3}` |
 | `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`; `0` disables cascading (each column takes the first accepting encoder) |
 
 | Method | Notes |
 |--------|-------|
 | `withZoneMaps(boolean)` | Toggle zone-map statistics. By default Rust's `vortex.zoned`: one zone per 8192 rows regardless of `writeChunk` batches, with max/min (strings: 64-byte bounds), `nan_count` for floats and `null_count`, no sum. An edition before `core2026.08.0` gets the legacy `vortex.stats`: one zone per batch with a sum, pruned by vortex-jni only when every batch but the last has the same row count |
 | `withGlobalDict(boolean)` | Toggle the shared cross-chunk dictionary |
-| `withZstd(boolean)` | Add Zstandard to the cascade codec competition. Requires `allowedCascading > 0` — Zstd only competes inside the cascade, so `withZstd(true)` throws `IllegalArgumentException` at depth 0; combine with `cascading(depth)` |
+| `withCompact(boolean)` | Rust's compact preset (`with_compact`): Zstandard for strings and binary and Pco for integers and floats compete in the cascade. Requires `allowedCascading > 0`; `compact()` reads it back |
 | `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |
 | `withExecutor(Executor)` | Compress segments on `executor` (e.g. the common `ForkJoinPool`); default is the calling thread. Output is byte-identical to a sequential write. The writer owns arrays passed to `writeChunk` until `close()` — do not modify them |
 | `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family |
@@ -642,7 +642,7 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | `export`   | `export <file.vortex\|url> [out.csv\|out.parquet\|-]` | All columns to CSV (default) or Parquet, by output extension; `-` for CSV on stdout. A `url` source requires an explicit `out.parquet` path — CSV/stdout from a URL isn't supported |
 | `select`   | `select <file.vortex> <col> [col2 ...] [--where "<expr>" ...]` | Project columns to CSV; each `--where` is a `filter` expression and all must hold (the filtered columns need not be printed) |
 | `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
-| `import`   | `import [--delimiter <char>] <file.csv\|file.parquet\|url> [out.vortex\|out.parquet]` | CSV or Parquet (local or remote) source to Vortex; a `.parquet` output is CSV-only (chains through a temp Vortex file internally) — a Parquet source always produces Vortex, `.parquet` output is rejected |
+| `import`   | `import [--delimiter <char>] [--compact] <file.csv\|file.parquet\|url> [out.vortex\|out.parquet]` | CSV or Parquet (local or remote) source to Vortex; a `.parquet` output is CSV-only (chains through a temp Vortex file internally) — a Parquet source always produces Vortex, `.parquet` output is rejected; `--compact` is Rust's compact preset (Zstandard for text, Pco for numbers), see [Convert CSV to Vortex](how-to.md#convert-csv-to-vortex) |
 
 Any subcommand also takes `--timing`, anywhere on the command line, including before the subcommand: it prints
 `elapsed: <n> ms` to **stderr** when the command ends, so data on stdout stays clean in a pipeline. The time is printed

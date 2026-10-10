@@ -25,7 +25,7 @@ final class ImportCommand {
     /// `outputTarget` is the raw second positional argument, or `null` when omitted — kept
     /// unresolved here because deriving a default depends on whether `inputTarget` turns out to
     /// be a local path or a URL, decided in [#run].
-    private record ParsedArgs(String inputTarget, String outputTarget, Character delimiter) {
+    private record ParsedArgs(String inputTarget, String outputTarget, Character delimiter, boolean compact) {
     }
 
     private ImportCommand() {
@@ -38,14 +38,14 @@ final class ImportCommand {
         } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
             System.err.println(
-                    "usage: import [--delimiter <char>] <file.csv|file.parquet|url> [out.vortex|out.parquet]");
+                    "usage: import [--delimiter <char>] [--compact] <file.csv|file.parquet|url> [out.vortex|out.parquet]");
             return ExitStatus.USAGE_ERROR;
         }
         String target = parsedArgs.inputTarget();
         boolean remote = target.startsWith("http://") || target.startsWith("https://");
         try {
             if (remote) {
-                return runRemote(target, parsedArgs.outputTarget(), parsedArgs.delimiter());
+                return runRemote(target, parsedArgs.outputTarget(), parsedArgs.delimiter(), parsedArgs.compact());
             }
             Path inputPath = Path.of(target);
             if (!Files.exists(inputPath)) {
@@ -62,9 +62,9 @@ final class ImportCommand {
                             + "a Parquet source cannot import to a .parquet output");
                     return ExitStatus.USAGE_ERROR;
                 }
-                return runParquet(inputPath, outputPath);
+                return runParquet(inputPath, outputPath, parsedArgs.compact());
             } else {
-                return runCsv(inputPath, outputPath, parsedArgs.delimiter());
+                return runCsv(inputPath, outputPath, parsedArgs.delimiter(), parsedArgs.compact());
             }
         } catch (IOException e) {
             ProgressBar.clear();
@@ -76,7 +76,8 @@ final class ImportCommand {
     /// Handles an `http(s)://` source, dispatching by the *source* extension (Parquet or CSV;
     /// nothing else is supported from a URL). The output target may independently be `.vortex`
     /// or `.parquet` — see [#runCsv] / [#runRemoteCsv] for the CSV-to-Parquet chain.
-    private static int runRemote(String url, String outputTarget, Character delimiter) throws IOException {
+    private static int runRemote(String url, String outputTarget, Character delimiter, boolean compact)
+            throws IOException {
         FileName source = new FileName(url);
         if (source.is(FileFormat.PARQUET)) {
             Path vortexPath = Path.of(outputTarget != null
@@ -87,23 +88,23 @@ final class ImportCommand {
                         + "a Parquet source cannot import to a .parquet output");
                 return ExitStatus.USAGE_ERROR;
             }
-            return runRemoteParquet(url, vortexPath);
+            return runRemoteParquet(url, vortexPath, compact);
         }
         if (source.is(FileFormat.CSV)) {
             Path outputPath = Path.of(outputTarget != null
                     ? outputTarget
                     : lastPathSegment(url, "output.csv").withFormat(FileFormat.VORTEX));
-            return runRemoteCsv(url, outputPath, delimiter);
+            return runRemoteCsv(url, outputPath, delimiter, compact);
         }
         System.err.println("only Parquet or CSV import is supported from a URL");
         return ExitStatus.USAGE_ERROR;
     }
 
-    private static int runRemoteParquet(String parquetUrl, Path vortexPath) throws IOException {
+    private static int runRemoteParquet(String parquetUrl, Path vortexPath, boolean compact) throws IOException {
         io.github.dfa1.vortex.parquet.ImportOptions defaults = io.github.dfa1.vortex.parquet.ImportOptions.defaults();
         io.github.dfa1.vortex.parquet.ImportOptions options =
                 defaults.withProgressListener(ImportCommand::renderProgress)
-                        .withWriteOptions(compressInParallel(defaults.writeOptions()));
+                        .withWriteOptions(writeOptions(defaults.writeOptions(), compact));
         ParquetImporter.importParquet(URI.create(parquetUrl), vortexPath, options);
         ProgressBar.clear();
         printSimpleResult(vortexPath);
@@ -112,8 +113,9 @@ final class ImportCommand {
 
     /// Imports a remote CSV, same as [#runCsv] but with no local input file to size for the
     /// progress/result print, so the result line reports only the output size.
-    private static int runRemoteCsv(String csvUrl, Path outputPath, Character delimiter) throws IOException {
-        ImportOptions options = csvOptions(delimiter);
+    private static int runRemoteCsv(String csvUrl, Path outputPath, Character delimiter, boolean compact)
+            throws IOException {
+        ImportOptions options = csvOptions(delimiter, compact);
         if (FileName.of(outputPath).is(FileFormat.PARQUET)) {
             chainCsvToParquet(tempVortex -> CsvImporter.importCsv(URI.create(csvUrl), tempVortex, options),
                     outputPath);
@@ -131,6 +133,7 @@ final class ImportCommand {
         }
         List<String> positional = new ArrayList<>();
         Character delimiter = null;
+        boolean compact = false;
         for (int i = 1; i < args.length; i++) {
             String arg = args[i];
             if ("--delimiter".equals(arg)) {
@@ -144,20 +147,25 @@ final class ImportCommand {
                 delimiter = value.charAt(0);
                 continue;
             }
+            if ("--compact".equals(arg)) {
+                compact = true;
+                continue;
+            }
             positional.add(arg);
         }
         if (positional.size() < 1 || positional.size() > 2) {
             throw new IllegalArgumentException("expected input path and optional output path");
         }
         String outputTarget = positional.size() == 2 ? positional.get(1) : null;
-        return new ParsedArgs(positional.getFirst(), outputTarget, delimiter);
+        return new ParsedArgs(positional.getFirst(), outputTarget, delimiter, compact);
     }
 
     /// Imports a local CSV file. When `outputPath` ends `.parquet`, the CSV is imported to a
     /// temp Vortex file first, then exported to Parquet and the temp file discarded — Vortex is
     /// always the hub, Parquet is never a direct CSV-import target.
-    private static int runCsv(Path csvPath, Path outputPath, Character delimiter) throws IOException {
-        ImportOptions options = csvOptions(delimiter);
+    private static int runCsv(Path csvPath, Path outputPath, Character delimiter, boolean compact)
+            throws IOException {
+        ImportOptions options = csvOptions(delimiter, compact);
         if (FileName.of(outputPath).is(FileFormat.PARQUET)) {
             chainCsvToParquet(tempVortex -> CsvImporter.importCsv(csvPath, tempVortex, options), outputPath);
             ProgressBar.clear();
@@ -171,29 +179,30 @@ final class ImportCommand {
         return ExitStatus.OK;
     }
 
-    private static int runParquet(Path parquetPath, Path vortexPath) throws IOException {
+    private static int runParquet(Path parquetPath, Path vortexPath, boolean compact) throws IOException {
         io.github.dfa1.vortex.parquet.ImportOptions defaults = io.github.dfa1.vortex.parquet.ImportOptions.defaults();
         io.github.dfa1.vortex.parquet.ImportOptions options =
                 defaults.withProgressListener(ImportCommand::renderProgress)
-                        .withWriteOptions(compressInParallel(defaults.writeOptions()));
+                        .withWriteOptions(writeOptions(defaults.writeOptions(), compact));
         ParquetImporter.importParquet(parquetPath, vortexPath, options);
         ProgressBar.clear();
         printResult(parquetPath, vortexPath, options.writeOptions().allowedCascading());
         return ExitStatus.OK;
     }
 
-    private static ImportOptions csvOptions(Character delimiter) {
+    private static ImportOptions csvOptions(Character delimiter, boolean compact) {
         ImportOptions defaults = ImportOptions.defaults();
         ImportOptions options = defaults.withProgressListener(ImportCommand::renderProgress)
-                                        .withWriteOptions(compressInParallel(defaults.writeOptions()));
+                                        .withWriteOptions(writeOptions(defaults.writeOptions(), compact));
         return delimiter != null ? options.withDelimiter(delimiter) : options;
     }
 
     /// Compresses columns and chunks on the common pool while the importer keeps parsing: the file is
     /// byte-identical to a sequential write, only sooner (an import is bound by its single-threaded
-    /// parse, so the gain is the encoding time, not a multiple of the cores).
-    private static WriteOptions compressInParallel(WriteOptions options) {
-        return options.withExecutor(ForkJoinPool.commonPool());
+    /// parse, so the gain is the encoding time, not a multiple of the cores). `compact` is Rust's compact
+    /// preset: Zstandard for text and Pco for numbers compete too.
+    private static WriteOptions writeOptions(WriteOptions options, boolean compact) {
+        return options.withExecutor(ForkJoinPool.commonPool()).withCompact(compact);
     }
 
     @FunctionalInterface

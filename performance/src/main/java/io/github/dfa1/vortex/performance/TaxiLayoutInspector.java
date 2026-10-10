@@ -113,7 +113,7 @@ public final class TaxiLayoutInspector {
 
             System.out.print("Writing Java Vortex (cascading depth 3 + Zstd)...");
             ImportOptions zstdOpts = ImportOptions.defaults()
-                    .withWriteOptions(WriteOptions.cascading(3).withZstd(true));
+                    .withWriteOptions(WriteOptions.cascading(3).withCompact(true));
             ParquetImporter.importParquet(parquetFile, javaZstdVortex, zstdOpts);
             System.out.printf(" %6.1f MB%n", mb(javaZstdVortex));
 
