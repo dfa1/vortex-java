@@ -2409,6 +2409,32 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_pco_i64_largeChunkWithClusteredJumps(@TempDir Path tmp) throws IOException {
+        // Given — 100k positions that mostly step a little and jump far every 40th row: big enough
+        // for the radix sort (the other Pco tests are below its 512-value threshold), and with
+        // a bimodal delta so both the plain and the delta histograms are built from sorted keys
+        Path file = tmp.resolve("java_pco_i64_clustered.vtx");
+        long[] data = new long[100_000];
+        long position = 1_000_000L;
+        long state = 12345L;
+        for (int i = 0; i < data.length; i++) {
+            state = state * 6364136223846793005L + 1442695040888963407L;
+            position += i % 40 == 0 ? 50_000_000L + (state >>> 40) % 1_000 : (state >>> 40) % 500;
+            data[i] = position;
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+                     List.of(new PcoEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
+        }
+
+        // Then
+        long[] decoded = readLongColumn(file, "ts");
+        assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
     void javaWriter_rustReader_pco_i32(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("java_pco_i32.vtx");
