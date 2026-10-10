@@ -65,6 +65,9 @@ public record ArrayStats(
             if (sv.uint64_value() != null) {
                 return sv.uint64_value();
             }
+            if (sv.f16_value() != null) {
+                return Float.float16ToFloat((short) sv.f16_value().longValue());
+            }
             if (sv.f32_value() != null) {
                 return sv.f32_value();
             }

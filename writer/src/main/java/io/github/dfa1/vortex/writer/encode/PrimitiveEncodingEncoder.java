@@ -235,7 +235,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                         max = fv;
                     }
                 }
-                yield min > max ? null : new byte[][]{scalarF32(min), scalarF32(max)};
+                yield min > max ? null : new byte[][]{scalarF16(min), scalarF16(max)};
             }
         };
     }
@@ -409,6 +409,12 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
 
     private static byte[] scalarU64(long v) {
         return ProtoScalarValue.ofUint64Value(v).encode();
+    }
+
+    // Rust types an F16 column's min/max as F16 scalars (`f16_value`, the half bits as a u64); an
+    // f32 scalar on an F16 column is rejected on read ("expected F32 dtype for F32Value, got f16").
+    private static byte[] scalarF16(float v) {
+        return ProtoScalarValue.ofF16Value(Short.toUnsignedLong(Float.floatToFloat16(v))).encode();
     }
 
     private static byte[] scalarF32(float v) {

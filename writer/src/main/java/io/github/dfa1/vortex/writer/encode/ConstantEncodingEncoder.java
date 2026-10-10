@@ -71,8 +71,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         byte[] scalarBytes = scalar.encode();
         // A constant array's min and max are both the one repeated value, by construction -- no
         // scan needed. Empty arrays report no stats, matching every other encoder's convention.
-        // F16 min/max travel as f32 scalars, as PrimitiveEncodingEncoder writes them.
-        byte[] stats = Array.getLength(data) > 0 ? statsScalar(ptype, firstRaw, scalarBytes) : null;
+        byte[] stats = Array.getLength(data) > 0 ? scalarBytes : null;
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)), stats, stats);
     }
 
@@ -210,13 +209,6 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
                 yield OptionalLong.of(first);
             }
         };
-    }
-
-    private static byte[] statsScalar(PType ptype, long rawBits, byte[] scalarBytes) {
-        if (ptype != PType.F16) {
-            return scalarBytes;
-        }
-        return ProtoScalarValue.ofF32Value(Float.float16ToFloat((short) rawBits)).encode();
     }
 
     private static ProtoScalarValue buildScalar(PType ptype, long rawBits) {

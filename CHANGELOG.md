@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `WriteOptions` is a final class instead of a record. ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Fixed
+- `F16` files written by vortex-java can be read by vortex-jni: min/max statistics were written as `f32` scalars, which Rust rejects with `expected F32 dtype for F32Value, got f16`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - `F16` columns with constant, low-cardinality, run-heavy or mostly-one-value data can be written and read back; they failed with `unsupported ptype: F16` or wrote files the reader rejected. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - Pco columns follow Rust: 2^18-value chunks of 8192-value pages, Rust's IntMult filter, delta sample and histogram; integer columns are byte-identical to pco 1.0.1. ([#513](https://github.com/dfa1/vortex-java/pull/513))
 - Integer columns that are an exact arithmetic sequence (timestamps at a fixed step) are written as `vortex.sequence` instead of bit-packed, as Rust does (a 4.2M-row klines file 155 → 128 MB). ([#507](https://github.com/dfa1/vortex-java/issues/507))

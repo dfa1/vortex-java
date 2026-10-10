@@ -266,7 +266,7 @@ final class ZoneMapStatCodec {
                 yield a;
             }
             case F16 -> {
-                // F16 min/max are serialized as f32 scalars; re-pack to float16 storage.
+                // F16 min/max are f16 scalars; widen and re-pack to float16 storage.
                 short[] a = new short[n];
                 for (int i = 0; i < n; i++) {
                     valid[i] = statBytes.get(i) != null;
@@ -284,11 +284,14 @@ final class ZoneMapStatCodec {
     }
 
     private static double scalarDouble(byte[] bytes) throws IOException {
-        // Float columns serialize min/max as f64 (F64) or f32 (F32). Branch rather than use a
-        // ternary so the F32 path widens Float -> double explicitly instead of mixing boxed types.
+        // Float columns serialize min/max as f64 (F64), f32 (F32) or f16 (F16, the half bits).
+        // Branch rather than use a ternary so each path widens explicitly instead of mixing boxed types.
         ProtoScalarValue sv = decodeScalar(bytes);
         if (sv.f64_value() != null) {
             return sv.f64_value();
+        }
+        if (sv.f16_value() != null) {
+            return Float.float16ToFloat((short) sv.f16_value().longValue());
         }
         return sv.f32_value();
     }
