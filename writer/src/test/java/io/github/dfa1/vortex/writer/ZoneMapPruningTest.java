@@ -397,6 +397,42 @@ class ZoneMapPruningTest {
         }
     }
 
+    /// #515: an F16 column's zone map decoded to no stats at all (`boxedScalar` had no
+    /// `Float16Array` case), so a filter on it never pruned a chunk. Stats decode as `Float`, like F32.
+    @Nested
+    class Float16Column {
+
+        private static final DType.Struct F16_SCHEMA = new DType.Struct(
+                List.of(ColumnName.of("v")), List.of(DType.F16), false);
+
+        @ParameterizedTest(name = "{0} on F16 column")
+        @MethodSource("io.github.dfa1.vortex.writer.ZoneMapPruningTest$FloatWidths#values")
+        void f16ColumnPrunesLikeF32(String name, Object value, @TempDir Path tmp) throws IOException {
+            // Given three chunks v in [1..50], [51..100], [101..150], exact in half precision
+            Path file = tmp.resolve("f16_chunks.vtx");
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = VortexWriter.create(ch, F16_SCHEMA, LegacyZoneMaps.OPTIONS)) {
+                sut.writeChunk(Map.of(ColumnName.of("v"), f16range(1, 50)));
+                sut.writeChunk(Map.of(ColumnName.of("v"), f16range(51, 100)));
+                sut.writeChunk(Map.of(ColumnName.of("v"), f16range(101, 150)));
+            }
+
+            // When
+            List<Long> rowCounts = scanRowCounts(file, RowFilter.gte(ColumnName.of("v"), (Comparable<?>) value));
+
+            // Then chunk 1 (max 50) is pruned
+            assertThat(rowCounts).containsExactly(50L, 50L);
+        }
+
+        private static short[] f16range(int from, int to) {
+            short[] arr = new short[to - from + 1];
+            for (int i = 0; i < arr.length; i++) {
+                arr[i] = Float.floatToFloat16(from + i);
+            }
+            return arr;
+        }
+    }
+
     /// Comparison mode keys off the *column* type, not the filter value's boxing — so an integer
     /// column never routes through double-compare, which would lose precision past 2^53.
     @Nested

@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.CanonicalArrays;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.ListArray;
@@ -650,6 +651,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case IntArray a -> unsigned ? Integer.toUnsignedLong(a.getInt(i)) : (Object) a.getInt(i);
             case DoubleArray a -> a.getDouble(i);
             case FloatArray a -> a.getFloat(i);
+            case Float16Array a -> a.getFloat(i);
             case ShortArray a -> unsigned ? a.getShort(i) & 0xFFFFL : (Object) a.getShort(i);
             case ByteArray a -> unsigned ? a.getByte(i) & 0xFFL : (Object) a.getByte(i);
             case BoolArray a -> a.getBoolean(i);
