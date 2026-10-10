@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.ListArray;
@@ -182,6 +183,8 @@ public final class CsvExporter {
             case ByteArray ba -> Integer.toString(ba.getInt(rowIdx));
             case DoubleArray da -> Double.toString(da.getDouble(rowIdx));
             case FloatArray fa -> Float.toString(fa.getFloat(rowIdx));
+            // A half widens to float exactly, so the float's shortest decimal round-trips the half
+            case Float16Array ha -> Float.toString(ha.getFloat(rowIdx));
             case BoolArray ba -> Boolean.toString(ba.getBoolean(rowIdx));
             // toPlainString: toString switches to exponent notation for small values (1E-10)
             case DecimalArray da -> da.getDecimal(rowIdx).toPlainString();
