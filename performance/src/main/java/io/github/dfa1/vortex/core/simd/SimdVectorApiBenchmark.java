@@ -47,6 +47,7 @@ public class SimdVectorApiBenchmark {
     private Object constant;
     private boolean[] constantFlags;
     private MemorySegment codes;
+    private long[] widened;
 
     @Setup
     public void setup() {
@@ -60,6 +61,7 @@ public class SimdVectorApiBenchmark {
         runsFew = array(ptype, size, 64, new Random(2));
         constant = array(ptype, size, Integer.MAX_VALUE, new Random(3));
         constantFlags = new boolean[size];
+        widened = new long[size];
         codes = Arena.ofAuto().allocate((long) size * 8);
         Random fill = new Random(4);
         for (long b = 0; b < codes.byteSize(); b++) {
@@ -95,6 +97,20 @@ public class SimdVectorApiBenchmark {
     @Benchmark
     public java.util.OptionalLong sum() {
         return ops.sum(runsMany, ptype);
+    }
+
+    /// Widens a heap array of random full-range integers to longs (I8, I16, I32).
+    @Benchmark
+    public long[] widenArray() {
+        ops.widenArrayInto(runsMany, 0, size, ptype, widened);
+        return widened;
+    }
+
+    /// Widens a segment of random full-range integers to longs, as the decoders do (I8, I16, I32).
+    @Benchmark
+    public long[] widenSegment() {
+        ops.widenInto(codes, 0, size, ptype, widened);
+        return widened;
     }
 
     /// Finds the smallest and largest element of random full-range data (integer ptypes only).

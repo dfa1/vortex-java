@@ -58,6 +58,9 @@ final class VectorApiSimdOperations implements SimdOperations {
         return INTS.vectorBitSize();
     }
 
+    // Widening stays on C2: a Vector API version (convertShape per part) measured 55x slower for
+    // bytes and shorts (2.2 ms vs 40 us) and 0.55-0.6x for ints (128-bit NEON, 262144 elements, JMH
+    // -f 2), for both the segment and the heap-array source.
     @Override
     public void widenInto(MemorySegment src, long fromElement, int count, PType ptype, long[] out) {
         fallback.widenInto(src, fromElement, count, ptype, out);
