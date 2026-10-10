@@ -54,7 +54,7 @@ class VortexWriterTest {
         // VortexWriter pads before each segment so every buffer starts 64-aligned (Arrow-compatible);
         // a broken pad — wrong modulus arithmetic or a skipped writePadding — leaves a segment offset
         // off a 64-byte boundary.
-        WriteOptions opts = new WriteOptions(false, 0.90, 0, false, false, MemorySize.ofMiB(256), Map.of());
+        WriteOptions opts = new WriteOptions(false, 0.90, 0, false, MemorySize.ofMiB(256), Map.of());
         Path file = tmp.resolve("aligned.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {

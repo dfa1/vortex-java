@@ -438,6 +438,22 @@ java -jar cli/target/vortex-cli-*-all.jar import data.csv out.parquet
 java -jar cli/target/vortex-cli-*-all.jar import https://example.com/data.csv out.parquet
 ```
 
+Text-heavy files (long, repetitive strings such as names, descriptions, accession lists) and
+numbers with structure that bit-packing cannot use (positions sorted within groups) compress
+better with `--compact`, Rust's compact preset (`with_compact`): Zstandard competes for strings
+and binary, and [Pco](https://github.com/pcodec/pcodec) for integers and floats, next to the
+default encodings, each winning a chunk only where it makes it smaller:
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar import --compact data.csv
+```
+
+On the ClinVar variant summary (4.6M rows, 43 columns, mostly free text) the default import wrote
+392 MB and `--compact` 251 MB, in 16 s instead of 13 s. Both encodings are slower to write and to
+decode than the structural ones, so scans of those columns are slower. It is off by default, as in
+Rust. In Java, `WriteOptions#withCompact` does the same, and `WriteOptions#withColumnEncoding`
+forces the encodings of one column.
+
 ---
 
 ## Import from a JDBC source

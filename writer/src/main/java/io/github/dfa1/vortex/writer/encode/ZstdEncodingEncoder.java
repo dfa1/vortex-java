@@ -61,9 +61,20 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     /// Values per zstd frame; `0` (or any non-positive value) means a single frame for the whole array.
     private final long valuesPerFrame;
 
+    /// Whether only strings and binary are accepted, as in Rust's compact preset, which hands numbers to Pco.
+    private final boolean textOnly;
+
     /// Creates an encoder that compresses each array into a single frame.
     public ZstdEncodingEncoder() {
         this(0);
+    }
+
+    /// Creates an encoder for strings and binary only (single frame per array), as Rust's compact
+    /// preset uses Zstd, leaving numbers to Pco.
+    ///
+    /// @return a text-only encoder
+    public static ZstdEncodingEncoder forText() {
+        return new ZstdEncodingEncoder(0, true);
     }
 
     /// Creates an encoder that splits the payload into frames of `valuesPerFrame` values each.
@@ -71,7 +82,12 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     /// @param valuesPerFrame the number of values per zstd frame; non-positive means a single frame
     ///                       for the whole array
     public ZstdEncodingEncoder(long valuesPerFrame) {
+        this(valuesPerFrame, false);
+    }
+
+    private ZstdEncodingEncoder(long valuesPerFrame, boolean textOnly) {
         this.valuesPerFrame = valuesPerFrame;
+        this.textOnly = textOnly;
     }
 
     @Override
@@ -81,7 +97,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8
+        return (!textOnly && dtype instanceof DType.Primitive) || dtype instanceof DType.Utf8
                 || dtype instanceof DType.Binary;
     }
 
@@ -89,8 +105,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     public boolean acceptsNullable(DType dtype) {
         // Nullable primitive, utf8, and binary columns arrive as a NullableData carrier and are
         // encoded directly here (validity emitted as Bool child[0]) rather than masked-wrapped.
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8
-                || dtype instanceof DType.Binary;
+        return accepts(dtype);
     }
 
     @Override

@@ -38,6 +38,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ZstdEncodingEncoderTest {
 
     private static final ZstdEncodingEncoder ENCODER = new ZstdEncodingEncoder();
+
+    @Test
+    void forText_acceptsStringsAndBinaryButNotNumbers() {
+        // Given — Rust's compact preset gives numbers to Pco
+        ZstdEncodingEncoder sut = ZstdEncodingEncoder.forText();
+
+        // When / Then
+        assertThat(sut.accepts(DType.UTF8)).isTrue();
+        assertThat(sut.accepts(DType.BINARY)).isTrue();
+        assertThat(sut.accepts(DType.I64)).isFalse();
+        assertThat(sut.acceptsNullable(DType.F64)).isFalse();
+        assertThat(ENCODER.accepts(DType.I64)).isTrue();
+    }
     private static final ZstdEncodingDecoder DECODER = new ZstdEncodingDecoder();
     private static final BoolEncodingEncoder BOOL_ENCODER = new BoolEncodingEncoder();
 

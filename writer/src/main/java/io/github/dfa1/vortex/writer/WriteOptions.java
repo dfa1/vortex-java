@@ -21,7 +21,7 @@ public final class WriteOptions {
     private final double compressionRatioThreshold;
     private final int allowedCascading;
     private final boolean globalDict;
-    private final boolean enableZstd;
+    private final boolean compact;
     private final MemorySize globalDictMaxRetainedBytes;
     private final Map<EditionFamily, Edition> editions;
     private final Map<ColumnName, ColumnEncoding> columnEncodings;
@@ -33,33 +33,30 @@ public final class WriteOptions {
     /// @param compressionRatioThreshold  see [#compressionRatioThreshold()]
     /// @param allowedCascading           see [#allowedCascading()]
     /// @param globalDict                 see [#globalDict()]
-    /// @param enableZstd                 see [#enableZstd()]
     /// @param globalDictMaxRetainedBytes see [#globalDictMaxRetainedBytes()]
     /// @param editions                   see [#editions()]
-    /// @throws IllegalArgumentException if `enableZstd` is `true` while `allowedCascading` is `0`:
-    ///                                  Zstd only ever competes inside the cascade, so at depth 0
-    ///                                  the flag would be silently ignored
     public WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
-                        boolean globalDict, boolean enableZstd, MemorySize globalDictMaxRetainedBytes,
+                        boolean globalDict, MemorySize globalDictMaxRetainedBytes,
                         Map<EditionFamily, Edition> editions) {
-        this(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
+        this(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, false,
                 globalDictMaxRetainedBytes, editions, Map.of(), CALLER_RUNS);
     }
 
     private WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
-                         boolean globalDict, boolean enableZstd, MemorySize globalDictMaxRetainedBytes,
+                         boolean globalDict, boolean compact,
+                         MemorySize globalDictMaxRetainedBytes,
                          Map<EditionFamily, Edition> editions, Map<ColumnName, ColumnEncoding> columnEncodings,
                          Executor executor) {
-        if (enableZstd && allowedCascading == 0) {
+        if (compact && allowedCascading == 0) {
             throw new IllegalArgumentException(
-                    "enableZstd requires allowedCascading > 0 (Zstd only competes inside the cascade); "
-                            + "use WriteOptions.cascading(depth).withZstd(true)");
+                    "compact requires allowedCascading > 0 (Zstd and Pco only compete inside the cascade); "
+                            + "use WriteOptions.cascading(depth).withCompact(true)");
         }
         this.enableZoneMaps = enableZoneMaps;
         this.compressionRatioThreshold = compressionRatioThreshold;
         this.allowedCascading = allowedCascading;
         this.globalDict = globalDict;
-        this.enableZstd = enableZstd;
+        this.compact = compact;
         this.globalDictMaxRetainedBytes = globalDictMaxRetainedBytes;
         this.editions = Map.copyOf(editions);
         this.columnEncodings = Map.copyOf(columnEncodings);
@@ -94,11 +91,11 @@ public final class WriteOptions {
         return globalDict;
     }
 
-    /// Whether Zstandard competes in the cascade — see [#withZstd(boolean)] for the trade-off.
+    /// Whether the cascade follows Rust's compact preset — see [#withCompact(boolean)].
     ///
-    /// @return `true` if Zstd is a cascade candidate
-    public boolean enableZstd() {
-        return enableZstd;
+    /// @return `true` if Zstd (for text) and Pco (for numbers) compete in the cascade
+    public boolean compact() {
+        return compact;
     }
 
     /// The aggregate heap budget for the code arrays global-dictionary candidate columns buffer until
@@ -157,7 +154,7 @@ public final class WriteOptions {
     /// @return a new `WriteOptions` with the executor set
     public WriteOptions withExecutor(Executor executor) {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
+                compact, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options choosing `column`'s encodings by `encoding` instead of the
@@ -170,7 +167,7 @@ public final class WriteOptions {
         Map<ColumnName, ColumnEncoding> updated = new HashMap<>(columnEncodings);
         updated.put(Objects.requireNonNull(column, "column"), Objects.requireNonNull(encoding, "encoding"));
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, editions, updated, executor);
+                compact, globalDictMaxRetainedBytes, editions, updated, executor);
     }
 
     /// Default aggregate retention budget (2 GB) for the buffered per-chunk code arrays of global
@@ -192,7 +189,7 @@ public final class WriteOptions {
     private static final int DEFAULT_CASCADE_DEPTH = 3;
 
     /// Default options: global dictionary encoding enabled, cascading compression up to depth 3
-    /// (as Rust), Zstd disabled, edition guard targeting the latest frozen `core` edition.
+    /// (as Rust), no Zstd or Pco, edition guard targeting the latest frozen `core` edition.
     ///
     /// @return default `WriteOptions`
     public static WriteOptions defaults() {
@@ -205,7 +202,7 @@ public final class WriteOptions {
     /// @param depth maximum cascade depth
     /// @return `WriteOptions` with cascading enabled at the given depth
     public static WriteOptions cascading(int depth) {
-        return new WriteOptions(true, 0.90, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
+        return new WriteOptions(true, 0.90, depth, true, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
                 DEFAULT_EDITIONS);
     }
 
@@ -214,8 +211,7 @@ public final class WriteOptions {
     /// @param enabled `true` to write per-chunk min/max/sum statistics for zone-map pruning
     /// @return a new `WriteOptions` with the zone-map flag updated
     public WriteOptions withZoneMaps(boolean enabled) {
-        return new WriteOptions(enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd,
-                globalDictMaxRetainedBytes, editions, columnEncodings, executor);
+        return new WriteOptions(enabled, compressionRatioThreshold, allowedCascading, globalDict, compact, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with global dictionary encoding set to `enabled`.
@@ -223,29 +219,28 @@ public final class WriteOptions {
     /// @param enabled `true` to enable global dictionary encoding across chunks
     /// @return a new `WriteOptions` with the global dict flag updated
     public WriteOptions withGlobalDict(boolean enabled) {
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, enableZstd,
-                globalDictMaxRetainedBytes, editions, columnEncodings, executor);
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, compact, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
-    /// Returns a copy of these options with Zstandard compression set to `enabled`.
+    /// Returns a copy of these options with Rust's compact preset set to `enabled`
+    /// (`BtrBlocksCompressorBuilder::with_compact`): Zstandard competes for strings and binary, and
+    /// Pco for integers and floats, next to the default encodings. Each wins a chunk only where it
+    /// makes it smaller.
     ///
-    /// When enabled, Zstd is added to the cascade codec list and competes with structural encodings
-    /// (ALP, bitpack, FOR, etc.) on every chunk. Zstd typically wins on high-cardinality numeric columns
-    /// (e.g. `fare_amount`, `total_amount`), reducing file size by 10–15%.
+    /// On a ClinVar variant summary (4.6M rows, 43 columns, mostly free text) the default cascade
+    /// wrote 382 MB and compact about 235 MB.
     ///
-    /// Trade-off: Zstd decompression is ~6× slower than ALP reconstruction or bitpack unpack.
-    /// Use `false` (the default) for read-heavy or latency-sensitive workloads.
+    /// Trade-off: both encodings are slower to write and to decode than the structural ones, Pco
+    /// the slowest to write (that file took 33 s instead of 24 s). Off by default, as in Rust.
     ///
-    /// `enabled=true` requires `allowedCascading() > 0` — Zstd only ever competes inside the
-    /// cascade, so enabling it at depth 0 (e.g. straight off [#defaults()]) would be a silent
-    /// no-op. Combine with [#cascading(int)]: `WriteOptions.cascading(depth).withZstd(true)`.
+    /// `enabled=true` requires `allowedCascading() > 0`: both only ever compete inside the cascade.
     ///
-    /// @param enabled `true` to enable Zstd in the compression cascade
-    /// @return a new `WriteOptions` with the Zstd flag updated
+    /// @param enabled `true` to enable the compact preset
+    /// @return a new `WriteOptions` with the compact flag updated
     /// @throws IllegalArgumentException if `enabled` is `true` and `allowedCascading()` is `0`
-    public WriteOptions withZstd(boolean enabled) {
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict, enabled,
-                globalDictMaxRetainedBytes, editions, columnEncodings, executor);
+    public WriteOptions withCompact(boolean enabled) {
+        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+                enabled, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with the global-dictionary retention budget set to `budget`.
@@ -260,7 +255,7 @@ public final class WriteOptions {
     /// @return a new `WriteOptions` with the global-dict retention budget updated
     public WriteOptions withGlobalDictMaxRetainedBytes(MemorySize budget) {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, budget, editions, columnEncodings, executor);
+                compact, budget, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with `edition` enabled, replacing any edition already
@@ -279,7 +274,7 @@ public final class WriteOptions {
         Map<EditionFamily, Edition> updated = new HashMap<>(editions);
         updated.put(edition.id().family(), edition);
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, updated, columnEncodings, executor);
+                compact, globalDictMaxRetainedBytes, updated, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with the edition guard turned off, the counterpart of Rust's
@@ -292,6 +287,6 @@ public final class WriteOptions {
     /// @return a new `WriteOptions` with no edition enabled
     public WriteOptions withoutEditions() {
         return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
-                enableZstd, globalDictMaxRetainedBytes, Map.of(), columnEncodings, executor);
+                compact, globalDictMaxRetainedBytes, Map.of(), columnEncodings, executor);
     }
 }

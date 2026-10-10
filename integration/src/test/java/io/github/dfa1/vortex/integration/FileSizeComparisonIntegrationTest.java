@@ -103,8 +103,8 @@ class FileSizeComparisonIntegrationTest {
         return writeJava(dir, "ohlc-java.vtx", WriteOptions.cascading(3), batches);
     }
 
-    private static Path writeJavaZstd(Path dir, List<OhlcData.Batch> batches) throws IOException {
-        return writeJava(dir, "ohlc-java-zstd.vtx", WriteOptions.cascading(3).withZstd(true), batches);
+    private static Path writeJavaCompact(Path dir, List<OhlcData.Batch> batches) throws IOException {
+        return writeJava(dir, "ohlc-java-compact.vtx", WriteOptions.cascading(3).withCompact(true), batches);
     }
 
     private static Path writeJavaGlobalDict(Path dir, boolean globalDict,
@@ -214,29 +214,29 @@ class FileSizeComparisonIntegrationTest {
     }
 
     @Test
-    void withZstd_smallerFile_and_readable(@TempDir Path tmp) throws IOException {
+    void withCompact_smallerFile_and_readable(@TempDir Path tmp) throws IOException {
         // Given
         List<OhlcData.Batch> batches = OhlcData.generate(TOTAL_ROWS, BATCH_SIZE);
 
         // When
-        Path noZstd = writeJava(tmp, batches);
-        Path withZstd = writeJavaZstd(tmp, batches);
+        Path noCompact = writeJava(tmp, batches);
+        Path withCompact = writeJavaCompact(tmp, batches);
 
-        long noZstdSize = Files.size(noZstd);
-        long zstdSize = Files.size(withZstd);
+        long noCompactSize = Files.size(noCompact);
+        long compactSize = Files.size(withCompact);
 
         System.out.printf(
-                "[ZstdComparison] %,d rows  noZstd=%,d bytes (%.1f MB)  withZstd=%,d bytes (%.1f MB)  ratio=%.2fx%n",
-                TOTAL_ROWS, noZstdSize, noZstdSize / 1_048_576.0,
-                zstdSize, zstdSize / 1_048_576.0,
-                (double) noZstdSize / zstdSize);
+                "[CompactComparison] %,d rows  default=%,d bytes (%.1f MB)  compact=%,d bytes (%.1f MB)  ratio=%.2fx%n",
+                TOTAL_ROWS, noCompactSize, noCompactSize / 1_048_576.0,
+                compactSize, compactSize / 1_048_576.0,
+                (double) noCompactSize / compactSize);
 
-        // Then — Zstd produces a smaller file for OHLC F64 data
-        assertThat(zstdSize).isLessThan(noZstdSize);
+        // Then — compact produces a smaller file for OHLC data
+        assertThat(compactSize).isLessThan(noCompactSize);
 
-        // Then — Zstd file is readable with correct row count
+        // Then — the compact file is readable with correct row count
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
-        try (VortexReader reader = VortexReader.open(withZstd, ReadRegistry.loadAll());
+        try (VortexReader reader = VortexReader.open(withCompact, ReadRegistry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("volume")))) {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column(ColumnName.of("volume")).length()));
         }

@@ -110,6 +110,40 @@ class ImportCommandTest {
         }
 
         @Test
+        void compactFlag_givesTextToZstdAndNumbersToPco(@TempDir Path tmp) throws IOException {
+            // Given — free text, plus positions that mostly step a little but jump far now and then,
+            // the shape bit-packing pays the widest block for and Pco adapts to
+            Path csv = tmp.resolve("compact.csv");
+            StringBuilder rows = new StringBuilder("position,text\n");
+            long position = 1_000_000;
+            long state = 12345;
+            for (int i = 0; i < 20_000; i++) {
+                state = state * 6364136223846793005L + 1442695040888963407L;
+                position += i % 40 == 0 ? 50_000_000 + (state >>> 40) % 1_000 : (state >>> 40) % 500;
+                rows.append(position).append(",\"variant ").append(i % 97).append(" of gene ").append(i % 13)
+                        .append(" with clinical significance ").append((i * 31) % 211)
+                        .append(" reported by submitter ").append(i % 29).append("\"\n");
+            }
+            Files.writeString(csv, rows, StandardCharsets.UTF_8);
+            Path compact = tmp.resolve("compact.vortex");
+            Path plain = tmp.resolve("plain.vortex");
+
+            // When
+            CliTestSupport.Captured withCompact = capture(() ->
+                    ImportCommand.run(new String[]{"import", "--compact", csv.toString(), compact.toString()}));
+            CliTestSupport.Captured withoutFlag = capture(() ->
+                    ImportCommand.run(new String[]{"import", csv.toString(), plain.toString()}));
+
+            // Then — the encoding ids are spelled out in the footer's array specs; the default never uses them
+            assertThat(withCompact.status()).isEqualTo(ExitStatus.OK);
+            assertThat(withoutFlag.status()).isEqualTo(ExitStatus.OK);
+            assertThat(new String(Files.readAllBytes(compact), StandardCharsets.ISO_8859_1))
+                    .contains("vortex.pco").contains("vortex.zstd");
+            assertThat(new String(Files.readAllBytes(plain), StandardCharsets.ISO_8859_1))
+                    .doesNotContain("vortex.pco").doesNotContain("vortex.zstd");
+        }
+
+        @Test
         void csvWithExplicitOutputPath_usesIt(@TempDir Path tmp) throws IOException {
             // Given
             Path csv = tmp.resolve("in.csv");

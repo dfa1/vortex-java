@@ -48,7 +48,7 @@ class WriteOptionsTest {
         assertThat(result.compressionRatioThreshold()).isEqualTo(base.compressionRatioThreshold());
         assertThat(result.allowedCascading()).isEqualTo(base.allowedCascading());
         assertThat(result.globalDict()).isEqualTo(base.globalDict());
-        assertThat(result.enableZstd()).isEqualTo(base.enableZstd());
+        assertThat(result.compact()).isEqualTo(base.compact());
     }
 
     @Test
@@ -65,23 +65,33 @@ class WriteOptionsTest {
     }
 
     @Test
-    void withZstd_atDepthZero_rejectedBecauseCascadingIsZero() {
-        // Given — at allowedCascading == 0 Zstd could never be reached by VortexWriter (it is only
-        // added to the cascade codec list, which is only consulted when allowedCascading > 0);
-        // this must fail loudly rather than silently write plain files.
+    void withCompact_atDepthZero_rejectedBecauseCascadingIsZero() {
+        // Given — Zstd and Pco only ever compete inside the cascade, which depth 0 never runs
         WriteOptions base = WriteOptions.cascading(0);
 
         // When / Then
-        assertThatIllegalArgumentException().isThrownBy(() -> base.withZstd(true));
+        assertThatIllegalArgumentException().isThrownBy(() -> base.withCompact(true));
     }
 
     @Test
-    void cascading_withZstd_succeeds() {
+    void cascading_withCompact_setsTheFlag() {
         // Given / When
-        WriteOptions result = WriteOptions.cascading(3).withZstd(true);
+        WriteOptions result = WriteOptions.cascading(3).withCompact(true);
 
-        // Then
-        assertThat(result.enableZstd()).isTrue();
-        assertThat(result.allowedCascading()).isEqualTo(3);
+        // Then — and it stays off by default, as in Rust
+        assertThat(result.compact()).isTrue();
+        assertThat(WriteOptions.defaults().compact()).isFalse();
+    }
+
+    @Test
+    void otherWithers_keepTheCompactFlag() {
+        // Given
+        WriteOptions compact = WriteOptions.cascading(3).withCompact(true);
+
+        // When
+        WriteOptions result = compact.withZoneMaps(false).withGlobalDict(false);
+
+        // Then — a copy method that rebuilt the options without it would silently drop the preset
+        assertThat(result.compact()).isTrue();
     }
 }

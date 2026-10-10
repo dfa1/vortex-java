@@ -44,6 +44,7 @@ import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.OnPairEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
@@ -117,8 +118,8 @@ public final class VortexWriter implements Closeable {
             new DictEncodingEncoder(), new VarBinEncodingEncoder(), new ExtEncodingEncoder(),
             new FixedSizeListEncodingEncoder(), new ListEncodingEncoder(), new DecimalEncodingEncoder());
 
-    // Base cascade codec list — no Zstd. Zstd is appended (before PrimitiveEncoding) when
-    // WriteOptions.enableZstd() is true. See WriteOptions.withZstd(boolean) for the tradeoff.
+    // Base cascade codec list — no Zstd or Pco. They are appended (before PrimitiveEncoding) when
+    // WriteOptions.compact() is true. See WriteOptions.withCompact(boolean) for the tradeoff.
 
     private final WritableByteChannel channel;
     private final DType.Struct schema;
@@ -353,8 +354,10 @@ public final class VortexWriter implements Closeable {
         }
         codecs.add(new FsstEncodingEncoder());
         codecs.add(new VarBinEncodingEncoder());
-        if (options.enableZstd()) {
-            codecs.add(new ZstdEncodingEncoder());
+        if (options.compact()) {
+            // Rust's with_compact(): Zstd for strings and binary, Pco for numerics.
+            codecs.add(ZstdEncodingEncoder.forText());
+            codecs.add(new PcoEncodingEncoder());
         }
         codecs.add(new PrimitiveEncodingEncoder());
         codecs.add(new BoolEncodingEncoder());
