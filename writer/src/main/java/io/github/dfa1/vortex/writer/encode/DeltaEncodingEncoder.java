@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
-import io.github.dfa1.vortex.core.simd.VectorSupport;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -139,7 +139,7 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
             int basesOff = chunk * lanes;
             System.arraycopy(transposed, 0, basesAll, basesOff, lanes);
             System.arraycopy(basesAll, basesOff, chunkBases, 0, lanes);
-            VectorSupport.operations().deltaChunk(transposed, chunkBases, lanes, typeBits, mask, chunkDelta);
+            SimdOperationsSupport.preferred().deltaChunk(transposed, chunkBases, lanes, typeBits, mask, chunkDelta);
             System.arraycopy(chunkDelta, 0, deltasAll, chunk * FastLanes.CHUNK, FastLanes.CHUNK);
         }
 

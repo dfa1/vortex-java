@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
-import io.github.dfa1.vortex.core.simd.VectorSupport;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
@@ -107,7 +107,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         for (long chunk = firstChunk; chunk <= lastChunk; chunk++) {
             readElements(basesSeg, ptype, basesCap, chunk * lanes, lanes, chunkBases);
             readElements(deltasSeg, ptype, deltasCap, chunk * FastLanes.CHUNK, FastLanes.CHUNK, chunkDeltas);
-            VectorSupport.operations().undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
+            SimdOperationsSupport.preferred().undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
             scatterChunk(out, ptype, chunkUndelta, chunk * FastLanes.CHUNK - offset, rowCount);
         }
         // A nullable column carries its validity as an optional third child, not under a

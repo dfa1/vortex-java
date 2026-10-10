@@ -5,11 +5,11 @@ import io.github.dfa1.vortex.core.model.PType;
 import java.lang.foreign.MemorySegment;
 
 /// The vectorizable kernels shared by the reader and the writer: the tight loops where a SIMD
-/// implementation can replace the scalar one without changing a single output byte.
+/// implementation can replace the auto-vectorized one without changing a single output byte.
 ///
-/// [ScalarOperations] holds the plain loops, written to the hot-loop rule so C2 can auto-vectorize
+/// [AutoVectorizedSimdOperations] holds the plain loops, written to the hot-loop rule so C2 can auto-vectorize
 /// them. It is always complete, so correctness never depends on which implementation
-/// [VectorSupport#operations()] returns. Callers validate arguments and attribute errors; kernels
+/// [SimdOperationsSupport#preferred()] returns. Callers validate arguments and attribute errors; kernels
 /// assume well-formed input and throw only [IllegalArgumentException] for a `ptype` they do not cover.
 public interface SimdOperations {
 
