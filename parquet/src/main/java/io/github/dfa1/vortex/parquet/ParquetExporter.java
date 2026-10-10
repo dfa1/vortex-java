@@ -24,6 +24,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -32,15 +33,18 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 /// Reads a Vortex file and writes a Parquet file.
 ///
-/// Supports flat schemas only: every top-level column must be `Bool`, a non-`F16` `Primitive`,
+/// Supports flat schemas only: every top-level column must be `Bool`, a `Primitive`,
 /// `Utf8`, `Binary`, or a `vortex.timestamp` extension over millisecond/microsecond/nanosecond
-/// resolution. `Struct`, `List`, `Map`, `F16`, and any extension other than `vortex.timestamp`
+/// resolution. `Struct`, `List`, `Map`, and any extension other than `vortex.timestamp`
 /// throw [UnsupportedOperationException] — the inverse direction ([ParquetImporter]) supports
 /// nested `LIST`/`STRUCT`; export does not yet.
 ///
@@ -49,7 +53,7 @@ import java.util.List;
 /// - I8/U8, I16/U16 → INT32 (IntType 8/16, signed or unsigned)
 /// - I32 → INT32 (no annotation), U32 → INT32 (IntType 32, unsigned)
 /// - I64 → INT64 (no annotation), U64 → INT64 (IntType 64, unsigned)
-/// - F32 → FLOAT, F64 → DOUBLE
+/// - F32 → FLOAT, F64 → DOUBLE, F16 → FIXED_LEN_BYTE_ARRAY(2) (FLOAT16)
 /// - Utf8 → BYTE_ARRAY (STRING), Binary → BYTE_ARRAY (no annotation)
 /// - `vortex.timestamp` → INT64 (TIMESTAMP, `isAdjustedToUTC` set from whether the column
 ///   carries a timezone)
@@ -169,8 +173,8 @@ public final class ParquetExporter {
             case U64 -> builder.addColumn(name, PhysicalType.INT64, rep, new LogicalType.IntType(64, false));
             case F32 -> builder.addColumn(name, PhysicalType.FLOAT, rep);
             case F64 -> builder.addColumn(name, PhysicalType.DOUBLE, rep);
-            case F16 -> throw new UnsupportedOperationException(
-                    "F16 columns are not supported for Parquet export (column: " + name + ")");
+            // Parquet's FLOAT16 is a 2-byte FIXED_LEN_BYTE_ARRAY holding the little-endian half
+            case F16 -> builder.addColumn(name, PhysicalType.FIXED_LEN_BYTE_ARRAY, rep, 2, new LogicalType.Float16Type());
         }
     }
 
@@ -254,7 +258,14 @@ public final class ParquetExporter {
                     batch.doubles(idx, values, nulls);
                 }
             }
-            case F16 -> throw new UnsupportedOperationException("F16 columns are not supported for Parquet export");
+            case F16 -> {
+                byte[][] values = readHalves((Float16Array) target, rowCount);
+                if (nulls == null) {
+                    batch.fixed(idx, values);
+                } else {
+                    batch.fixed(idx, values, nulls);
+                }
+            }
         }
     }
 
@@ -318,6 +329,19 @@ public final class ParquetExporter {
         long[] values = new long[rowCount];
         for (int i = 0; i < rowCount; i++) {
             values[i] = arr.getLong(i);
+        }
+        return values;
+    }
+
+    /// One 2-byte little-endian entry per row, copied from the half's raw bits so a NaN payload or
+    /// `-0.0` is written as it is held, not rounded through `float`.
+    private static byte[][] readHalves(Float16Array arr, int rowCount) {
+        byte[][] values = new byte[rowCount][];
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment bits = arr.materialize(arena);
+            for (int i = 0; i < rowCount; i++) {
+                values[i] = new byte[]{bits.get(ValueLayout.JAVA_BYTE, i * 2L), bits.get(ValueLayout.JAVA_BYTE, i * 2L + 1)};
+            }
         }
         return values;
     }

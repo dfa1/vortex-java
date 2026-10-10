@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Parquet import and export handle `F16` columns, as Parquet's `FLOAT16` (a 2-byte `FIXED_LEN_BYTE_ARRAY`); nested `F16` in a list or struct is still unsupported. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - `vortex import --compact` and `WriteOptions#withCompact` follow Rust's compact preset: Zstandard for text and Pco for numbers compete in the cascade, e.g. a 4.6M-row ClinVar summary 392 → 251 MB. ([#510](https://github.com/dfa1/vortex-java/pull/510))
 - Every `vortex` subcommand takes `--timing`, which prints the elapsed time to stderr without counting the JVM's start-up. ([#507](https://github.com/dfa1/vortex-java/issues/507))
 - `vortex select` takes `--where "<expr>"` (repeatable) to print only some columns of the rows that match, e.g. one price column over a time interval. ([#507](https://github.com/dfa1/vortex-java/issues/507))

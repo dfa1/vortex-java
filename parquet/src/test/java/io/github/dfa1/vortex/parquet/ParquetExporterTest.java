@@ -7,6 +7,7 @@ import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.FileSchema;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
@@ -19,6 +20,7 @@ import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -31,6 +33,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -131,12 +135,15 @@ class ParquetExporterTest {
         }
 
         @Test
-        void f16_throws() {
-            // Given — mirrors ParquetImporter, which never produces F16 either
-            DType f16 = new DType.Primitive(PType.F16, false);
+        void f16_mapsToTwoByteFixedLenByteArray_withFloat16Annotation() {
+            // When
+            var column = schemaOf("h", new DType.Primitive(PType.F16, true)).getColumn(0);
 
-            // When / Then
-            assertThatThrownBy(() -> schemaOf("f", f16)).isInstanceOf(UnsupportedOperationException.class);
+            // Then Parquet's FLOAT16 is a 2-byte FIXED_LEN_BYTE_ARRAY
+            assertThat(column.type()).isEqualTo(PhysicalType.FIXED_LEN_BYTE_ARRAY);
+            assertThat(column.typeLength()).isEqualTo(2);
+            assertThat(column.logicalType()).isEqualTo(new LogicalType.Float16Type());
+            assertThat(column.repetitionType()).isEqualTo(RepetitionType.OPTIONAL);
         }
 
         @Test
@@ -432,6 +439,50 @@ class ParquetExporterTest {
                     assertThat(bigCount.getInt(0)).isZero();
                     assertThat(bigCount.getInt(1)).isEqualTo(-1);
                     assertThat(bigCount.getInt(2)).isEqualTo(12345);
+                }
+            }
+        }
+
+        @Test
+        void float16Column_roundTripsEveryHalfBitThroughParquetAndBack(@TempDir Path tmp) throws Exception {
+            // Given a non-null and a nullable F16 column: 1.5, -0.0, a NaN payload and +Inf, whose
+            // bits a trip through float would change (the NaN payload, the sign of zero)
+            short[] bits = {(short) 0x3E00, (short) 0x8000, (short) 0x7C01, (short) 0x7C00};
+            Path original = writeVortex(tmp, "f16.vortex",
+                    List.of(ColumnName.of("h"), ColumnName.of("n")),
+                    List.of(new DType.Primitive(PType.F16, false), new DType.Primitive(PType.F16, true)),
+                    Map.of(
+                            ColumnName.of("h"), bits,
+                            ColumnName.of("n"), new Short[]{bits[0], null, bits[2], bits[3]}));
+            Path parquet = tmp.resolve("f16.parquet");
+            Path reimported = tmp.resolve("f16-reimported.vortex");
+
+            // When
+            ParquetExporter.exportParquet(original, parquet);
+            ParquetImporter.importParquet(parquet, reimported);
+
+            // Then
+            try (VortexReader reader = VortexReader.open(reimported);
+                 ScanIterator iter = reader.scan(ScanOptions.all());
+                 Arena arena = Arena.ofConfined()) {
+                assertThat(reader.dtype()).isEqualTo(new DType.Struct(
+                        List.of(ColumnName.of("h"), ColumnName.of("n")),
+                        List.of(new DType.Primitive(PType.F16, false), new DType.Primitive(PType.F16, true)), false));
+                assertThat(iter.hasNext()).isTrue();
+                try (Chunk chunk = iter.next()) {
+                    Float16Array plain = chunk.column(ColumnName.of("h"));
+                    MemorySegment plainBits = plain.materialize(arena);
+                    MaskedArray nullable = chunk.column(ColumnName.of("n"));
+                    MemorySegment nullableBits = ((Float16Array) nullable.inner()).materialize(arena);
+                    for (int i = 0; i < bits.length; i++) {
+                        assertThat(plainBits.getAtIndex(VortexFormat.LE_SHORT, i)).as("h row %d", i).isEqualTo(bits[i]);
+                    }
+                    assertThat(nullable.isValid(0)).isTrue();
+                    assertThat(nullable.isValid(1)).isFalse();
+                    for (int i : new int[]{0, 2, 3}) {
+                        assertThat(nullable.isValid(i)).isTrue();
+                        assertThat(nullableBits.getAtIndex(VortexFormat.LE_SHORT, i)).as("n row %d", i).isEqualTo(bits[i]);
+                    }
                 }
             }
         }
