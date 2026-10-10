@@ -14,12 +14,12 @@ import java.util.Arrays;
 final class LeBitWriter {
 
     private static final VarHandle LE_LONG = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
-    private static final VarHandle LE_INT = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
+    // Widest write that fits the accumulator next to up to 7 pending bits.
+    private static final int MAX_SHORT_BITS = 56;
 
     private byte[] buffer;
     private int bytePos;
-    // Pending bits, LSB first: always fewer than 32 between calls, so one more write of up to 64 bits fits
-    // the accumulator or spills at most 31 bits into the next one.
+    // Pending bits of the byte at bytePos, LSB first: always fewer than 8 between calls.
     private long pending;
     private int pendingBits;
 
@@ -32,38 +32,85 @@ final class LeBitWriter {
     /// @param value source bits; only the low `n` bits are written
     /// @param n     bit count, 0..64 inclusive
     void writeBits(long value, int n) {
-        if (n == 0) {
-            return;
+        if (n > MAX_SHORT_BITS) {
+            writeShortBits(value, 32);
+            writeShortBits(value >>> 32, n - 32);
+        } else {
+            writeShortBits(value, n);
         }
-        long bits = n < 64 ? value & ((1L << n) - 1) : value;
-        pending |= bits << pendingBits;
+    }
+
+    // Branch-free: the bit widths of ANS states and offsets are data-dependent, so a flush branch
+    // mispredicts. Stores the whole accumulator every time (bytes past the pending bits are zeros
+    // over not-yet-written bytes) and keeps only the partial byte.
+    private void writeShortBits(long value, int n) {
+        ensureCapacity(8);
+        pending |= (value & ((1L << n) - 1)) << pendingBits;
+        LE_LONG.set(buffer, bytePos, pending);
         int total = pendingBits + n;
-        if (total >= 64) {
-            ensureCapacity(8);
-            LE_LONG.set(buffer, bytePos, pending);
-            bytePos += 8;
-            // pendingBits is 0 only when n is 64, which leaves nothing over
-            pending = pendingBits == 0 ? 0 : bits >>> (64 - pendingBits);
-            total -= 64;
-        } else if (total >= 32) {
-            ensureCapacity(4);
-            LE_INT.set(buffer, bytePos, (int) pending);
-            bytePos += 4;
-            pending >>>= 32;
-            total -= 32;
+        bytePos += total >>> 3;
+        pending >>>= total & ~7;
+        pendingBits = total & 7;
+    }
+
+    /// Write `values[i]` in `widths[i]` bits for each `i` in `[from, to)`, as [#writeBits(long, int)]
+    /// would one by one.
+    ///
+    /// The writer state lives in locals for the whole run (Rust's `write_short_uints` does the same):
+    /// kept in fields, each write reloaded what the previous one had just stored, a store-to-load
+    /// forward on the loop-carried path.
+    ///
+    /// @param values source bits; only the low `widths[i]` bits of each are written
+    /// @param widths bit count per value, 0..64 inclusive
+    /// @param from   first index, inclusive
+    /// @param to     last index, exclusive
+    void writeBits(long[] values, int[] widths, int from, int to) {
+        ensureCapacity((to - from) * 8 + 8);
+        byte[] buf = buffer;
+        long acc = pending;
+        int accBits = pendingBits;
+        int pos = bytePos;
+        for (int i = from; i < to; i++) {
+            long value = values[i];
+            int n = widths[i];
+            if (n > MAX_SHORT_BITS) {
+                acc |= (value & 0xFFFF_FFFFL) << accBits;
+                LE_LONG.set(buf, pos, acc);
+                int total = accBits + 32;
+                pos += total >>> 3;
+                acc >>>= total & ~7;
+                accBits = total & 7;
+                value >>>= 32;
+                n -= 32;
+            }
+            acc |= (value & ((1L << n) - 1)) << accBits;
+            LE_LONG.set(buf, pos, acc);
+            int total = accBits + n;
+            pos += total >>> 3;
+            acc >>>= total & ~7;
+            accBits = total & 7;
         }
-        pendingBits = total;
+        pending = acc;
+        pendingBits = accBits;
+        bytePos = pos;
+    }
+
+    /// Forget everything written, keeping the buffer: bytes are overwritten, never OR-ed, so stale
+    /// bytes past the write position never leak into later output.
+    void reset() {
+        bytePos = 0;
+        pending = 0;
+        pendingBits = 0;
     }
 
     /// Pad with zero bits to the next byte boundary.
     void alignToByte() {
-        int bytes = (pendingBits + 7) >>> 3;
-        ensureCapacity(bytes);
-        for (int i = 0; i < bytes; i++) {
-            buffer[bytePos++] = (byte) (pending >>> (8 * i));
+        if (pendingBits > 0) {
+            // the partial byte is already in the buffer, stored by the write that left it pending
+            bytePos++;
+            pending = 0;
+            pendingBits = 0;
         }
-        pending = 0;
-        pendingBits = 0;
     }
 
     /// Copy buffered bytes into an arena-allocated [MemorySegment].
