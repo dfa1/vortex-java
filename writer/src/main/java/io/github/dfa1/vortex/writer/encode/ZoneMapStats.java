@@ -2,7 +2,9 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -113,17 +115,8 @@ final class ZoneMapStats {
         if (values.length == 0) {
             return null;
         }
-        long min = values[0];
-        long max = values[0];
-        for (long v : values) {
-            if (v < min) {
-                min = v;
-            }
-            if (v > max) {
-                max = v;
-            }
-        }
-        return new byte[][]{decimalScalar(min), decimalScalar(max)};
+        long[] minMax = SimdOperationsSupport.preferred().minMax(values, PType.I64);
+        return new byte[][]{decimalScalar(minMax[0]), decimalScalar(minMax[1])};
     }
 
     /// Compares two equal-width little-endian two's-complement values in place: the most

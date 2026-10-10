@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -334,7 +335,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
             EncodeNode valNode;
             int valOffset = allBuffers.size();
-            if (allEqual(excValsArr)) {
+            if (SimdOperationsSupport.preferred().allEqual(excValsArr, PType.I16)) {
                 EncodeResult constant = new ConstantEncodingEncoder().encode(DType.U16, excValsArr, ctx);
                 allBuffers.addAll(constant.encodedBuffers());
                 valNode = EncodeNode.remapBufferIndices(constant.rootNode(), valOffset);
@@ -363,15 +364,6 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         EncodeNode root = new EncodeNode(
             EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(metaBytes), children, new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), statsMin, statsMax);
-    }
-
-    private static boolean allEqual(short[] values) {
-        for (short value : values) {
-            if (value != values[0]) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static byte[] scalarF64(double v) {

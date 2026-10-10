@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -157,11 +158,7 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
         int n = values.length;
         // Rust skips on stats before sampling; ours carry no minimum, so find it with a read-only
         // scan before allocating anything — the common all-non-negative column stops here
-        long min = 0L;
-        for (long v : values) {
-            min = Math.min(min, v);
-        }
-        if (min >= 0L) {
+        if (n == 0 || SimdOperationsSupport.preferred().minMax(values, PType.I64)[0] >= 0L) {
             return CascadeStep.notApplicable();
         }
         long[] encoded = new long[n];

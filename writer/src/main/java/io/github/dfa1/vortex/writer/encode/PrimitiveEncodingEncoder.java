@@ -5,8 +5,12 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.simd.SimdOperations;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.reflect.Array;
+import java.util.OptionalLong;
 
 /// Write-only encoder for `vortex.primitive` — raw little-endian primitive arrays.
 public final class PrimitiveEncodingEncoder implements EncodingEncoder {
@@ -47,196 +51,23 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     /// @param data  the raw primitive array (e.g. `long[]`, `int[]`, `String`-free)
     /// @return a two-element `{min, max}` array of encoded scalars, or `null` if `data` is empty
     public static byte[][] minMaxStats(PType ptype, Object data) {
+        if (Array.getLength(data) == 0) {
+            return null;
+        }
+        // Floating-point arrays skip NaN, so an all-NaN one has no min/max: the kernel returns nothing
+        long[] minMax = SimdOperationsSupport.preferred().minMax(data, ptype);
+        if (minMax.length == 0) {
+            return null;
+        }
         return switch (ptype) {
-            case I8 -> {
-                byte[] arr = (byte[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = arr[0];
-                long max = arr[0];
-                for (byte v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarI64(min), scalarI64(max)};
-            }
-            case I16 -> {
-                short[] arr = (short[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = arr[0];
-                long max = arr[0];
-                for (short v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarI64(min), scalarI64(max)};
-            }
-            case I32 -> {
-                int[] arr = (int[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = arr[0];
-                long max = arr[0];
-                for (int v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarI64(min), scalarI64(max)};
-            }
-            case I64 -> {
-                long[] arr = (long[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = arr[0];
-                long max = arr[0];
-                for (long v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarI64(min), scalarI64(max)};
-            }
-            case U8 -> {
-                byte[] arr = (byte[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = Byte.toUnsignedInt(arr[0]);
-                long max = Byte.toUnsignedInt(arr[0]);
-                for (byte v : arr) {
-                    long uv = Byte.toUnsignedInt(v);
-                    if (uv < min) {
-                        min = uv;
-                    }
-                    if (uv > max) {
-                        max = uv;
-                    }
-                }
-                yield new byte[][]{scalarU64(min), scalarU64(max)};
-            }
-            case U16 -> {
-                short[] arr = (short[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = Short.toUnsignedInt(arr[0]);
-                long max = Short.toUnsignedInt(arr[0]);
-                for (short v : arr) {
-                    long uv = Short.toUnsignedInt(v);
-                    if (uv < min) {
-                        min = uv;
-                    }
-                    if (uv > max) {
-                        max = uv;
-                    }
-                }
-                yield new byte[][]{scalarU64(min), scalarU64(max)};
-            }
-            case U32 -> {
-                int[] arr = (int[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = Integer.toUnsignedLong(arr[0]);
-                long max = Integer.toUnsignedLong(arr[0]);
-                for (int v : arr) {
-                    long uv = Integer.toUnsignedLong(v);
-                    if (uv < min) {
-                        min = uv;
-                    }
-                    if (uv > max) {
-                        max = uv;
-                    }
-                }
-                yield new byte[][]{scalarU64(min), scalarU64(max)};
-            }
-            case U64 -> {
-                long[] arr = (long[]) data;
-                if (arr.length == 0) {
-                    yield null;
-                }
-                long min = arr[0];
-                long max = arr[0];
-                for (long v : arr) {
-                    if (Long.compareUnsigned(v, min) < 0) {
-                        min = v;
-                    }
-                    if (Long.compareUnsigned(v, max) > 0) {
-                        max = v;
-                    }
-                }
-                yield new byte[][]{scalarU64(min), scalarU64(max)};
-            }
-            case F32 -> {
-                float[] arr = (float[]) data;
-                // NaN-skipping, as Rust's min/max (skip_nans): every comparison with NaN is false, so
-                // starting from the infinities skips NaN without a per-element branch; an all-NaN
-                // (or empty) array ends with min > max and has no min/max.
-                float min = Float.POSITIVE_INFINITY;
-                float max = Float.NEGATIVE_INFINITY;
-                for (float v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield min > max ? null : new byte[][]{scalarF32(min), scalarF32(max)};
-            }
-            case F64 -> {
-                double[] arr = (double[]) data;
-                // NaN-skipping, as Rust's min/max (skip_nans): every comparison with NaN is false, so
-                // starting from the infinities skips NaN without a per-element branch; an all-NaN
-                // (or empty) array ends with min > max and has no min/max.
-                double min = Double.POSITIVE_INFINITY;
-                double max = Double.NEGATIVE_INFINITY;
-                for (double v : arr) {
-                    if (v < min) {
-                        min = v;
-                    }
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-                yield min > max ? null : new byte[][]{scalarF64(min), scalarF64(max)};
-            }
-            case F16 -> {
-                short[] arr = (short[]) data;
-                // NaN-skipping like F32/F64 above.
-                float min = Float.POSITIVE_INFINITY;
-                float max = Float.NEGATIVE_INFINITY;
-                for (short v : arr) {
-                    float fv = Float.float16ToFloat(v);
-                    if (fv < min) {
-                        min = fv;
-                    }
-                    if (fv > max) {
-                        max = fv;
-                    }
-                }
-                yield min > max ? null : new byte[][]{scalarF16(min), scalarF16(max)};
-            }
+            case I8, I16, I32, I64 -> new byte[][]{scalarI64(minMax[0]), scalarI64(minMax[1])};
+            case U8, U16, U32, U64 -> new byte[][]{scalarU64(minMax[0]), scalarU64(minMax[1])};
+            case F16 -> new byte[][]{scalarF16(Float.float16ToFloat((short) minMax[0])),
+                    scalarF16(Float.float16ToFloat((short) minMax[1]))};
+            case F32 -> new byte[][]{scalarF32(Float.intBitsToFloat((int) minMax[0])),
+                    scalarF32(Float.intBitsToFloat((int) minMax[1]))};
+            case F64 -> new byte[][]{scalarF64(Double.longBitsToDouble(minMax[0])),
+                    scalarF64(Double.longBitsToDouble(minMax[1]))};
         };
     }
 
@@ -270,136 +101,20 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     /// @param data  the raw primitive array
     /// @return the encoded sum scalar, or `null` on overflow or empty input
     public static byte[] sumStat(PType ptype, Object data) {
+        if (Array.getLength(data) == 0) {
+            return null;
+        }
+        SimdOperations ops = SimdOperationsSupport.preferred();
         return switch (ptype) {
-            case I8 -> {
-                byte[] a = (byte[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (byte v : a) {
-                    s += v;
-                }
-                yield scalarI64(s);
+            case I8, I16, I32, I64 -> {
+                OptionalLong sum = ops.sum(data, ptype);
+                yield sum.isEmpty() ? null : scalarI64(sum.getAsLong());
             }
-            case I16 -> {
-                short[] a = (short[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (short v : a) {
-                    s += v;
-                }
-                yield scalarI64(s);
+            case U8, U16, U32, U64 -> {
+                OptionalLong sum = ops.sum(data, ptype);
+                yield sum.isEmpty() ? null : scalarU64(sum.getAsLong());
             }
-            case I32 -> {
-                int[] a = (int[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (int v : a) {
-                    s += v;
-                }
-                yield scalarI64(s);
-            }
-            case I64 -> {
-                long[] a = (long[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (long v : a) {
-                    try {
-                        s = Math.addExact(s, v);
-                    } catch (ArithmeticException _) {
-                        yield null;
-                    }
-                }
-                yield scalarI64(s);
-            }
-            case U8 -> {
-                byte[] a = (byte[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (byte v : a) {
-                    s += Byte.toUnsignedLong(v);
-                }
-                yield scalarU64(s);
-            }
-            case U16 -> {
-                short[] a = (short[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (short v : a) {
-                    s += Short.toUnsignedLong(v);
-                }
-                yield scalarU64(s);
-            }
-            case U32 -> {
-                int[] a = (int[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (int v : a) {
-                    s += Integer.toUnsignedLong(v);
-                }
-                yield scalarU64(s);
-            }
-            case U64 -> {
-                long[] a = (long[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                long s = 0;
-                for (long v : a) {
-                    long next = s + v;
-                    if (Long.compareUnsigned(next, s) < 0) {
-                        yield null;
-                    }
-                    s = next;
-                }
-                yield scalarU64(s);
-            }
-            case F32 -> {
-                float[] a = (float[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                double s = 0;
-                for (float v : a) {
-                    s += v;
-                }
-                yield scalarF64(s);
-            }
-            case F64 -> {
-                double[] a = (double[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                double s = 0;
-                for (double v : a) {
-                    s += v;
-                }
-                yield scalarF64(s);
-            }
-            case F16 -> {
-                short[] a = (short[]) data;
-                if (a.length == 0) {
-                    yield null;
-                }
-                double s = 0;
-                for (short v : a) {
-                    s += Float.float16ToFloat(v);
-                }
-                yield scalarF64(s);
-            }
+            case F16, F32, F64 -> scalarF64(ops.sumFloating(data, ptype));
         };
     }
 
