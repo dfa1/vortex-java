@@ -148,7 +148,9 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         return switch (type) {
             case DType.Primitive p -> switch (p.ptype()) {
                 case F64 -> ((DoubleArray) array).getDouble(r);
-                case F32 -> (double) ((FloatArray) array).getFloat(r);
+                // REAL is a java.lang.Float to Calcite's generated code: a Double here made every SQL
+                // query that read an F32 column fail with a ClassCastException
+                case F32 -> ((FloatArray) array).getFloat(r);
                 case I64 -> ((LongArray) array).getLong(r);
                 // U64 maps to signed BIGINT (no wider SQL integer exists): values with the high bit
                 // set have no signed-long representation, so fail loud rather than surface a

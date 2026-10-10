@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `WriteOptions` is a final class instead of a record. ([#474](https://github.com/dfa1/vortex-java/issues/474))
 
 ### Fixed
+- A SQL query that reads an `F32` column through the Calcite adapter works; it failed with a `ClassCastException` (`Double` cannot be cast to `Float`). ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - `vortex filter` works on `F16` columns, and `vortex view`/`tui` show their values instead of `<MaterializedFloat16Array>`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - CSV export writes `F16` columns; it failed with `unsupported array type for CSV export`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
 - A chunked `F16` column decodes; it failed with `unsupported ptype for chunked layout: F16`. ([#515](https://github.com/dfa1/vortex-java/issues/515))
