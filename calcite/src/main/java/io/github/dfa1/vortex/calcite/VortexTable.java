@@ -729,12 +729,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         RelDataType sql = switch (type) {
             case DType.Primitive p -> switch (p.ptype()) {
                 case F64 -> factory.createSqlType(SqlTypeName.DOUBLE);
-                case F32 -> factory.createSqlType(SqlTypeName.REAL);
+                // SQL has no half-precision type: an F16 widens exactly into REAL, like F32
+                case F32, F16 -> factory.createSqlType(SqlTypeName.REAL);
                 case I64, U64, U32 -> factory.createSqlType(SqlTypeName.BIGINT);
                 case I32, U16 -> factory.createSqlType(SqlTypeName.INTEGER);
                 case I16, U8 -> factory.createSqlType(SqlTypeName.SMALLINT);
                 case I8 -> factory.createSqlType(SqlTypeName.TINYINT);
-                default -> throw new IllegalStateException("unsupported ptype: " + p.ptype());
             };
             case DType.Utf8 _ -> factory.createSqlType(SqlTypeName.VARCHAR);
             case DType.Bool _ -> factory.createSqlType(SqlTypeName.BOOLEAN);

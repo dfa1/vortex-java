@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -148,6 +149,12 @@ public final class VortexAggregates {
                             }
                         }
                         case FloatArray a -> {
+                            isFloating = true;
+                            for (long i = 0; i < n; i++) {
+                                doubleSum += a.getFloat(i);
+                            }
+                        }
+                        case Float16Array a -> {
                             isFloating = true;
                             for (long i = 0; i < n; i++) {
                                 doubleSum += a.getFloat(i);
