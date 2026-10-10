@@ -121,7 +121,7 @@ class VortexAdapterCoverageTest {
         assertThat(r0[2]).isEqualTo(100);        // i32 -> Integer
         assertThat(r0[3]).isEqualTo(1000L);      // i64 -> Long
         assertThat(r0[7]).isEqualTo(4000L);      // u64 -> Long
-        assertThat(r0[8]).isEqualTo(1.5);        // f32 -> Double
+        assertThat(r0[8]).isEqualTo(1.5f);       // f32 -> Float, as its REAL type needs
         assertThat(r0[9]).isEqualTo(1.25);       // f64 -> Double
         assertThat(r0[10]).isEqualTo("a");       // s   -> String
         assertThat(r0[11]).isEqualTo(true);      // b   -> Boolean
