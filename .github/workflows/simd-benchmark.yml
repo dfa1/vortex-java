@@ -1,15 +1,16 @@
 name: SIMD benchmark
 
-# Informational, never a gate: single-fork JMH numbers on shared runners are noisy. It exists to put the
+# Informational, never a gate: numbers from shared runners are noisy, so it runs 3 forks and the table says
+# which rows are within JMH's confidence interval of a tie. It exists to put the
 # Vector API kernels next to the auto-vectorized ones on more than one architecture (ADR 0005 asks for
 # two), as a table in the job summary. Runs on demand and when the SIMD code or this workflow changes.
 on:
   workflow_dispatch:
     inputs:
       forks:
-        description: 'JMH forks per benchmark (3 for numbers worth recording)'
+        description: 'JMH forks per benchmark'
         required: false
-        default: '1'
+        default: '3'
   pull_request:
     branches: [ main ]
     paths:
@@ -24,7 +25,7 @@ permissions:
 jobs:
   benchmark:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     strategy:
       fail-fast: false
@@ -64,7 +65,7 @@ jobs:
 
       - name: Run the benchmarks
         env:
-          FORKS: ${{ inputs.forks || '1' }}
+          FORKS: ${{ inputs.forks || '3' }}
         run: |
           scripts/simd-benchmark.sh performance/target/simd-benchmark > table.md
           { echo; cat table.md; } >> "$GITHUB_STEP_SUMMARY"
