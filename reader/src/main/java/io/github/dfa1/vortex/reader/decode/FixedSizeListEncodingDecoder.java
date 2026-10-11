@@ -3,7 +3,9 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
 /// Read-only decoder for `vortex.fixed_size_list`.
@@ -37,6 +39,17 @@ public final class FixedSizeListEncodingDecoder implements EncodingDecoder {
                 ctx.segmentBuffers(), ctx.registry(), ctx.arena());
         Array elements = ctx.registry().decode(elemCtx);
 
-        return new FixedSizeListArray(fsl, outerLen, elements);
+        // A nullable list carries its validity as a second child, not under a vortex.masked
+        // wrapper. Ignoring it turned every null row into a list of zeros. As for vortex.list, the
+        // declared nullability is authoritative: a second child under a non-nullable dtype is not
+        // consulted.
+        if (nchildren == 1 || !fsl.nullable()) {
+            return new FixedSizeListArray(fsl, outerLen, elements);
+        }
+        Array validityArray = ctx.decodeChild(1, DType.BOOL, outerLen);
+        BoolArray validity = MaskedArray.requireBoolArray(validityArray, EncodingId.VORTEX_FIXED_SIZE_LIST,
+                "validity child");
+        DType.FixedSizeList innerDtype = (DType.FixedSizeList) fsl.withNullable(false);
+        return new MaskedArray(new FixedSizeListArray(innerDtype, outerLen, elements), validity);
     }
 }
