@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Nested;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -197,5 +198,48 @@ class VarBinViewEncodingDecoderTest {
         long off = (long) row * 16;
         views.set(VortexFormat.LE_INT, off, bytes.length);
         MemorySegment.copy(MemorySegment.ofArray(bytes), 0, views, off + 4, bytes.length);
+    }
+
+    /// Rust's VarBinView takes `[validity?]` as its only child. The decoder used to ignore it, so
+    /// every null row of a Rust-written nullable column read back as an empty value.
+    @Test
+    void decode_validityChild_masksNullRows() {
+        // Given "a", null, "c": three inline views, validity bits 0b101
+        Arena arena = Arena.ofAuto();
+        MemorySegment views = arena.allocate(3 * 16);
+        writeInlineView(views, 0, "a".getBytes(StandardCharsets.UTF_8));
+        writeInlineView(views, 1, new byte[0]);
+        writeInlineView(views, 2, "c".getBytes(StandardCharsets.UTF_8));
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[]{validityNode}, new int[]{0});
+        DecodeContext ctx = new DecodeContext(node, new DType.Utf8(true), 3,
+                new MemorySegment[]{views, MemorySegment.ofArray(new byte[]{0b101})},
+                TestRegistry.ofDecoders(SUT, new BoolEncodingDecoder()), arena);
+
+        // When
+        Array result = SUT.decode(ctx);
+
+        // Then
+        MaskedArray masked = (MaskedArray) result;
+        assertThat(masked.isValid(0)).isTrue();
+        assertThat(masked.isValid(1)).isFalse();
+        assertThat(((VarBinArray) masked.inner()).getString(2)).isEqualTo("c");
+    }
+
+    @Test
+    void decode_twoChildren_throws() {
+        // Given Rust accepts only [] or [validity]
+        Arena arena = Arena.ofAuto();
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null,
+                new ArrayNode[]{validityNode, validityNode}, new int[]{0});
+        DecodeContext ctx = new DecodeContext(node, new DType.Utf8(true), 1,
+                new MemorySegment[]{arena.allocate(16), MemorySegment.ofArray(new byte[]{1})},
+                TestRegistry.ofDecoders(SUT, new BoolEncodingDecoder()), arena);
+
+        // When / Then
+        assertThatThrownBy(() -> SUT.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("expected 0 or 1 children, got 2");
     }
 }
