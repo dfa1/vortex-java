@@ -308,12 +308,12 @@ class AggregateWhereCleanPartitionTest {
     }
 
     @Test
-    void nanRowNeverMatchesAFloatingWhereFilterEvenAfterAbandoningToScan() throws Exception {
+    void nanRowSortsAboveEveryValueInAFloatingWhereFilterEvenAfterAbandoningToScan() throws Exception {
         // Given a NaN price alongside ordinary values that would all otherwise satisfy the filter
         // below. A mix like this makes every zone at best a BOUNDARY under the floating column's
         // classify (never IN), so the fold abandons to a full scan — this test proves that scan
-        // path (VortexEnumerator -> Compute#matches -> PredicateEvaluator) is NaN-correct too, not
-        // just the fold's own classify.
+        // path (VortexEnumerator -> Compute#matches -> PredicateEvaluator) orders NaN as the maximum
+        // (Rust's total order, #518) too, not just the fold's own classify.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("price"), ColumnName.of("vol")),
                 List.of(new DType.Primitive(PType.F64, false), new DType.Primitive(PType.I64, false)),
@@ -328,13 +328,13 @@ class AggregateWhereCleanPartitionTest {
         }
 
         try (Connection conn = connect(f)) {
-            // When summing vol over rows where price >= 0 — every ordinary row matches, the NaN
-            // row must not
+            // When summing vol over rows where price >= 0 — every ordinary row matches, and so does
+            // the NaN row, the maximum in total order
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery("select sum(vol) s, count(*) c from vtx.t where price >= 0")) {
                 rs.next();
-                assertThat(rs.getLong("s")).isEqualTo(80); // 10 + 30 + 40, NOT + 999
-                assertThat(rs.getLong("c")).isEqualTo(3);
+                assertThat(rs.getLong("s")).isEqualTo(1079); // 10 + 999 + 30 + 40
+                assertThat(rs.getLong("c")).isEqualTo(4);
             }
         }
     }

@@ -553,6 +553,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             Array boundedMaxA = includeBounds ? fieldOrNull(table, ZonedStatsSchema.BOUNDED_MAX) : null;
             Array sumA = fieldOrNull(table, ZonedStatsSchema.Stat.SUM.fieldName());
             Array nullCountA = fieldOrNull(table, ZonedStatsSchema.Stat.NULL_COUNT.fieldName());
+            Array nanCountA = fieldOrNull(table, ZonedStatsSchema.Stat.NAN_COUNT.fieldName());
             // Not pre-sized from nZones: it is bounded above only by Integer.MAX_VALUE (see the
             // guard above), and a single ArrayList allocation at that scale is itself an
             // OutOfMemoryError vector the security contract forbids. Growing incrementally keeps
@@ -560,13 +561,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             List<ArrayStats> out = new ArrayList<>();
             for (long i = 0; i < nZones; i++) {
                 Object nullCount = boxedScalar(nullCountA, i);
+                Object nanCount = boxedScalar(nanCountA, i);
                 out.add(new ArrayStats(
                         minA != null ? boxedScalar(minA, i) : boxedScalar(boundedMinA, i),
                         maxA != null ? boxedScalar(maxA, i) : boundedMaxScalar(boundedMaxA, i),
                         boxedScalar(sumA, i),
                         null,
                         nullCount == null ? null : ((Number) nullCount).longValue(),
-                        null, null));
+                        null, null,
+                        nanCount == null ? null : ((Number) nanCount).longValue()));
             }
             return out;
         }
@@ -1128,7 +1131,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// conservative: every branch returns `false` (do not prune) when a needed statistic is missing
     /// or the outcome is uncertain, so a chunk is skipped only when it provably holds no match. All
     /// ordering routes through [Compare#values(Object, Object, DType)] so the test stays
-    /// width-agnostic and unsigned/float-aware, identically to the row-level scan it gates.
+    /// width-agnostic and unsigned/float-aware, identically to the row-level scan it gates. Floats order
+    /// totally, as in Rust: `-0.0 < 0.0`, `NaN` is the maximum.
     ///
     /// @param predicate the value-test bound to the column
     /// @param stats     the column's per-chunk min/max/nullCount statistics
@@ -1139,6 +1143,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Object min = stats.min();
         Object max = stats.max();
         Long nullCount = stats.nullCount();
+        if (ct instanceof DType.Primitive p && p.ptype().isFloating()
+                && (stats.nanCount() == null || stats.nanCount() > 0)) {
+            // Float min/max skip NaN, but filters order floats totally (Rust), where NaN is the
+            // maximum: a chunk that may hold one (nan_count absent or positive) has a NaN upper bound.
+            max = Double.NaN;
+        }
         return switch (predicate) {
             // val < min || val > max → no row equals val.
             case Predicate.Eq(var v) -> min != null && max != null

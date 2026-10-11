@@ -772,6 +772,63 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(result).containsExactly(10L, 11L, 12L, 13L);
     }
 
+    static Stream<Arguments> floatFilters() {
+        List<Arguments> cases = new ArrayList<>();
+        for (String op : List.of("EQ", "NOT_EQ", "GT", "GTE", "LT", "LTE")) {
+            for (double bound : new double[]{-0.0, 0.0, Double.NaN, 1.0}) {
+                cases.add(Arguments.of(op, bound));
+            }
+        }
+        return cases.stream();
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("floatFilters")
+    void javaWriter_jniReader_filteredFloats_matchJni(String op, double bound, @TempDir Path tmp)
+            throws IOException {
+        // Given — one zone per chunk, holding the values where a total order and IEEE disagree:
+        // -0.0 vs 0.0 and NaN (#518). Rust orders floats totally (-inf < -0.0 < 0.0 < inf < NaN, NaN == NaN),
+        // so Java must keep exactly the rows vortex-jni keeps, in pruning and in row-level evaluation.
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.F64), false);
+        Path file = tmp.resolve("java_float_filters.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema,
+                     WriteOptions.defaults().withEdition(io.github.dfa1.vortex.core.model.Editions.CORE_2025_10_0))) {
+            sut.writeChunk(Map.of(ColumnName.of("v"), new double[]{-1.0, -0.0, Double.NaN}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new double[]{0.0, 1.0, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY}));
+        }
+        ColumnName column = ColumnName.of("v");
+        io.github.dfa1.vortex.reader.RowFilter filter = switch (op) {
+            case "EQ" -> io.github.dfa1.vortex.reader.RowFilter.eq(column, bound);
+            case "NOT_EQ" -> io.github.dfa1.vortex.reader.RowFilter.neq(column, bound);
+            case "GT" -> io.github.dfa1.vortex.reader.RowFilter.gt(column, bound);
+            case "GTE" -> io.github.dfa1.vortex.reader.RowFilter.gte(column, bound);
+            case "LT" -> io.github.dfa1.vortex.reader.RowFilter.lt(column, bound);
+            default -> io.github.dfa1.vortex.reader.RowFilter.lte(column, bound);
+        };
+
+        // When
+        List<Long> jni = readColumnFiltered(file, "v", Expression.binary(Expression.BinaryOp.valueOf(op),
+                Expression.column("v"), Expression.literal(bound))).stream()
+                .map(v -> Double.doubleToRawLongBits((Double) v)).sorted().toList();
+        List<Long> result = new ArrayList<>();
+        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file,
+                io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
+            reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all().withFilter(filter)).forEachRemaining(chunk -> {
+                io.github.dfa1.vortex.reader.array.DoubleArray values = chunk.column(column);
+                for (long row = 0; row < chunk.rowCount(); row++) {
+                    if (io.github.dfa1.vortex.reader.compute.Compute.matches(chunk, filter, row)) {
+                        result.add(Double.doubleToRawLongBits(values.getDouble(row)));
+                    }
+                }
+            });
+        }
+        result.sort(null);
+
+        // Then
+        assertThat(result).isEqualTo(jni);
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("zoneMappedChunkShapes")
     void javaWriter_jniReader_zoneMapped_filterKeepsEveryMatch(String shape, int[] chunkSizes, long threshold,

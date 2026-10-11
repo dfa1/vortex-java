@@ -231,7 +231,8 @@ class Float16InteropIntegrationTest {
     }
 
     /// Zone-map pruning on a half-precision column (#515: it decoded to no stats, so nothing was
-    /// ever pruned). Both writers' zone maps must yield every matching row, and Java's must prune.
+    /// ever pruned). Both writers' zone maps must yield every matching row. Java's legacy zones carry no `nan_count`, so
+    /// they never prune on the maximum (#518); pruning on default zones is in `ZoneMapPruningTest`.
     @ParameterizedTest(name = "written by {0}")
     @ValueSource(strings = {"java", "jni"})
     void filteredScan_returnsEveryMatchingRow_whoeverWroteTheFile(String writer, @TempDir Path tmp) throws IOException {
@@ -259,24 +260,19 @@ class Float16InteropIntegrationTest {
         }
 
         // When
-        long[] rowsRead = {0};
         long[] matching = {0};
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
             reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()
                     .withFilter(io.github.dfa1.vortex.reader.RowFilter.gt(COLUMN, 1000.0f))).forEachRemaining(chunk -> {
                 Float16Array column = chunk.column(COLUMN);
-                rowsRead[0] += column.length();
                 for (long i = 0; i < column.length(); i++) {
                     matching[0] += column.getFloat(i) > 1000.0f ? 1 : 0;
                 }
             });
         }
 
-        // Then no matching row is lost, and Java's one-zone-per-chunk map drops the chunks below 1000
+        // Then no matching row is lost
         assertThat(matching[0]).isEqualTo(expected);
-        if (writer.equals("java")) {
-            assertThat(rowsRead[0]).isLessThan(data.length);
-        }
     }
 
     static Stream<Arguments> nullableCases() {

@@ -38,15 +38,9 @@ final class PredicateEvaluator {
     /// `Gt` / `Lte` / `Gte` / `Between`).
     ///
     /// A floating column dispatches through [PrimitiveFilter#lowerDouble(Predicate)] /
-    /// [PrimitiveFilter#matchDouble(double, PrimitiveFilter.DoubleOp, double, double)] — native
-    /// `<`/`>`/`==`/… double comparisons, IEEE-correct: a `NaN` value never satisfies an ordering
-    /// test. This is deliberately *not* routed through [Compare#values(Object, Object, DType)]: that
-    /// method reports a single three-way result, and no such result can make every derived
-    /// `<,>,<=,>=,==` comparison come out false at once the way IEEE's unordered `NaN` comparisons
-    /// require — [Compare#values(Object, Object, DType)]'s `Double.compare` ordering is correct for
-    /// `MIN`/`MAX`/sort (where a total order is required) but not for testing whether a value
-    /// satisfies a predicate. Every other column type keeps the existing width-agnostic
-    /// [Compare#values(Object, Object, DType)] dispatch.
+    /// [PrimitiveFilter#matchDouble(double, PrimitiveFilter.DoubleOp, double, double)], which compare in
+    /// total order like Rust (`-0.0 < 0.0`, `NaN` equal to itself and the maximum), the same order
+    /// [Compare#values(Object, Object, DType)] uses for every other column type.
     ///
     /// @param array     the array under test
     /// @param i         the zero-based, non-null position

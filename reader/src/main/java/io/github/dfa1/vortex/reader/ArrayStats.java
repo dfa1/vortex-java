@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 /// @param nullCount      number of null values, or `null` if unknown
 /// @param isSorted       `true` if the array is sorted in ascending order, or `null` if unknown
 /// @param isStrictSorted `true` if the array is strictly sorted (no duplicates), or `null` if unknown
+/// @param nanCount       number of `NaN` values in a float column (`min` and `max` skip them), or `null` if unknown
 public record ArrayStats(
         Object min,
         Object max,
@@ -23,9 +24,24 @@ public record ArrayStats(
         Long trueCount,
         Long nullCount,
         Boolean isSorted,
-        Boolean isStrictSorted
+        Boolean isStrictSorted,
+        Long nanCount
 ) {
-    private static final ArrayStats EMPTY = new ArrayStats(null, null, null, null, null, null, null);
+    private static final ArrayStats EMPTY = new ArrayStats(null, null, null, null, null, null, null, null);
+
+    /// Creates stats with no `NaN` count.
+    ///
+    /// @param min            minimum value in the array, or `null` if unknown
+    /// @param max            maximum value in the array, or `null` if unknown
+    /// @param sum            sum of values, or `null` if unknown
+    /// @param trueCount      number of `true` values for bool columns, or `null` if unknown
+    /// @param nullCount      number of null values, or `null` if unknown
+    /// @param isSorted       `true` if the array is sorted in ascending order, or `null` if unknown
+    /// @param isStrictSorted `true` if the array is strictly sorted, or `null` if unknown
+    public ArrayStats(Object min, Object max, Object sum, Long trueCount, Long nullCount,
+                      Boolean isSorted, Boolean isStrictSorted) {
+        this(min, max, sum, trueCount, nullCount, isSorted, isStrictSorted, null);
+    }
 
     /// Returns an empty stats instance with all fields set to `null`.
     ///

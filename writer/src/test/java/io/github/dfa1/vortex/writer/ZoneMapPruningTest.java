@@ -123,26 +123,27 @@ class ZoneMapPruningTest {
         return arr;
     }
 
-    // Three F32 chunks: v in [1..50], [51..100], [101..150]. F32 zone stats decode as Float, so a
-    // Double or Float filter value must still compare via the shared width-agnostic path.
+    // Three F32 chunks of 1 MiB each, all rows 50, 100 and 150. Default `vortex.zoned`
+    // zones carry nan_count; the legacy `vortex.stats` table does not, and without it a float chunk
+    // may hold a NaN (the maximum in Rust's total order), so max-based pruning is off (#518).
+    // F32 zone stats decode as Float, so a Double or Float filter value must still compare via the
+    // shared width-agnostic path.
     private static Path writeF32Chunks(Path tmp) throws IOException {
         Path file = tmp.resolve("f32_chunks.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, F32_SCHEMA, LegacyZoneMaps.OPTIONS)) {
-            sut.writeChunk(Map.of(ColumnName.of("v"), f32range(1, 50)));
-            sut.writeChunk(Map.of(ColumnName.of("v"), f32range(51, 100)));
-            sut.writeChunk(Map.of(ColumnName.of("v"), f32range(101, 150)));
+             var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults())) {
+            for (float fill : new float[]{50f, 100f, 150f}) {
+                float[] chunk = new float[ZONE_ROWS];
+                Arrays.fill(chunk, fill);
+                sut.writeChunk(Map.of(ColumnName.of("v"), chunk));
+            }
         }
         return file;
     }
 
-    private static float[] f32range(int from, int to) {
-        float[] arr = new float[to - from + 1];
-        for (int i = 0; i < arr.length; i++) {
-            arr[i] = from + i;
-        }
-        return arr;
-    }
+    // 1 MiB of F32: the writer emits a chunk at that size (Rust's ChunksBuffer), so each batch below
+    // is its own chunk and zone pruning can drop it whole.
+    private static final int ZONE_ROWS = 1 << 18;
 
     // Per-operator filter factories (value boxed by the caller), so the parameterized groups can
     // drive every comparison operator through one shared body.
@@ -392,8 +393,72 @@ class ZoneMapPruningTest {
             // When
             List<Long> rowCounts = scanRowCounts(file, RowFilter.gte(ColumnName.of("v"), (Comparable<?>) value));
 
-            // Then — chunk 1 (max 50) pruned
-            assertThat(rowCounts).containsExactly(50L, 50L);
+            // Then — the zone filled with 50 (max 50) is pruned
+            assertThat(rowCounts.stream().mapToLong(Long::longValue).sum()).isEqualTo(2L * ZONE_ROWS);
+        }
+    }
+
+    /// #518: filters order floats totally, as Rust does: `-0.0 < 0.0`, and `NaN` is the maximum.
+    @Nested
+    class TotalOrder {
+
+        @Test
+        void eqZeroPrunesTheNegativeZeroChunk(@TempDir Path tmp) throws IOException {
+            // Given two one-zone chunks, [-0.0, -0.0] and [0.0, 0.0]
+            Path file = writeFloatChunks(tmp, WriteOptions.defaults(), -0.0f, 0.0f);
+
+            // When
+            List<Long> result = scanRowCounts(file, RowFilter.eq(ColumnName.of("v"), 0.0f));
+
+            // Then only the 0.0 chunk survives, as vortex-jni returns only the 0.0 rows
+            assertThat(result.stream().mapToLong(Long::longValue).sum()).isEqualTo(ZONE_ROWS);
+        }
+
+        @Test
+        void gtKeepsAChunkHoldingNan(@TempDir Path tmp) throws IOException {
+            // Given a chunk of 1.0 with one NaN, and a chunk of 2.0; min/max skip the NaN
+            Path file = tmp.resolve("nan.vtx");
+            float[] withNan = new float[ZONE_ROWS];
+            Arrays.fill(withNan, 1.0f);
+            withNan[7] = Float.NaN;
+            float[] plain = new float[ZONE_ROWS];
+            Arrays.fill(plain, 2.0f);
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults())) {
+                sut.writeChunk(Map.of(ColumnName.of("v"), withNan));
+                sut.writeChunk(Map.of(ColumnName.of("v"), plain));
+            }
+
+            // When
+            List<Long> result = scanRowCounts(file, RowFilter.gt(ColumnName.of("v"), 1.5f));
+
+            // Then the NaN chunk survives: NaN > 1.5 in total order
+            assertThat(result.stream().mapToLong(Long::longValue).sum()).isEqualTo(2L * ZONE_ROWS);
+        }
+
+        @Test
+        void legacyZonesWithoutNanCountNeverPruneOnMax(@TempDir Path tmp) throws IOException {
+            // Given legacy `vortex.stats` zones, which carry no nan_count
+            Path file = writeFloatChunks(tmp, LegacyZoneMaps.OPTIONS, 1.0f, 2.0f);
+
+            // When
+            List<Long> result = scanRowCounts(file, RowFilter.gt(ColumnName.of("v"), 5.0f));
+
+            // Then both chunks survive: either may hold a NaN, which is greater than 5.0
+            assertThat(result).hasSize(2);
+        }
+
+        private static Path writeFloatChunks(Path tmp, WriteOptions options, float... fills) throws IOException {
+            Path file = tmp.resolve("fills.vtx");
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = VortexWriter.create(ch, F32_SCHEMA, options)) {
+                for (float fill : fills) {
+                    float[] chunk = new float[ZONE_ROWS];
+                    Arrays.fill(chunk, fill);
+                    sut.writeChunk(Map.of(ColumnName.of("v"), chunk));
+                }
+            }
+            return file;
         }
     }
 
@@ -408,28 +473,22 @@ class ZoneMapPruningTest {
         @ParameterizedTest(name = "{0} on F16 column")
         @MethodSource("io.github.dfa1.vortex.writer.ZoneMapPruningTest$FloatWidths#values")
         void f16ColumnPrunesLikeF32(String name, Object value, @TempDir Path tmp) throws IOException {
-            // Given three chunks v in [1..50], [51..100], [101..150], exact in half precision
+            // Given three 1 MiB-chunks filled with 50, 100 and 150, exact in half precision
             Path file = tmp.resolve("f16_chunks.vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 var sut = VortexWriter.create(ch, F16_SCHEMA, LegacyZoneMaps.OPTIONS)) {
-                sut.writeChunk(Map.of(ColumnName.of("v"), f16range(1, 50)));
-                sut.writeChunk(Map.of(ColumnName.of("v"), f16range(51, 100)));
-                sut.writeChunk(Map.of(ColumnName.of("v"), f16range(101, 150)));
+                 var sut = VortexWriter.create(ch, F16_SCHEMA, WriteOptions.defaults())) {
+                for (float fill : new float[]{50f, 100f, 150f}) {
+                    short[] chunk = new short[2 * ZONE_ROWS];
+                    Arrays.fill(chunk, Float.floatToFloat16(fill));
+                    sut.writeChunk(Map.of(ColumnName.of("v"), chunk));
+                }
             }
 
             // When
             List<Long> rowCounts = scanRowCounts(file, RowFilter.gte(ColumnName.of("v"), (Comparable<?>) value));
 
-            // Then chunk 1 (max 50) is pruned
-            assertThat(rowCounts).containsExactly(50L, 50L);
-        }
-
-        private static short[] f16range(int from, int to) {
-            short[] arr = new short[to - from + 1];
-            for (int i = 0; i < arr.length; i++) {
-                arr[i] = Float.floatToFloat16(from + i);
-            }
-            return arr;
+            // Then the zone filled with 50 (max 50) is pruned
+            assertThat(rowCounts.stream().mapToLong(Long::longValue).sum()).isEqualTo(4L * ZONE_ROWS);
         }
     }
 

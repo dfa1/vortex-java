@@ -381,7 +381,7 @@ class AggregateWhereBoundaryTest {
     }
 
     @Test
-    void floatFilterColumnAcrossBoundaryAbandonsButScanIsNaNCorrect() throws Exception {
+    void floatFilterColumnAcrossBoundaryAbandonsButScanOrdersNaNAsMaximum() throws Exception {
         // Given a float FILTER column containing NaN in a boundary chunk: the compute-kernel compare
         // sorts NaN as the maximum, so `f >= 1.5` (lowered to Eq OR Gt) would wrongly SELECT the NaN
         // row in a boundary fold that REPLACES the scan — a silent wrong answer. The push-down must
@@ -397,13 +397,13 @@ class AggregateWhereBoundaryTest {
                 Map.of(ColumnName.of("f"), new double[]{1.0, Double.NaN, 2.0, 3.0}, ColumnName.of("val"), new long[]{10, 20, 30, 40}),
                 Map.of(ColumnName.of("f"), new double[]{4.0, 5.0, 6.0, 7.0}, ColumnName.of("val"), new long[]{50, 60, 70, 80}));
 
-        // Ground truth: reduce the same data with SQL-NaN-correct `f >= 1.5` (NaN row excluded).
+        // Ground truth: reduce the same data with total-order `f >= 1.5` (the NaN row is the maximum, so included).
         double[] allF = {1.0, Double.NaN, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0};
         long[] allVal = {10, 20, 30, 40, 50, 60, 70, 80};
         long oracleSum = 0;
         long oracleCount = 0;
         for (int i = 0; i < allF.length; i++) {
-            if (allF[i] >= 1.5) {
+            if (Double.compare(allF[i], 1.5) >= 0) {
                 oracleSum += allVal[i];
                 oracleCount++;
             }
@@ -415,7 +415,7 @@ class AggregateWhereBoundaryTest {
             String sql = "select sum(val) s, count(*) c from vtx.t where f >= 1.5";
             assertThat(explain(conn, sql)).contains("TableScan");
 
-            // And the NaN-correct scan produces the oracle result (the NaN row is excluded)
+            // And the scan produces the oracle result (the NaN row is included)
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery(sql)) {
                 rs.next();

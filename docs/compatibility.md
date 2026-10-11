@@ -67,6 +67,11 @@ Separate from the Vector API, found while comparing against the Rust source:
 
 - Float min/max statistics now order `-0.0` before `0.0` and skip `NaN`, as Rust's `total_compare` with
   `skip_nans` does. Before, the first zero met in array order was kept.
+- Float filters order values totally, as vortex-jni does: `-0.0 < 0.0`, and `NaN` equals itself and is the
+  maximum (so `NaN >= 0.0` matches, where IEEE says it does not). Zone-map pruning follows: a float zone
+  without a `nan_count` (the legacy `vortex.stats` table) may hold a `NaN`, so it is never pruned on its
+  maximum. Pinned by `JavaWritesRustReadsIntegrationTest#javaWriter_jniReader_filteredFloats_matchJni`
+  ([#518](https://github.com/dfa1/vortex-java/issues/518)).
 - `U64` min/max and the dense-counter span in `ArrayStats` are computed in unsigned order, as Rust's
   `typed_int_stats` does.
 - **Open divergence:** Rust binds the zoned `Min`, `Max` **and `Sum`** aggregates with `skip_nans()`, so a

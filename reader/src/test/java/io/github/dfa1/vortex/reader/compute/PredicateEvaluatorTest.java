@@ -20,29 +20,43 @@ class PredicateEvaluatorTest {
     class FloatingNan {
 
         @Test
-        void nanRowNeverMatchesAnOrderingPredicate() {
-            // Given an f64 column with one NaN row among ordinary values
+        void nanRowSortsAboveEveryOrdinaryValue() {
+            // Given an f64 column with one NaN row among ordinary values; Rust orders floats totally,
+            // so NaN is the maximum (#518)
             Array column = ComputeArrays.doubleArray(ARENA, 1.0, Double.NaN, 3.0);
 
-            // When testing the NaN row (index 1) against every ordering predicate
-            // Then none match
+            // When testing the NaN row (index 1) against every predicate with an ordinary operand
+            // Then it is greater than the operand, never equal or less
             assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Eq(2.0))).isFalse();
             assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Lt(2.0))).isFalse();
             assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Lte(2.0))).isFalse();
-            assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Gt(2.0))).isFalse();
-            assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Gte(2.0))).isFalse();
+            assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Gt(2.0))).isTrue();
+            assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Gte(2.0))).isTrue();
             assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Between(0.0, 10.0))).isFalse();
         }
 
         @Test
-        void nanRowMatchesNeqAgainstAnyValueIncludingItself() {
+        void nanRowEqualsNanAndDiffersFromEverythingElse() {
             // Given an f64 column whose only row is NaN
             Array column = ComputeArrays.doubleArray(ARENA, Double.NaN);
 
-            // When testing Neq against an ordinary value and against NaN itself
-            // Then both match: NaN == x is false for every x, so "not equal" is true (IEEE, not a bug)
+            // When testing Eq and Neq against NaN itself and against an ordinary value
+            // Then NaN equals itself (total order), and differs from the ordinary value
+            assertThat(PredicateEvaluator.evaluate(column, 0, new Predicate.Eq(Double.NaN))).isTrue();
+            assertThat(PredicateEvaluator.evaluate(column, 0, new Predicate.Neq(Double.NaN))).isFalse();
             assertThat(PredicateEvaluator.evaluate(column, 0, new Predicate.Neq(2.0))).isTrue();
-            assertThat(PredicateEvaluator.evaluate(column, 0, new Predicate.Neq(Double.NaN))).isTrue();
+        }
+
+        @Test
+        void negativeZeroSortsBelowPositiveZero() {
+            // Given an f64 column of -0.0 and 0.0
+            Array column = ComputeArrays.doubleArray(ARENA, -0.0, 0.0);
+
+            // When testing Eq(0.0) and Lt(0.0)
+            // Then -0.0 is not equal to 0.0 and is less than it, as in Rust (#518)
+            assertThat(PredicateEvaluator.evaluate(column, 0, new Predicate.Eq(0.0))).isFalse();
+            assertThat(PredicateEvaluator.evaluate(column, 0, new Predicate.Lt(0.0))).isTrue();
+            assertThat(PredicateEvaluator.evaluate(column, 1, new Predicate.Eq(0.0))).isTrue();
         }
 
         @Test

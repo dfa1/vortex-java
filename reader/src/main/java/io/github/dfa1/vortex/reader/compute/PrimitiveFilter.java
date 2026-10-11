@@ -9,12 +9,11 @@ package io.github.dfa1.vortex.reader.compute;
 ///   order-preserving XOR flip (`x ^ Long.MIN_VALUE` for unsigned columns, matching
 ///   [Long#compareUnsigned(long, long)]); every value leaf then lowers to a single inclusive
 ///   [LongRange] test on the flipped longs (with a `negate` flag for `Neq`).
-/// - double domain — a floating column read and widened to a `double` and compared with the native
-///   `<`/`>`/`<=`/`>=`/`==`/`!=` operators (see [#matchDouble(double, DoubleOp, double, double)]), so
-///   a `NaN` value — IEEE's unordered case — never satisfies any ordering test, matching the generic
-///   per-element path ([PredicateEvaluator]) exactly. This is deliberately *not*
-///   [Double#compare(double, double)]: that total-order convention (`NaN` sorts as the maximum) is
-///   correct for `MIN`/`MAX`/sort, not for testing whether a value satisfies a predicate.
+/// - double domain — a floating column read and widened to a `double` and compared in IEEE 754 total
+///   order (see [#matchDouble(double, DoubleOp, double, double)]), as Rust does for float filters:
+///   `-0.0 < 0.0`, and `NaN` equals itself and is the maximum. This is the same order as
+///   [Compare#values(Object, Object, io.github.dfa1.vortex.core.model.DType)], so the fused kernels, the
+///   generic per-element path ([PredicateEvaluator]) and zone-map pruning cannot drift apart.
 ///
 /// The lowering is the single source of truth for both domains, so the fused kernels can never lower a
 /// predicate to bounds that drift from one another.
@@ -131,9 +130,9 @@ final class PrimitiveFilter {
     record DoubleBound(DoubleOp op, double lo, double hi) {
     }
 
-    /// Tests one double value against the lowered operator using the native comparison operators —
-    /// IEEE-correct, so a `NaN` value under test never satisfies any operator (including `NEQ`,
-    /// where `NaN != x` is `true` because `NaN == x` is `false`, for every `x` including `NaN` itself).
+    /// Tests one double value against the lowered operator in IEEE 754 total order
+    /// ([Double#compare(double, double)]), as Rust does for float filters: `-0.0 < 0.0`, and `NaN`
+    /// equals itself and sorts above every other value, including `+Infinity`.
     ///
     /// @param v  the value under test
     /// @param op the lowered operator
@@ -142,13 +141,13 @@ final class PrimitiveFilter {
     /// @return `true` if `v` satisfies the operator
     static boolean matchDouble(double v, DoubleOp op, double lo, double hi) {
         return switch (op) {
-            case EQ -> v == lo;
-            case NEQ -> v != lo;
-            case LT -> v < lo;
-            case LTE -> v <= lo;
-            case GT -> v > lo;
-            case GTE -> v >= lo;
-            case BETWEEN -> v >= lo && v <= hi;
+            case EQ -> Double.compare(v, lo) == 0;
+            case NEQ -> Double.compare(v, lo) != 0;
+            case LT -> Double.compare(v, lo) < 0;
+            case LTE -> Double.compare(v, lo) <= 0;
+            case GT -> Double.compare(v, lo) > 0;
+            case GTE -> Double.compare(v, lo) >= 0;
+            case BETWEEN -> Double.compare(v, lo) >= 0 && Double.compare(v, hi) <= 0;
         };
     }
 

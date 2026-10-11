@@ -170,7 +170,7 @@ class FilterPushDownTest {
     }
 
     @Test
-    void nanRowNeverMatchesAFloatingPredicateVortexTableEnforcesItself(@TempDir Path localTmp) throws Exception {
+    void nanRowSortsAboveEveryValueInAFloatingPredicateVortexTableEnforcesItself(@TempDir Path localTmp) throws Exception {
         // Given a file whose floating column has a NaN row alongside ordinary values that would
         // all otherwise satisfy the predicate below
         Path nanFile = localTmp.resolve("nan-filter.vortex");
@@ -202,8 +202,8 @@ class FilterPushDownTest {
 
         // Then the predicate was captured in full ...
         assertThat(filters).isEmpty();
-        // ... and the NaN row (i64 = 2) never matched "f64 >= 0.0", even though every ordinary
-        // value here does
-        assertThat(rows).extracting(r -> r[0]).containsExactlyInAnyOrder(1L, 3L);
+        // ... and the NaN row (i64 = 2) matched "f64 >= 0.0" too: Rust orders floats totally, with
+        // NaN as the maximum (#518)
+        assertThat(rows).extracting(r -> r[0]).containsExactlyInAnyOrder(1L, 2L, 3L);
     }
 }
