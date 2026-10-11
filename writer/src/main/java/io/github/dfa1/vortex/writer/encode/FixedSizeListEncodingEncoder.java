@@ -13,7 +13,8 @@ public final class FixedSizeListEncodingEncoder implements EncodingEncoder {
 
     private static final List<EncodingEncoder> FALLBACK = List.of(
             new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(), new BoolEncodingEncoder(),
-            new NullEncodingEncoder(), new ByteBoolEncodingEncoder());
+            new NullEncodingEncoder(), new ByteBoolEncodingEncoder(), new StructEncodingEncoder(),
+            new FixedSizeListEncodingEncoder(), new ListEncodingEncoder());
 
     @Override
     public EncodingId encodingId() {
