@@ -74,9 +74,8 @@ Separate from the Vector API, found while comparing against the Rust source:
   ([#518](https://github.com/dfa1/vortex-java/issues/518)).
 - `U64` min/max and the dense-counter span in `ArrayStats` are computed in unsigned order, as Rust's
   `typed_int_stats` does.
-- **Open divergence:** Rust binds the zoned `Min`, `Max` **and `Sum`** aggregates with `skip_nans()`, so a
-  float zone's sum ignores `NaN`. Java's float sum adds `NaN` and so becomes `NaN`. This predates the
-  Vector API work and is not changed by it ([#523](https://github.com/dfa1/vortex-java/issues/523)).
+- The zoned float `Sum` skips `NaN`, as Rust's `skip_nans()` binding does; an all-`NaN` zone sums to `0.0`
+  ([#523](https://github.com/dfa1/vortex-java/issues/523)).
 
 ## Real-world conformance: the Raincloud corpus
 

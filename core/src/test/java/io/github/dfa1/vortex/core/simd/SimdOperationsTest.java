@@ -29,6 +29,20 @@ class SimdOperationsTest {
 
     private final SimdOperations sut = SimdOperationsSupport.preferred();
 
+    @Test
+    void sumFloating_skipsNaN() {
+        // Given NaN in the middle and at the tail (Rust's skip_nans), for every float carrier
+        double[] doubles = {1.0, Double.NaN, 2.0, Double.NaN};
+        float[] floats = {1f, Float.NaN, 2f, Float.NaN};
+        short[] halves = {Float.floatToFloat16(1f), Float.floatToFloat16(Float.NaN), Float.floatToFloat16(2f)};
+
+        // When / Then
+        assertThat(sut.sumFloating(doubles, PType.F64)).isEqualTo(3.0);
+        assertThat(sut.sumFloating(floats, PType.F32)).isEqualTo(3.0);
+        assertThat(sut.sumFloating(halves, PType.F16)).isEqualTo(3.0);
+        assertThat(sut.sumFloating(new double[]{Double.NaN}, PType.F64)).isZero();
+    }
+
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
     void widenInto_roundTripsNarrowedValues(PType ptype) {

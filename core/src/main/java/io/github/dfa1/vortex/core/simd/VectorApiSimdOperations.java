@@ -1073,7 +1073,10 @@ final class VectorApiSimdOperations implements SimdOperations {
             case F16 -> {
                 double s = 0;
                 for (short v : (short[]) values) {
-                    s += Float.float16ToFloat(v);
+                    float f = Float.float16ToFloat(v);
+                    if (!Float.isNaN(f)) {
+                        s += f;
+                    }
                 }
                 yield s;
             }
@@ -1088,12 +1091,15 @@ final class VectorApiSimdOperations implements SimdOperations {
         for (; i + FLOATS.length() <= a.length; i += FLOATS.length()) {
             FloatVector v = FloatVector.fromArray(FLOATS, a, i);
             for (int part = 0; part < parts; part++) {
-                acc = acc.add((DoubleVector) v.convertShape(VectorOperators.F2D, DOUBLES, part));
+                DoubleVector d = (DoubleVector) v.convertShape(VectorOperators.F2D, DOUBLES, part);
+                acc = acc.add(d, d.eq(d));
             }
         }
         double total = acc.reduceLanes(VectorOperators.ADD);
         for (; i < a.length; i++) {
-            total += a[i];
+            if (!Float.isNaN(a[i])) {
+                total += a[i];
+            }
         }
         return total;
     }
@@ -1102,11 +1108,14 @@ final class VectorApiSimdOperations implements SimdOperations {
         DoubleVector acc = DoubleVector.zero(DOUBLES);
         int i = 0;
         for (; i + DOUBLES.length() <= a.length; i += DOUBLES.length()) {
-            acc = acc.add(DoubleVector.fromArray(DOUBLES, a, i));
+            DoubleVector v = DoubleVector.fromArray(DOUBLES, a, i);
+            acc = acc.add(v, v.eq(v));
         }
         double total = acc.reduceLanes(VectorOperators.ADD);
         for (; i < a.length; i++) {
-            total += a[i];
+            if (!Double.isNaN(a[i])) {
+                total += a[i];
+            }
         }
         return total;
     }

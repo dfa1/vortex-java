@@ -615,17 +615,24 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
         switch (ptype) {
             case F16 -> {
                 for (short v : (short[]) values) {
-                    s += Float.float16ToFloat(v);
+                    float f = Float.float16ToFloat(v);
+                    if (!Float.isNaN(f)) {
+                        s += f;
+                    }
                 }
             }
             case F32 -> {
                 for (float v : (float[]) values) {
-                    s += v;
+                    if (!Float.isNaN(v)) {
+                        s += v;
+                    }
                 }
             }
             case F64 -> {
                 for (double v : (double[]) values) {
-                    s += v;
+                    if (!Double.isNaN(v)) {
+                        s += v;
+                    }
                 }
             }
             default -> throw new IllegalArgumentException("not a floating-point ptype: " + ptype);

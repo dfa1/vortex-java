@@ -100,6 +100,9 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     /// @param ptype the primitive type of `data`
     /// @param data  the raw primitive array
     /// @return the encoded sum scalar, or `null` on overflow or empty input
+    // Most likely dead weight: Rust's default vortex.zoned layout writes no zone sum (#447) and vortex-jni
+    // cannot read one, so only the legacy vortex.stats layout and segment/dict-chunk stats carry this value,
+    // observable through our own columnZoneStats. Kept NaN-skipping for parity (#523); candidate for removal.
     public static byte[] sumStat(PType ptype, Object data) {
         if (Array.getLength(data) == 0) {
             return null;

@@ -102,7 +102,8 @@ public interface SimdOperations {
     /// @throws IllegalArgumentException if `ptype` is not an integer type
     OptionalLong sum(Object values, PType ptype);
 
-    /// Sums a floating-point array into a `double`, strictly left to right. The order is part of the
+    /// Sums a floating-point array into a `double`, skipping `NaN` (Rust's `skip_nans`: the zone-map
+    /// sum), strictly left to right. The order is part of the
     /// contract: reassociating a float sum changes its rounding, and with it the stats bits we write.
     ///
     /// @param values a `short[]` (`F16`), `float[]` (`F32`) or `double[]` (`F64`)

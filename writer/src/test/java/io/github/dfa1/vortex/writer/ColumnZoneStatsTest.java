@@ -121,6 +121,24 @@ class ColumnZoneStatsTest {
     }
 
     @Test
+    void floatColumnZoneSumSkipsNaN(@TempDir Path tmp) throws IOException {
+        // Given — Rust binds the zoned Sum with skip_nans, so NaN must not poison the stored sum (#523).
+        // The second chunk is all NaN: Rust sums it to 0.0, not NaN.
+        Path file = tmp.resolve("f64_nan.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, F64_SCHEMA, LegacyZoneMaps.OPTIONS)) {
+            sut.writeChunk(Map.of(ColumnName.of("v"), new double[]{1.0, Double.NaN, 2.0, Double.NaN, 3.0}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new double[]{Double.NaN, Double.NaN}));
+        }
+
+        // When
+        List<ArrayStats> result = zoneStats(file, "v");
+
+        // Then
+        assertThat(result).extracting(ArrayStats::sum).containsExactly(6.0, 0.0);
+    }
+
+    @Test
     void missingColumnYieldsEmptyStatsPerZone(@TempDir Path tmp) throws IOException {
         // Given
         Path file = writeThreeChunks(tmp);
