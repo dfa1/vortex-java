@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.reader.array.LazyByteBoolArray;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -77,5 +79,45 @@ class ByteBoolEncodingDecoderTest {
         assertThatThrownBy(() -> sut.decode(ctx))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("shorter than the 8 declared row(s)");
+    }
+
+    /// Rust's ByteBool takes `[validity?]` as its only child. The decoder used to ignore it, so
+    /// every null row of a Rust-written nullable column read back as `false`.
+    @Test
+    void decode_validityChild_masksNullRows() {
+        // Given true, null, true: validity bits 0b101
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_BYTEBOOL, null, new ArrayNode[]{validityNode}, new int[]{0});
+        DecodeContext ctx = new DecodeContext(node, new DType.Bool(true), 3,
+                new MemorySegment[]{MemorySegment.ofArray(new byte[]{1, 0, 1}), MemorySegment.ofArray(new byte[]{0b101})},
+                TestRegistry.ofDecoders(new ByteBoolEncodingDecoder(), new BoolEncodingDecoder()), Arena.ofAuto());
+        var sut = new ByteBoolEncodingDecoder();
+
+        // When
+        var result = sut.decode(ctx);
+
+        // Then
+        MaskedArray masked = (MaskedArray) result;
+        assertThat(masked.isValid(0)).isTrue();
+        assertThat(masked.isValid(1)).isFalse();
+        assertThat(masked.isValid(2)).isTrue();
+        assertThat(((BoolArray) masked.inner()).getBoolean(2)).isTrue();
+    }
+
+    @Test
+    void decode_twoChildren_throws() {
+        // Given Rust accepts only [] or [validity]
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_BYTEBOOL, null,
+                new ArrayNode[]{validityNode, validityNode}, new int[]{0});
+        DecodeContext ctx = new DecodeContext(node, new DType.Bool(true), 1,
+                new MemorySegment[]{MemorySegment.ofArray(new byte[]{1}), MemorySegment.ofArray(new byte[]{1})},
+                TestRegistry.ofDecoders(new ByteBoolEncodingDecoder(), new BoolEncodingDecoder()), Arena.ofAuto());
+        var sut = new ByteBoolEncodingDecoder();
+
+        // When / Then
+        assertThatThrownBy(() -> sut.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("expected 0 or 1 children, got 2");
     }
 }
