@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyFsstVarBinArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
@@ -37,8 +38,8 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_FSST, "expected 3 buffers, got " + numBufs);
         }
         int numChildren = ctx.node().children().length;
-        if (numChildren < 2) {
-            throw new VortexException(EncodingId.VORTEX_FSST, "expected at least 2 children, got " + numChildren);
+        if (numChildren < 2 || numChildren > 3) {
+            throw new VortexException(EncodingId.VORTEX_FSST, "expected 2 or 3 children, got " + numChildren);
         }
 
         // Proto3 omits fields at their default (zero) value on the wire, so an all-U8 metadata
@@ -94,7 +95,17 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
         // deferred to LazyFsstVarBinArray's accessors, which run only for rows a caller actually
         // reads (ADR 0026) — mirroring VarBinArrays' "offsets are not scanned at decode time"
         // convention for the other VarBinArray implementations.
-        return new LazyFsstVarBinArray(ctx.dtype(), n, decompressor, compressedBytes,
+        LazyFsstVarBinArray strings = new LazyFsstVarBinArray(ctx.dtype(), n, decompressor, compressedBytes,
                 uncompLensSeg, uncompLenPType, codesOffsetsSeg, codesOffPType);
+
+        // A nullable column carries its validity as an optional third child (Rust: `codes_validity`,
+        // `children.get(2, ..)`), not under a vortex.masked wrapper. Ignoring it read every null row
+        // back as an empty string. As for vortex.varbin, the declared nullability is authoritative.
+        if (numChildren == 2 || !ctx.dtype().nullable()) {
+            return strings;
+        }
+        Array validity = ctx.decodeChild(2, DType.BOOL, n);
+        return new MaskedArray(strings, MaskedArray.requireBoolArray(validity, EncodingId.VORTEX_FSST,
+                "validity child"));
     }
 }
