@@ -109,6 +109,11 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             }
         }
         int numPatches = patchIdx.size();
+        // Rust rejects a sparse array without patches ("Patch indices must not be empty"); an
+        // all-equal column is vortex.constant's job, so decline and let the next candidate run.
+        if (numPatches == 0) {
+            return CascadeStep.notApplicable();
+        }
 
         // Owned buffers: fill scalar. idx and val moved to ChildSlot so cascade can bitpack.
         ProtoScalarValue fillScalar = scalar(ptype, fill);

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Nulls written by Rust come back as null, not as zeros or empty strings, in fixed-size list, FSST, decimal, bytebool, varbinview and delta columns, and a fixed-size list can hold nullable elements or a list, struct or fixed-size list as its element. ([0c910d2f](https://github.com/dfa1/vortex-java/commit/0c910d2f), [4404effe](https://github.com/dfa1/vortex-java/commit/4404effe), [6018bd57](https://github.com/dfa1/vortex-java/commit/6018bd57), [581bf894](https://github.com/dfa1/vortex-java/commit/581bf894), [692c991f](https://github.com/dfa1/vortex-java/commit/692c991f), [7079aed0](https://github.com/dfa1/vortex-java/commit/7079aed0), [c74e7432](https://github.com/dfa1/vortex-java/commit/c74e7432), [07171ffa](https://github.com/dfa1/vortex-java/commit/07171ffa))
+- A forced `vortex.sparse` on a column of equal values no longer writes a file Rust refuses to read. ([#519](https://github.com/dfa1/vortex-java/issues/519))
 
 ## [0.17.0] — 2026-10-10
 

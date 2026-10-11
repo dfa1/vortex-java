@@ -79,6 +79,19 @@ class SparseEncodingEncoderTest {
         }
 
         @Test
+        void encodeCascade_allEqual_declinesBecauseRustRejectsEmptyPatches() {
+            // Given -- a forced vortex.sparse on constant data would write zero patches, which Rust
+            // refuses to read ("Patch indices must not be empty")
+            long[] data = {7L, 7L, 7L, 7L};
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isFalse();
+        }
+
+        @Test
         void encode_withNonZero_createsPatches() throws java.io.IOException {
             // Given
             long[] data = {0L, 10L, 0L, 50L, 0L};
