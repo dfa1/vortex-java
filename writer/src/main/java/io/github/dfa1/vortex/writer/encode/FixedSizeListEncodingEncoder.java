@@ -30,7 +30,12 @@ public final class FixedSizeListEncodingEncoder implements EncodingEncoder {
         DType.FixedSizeList fsl = (DType.FixedSizeList) dtype;
         FixedSizeListData fsd = (FixedSizeListData) data;
         DType elementType = fsl.elementType();
-        EncodingEncoder inner = findEncoding(elementType);
+        // Nullable elements carry a NullableData(values, validity) pair, which the element type's
+        // own fallback encoder (dense values only) rejects: route it through the masked encoder, as
+        // ListEncodingEncoder and StructEncodingEncoder do.
+        EncodingEncoder inner = fsd.elements() instanceof NullableData && !(elementType instanceof DType.Extension)
+                ? new MaskedEncodingEncoder()
+                : findEncoding(elementType);
 
         EncodeResult elemResult = inner.encode(elementType, fsd.elements(), ctx);
 
