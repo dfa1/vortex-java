@@ -55,6 +55,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -72,6 +73,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
@@ -2487,6 +2489,37 @@ class JavaWritesRustReadsIntegrationTest {
         // Then
         long[] decoded = readLongColumn(file, "ts");
         assertThat(decoded).containsExactly(data);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {2, 3, 5})
+    void javaWriter_jniReader_pco_i64_higherDeltaOrder_fullAndRowRange(int degree, @TempDir Path tmp) throws IOException {
+        // Given — a sequence integrated `degree` times from small random steps, so Rust's delta
+        // search settles on that consecutive order, not 1. 20k rows span three pages, each storing
+        // its own `degree` delta moments; a row range starting mid-page makes vortex-jni decode
+        // pages whose moments Java wrote, which a wrong moment layout would corrupt.
+        Path file = tmp.resolve("java_pco_i64_order" + degree + ".vtx");
+        long[] data = new long[20_000];
+        long[] levels = new long[degree];
+        Random random = new Random(degree);
+        for (int i = 0; i < data.length; i++) {
+            levels[degree - 1] += random.nextInt(5) - 2;
+            for (int d = degree - 2; d >= 0; d--) {
+                levels[d] += levels[d + 1];
+            }
+            data[i] = levels[0];
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+                     List.of(new PcoEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
+        }
+
+        // Then
+        assertThat(readLongColumn(file, "ts")).containsExactly(data);
+        assertThat(readRowRange(file, "ts", 5_001, 17_333))
+                .containsExactlyElementsOf(slice(Arrays.stream(data).boxed(), 5_001, 17_333));
     }
 
     @Test
