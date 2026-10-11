@@ -60,10 +60,11 @@
                     <failOnWarnings>true</failOnWarnings>
                 </configuration>
             </plugin>
-            <!-- Every test JVM runs with the jdk.incubator.vector module added (the root argLine), so the Vector
-                 API implementation is what the suite exercises. This second pass runs the SIMD tests without
-                 the module, which is how most users run: SimdOperationsSupport must then pick the
-                 auto-vectorized implementation, and it must pass the same kernel tests. -->
+            <!-- The test JVMs run without the jdk.incubator.vector module for now (add the add-modules option for
+                 jdk.incubator.vector to the root and integration argLine to exercise the Vector API
+                 implementation again; its tests are skipped without it). This second pass then only repeats the
+                 SIMD tests under the same conditions, and stays so that re-enabling the module keeps proving
+                 that SimdOperationsSupport picks the auto-vectorized implementation without it. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
