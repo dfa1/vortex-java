@@ -40,6 +40,20 @@ class PTypeTest {
     }
 
     @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"U8", "U16", "U32", "U64", "I8", "I16", "I32", "I64"})
+    void isInteger_trueForIntegers(PType ptype) {
+        // Given / When / Then
+        assertThat(ptype.isInteger()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
+    void isInteger_falseForFloats(PType ptype) {
+        // Given / When / Then
+        assertThat(ptype.isInteger()).isFalse();
+    }
+
+    @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "I16", "I32", "I64", "F16", "F32", "F64"})
     void isSigned_trueForSignedAndFloats(PType ptype) {
         // Given / When / Then

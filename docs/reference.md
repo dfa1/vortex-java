@@ -30,7 +30,7 @@ Physical primitive type — wire-level numeric kind for a column.
 | `F16`                     | 2             | IEEE 754 half — decoded via `Float#float16ToFloat` |
 | `F32`, `F64`              | 4 / 8         | IEEE 754 single / double                 |
 
-Methods: `byteSize()`, `isFloating()`, `isSigned()`.
+Methods: `byteSize()`, `isFloating()`, `isInteger()`, `isSigned()`.
 
 ### `DType` (`io.github.dfa1.vortex.core.model.DType`)
 

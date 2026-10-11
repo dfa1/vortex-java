@@ -57,6 +57,13 @@ public enum PType {
         return this == F16 || this == F32 || this == F64;
     }
 
+    /// Returns `true` for `I8`–`I64` and `U8`–`U64`.
+    ///
+    /// @return `true` if this ptype is an integer type
+    public boolean isInteger() {
+        return !isFloating();
+    }
+
     /// Returns `true` for signed integers (`I8`–`I64`) and all floating-point types.
     ///
     /// @return `true` if this ptype is signed

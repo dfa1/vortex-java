@@ -90,7 +90,7 @@ public record ArrayStats(
         // random-2^40 corpora) and nothing at all on low-cardinality ones, which exit the scan
         // having never reached the cap.
         long cap = n / 2L + 1L;
-        if (!ptype.isFloating()) {
+        if (ptype.isInteger()) {
             // Widened a chunk at a time into one small buffer, so one loop serves every integer
             // width without copying the whole array to a long[] (8 bytes per row of garbage on
             // every int[] column, #476).

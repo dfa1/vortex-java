@@ -29,7 +29,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive p && !p.ptype().isFloating();
+        return dtype instanceof DType.Primitive p && p.ptype().isInteger();
     }
 
     /// Rust's `RunEndScheme` verdict: skip unless runs average at least [#RUN_END_THRESHOLD]

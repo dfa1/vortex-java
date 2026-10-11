@@ -43,7 +43,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
     @Override
     public boolean accepts(DType dtype) {
         // Integer-only, as Rust's SequenceScheme: SequenceArray rejects float ptypes on construction.
-        return dtype instanceof DType.Primitive p && !p.ptype().isFloating();
+        return dtype instanceof DType.Primitive p && p.ptype().isInteger();
     }
 
     /// Cascade-aware entry point. [#encode] throws when `data` isn't a perfect arithmetic sequence

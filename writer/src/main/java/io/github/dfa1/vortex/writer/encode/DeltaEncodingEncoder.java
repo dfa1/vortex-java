@@ -26,10 +26,7 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
         if (!(dtype instanceof DType.Primitive p)) {
             return false;
         }
-        return switch (p.ptype()) {
-            case I8, I16, I32, I64, U8, U16, U32, U64 -> true;
-            default -> false;
-        };
+        return p.ptype().isInteger();
     }
 
     @Override

@@ -46,7 +46,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive p && !p.ptype().isFloating();
+        return dtype instanceof DType.Primitive p && p.ptype().isInteger();
     }
 
     @Override
