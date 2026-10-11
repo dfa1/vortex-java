@@ -19,7 +19,7 @@ the decision shipped in (blank = not yet shipped).
 | 0002 | Pluggable DType, Layout, and Compute          | Deferred  |          |
 | 0003 | VortexException sanitization + bounds typing  | Accepted  |          |
 | 0004 | ResourceLimits + ReadOptions                  | Accepted  |          |
-| 0005 | Vector API adoption                           | Deferred  |          |
+| 0005 | Vector API adoption                           | Proposed  |          |
 | 0006 | Benchmark publishing                          | Accepted  |          |
 | 0007 | Pure-Java vortex.pco encoder                  | Accepted   | 0.7.0 |
 | 0008 | Domain primitives for unsigned integers       | Proposed  |          |

@@ -1,6 +1,6 @@
 # ADR 0005: Vector API adoption strategy
 
-- **Status:** Deferred — adoption gated on API finalization + benchmark evidence
+- **Status:** Proposed
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
 - **Related:** [CLAUDE.md §Memory model — Hot-loop rule](../CLAUDE.md),
