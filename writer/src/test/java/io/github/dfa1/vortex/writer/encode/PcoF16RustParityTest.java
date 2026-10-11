@@ -33,9 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// Encoding must match Rust byte for byte where Java makes the same choices (Classic). Decoding
 /// must read every shape Rust writes, including FloatQuant, which Java never writes: the `quant`
-/// shape is the half-precision case of that mode. The `ramp` shape (consecutive delta) is decoded
-/// only: Java's 16-bit delta binning writes 2474 bytes where Rust writes 192, for `u16` data as
-/// well, so it is not an F16 gap. FloatMult is not covered: pco 1.0.1 never chose it for any half
+/// shape is the half-precision case of that mode. The `ramp` shape needs second-order consecutive
+/// delta (#520): its deltas are powers of two, its deltas-of-deltas almost all zero. FloatMult is not covered: pco 1.0.1 never chose it for any half
 /// shape tried.
 class PcoF16RustParityTest {
 
@@ -44,9 +43,9 @@ class PcoF16RustParityTest {
     private final PcoEncodingDecoder decoder = new PcoEncodingDecoder();
 
     @ParameterizedTest
-    @ValueSource(strings = {"random", "tenths", "lowcard"})
+    @ValueSource(strings = {"random", "ramp", "tenths", "lowcard"})
     void encodesTheBytesRustPcoWrites(String shape) throws IOException {
-        // Given the Classic shapes without delta; Java matches Rust on these
+        // Given the Classic shapes; Java matches Rust on these
         short[] values = raw(shape);
         byte[] expected = resource(shape + "-f16.pco");
 

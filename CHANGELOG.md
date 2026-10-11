@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Opt-in Vector API kernels for min/max, sums, run counting, widening and bit-packing, enabled by `--add-modules jdk.incubator.vector` (over 10× faster on byte and short columns); float sums and 64-bit overflow checks differ slightly from Rust's order, see `docs/compatibility.md`. ([#516](https://github.com/dfa1/vortex-java/issues/516))
 
 ### Changed
+- Pco encodes 16-bit ramps (and any data suiting second-order or higher consecutive delta) about 13× smaller, matching pco 1.0.1. ([#520](https://github.com/dfa1/vortex-java/issues/520))
 - Float min/max statistics order `-0.0` before `0.0` and skip `NaN`, and `U64` min/max compare unsigned, as Rust does. ([#516](https://github.com/dfa1/vortex-java/issues/516))
 - **Breaking:** float filters follow Rust's total order: `-0.0` is below `0.0` and `NaN` equals itself and is the largest value, so `NaN >= 0.0` now matches. ([#518](https://github.com/dfa1/vortex-java/issues/518))
 

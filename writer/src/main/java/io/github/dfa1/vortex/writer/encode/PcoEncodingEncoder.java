@@ -36,6 +36,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
     private static final int CHUNK_SIZE = 1 << 18;
     private static final int MAX_PAGE_N = 8192;
     // Rust's choose_auto_delta_encoding sample: groups of DELTA_GROUP_SIZE, one more per N_PER_EXTRA_DELTA_GROUP
+    private static final int MAX_CONSECUTIVE_DELTA_ORDER = 7;
     private static final int DELTA_GROUP_SIZE = 200;
     private static final int N_PER_EXTRA_DELTA_GROUP = 10_000;
     // Mode::Classic.max_bit_size() and DeltaEncoding::MAX_BIT_SIZE, in Rust's meta_size_hint
@@ -138,15 +139,14 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         private static ChunkResult encodeChunkClassic(long[] latents, int dtypeSize, Arena arena) {
             int n = latents.length;
             int nBinsLog = unoptimizedBinsLog(n);
-            boolean useDelta = n > 1 && chooseConsecutiveDelta(latents, dtypeSize, nBinsLog);
-            int order = useDelta ? 1 : 0;
+            int order = n > 1 ? chooseDeltaOrder(latents, dtypeSize, nBinsLog) : 0;
             int[] pageNs = pageNs(n);
             // Rust delta-encodes each page on its own: a page stores its first latent as the moment
             // and the deltas after it; bins are trained on every page's stored latents together.
-            long[] sortKeys = toSortKeys(useDelta ? pageDeltas(latents, pageNs, dtypeSize) : latents);
+            long[] sortKeys = toSortKeys(order > 0 ? pageDeltas(latents, pageNs, order, dtypeSize) : latents);
             Trained t = train(sortKeys, nBinsLog, dtypeSize);
 
-            MemorySegment chunkMetaSeg = buildClassicChunkMeta(dtypeSize, t.bins(), t.q(), order, order, arena);
+            MemorySegment chunkMetaSeg = buildClassicChunkMeta(dtypeSize, t.bins(), t.q(), order > 0 ? 1 : 0, order, arena);
             PageStream stream = new PageStream(t, pageNs[0]);
             LeBitWriter w = new LeBitWriter(pageNs[0] * (dtypeSize / 8) + 64);
             List<MemorySegment> pages = new ArrayList<>(pageNs.length);
@@ -155,7 +155,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             for (int pageN : pageNs) {
                 int storedN = Math.max(pageN - order, 0);
                 stream.prepare(sortKeys, storedStart, storedN);
-                pages.add(buildClassicPage(w, stream, dtypeSize, latents[pageStart], useDelta, arena));
+                pages.add(buildClassicPage(w, stream, dtypeSize, deltaMoments(latents, pageStart, pageN, order, dtypeSize), arena));
                 pageStart += pageN;
                 storedStart += storedN;
             }
@@ -174,13 +174,13 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return pageNs;
         }
 
-        // Consecutive deltas within each page, pages concatenated (each page loses its first latent).
-        private static long[] pageDeltas(long[] latents, int[] pageNs, int dtypeSize) {
-            long[] out = new long[latents.length - pageNs.length];
+        // Consecutive deltas within each page, pages concatenated (each page loses its first `order` latents).
+        private static long[] pageDeltas(long[] latents, int[] pageNs, int order, int dtypeSize) {
+            long[] out = new long[latents.length - pageNs.length * order];
             int pageStart = 0;
             int outPos = 0;
             for (int pageN : pageNs) {
-                long[] deltas = consecutiveDeltas(Arrays.copyOfRange(latents, pageStart, pageStart + pageN), dtypeSize);
+                long[] deltas = consecutiveDeltas(Arrays.copyOfRange(latents, pageStart, pageStart + pageN), order, dtypeSize);
                 System.arraycopy(deltas, 0, out, outPos, deltas.length);
                 outPos += deltas.length;
                 pageStart += pageN;
@@ -195,15 +195,25 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return COMPRESSION_LEVEL <= fast ? COMPRESSION_LEVEL : fast + (COMPRESSION_LEVEL - fast) / 2;
         }
 
-        // ── delta choice (port of choose_auto_delta_encoding, NoOp vs Consecutive order 1) ──
+        // ── delta choice (port of choose_auto_delta_encoding, NoOp vs Consecutive orders 1..7) ──
 
         // Rust prices each delta candidate by fully compressing a sample of groups of 200 values
         // spread over the chunk, not by training on the whole chunk twice.
-        private static boolean chooseConsecutiveDelta(long[] latents, int dtypeSize, int nBinsLog) {
+        // Orders are tried upward and the search stops at the first that does not beat the best so far
+        // ("it's almost always convex"). Lookback is not ported, so it never competes.
+        private static int chooseDeltaOrder(long[] latents, int dtypeSize, int nBinsLog) {
             long[] sample = deltaSample(latents, DELTA_GROUP_SIZE, 1 + latents.length / N_PER_EXTRA_DELTA_GROUP);
-            float noOpCost = compressedSampleSize(sample, 0, dtypeSize, nBinsLog);
-            float deltaCost = compressedSampleSize(sample, 1, dtypeSize, nBinsLog);
-            return deltaCost < noOpCost;
+            int bestOrder = 0;
+            float bestCost = compressedSampleSize(sample, 0, dtypeSize, nBinsLog);
+            for (int order = 1; order <= MAX_CONSECUTIVE_DELTA_ORDER && order < sample.length; order++) {
+                float cost = compressedSampleSize(sample, order, dtypeSize, nBinsLog);
+                if (cost >= bestCost) {
+                    break;
+                }
+                bestOrder = order;
+                bestCost = cost;
+            }
+            return bestOrder;
         }
 
         // Port of choose_delta_sample: the first group, then nExtraGroups more evenly spaced.
@@ -227,7 +237,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
         // Port of calculate_compressed_sample_size: chunk meta max size + page meta + body bytes.
         private static float compressedSampleSize(long[] sample, int order, int dtypeSize, int nBinsLog) {
-            long[] values = order == 0 ? sample : consecutiveDeltas(sample, dtypeSize);
+            long[] values = consecutiveDeltas(sample, order, dtypeSize);
             int ansSizeLog = 0;
             long binBits = 0;
             double avgBits = 0;
@@ -376,9 +386,9 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         // ── Classic page encoding ─────────────────────────────────────────────
 
         private static MemorySegment buildClassicPage(
-            LeBitWriter w, PageStream stream, int dtypeSize, long moment, boolean hasMoment, Arena arena) {
+            LeBitWriter w, PageStream stream, int dtypeSize, long[] moments, Arena arena) {
             w.reset();
-            if (hasMoment) {
+            for (long moment : moments) {
                 w.writeBits(moment, dtypeSize);
             }
             stream.writeInitialStates(w);
@@ -495,14 +505,42 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
         // ── delta computation ────────────────────────────────────────────────
 
-        private static long[] consecutiveDeltas(long[] latents, int dtypeSize) {
-            long mid = typeMid(dtypeSize);
-            long mask = typeMask(dtypeSize);
-            long[] deltas = new long[latents.length - 1];
-            for (int i = 0; i < deltas.length; i++) {
-                deltas[i] = ((latents[i + 1] - latents[i]) & mask) ^ mid;
+        // Port of delta::consecutive::encode_in_place: `order` rounds of first differences, each dropping
+        // the head latent, then one toggle_center. Order 0 is the identity (no centering).
+        private static long[] consecutiveDeltas(long[] latents, int order, int dtypeSize) {
+            if (order == 0) {
+                return latents;
             }
-            return deltas;
+            long mask = typeMask(dtypeSize);
+            long[] current = latents;
+            for (int round = 0; round < order; round++) {
+                long[] next = new long[Math.max(current.length - 1, 0)];
+                for (int i = 0; i < next.length; i++) {
+                    next[i] = (current[i + 1] - current[i]) & mask;
+                }
+                current = next;
+            }
+            long mid = typeMid(dtypeSize);
+            for (int i = 0; i < current.length; i++) {
+                current[i] ^= mid;
+            }
+            return current;
+        }
+
+        // The head latent of each round, which a page stores so the decoder can undo the differences.
+        private static long[] deltaMoments(long[] latents, int pageStart, int pageN, int order, int dtypeSize) {
+            long mask = typeMask(dtypeSize);
+            long[] moments = new long[order];
+            long[] current = Arrays.copyOfRange(latents, pageStart, pageStart + pageN);
+            for (int round = 0; round < order; round++) {
+                moments[round] = current.length > 0 ? current[0] : 0;
+                long[] next = new long[Math.max(current.length - 1, 0)];
+                for (int i = 0; i < next.length; i++) {
+                    next[i] = (current[i + 1] - current[i]) & mask;
+                }
+                current = next;
+            }
+            return moments;
         }
 
         // ── sort-key conversion ──────────────────────────────────────────────
