@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -76,7 +77,12 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
                             + deltasLen + " delta element(s)");
         }
 
-        DType dtype = ctx.dtype();
+        // Rust: [bases, deltas, validity?] (2 or 3 children), the first two read as non-nullable.
+        int children = ctx.node().children().length;
+        if (children > 3) {
+            throw new VortexException(EncodingId.FASTLANES_DELTA, "expected 2 or 3 children, got " + children);
+        }
+        DType dtype = ctx.dtype().withNullable(false);
         long basesLen = (deltasLen / FastLanes.CHUNK) * lanes;
         MemorySegment basesSeg = ctx.decodeChildSegment(0, dtype, basesLen);
         MemorySegment deltasSeg = ctx.decodeChildSegment(1, dtype, deltasLen);
@@ -104,7 +110,15 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
             VectorSupport.operations().undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
             scatterChunk(out, ptype, chunkUndelta, chunk * FastLanes.CHUNK - offset, rowCount);
         }
-        return MaterializedArrays.of(ctx.dtype(), ptype, rowCount, out.asReadOnly());
+        // A nullable column carries its validity as an optional third child, not under a
+        // vortex.masked wrapper. Ignoring it read every null row back as the delta-decoded value.
+        // As for vortex.list, the declared nullability is authoritative.
+        if (children == 2 || !ctx.dtype().nullable()) {
+            return MaterializedArrays.of(ctx.dtype(), ptype, rowCount, out.asReadOnly());
+        }
+        Array validity = ctx.decodeChild(2, DType.BOOL, rowCount);
+        return new MaskedArray(MaterializedArrays.of(dtype, ptype, rowCount, out.asReadOnly()),
+                MaskedArray.requireBoolArray(validity, EncodingId.FASTLANES_DELTA, "validity child"));
     }
 
     /// Untransposes one chunk straight into the output window.

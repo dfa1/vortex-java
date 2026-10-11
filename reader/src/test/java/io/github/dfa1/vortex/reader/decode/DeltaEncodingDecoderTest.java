@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -30,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class DeltaEncodingDecoderTest {
 
     private static final DeltaEncodingDecoder SUT = new DeltaEncodingDecoder();
-    private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder());
+    private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
 
     private static final int FL_CHUNK_SIZE = 1024;
 
@@ -149,6 +150,12 @@ class DeltaEncodingDecoderTest {
     /// called: the writer module is not on the reader's test classpath, and the encoder never
     /// emits a non-zero `offset`, which is precisely the case worth covering.
     private static LongArray decodeDelta(PType ptype, long[] values, int offset, int rowCount) {
+        return new WidenedLongView(decodeDeltaArray(ptype, values, offset, rowCount, false, null));
+    }
+
+    /// `validity`, when given, is a third child as Rust writes a nullable column's.
+    private static Array decodeDeltaArray(PType ptype, long[] values, int offset, int rowCount, boolean nullable,
+                                          byte[] validity) {
         int lanes = FastLanes.lanes(ptype);
         int typeBits = ptype.bits();
         long mask = FastLanes.lowMask(typeBits);
@@ -184,13 +191,18 @@ class DeltaEncodingDecoderTest {
         MemorySegment meta = MemorySegment.ofArray(new ProtoDeltaMetadata(paddedLen, offset).encode());
         ArrayNode bases = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode deltas = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
-        ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA, meta, new ArrayNode[]{bases, deltas}, new int[0]);
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{2});
+        ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA, meta,
+                validity == null ? new ArrayNode[]{bases, deltas} : new ArrayNode[]{bases, deltas, validityNode},
+                new int[0]);
 
-        MemorySegment[] segs = {toSegment(basesAll, ptype), toSegment(deltasAll, ptype)};
-        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), rowCount, segs,
+        MemorySegment[] segs = validity == null
+                ? new MemorySegment[]{toSegment(basesAll, ptype), toSegment(deltasAll, ptype)}
+                : new MemorySegment[]{toSegment(basesAll, ptype), toSegment(deltasAll, ptype),
+                MemorySegment.ofArray(validity)};
+        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, nullable), rowCount, segs,
                 REGISTRY, Arena.ofAuto());
-        Array decoded = SUT.decode(ctx);
-        return new WidenedLongView(decoded);
+        return SUT.decode(ctx);
     }
 
     private static MemorySegment toSegment(long[] longs, PType ptype) {
@@ -327,5 +339,40 @@ class DeltaEncodingDecoderTest {
         MemorySegment[] segs = {TestSegments.leLongs(0L), TestSegments.leLongs(0L)};
         return new DecodeContext(node, new DType.Primitive(PType.I64, false), rowCount,
                 segs, REGISTRY, Arena.ofAuto());
+    }
+
+    /// Rust's Delta takes `[bases, deltas, validity?]`. The decoder used to ignore the third child,
+    /// so every null row of a Rust-written nullable column read back as its delta-decoded value.
+    @Test
+    void decode_validityChild_masksNullRows() {
+        // Given 0, 7, 14, ... with rows 1 and 3 null: validity bits 0b00010101 (rows 0, 2, 4 valid)
+        long[] values = new long[8];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i * 7L;
+        }
+
+        // When
+        Array result = decodeDeltaArray(PType.I64, values, 0, values.length, true, new byte[]{0b00010101});
+
+        // Then
+        MaskedArray masked = (MaskedArray) result;
+        assertThat(masked.isValid(0)).isTrue();
+        assertThat(masked.isValid(1)).isFalse();
+        assertThat(masked.isValid(2)).isTrue();
+        assertThat(masked.isValid(3)).isFalse();
+        assertThat(new WidenedLongView(masked.inner()).getLong(4)).isEqualTo(28L);
+    }
+
+    @Test
+    void decode_nullableWithoutValidityChild_isNotMasked() {
+        // Given a nullable dtype whose node has only [bases, deltas]: every row is valid
+        long[] values = {1, 2, 3, 4};
+
+        // When
+        Array result = decodeDeltaArray(PType.I64, values, 0, values.length, true, null);
+
+        // Then
+        assertThat(result).isNotInstanceOf(MaskedArray.class);
+        assertThat(new WidenedLongView(result).getLong(3)).isEqualTo(4L);
     }
 }
