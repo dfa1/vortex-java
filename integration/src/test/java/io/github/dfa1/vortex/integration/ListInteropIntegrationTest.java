@@ -125,7 +125,7 @@ class ListInteropIntegrationTest {
         assertThat(result).containsExactlyElementsOf(expected(element, nulls, elementNulls, 0, ROWS));
     }
 
-    private static int length(long row) {
+    static int length(long row) {
         return (int) (row % 4);
     }
 
@@ -138,7 +138,7 @@ class ListInteropIntegrationTest {
         return flat;
     }
 
-    private static List<List<Object>> expected(Element element, Nulls nulls, ElementNulls elementNulls, int from,
+    static List<List<Object>> expected(Element element, Nulls nulls, ElementNulls elementNulls, int from,
                                                int to) {
         List<List<Object>> rows = new ArrayList<>();
         long flat = firstFlat(nulls, from);
@@ -196,7 +196,7 @@ class ListInteropIntegrationTest {
     }
 
     /// The dense array of `values`, zero (or empty) where an element is null.
-    private static Object pack(Element element, List<Object> values) {
+    static Object pack(Element element, List<Object> values) {
         int n = values.size();
         return switch (element) {
             case INT -> {
@@ -241,7 +241,7 @@ class ListInteropIntegrationTest {
         return value == null ? element.zero() : value;
     }
 
-    private static List<List<Object>> readJni(Path file, long begin, long end, Expression filter) throws IOException {
+    static List<List<Object>> readJni(Path file, long begin, long end, Expression filter) throws IOException {
         var builder = ScanOptions.builder()
                 .projection(Expression.select(new String[]{"v"}, Expression.root()))
                 .rowRangeBegin(begin)
@@ -256,9 +256,9 @@ class ListInteropIntegrationTest {
             try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
                 while (reader.loadNextBatch()) {
                     VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    ListVector vector = (ListVector) root.getVector("v");
+                    FieldVector vector = root.getVector("v");
                     for (int i = 0; i < root.getRowCount(); i++) {
-                        rows.add(vector.isNull(i) ? null : vector.getObject(i).stream()
+                        rows.add(vector.isNull(i) ? null : ((List<?>) vector.getObject(i)).stream()
                                 .map(item -> item instanceof org.apache.arrow.vector.util.Text text
                                         ? text.toString() : item)
                                 .collect(Collectors.toCollection(ArrayList::new)));
@@ -351,7 +351,7 @@ class ListInteropIntegrationTest {
         return rows;
     }
 
-    private static long offset(MemorySegment offsets, int bytes, long index) {
+    static long offset(MemorySegment offsets, int bytes, long index) {
         return switch (bytes) {
             case 1 -> offsets.get(ValueLayout.JAVA_BYTE, index);
             case 2 -> offsets.getAtIndex(VortexFormat.LE_SHORT, index);
