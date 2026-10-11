@@ -3,7 +3,7 @@
 - **Status:** Accepted — implementation pending
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
-- **Related:** [CLAUDE.md §Security contract](../CLAUDE.md), [TODO.md §Resource caps](../TODO.md)
+- **Related:** [CLAUDE.md §Security contract](../CLAUDE.md)
 
 ## Context
 
@@ -171,5 +171,4 @@ a user-facing query limit, not a security cap.
 ## References
 
 - [CLAUDE.md §Security contract](../CLAUDE.md)
-- [TODO.md §Resource caps](../TODO.md)
 - [ADR 0003 — VortexException sanitization](0003-vortex-exception-sanitization.md)

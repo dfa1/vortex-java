@@ -3,8 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
-- **Related:** [CLAUDE.md §Memory model — Hot-loop rule](../CLAUDE.md),
-  [TODO.md §Vector API](../TODO.md)
+- **Related:** [CLAUDE.md §Memory model — Hot-loop rule](../CLAUDE.md)
 
 ## Context
 
@@ -152,7 +151,6 @@ loop structure.
 
 - [CLAUDE.md §Hot-loop rule](../CLAUDE.md) — the primary vectorization
   strategy in use today
-- [TODO.md §Vector API items](../TODO.md)
 - JEP 469: Vector API (8th Incubator) —
   https://openjdk.org/jeps/469
 - JMH benchmark harness: `./bench` command, `JavaVsJniReadBenchmark`

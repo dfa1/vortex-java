@@ -180,7 +180,7 @@ class BitpackedEncodingDecoderTest {
         }
     }
 
-    /// Adversarial metadata and buffers from an untrusted file (TODO.md §Security,
+    /// Adversarial metadata and buffers from an untrusted file (CLAUDE.md §Security contract,
     /// per-encoding adversarial tests). `bit_width` was read straight off the wire and fed
     /// into the shift and byte-offset math of the unpack loops, so a negative or oversized
     /// width — or a `packed` buffer too short for the declared row count — escaped as a raw

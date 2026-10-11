@@ -10,12 +10,11 @@
 - **Date:** 2026-07-12
 - **Deciders:** project maintainer
 - **Related:** [ADR 0003 — VortexException sanitization](0003-vortex-exception-sanitization.md),
-  [ADR 0004 — Resource caps and `ReadOptions`](0004-resource-caps-read-options.md),
-  [TODO.md §Security](../TODO.md)
+  [ADR 0004 — Resource caps and `ReadOptions`](0004-resource-caps-read-options.md)
 
 ## Context
 
-The reader's security contract (TODO.md §Security) requires every malformed input to fail as
+The reader's security contract (CLAUDE.md §Security contract) requires every malformed input to fail as
 `VortexException`, never a raw JVM crash class (`ArrayIndexOutOfBoundsException`,
 `OutOfMemoryError`, `StackOverflowError`, a raw FlatBuffer/Protobuf parser exception). Per-encoding
 adversarial unit tests cover known gotchas by hand (non-monotonic offsets, out-of-range codes,
@@ -60,7 +59,7 @@ below land — the five hand-picked files above are a stopgap, not a replacement
 - One `@FuzzTest` per encoding `Encoding.decode` — per-encoding decode boundary.
 
 Crash oracle: `ignore = {VortexException.class}` — anything else is a real finding, per the
-security contract in TODO.md §Security.
+security contract in CLAUDE.md §Security contract.
 
 ### Differential fuzz (Java vs Rust)
 
@@ -78,7 +77,7 @@ OSS-Fuzz engine, giving free continuous fuzzing beyond what CI runs.
 ### Positive
 
 - Explores the untrusted-input space beyond hand-written adversarial tests; the per-encoding
-  gotcha list in TODO.md §Security becomes a floor, not a ceiling.
+  gotcha list in CLAUDE.md §Security contract becomes a floor, not a ceiling.
 - Crash reproducers become permanent regression tests via the JUnit 5 integration.
 - Differential mode catches semantic divergence from the Rust reference, not just crashes.
 - OSS-Fuzz gives continuous fuzzing without maintaining dedicated infrastructure.
@@ -99,7 +98,7 @@ OSS-Fuzz engine, giving free continuous fuzzing beyond what CI runs.
 ## Alternatives considered
 
 - **Hand-written adversarial tests only (status quo)** — cheap, but bounded by what a human
-  enumerates; the per-encoding gotcha list in TODO.md §Security exists precisely because this
+  enumerates; the per-encoding gotcha list in CLAUDE.md §Security contract exists precisely because this
   approach misses things.
 - **AFL/libFuzzer via a custom JNI harness** — more mature native fuzzing ecosystem, but requires
   building and maintaining a harness that bridges into JVM bytecode. Jazzer already does this and
@@ -108,6 +107,5 @@ OSS-Fuzz engine, giving free continuous fuzzing beyond what CI runs.
 ## References
 
 - [Jazzer](https://github.com/CodeIntelligenceTesting/jazzer)
-- [TODO.md §Security](../TODO.md)
 - [ADR 0003 — VortexException sanitization](0003-vortex-exception-sanitization.md)
 - [ADR 0004 — Resource caps and `ReadOptions`](0004-resource-caps-read-options.md)

@@ -441,7 +441,7 @@ class LazySparseArrayTest {
         }
     }
 
-    /// Malformed-input cases (TODO.md §Security, ADR 0003): `patchIndices` is untrusted file
+    /// Malformed-input cases (CLAUDE.md §Security contract, ADR 0003): `patchIndices` is untrusted file
     /// data the format requires to be sorted ascending. `walkPatches` (the shared `forEach`
     /// engine) advances its cursor to `patchAbs + 1` per patch and assumes it never sees a
     /// smaller value again — before the guard landed, an out-of-order index moved the cursor

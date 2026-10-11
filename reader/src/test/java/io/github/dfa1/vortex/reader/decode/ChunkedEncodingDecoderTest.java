@@ -49,7 +49,7 @@ class ChunkedEncodingDecoderTest {
         assertThat(longs.getLong(4)).isEqualTo(14);
     }
 
-    /// Malformed-input cases for `vortex.chunked` (TODO.md §Security, ADR 0003). The child count
+    /// Malformed-input cases for `vortex.chunked` (CLAUDE.md §Security contract, ADR 0003). The child count
     /// and the chunk-offsets buffer both come from untrusted file bytes; the class named in each
     /// comment is the raw JDK exception the reader leaked before the guards landed.
     ///

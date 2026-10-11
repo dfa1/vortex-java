@@ -418,4 +418,3 @@ programmatically inspect exception types, this decision can be revisited.
 - [CLAUDE.md §Security contract](../CLAUDE.md)
 - [PR #27 — `BoundedSegment` + audit trail for untrusted `asSlice`](https://github.com/dfa1/vortex-java/pull/27)
 - [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md)
-- [TODO.md §"`VortexException` message sanitization"](../TODO.md)

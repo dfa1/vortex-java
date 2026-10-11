@@ -3,8 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
-- **Related:** [TODO.md — domain primitives / Valhalla item](../TODO.md),
-  [ADR 0005 — Vector API adoption](0005-vector-api-adoption.md)
+- **Related:** [ADR 0005 — Vector API adoption](0005-vector-api-adoption.md)
 
 ## Context
 
@@ -20,9 +19,8 @@ as their widened signed counterparts (`int`, `int`, `long`, `long`) with
 no enforcement of the unsigned range and no indication at the call site that
 the value must be treated as unsigned.
 
-The [TODO.md](../TODO.md) item reads:
-> Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via
-> Project Valhalla instead of raw `long`/`int`.
+The idea is to use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via
+Project Valhalla instead of raw `long`/`int`.
 
 [A companion article](https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla)
 argues that Valhalla's `value class` eliminates the historical heap-allocation
@@ -155,7 +153,6 @@ additional tooling.
 
 ## References
 
-- [TODO.md — domain primitives / Valhalla item](../TODO.md)
 - [Rethink Domain Primitives with Valhalla](https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla)
 - JEP 401: Value Classes and Objects — https://openjdk.org/jeps/401
 - [ADR 0005 — Vector API adoption](0005-vector-api-adoption.md) — analogous

@@ -77,7 +77,7 @@ class VarBinViewEncodingDecoderTest {
                 .hasMessageContaining("at least 1 buffer");
     }
 
-    /// Adversarial views from an untrusted file (TODO.md §Security, per-encoding adversarial
+    /// Adversarial views from an untrusted file (CLAUDE.md §Security contract, per-encoding adversarial
     /// tests). The view headers are decoded lazily and were read with no validation at all:
     /// a negative size reached `new byte[size]` as a `NegativeArraySizeException`, a bogus
     /// buffer index indexed `dataBufs` as a raw `ArrayIndexOutOfBoundsException`, and a row

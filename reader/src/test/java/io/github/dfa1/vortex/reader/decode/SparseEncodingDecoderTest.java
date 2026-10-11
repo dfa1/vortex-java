@@ -331,7 +331,7 @@ class SparseEncodingDecoderTest {
                 .hasMessageContaining("2");
     }
 
-    /// Malformed-input cases for `vortex.sparse` (TODO.md §Security, ADR 0003): the patch count,
+    /// Malformed-input cases for `vortex.sparse` (CLAUDE.md §Security contract, ADR 0003): the patch count,
     /// the patch children's buffers and the patch-value offsets all come from untrusted file
     /// bytes and none of them are cross-validated at decode time. Every case here crashed with a
     /// raw JDK exception before the guards landed — the class named in each comment is what the

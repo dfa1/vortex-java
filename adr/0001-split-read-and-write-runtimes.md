@@ -355,4 +355,3 @@ of CI / integration-test fallout, plus reviewer time. Not a weekend.
 - [Phase 1–4 commits — BoundedSegment introduction and migration](https://github.com/dfa1/vortex-java/pull/27/commits)
 - [CLAUDE.md §Security contract](../CLAUDE.md)
 - [CLAUDE.md — current "three touch-points" rule for adding an encoding](../CLAUDE.md)
-- [TODO.md — parser hardening backlog](../TODO.md)
