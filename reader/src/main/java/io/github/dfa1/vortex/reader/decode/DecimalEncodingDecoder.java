@@ -1,8 +1,10 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoDecimalMetadata;
 
@@ -37,7 +39,20 @@ public final class DecimalEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_DECIMAL,
                     "buffer too small: expected %d bytes, got %d".formatted(expected, buffer.byteSize()));
         }
-        return new LazyDecimalArray(ctx.dtype(), ctx.rowCount(), buffer, byteWidth);
+        // A nullable column carries its validity as an optional single child (Rust: `children.get(0, ..)`),
+        // not under a vortex.masked wrapper. Ignoring it read every null row back as zero. As for
+        // vortex.list, the declared nullability is authoritative.
+        int children = ctx.node().children().length;
+        if (children > 1) {
+            throw new VortexException(EncodingId.VORTEX_DECIMAL, "expected 0 or 1 children, got " + children);
+        }
+        if (children == 0 || !ctx.dtype().nullable()) {
+            return new LazyDecimalArray(ctx.dtype(), ctx.rowCount(), buffer, byteWidth);
+        }
+        Array validity = ctx.decodeChild(0, DType.BOOL, ctx.rowCount());
+        return new MaskedArray(
+                new LazyDecimalArray(ctx.dtype().withNullable(false), ctx.rowCount(), buffer, byteWidth),
+                MaskedArray.requireBoolArray(validity, EncodingId.VORTEX_DECIMAL, "validity child"));
     }
 
     private static int decimalTypeByteWidth(int valuesType) {

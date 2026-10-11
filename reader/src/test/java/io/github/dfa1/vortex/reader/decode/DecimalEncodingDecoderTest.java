@@ -7,6 +7,8 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import org.junit.jupiter.api.Nested;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -107,5 +109,45 @@ class DecimalEncodingDecoderTest {
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("invalid metadata");
         }
+    }
+
+    /// Rust's Decimal takes `[validity?]` as its only child. The decoder used to ignore it, so every
+    /// null row of a Rust-written nullable column (i8 and i128 storage in the interop sweep) read
+    /// back as zero.
+    @Test
+    void decode_validityChild_masksNullRows() {
+        // Given 0.01, null, 0.03 in i8 storage: validity bits 0b101
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{0x08, 0});
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DECIMAL, meta, new ArrayNode[]{validityNode}, new int[]{0});
+        DecodeContext ctx = new DecodeContext(node, new DType.Decimal((byte) 10, (byte) 2, true), 3,
+                new MemorySegment[]{MemorySegment.ofArray(new byte[]{1, 2, 3}), MemorySegment.ofArray(new byte[]{0b101})},
+                TestRegistry.ofDecoders(SUT, new BoolEncodingDecoder()), Arena.ofAuto());
+
+        // When
+        Array result = SUT.decode(ctx);
+
+        // Then
+        MaskedArray masked = (MaskedArray) result;
+        assertThat(masked.isValid(0)).isTrue();
+        assertThat(masked.isValid(1)).isFalse();
+        assertThat(((DecimalArray) masked.inner()).getDecimal(2)).isEqualByComparingTo("0.03");
+    }
+
+    @Test
+    void decode_twoChildren_throws() {
+        // Given Rust accepts only [] or [validity]
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{0x08, 0});
+        ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DECIMAL, meta,
+                new ArrayNode[]{validityNode, validityNode}, new int[]{0});
+        DecodeContext ctx = new DecodeContext(node, new DType.Decimal((byte) 10, (byte) 2, true), 1,
+                new MemorySegment[]{MemorySegment.ofArray(new byte[]{1}), MemorySegment.ofArray(new byte[]{1})},
+                TestRegistry.ofDecoders(SUT, new BoolEncodingDecoder()), Arena.ofAuto());
+
+        // When / Then
+        assertThatThrownBy(() -> SUT.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("expected 0 or 1 children, got 2");
     }
 }
