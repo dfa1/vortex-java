@@ -110,6 +110,9 @@ class Float16InteropIntegrationTest {
         cases.add(forced(EncodingId.FASTLANES_RLE, "runs", shapes));
         cases.add(forced(EncodingId.FASTLANES_RLE, "signed zeros", shapes));
         cases.add(forced(EncodingId.VORTEX_SPARSE, "mostly one value", shapes));
+        // all-equal data leaves sparse no patches, which Rust refuses to read (#519): it must decline
+        cases.add(Arguments.of("VORTEX_SPARSE declines / constant 1.5", WriteOptions.defaults().withoutEditions()
+                .withColumnEncoding(COLUMN, ColumnEncoding.candidates(EncodingId.VORTEX_SPARSE)), null, shapes.get("constant 1.5")));
         // Pco is the one encoding Rust runs on half-precision floats that Java lacked (compact preset)
         cases.add(forced(EncodingId.VORTEX_PCO, "random", shapes));
         cases.add(forced(EncodingId.VORTEX_PCO, "low cardinality", shapes));
