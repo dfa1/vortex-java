@@ -131,3 +131,13 @@ Architecture, API design, and all decisions are human-driven.
 | [vortex-data/vortex](https://github.com/vortex-data/vortex)         | Rust     | Reference implementation + JNI bindings |
 | [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
 | [Evariops/Vorticity](https://github.com/Evariops/Vorticity)         | C#       | Pure .NET, dependency-free              |
+
+## Acknowledgments
+
+<a href="https://www.yourkit.com/java/profiler/"><img src="https://www.yourkit.com/images/yklogo.png" alt="YourKit" width="120"></a>
+
+YourKit supports open source projects with innovative and intelligent tools
+for monitoring and profiling Java and .NET applications.
+YourKit is the creator of [YourKit Java Profiler](https://www.yourkit.com/java/profiler/),
+[YourKit .NET Profiler](https://www.yourkit.com/dotnet-profiler/),
+and [YourKit YouMonitor](https://www.yourkit.com/youmonitor/).
