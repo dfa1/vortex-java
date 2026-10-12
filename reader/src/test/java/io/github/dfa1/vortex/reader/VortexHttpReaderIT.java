@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("integration")
 class VortexHttpReaderIT {
 
-    private static final URI BASE = URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.84.0/arrays/");
+    private static final URI BASE = URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.88.0/arrays/");
 
     private static final URI TPCH_LINEITEM = BASE.resolve("tpch_lineitem.compact.vortex");
 
