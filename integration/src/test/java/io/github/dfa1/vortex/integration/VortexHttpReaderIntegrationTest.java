@@ -90,7 +90,7 @@ class VortexHttpReaderIntegrationTest {
             "alp.vortex", "alprd.vortex", "bitpacked.vortex", "booleans.vortex", "bytebool.vortex",
             "chunked.vortex", "constant.vortex", "datetime.vortex", "datetimeparts.vortex",
             "decimal.vortex", "decimal_byte_parts.vortex", "dict.vortex", "fixed_size_list.vortex",
-            "fsst.vortex", "null.vortex", "pco.vortex", "primitives.vortex", "rle.vortex",
+            "fsst.vortex", "map.vortex", "null.vortex", "pco.vortex", "primitives.vortex", "rle.vortex",
             "runend.vortex", "sequence.vortex", "sparse.vortex", "struct_nested.vortex",
             "varbin.vortex", "varbinview.vortex", "zigzag.vortex", "zstd.vortex"
             // zstd.vortex is dictionary-compressed; decoded against its shared dictionary via the
@@ -116,14 +116,11 @@ class VortexHttpReaderIntegrationTest {
     }
 
     // vortex.masked / vortex.patched / vortex.variant: decoders implemented, but no S3 fixture
-    // is published (still absent at v0.84.0) — enable this test once fixtures exist upstream.
-    // vortex.map: decoder and encoder both exist (core2026.08.0, issue #351), only the fixture is
-    // missing — cross-language coverage runs through the vortex-jni oracle in the integration
-    // module (MapEncodingInteropIntegrationTest) until a fixture is published.
+    // is published (still absent at v0.88.0) — enable this test once fixtures exist upstream.
 
-    @Disabled("no S3 fixture through v0.84.0")
+    @Disabled("no S3 fixture through v0.88.0")
     @ParameterizedTest
-    @ValueSource(strings = {"masked.vortex", "patched.vortex", "variant.vortex", "map.vortex"})
+    @ValueSource(strings = {"masked.vortex", "patched.vortex", "variant.vortex"})
     void scan_unpublishedFixture_decodesAllRows(String fixture) throws Exception {
         // Given
         URI uri = BASE.resolve(fixture);
