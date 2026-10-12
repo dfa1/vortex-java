@@ -75,7 +75,7 @@ public record ArrayStats(
         if (n == 0) {
             return EMPTY;
         }
-        long averageRunLength = n / SimdOperationsSupport.preferred().runs(data, ptype);
+        long averageRunLength = n / Math.max(1, SimdOperationsSupport.preferred().runs(data, ptype));
         boolean accumulate = options.countDistinct() || options.trackMostFrequent();
 
         // Stop once the distinct count passes half the rows: past that point every consumer's

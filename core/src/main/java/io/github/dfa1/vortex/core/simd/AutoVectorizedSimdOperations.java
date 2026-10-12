@@ -361,7 +361,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                 boolean seen = false;
                 for (short v : a) {
                     float f = Float.float16ToFloat(v);
-                    if (f != f) {
+                    if (Float.isNaN(f)) {
                         continue;
                     }
                     if (!seen) {
@@ -388,7 +388,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                 float min = Float.POSITIVE_INFINITY;
                 float max = Float.NEGATIVE_INFINITY;
                 for (float v : a) {
-                    if (v == v) {
+                    if (!Float.isNaN(v)) {
                         min = Math.min(min, v);
                         max = Math.max(max, v);
                     }
@@ -401,7 +401,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                 double min = Double.POSITIVE_INFINITY;
                 double max = Double.NEGATIVE_INFINITY;
                 for (double v : a) {
-                    if (v == v) {
+                    if (!Double.isNaN(v)) {
                         min = Math.min(min, v);
                         max = Math.max(max, v);
                     }

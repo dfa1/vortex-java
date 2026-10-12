@@ -529,7 +529,7 @@ final class VectorApiSimdOperations implements SimdOperations {
         float lo = min.reduceLanes(VectorOperators.MIN);
         float hi = max.reduceLanes(VectorOperators.MAX);
         for (; i < a.length; i++) {
-            if (a[i] == a[i]) {
+            if (!Float.isNaN(a[i])) {
                 lo = Math.min(lo, a[i]);
                 hi = Math.max(hi, a[i]);
             }
@@ -551,7 +551,7 @@ final class VectorApiSimdOperations implements SimdOperations {
         double lo = min.reduceLanes(VectorOperators.MIN);
         double hi = max.reduceLanes(VectorOperators.MAX);
         for (; i < a.length; i++) {
-            if (a[i] == a[i]) {
+            if (!Double.isNaN(a[i])) {
                 lo = Math.min(lo, a[i]);
                 hi = Math.max(hi, a[i]);
             }
@@ -568,7 +568,7 @@ final class VectorApiSimdOperations implements SimdOperations {
         boolean seen = false;
         for (short v : a) {
             float f = Float.float16ToFloat(v);
-            if (f != f) {
+            if (Float.isNaN(f)) {
                 continue;
             }
             if (!seen) {
