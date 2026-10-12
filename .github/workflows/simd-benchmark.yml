@@ -79,7 +79,7 @@ jobs:
           scripts/simd-benchmark.sh performance/target/simd-benchmark > table.md
           { echo; cat table.md; } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: simd-benchmark-${{ matrix.name }}
