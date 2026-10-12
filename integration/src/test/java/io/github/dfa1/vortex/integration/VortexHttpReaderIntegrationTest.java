@@ -1,8 +1,10 @@
-package io.github.dfa1.vortex.reader;
+package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.reader.VortexHttpReader;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.array.ListArray;
 import io.github.dfa1.vortex.reader.array.ListViewArray;
 import org.junit.jupiter.api.Disabled;
@@ -20,10 +22,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// via HTTP Range requests and validates structure + data.
 ///
 /// Skipped automatically when the network is unavailable.
-@Tag("integration")
-class VortexHttpReaderIT {
+@Tag("slow")
+class VortexHttpReaderIntegrationTest {
 
-    private static final URI BASE = URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.88.0/arrays/");
+    private static final URI BASE = RustFixtures.arrayUri("");
 
     private static final URI TPCH_LINEITEM = BASE.resolve("tpch_lineitem.compact.vortex");
 

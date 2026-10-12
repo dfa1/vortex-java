@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// `ScanIterator#buildColumnMap` has a legitimate reason to unpack a decoded `StructArray` into
 /// several named columns: some files' root layout isn't itself a Struct layout (no per-column
 /// layout children — e.g. all columns packed into one flat segment, see
-/// `VortexHttpReaderIT#scan_forVortex_decodesAllRows`), so the whole file decodes as a single
+/// `VortexHttpReaderIntegrationTest#scan_forVortex_decodesAllRows`), so the whole file decodes as a single
 /// synthetic placeholder whose `StructArray` fields *are* the file's real columns. But that
 /// heuristic used to fire on *any* single-column projection whose sole (real, named) column
 /// happened to decode to a `StructArray` too — silently dropping the column's actual name and
