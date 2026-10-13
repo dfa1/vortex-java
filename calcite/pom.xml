@@ -13,6 +13,8 @@
     <description>Apache Calcite SQL adapter over the Vortex columnar file format (demo: filter/project/aggregate push-down).</description>
 
     <properties>
+        <!-- Calcite pulls in protobuf-java, whose UnsafeUtil calls sun.misc.Unsafe (not ours: we never use Unsafe). -->
+        <test.unsafe.args>--sun-misc-unsafe-memory-access=allow</test.unsafe.args>
         <calcite.version>1.42.0</calcite.version>
     </properties>
 
