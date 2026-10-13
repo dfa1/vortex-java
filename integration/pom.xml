@@ -39,7 +39,6 @@
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
             <artifactId>vortex-writer</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
@@ -49,12 +48,10 @@
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
             <artifactId>vortex-csv</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
             <artifactId>vortex-jdbc</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
@@ -75,12 +72,10 @@
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
             <artifactId>vortex-reader</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
             <artifactId>vortex-inspector</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>dev.vortex</groupId>
@@ -212,7 +207,7 @@
                          dependency we don't own. Drop only that category here; every other
                          lint stays strict via the parent's -Werror. -->
                     <compilerArgs combine.self="override">
-                        <arg>-Xlint:all,-classfile</arg>
+                        <arg>-Xlint:all,-classfile,-incubating</arg>
                     </compilerArgs>
                 </configuration>
             </plugin>
@@ -245,7 +240,7 @@
                     <argLine>
                         @{argLine}
                         --add-opens java.base/java.nio=ALL-UNNAMED
-                        --enable-native-access=ALL-UNNAMED
+                        --enable-native-access=io.github.dfa1.zstd,ALL-UNNAMED
                         --sun-misc-unsafe-memory-access=allow
                         ${test.vector.args}
                     </argLine>

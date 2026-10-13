@@ -61,7 +61,9 @@
                 </configuration>
             </plugin>
             <!-- Publish a test-jar so reader/ and writer/ tests can reuse core test
-                 helpers (DTypes, EncodeTestHelper) without duplication. -->
+                 helpers (DTypes, EncodeTestHelper) without duplication. Only the
+                 testing package goes in: the module path rejects a test-jar that re-declares packages of the real core
+                 module (a split package), which core's own *Test classes would. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
@@ -71,6 +73,11 @@
                         <goals>
                             <goal>test-jar</goal>
                         </goals>
+                        <configuration>
+                            <includes>
+                                <include>io/github/dfa1/vortex/core/testing/**</include>
+                            </includes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

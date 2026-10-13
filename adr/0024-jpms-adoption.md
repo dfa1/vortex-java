@@ -1,6 +1,6 @@
 # ADR 0024: JPMS adoption for core/reader/writer
 
-- **Status:** Accepted for `core`, `fsst`, `reader` and `writer` (2026-10-13); the remaining modules stay on the classpath
+- **Status:** Accepted (2026-10-13): `core`, `fsst`, `reader`, `writer`, `csv`, `jdbc`, `inspector` and `integration` are named modules; `parquet`, `calcite`, `cli` and the generators pin an `Automatic-Module-Name`
 - **Date:** 2026-09-06
 - **Deciders:** project maintainer
 - **Related:** [ADR 0017 — In-house FlatBuffers codegen](0017-in-house-flatbuffers-codegen.md),

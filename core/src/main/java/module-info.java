@@ -13,6 +13,6 @@ module io.github.dfa1.vortex.core {
     exports io.github.dfa1.vortex.core.compute;
     exports io.github.dfa1.vortex.core.simd;
     // Generated wire codecs: qualified so they stay out of the public API (and out of the exports lint).
-    exports io.github.dfa1.vortex.core.fbs to io.github.dfa1.vortex.reader, io.github.dfa1.vortex.writer, io.github.dfa1.vortex.inspector;
-    exports io.github.dfa1.vortex.core.proto to io.github.dfa1.vortex.reader, io.github.dfa1.vortex.writer;
+    exports io.github.dfa1.vortex.core.fbs to io.github.dfa1.vortex.reader, io.github.dfa1.vortex.writer, io.github.dfa1.vortex.inspect;
+    exports io.github.dfa1.vortex.core.proto to io.github.dfa1.vortex.reader, io.github.dfa1.vortex.writer, io.github.dfa1.vortex.integration;
 }

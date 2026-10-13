@@ -270,8 +270,11 @@ When stuck on encode/decode behavior, consult **in this order**:
   loudly (`VortexException`, Rust default; no allowUnknown for layouts). Scope: the layout SPI covers
   full-column subtree decode; zone-map pruning, filtered scans, and chunk planning recognize the
   built-in layouts only.
-- **`core`, `fsst`, `reader`, `writer` are named JPMS modules** (ADR 0024); the rest stay classpath-only. Surefire runs them on the
-  module path, so the module graph is checked by the unit tests. Rules: `core` exports `fbs`/`proto` only to the modules that
+- **JPMS (ADR 0024).** `core`, `fsst`, `reader`, `writer`, `csv`, `jdbc` and `inspector` are named modules (module name = package
+  root: `io.github.dfa1.vortex.inspect`, not `...inspector`); `integration` has a main descriptor with no code so failsafe runs on
+  the module path too. Surefire/failsafe use the module path, so the module graph is checked by the tests. `parquet`, `calcite`,
+  `cli`, `fbs-gen`, `proto-gen` have no `module-info` (they depend on jars with no module descriptor, or are tools) and instead
+  pin a stable `Automatic-Module-Name` in the manifest; `performance`, `demo` and `fuzz` are unpublished and stay on the classpath. Rules: `core` exports `fbs`/`proto` only to the modules that
   need them (the generated wire codecs stay out of the public API); `writer` never `requires` the reader, so its round-trip
   tests reach the reader on the test classpath and the extra `--add-reads`/`--add-exports` live in the writer POM's
   `test.modules.args`, never in `module-info.java`; a module that exposes a generated type from a public signature
