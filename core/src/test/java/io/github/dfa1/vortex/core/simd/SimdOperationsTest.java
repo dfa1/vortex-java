@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
+import org.assertj.core.data.Offset;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -14,20 +16,33 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.OptionalLong;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class SimdOperationsTest {
+/// The behavior every [SimdOperations] implementation must have; a subclass supplies the one under test.
+abstract class SimdOperationsTest {
 
     // Full-range values: a wrong width, or sign vs zero extension, changes the result
     private static final long[] VALUES = {0L, -1L, 1L, 0x80L, 0xFFL, 0x8000L, 0xFFFFL, 0x80000000L,
             0xFFFFFFFFL, Long.MIN_VALUE, Long.MAX_VALUE, 0x123456789ABCDEFL};
 
-    private final SimdOperations sut = SimdOperationsSupport.preferred();
+    protected SimdOperations sut;
+
+    /// Creates the implementation under test, skipping the test if it cannot run in this JVM.
+    ///
+    /// @return the implementation under test
+    protected abstract SimdOperations createSut();
+
+    @BeforeEach
+    void setUpSut() {
+        sut = createSut();
+    }
 
     @Test
     void sumFloating_skipsNaN() {
@@ -48,11 +63,11 @@ class SimdOperationsTest {
     void widenInto_roundTripsNarrowedValues(PType ptype) {
         // Given values narrowed to ptype's width with the PTypeIO reference writer
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment src = arena.allocate(VALUES.length * ptype.byteSize());
+            MemorySegment src = arena.allocate((long) VALUES.length * ptype.byteSize());
             long[] expected = new long[VALUES.length];
             for (int i = 0; i < VALUES.length; i++) {
-                PTypeIO.set(src, i * ptype.byteSize(), ptype, VALUES[i]);
-                expected[i] = PrimitiveArrays.readLong(src, i * ptype.byteSize(), ptype, EncodingId.VORTEX_PRIMITIVE);
+                PTypeIO.set(src, (long) i * ptype.byteSize(), ptype, VALUES[i]);
+                expected[i] = PrimitiveArrays.readLong(src, (long) i * ptype.byteSize(), ptype, EncodingId.VORTEX_PRIMITIVE);
             }
 
             // When widened from element 2, leaving the rest of out untouched
@@ -427,11 +442,11 @@ class SimdOperationsTest {
     void narrowInto_matchesPTypeIoSet(PType ptype) {
         // Given
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment expected = arena.allocate(VALUES.length * ptype.byteSize());
+            MemorySegment expected = arena.allocate((long) VALUES.length * ptype.byteSize());
             for (int i = 0; i < VALUES.length; i++) {
-                PTypeIO.set(expected, i * ptype.byteSize(), ptype, VALUES[i]);
+                PTypeIO.set(expected, (long) i * ptype.byteSize(), ptype, VALUES[i]);
             }
-            MemorySegment result = arena.allocate(VALUES.length * ptype.byteSize());
+            MemorySegment result = arena.allocate((long) VALUES.length * ptype.byteSize());
 
             // When
             sut.narrowInto(VALUES, ptype, result);
@@ -500,9 +515,9 @@ class SimdOperationsTest {
             default -> PType.U64;
         };
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment src = arena.allocate(VALUES.length * ptype.byteSize());
+            MemorySegment src = arena.allocate((long) VALUES.length * ptype.byteSize());
             for (int i = 0; i < VALUES.length; i++) {
-                PTypeIO.set(src, i * ptype.byteSize(), unsigned, VALUES[i]);
+                PTypeIO.set(src, (long) i * ptype.byteSize(), unsigned, VALUES[i]);
             }
             long[] expected = new long[VALUES.length];
             long[] result = new long[VALUES.length];
@@ -695,5 +710,483 @@ class SimdOperationsTest {
             case long[] a -> a[index]++;
             default -> throw new IllegalArgumentException(array.getClass().toString());
         }
+    }
+
+    private static final int[] LENGTHS = {0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 100, 255, 256, 257, 1000};
+
+    // The default implementation is the Rust-parity oracle for the differential tests below
+    private final SimdOperations reference = new AutoVectorizedSimdOperations();
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void runs_matchesReference(PType ptype) {
+        // Given arrays with long runs, short runs and no runs at every length, and NaN / signed zero floats
+        for (int length : LENGTHS) {
+            for (int runLength : new int[]{1, 2, 5, 64}) {
+                Object values = arrayWithRuns(ptype, length, runLength, new Random(length * 31L + runLength));
+
+                // When
+                long result = sut.runs(values, ptype);
+
+                // Then
+                assertThat(result).as("%s length=%d runLength=%d", ptype, length, runLength)
+                        .isEqualTo(reference.runs(values, ptype));
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void allEqual_matchesReference(PType ptype) {
+        // Given a constant array at every length, and the same array with one element changed at the
+        // first, a middle, the last and the first-tail position
+        for (int length : LENGTHS) {
+            Object constant = arrayWithRuns(ptype, length, Integer.MAX_VALUE, new Random(length));
+            assertThat(sut.allEqual(constant, ptype)).as("%s constant length=%d", ptype, length)
+                    .isEqualTo(reference.allEqual(constant, ptype));
+            for (int position : new int[]{0, length / 2, length - 1, length - length % 16 - 1}) {
+                if (position < 0 || position >= length) {
+                    continue;
+                }
+                Object changed = arrayWithRuns(ptype, length, Integer.MAX_VALUE, new Random(length));
+                flip(changed, position);
+
+                // When / Then
+                assertThat(sut.allEqual(changed, ptype)).as("%s length=%d differs at %d", ptype, length, position)
+                        .isEqualTo(reference.allEqual(changed, ptype));
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void minMax_matchesReference(PType ptype) {
+        // Given random full-range data at every length: values near the sign boundary, where the
+        // unsigned flip would swap min and max if wrong
+        for (int length : LENGTHS) {
+            if (length == 0 && !ptype.isFloating()) {
+                continue;
+            }
+            Object values = arrayWithRuns(ptype, length, 1, new Random(length * 17L));
+
+            // When
+            long[] result = sut.minMax(values, ptype);
+
+            // Then
+            assertThat(result).as("%s length=%d", ptype, length).containsExactly(reference.minMax(values, ptype));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void minMax_extremes_matchReference(PType ptype) {
+        // Given arrays holding only the extremes of the carrier, in a vector-length run and a tail
+        for (int length : new int[]{1, 5, 17, 64, 70}) {
+            Object values = arrayWithRuns(ptype, length, 1, new Random(1));
+            extremes(values);
+
+            // When / Then
+            assertThat(sut.minMax(values, ptype)).as("%s length=%d", ptype, length)
+                    .containsExactly(reference.minMax(values, ptype));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"U8", "U16", "U32", "U64"})
+    void maxUnsigned_matchesReference(PType ptype) {
+        // Given random codes, with the maximum planted at every position class: first, last, a lane boundary
+        try (Arena arena = Arena.ofConfined()) {
+            for (int length : LENGTHS) {
+                MemorySegment segment = arena.allocate(Math.max(1L, (long) length * ptype.byteSize()));
+                Random random = new Random(length);
+                for (long b = 0; b < segment.byteSize(); b++) {
+                    segment.set(ValueLayout.JAVA_BYTE, b, (byte) random.nextInt(256));
+                }
+
+                // When / Then
+                assertThat(sut.maxUnsigned(segment, length, ptype)).as("%s length=%d", ptype, length)
+                        .isEqualTo(reference.maxUnsigned(segment, length, ptype));
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
+    void sum_matchesReference(PType ptype) {
+        // Given random data at every length; the 64-bit types hold values below 2^40 so no partial sum
+        // overflows, which is the case where lane-wise and sequential overflow checks must agree
+        for (int length : LENGTHS) {
+            Object values = arrayWithRuns(ptype, length, 1, new Random(length * 13L));
+            if (values instanceof long[] longs) {
+                for (int i = 0; i < longs.length; i++) {
+                    longs[i] >>= 24;
+                    longs[i] = ptype == PType.U64 ? longs[i] & 0xFF_FFFF_FFFFL : longs[i];
+                }
+            }
+
+            // When / Then
+            assertThat(sut.sum(values, ptype)).as("%s length=%d", ptype, length).isEqualTo(reference.sum(values, ptype));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32"})
+    void sum_pastTheFlushWindow_doesNotOverflowALane(PType ptype) {
+        // Given more elements than one int-lane flush window holds, every one at the carrier's extreme
+        // (255 / 65535 / -32768): a missing flush would wrap an int lane here
+        int length = 600_000;
+        Object values = arrayWithRuns(ptype, length, Integer.MAX_VALUE, new Random(1));
+        extremes(values);
+        fillConstant(values);
+
+        // When
+        OptionalLong result = sut.sum(values, ptype);
+
+        // Then
+        assertThat(result).isEqualTo(reference.sum(values, ptype));
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void widenArrayInto_matchesReference(PType ptype) {
+        // Given full-range data widened from several start offsets, so the vector body starts unaligned
+        for (int length : LENGTHS) {
+            Object values = arrayWithRuns(ptype, length + 5, 1, new Random(length * 7L));
+            for (int from : new int[]{0, 1, 5}) {
+                long[] expected = new long[length + 1];
+                long[] result = new long[length + 1];
+
+                // When
+                reference.widenArrayInto(values, from, length, ptype, expected);
+                sut.widenArrayInto(values, from, length, ptype, result);
+
+                // Then, including the untouched slot past count
+                assertThat(result).as("%s length=%d from=%d", ptype, length, from).containsExactly(expected);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void widenInto_matchesReference(PType ptype) {
+        // Given full-range data in a segment, widened from several start elements
+        try (Arena arena = Arena.ofConfined()) {
+            for (int length : LENGTHS) {
+                Object values = arrayWithRuns(ptype, length + 5, 1, new Random(length * 11L));
+                MemorySegment segment = PrimitiveArrays.toSegment(values, ptype, arena);
+                for (long from : new long[]{0, 1, 5}) {
+                    long[] expected = new long[length + 1];
+                    long[] result = new long[length + 1];
+
+                    // When
+                    reference.widenInto(segment, from, length, ptype, expected);
+                    sut.widenInto(segment, from, length, ptype, result);
+
+                    // Then
+                    assertThat(result).as("%s length=%d from=%d", ptype, length, from).containsExactly(expected);
+                }
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void narrowArrayInto_matchesReference(PType ptype) {
+        // Given full-range wide values at every length
+        for (int length : LENGTHS) {
+            long[] values = new Random(length * 3L).longs(length).toArray();
+            Object expected = narrowCarrier(ptype, length);
+            Object result = narrowCarrier(ptype, length);
+
+            // When
+            reference.narrowArrayInto(values, ptype, expected);
+            sut.narrowArrayInto(values, ptype, result);
+
+            // Then
+            assertThat(result).as("%s length=%d", ptype, length).isEqualTo(expected);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void narrowInto_matchesReference(PType ptype) {
+        // Given full-range wide values written into segments of exactly the narrowed size
+        try (Arena arena = Arena.ofConfined()) {
+            for (int length : LENGTHS) {
+                long[] values = new Random(length * 5L).longs(length).toArray();
+                MemorySegment expected = arena.allocate(Math.max(1L, (long) length * ptype.byteSize()));
+                MemorySegment result = arena.allocate(Math.max(1L, (long) length * ptype.byteSize()));
+
+                // When
+                reference.narrowInto(values, ptype, expected);
+                sut.narrowInto(values, ptype, result);
+
+                // Then
+                assertThat(result.mismatch(expected)).as("%s length=%d", ptype, length).isEqualTo(-1L);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
+    void sumFloating_agreesWithTheReferenceToRoundingError(PType ptype) {
+        // Given values small enough that the sum is well inside the double range. The Vector API sums
+        // lane-wise, so the last bits legitimately differ from the sequential reference.
+        for (int length : LENGTHS) {
+            Object values = arrayWithRuns(ptype, length, 1, new Random(length * 19L));
+            if (values instanceof float[] f) {
+                for (int i = 0; i < f.length; i++) {
+                    f[i] = Float.isFinite(f[i]) ? (float) (f[i] % 1e6) : 1f;
+                }
+            } else if (values instanceof double[] d) {
+                for (int i = 0; i < d.length; i++) {
+                    d[i] = Double.isFinite(d[i]) ? d[i] % 1e12 : 1d;
+                }
+            } else if (values instanceof short[] h) {
+                for (int i = 0; i < h.length; i++) {
+                    h[i] = Float.isFinite(Float.float16ToFloat(h[i])) ? h[i] : Float.floatToFloat16(1f);
+                }
+            }
+            double expected = reference.sumFloating(values, ptype);
+
+            // When
+            double result = sut.sumFloating(values, ptype);
+
+            // Then within a relative 1e-9 of the sum of the magnitudes (the error scale of reordering)
+            double scale = Math.max(1.0, magnitude(values, ptype));
+            assertThat(result).as("%s length=%d", ptype, length).isCloseTo(expected,
+                    Offset.offset(scale * 1e-9));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16"})
+    void sum_narrowIntegersAtTheirMostExtremeValues_neverOverflowAnAccumulator(PType ptype) {
+        // Given long arrays of the value that gains the most per vector in a 16-bit (bytes) or 32-bit
+        // (shorts) accumulator: the minimum for signed types, the maximum for unsigned ones
+        int length = 300_000;
+        Object values = switch (ptype) {
+            case I8 -> filled(new byte[length], Byte.MIN_VALUE);
+            case U8 -> filled(new byte[length], (byte) 0xFF);
+            case I16 -> filled(new short[length], Short.MIN_VALUE);
+            default -> filled(new short[length], (short) 0xFFFF);
+        };
+
+        // When
+        OptionalLong result = sut.sum(values, ptype);
+
+        // Then
+        assertThat(result).isEqualTo(reference.sum(values, ptype));
+    }
+
+    @Test
+    void sumFloating_exactlyRepresentableValues_areEqualWhateverTheOrder() {
+        // Given small integers, whose sum is exact in any order
+        double[] doubles = new Random(3).doubles(1000, 0, 100).map(Math::floor).toArray();
+        float[] floats = new float[1000];
+        for (int i = 0; i < floats.length; i++) {
+            floats[i] = (float) doubles[i];
+        }
+
+        // When / Then
+        assertThat(sut.sumFloating(doubles, PType.F64)).isEqualTo(reference.sumFloating(doubles, PType.F64));
+        assertThat(sut.sumFloating(floats, PType.F32)).isEqualTo(reference.sumFloating(floats, PType.F32));
+    }
+
+    @Test
+    void minMax_floatsWithNaNAndZerosOfBothSigns_matchReference() {
+        // Given every arrangement of NaN, +0.0, -0.0 and ordinary values, long enough for the vector
+        // body, so the lane merge sees a zero of each sign in different lanes
+        float[] pool = {Float.NaN, 0.0f, -0.0f, 1f, -1f, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY};
+        Random random = new Random(42);
+        for (int trial = 0; trial < 200; trial++) {
+            int length = 1 + random.nextInt(70);
+            float[] floats = new float[length];
+            double[] doubles = new double[length];
+            for (int i = 0; i < length; i++) {
+                floats[i] = pool[random.nextInt(pool.length)];
+                doubles[i] = floats[i];
+            }
+
+            // When / Then
+            assertThat(sut.minMax(floats, PType.F32)).as("F32 %s", Arrays.toString(floats))
+                    .containsExactly(reference.minMax(floats, PType.F32));
+            assertThat(sut.minMax(doubles, PType.F64)).as("F64 %s", Arrays.toString(doubles))
+                    .containsExactly(reference.minMax(doubles, PType.F64));
+        }
+    }
+
+    @Test
+    void allEqual_booleans_matchReference() {
+        // Given
+        for (int length : LENGTHS) {
+            boolean[] constant = new boolean[length];
+            Arrays.fill(constant, true);
+            assertThat(sut.allEqual(constant)).as("constant length=%d", length).isEqualTo(reference.allEqual(constant));
+            for (int position : new int[]{0, length / 2, length - 1}) {
+                if (position < 0 || position >= length) {
+                    continue;
+                }
+                boolean[] changed = constant.clone();
+                changed[position] = false;
+
+                // When / Then
+                assertThat(sut.allEqual(changed)).as("length=%d differs at %d", length, position)
+                        .isEqualTo(reference.allEqual(changed));
+            }
+        }
+    }
+
+    /// An array of `length` elements in runs of `runLength` equal values, full-range per carrier.
+    private static Object arrayWithRuns(PType ptype, int length, int runLength, Random random) {
+        long[] base = new long[length];
+        long current = random.nextLong();
+        for (int i = 0; i < length; i++) {
+            if (i % runLength == 0) {
+                current = random.nextLong();
+            }
+            base[i] = current;
+        }
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = new byte[length];
+                for (int i = 0; i < length; i++) {
+                    a[i] = (byte) base[i];
+                }
+                yield a;
+            }
+            case I16, U16, F16 -> {
+                short[] a = new short[length];
+                for (int i = 0; i < length; i++) {
+                    a[i] = (short) base[i];
+                }
+                yield a;
+            }
+            case I32, U32 -> {
+                int[] a = new int[length];
+                for (int i = 0; i < length; i++) {
+                    a[i] = (int) base[i];
+                }
+                yield a;
+            }
+            case I64, U64 -> base;
+            case F32 -> {
+                float[] a = new float[length];
+                for (int i = 0; i < length; i++) {
+                    a[i] = Float.intBitsToFloat((int) base[i]);
+                }
+                yield a;
+            }
+            case F64 -> {
+                double[] a = new double[length];
+                for (int i = 0; i < length; i++) {
+                    a[i] = Double.longBitsToDouble(base[i]);
+                }
+                yield a;
+            }
+        };
+    }
+
+    /// Changes one element so that it differs from its neighbors in the raw bits.
+    private static void flip(Object array, int index) {
+        switch (array) {
+            case byte[] a -> a[index] ^= 0x55;
+            case short[] a -> a[index] ^= 0x5555;
+            case int[] a -> a[index] ^= 0x55555555;
+            case long[] a -> a[index] ^= 0x5555555555555555L;
+            case float[] a -> a[index] = Float.intBitsToFloat(Float.floatToRawIntBits(a[index]) ^ 1);
+            case double[] a -> a[index] = Double.longBitsToDouble(Double.doubleToRawLongBits(a[index]) ^ 1L);
+            default -> throw new IllegalArgumentException(array.getClass().toString());
+        }
+    }
+
+    /// Overwrites every other element with the carrier's minimum and maximum bit patterns.
+    private static void extremes(Object array) {
+        switch (array) {
+            case byte[] a -> fill(a);
+            case short[] a -> fill(a);
+            case int[] a -> fill(a);
+            case long[] a -> fill(a);
+            default -> throw new IllegalArgumentException(array.getClass().toString());
+        }
+    }
+
+    private static void fill(byte[] a) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] = i % 3 == 0 ? Byte.MIN_VALUE : i % 3 == 1 ? Byte.MAX_VALUE : (byte) -1;
+        }
+    }
+
+    private static void fill(short[] a) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] = i % 3 == 0 ? Short.MIN_VALUE : i % 3 == 1 ? Short.MAX_VALUE : (short) -1;
+        }
+    }
+
+    private static void fill(int[] a) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] = i % 3 == 0 ? Integer.MIN_VALUE : i % 3 == 1 ? Integer.MAX_VALUE : -1;
+        }
+    }
+
+    private static void fill(long[] a) {
+        for (int i = 0; i < a.length; i++) {
+            a[i] = i % 3 == 0 ? Long.MIN_VALUE : i % 3 == 1 ? Long.MAX_VALUE : -1L;
+        }
+    }
+
+    /// Sets every element to the carrier's all-ones pattern: 255 / 65535 as unsigned, -1 as signed.
+    private static void fillConstant(Object array) {
+        switch (array) {
+            case byte[] a -> Arrays.fill(a, (byte) -1);
+            case short[] a -> Arrays.fill(a, (short) -1);
+            case int[] a -> Arrays.fill(a, -1);
+            default -> throw new IllegalArgumentException(array.getClass().toString());
+        }
+    }
+
+    private static Object narrowCarrier(PType ptype, int length) {
+        return switch (ptype) {
+            case I8, U8 -> new byte[length];
+            case I16, U16, F16 -> new short[length];
+            case I32, U32 -> new int[length];
+            case I64, U64 -> new long[length];
+            case F32 -> new float[length];
+            case F64 -> new double[length];
+        };
+    }
+
+    /// The sum of the absolute values: the scale of the rounding error a reordered float sum can have.
+    private static double magnitude(Object values, PType ptype) {
+        double total = 0;
+        switch (values) {
+            case float[] f -> {
+                for (float v : f) {
+                    total += Math.abs(v);
+                }
+            }
+            case double[] d -> {
+                for (double v : d) {
+                    total += Math.abs(v);
+                }
+            }
+            case short[] h -> {
+                for (short v : h) {
+                    total += Math.abs(Float.float16ToFloat(v));
+                }
+            }
+            default -> throw new IllegalArgumentException(ptype.toString());
+        }
+        return total;
+    }
+
+    private static byte[] filled(byte[] array, byte value) {
+        Arrays.fill(array, value);
+        return array;
+    }
+
+    private static short[] filled(short[] array, short value) {
+        Arrays.fill(array, value);
+        return array;
     }
 }

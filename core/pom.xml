@@ -60,32 +60,6 @@
                     <failOnWarnings>true</failOnWarnings>
                 </configuration>
             </plugin>
-            <!-- The test JVMs run without the jdk.incubator.vector module for now (add the add-modules option for
-                 jdk.incubator.vector to the root and integration argLine to exercise the Vector API
-                 implementation again; its tests are skipped without it). This second pass then only repeats the
-                 SIMD tests under the same conditions, and stays so that re-enabling the module keeps proving
-                 that SimdOperationsSupport picks the auto-vectorized implementation without it. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>without-vector-module</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>test</goal>
-                        </goals>
-                        <configuration>
-                            <argLine>@{argLine} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
-                            <includes>
-                                <include>**/SimdOperationsSupportTest.java</include>
-                                <include>**/SimdOperationsTest.java</include>
-                            </includes>
-                            <reportsDirectory>${project.build.directory}/surefire-reports-without-vector-module</reportsDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <!-- Publish a test-jar so reader/ and writer/ tests can reuse core test
                  helpers (DTypes, EncodeTestHelper) without duplication. -->
             <plugin>
