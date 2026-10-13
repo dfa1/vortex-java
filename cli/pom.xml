@@ -13,6 +13,8 @@
     <description>Command-line interface for the Vortex columnar file format.</description>
 
     <properties>
+        <!-- PosixTerminal (TUI) calls Linker#downcallHandle, a restricted FFM method. -->
+        <test.native.args>--enable-native-access=ALL-UNNAMED</test.native.args>
     </properties>
 
     <dependencies>
@@ -85,7 +87,7 @@
                          {@code coverage} profile is active; empty default otherwise (set
                          in the root pom). Without it the agent never attaches and the
                          cli module reports 0% coverage. -->
-                    <argLine>@{argLine} --sun-misc-unsafe-memory-access=allow</argLine>
+                    <argLine>@{argLine} --sun-misc-unsafe-memory-access=allow ${test.native.args}</argLine>
                     <includes>
                         <include>**/*Test.java</include>
                         <include>**/*IT.java</include>

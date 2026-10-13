@@ -12,6 +12,11 @@
     <name>vortex-parquet</name>
     <description>Parquet conversion support for the Vortex columnar file format.</description>
 
+    <properties>
+        <!-- zstd-jni (Parquet page decompression) calls System#loadLibrary, a restricted method. -->
+        <test.native.args>--enable-native-access=ALL-UNNAMED</test.native.args>
+    </properties>
+
     <dependencies>
         <!-- production -->
         <dependency>
