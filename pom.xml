@@ -136,6 +136,7 @@
              tests trip the matching JDK warning (FFM or System.loadLibrary callers; Unsafe users such as protobuf-java). -->
         <test.native.args />
         <test.unsafe.args />
+        <test.modules.args />
         <!-- release plugins -->
         <central-publishing-plugin.version>0.11.0</central-publishing-plugin.version>
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
@@ -396,7 +397,7 @@
                              {@code net.bytebuddy:byte-buddy-agent:jar} is resolved to an absolute path
                              by {@code maven-dependency-plugin:properties} (declared in build/plugins);
                              loading it as a javaagent suppresses the Mockito self-attach warning. -->
-                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} ${test.vector.args} ${test.native.args} ${test.unsafe.args}</argLine>
+                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} ${test.vector.args} ${test.native.args} ${test.unsafe.args} ${test.modules.args}</argLine>
                     </configuration>
                 </plugin>
                 <plugin>

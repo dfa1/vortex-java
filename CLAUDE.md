@@ -270,6 +270,14 @@ When stuck on encode/decode behavior, consult **in this order**:
   loudly (`VortexException`, Rust default; no allowUnknown for layouts). Scope: the layout SPI covers
   full-column subtree decode; zone-map pruning, filtered scans, and chunk planning recognize the
   built-in layouts only.
+- **`core`, `fsst`, `reader`, `writer` are named JPMS modules** (ADR 0024); the rest stay classpath-only. Surefire runs them on the
+  module path, so the module graph is checked by the unit tests. Rules: `core` exports `fbs`/`proto` only to the modules that
+  need them (the generated wire codecs stay out of the public API); `writer` never `requires` the reader, so its round-trip
+  tests reach the reader on the test classpath and the extra `--add-reads`/`--add-exports` live in the writer POM's
+  `test.modules.args`, never in `module-info.java`; a module that exposes a generated type from a public signature
+  suppresses the `exports` lint on that one declaration with a comment. JVM flags that only some modules' tests need are
+  the empty `test.native.args`/`test.unsafe.args`/`test.modules.args` properties in the root POM, set per module (a named
+  module is enabled by name: `--enable-native-access=io.github.dfa1.zstd`, not `ALL-UNNAMED`).
 - **Options types are plain final classes with a private constructor** (`WriteOptions`, `ScanOptions`,
   and the CSV/Parquet/JDBC import and export options): a `defaults()` or named factory returns the
   starting point and `withXxx` methods return copies. Never a record and never a public

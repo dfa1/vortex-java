@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `core`, `fsst`, `reader` and `writer` ship as named JPMS modules (`io.github.dfa1.vortex.*`). ([#176](https://github.com/dfa1/vortex-java/pull/176))
+
 ## [0.17.1] — 2026-10-11
 
 ### Added

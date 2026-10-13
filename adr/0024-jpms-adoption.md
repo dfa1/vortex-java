@@ -1,6 +1,6 @@
 # ADR 0024: JPMS adoption for core/reader/writer
 
-- **Status:** Proposed
+- **Status:** Accepted for `core`, `fsst`, `reader` and `writer` (2026-10-13); the remaining modules stay on the classpath
 - **Date:** 2026-09-06
 - **Deciders:** project maintainer
 - **Related:** [ADR 0017 — In-house FlatBuffers codegen](0017-in-house-flatbuffers-codegen.md),

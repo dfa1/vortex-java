@@ -16,7 +16,7 @@
 
     <properties>
         <!-- Our own FFM zstd binding (io.github.dfa1.zstd.NativeLibrary calls SymbolLookup#libraryLookup, a restricted method). -->
-        <test.native.args>--enable-native-access=ALL-UNNAMED</test.native.args>
+        <test.native.args>--enable-native-access=io.github.dfa1.zstd</test.native.args>
     </properties>
 
     <dependencies>
@@ -62,6 +62,17 @@
 
     <build>
         <plugins>
+            <!-- Encoders and decoders are stateless public classes that the registries instantiate; an explicit
+                 constructor on each would be noise, so the missing-explicit-ctor lint (new with modules) is off. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs combine.children="append">
+                        <arg>-Xlint:-missing-explicit-ctor</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
             <!-- Publish a test-jar so writer/ tests can reuse reader test helpers
                  (TestRegistry, TestDecodeContexts, DecodeTestHelper). -->
             <plugin>
