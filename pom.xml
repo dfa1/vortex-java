@@ -127,6 +127,10 @@
              the {@code coverage} profile is not enabled the empty default ensures surefire
              doesn't receive a literal {@code @{argLine}} token as a JVM argument. -->
         <argLine />
+        <!-- JVM options that put the Vector API on the test JVMs' module graph (surefire and failsafe). Tests
+             run with it so the Vector API kernels are exercised; CI also runs a leg with it empty
+             (-Dtest.vector.args=), the configuration users get by default. -->
+        <test.vector.args>--add-modules jdk.incubator.vector</test.vector.args>
         <!-- release plugins -->
         <central-publishing-plugin.version>0.11.0</central-publishing-plugin.version>
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
@@ -387,7 +391,7 @@
                              {@code net.bytebuddy:byte-buddy-agent:jar} is resolved to an absolute path
                              by {@code maven-dependency-plugin:properties} (declared in build/plugins);
                              loading it as a javaagent suppresses the Mockito self-attach warning. -->
-                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED --add-modules jdk.incubator.vector</argLine>
+                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED ${test.vector.args}</argLine>
                     </configuration>
                 </plugin>
                 <plugin>

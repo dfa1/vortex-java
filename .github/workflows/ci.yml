@@ -52,6 +52,12 @@ jobs:
         if: runner.os != 'Windows'
         run: ./mvnw verify
 
+      # The test JVMs add jdk.incubator.vector; users get the auto-vectorized kernels unless they opt in.
+      # This leg runs everything again without the module, the configuration most users run.
+      - name: Build and test without the Vector API module
+        if: matrix.os == 'ubuntu-latest' && matrix.java-version == '25'
+        run: ./mvnw verify -Dtest.vector.args=
+
       - name: Build and test (Windows)
         if: runner.os == 'Windows'
         shell: bash
