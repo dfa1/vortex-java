@@ -382,6 +382,9 @@
                         <failOnWarning>true</failOnWarning>
                         <compilerArgs>
                             <arg>-Xlint:all</arg>
+                            <!-- JDK 26 flags the incubating Vector API module for every module that resolves core (its
+                                 requires static); the opt-in kernels are intentional, and no other module uses it. -->
+                            <arg>-Xlint:-incubating</arg>
                         </compilerArgs>
                     </configuration>
                 </plugin>
