@@ -97,7 +97,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     out[i] = a[from + i] & 0xFFFF_FFFFL;
                 }
             }
-            case I64, U64 -> System.arraycopy((long[]) values, from, out, 0, count);
+            case I64, U64 -> System.arraycopy(values, from, out, 0, count);
             case F32 -> {
                 float[] a = (float[]) values;
                 for (int i = 0; i < count; i++) {
@@ -150,7 +150,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     a[i] = (byte) values[i];
                 }
             }
-            case I16, U16 -> {
+            case I16, U16, F16 -> {
                 short[] a = (short[]) out;
                 for (int i = 0; i < n; i++) {
                     a[i] = (short) values[i];
@@ -162,13 +162,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
                     a[i] = (int) values[i];
                 }
             }
-            case I64, U64 -> System.arraycopy(values, 0, (long[]) out, 0, n);
-            case F16 -> {
-                short[] a = (short[]) out;
-                for (int i = 0; i < n; i++) {
-                    a[i] = (short) values[i];
-                }
-            }
+            case I64, U64 -> System.arraycopy(values, 0, out, 0, n);
             case F32 -> {
                 float[] a = (float[]) out;
                 for (int i = 0; i < n; i++) {

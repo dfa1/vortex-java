@@ -157,7 +157,7 @@ final class VectorApiSimdOperations implements SimdOperations {
                     out[i] = ptype == PType.U32 ? a[from + i] & 0xFFFF_FFFFL : a[from + i];
                 }
             }
-            case I64, U64 -> System.arraycopy((long[]) values, from, out, 0, count);
+            case I64, U64 -> System.arraycopy(values, from, out, 0, count);
             case F32 -> {
                 float[] a = (float[]) values;
                 int i = 0;
@@ -275,7 +275,7 @@ final class VectorApiSimdOperations implements SimdOperations {
                     a[i] = (int) values[i];
                 }
             }
-            case I64, U64 -> System.arraycopy(values, 0, (long[]) out, 0, n);
+            case I64, U64 -> System.arraycopy(values, 0, out, 0, n);
             case F32 -> {
                 float[] a = (float[]) out;
                 int i = 0;
@@ -305,14 +305,14 @@ final class VectorApiSimdOperations implements SimdOperations {
     // contraction measured about 25x slower than this staged form.
     private static IntVector narrowToInts(long[] values, int from) {
         return ((IntVector) LongVector.fromArray(LONGS, values, from).convertShape(VectorOperators.L2I, INTS, 0))
-                .or((IntVector) LongVector.fromArray(LONGS, values, from + LONGS.length())
+                .or(LongVector.fromArray(LONGS, values, from + LONGS.length())
                         .convertShape(VectorOperators.L2I, INTS, -1));
     }
 
     private static ByteVector narrowToBytes(long[] values, int from) {
         ByteVector result = ByteVector.zero(BYTES);
         for (int part = 0; part < BYTES.length() / INTS.length(); part++) {
-            result = result.or((ByteVector) narrowToInts(values, from + part * INTS.length())
+            result = result.or(narrowToInts(values, from + part * INTS.length())
                     .convertShape(VectorOperators.I2B, BYTES, -part));
         }
         return result;
@@ -321,7 +321,7 @@ final class VectorApiSimdOperations implements SimdOperations {
     private static ShortVector narrowToShorts(long[] values, int from) {
         ShortVector result = ShortVector.zero(SHORTS);
         for (int part = 0; part < SHORTS.length() / INTS.length(); part++) {
-            result = result.or((ShortVector) narrowToInts(values, from + part * INTS.length())
+            result = result.or(narrowToInts(values, from + part * INTS.length())
                     .convertShape(VectorOperators.I2S, SHORTS, -part));
         }
         return result;
@@ -976,7 +976,7 @@ final class VectorApiSimdOperations implements SimdOperations {
         for (; i + INTS.length() <= a.length; i += INTS.length()) {
             IntVector v = IntVector.fromArray(INTS, a, i);
             for (int part = 0; part < parts; part++) {
-                acc = acc.add((LongVector) v.convertShape(widen, LONGS, part));
+                acc = acc.add(v.convertShape(widen, LONGS, part));
             }
         }
         long total = acc.reduceLanes(VectorOperators.ADD);
