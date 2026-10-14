@@ -270,7 +270,7 @@ When stuck on encode/decode behavior, consult **in this order**:
   loudly (`VortexException`, Rust default; no allowUnknown for layouts). Scope: the layout SPI covers
   full-column subtree decode; zone-map pruning, filtered scans, and chunk planning recognize the
   built-in layouts only.
-- **JPMS (ADR 0027).** `core`, `fsst`, `reader`, `writer`, `csv`, `jdbc` and `inspector` are named modules (module name = package
+- **JPMS (ADR 0024).** `core`, `fsst`, `reader`, `writer`, `csv`, `jdbc` and `inspector` are named modules (module name = package
   root: `io.github.dfa1.vortex.inspect`, not `...inspector`); `integration` has a main descriptor with no code so failsafe runs on
   the module path too. Surefire/failsafe use the module path, so the module graph is checked by the tests. `parquet`, `calcite`,
   `cli`, `fbs-gen`, `proto-gen` have no `module-info` (they depend on jars with no module descriptor, or are tools) and instead
