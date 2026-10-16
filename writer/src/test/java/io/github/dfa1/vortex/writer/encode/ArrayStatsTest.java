@@ -239,6 +239,59 @@ class ArrayStatsTest {
         assertThat(result.mostFrequentBits()).isEqualTo(expectedTopBits);
     }
 
+    /// Float inputs for the run-aware scans: runs of mixed lengths (including a tail run), a
+    /// run-free low-cardinality column, and the bit patterns a value comparison would merge or
+    /// split wrongly (0.0 / -0.0, NaN). Keys are raw bits, so each pattern counts on its own.
+    static Stream<Arguments> floatCountingPaths() {
+        var rng = new Random(7L);
+        double[] runny64 = new double[10_001];
+        float[] runny32 = new float[10_001];
+        short[] runny16 = new short[10_001];
+        for (int i = 0; i < runny64.length; i++) {
+            int run = i / (1 + (i / 1_000) * 3);
+            runny64[i] = (run % 5 == 0) ? 0.0 : (run % 5 == 1) ? -0.0 : (run % 5 == 2) ? Double.NaN : run % 97 * 0.25;
+            runny32[i] = (float) runny64[i];
+            runny16[i] = (short) (run % 61 + (run % 2) * 0x8000);
+        }
+        double[] scattered64 = new double[8_000];
+        float[] scattered32 = new float[8_000];
+        short[] scattered16 = new short[8_000];
+        for (int i = 0; i < scattered64.length; i++) {
+            scattered64[i] = rng.nextInt(300) * 0.1;
+            scattered32[i] = (float) scattered64[i];
+            // Few enough patterns to stay under the distinct cap (n / 2), which would otherwise stop the scan early.
+            scattered16[i] = (short) (rng.nextInt(500) + 0x7F00);
+        }
+        return Stream.of(
+                Arguments.of(PType.F64, runny64, Arrays.stream(runny64).mapToLong(Double::doubleToRawLongBits).toArray()),
+                Arguments.of(PType.F32, runny32, rawBits(runny32)),
+                Arguments.of(PType.F16, runny16, widen(runny16, true)),
+                Arguments.of(PType.F64, scattered64, Arrays.stream(scattered64).mapToLong(Double::doubleToRawLongBits).toArray()),
+                Arguments.of(PType.F32, scattered32, rawBits(scattered32)),
+                Arguments.of(PType.F16, scattered16, widen(scattered16, true)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("floatCountingPaths")
+    void compute_everyFloatCountingPath_matchesPerRowReference(PType ptype, Object data, long[] bits) {
+        // Given: reference counts by brute force over the raw bits; the scans merge runs of equal
+        // bits into one probe, which must give the counts a probe per row would
+        Map<Long, Integer> reference = new HashMap<>();
+        for (long v : bits) {
+            reference.merge(v, 1, Integer::sum);
+        }
+        int expectedTopFreq = reference.values().stream().max(Integer::compare).orElseThrow();
+
+        // When
+        ArrayStats result = ArrayStats.compute(ptype, data, StatsOptions.distinctAndTop());
+
+        // Then
+        assertThat(result.distinctCapped()).isFalse();
+        assertThat(result.distinctCount()).isEqualTo(reference.size());
+        assertThat(result.topFrequency()).isEqualTo(expectedTopFreq);
+        assertThat(reference.get(result.mostFrequentBits())).isEqualTo(expectedTopFreq);
+    }
+
     @Test
     void compute_averageRunLength_isValueCountOverRuns() {
         // Given: a date-like column, each value repeated 30 times, 100 runs
@@ -265,6 +318,14 @@ class ArrayStatsTest {
 
         // Then: integer division, as Rust's value_count / runs
         assertThat(result.averageRunLength()).isEqualTo(1);
+    }
+
+    private static long[] rawBits(float[] a) {
+        long[] out = new long[a.length];
+        for (int i = 0; i < a.length; i++) {
+            out[i] = Float.floatToRawIntBits(a[i]);
+        }
+        return out;
     }
 
     private static long[] widen(short[] a, boolean unsigned) {

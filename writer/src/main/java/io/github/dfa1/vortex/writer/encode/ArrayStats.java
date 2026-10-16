@@ -248,36 +248,67 @@ public record ArrayStats(
         return new ArrayStats(n, distinct, topFreqBits, topFreq, capped, averageRunLength, 0, 0);
     }
 
+    /// The float scans count once per run of equal bit patterns, as [#integerStats] does: a hash
+    /// probe per row was the hottest frame left in a cascading write (10% of CPU), and runny float
+    /// columns (prices, quotes that repeat) pay one probe per run instead. The counts are exactly
+    /// a per-row scan's, since a run adds its length to the same key. Rust probes every row; this
+    /// changes the cost only, never a verdict. Keys are raw bits, so NaNs and -0.0 stay distinct.
     private static boolean scanF16(short[] a, int n, LongIntMap counts, long cap) {
+        long prev = Short.toUnsignedLong(a[0]);
+        int pending = 0;
         for (int i = 0; i < n; i++) {
-            counts.increment(Short.toUnsignedLong(a[i]));
-            if (counts.size() > cap) {
-                return true;
+            long bits = Short.toUnsignedLong(a[i]);
+            if (bits != prev) {
+                counts.increment(prev, pending);
+                if (counts.size() > cap) {
+                    return true;
+                }
+                prev = bits;
+                pending = 0;
             }
+            pending++;
         }
-        return false;
+        counts.increment(prev, pending);
+        return counts.size() > cap;
     }
 
     private static boolean scanF32(float[] a, int n, LongIntMap counts, long cap) {
+        long prev = Float.floatToRawIntBits(a[0]);
+        int pending = 0;
         for (int i = 0; i < n; i++) {
-            counts.increment(Float.floatToRawIntBits(a[i]));
-            if (counts.size() > cap) {
-                return true;
+            long bits = Float.floatToRawIntBits(a[i]);
+            if (bits != prev) {
+                counts.increment(prev, pending);
+                if (counts.size() > cap) {
+                    return true;
+                }
+                prev = bits;
+                pending = 0;
             }
+            pending++;
         }
-        return false;
+        counts.increment(prev, pending);
+        return counts.size() > cap;
     }
 
     private static boolean scanF64(double[] a, int n, LongIntMap counts, long cap) {
+        long prev = Double.doubleToRawLongBits(a[0]);
+        int pending = 0;
         for (int i = 0; i < n; i++) {
-            counts.increment(Double.doubleToRawLongBits(a[i]));
-            if (counts.size() > cap) {
-                return true;
+            long bits = Double.doubleToRawLongBits(a[i]);
+            if (bits != prev) {
+                counts.increment(prev, pending);
+                if (counts.size() > cap) {
+                    return true;
+                }
+                prev = bits;
+                pending = 0;
             }
+            pending++;
         }
-        return false;
+        counts.increment(prev, pending);
+        return counts.size() > cap;
     }
-
 
     private ArrayStats withMinMax(long newMin, long newMax) {
         return new ArrayStats(valueCount, distinctCount, mostFrequentBits, topFrequency, distinctCapped,
