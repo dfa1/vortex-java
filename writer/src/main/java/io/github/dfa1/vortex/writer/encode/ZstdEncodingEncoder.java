@@ -113,7 +113,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         requireBinding(ZSTD_BINDING_PRESENT);
         // Compression does not reorder anything, so the column's bounds are the input's bounds.
         // Computed once here rather than in each of the four shape-specific paths below.
-        byte[][] stats = ZoneMapStats.of(dtype, data);
+        MinMax stats = ZoneMapStats.of(dtype, data);
         if (data instanceof NullableData nd) {
             if (dtype instanceof DType.Primitive dt) {
                 return encodeNullablePrimitive(dt, nd, ctx).withStats(stats);

@@ -37,8 +37,8 @@ final class ZoneMapStats {
     ///
     /// @param dtype the column's dtype; a nullable one is read through to its non-nullable form
     /// @param data  the values being encoded
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null`
-    static byte[][] of(DType dtype, Object data) {
+    /// @return the [MinMax] of encoded scalars, or `null`
+    static MinMax of(DType dtype, Object data) {
         if (data instanceof NullableData(var values, var validity)) {
             DType nonNullable = dtype == null ? null : dtype.withNullable(false);
             if (nonNullable instanceof DType.Primitive p) {
@@ -67,8 +67,8 @@ final class ZoneMapStats {
     ///
     /// @param dtype  the decimal dtype (precision picks the width)
     /// @param values the decimals, `null` at masked-out rows
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null` when none is valid
-    static byte[][] ofDecimal(DType.Decimal dtype, BigDecimal[] values) {
+    /// @return the [MinMax] of encoded scalars, or `null` when none is valid
+    static MinMax ofDecimal(DType.Decimal dtype, BigDecimal[] values) {
         BigDecimal[] valid = Arrays.stream(values).filter(Objects::nonNull).toArray(BigDecimal[]::new);
         int width = DecimalEncodingEncoder.storageWidth(dtype.precision());
         return ofDecimal(DecimalEncodingEncoder.pack(valid, width, Arena.ofAuto()), width);
@@ -86,8 +86,8 @@ final class ZoneMapStats {
     ///
     /// @param values    the packed values
     /// @param byteWidth bytes per value, 1/2/4/8/16/32
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null` when empty
-    static byte[][] ofDecimal(MemorySegment values, int byteWidth) {
+    /// @return the [MinMax] of encoded scalars, or `null` when empty
+    static MinMax ofDecimal(MemorySegment values, int byteWidth) {
         long n = values.byteSize() / byteWidth;
         if (n == 0) {
             return null;
@@ -103,20 +103,20 @@ final class ZoneMapStats {
                 maxOff = off;
             }
         }
-        return new byte[][]{decimalScalar(values, minOff, byteWidth), decimalScalar(values, maxOff, byteWidth)};
+        return new MinMax(decimalScalar(values, minOff, byteWidth), decimalScalar(values, maxOff, byteWidth));
     }
 
     /// Bounds for a decimal column already widened into `long` values, encoded at the same
     /// eight-byte width Rust uses for `DecimalValue::I64`.
     ///
     /// @param values the unscaled values
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null` when empty
-    static byte[][] ofDecimal(long[] values) {
+    /// @return the [MinMax] of encoded scalars, or `null` when empty
+    static MinMax ofDecimal(long[] values) {
         if (values.length == 0) {
             return null;
         }
         long[] minMax = SimdOperationsSupport.preferred().minMax(values, PType.I64);
-        return new byte[][]{decimalScalar(minMax[0]), decimalScalar(minMax[1])};
+        return new MinMax(decimalScalar(minMax[0]), decimalScalar(minMax[1]));
     }
 
     /// Compares two equal-width little-endian two's-complement values in place: the most
@@ -137,32 +137,32 @@ final class ZoneMapStats {
         return 0;
     }
 
-    private static byte[] decimalScalar(MemorySegment values, long offset, int byteWidth) {
+    private static ProtoScalarValue decimalScalar(MemorySegment values, long offset, int byteWidth) {
         return ProtoScalarValue.ofBytesValue(
-                values.asSlice(offset, byteWidth).toArray(ValueLayout.JAVA_BYTE)).encode();
+                values.asSlice(offset, byteWidth).toArray(ValueLayout.JAVA_BYTE));
     }
 
-    private static byte[] decimalScalar(long value) {
+    private static ProtoScalarValue decimalScalar(long value) {
         byte[] le = new byte[Long.BYTES];
         for (int i = 0; i < Long.BYTES; i++) {
             le[i] = (byte) (value >>> (8 * i));
         }
-        return ProtoScalarValue.ofBytesValue(le).encode();
+        return ProtoScalarValue.ofBytesValue(le);
     }
 
     /// The min half of an [#of(DType, Object)] result, or `null`.
     ///
     /// @param stats an [#of(DType, Object)] result, possibly `null`
     /// @return the serialized min scalar, or `null`
-    static byte[] minOf(byte[][] stats) {
-        return stats == null ? null : stats[0];
+    static ProtoScalarValue minOf(MinMax stats) {
+        return stats == null ? null : stats.min();
     }
 
     /// The max half of an [#of(DType, Object)] result, or `null`.
     ///
     /// @param stats an [#of(DType, Object)] result, possibly `null`
     /// @return the serialized max scalar, or `null`
-    static byte[] maxOf(byte[][] stats) {
-        return stats == null ? null : stats[1];
+    static ProtoScalarValue maxOf(MinMax stats) {
+        return stats == null ? null : stats.max();
     }
 }

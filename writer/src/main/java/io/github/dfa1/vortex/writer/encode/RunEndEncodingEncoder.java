@@ -189,8 +189,8 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_RUNEND, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{endsNode, valuesNode}, new int[0]);
-        byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
-        byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
+        ProtoScalarValue statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
+        ProtoScalarValue statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
         return new EncodeResult(root, List.of(EncodedBuffer.of(endsBuf, PType.U32), EncodedBuffer.of(valuesBuf, ptype)), statsMin, statsMax);
     }
 
@@ -243,15 +243,15 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{null, null}, new int[0]);
         ChildSlot endsSlot = new ChildSlot(new DType.Primitive(PType.U32, false), ends, 0, ENDS_EXCLUDED);
         ChildSlot valuesSlot = new ChildSlot(dtype, PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.VORTEX_RUNEND), 1, VALUES_EXCLUDED);
-        byte[][] stats = ZoneMapStats.of(dtype, data);
+        MinMax stats = ZoneMapStats.of(dtype, data);
         return new CascadeStep(partialRoot, List.of(), List.of(endsSlot, valuesSlot),
                 ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }
 
-    private static byte[] statsBytes(PType ptype, long value) {
+    private static ProtoScalarValue statsBytes(PType ptype, long value) {
         if (ptype.isUnsigned()) {
-            return ProtoScalarValue.ofUint64Value(value).encode();
+            return ProtoScalarValue.ofUint64Value(value);
         }
-        return ProtoScalarValue.ofInt64Value(value).encode();
+        return ProtoScalarValue.ofInt64Value(value);
     }
 }

@@ -237,8 +237,8 @@ class AlpRdEncodingEncoderTest {
         EncodeResult result = new AlpRdEncodingEncoder().encode(DTypes.F64, values, EncodeTestHelper.testCtx());
 
         // Then
-        assertThat(scalar(result.statsMin()).f64_value()).isEqualTo(-3.25);
-        assertThat(scalar(result.statsMax()).f64_value()).isEqualTo(10.0);
+        assertThat(result.statsMin().f64_value()).isEqualTo(-3.25);
+        assertThat(result.statsMax().f64_value()).isEqualTo(10.0);
     }
 
     @Test
@@ -250,8 +250,8 @@ class AlpRdEncodingEncoderTest {
         EncodeResult result = new AlpRdEncodingEncoder().encode(DTypes.F32, values, EncodeTestHelper.testCtx());
 
         // Then
-        assertThat(scalar(result.statsMin()).f32_value()).isEqualTo(-3.25f);
-        assertThat(scalar(result.statsMax()).f32_value()).isEqualTo(10.0f);
+        assertThat(result.statsMin().f32_value()).isEqualTo(-3.25f);
+        assertThat(result.statsMax().f32_value()).isEqualTo(10.0f);
     }
 
     @Test

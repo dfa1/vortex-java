@@ -410,8 +410,8 @@ class SequenceEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(40L);
+            assertThat(result.statsMin().int64_value()).isEqualTo(10L);
+            assertThat(result.statsMax().int64_value()).isEqualTo(40L);
         }
 
         @Test
@@ -423,8 +423,8 @@ class SequenceEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(40L);
+            assertThat(result.statsMin().int64_value()).isEqualTo(10L);
+            assertThat(result.statsMax().int64_value()).isEqualTo(40L);
         }
 
         @Test

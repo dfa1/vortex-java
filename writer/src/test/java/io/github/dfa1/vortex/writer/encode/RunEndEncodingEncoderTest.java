@@ -190,8 +190,8 @@ class RunEndEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(-5L);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(10L);
+            assertThat(result.statsMin().int64_value()).isEqualTo(-5L);
+            assertThat(result.statsMax().int64_value()).isEqualTo(10L);
         }
 
         @Test
@@ -204,8 +204,8 @@ class RunEndEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.U32, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).uint64_value()).isEqualTo(1L);
-            assertThat(scalar(result.statsMax()).uint64_value()).isEqualTo(4294967295L);
+            assertThat(result.statsMin().uint64_value()).isEqualTo(1L);
+            assertThat(result.statsMax().uint64_value()).isEqualTo(4294967295L);
         }
 
         @Test

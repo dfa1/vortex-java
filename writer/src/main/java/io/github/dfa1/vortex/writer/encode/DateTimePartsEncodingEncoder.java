@@ -81,7 +81,7 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         // Bounds come from the undivided timestamps, in storage space: the split children are
         // days/seconds/subseconds and none of them orders the column. Without this, choosing
         // datetimeparts over vortex.ext would trade the column's zone map for its size.
-        byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps());
+        MinMax stats = PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps());
         return new EncodeResult(root, List.copyOf(allBuffers),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats));
     }
@@ -112,7 +112,7 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                 new ChildSlot(DType.I64, seconds, 1, SELF),
                 new ChildSlot(DType.I64, subseconds, 2, SELF));
 
-        byte[][] stats = PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps());
+        MinMax stats = PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps());
         return new CascadeStep(partialRoot, List.of(), children,
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
     }

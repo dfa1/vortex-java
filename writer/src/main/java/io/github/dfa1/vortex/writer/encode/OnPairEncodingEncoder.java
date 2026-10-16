@@ -66,8 +66,8 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(c.metadata()),
                 children, new int[]{0});
-        byte[][] stats = zoneMapStats(data);
-        return new EncodeResult(root, buffers, stats != null ? stats[0] : null, stats != null ? stats[1] : null);
+        MinMax stats = zoneMapStats(data);
+        return new EncodeResult(root, buffers, stats != null ? stats.min() : null, stats != null ? stats.max() : null);
     }
 
     /// Leaves the four integer children open, so the cascade can bit-pack, frame-of-reference or
@@ -87,11 +87,11 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(c.metadata()),
                 new EncodeNode[4], new int[]{0});
-        byte[][] stats = zoneMapStats(data);
+        MinMax stats = zoneMapStats(data);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(c.dictBytes(ctx.arena()))), slots,
-                stats != null ? stats[0] : null, stats != null ? stats[1] : null, true);
+                stats != null ? stats.min() : null, stats != null ? stats.max() : null, true);
     }
-    private static byte[][] zoneMapStats(Object data) {
+    private static MinMax zoneMapStats(Object data) {
         return data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
     }
 

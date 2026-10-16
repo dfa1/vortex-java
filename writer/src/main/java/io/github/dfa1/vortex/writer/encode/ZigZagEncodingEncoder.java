@@ -131,8 +131,8 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
         };
         EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZIGZAG, null, new EncodeNode[]{child}, new int[0]);
-        byte[] statsMin = n > 0 ? ProtoScalarValue.ofInt64Value(minMax[0]).encode() : null;
-        byte[] statsMax = n > 0 ? ProtoScalarValue.ofInt64Value(minMax[1]).encode() : null;
+        ProtoScalarValue statsMin = n > 0 ? ProtoScalarValue.ofInt64Value(minMax[0]) : null;
+        ProtoScalarValue statsMax = n > 0 ? ProtoScalarValue.ofInt64Value(minMax[1]) : null;
         return new EncodeResult(root, List.of(EncodedBuffer.of(seg, signed)), statsMin, statsMax);
     }
 
@@ -173,7 +173,7 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
         ChildSlot slot = new ChildSlot(new DType.Primitive(unsigned, false),
                 PrimitiveArrays.fromLongsArray(encoded, unsigned, EncodingId.VORTEX_ZIGZAG), 0, ENCODED_EXCLUDED);
         // zigzag is not order-preserving, so the bounds come from the original signed values
-        byte[][] stats = ZoneMapStats.of(dtype, data);
+        MinMax stats = ZoneMapStats.of(dtype, data);
         return new CascadeStep(partialRoot, List.of(), List.of(slot),
                 ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }

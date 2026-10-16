@@ -70,9 +70,10 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
                 .orElseThrow(() -> new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array"));
         ProtoScalarValue scalar = buildScalar(ptype, firstRaw);
         byte[] scalarBytes = scalar.encode();
+        ProtoScalarValue statsScalar = scalar;
         // A constant array's min and max are both the one repeated value, by construction -- no
         // scan needed. Empty arrays report no stats, matching every other encoder's convention.
-        byte[] stats = Array.getLength(data) > 0 ? scalarBytes : null;
+        ProtoScalarValue stats = Array.getLength(data) > 0 ? statsScalar : null;
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)), stats, stats);
     }
 
@@ -101,10 +102,11 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         if (data.length == 0 || !isConstantStrings(data)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
         }
-        byte[] scalarBytes = ProtoScalarValue.ofStringValue(data[0]).encode();
+        ProtoScalarValue scalar = ProtoScalarValue.ofStringValue(data[0]);
+        byte[] scalarBytes = scalar.encode();
         // Both extremes are the one repeated value, by construction
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)),
-                scalarBytes, scalarBytes);
+                scalar, scalar);
     }
 
     private static boolean isConstantStrings(String[] data) {

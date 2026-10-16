@@ -86,18 +86,18 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         // A perfect arithmetic sequence is monotonic (or constant) end to end, so its extremes are
         // always the first and last element -- no separate scan needed.
         boolean unsign = pt.isUnsigned();
-        byte[] statsMin = null;
-        byte[] statsMax = null;
+        ProtoScalarValue statsMin = null;
+        ProtoScalarValue statsMax = null;
         if (n > 0) {
             long last = base + (n - 1) * multiplier;
             boolean baseIsMin = unsign ? Long.compareUnsigned(base, last) <= 0 : base <= last;
-            statsMin = buildIntScalar(pt, baseIsMin ? base : last).encode();
-            statsMax = buildIntScalar(pt, baseIsMin ? last : base).encode();
+            statsMin = buildIntScalar(pt, baseIsMin ? base : last);
+            statsMax = buildIntScalar(pt, baseIsMin ? last : base);
         }
         return buildResult(baseScalar, mulScalar, statsMin, statsMax);
     }
 
-    private static EncodeResult buildResult(ProtoScalarValue base, ProtoScalarValue mul, byte[] statsMin, byte[] statsMax) {
+    private static EncodeResult buildResult(ProtoScalarValue base, ProtoScalarValue mul, ProtoScalarValue statsMin, ProtoScalarValue statsMax) {
         ProtoSequenceMetadata meta = new ProtoSequenceMetadata(base, mul);
         MemorySegment metaBuf = MemorySegment.ofArray(meta.encode());
         EncodeNode node = new EncodeNode(EncodingId.VORTEX_SEQUENCE, metaBuf, new EncodeNode[0], new int[]{});

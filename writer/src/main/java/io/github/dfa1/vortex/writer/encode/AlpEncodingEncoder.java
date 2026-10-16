@@ -216,8 +216,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             }
         }
 
-        byte[] statsMin = n > 0 ? scalarF64(min) : null;
-        byte[] statsMax = n > 0 ? scalarF64(max) : null;
+        ProtoScalarValue statsMin = n > 0 ? scalarF64(min) : null;
+        ProtoScalarValue statsMax = n > 0 ? scalarF64(max) : null;
         return new AlpF64Data(expE, expF, encodedArr, patchIndices, patchValues, statsMin, statsMax);
     }
 
@@ -401,8 +401,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             }
         }
 
-        byte[] statsMin = n > 0 ? scalarF32(min) : null;
-        byte[] statsMax = n > 0 ? scalarF32(max) : null;
+        ProtoScalarValue statsMin = n > 0 ? scalarF32(min) : null;
+        ProtoScalarValue statsMax = n > 0 ? scalarF32(max) : null;
 
         MemorySegment encodedBuf = ctx.arena().allocate((long) n * 4, 4);
         for (int i = 0; i < n; i++) {
@@ -440,17 +440,17 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
                 EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())), statsMin, statsMax);
     }
 
-    private static byte[] scalarF64(double v) {
-        return ProtoScalarValue.ofF64Value(v).encode();
+    private static ProtoScalarValue scalarF64(double v) {
+        return ProtoScalarValue.ofF64Value(v);
     }
 
-    private static byte[] scalarF32(float v) {
-        return ProtoScalarValue.ofF32Value(v).encode();
+    private static ProtoScalarValue scalarF32(float v) {
+        return ProtoScalarValue.ofF32Value(v);
     }
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record AlpF64Data(int expE, int expF, long[] encodedArr,
                               List<Integer> patchIndices, List<Double> patchValues,
-                              byte[] statsMin, byte[] statsMax) {
+                              ProtoScalarValue statsMin, ProtoScalarValue statsMax) {
     }
 }

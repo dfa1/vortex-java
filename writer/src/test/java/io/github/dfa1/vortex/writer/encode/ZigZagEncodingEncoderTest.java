@@ -246,8 +246,8 @@ class ZigZagEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(-1L);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(5L);
+            assertThat(result.statsMin().int64_value()).isEqualTo(-1L);
+            assertThat(result.statsMax().int64_value()).isEqualTo(5L);
         }
 
         @Test
@@ -259,8 +259,8 @@ class ZigZagEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(Long.MIN_VALUE);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(Long.MAX_VALUE);
+            assertThat(result.statsMin().int64_value()).isEqualTo(Long.MIN_VALUE);
+            assertThat(result.statsMax().int64_value()).isEqualTo(Long.MAX_VALUE);
         }
 
         @Test
@@ -317,8 +317,8 @@ class ZigZagEncodingEncoderTest {
             CascadeStep result = sut.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(result.statsMin()).isEqualTo(ProtoScalarValue.ofInt64Value(-100L).encode());
-            assertThat(result.statsMax()).isEqualTo(ProtoScalarValue.ofInt64Value(50L).encode());
+            assertThat(result.statsMin()).isEqualTo(ProtoScalarValue.ofInt64Value(-100L));
+            assertThat(result.statsMax()).isEqualTo(ProtoScalarValue.ofInt64Value(50L));
         }
 
         @Test

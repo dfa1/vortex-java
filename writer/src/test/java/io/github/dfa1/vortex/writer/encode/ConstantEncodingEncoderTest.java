@@ -399,8 +399,8 @@ class ConstantEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I64, new long[]{constant, constant}, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(constant);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(constant);
+            assertThat(result.statsMin().int64_value()).isEqualTo(constant);
+            assertThat(result.statsMax().int64_value()).isEqualTo(constant);
         }
 
         @Test
@@ -412,8 +412,8 @@ class ConstantEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.F64, new double[]{constant, constant, constant}, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).f64_value()).isEqualTo(constant);
-            assertThat(scalar(result.statsMax()).f64_value()).isEqualTo(constant);
+            assertThat(result.statsMin().f64_value()).isEqualTo(constant);
+            assertThat(result.statsMax().f64_value()).isEqualTo(constant);
         }
 
         @Test
@@ -425,8 +425,8 @@ class ConstantEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).f16_value()).isEqualTo(0x4100L);
-            assertThat(scalar(result.statsMax()).f16_value()).isEqualTo(0x4100L);
+            assertThat(result.statsMin().f16_value()).isEqualTo(0x4100L);
+            assertThat(result.statsMax().f16_value()).isEqualTo(0x4100L);
         }
 
         @Test

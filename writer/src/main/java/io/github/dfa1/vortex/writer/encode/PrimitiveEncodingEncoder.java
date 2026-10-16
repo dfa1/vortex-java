@@ -32,12 +32,12 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         MemorySegment seg = data instanceof byte[] bytes
                 ? MemorySegment.ofArray(bytes)
                 : PrimitiveArrays.toSegment(data, ptype, ctx.arena());
-        byte[] min = null;
-        byte[] max = null;
-        byte[][] stats = minMaxStats(ptype, data);
+        ProtoScalarValue min = null;
+        ProtoScalarValue max = null;
+        MinMax stats = minMaxStats(ptype, data);
         if (stats != null) {
-            min = stats[0];
-            max = stats[1];
+            min = stats.min();
+            max = stats.max();
         }
         return EncodeResult.simple(EncodingId.VORTEX_PRIMITIVE, EncodedBuffer.of(seg, ptype), min, max);
     }
@@ -49,8 +49,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     ///
     /// @param ptype the primitive type of `data`
     /// @param data  the raw primitive array (e.g. `long[]`, `int[]`, `String`-free)
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null` if `data` is empty
-    public static byte[][] minMaxStats(PType ptype, Object data) {
+    /// @return the [MinMax] of encoded scalars, or `null` if `data` is empty
+    public static MinMax minMaxStats(PType ptype, Object data) {
         if (Array.getLength(data) == 0) {
             return null;
         }
@@ -60,33 +60,33 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
             return null;
         }
         return switch (ptype) {
-            case I8, I16, I32, I64 -> new byte[][]{scalarI64(minMax[0]), scalarI64(minMax[1])};
-            case U8, U16, U32, U64 -> new byte[][]{scalarU64(minMax[0]), scalarU64(minMax[1])};
-            case F16 -> new byte[][]{scalarF16(Float.float16ToFloat((short) minMax[0])),
-                    scalarF16(Float.float16ToFloat((short) minMax[1]))};
-            case F32 -> new byte[][]{scalarF32(Float.intBitsToFloat((int) minMax[0])),
-                    scalarF32(Float.intBitsToFloat((int) minMax[1]))};
-            case F64 -> new byte[][]{scalarF64(Double.longBitsToDouble(minMax[0])),
-                    scalarF64(Double.longBitsToDouble(minMax[1]))};
+            case I8, I16, I32, I64 -> new MinMax(scalarI64(minMax[0]), scalarI64(minMax[1]));
+            case U8, U16, U32, U64 -> new MinMax(scalarU64(minMax[0]), scalarU64(minMax[1]));
+            case F16 -> new MinMax(scalarF16(Float.float16ToFloat((short) minMax[0])),
+                    scalarF16(Float.float16ToFloat((short) minMax[1])));
+            case F32 -> new MinMax(scalarF32(Float.intBitsToFloat((int) minMax[0])),
+                    scalarF32(Float.intBitsToFloat((int) minMax[1])));
+            case F64 -> new MinMax(scalarF64(Double.longBitsToDouble(minMax[0])),
+                    scalarF64(Double.longBitsToDouble(minMax[1])));
         };
     }
 
     /// The min half of a [#minMaxStats] result, or `null` when `stats` itself is `null` (empty
-    /// data). Saves callers the repeated `stats == null ? null : stats[0]` idiom.
+    /// data). Saves callers the repeated `stats == null ? null : stats.min()` idiom.
     ///
     /// @param stats a [#minMaxStats] result, possibly `null`
     /// @return the serialized min scalar, or `null`
-    public static byte[] minOf(byte[][] stats) {
-        return stats == null ? null : stats[0];
+    public static ProtoScalarValue minOf(MinMax stats) {
+        return stats == null ? null : stats.min();
     }
 
     /// The max half of a [#minMaxStats] result, or `null` when `stats` itself is `null` (empty
-    /// data). Saves callers the repeated `stats == null ? null : stats[1]` idiom.
+    /// data). Saves callers the repeated `stats == null ? null : stats.max()` idiom.
     ///
     /// @param stats a [#minMaxStats] result, possibly `null`
     /// @return the serialized max scalar, or `null`
-    public static byte[] maxOf(byte[][] stats) {
-        return stats == null ? null : stats[1];
+    public static ProtoScalarValue maxOf(MinMax stats) {
+        return stats == null ? null : stats.max();
     }
 
     /// Computes the serialized SUM [io.github.dfa1.vortex.core.proto.ProtoScalarValue] for a raw primitive
@@ -103,7 +103,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     // Most likely dead weight: Rust's default vortex.zoned layout writes no zone sum (#447) and vortex-jni
     // cannot read one, so only the legacy vortex.stats layout and segment/dict-chunk stats carry this value,
     // observable through our own columnZoneStats. Kept NaN-skipping for parity (#523); candidate for removal.
-    public static byte[] sumStat(PType ptype, Object data) {
+    public static ProtoScalarValue sumStat(PType ptype, Object data) {
         if (Array.getLength(data) == 0) {
             return null;
         }
@@ -121,25 +121,25 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static byte[] scalarI64(long v) {
-        return ProtoScalarValue.ofInt64Value(v).encode();
+    private static ProtoScalarValue scalarI64(long v) {
+        return ProtoScalarValue.ofInt64Value(v);
     }
 
-    private static byte[] scalarU64(long v) {
-        return ProtoScalarValue.ofUint64Value(v).encode();
+    private static ProtoScalarValue scalarU64(long v) {
+        return ProtoScalarValue.ofUint64Value(v);
     }
 
     // Rust types an F16 column's min/max as F16 scalars (`f16_value`, the half bits as a u64); an
     // f32 scalar on an F16 column is rejected on read ("expected F32 dtype for F32Value, got f16").
-    private static byte[] scalarF16(float v) {
-        return ProtoScalarValue.ofF16Value(Short.toUnsignedLong(Float.floatToFloat16(v))).encode();
+    private static ProtoScalarValue scalarF16(float v) {
+        return ProtoScalarValue.ofF16Value(Short.toUnsignedLong(Float.floatToFloat16(v)));
     }
 
-    private static byte[] scalarF32(float v) {
-        return ProtoScalarValue.ofF32Value(v).encode();
+    private static ProtoScalarValue scalarF32(float v) {
+        return ProtoScalarValue.ofF32Value(v);
     }
 
-    private static byte[] scalarF64(double v) {
-        return ProtoScalarValue.ofF64Value(v).encode();
+    private static ProtoScalarValue scalarF64(double v) {
+        return ProtoScalarValue.ofF64Value(v);
     }
 }

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import java.util.List;
 
 /// One step in cascade-aware encoding: a partially-assembled node tree plus open child slots.
@@ -17,16 +18,15 @@ import java.util.List;
 /// @param partialRoot  partially-assembled root encode node (may be `null` when not applicable)
 /// @param ownedBuffers buffers owned directly by the root node, before child buffers are appended
 /// @param openChildren child slots to be filled recursively by the cascading compressor
-/// @param statsMin     serialized minimum stat bytes, or `null`
-/// @param statsMax     serialized maximum stat bytes, or `null`
+/// @param statsMin     minimum stat scalar, or `null`
+/// @param statsMax     maximum stat scalar, or `null`
 /// @param applicable   `false` if this encoding cannot handle the input data
-@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record CascadeStep(
         EncodeNode partialRoot,
         List<EncodedBuffer> ownedBuffers,
         List<ChildSlot> openChildren,
-        byte[] statsMin,
-        byte[] statsMax,
+        ProtoScalarValue statsMin,
+        ProtoScalarValue statsMax,
         boolean applicable
 ) {
     /// This step with zone-map bounds attached, for an encoder whose entry point knows the
@@ -36,10 +36,10 @@ public record CascadeStep(
     /// @param stats a `{min, max}` pair from [ZoneMapStats#of(io.github.dfa1.vortex.core.model.DType, Object)],
     ///              or `null` when the input carried nothing to bound
     /// @return a copy of this step carrying `stats`
-    public CascadeStep withStats(byte[][] stats) {
+    public CascadeStep withStats(MinMax stats) {
         return stats == null || !applicable
                 ? this
-                : new CascadeStep(partialRoot, ownedBuffers, openChildren, stats[0], stats[1], applicable);
+                : new CascadeStep(partialRoot, ownedBuffers, openChildren, stats.min(), stats.max(), applicable);
     }
 
     /// Convenience: terminal step — no open children, result is final.

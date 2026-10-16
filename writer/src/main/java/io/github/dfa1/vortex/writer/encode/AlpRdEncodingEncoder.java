@@ -295,7 +295,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     private static EncodeResult buildEncodeResult(
         short[] dict, int rightBitWidth,
         short[] leftCodes, Object rightPartsData, DType rightDtype,
-        List<Long> excPos, List<Short> excVals, byte[] statsMin, byte[] statsMax, EncodeContext ctx) {
+        List<Long> excPos, List<Short> excVals, ProtoScalarValue statsMin, ProtoScalarValue statsMax, EncodeContext ctx) {
 
         EncodingEncoder bp = ctx.lookupEncoder(EncodingId.FASTLANES_BITPACKED);
         EncodeResult leftResult = bp.encode(DType.U16, leftCodes, ctx);
@@ -366,12 +366,12 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root, List.copyOf(allBuffers), statsMin, statsMax);
     }
 
-    private static byte[] scalarF64(double v) {
-        return ProtoScalarValue.ofF64Value(v).encode();
+    private static ProtoScalarValue scalarF64(double v) {
+        return ProtoScalarValue.ofF64Value(v);
     }
 
-    private static byte[] scalarF32(float v) {
-        return ProtoScalarValue.ofF32Value(v).encode();
+    private static ProtoScalarValue scalarF32(float v) {
+        return ProtoScalarValue.ofF32Value(v);
     }
 
     private static EncodeResult emptyResult(DType rightDtype, EncodeContext ctx) {

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -67,11 +68,11 @@ class ZoneMapStatCodecTest {
             long[] data = {10L, -5L, 3L, 7L};
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(DTypes.I64, data);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(DTypes.I64, data);
 
             // Then
-            assertThat(scalar(stats[0]).int64_value()).isEqualTo(-5L);
-            assertThat(scalar(stats[1]).int64_value()).isEqualTo(10L);
+            assertThat(stats.min().int64_value()).isEqualTo(-5L);
+            assertThat(stats.max().int64_value()).isEqualTo(10L);
         }
 
         @Test
@@ -80,11 +81,11 @@ class ZoneMapStatCodecTest {
             int[] data = {1, -1, 5};
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(DTypes.U32, data);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(DTypes.U32, data);
 
             // Then
-            assertThat(scalar(stats[0]).uint64_value()).isEqualTo(1L);
-            assertThat(scalar(stats[1]).uint64_value()).isEqualTo(4294967295L);
+            assertThat(stats.min().uint64_value()).isEqualTo(1L);
+            assertThat(stats.max().uint64_value()).isEqualTo(4294967295L);
         }
 
         @Test
@@ -96,11 +97,11 @@ class ZoneMapStatCodecTest {
             NullableData data = new NullableData(values, validity);
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(DTypes.I64.asNullable(), data);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(DTypes.I64.asNullable(), data);
 
             // Then
-            assertThat(scalar(stats[0]).int64_value()).isEqualTo(-50L);
-            assertThat(scalar(stats[1]).int64_value()).isEqualTo(100L);
+            assertThat(stats.min().int64_value()).isEqualTo(-50L);
+            assertThat(stats.max().int64_value()).isEqualTo(100L);
         }
 
         @Test
@@ -109,7 +110,7 @@ class ZoneMapStatCodecTest {
             long[] data = {};
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(DTypes.I64, data);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(DTypes.I64, data);
 
             // Then
             assertThat(stats).isNull();
@@ -128,11 +129,11 @@ class ZoneMapStatCodecTest {
             long[] data = {100L, 200L, 50L};
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(TIMESTAMP_MS, data);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(TIMESTAMP_MS, data);
 
             // Then
-            assertThat(scalar(stats[0]).int64_value()).isEqualTo(50L);
-            assertThat(scalar(stats[1]).int64_value()).isEqualTo(200L);
+            assertThat(stats.min().int64_value()).isEqualTo(50L);
+            assertThat(stats.max().int64_value()).isEqualTo(200L);
         }
 
         @Test
@@ -154,11 +155,11 @@ class ZoneMapStatCodecTest {
             FakeCarrier carrier = new FakeCarrier(new long[]{9L, 1L, 5L});
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(TIMESTAMP_MS, carrier);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(TIMESTAMP_MS, carrier);
 
             // Then
-            assertThat(scalar(stats[0]).int64_value()).isEqualTo(1L);
-            assertThat(scalar(stats[1]).int64_value()).isEqualTo(9L);
+            assertThat(stats.min().int64_value()).isEqualTo(1L);
+            assertThat(stats.max().int64_value()).isEqualTo(9L);
         }
 
         @Test
@@ -169,11 +170,11 @@ class ZoneMapStatCodecTest {
             NullableData data = new NullableData(values, validity);
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(TIMESTAMP_MS, data);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(TIMESTAMP_MS, data);
 
             // Then
-            assertThat(scalar(stats[0]).int64_value()).isEqualTo(300L);
-            assertThat(scalar(stats[1]).int64_value()).isEqualTo(300L);
+            assertThat(stats.min().int64_value()).isEqualTo(300L);
+            assertThat(stats.max().int64_value()).isEqualTo(300L);
         }
     }
 
@@ -186,11 +187,11 @@ class ZoneMapStatCodecTest {
             String[] data = {"banana", "apple", "cherry"};
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(DTypes.UTF8, data);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(DTypes.UTF8, data);
 
             // Then
-            assertThat(scalar(stats[0]).string_value()).isEqualTo("apple");
-            assertThat(scalar(stats[1]).string_value()).isEqualTo("cherry");
+            assertThat(stats.min().string_value()).isEqualTo("apple");
+            assertThat(stats.max().string_value()).isEqualTo("cherry");
         }
 
         @Test
@@ -201,11 +202,11 @@ class ZoneMapStatCodecTest {
             NullableData data = new NullableData(values, new boolean[]{false, true, false, true});
 
             // When
-            byte[][] stats = ZoneMapStatCodec.columnMinMax(DTypes.UTF8.asNullable(), data);
+            MinMax stats = ZoneMapStatCodec.columnMinMax(DTypes.UTF8.asNullable(), data);
 
             // Then
-            assertThat(scalar(stats[0]).string_value()).isEqualTo("apple");
-            assertThat(scalar(stats[1]).string_value()).isEqualTo("banana");
+            assertThat(stats.min().string_value()).isEqualTo("apple");
+            assertThat(stats.max().string_value()).isEqualTo("banana");
         }
     }
 

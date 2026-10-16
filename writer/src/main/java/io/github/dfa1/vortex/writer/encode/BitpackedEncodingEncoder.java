@@ -81,8 +81,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         if (hasNegative) {
             MemorySegment widePacked = packFastLanes(longs, n, typeBits, typeBits, ctx.arena());
             byte[] wideMeta = new ProtoBitPackedMetadata(typeBits, 0, null).encode();
-            byte[] wideMin = statsBytes(ptype, signedMin);
-            byte[] wideMax = statsBytes(ptype, signedMax);
+            ProtoScalarValue wideMin = statsBytes(ptype, signedMin);
+            ProtoScalarValue wideMax = statsBytes(ptype, signedMax);
             EncodeNode wideRoot = new EncodeNode(EncodingId.FASTLANES_BITPACKED,
                     MemorySegment.ofArray(wideMeta), new EncodeNode[0], new int[]{0});
             return new EncodeResult(wideRoot, List.of(EncodedBuffer.of(widePacked, ptype)), wideMin, wideMax);
@@ -92,8 +92,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
 
         MemorySegment packed = packFastLanes(longs, n, bitWidth, typeBits, ctx.arena());
 
-        byte[] statsMin = n > 0 ? statsBytes(ptype, signedMin) : null;
-        byte[] statsMax = n > 0 ? statsBytes(ptype, signedMax) : null;
+        ProtoScalarValue statsMin = n > 0 ? statsBytes(ptype, signedMin) : null;
+        ProtoScalarValue statsMax = n > 0 ? statsBytes(ptype, signedMax) : null;
 
         if (bitWidth >= typeBits) {
             // Packed width covers full type range — no overflow possible, no patches needed.
@@ -243,10 +243,10 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         }
     }
 
-    private static byte[] statsBytes(PType ptype, long value) {
+    private static ProtoScalarValue statsBytes(PType ptype, long value) {
         if (ptype.isUnsigned()) {
-            return ProtoScalarValue.ofUint64Value(value).encode();
+            return ProtoScalarValue.ofUint64Value(value);
         }
-        return ProtoScalarValue.ofInt64Value(value).encode();
+        return ProtoScalarValue.ofInt64Value(value);
     }
 }
