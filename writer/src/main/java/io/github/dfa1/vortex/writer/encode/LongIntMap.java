@@ -253,7 +253,8 @@ public final class LongIntMap {
         return keys.length;
     }
 
-    /// Package-private for tests: resets the map to empty without reallocating.
+    /// Resets the map to empty without reallocating, so a caller that counts in rounds (see
+    /// `AlpRdEncodingEncoder`) reuses one table.
     public void clear() {
         Arrays.fill(values, 0);
         size = 0;
