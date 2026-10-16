@@ -145,11 +145,11 @@ class PrimitiveEncodingEncoderTest {
             double[] values = {Double.NaN, 3.0, -1.0};
 
             // When
-            byte[][] result = PrimitiveEncodingEncoder.minMaxStats(PType.F64, values);
+            MinMax result = PrimitiveEncodingEncoder.minMaxStats(PType.F64, values);
 
             // Then
-            assertThat(result[0]).isEqualTo(ProtoScalarValue.ofF64Value(-1.0).encode());
-            assertThat(result[1]).isEqualTo(ProtoScalarValue.ofF64Value(3.0).encode());
+            assertThat(result.min()).isEqualTo(ProtoScalarValue.ofF64Value(-1.0));
+            assertThat(result.max()).isEqualTo(ProtoScalarValue.ofF64Value(3.0));
         }
 
         @Test
@@ -158,7 +158,7 @@ class PrimitiveEncodingEncoderTest {
             float[] values = {Float.NaN, Float.NaN};
 
             // When
-            byte[][] result = PrimitiveEncodingEncoder.minMaxStats(PType.F32, values);
+            MinMax result = PrimitiveEncodingEncoder.minMaxStats(PType.F32, values);
 
             // Then
             assertThat(result).isNull();
@@ -171,11 +171,11 @@ class PrimitiveEncodingEncoderTest {
             double[] values = {Double.POSITIVE_INFINITY};
 
             // When
-            byte[][] result = PrimitiveEncodingEncoder.minMaxStats(PType.F64, values);
+            MinMax result = PrimitiveEncodingEncoder.minMaxStats(PType.F64, values);
 
             // Then
-            assertThat(result[0]).isEqualTo(ProtoScalarValue.ofF64Value(Double.POSITIVE_INFINITY).encode());
-            assertThat(result[1]).isEqualTo(ProtoScalarValue.ofF64Value(Double.POSITIVE_INFINITY).encode());
+            assertThat(result.min()).isEqualTo(ProtoScalarValue.ofF64Value(Double.POSITIVE_INFINITY));
+            assertThat(result.max()).isEqualTo(ProtoScalarValue.ofF64Value(Double.POSITIVE_INFINITY));
         }
     }
 

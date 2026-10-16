@@ -183,8 +183,8 @@ class DeltaEncodingEncoderTest {
 
         // Then — signed stats use the int64 scalar field, min/max by signed ordering
         assertThat(result.hasStats()).isTrue();
-        assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(-10L);
-        assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(50L);
+        assertThat(result.statsMin().int64_value()).isEqualTo(-10L);
+        assertThat(result.statsMax().int64_value()).isEqualTo(50L);
     }
 
     @Test
@@ -197,8 +197,8 @@ class DeltaEncodingEncoderTest {
         EncodeResult result = ENCODER.encode(DTypes.U64, data, EncodeTestHelper.testCtx());
 
         // Then
-        assertThat(scalar(result.statsMin()).uint64_value()).isEqualTo(1L);
-        assertThat(scalar(result.statsMax()).uint64_value()).isEqualTo(-1L);
+        assertThat(result.statsMin().uint64_value()).isEqualTo(1L);
+        assertThat(result.statsMax().uint64_value()).isEqualTo(-1L);
     }
 
     @Test

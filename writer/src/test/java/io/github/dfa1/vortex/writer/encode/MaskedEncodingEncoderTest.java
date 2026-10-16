@@ -261,8 +261,8 @@ class MaskedEncodingEncoderTest {
 
         // Then
         assertThat(result.hasStats()).isTrue();
-        assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(500L);
-        assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(900L);
+        assertThat(result.statsMin().int64_value()).isEqualTo(500L);
+        assertThat(result.statsMax().int64_value()).isEqualTo(900L);
     }
 
     @Test

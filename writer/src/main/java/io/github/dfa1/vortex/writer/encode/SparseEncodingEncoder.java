@@ -81,7 +81,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         // `data` is the whole logical column -- the fill value and patch positions are derived
         // from it below -- so the column's bounds are just its bounds, patches included.
-        byte[][] stats = ZoneMapStats.of(dtype, data);
+        MinMax stats = ZoneMapStats.of(dtype, data);
         if (!(dtype instanceof DType.Primitive p)) {
             return CascadeStep.notApplicable();
         }

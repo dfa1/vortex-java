@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.writer.encode.ListViewData;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.Edition;
@@ -19,6 +20,7 @@ import io.github.dfa1.vortex.writer.encode.EncodeContext;
 import io.github.dfa1.vortex.writer.encode.EncodeNode;
 import io.github.dfa1.vortex.writer.encode.EncodeResult;
 import io.github.dfa1.vortex.writer.encode.EncodedBuffer;
+import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
 import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
@@ -853,15 +855,15 @@ public final class VortexWriter implements Closeable {
             // fallback computes them from the untouched input, independent of which encoder ran.
             // This is what makes stats coverage an encoder-independent guarantee rather than a
             // per-encoder convention every new encoder has to remember (ADR 0025).
-            byte[] min;
-            byte[] max;
+            ProtoScalarValue min;
+            ProtoScalarValue max;
             if (result.hasStats()) {
                 min = result.statsMin();
                 max = result.statsMax();
             } else {
-                byte[][] fallback = ZoneMapStatCodec.columnMinMax(dtype, data);
-                min = fallback != null ? fallback[0] : null;
-                max = fallback != null ? fallback[1] : null;
+                MinMax fallback = ZoneMapStatCodec.columnMinMax(dtype, data);
+                min = fallback != null ? fallback.min() : null;
+                max = fallback != null ? fallback.max() : null;
             }
             SegmentStats stats = new SegmentStats(min, max, ZoneMapStatCodec.columnSum(dtype, data), nullCount);
             return new EncodedSegment(result, arena, stats);
@@ -1005,9 +1007,9 @@ public final class VortexWriter implements Closeable {
         // (Rust's flat writer doesn't either — flat/writer.rs retains only pre-computed stats); the
         // per-zone sum lives in the vortex.stats zone-map table emitted by flushZoneMaps().
         int minVec = result.hasStats()
-                ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(fbb, result.statsMin()) : 0;
+                ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(fbb, result.statsMin().encode()) : 0;
         int maxVec = result.hasStats()
-                ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMaxVector(fbb, result.statsMax()) : 0;
+                ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMaxVector(fbb, result.statsMax().encode()) : 0;
         // forceDefaults only while building ArrayStats, so null_count = 0 is serialized (flatbuffers
         // omits a scalar equal to its default otherwise) — matching the Rust writer and letting the
         // reader prune IS NULL on zero-null chunks. Reset immediately so the Array/ArrayNode tables
@@ -1142,8 +1144,8 @@ public final class VortexWriter implements Closeable {
     /// min/max) rather than dropping the stat for the whole column — MIN/MAX/SUM are nullable per
     /// zone, matching Rust. Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), SUM(5),
     /// NULL_COUNT(6).
-    private void emitZoneMap(ColumnName colName, DType minMaxDtype, List<byte[]> minBytes, List<byte[]> maxBytes,
-                             DType sumDtype, List<byte[]> sumBytes, long[] nullCounts,
+    private void emitZoneMap(ColumnName colName, DType minMaxDtype, List<ProtoScalarValue> minBytes, List<ProtoScalarValue> maxBytes,
+                             DType sumDtype, List<ProtoScalarValue> sumBytes, long[] nullCounts,
                              long[] rowCounts) throws IOException {
         int nZones = nullCounts.length;
         boolean[] allValid = new boolean[nZones];
@@ -1546,10 +1548,7 @@ public final class VortexWriter implements Closeable {
     private record SegRef(long offset, long len, SegmentStats stats) {
     }
 
-    // S6218: the byte[] stat components are never value-compared — SegmentStats instances are only
-    // read positionally, so the default identity equals is fine.
-    @SuppressWarnings("java:S6218")
-    private record SegmentStats(byte[] min, byte[] max, byte[] sum, long nullCount) {
+    private record SegmentStats(ProtoScalarValue min, ProtoScalarValue max, ProtoScalarValue sum, long nullCount) {
     }
 
     private record EncodedSegment(EncodeResult result, Arena arena, SegmentStats stats) {
@@ -1568,7 +1567,7 @@ public final class VortexWriter implements Closeable {
     /// @param nullableCodes whether the codes child carries validity (Rust's `is_nullable_codes`)
     private record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,
             List<Long> codesRowCounts, List<Long> chunkRowCounts, List<Long> chunkNullCounts,
-            List<byte[]> chunkStatsMin, List<byte[]> chunkStatsMax, List<byte[]> chunkStatsSum,
+            List<ProtoScalarValue> chunkStatsMin, List<ProtoScalarValue> chunkStatsMax, List<ProtoScalarValue> chunkStatsSum,
             boolean nullableCodes) {
         long totalRows() {
             return chunkRowCounts.stream().mapToLong(Long::longValue).sum();

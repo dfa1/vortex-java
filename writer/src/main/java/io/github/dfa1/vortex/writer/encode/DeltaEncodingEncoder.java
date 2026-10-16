@@ -80,7 +80,7 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
     /// @param statsMin  zone-map minimum, `null` when empty
     /// @param statsMax  zone-map maximum, `null` when empty
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-    private record Deltas(long[] bases, long[] deltas, long paddedLen, byte[] statsMin, byte[] statsMax) {
+    private record Deltas(long[] bases, long[] deltas, long paddedLen, ProtoScalarValue statsMin, ProtoScalarValue statsMax) {
 
         byte[] metadata() {
             return new ProtoDeltaMetadata(paddedLen, 0).encode();
@@ -140,16 +140,16 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
             System.arraycopy(chunkDelta, 0, deltasAll, chunk * FastLanes.CHUNK, FastLanes.CHUNK);
         }
 
-        byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
-        byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
+        ProtoScalarValue statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
+        ProtoScalarValue statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
         return new Deltas(basesAll, deltasAll, paddedLen, statsMin, statsMax);
     }
 
-    private static byte[] statsBytes(PType ptype, long value) {
+    private static ProtoScalarValue statsBytes(PType ptype, long value) {
         if (ptype.isUnsigned()) {
-            return ProtoScalarValue.ofUint64Value(value).encode();
+            return ProtoScalarValue.ofUint64Value(value);
         }
-        return ProtoScalarValue.ofInt64Value(value).encode();
+        return ProtoScalarValue.ofInt64Value(value);
     }
 
 }

@@ -48,8 +48,8 @@ class ExtEncodingEncoderTest {
 
             // Then — the reader resolves an extension column's MIN/MAX against its storage dtype
             assertThat(result.hasStats()).isTrue();
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(1_600_000_000_000L);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(1_800_000_000_000L);
+            assertThat(result.statsMin().int64_value()).isEqualTo(1_600_000_000_000L);
+            assertThat(result.statsMax().int64_value()).isEqualTo(1_800_000_000_000L);
         }
 
         @Test
@@ -65,8 +65,8 @@ class ExtEncodingEncoderTest {
 
             // Then
             assertThat(result.openChildren()).isNotEmpty();
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(1_600_000_000_000L);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(1_800_000_000_000L);
+            assertThat(result.statsMin().int64_value()).isEqualTo(1_600_000_000_000L);
+            assertThat(result.statsMax().int64_value()).isEqualTo(1_800_000_000_000L);
         }
 
         @Test

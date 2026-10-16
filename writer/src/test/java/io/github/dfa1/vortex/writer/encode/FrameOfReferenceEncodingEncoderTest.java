@@ -248,8 +248,8 @@ class FrameOfReferenceEncodingEncoderTest {
 
             // Then
             assertThat(result.hasStats()).isTrue();
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(990L);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(1050L);
+            assertThat(result.statsMin().int64_value()).isEqualTo(990L);
+            assertThat(result.statsMax().int64_value()).isEqualTo(1050L);
         }
 
         @Test
@@ -261,8 +261,8 @@ class FrameOfReferenceEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(new DType.Primitive(PType.U32, false), data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(result.statsMin()).uint64_value()).isEqualTo(100L);
-            assertThat(scalar(result.statsMax()).uint64_value()).isEqualTo(300L);
+            assertThat(result.statsMin().uint64_value()).isEqualTo(100L);
+            assertThat(result.statsMax().uint64_value()).isEqualTo(300L);
         }
 
         @Test
@@ -277,8 +277,8 @@ class FrameOfReferenceEncodingEncoderTest {
 
             // Then
             assertThat(result.applicable()).isTrue();
-            assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(990L);
-            assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(1050L);
+            assertThat(result.statsMin().int64_value()).isEqualTo(990L);
+            assertThat(result.statsMax().int64_value()).isEqualTo(1050L);
         }
 
         private static ProtoScalarValue scalar(byte[] bytes) throws IOException {

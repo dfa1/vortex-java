@@ -105,7 +105,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         }
         // Run-length encoding preserves the value set, so the runs bound the column exactly as the
         // raw values do.
-        byte[][] stats = ZoneMapStats.of(dtype, data);
+        MinMax stats = ZoneMapStats.of(dtype, data);
 
         Runs runs = runs(longs);
         MemorySegment valuesSeg = fromLongs(runs.values(), runs.valuesCount(), ptype, ctx.arena());
@@ -156,7 +156,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 new ChildSlot(dtype, PrimitiveArrays.fromBitsArray(values, ptype, EncodingId.FASTLANES_RLE), 0, VALUES_EXCLUDED),
                 new ChildSlot(new DType.Primitive(PType.U16, false), runs.indices(), 1, POSITIONS_EXCLUDED),
                 new ChildSlot(new DType.Primitive(PType.U64, false), runs.offsets(), 2, POSITIONS_EXCLUDED));
-        byte[][] stats = ZoneMapStats.of(dtype, data);
+        MinMax stats = ZoneMapStats.of(dtype, data);
         return new CascadeStep(partialRoot, List.of(), slots, ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }
 

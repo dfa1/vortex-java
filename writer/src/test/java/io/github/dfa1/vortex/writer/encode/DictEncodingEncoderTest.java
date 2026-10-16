@@ -219,8 +219,8 @@ class DictEncodingEncoderTest {
 
         // Then — min/max reflect the logical column values (10..30), not the dict codes (0..2)
         assertThat(result.hasStats()).isTrue();
-        assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
-        assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(30L);
+        assertThat(result.statsMin().int64_value()).isEqualTo(10L);
+        assertThat(result.statsMax().int64_value()).isEqualTo(30L);
     }
 
     @Test
@@ -234,8 +234,8 @@ class DictEncodingEncoderTest {
         CascadeStep result = ENCODER.encodeCascade(DTypes.I64, data, EncodeTestHelper.testCtx());
 
         // Then
-        assertThat(scalar(result.statsMin()).int64_value()).isEqualTo(10L);
-        assertThat(scalar(result.statsMax()).int64_value()).isEqualTo(30L);
+        assertThat(result.statsMin().int64_value()).isEqualTo(10L);
+        assertThat(result.statsMax().int64_value()).isEqualTo(30L);
     }
 
     @Test
@@ -247,8 +247,8 @@ class DictEncodingEncoderTest {
         EncodeResult result = ENCODER.encode(new DType.Primitive(PType.U32, false), data, EncodeTestHelper.testCtx());
 
         // Then
-        assertThat(scalar(result.statsMin()).uint64_value()).isEqualTo(100L);
-        assertThat(scalar(result.statsMax()).uint64_value()).isEqualTo(300L);
+        assertThat(result.statsMin().uint64_value()).isEqualTo(100L);
+        assertThat(result.statsMax().uint64_value()).isEqualTo(300L);
     }
 
     @Test

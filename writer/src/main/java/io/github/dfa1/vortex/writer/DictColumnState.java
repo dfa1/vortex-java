@@ -2,7 +2,9 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.encode.LongIntMap;
+import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
@@ -70,9 +72,9 @@ final class DictColumnState {
     private final List<boolean[]> chunkValidity = new ArrayList<>();
     private final List<Long> chunkRowCounts = new ArrayList<>();
     private final List<Long> chunkNullCounts = new ArrayList<>();
-    private final List<byte[]> chunkStatsMin = new ArrayList<>();
-    private final List<byte[]> chunkStatsMax = new ArrayList<>();
-    private final List<byte[]> chunkStatsSum = new ArrayList<>();
+    private final List<ProtoScalarValue> chunkStatsMin = new ArrayList<>();
+    private final List<ProtoScalarValue> chunkStatsMax = new ArrayList<>();
+    private final List<ProtoScalarValue> chunkStatsSum = new ArrayList<>();
     private long codeArrayBytes;
 
     DictColumnState(DType dtype) {
@@ -138,15 +140,15 @@ final class DictColumnState {
         return chunkNullCounts;
     }
 
-    List<byte[]> chunkStatsMin() {
+    List<ProtoScalarValue> chunkStatsMin() {
         return chunkStatsMin;
     }
 
-    List<byte[]> chunkStatsMax() {
+    List<ProtoScalarValue> chunkStatsMax() {
         return chunkStatsMax;
     }
 
-    List<byte[]> chunkStatsSum() {
+    List<ProtoScalarValue> chunkStatsSum() {
         return chunkStatsSum;
     }
 
@@ -288,14 +290,14 @@ final class DictColumnState {
             chunkStatsMax.add(null);
             chunkStatsSum.add(null);
         } else if (varBin) {
-            byte[][] mm = VarBinEncodingEncoder.minMaxStats((String[]) values);
-            chunkStatsMin.add(mm != null ? mm[0] : null);
-            chunkStatsMax.add(mm != null ? mm[1] : null);
+            MinMax mm = VarBinEncodingEncoder.minMaxStats((String[]) values);
+            chunkStatsMin.add(mm != null ? mm.min() : null);
+            chunkStatsMax.add(mm != null ? mm.max() : null);
             chunkStatsSum.add(null);
         } else {
-            byte[][] mm = PrimitiveEncodingEncoder.minMaxStats(ptype, values);
-            chunkStatsMin.add(mm != null ? mm[0] : null);
-            chunkStatsMax.add(mm != null ? mm[1] : null);
+            MinMax mm = PrimitiveEncodingEncoder.minMaxStats(ptype, values);
+            chunkStatsMin.add(mm != null ? mm.min() : null);
+            chunkStatsMax.add(mm != null ? mm.max() : null);
             chunkStatsSum.add(PrimitiveEncodingEncoder.sumStat(ptype, values));
         }
         codeArrayBytes += 2L * len;

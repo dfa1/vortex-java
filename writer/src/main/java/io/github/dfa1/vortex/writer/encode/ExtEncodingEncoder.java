@@ -67,7 +67,7 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
         ChildSlot slot = new ChildSlot(ext.storageDType(), data, 0, Set.of(EncodingId.VORTEX_EXT));
         // The cascade reads stats off the step, not off the children it later resolves, so the
         // bounds have to be computed here rather than inherited from the storage slot.
-        byte[][] stats = storageStats(ext.storageDType(), data);
+        MinMax stats = storageStats(ext.storageDType(), data);
         return new CascadeStep(partialRoot, List.of(), List.of(slot),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
     }
@@ -78,8 +78,8 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
     ///
     /// @param storage the extension's storage dtype
     /// @param data    the storage-shaped values being encoded
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null`
-    private static byte[][] storageStats(DType storage, Object data) {
+    /// @return the [MinMax] of encoded scalars, or `null`
+    private static MinMax storageStats(DType storage, Object data) {
         return storage instanceof DType.Primitive(PType ptype, boolean ignored)
                 ? PrimitiveEncodingEncoder.minMaxStats(ptype, data)
                 : null;

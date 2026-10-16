@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
@@ -61,9 +62,9 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
                 null,
                 new EncodeNode[]{valuesResult.rootNode(), validityNode},
                 new int[0]);
-        byte[][] stats = maskedMinMaxStats(nonNullable, values, validity);
-        byte[] statsMin = stats == null ? null : stats[0];
-        byte[] statsMax = stats == null ? null : stats[1];
+        MinMax stats = maskedMinMaxStats(nonNullable, values, validity);
+        ProtoScalarValue statsMin = stats == null ? null : stats.min();
+        ProtoScalarValue statsMax = stats == null ? null : stats.max();
         EncodeResult masked = new EncodeResult(root, buffers, statsMin, statsMax);
 
         // Rust never wraps a dict-encoded nullable string column in a row mask: its dict builder
@@ -93,8 +94,8 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// @param nonNullable the values' own dtype (validity stripped)
     /// @param values      the dense values array from the [NullableData] carrier
     /// @param validity    per-row validity, aligned with `values`
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null` when no row is valid
-    private static byte[][] maskedMinMaxStats(DType nonNullable, Object values, boolean[] validity) {
+    /// @return the [MinMax] of encoded scalars, or `null` when no row is valid
+    private static MinMax maskedMinMaxStats(DType nonNullable, Object values, boolean[] validity) {
         return ZoneMapStats.of(nonNullable, new NullableData(values, validity));
     }
 

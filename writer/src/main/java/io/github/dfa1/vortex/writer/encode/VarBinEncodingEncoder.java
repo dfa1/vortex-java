@@ -56,9 +56,9 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
 
         // Zone-map min/max stats are lexicographic-string-only (minMaxStats(String[])); binary
         // blobs (e.g. audio bytes) aren't usefully zone-mapped, so skip stats for that path.
-        byte[][] stats = strings != null ? minMaxStats(strings) : null;
-        byte[] statsMin = stats != null ? stats[0] : null;
-        byte[] statsMax = stats != null ? stats[1] : null;
+        MinMax stats = strings != null ? minMaxStats(strings) : null;
+        ProtoScalarValue statsMin = stats != null ? stats.min() : null;
+        ProtoScalarValue statsMax = stats != null ? stats.max() : null;
 
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBIN, MemorySegment.ofArray(metaBytes),
@@ -72,8 +72,8 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
     /// to the flat path.
     ///
     /// @param strings the string values (may contain `null`)
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null` if all entries are `null`
-    public static byte[][] minMaxStats(String[] strings) {
+    /// @return the [MinMax] of encoded scalars, or `null` if all entries are `null`
+    public static MinMax minMaxStats(String[] strings) {
         String minStr = null;
         String maxStr = null;
         for (String s : strings) {
@@ -90,6 +90,6 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         if (minStr == null) {
             return null;
         }
-        return new byte[][]{ProtoScalarValue.ofStringValue(minStr).encode(), ProtoScalarValue.ofStringValue(maxStr).encode()};
+        return new MinMax(ProtoScalarValue.ofStringValue(minStr), ProtoScalarValue.ofStringValue(maxStr));
     }
 }

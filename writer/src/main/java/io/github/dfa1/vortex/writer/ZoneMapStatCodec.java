@@ -5,12 +5,11 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.encode.ComparableValues;
+import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 
-import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
@@ -109,7 +108,7 @@ final class ZoneMapStatCodec {
     /// The serialized per-chunk SUM scalar for `data` of logical type `dtype`, or `null` when the
     /// column is not summable (non-primitive) or the sum overflowed. Validity placeholders are zero
     /// and therefore sum-neutral, so a nullable carrier sums correctly via its values.
-    static byte[] columnSum(DType dtype, Object data) {
+    static ProtoScalarValue columnSum(DType dtype, Object data) {
         if (!(dtype instanceof DType.Primitive p)) {
             return null;
         }
@@ -138,7 +137,7 @@ final class ZoneMapStatCodec {
     /// @param dtype the segment's logical type
     /// @param data  the segment's input data, possibly [NullableData]- or [ComparableValues]-wrapped
     /// @return a `{min, max}` pair, or `null` when `dtype` has no recordable min/max
-    static byte[][] columnMinMax(DType dtype, Object data) {
+    static MinMax columnMinMax(DType dtype, Object data) {
         if (data instanceof ComparableValues cv) {
             return PrimitiveEncodingEncoder.minMaxStats(cv.ptype(), cv.values());
         }
@@ -167,7 +166,7 @@ final class ZoneMapStatCodec {
     /// or an encoder that does not compute one) marks that zone invalid in `valid` rather than
     /// failing the whole column's zone-map — matching Rust, which stores min/max as a nullable
     /// per-zone stat.
-    static Object zoneStatValues(DType minMaxDtype, List<byte[]> statBytes, boolean[] valid) throws IOException {
+    static Object zoneStatValues(DType minMaxDtype, List<ProtoScalarValue> statBytes, boolean[] valid) {
         return switch (minMaxDtype) {
             case DType.Primitive p -> statColumn(p.ptype(), statBytes, valid);
             case DType.Utf8 _ -> statStringColumn(statBytes, valid);
@@ -178,7 +177,7 @@ final class ZoneMapStatCodec {
     /// Builds the per-zone SUM array for `sumDtype` (i64/u64 → `long[]`, f64 → `double[]`), decoding
     /// each zone's serialized scalar. Zones whose sum overflowed carry a `null` entry in `sumBytes`;
     /// `valid[i]` is set accordingly so the stat field reports them as null.
-    static Object sumColumn(DType sumDtype, List<byte[]> sumBytes, boolean[] valid) throws IOException {
+    static Object sumColumn(DType sumDtype, List<ProtoScalarValue> sumBytes, boolean[] valid) {
         PType ptype = ((DType.Primitive) sumDtype).ptype();
         int n = sumBytes.size();
         if (ptype == PType.F64) {
@@ -202,11 +201,11 @@ final class ZoneMapStatCodec {
     /// A `null` entry in `statBytes` sets `valid[i]` to `false` and fills the slot with `""` (a
     /// sum-neutral-style placeholder never read back, since [NullableData] carries validity
     /// separately from values).
-    private static String[] statStringColumn(List<byte[]> statBytes, boolean[] valid) throws IOException {
+    private static String[] statStringColumn(List<ProtoScalarValue> statBytes, boolean[] valid) {
         String[] out = new String[statBytes.size()];
         for (int i = 0; i < out.length; i++) {
             valid[i] = statBytes.get(i) != null;
-            out[i] = valid[i] ? decodeScalar(statBytes.get(i)).string_value() : "";
+            out[i] = valid[i] ? statBytes.get(i).string_value() : "";
         }
         return out;
     }
@@ -214,7 +213,7 @@ final class ZoneMapStatCodec {
     /// Builds the per-zone values array in the storage shape the primitive encoder expects, decoding
     /// each zone's serialized [ProtoScalarValue] stat. A `null` entry in `statBytes` sets `valid[i]`
     /// to `false` and fills the slot with a zero placeholder, never read back.
-    private static Object statColumn(PType ptype, List<byte[]> statBytes, boolean[] valid) throws IOException {
+    private static Object statColumn(PType ptype, List<ProtoScalarValue> statBytes, boolean[] valid) {
         int n = statBytes.size();
         return switch (ptype) {
             case I8, U8 -> {
@@ -277,16 +276,14 @@ final class ZoneMapStatCodec {
         };
     }
 
-    private static long scalarLong(byte[] bytes) throws IOException {
+    private static long scalarLong(ProtoScalarValue sv) {
         // Integer columns serialize min/max as int64 (signed) or uint64 (unsigned).
-        ProtoScalarValue sv = decodeScalar(bytes);
         return sv.int64_value() != null ? sv.int64_value() : sv.uint64_value();
     }
 
-    private static double scalarDouble(byte[] bytes) throws IOException {
+    private static double scalarDouble(ProtoScalarValue sv) {
         // Float columns serialize min/max as f64 (F64), f32 (F32) or f16 (F16, the half bits).
         // Branch rather than use a ternary so each path widens explicitly instead of mixing boxed types.
-        ProtoScalarValue sv = decodeScalar(bytes);
         if (sv.f64_value() != null) {
             return sv.f64_value();
         }
@@ -294,10 +291,5 @@ final class ZoneMapStatCodec {
             return Float.float16ToFloat((short) sv.f16_value().longValue());
         }
         return sv.f32_value();
-    }
-
-    private static ProtoScalarValue decodeScalar(byte[] bytes) throws IOException {
-        MemorySegment seg = MemorySegment.ofArray(bytes);
-        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 }

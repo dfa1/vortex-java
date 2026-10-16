@@ -54,11 +54,11 @@ public final class BoolEncodingEncoder implements EncodingEncoder {
                 break;
             }
         }
-        byte[] statsMin = bools.length > 0
-                                  ? ProtoScalarValue.ofBoolValue(!hasFalse).encode()
+        ProtoScalarValue statsMin = bools.length > 0
+                                  ? ProtoScalarValue.ofBoolValue(!hasFalse)
                                   : null;
-        byte[] statsMax = bools.length > 0
-                                  ? ProtoScalarValue.ofBoolValue(hasTrue).encode()
+        ProtoScalarValue statsMax = bools.length > 0
+                                  ? ProtoScalarValue.ofBoolValue(hasTrue)
                                   : null;
         return EncodeResult.simple(encodingId(), EncodedBuffer.bytes(encodeBool(bools, ctx.arena())), statsMin, statsMax);
     }

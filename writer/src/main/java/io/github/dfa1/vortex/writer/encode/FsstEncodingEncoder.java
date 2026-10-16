@@ -69,8 +69,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// skips them: a zone map over arbitrary blobs prunes nothing.
     ///
     /// @param data the Utf8 (`String[]`) or Binary (`byte[][]`) values being encoded
-    /// @return a two-element `{min, max}` array of encoded scalars, or `null`
-    private static byte[][] zoneMapStats(Object data) {
+    /// @return the [MinMax] of encoded scalars, or `null`
+    private static MinMax zoneMapStats(Object data) {
         return data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
     }
 
@@ -87,7 +87,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// @param arena arena backing the length/offset buffers
     /// @param stats the `{min, max}` zone-map scalars from [#zoneMapStats(Object)], or `null`
     /// @return the terminal `vortex.fsst` encode result
-    static EncodeResult toEncodeResult(Fsst c, Arena arena, byte[][] stats) {
+    static EncodeResult toEncodeResult(Fsst c, Arena arena, MinMax stats) {
         long uncompLenBytes = c.uncompLenPType().byteSize();
         MemorySegment uncompLenBuf = arena.allocate(Math.max(c.n() * uncompLenBytes, 1));
         for (int i = 0; i < c.n(); i++) {
@@ -111,7 +111,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                 List.of(EncodedBuffer.of(c.symBuf(), PType.U64), EncodedBuffer.bytes(c.symLenBuf()),
                         EncodedBuffer.bytes(c.compBuf()), EncodedBuffer.of(uncompLenBuf, c.uncompLenPType()),
                         EncodedBuffer.of(codesOffBuf, c.codesOffPType())),
-                stats != null ? stats[0] : null, stats != null ? stats[1] : null);
+                stats != null ? stats.min() : null, stats != null ? stats.max() : null);
     }
 
     /// Cascading FSST: expose the per-row uncompressed-length and code-offset children as open
@@ -132,7 +132,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             return CascadeStep.terminal(encode(dtype, data, ctx));
         }
         Fsst c = compress(data, ctx.arena());
-        byte[][] stats = zoneMapStats(data);
+        MinMax stats = zoneMapStats(data);
         Object uncompLens = PrimitiveArrays.fromIntsArray(c.uncompLens(), c.uncompLenPType(), EncodingId.VORTEX_FSST);
         Object codesOffsets = PrimitiveArrays.fromIntsArray(c.codesOffsets(), c.codesOffPType(), EncodingId.VORTEX_FSST);
         EncodeNode partialRoot = new EncodeNode(
@@ -145,7 +145,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
                         EncodedBuffer.bytes(c.compBuf())),
                 List.of(new ChildSlot(new DType.Primitive(c.uncompLenPType(), false), uncompLens, 0, SELF),
                         new ChildSlot(new DType.Primitive(c.codesOffPType(), false), codesOffsets, 1, SELF)),
-                stats != null ? stats[0] : null, stats != null ? stats[1] : null, true);
+                stats != null ? stats.min() : null, stats != null ? stats.max() : null, true);
     }
 
     /// The FSST-specific product of compression: the symbol-table buffers, the wire code stream, the

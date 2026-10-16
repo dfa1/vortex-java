@@ -56,8 +56,8 @@ class FsstEncodingEncoderTest {
 
             // Then
             assertThat(result.hasStats()).isTrue();
-            assertThat(scalar(result.statsMin()).string_value()).isEqualTo("apple");
-            assertThat(scalar(result.statsMax()).string_value()).isEqualTo("quince");
+            assertThat(result.statsMin().string_value()).isEqualTo("apple");
+            assertThat(result.statsMax().string_value()).isEqualTo("quince");
         }
 
         @Test
@@ -72,10 +72,10 @@ class FsstEncodingEncoderTest {
                     .encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(scalar(fsst.statsMin()).string_value())
-                    .isEqualTo(scalar(varbin.statsMin()).string_value());
-            assertThat(scalar(fsst.statsMax()).string_value())
-                    .isEqualTo(scalar(varbin.statsMax()).string_value());
+            assertThat(fsst.statsMin().string_value())
+                    .isEqualTo(varbin.statsMin().string_value());
+            assertThat(fsst.statsMax().string_value())
+                    .isEqualTo(varbin.statsMax().string_value());
         }
 
         @Test
@@ -91,8 +91,8 @@ class FsstEncodingEncoderTest {
 
             // Then
             assertThat(result.openChildren()).isNotEmpty();
-            assertThat(scalar(result.statsMin()).string_value()).isEqualTo("apple");
-            assertThat(scalar(result.statsMax()).string_value()).isEqualTo("quince");
+            assertThat(result.statsMin().string_value()).isEqualTo("apple");
+            assertThat(result.statsMax().string_value()).isEqualTo("quince");
         }
 
         @Test
