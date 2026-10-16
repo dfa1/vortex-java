@@ -67,7 +67,7 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
     }
 
     /// Computes the serialized min/max string [ProtoScalarValue] pair for a string array, skipping
-    /// `null` entries (lexicographic by [String#compareTo]). Returns `null` when every entry is
+    /// `null` entries (UTF-8 byte order, see [Utf8Order]). Returns `null` when every entry is
     /// `null`. Shared so the dictionary zone-map path computes per-chunk string min/max identically
     /// to the flat path.
     ///
@@ -87,6 +87,15 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
                 maxStr = s;
             }
         }
+        return encodeMinMax(minStr, maxStr);
+    }
+
+    /// Encodes an already-computed string min/max as [#minMaxStats(String[])] would.
+    ///
+    /// @param minStr the minimum in UTF-8 order, or `null` when there is no non-null value
+    /// @param maxStr the maximum in UTF-8 order, or `null` when there is no non-null value
+    /// @return the [MinMax] of encoded scalars, or `null` if `minStr` is `null`
+    public static MinMax encodeMinMax(String minStr, String maxStr) {
         if (minStr == null) {
             return null;
         }

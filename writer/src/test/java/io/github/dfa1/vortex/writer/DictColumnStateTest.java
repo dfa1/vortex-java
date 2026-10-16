@@ -2,12 +2,14 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.List;
 import java.util.stream.Stream;
 
 import static io.github.dfa1.vortex.writer.DictColumnState.GLOBAL_DICT_MAX_CARDINALITY;
@@ -274,6 +276,32 @@ class DictColumnStateTest {
 
         // Then
         assertThat(result).isEqualTo(expected);
+    }
+
+    // ── ingestDictChunk (string min/max per chunk) ───────────────────────────────
+
+    /// Min/max are taken once per distinct code per chunk, not per row. This pins that each chunk
+    /// still reports its own extremes: chunk 3 reuses codes chunk 1 already saw (a stale "seen"
+    /// mark would drop them), chunk 2 holds none of them, and the emoji sorts above U+FF21 only in
+    /// UTF-8 order (String#compareTo says the opposite).
+    @Test
+    void ingestDictChunkReportsPerChunkStringMinMax() {
+        // Given
+        DictColumnState sut = new DictColumnState(new DType.Utf8(true));
+        String emoji = new String(Character.toChars(0x1F600));
+
+        // When
+        sut.ingestDictChunk(new String[]{"b", "a", "b", "\uFF21", emoji, "a"});
+        sut.ingestDictChunk(new String[]{"c", null, "c", "d"});
+        sut.ingestDictChunk(new String[]{"b", "a", "b"});
+
+        // Then
+        assertThat(decodeStrings(sut.chunkStatsMin())).containsExactly("a", "c", "a");
+        assertThat(decodeStrings(sut.chunkStatsMax())).containsExactly(emoji, "d", "b");
+    }
+
+    private static List<String> decodeStrings(List<ProtoScalarValue> scalars) {
+        return scalars.stream().map(ProtoScalarValue::string_value).toList();
     }
 
     /// Builds a long[] with exactly `distinct` distinct values, each repeated 4× (so the array is
