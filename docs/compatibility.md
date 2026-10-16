@@ -100,8 +100,7 @@ distinguishing "blocked on a credential" from plain `untriaged`). A scheduled wo
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
 252 `ok`, 0 known gaps, 33 `missing_auth`, 145 untriaged (mostly large datasets and the
 `tpcgen-rs-*` family, which needs `tpcgen-cli` to build). On the v0.3.0 corpus, 172 hydrated
-datasets match their Parquet sibling exactly; 14 more report as skipped because the oracle
-(hardwood 1.1.0.Beta1) cannot read their Parquet files (hardwood#1380, fixed upstream). Every gap found so far is fixed
+datasets match their Parquet sibling exactly. Every gap found so far is fixed
 ([#206](https://github.com/dfa1/vortex-java/issues/206)–[#211](https://github.com/dfa1/vortex-java/issues/211),
 [#215](https://github.com/dfa1/vortex-java/issues/215)–[#217](https://github.com/dfa1/vortex-java/issues/217),
 [#221](https://github.com/dfa1/vortex-java/issues/221),

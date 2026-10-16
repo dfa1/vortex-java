@@ -26,7 +26,6 @@ airbnbopendata,missing_auth
 amazon-reviews-2023-subscription-boxes,ok
 ampds-whe,ok
 anthropic-economic-index,ok
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 anthropic-hh-rlhf-helpful-base,ok
 anthropic-interviewer,ok
 appian-address,ok
@@ -92,7 +91,6 @@ bi-uberlandia,ok
 bi-uscensus,untriaged
 bi-wins,ok
 bi-yalelanguages,ok
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 bigscience-p3-eval-subset,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 building-permit-applications-data,missing_auth
@@ -106,13 +104,11 @@ cardiovascular-diseases-risk-prediction-dataset,ok
 # Fixed upstream on main (hardwood-hq/hardwood#1104, milestone 1.1.0.Beta2; our reproducer landed
 # as their regression test in #1381), so the bump to Beta2 should make this slug assert for real
 # again — drop this comment then, and if it still aborts, the blocker is a new one.
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 chess,ok
 clickbench-hits,untriaged
 cnn-dailymail,ok
 codeparrot-clean-valid,ok
 cohere-wikipedia-simple-embed,untriaged
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 coig,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 coronahack-chest-xraydataset,missing_auth
@@ -123,7 +119,6 @@ covid-world-vaccination-progress,ok
 covid19-data-from-john-hopkins-university,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
 crimes-in-boston,missing_auth
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 databricks-dolly-15k,ok
 dbpedia-embeddings,untriaged
 diabetes-health-indicators-dataset,ok
@@ -168,7 +163,6 @@ emotions-dataset-for-nlp,ok
 fhv_tripdata_2025,ok
 fhvhv_tripdata_2025,untriaged
 finemath-4plus,untriaged
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 finepdfs-en-test,ok
 finetranslations-swedish,ok
 fineweb-2-swedish,untriaged
@@ -193,13 +187,11 @@ gtsrb-german-traffic-sign,ok
 hacker-news,untriaged
 heart-disease-health-indicators-dataset,ok
 hellaswag,ok
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 helpsteer2,ok
 hotel-booking-demand,ok
 hotpotqa-fullwiki,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 housing-prices-dataset,missing_auth
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 humaneval,ok
 imdb-job-aka-name,ok
 imdb-job-aka-title,ok
@@ -238,14 +230,11 @@ loan-default-dataset,missing_auth
 lung-cancer,ok
 marketing-data,ok
 mbpp,ok
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 medmcqa,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 mlcourse,missing_auth
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 mmlu,ok
 mmlu-pro,ok
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 mmmlu,ok
 mmmu,untriaged
 mnist,ok
@@ -254,14 +243,12 @@ movies,ok
 new-york-city-airbnb-open-data,missing_auth
 news-headlines-dataset-for-sarcasm-detection,ok
 nips-papers,ok
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 no-robots,ok
 nyc-311,ok
 nyc-parking-tickets,ok
 # fails to hydrate on raincloud v0.3.0: nyc.gov returns HTTP 403 for the rolling-sales download
 nyc-property-sales,ok
 nypd-complaints,ok
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 oasst1,ok
 open-food-facts,untriaged
 openlibrary-authors,ok
@@ -295,7 +282,6 @@ pleias-synth,untriaged
 pubmedqa-labeled,ok
 sf-salaries,ok
 slimpajama-6b,untriaged
-# oracle: hardwood 1.1.0.Beta1 cannot read this raincloud v0.3.0 parquet (long page-header statistics, hardwood#1380, fixed upstream but unreleased), so it reports as skipped
 squad-v2,ok
 stack-overflow-2018-developer-survey,ok
 stackoverflow-badges,ok
