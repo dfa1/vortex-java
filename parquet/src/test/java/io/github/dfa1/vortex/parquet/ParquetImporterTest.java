@@ -158,7 +158,7 @@ class ParquetImporterTest {
             // Given — a BYTE_ARRAY annotation that is neither string-like nor absent (e.g.
             // DECIMAL) must not be silently downgraded to raw Binary, losing its semantic
             ColumnSchema schema = col("amount", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED,
-                    new LogicalType.DecimalType(2, 10));
+                    new LogicalType.DecimalType(10, 2));
 
             // When / Then
             assertThatThrownBy(() -> ParquetImporter.mapDType(schema))
