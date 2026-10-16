@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -11,6 +12,7 @@ import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,6 +72,9 @@ final class DictColumnState {
     // One code array per ingested chunk (null slots hold nullCode).
     private final List<short[]> chunkCodes = new ArrayList<>();
     private final List<boolean[]> chunkValidity = new ArrayList<>();
+    // Per code, the stamp of the last chunk whose min/max already compared it; avoids clearing a flag array per chunk.
+    private int[] seenInChunk;
+    private int stamp;
     private final List<Long> chunkRowCounts = new ArrayList<>();
     private final List<Long> chunkNullCounts = new ArrayList<>();
     private final List<ProtoScalarValue> chunkStatsMin = new ArrayList<>();
@@ -227,6 +232,13 @@ final class DictColumnState {
         // earlier shape ran a non-mutating counting pass first to get that atomicity, which cost a
         // second boxed map probe for every row in the file.
         short[] codes = new short[len];
+        boolean statsStrings = strings != null && !binary;
+        String minString = null;
+        String maxString = null;
+        int chunkStamp = ++stamp;
+        if (statsStrings && seenInChunk == null) {
+            seenInChunk = new int[16];
+        }
         if (strings != null) {
             for (int i = 0; i < len; i++) {
                 // Nullable Utf8/Binary keeps a real null at invalid positions (ChunkImpl.adaptUtf8,
@@ -250,6 +262,25 @@ final class DictColumnState {
                     valueToCode.put(v, code);
                 }
                 codes[i] = code.shortValue();
+                // Min/max depend on the distinct values only, so compare each code once per
+                // chunk instead of twice per row (UTF-8 order compare was 4% of a cascading write).
+                if (statsStrings) {
+                    if (code >= seenInChunk.length) {
+                        // Grown with the dictionary, not sized to the cap: a low-cardinality column
+                        // must not hold 128 KiB the retained-bytes budget cannot see.
+                        seenInChunk = Arrays.copyOf(seenInChunk, Math.max(code + 1, seenInChunk.length * 2));
+                    }
+                }
+                if (statsStrings && seenInChunk[code] != chunkStamp) {
+                    seenInChunk[code] = chunkStamp;
+                    String s = (String) strings[i];
+                    if (minString == null || Utf8Order.compare(s, minString) < 0) {
+                        minString = s;
+                    }
+                    if (maxString == null || Utf8Order.compare(s, maxString) > 0) {
+                        maxString = s;
+                    }
+                }
             }
         } else {
             // Primitive path: probe the unboxed bits index and box only when inserting a value the
@@ -290,7 +321,7 @@ final class DictColumnState {
             chunkStatsMax.add(null);
             chunkStatsSum.add(null);
         } else if (varBin) {
-            MinMax mm = VarBinEncodingEncoder.minMaxStats((String[]) values);
+            MinMax mm = VarBinEncodingEncoder.encodeMinMax(minString, maxString);
             chunkStatsMin.add(mm != null ? mm.min() : null);
             chunkStatsMax.add(mm != null ? mm.max() : null);
             chunkStatsSum.add(null);
