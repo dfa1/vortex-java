@@ -110,6 +110,48 @@ class AlpRdEncodingEncoderTest {
     }
 
     @Test
+    void encode_f64_tiedPrefixesRankUnsignedSoNegativesComeAfterPositives() throws IOException {
+        // Given: +-1, 2, 4, 8, each 100 times, so eight left parts tie on count. Negative doubles
+        // have the sign bit set, so their 16-bit pattern is >= 0x8000: a signed comparison would
+        // rank them first, while Rust (and the wire format) order ties by the unsigned pattern
+        double[] values = new double[800];
+        for (int i = 0; i < values.length; i++) {
+            double magnitude = 1 << (i % 4);
+            values[i] = (i / 4) % 2 == 0 ? magnitude : -magnitude;
+        }
+        var sut = new AlpRdEncodingEncoder();
+
+        // When
+        EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+        var metaSeg = result.rootNode().metadata();
+        ProtoALPRDMetadata meta = ProtoALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+
+        // Then
+        assertThat(meta.right_bit_width()).isEqualTo(48);
+        assertThat(meta.dict()).containsExactly(0x3FF0, 0x4000, 0x4010, 0x4020, 0xBFF0, 0xC000, 0xC010, 0xC020);
+    }
+
+    @Test
+    void encode_f32_tiedPrefixesRankUnsignedSoNegativesComeAfterPositives() throws IOException {
+        // Given: the F32 twin of the F64 case above; same reason, same eight tied patterns shape
+        float[] values = new float[800];
+        for (int i = 0; i < values.length; i++) {
+            float magnitude = 1 << (i % 4);
+            values[i] = (i / 4) % 2 == 0 ? magnitude : -magnitude;
+        }
+        var sut = new AlpRdEncodingEncoder();
+
+        // When
+        EncodeResult result = sut.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
+        var metaSeg = result.rootNode().metadata();
+        ProtoALPRDMetadata meta = ProtoALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+
+        // Then
+        assertThat(meta.right_bit_width()).isEqualTo(16);
+        assertThat(meta.dict()).containsExactly(0x3F80, 0x4000, 0x4080, 0x4100, 0xBF80, 0xC000, 0xC080, 0xC100);
+    }
+
+    @Test
     void encode_f64_trainsTheDictionaryOnRunsSpreadOverTheArray() {
         // Given: 131072 values whose exponent changes every 64 rows, with 1.0 at every 256th row.
         // A sample taken every 256th row sees only 1.0, builds a one-entry dictionary, and sends

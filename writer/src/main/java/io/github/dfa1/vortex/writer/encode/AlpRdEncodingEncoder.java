@@ -11,9 +11,8 @@ import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 /// Write-only encoder for `vortex.alprd`.
 public final class AlpRdEncodingEncoder implements EncodingEncoder {
@@ -61,13 +60,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         int sampleLen = sample.length;
         Dictionary64 best = findBestDictionaryF64(sample, sampleLen);
 
-        Map<Short, Short> lookup = buildLookup(best.dict);
         long rightMask = -1L >>> (64 - best.rightBitWidth);
 
         short[] leftCodes = new short[n];
         long[] rightParts = new long[n];
-        List<Long> excPos = new ArrayList<>();
-        List<Short> excVals = new ArrayList<>();
+        Exceptions exceptions = new Exceptions();
 
         double min = Double.MAX_VALUE;
         double max = -Double.MAX_VALUE;
@@ -76,13 +73,12 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             long bits = Double.doubleToRawLongBits(v);
             short leftU16 = (short) (bits >>> best.rightBitWidth);
             rightParts[i] = bits & rightMask;
-            Short code = lookup.get(leftU16);
-            if (code != null) {
-                leftCodes[i] = code;
+            int code = indexOf(best.dict, leftU16);
+            if (code >= 0) {
+                leftCodes[i] = (short) code;
             } else {
                 leftCodes[i] = 0;
-                excPos.add((long) i);
-                excVals.add(leftU16);
+                exceptions.add(i, leftU16);
             }
             if (v < min) {
                 min = v;
@@ -94,7 +90,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, rightParts,
-            DType.U64, excPos, excVals, scalarF64(min), scalarF64(max), ctx);
+            DType.U64, exceptions, scalarF64(min), scalarF64(max), ctx);
     }
 
     /// Rust's `SamplePlan::subsample` (`alp` crate): the whole input when it has at most
@@ -141,16 +137,21 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         double bestEstSize = Double.MAX_VALUE;
         int bestRightBw = 48;
         short[] bestDict = new short[]{0};
+        LongIntMap counts = new LongIntMap(sampleLen);
+        short[] distinct = new short[Math.max(sampleLen, 1)];
 
         for (int p = 1; p <= MAX_CUT; p++) {
             int rightBw = 64 - p;
-            Map<Short, Integer> counts = new HashMap<>();
+            counts.clear();
+            int distinctLen = 0;
             for (int i = 0; i < sampleLen; i++) {
                 long bits = Double.doubleToRawLongBits(values[i]);
-                short leftU16 = (short) (bits >>> rightBw);
-                counts.merge(leftU16, 1, Integer::sum);
+                int leftU16 = (int) (bits >>> rightBw) & 0xFFFF;
+                if (counts.increment(leftU16) == 1) {
+                    distinct[distinctLen++] = (short) leftU16;
+                }
             }
-            short[] dict = topKByCount(counts);
+            short[] dict = topKByCount(counts, distinct, distinctLen);
             int excCount = countExceptionsF64(values, sampleLen, dict, rightBw);
             int maxCode = dict.length - 1;
             int leftBw = maxCode == 0 ? 1 : (Integer.SIZE - Integer.numberOfLeadingZeros(maxCode));
@@ -165,15 +166,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     }
 
     private static int countExceptionsF64(double[] values, int sampleLen, short[] dict, int rightBw) {
-        Map<Short, Boolean> dictSet = new HashMap<>();
-        for (short d : dict) {
-            dictSet.put(d, Boolean.TRUE);
-        }
         int count = 0;
         for (int i = 0; i < sampleLen; i++) {
             long bits = Double.doubleToRawLongBits(values[i]);
             short leftU16 = (short) (bits >>> rightBw);
-            if (!dictSet.containsKey(leftU16)) {
+            if (indexOf(dict, leftU16) < 0) {
                 count++;
             }
         }
@@ -191,13 +188,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         int sampleLen = sample.length;
         Dictionary32 best = findBestDictionaryF32(sample, sampleLen);
 
-        Map<Short, Short> lookup = buildLookup(best.dict);
         int rightMask = -1 >>> (32 - best.rightBitWidth);
 
         short[] leftCodes = new short[n];
         int[] rightParts = new int[n];
-        List<Long> excPos = new ArrayList<>();
-        List<Short> excVals = new ArrayList<>();
+        Exceptions exceptions = new Exceptions();
 
         float min = Float.MAX_VALUE;
         float max = -Float.MAX_VALUE;
@@ -206,13 +201,12 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             int bits = Float.floatToRawIntBits(v);
             short leftU16 = (short) (bits >>> best.rightBitWidth);
             rightParts[i] = bits & rightMask;
-            Short code = lookup.get(leftU16);
-            if (code != null) {
-                leftCodes[i] = code;
+            int code = indexOf(best.dict, leftU16);
+            if (code >= 0) {
+                leftCodes[i] = (short) code;
             } else {
                 leftCodes[i] = 0;
-                excPos.add((long) i);
-                excVals.add(leftU16);
+                exceptions.add(i, leftU16);
             }
             if (v < min) {
                 min = v;
@@ -224,23 +218,28 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, rightParts,
-            DType.U32, excPos, excVals, scalarF32(min), scalarF32(max), ctx);
+            DType.U32, exceptions, scalarF32(min), scalarF32(max), ctx);
     }
 
     private static Dictionary32 findBestDictionaryF32(float[] values, int sampleLen) {
         double bestEstSize = Double.MAX_VALUE;
         int bestRightBw = 16;
         short[] bestDict = new short[]{0};
+        LongIntMap counts = new LongIntMap(sampleLen);
+        short[] distinct = new short[Math.max(sampleLen, 1)];
 
         for (int p = 1; p <= MAX_CUT; p++) {
             int rightBw = 32 - p;
-            Map<Short, Integer> counts = new HashMap<>();
+            counts.clear();
+            int distinctLen = 0;
             for (int i = 0; i < sampleLen; i++) {
                 int bits = Float.floatToRawIntBits(values[i]);
-                short leftU16 = (short) (bits >>> rightBw);
-                counts.merge(leftU16, 1, Integer::sum);
+                int leftU16 = (bits >>> rightBw) & 0xFFFF;
+                if (counts.increment(leftU16) == 1) {
+                    distinct[distinctLen++] = (short) leftU16;
+                }
             }
-            short[] dict = topKByCount(counts);
+            short[] dict = topKByCount(counts, distinct, distinctLen);
             int excCount = countExceptionsF32(values, sampleLen, dict, rightBw);
             int maxCode = dict.length - 1;
             int leftBw = maxCode == 0 ? 1 : (Integer.SIZE - Integer.numberOfLeadingZeros(maxCode));
@@ -255,47 +254,54 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     }
 
     private static int countExceptionsF32(float[] values, int sampleLen, short[] dict, int rightBw) {
-        Map<Short, Boolean> dictSet = new HashMap<>();
-        for (short d : dict) {
-            dictSet.put(d, Boolean.TRUE);
-        }
         int count = 0;
         for (int i = 0; i < sampleLen; i++) {
             int bits = Float.floatToRawIntBits(values[i]);
             short leftU16 = (short) (bits >>> rightBw);
-            if (!dictSet.containsKey(leftU16)) {
+            if (indexOf(dict, leftU16) < 0) {
                 count++;
             }
         }
         return count;
     }
 
-    private static short[] topKByCount(Map<Short, Integer> counts) {
-        List<Map.Entry<Short, Integer>> sorted = new ArrayList<>(counts.entrySet());
-        // Rust's select_dictionary: most frequent first, ties by ascending (unsigned) pattern, so the
-        // dictionary is decided by the data and not by HashMap iteration order.
-        sorted.sort(Map.Entry.<Short, Integer>comparingByValue().reversed()
-                .thenComparing(e -> Short.toUnsignedInt(e.getKey())));
-        int dictSize = Math.min(sorted.size(), MAX_DICT_SIZE);
+    /// Rust's `select_dictionary`: most frequent first, ties by ascending (unsigned) pattern, so the
+    /// dictionary is decided by the data and not by hash order.
+    private static short[] topKByCount(LongIntMap counts, short[] distinct, int distinctLen) {
+        int dictSize = Math.min(distinctLen, MAX_DICT_SIZE);
         short[] dict = new short[dictSize];
-        for (int i = 0; i < dictSize; i++) {
-            dict[i] = sorted.get(i).getKey();
+        for (int k = 0; k < dictSize; k++) {
+            int best = k;
+            int bestCount = counts.get(distinct[k] & 0xFFFF);
+            for (int i = k + 1; i < distinctLen; i++) {
+                int c = counts.get(distinct[i] & 0xFFFF);
+                if (c > bestCount || (c == bestCount && (distinct[i] & 0xFFFF) < (distinct[best] & 0xFFFF))) {
+                    best = i;
+                    bestCount = c;
+                }
+            }
+            short t = distinct[k];
+            distinct[k] = distinct[best];
+            distinct[best] = t;
+            dict[k] = distinct[k];
         }
         return dict;
     }
 
-    private static Map<Short, Short> buildLookup(short[] dict) {
-        Map<Short, Short> lookup = new HashMap<>();
-        for (short i = 0; i < dict.length; i++) {
-            lookup.put(dict[i], i);
+    /// Linear scan: the dictionary holds at most [#MAX_DICT_SIZE] entries, so this beats a boxed map lookup per row.
+    private static int indexOf(short[] dict, short value) {
+        for (int i = 0; i < dict.length; i++) {
+            if (dict[i] == value) {
+                return i;
+            }
         }
-        return lookup;
+        return -1;
     }
 
     private static EncodeResult buildEncodeResult(
         short[] dict, int rightBitWidth,
         short[] leftCodes, Object rightPartsData, DType rightDtype,
-        List<Long> excPos, List<Short> excVals, ProtoScalarValue statsMin, ProtoScalarValue statsMax, EncodeContext ctx) {
+        Exceptions exceptions, ProtoScalarValue statsMin, ProtoScalarValue statsMax, EncodeContext ctx) {
 
         EncodingEncoder bp = ctx.lookupEncoder(EncodingId.FASTLANES_BITPACKED);
         EncodeResult leftResult = bp.encode(DType.U16, leftCodes, ctx);
@@ -315,14 +321,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
         EncodeNode[] children;
         ProtoPatchesMetadata patchesMeta = null;
-        if (excPos.isEmpty()) {
+        if (exceptions.size == 0) {
             children = new EncodeNode[]{leftNode, rightNode};
         } else {
-            long[] excPosArr = excPos.stream().mapToLong(Long::longValue).toArray();
-            short[] excValsArr = new short[excVals.size()];
-            for (int i = 0; i < excVals.size(); i++) {
-                excValsArr[i] = excVals.get(i);
-            }
+            long[] excPosArr = Arrays.copyOf(exceptions.positions, exceptions.size);
+            short[] excValsArr = Arrays.copyOf(exceptions.values, exceptions.size);
 
             // Rust's compress_patches: indices narrowed to the smallest unsigned type that holds them,
             // values left as they are (a constant array when they are all equal), and none of it
@@ -347,7 +350,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             }
 
             patchesMeta = new ProtoPatchesMetadata(
-                    excPos.size(),
+                    exceptions.size,
                     0L,
                     io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxType.ordinal()),
                     null, null, null);
@@ -364,6 +367,24 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         EncodeNode root = new EncodeNode(
             EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(metaBytes), children, new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), statsMin, statsMax);
+    }
+
+    /// The rows whose left bits missed the dictionary, kept in primitive arrays: boxing a `Long` and
+    /// a `Short` per exception showed up in the profile on noisy doubles, where most rows miss.
+    private static final class Exceptions {
+        long[] positions = new long[16];
+        short[] values = new short[16];
+        int size;
+
+        void add(long position, short value) {
+            if (size == positions.length) {
+                positions = Arrays.copyOf(positions, size * 2);
+                values = Arrays.copyOf(values, size * 2);
+            }
+            positions[size] = position;
+            values[size] = value;
+            size++;
+        }
     }
 
     private static ProtoScalarValue scalarF64(double v) {

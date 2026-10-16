@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Cascading writes allocate about 13% less and run faster, from cheaper ALP-RD encoding, dictionary string statistics and float statistics. ([#543](https://github.com/dfa1/vortex-java/pull/543))
+
 ## [0.17.1] — 2026-10-11
 
 ### Added
