@@ -25,6 +25,8 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.nio.file.Path;
@@ -108,6 +110,36 @@ class CalciteInteropIntegrationTest {
         }
     }
 
+    @ParameterizedTest(name = "where {0}")
+    @CsvSource(delimiter = '|', value = {
+            // an IN list arrives as an OR of equalities on one column
+            "id in (3, 1500, 2999)        | 3, 1500, 2999",
+            // a literal on the left
+            "2996 < id                    | 2997, 2998, 2999",
+            // n is null on every 1000th row
+            "n is null                    | 0, 1000, 2000",
+            "n is null and id in (0, 1, 1000) | 0, 1000"})
+    void jniWriter_translatedFilters_returnExactlyTheMatchingRows(String where, String expected, @TempDir Path tmp)
+            throws Exception {
+        // Given
+        Path file = tmp.resolve("jni_filters.vortex");
+        writeIdsWithJni(file, BATCHES, BATCH_ROWS);
+
+        // When
+        List<Long> result = new java.util.ArrayList<>();
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("select id from vtx.t where " + where + " order by id")) {
+            while (rs.next()) {
+                result.add(rs.getLong(1));
+            }
+        }
+
+        // Then
+        assertThat(result).containsExactlyElementsOf(
+                java.util.Arrays.stream(expected.split(",")).map(String::trim).map(Long::valueOf).toList());
+    }
+
     @Test
     void jniWriter_temporalDecimalAndBinaryColumns_readThroughSql(@TempDir Path tmp) throws Exception {
         // Given — a file with a timestamp could not be queried at all: the row type threw
@@ -163,15 +195,25 @@ class CalciteInteropIntegrationTest {
     }
 
     private static void writeIdsWithJni(Path file, int batches, int batchRows) throws Exception {
-        Schema schema = new Schema(List.of(Field.notNullable("id", new ArrowType.Int(64, true))));
+        Schema schema = new Schema(List.of(
+                Field.notNullable("id", new ArrowType.Int(64, true)),
+                Field.nullable("n", new ArrowType.Int(64, true))));
         try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
                 ALLOCATOR).build()) {
             for (int batch = 0; batch < batches; batch++) {
                 try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
                     BigIntVector ids = (BigIntVector) root.getVector("id");
+                    BigIntVector n = (BigIntVector) root.getVector("n");
                     ids.allocateNew(batchRows);
+                    n.allocateNew(batchRows);
                     for (int i = 0; i < batchRows; i++) {
-                        ids.set(i, (long) batch * batchRows + i);
+                        long id = (long) batch * batchRows + i;
+                        ids.set(i, id);
+                        if (id % 1000 == 0) {
+                            n.setNull(i);
+                        } else {
+                            n.set(i, id);
+                        }
                     }
                     root.setRowCount(batchRows);
                     try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);

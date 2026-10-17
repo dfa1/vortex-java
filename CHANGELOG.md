@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- The Calcite adapter pushes `IN` lists, comparisons with the literal on the left and `IS NULL` into the scan, so they prune chunks instead of being re-checked row by row. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter answers a filtered `COUNT`, `MIN` or `MAX` from Rust's `vortex.zoned` zone maps, the default, decoding only the zones the filter cuts. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter reads a table's schema and row count once instead of reopening the file for every planning call. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - **Breaking:** opening a file with an extension id that has no registered decoder fails unless `ReadRegistry.Builder#allowUnknown()` is set, as in Rust; the column then reads as its storage array. ([#530](https://github.com/dfa1/vortex-java/issues/530))

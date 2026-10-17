@@ -620,10 +620,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// [Predicate] unification: an unrecognized stat shape or a partially-overlapping zone is
     /// [Match#BOUNDARY], a zone provably outside the predicate is [Match#OUT], and a zone every row
     /// of which matches (which, for a value comparison, also requires the zone to carry no nulls) is
-    /// [Match#IN]. The composite and range predicates ([Predicate.Between] / [Predicate.And] /
-    /// [Predicate.Or]) cannot arise from the Calcite translation — `SEARCH` / `BETWEEN` expand to an
-    /// `AND` of single-leaf columns — so they fall through to [Match#BOUNDARY], which decodes and
-    /// applies the kernel mask and is therefore always correct.
+    /// [Match#IN]. A single-column [Predicate.And] / [Predicate.Or] (an `IN` list, a range union)
+    /// combines its sides' verdicts; [Predicate.Between] cannot arise from the Calcite translation
+    /// and stays [Match#BOUNDARY], which decodes and is therefore always correct.
     ///
     /// @param predicate the column-bound value-test
     /// @param s         the zone's statistics for that column
@@ -684,8 +683,22 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 yield nulls == rowCount ? Match.OUT : Match.BOUNDARY;
             }
             case Predicate.Between _ -> Match.BOUNDARY;
-            case Predicate.And _ -> Match.BOUNDARY;
-            case Predicate.Or _ -> Match.BOUNDARY;
+            case Predicate.And(var left, var right) -> {
+                Match l = classifyColumnRaw(left, s, rowCount);
+                Match r = classifyColumnRaw(right, s, rowCount);
+                if (l == Match.OUT || r == Match.OUT) {
+                    yield Match.OUT;
+                }
+                yield l == Match.IN && r == Match.IN ? Match.IN : Match.BOUNDARY;
+            }
+            case Predicate.Or(var left, var right) -> {
+                Match l = classifyColumnRaw(left, s, rowCount);
+                Match r = classifyColumnRaw(right, s, rowCount);
+                if (l == Match.IN || r == Match.IN) {
+                    yield Match.IN;
+                }
+                yield l == Match.OUT && r == Match.OUT ? Match.OUT : Match.BOUNDARY;
+            }
         };
     }
 
