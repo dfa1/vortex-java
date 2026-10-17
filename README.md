@@ -21,7 +21,7 @@ and against 172 real-world [Raincloud](docs/compatibility.md#real-world-conforma
   (native binaries for four platforms) that pulls in Arrow, Netty, Guava and RoaringBitmap.
   vortex-java's reader is ~800 KB of plain Java (`vortex-reader` + `vortex-core` +
   `vortex-fsst`) with no other required dependencies, and runs on any platform with a JDK.
-  CI builds the full reactor on Linux + macOS + Windows × JDK 25 + 26.
+  CI builds the full reactor on Linux + macOS + Windows × JDK 25 + 26 + 27.
 
 ## Quickstart
 
