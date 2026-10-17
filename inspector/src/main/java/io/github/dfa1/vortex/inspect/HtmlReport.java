@@ -6,10 +6,10 @@ import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.SegmentSpec;
+import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.ExtensionStorage;
 import io.github.dfa1.vortex.reader.layout.Layout;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -586,7 +586,7 @@ public final class HtmlReport {
             return switch (ExtensionId.parse(ext.extensionId())) {
                 case ExtensionId.WellKnown.VORTEX_TIMESTAMP ->
                         ExtensionStorage.instantFromRaw(epoch, ExtensionStorage.readUnit(ext));
-                case ExtensionId.WellKnown.VORTEX_DATE -> LocalDate.ofEpochDay(epoch);
+                case ExtensionId.WellKnown.VORTEX_DATE -> DateExtensionDecoder.INSTANCE.date(ext, epoch);
                 default -> raw;
             };
         } catch (RuntimeException e) {

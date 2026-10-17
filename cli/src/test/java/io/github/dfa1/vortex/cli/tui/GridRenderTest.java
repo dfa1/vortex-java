@@ -101,8 +101,7 @@ class GridRenderTest {
     void rendersDateExtensionFromIntStorage() {
         try (Arena arena = Arena.ofConfined()) {
             // Given — vortex.date over I32 epoch-day storage: day 0 = 1970-01-01
-            DType dateExt = new DType.Extension("vortex.date",
-                    DType.I32, null, false);
+            DType dateExt = io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.dtype(false);
             IntArray storage = ArrayFixtures.ints(arena, 0, 1);
 
             // When / Then

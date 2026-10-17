@@ -285,7 +285,7 @@ directly:
 
 ```java
 DType.Extension dtype = (DType.Extension) schema.field(ColumnName.of("birthdays"));
-List<LocalDate> values = DateExtensionDecoder.INSTANCE.decodeAll(chunk.column(ColumnName.of("birthdays")));
+List<LocalDate> values = DateExtensionDecoder.INSTANCE.decodeAll(dtype, chunk.column(ColumnName.of("birthdays")));
 ```
 
 End-to-end round-trip — write a `List<LocalDate>`, read it back:
@@ -326,7 +326,7 @@ custom extension id at all. A blank id, or one with a control character, fails t
 
 | Extension id        | Impl                   | Storage                                         | Metadata                                  | Round-trip |
 |---------------------|------------------------|-------------------------------------------------|-------------------------------------------|------------|
-| `vortex.date`       | `DateExtension`        | Signed integer days since 1970-01-01            | none                                      | ✅          |
+| `vortex.date`       | `DateExtension`        | `I32` days (Arrow `Date32`) or `I64` milliseconds (`Date64`) since 1970-01-01 | 1 byte: `TimeUnit` (Days or Milliseconds) | ✅ (writes Days) |
 | `vortex.time`       | `TimeExtension`        | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                        | ✅          |
 | `vortex.timestamp`  | `TimestampExtension`   | I64 epoch count in the recorded `TimeUnit`      | unit byte + u16 LE tz_len + UTF-8 tz      | ✅          |
 | `vortex.uuid`       | `UuidExtension`        | `FixedSizeList(Primitive(U8), 16)`              | none                                      | ✅          |

@@ -41,7 +41,7 @@ final class InspectorRender {
         if (declared instanceof DType.Extension ext
                 && ExtensionId.parse(ext.extensionId()) == ExtensionId.VORTEX_DATE) {
             try {
-                return DateExtensionDecoder.INSTANCE.decode(array, i).toString();
+                return DateExtensionDecoder.INSTANCE.decode(ext, array, i).toString();
             } catch (RuntimeException _) {
                 // fall through to generic rendering on shape mismatch
             }

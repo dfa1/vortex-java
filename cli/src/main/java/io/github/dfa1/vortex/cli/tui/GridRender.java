@@ -103,7 +103,7 @@ final class GridRender {
             return Optional.empty();
         }
         return Optional.of(switch (id) {
-            case VORTEX_DATE -> DateExtensionDecoder.INSTANCE.decode(storage, i).toString();
+            case VORTEX_DATE -> DateExtensionDecoder.INSTANCE.decode(ext, storage, i).toString();
             case VORTEX_TIME -> TimeExtensionDecoder.INSTANCE.decode(ext, storage, i).toString();
             case VORTEX_TIMESTAMP -> TimestampExtensionDecoder.INSTANCE.instant(ext, storage, i).toString();
             case VORTEX_UUID -> UuidExtensionDecoder.INSTANCE.decode(storage, i).toString();
