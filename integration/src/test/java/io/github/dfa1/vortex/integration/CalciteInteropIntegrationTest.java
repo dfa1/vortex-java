@@ -63,7 +63,7 @@ class CalciteInteropIntegrationTest {
     void jniWriter_tableStatistic_isTheRowCountRustWrote(@TempDir Path tmp) throws Exception {
         // Given
         Path file = tmp.resolve("jni.vortex");
-        writeWithJni(file);
+        writeIdsWithJni(file, BATCHES, BATCH_ROWS);
         VortexTable sut = new VortexTable(file);
 
         // When
@@ -76,6 +76,35 @@ class CalciteInteropIntegrationTest {
              ResultSet rs = st.executeQuery("select count(*) from vtx.t")) {
             assertThat(rs.next()).isTrue();
             assertThat(rs.getLong(1)).isEqualTo((long) BATCHES * BATCH_ROWS);
+        }
+    }
+
+    @Test
+    void jniWriter_filteredCountMinMax_foldFromRustZones(@TempDir Path tmp) throws Exception {
+        // Given — Rust writes fixed 8192-row vortex.zoned zones over chunks of its own sizing; the
+        // fold needed one zone per chunk, so every filtered aggregate on such a file scanned
+        Path file = tmp.resolve("jni_zoned.vortex");
+        writeIdsWithJni(file, 8, 25_000);
+        long lo = 10_000;
+        long hi = 170_000;
+        String sql = "select count(*) c, min(id) mn, max(id) mx from vtx.t where id between " + lo + " and " + hi;
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            String plan;
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + sql)) {
+                rs.next();
+                plan = rs.getString(1);
+            }
+
+            // Then — answered from zones and boundary rows, and equal to the data
+            assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                assertThat(rs.getLong("c")).isEqualTo(hi - lo + 1);
+                assertThat(rs.getLong("mn")).isEqualTo(lo);
+                assertThat(rs.getLong("mx")).isEqualTo(hi);
+            }
         }
     }
 
@@ -133,18 +162,18 @@ class CalciteInteropIntegrationTest {
         }
     }
 
-    private static void writeWithJni(Path file) throws Exception {
+    private static void writeIdsWithJni(Path file, int batches, int batchRows) throws Exception {
         Schema schema = new Schema(List.of(Field.notNullable("id", new ArrowType.Int(64, true))));
         try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
                 ALLOCATOR).build()) {
-            for (int batch = 0; batch < BATCHES; batch++) {
+            for (int batch = 0; batch < batches; batch++) {
                 try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
                     BigIntVector ids = (BigIntVector) root.getVector("id");
-                    ids.allocateNew(BATCH_ROWS);
-                    for (int i = 0; i < BATCH_ROWS; i++) {
-                        ids.set(i, (long) batch * BATCH_ROWS + i);
+                    ids.allocateNew(batchRows);
+                    for (int i = 0; i < batchRows; i++) {
+                        ids.set(i, (long) batch * batchRows + i);
                     }
-                    root.setRowCount(BATCH_ROWS);
+                    root.setRowCount(batchRows);
                     try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
                          ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
                         Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);

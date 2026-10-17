@@ -269,6 +269,7 @@ never desync.
 | `columns()`                                 | `SequencedMap<ColumnName, Chunk.Column>`, schema order, unmodifiable |
 | `<T extends Array> column(ColumnName name)` | Typed column lookup; throws `VortexException` if absent  |
 | `as(ColumnName name, Class<T> domainType)` | Extension column → typed `List<T>`, via the registered `ExtensionDecoder` |
+| `slice(long offset, long length)`           | Zero-copy view of a row range; valid while this chunk is open, closing it does nothing |
 | `isClosed()`                                | Whether `close()` has run                                |
 | `close()`                                   | Releases the chunk's arena. Idempotent.                  |
 
@@ -626,11 +627,13 @@ and fails on values past 2^63); `F16` reads as `REAL`.
 `DATE`, `TIME` and `TIMESTAMP` values carry millisecond precision. A zoned timestamp is not
 `TIMESTAMP WITH LOCAL TIME ZONE` because Avatica's JDBC getters shift that type by the JVM's zone.
 
-Whole-table aggregates (`min`/`max`/`sum`) are answered from zone-map statistics via
-`VortexAggregatePushDownRule` where possible — no data segment is decoded. The fold needs one zone
-per chunk and a per-zone sum, i.e. the legacy `vortex.stats` zone map (writes targeting an edition
-before `core2026.08.0`); files with Rust's `vortex.zoned` — the default since #447, and every
-Rust-written file — answer the same aggregates through a scan. `connect` is the
+`count`/`min`/`max`/`sum` (and `avg`, reduced to `sum`/`count`) are answered from zone-map
+statistics via `VortexAggregatePushDownRule` where possible, with or without a `WHERE` on
+column-vs-literal comparisons: zones the filter selects entirely fold from their statistics, and only
+the rows of zones it cuts are decoded. `sum` needs a per-zone sum, which only the legacy
+`vortex.stats` zone map records (writes targeting an edition before `core2026.08.0`); with Rust's
+`vortex.zoned` — the default since #447, and every Rust-written file — `sum` is answered by a scan.
+`connect` is the
 supported entry point; `VortexSchema`/`VortexTable` (`io.github.dfa1.vortex.calcite`) are the
 underlying schema/table plumbing it assembles, exposed for callers building a Calcite schema tree
 by hand instead of going through `connect`.
