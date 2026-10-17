@@ -577,6 +577,60 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(range).containsExactlyElementsOf(slice(Arrays.stream(times).boxed(), 1_501, 70_333));
     }
 
+    /// Columns that are arithmetic sequences only in wrapping 64-bit arithmetic, or only once a
+    /// narrow unsigned value is sign-extended. Rust builds a sequence with checked arithmetic in the
+    /// column's own type, so it refuses to read these as one; the unsigned ones that do step evenly
+    /// within their type must still be written as a sequence, with an unsigned base.
+    static Stream<Arguments> sequenceEdges() {
+        return Stream.of(
+                // a U8 base above 127, sign-extended, is a base Rust cannot narrow to u8
+                Arguments.of(DType.U8, new byte[]{(byte) 200, (byte) 201, (byte) 202}, true),
+                Arguments.of(DType.U16, new short[]{(short) 60_000, (short) 60_001, (short) 60_002}, true),
+                Arguments.of(DType.U32, new int[]{(int) 3_000_000_000L, (int) 3_000_000_001L, (int) 3_000_000_002L},
+                        true),
+                // descending: the step is negative, which a u64 multiplier cannot hold
+                Arguments.of(DType.U64, new long[]{10, 7, 4}, false),
+                // ascending past 2^64: each step overflows u64
+                Arguments.of(DType.U64, new long[]{0, -3_000_000_019L, -6_000_000_038L}, false),
+                // a step of 255 does not fit an i8
+                Arguments.of(DType.I8, new byte[]{-128, 127}, false),
+                // MAX - MIN wraps to -1
+                Arguments.of(DType.I64, new long[]{Long.MIN_VALUE, Long.MAX_VALUE}, false));
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("sequenceEdges")
+    void javaWriter_jniReader_sequenceInColumnTypeArithmetic(DType dtype, Object values, boolean sequence,
+            @TempDir Path tmp) throws IOException {
+        // Given
+        ColumnName column = ColumnName.of("v");
+        Path file = tmp.resolve("java_sequence_edge.vtx");
+        WriteOptions options = WriteOptions.defaults().withColumnEncoding(column,
+                io.github.dfa1.vortex.writer.ColumnEncoding.candidates(
+                        io.github.dfa1.vortex.core.model.EncodingId.VORTEX_SEQUENCE));
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, new DType.Struct(List.of(column), List.of(dtype), false), options)) {
+            sut.writeChunk(Map.of(column, values));
+        }
+        int n = java.lang.reflect.Array.getLength(values);
+
+        // When
+        List<Object> result = readRowRange(file, "v", 0, n);
+
+        // Then
+        List<Object> expected = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            expected.add(java.lang.reflect.Array.get(values, i));
+        }
+        // Arrow hands a UInt16 back as a char
+        assertThat(result).map(v -> v instanceof Character c ? (Object) (short) c.charValue() : v)
+                .containsExactlyElementsOf(expected);
+        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file)) {
+            assertThat(reader.footer().arraySpecs().contains(io.github.dfa1.vortex.core.model.EncodingId.VORTEX_SEQUENCE))
+                    .isEqualTo(sequence);
+        }
+    }
+
     @Test
     void javaWriter_jniReader_floatDictWithCompressedValues_fullFilteredAndRowRange(@TempDir Path tmp) throws IOException {
         // Given — 500 distinct full-precision prices over 100,000 rows: ALP cannot encode them, so

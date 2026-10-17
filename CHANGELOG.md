@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- Unsigned integer columns that step evenly only past their type's range, or above the signed range of `U8`/`U16`/`U32`, no longer write a `vortex.sequence` that Rust refuses to read. ([#528](https://github.com/dfa1/vortex-java/issues/528))
 - `vortex count`, `schema`, `stats` and `export` report a malformed file as an error instead of crashing with a stack trace. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - `vortex.date` columns in milliseconds, as Rust writes an Arrow `Date64`, decode to the right dates instead of failing or reading the count as days. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - An extension column with no metadata no longer writes a file Rust refuses to read. ([#547](https://github.com/dfa1/vortex-java/pull/547))
