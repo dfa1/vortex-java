@@ -15,6 +15,7 @@ import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.SegmentSpec;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -308,8 +309,10 @@ class WriterZoneMapTest {
             sut.writeChunk(Map.of(ColumnName.of("t"), new long[]{20, 21}));
         }
 
-        // When / Then the column is zoned with MAX+MIN+NULL_COUNT and the stats decode per zone
-        try (VortexReader reader = VortexReader.open(file)) {
+        // When / Then the column is zoned with MAX+MIN+NULL_COUNT and the stats decode per zone;
+        // test.ext has no decoder, so the file opens only with unknown ids allowed (Rust parity)
+        ReadRegistry allowUnknown = ReadRegistry.builder().registerDefaults().allowUnknown().build();
+        try (VortexReader reader = VortexReader.open(file, allowUnknown)) {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
             MemorySegment meta = column.metadata();

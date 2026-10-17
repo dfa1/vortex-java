@@ -107,6 +107,7 @@ public final class VortexReader implements VortexHandle {
         } catch (RuntimeException e) {
             throw new VortexException("malformed postscript", e);
         }
+        registry.validateExtensions(parsed.dtype());
 
         return new VortexReader(
                 arena, seg, size, trailer.version(),

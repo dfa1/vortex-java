@@ -16,7 +16,7 @@ import java.util.TreeMap;
 /// Instances are immutable after construction. Build one via [#builder()], or take the four
 /// built-ins directly via [#defaults()].
 ///
-/// Layouts register programmatically only (mirroring `ExtensionDecoder`). Unknown layout ids fail
+/// Layouts register programmatically only (mirroring encodings and extensions). Unknown layout ids fail
 /// loudly: there is no allow-unknown mode, matching the Rust reference.
 public final class LayoutRegistry {
 

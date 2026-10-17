@@ -14,7 +14,7 @@ import java.util.List;
 
 /// `vortex.date` — days since the Unix epoch, signed integer storage.
 /// Per Arrow's canonical Date type.
-public final class DateExtensionDecoder implements ExtensionDecoder {
+public final class DateExtensionDecoder implements ExtensionDecoder<LocalDate> {
 
     /// Singleton instance.
     public static final DateExtensionDecoder INSTANCE = new DateExtensionDecoder();
@@ -22,6 +22,16 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_DATE;
+    }
+
+    @Override
+    public Class<LocalDate> domainType() {
+        return LocalDate.class;
+    }
+
+    @Override
+    public List<LocalDate> decodeAll(DType.Extension dtype, Array storage) {
+        return decodeAll(storage);
     }
 
     @Override

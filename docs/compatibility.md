@@ -278,9 +278,10 @@ metadata. The Rust catalog lives in
 each subdir below names a canonical extension id and its on-disk shape.
 
 Read-side extensions live in `io.github.dfa1.vortex.reader.extension` (write-side encoders
-implement `ExtensionEncoder` in the writer module). Each spec extension is a singleton
-implementing the `ExtensionDecoder` interface, with typed decode methods on the concrete
-impl — grab the singleton directly:
+implement `ExtensionEncoder` in the writer module). Both are registered on their registry, the
+built-ins by `registerDefaults()`, as Rust registers an `ExtVTable` on the session. Each spec
+extension is a singleton with typed decode methods on the concrete impl — grab the singleton
+directly:
 
 ```java
 DType.Extension dtype = (DType.Extension) schema.field(ColumnName.of("birthdays"));
@@ -301,16 +302,22 @@ try (var iter = reader.scan(ScanOptions.all());
 }
 ```
 
-`Chunk.as(name, Class)` hides the per-extension decode dispatch for the four
-spec extensions (`LocalDate` ↔ `vortex.date`, `LocalTime` ↔ `vortex.time`,
-`Instant` ↔ `vortex.timestamp`, `UUID` ↔ `vortex.uuid`); the dispatch is closed over the
-spec set. Third-party extensions call their own impl's typed methods directly.
+`Chunk.as(name, Class)` decodes through the `ExtensionDecoder` registered for the column's id
+(`LocalDate` ↔ `vortex.date`, `LocalTime` ↔ `vortex.time`, `Instant` ↔ `vortex.timestamp`,
+`UUID` ↔ `vortex.uuid`, plus any registered third-party type). Both sides run the registered
+`validate(DType.Extension)` — Rust's `validate_dtype` — on every extension dtype, at
+`VortexWriter.create` and at open. The four built-ins do not yet port Rust's checks (e.g.
+timestamp storage must be `I64`) and accept every dtype.
 
 `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`: the spec ids
 (`VORTEX_DATE`, `VORTEX_TIME`, `VORTEX_TIMESTAMP`, `VORTEX_UUID`) plus any third-party id.
-Unknown wire ids on `DType.Extension` round-trip verbatim through the raw `String` field and
-read as their storage array, as Rust's `ForeignExtDType` does. A blank id, or one with a control
-character, fails the read with `VortexException` (Rust accepts any string).
+As in Rust, opening a file with an extension id that has no registered decoder fails
+(`VortexException`; Rust: "No such DType extension ID"), unless
+`ReadRegistry.Builder#allowUnknown()` is set — then the id round-trips verbatim through
+`DType.Extension`'s raw `String` field and the column reads as its storage array, Rust's
+`ForeignExtDType`. vortex-jni 0.88.0 exposes no `allow_unknown`, so it cannot read a file with a
+custom extension id at all. A blank id, or one with a control character, fails the read with
+`VortexException` (Rust accepts any string).
 
 | Extension id        | Impl                   | Storage                                         | Metadata                                  | Round-trip |
 |---------------------|------------------------|-------------------------------------------------|-------------------------------------------|------------|
@@ -318,7 +325,7 @@ character, fails the read with `VortexException` (Rust accepts any string).
 | `vortex.time`       | `TimeExtension`        | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                        | ✅          |
 | `vortex.timestamp`  | `TimestampExtension`   | I64 epoch count in the recorded `TimeUnit`      | unit byte + u16 LE tz_len + UTF-8 tz      | ✅          |
 | `vortex.uuid`       | `UuidExtension`        | `FixedSizeList(Primitive(U8), 16)`              | none                                      | ✅          |
-| _custom ids_        | _none_                 | _whatever the column declares_                  | _opaque bytes_                            | passthrough |
+| _custom ids_        | _registered decoder_   | _whatever the column declares_                  | _opaque bytes_                            | ✅ when registered; storage with `allowUnknown()` |
 
 `TimeUnit` (see [`extension/datetime/unit.rs`](https://github.com/vortex-data/vortex/blob/develop/vortex-array/src/extension/datetime/unit.rs))
 encodes precision in the first metadata byte:

@@ -625,7 +625,7 @@ class ComputeFilteredAggregateTest {
     private static Chunk chunk(long rows, Map<String, Array> columns) {
         SequencedMap<ColumnName, Chunk.Column> typed = new LinkedHashMap<>();
         columns.forEach((name, array) -> typed.put(ColumnName.of(name), new Chunk.Column(array, array.dtype())));
-        return new Chunk(rows, typed, ARENA, c -> { /* no-op: the shared arena outlives the chunk */ });
+        return new Chunk(rows, typed, ARENA, ReadRegistry.loadAll(), c -> { /* no-op: the shared arena outlives the chunk */ });
     }
 
     /// Builds a long-domain column from a reference, optionally narrowing it to an `i32` array, and
