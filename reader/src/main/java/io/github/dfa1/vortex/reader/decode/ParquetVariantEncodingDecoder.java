@@ -39,7 +39,7 @@ public final class ParquetVariantEncodingDecoder implements EncodingDecoder {
         }
         ProtoParquetVariantMetadata meta = parseMetadata(ctx.metadata());
         DType typedValueDtype = meta.typed_value_dtype() == null
-                ? null : VariantEncodingDecoder.dtypeFromProto(meta.typed_value_dtype());
+                ? null : VariantEncodingDecoder.dtypeFromProto(meta.typed_value_dtype(), ctx.registry());
         if (!meta.has_value() && typedValueDtype == null) {
             throw new VortexException(EncodingId.VORTEX_PARQUET_VARIANT,
                     "at least one of value or typed_value must be present");

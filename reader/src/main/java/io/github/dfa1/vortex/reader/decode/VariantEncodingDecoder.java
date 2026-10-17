@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VariantArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoVariantMetadata;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -23,7 +24,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        DType shreddedDtype = parseShreddedDtype(ctx.metadata());
+        DType shreddedDtype = parseShreddedDtype(ctx.metadata(), ctx.registry());
 
         int numChildren = ctx.node().children().length;
         if (numChildren < 1 || numChildren > 2) {
@@ -41,7 +42,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         return new VariantArray(ctx.dtype(), ctx.rowCount(), coreStorage, shredded);
     }
 
-    private static DType parseShreddedDtype(MemorySegment rawMeta) {
+    private static DType parseShreddedDtype(MemorySegment rawMeta, ReadRegistry registry) {
         if (rawMeta == null || rawMeta.byteSize() == 0) {
             return null;
         }
@@ -51,10 +52,24 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
             if (meta.shredded_dtype() == null) {
                 return null;
             }
-            return dtypeFromProto(meta.shredded_dtype());
+            return dtypeFromProto(meta.shredded_dtype(), registry);
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_VARIANT, "invalid metadata", e);
         }
+    }
+
+    /// Converts a dtype embedded in array metadata and checks its extension dtypes against
+    /// `registry`, as Rust's `DType::from_proto` resolves each extension id on the session.
+    ///
+    /// @param proto    the embedded dtype
+    /// @param registry the registry of the file being read
+    /// @return the converted dtype
+    /// @throws VortexException if an extension id is unregistered (without allow-unknown) or its
+    ///         decoder rejects the dtype
+    static DType dtypeFromProto(io.github.dfa1.vortex.core.proto.ProtoDType proto, ReadRegistry registry) {
+        DType dtype = dtypeFromProto(proto);
+        registry.validateExtensions(dtype);
+        return dtype;
     }
 
     static DType dtypeFromProto(io.github.dfa1.vortex.core.proto.ProtoDType proto) {
@@ -105,11 +120,13 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
                     proto.fixed_size_list().nullable());
         }
         if (proto.extension() != null) {
+            // an extension's nullability is its storage's, as the file-schema parser has it
+            DType storage = dtypeFromProto(proto.extension().storage_dtype());
             return new DType.Extension(
                     proto.extension().id(),
-                    dtypeFromProto(proto.extension().storage_dtype()),
+                    storage,
                     MemorySegment.ofArray(proto.extension().metadata() != null ? proto.extension().metadata() : new byte[0]).asReadOnly(),
-                    false);
+                    storage.nullable());
         }
         if (proto.variant() != null) {
             return new DType.Variant(proto.variant().nullable());

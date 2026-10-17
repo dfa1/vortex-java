@@ -24,6 +24,12 @@ public final class DateExtensionDecoder implements ExtensionDecoder<LocalDate> {
         return ExtensionId.VORTEX_DATE;
     }
 
+    /// Applies Rust's `validate_dtype` rules for `vortex.date`.
+    @Override
+    public void validate(DType.Extension dtype) {
+        ExtensionId.VORTEX_DATE.validate(dtype);
+    }
+
     @Override
     public Class<LocalDate> domainType() {
         return LocalDate.class;

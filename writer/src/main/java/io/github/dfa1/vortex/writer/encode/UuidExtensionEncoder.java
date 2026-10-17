@@ -21,6 +21,12 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
         return ExtensionId.VORTEX_UUID;
     }
 
+    /// Applies Rust's `validate_dtype` rules for `vortex.uuid`.
+    @Override
+    public void validate(DType.Extension dtype) {
+        ExtensionId.VORTEX_UUID.validate(dtype);
+    }
+
     @Override
     public DType.Extension dtype(boolean nullable) {
         DType.Primitive u8 = DType.U8;

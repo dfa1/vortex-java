@@ -155,6 +155,20 @@ class PostscriptParserDTypeGuardsTest {
     }
 
     @Test
+    void convertDType_extensionMissingMetadata_throwsVortexException() {
+        // Given — no metadata field at all, which older vortex-java wrote for null metadata. Rust
+        // refuses it ("failed to parse extension metadata from flatbuffer"); empty metadata is fine.
+        MemorySegment dtype = extensionDType("acme.geopoint", false);
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("extension dtype missing metadata");
+    }
+
+    @Test
     void convertDType_mapMissingKeyType_throwsVortexException() {
         // Given — a map dtype table with no key_type field. FlatBuffers makes every field
         // optional on the wire, so a crafted table can omit one and the generated reader hands
@@ -281,17 +295,26 @@ class PostscriptParserDTypeGuardsTest {
     }
 
 
-    /// Builds an extension dtype blob over non-nullable I64 storage; a `null` id omits the field.
+    /// Builds an extension dtype blob over non-nullable I64 storage with empty metadata; a `null`
+    /// id omits the field.
     private static MemorySegment extensionDType(String id) {
+        return extensionDType(id, true);
+    }
+
+    private static MemorySegment extensionDType(String id, boolean withMetadata) {
         var fbb = new FbsBuilder(256);
         int storage = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive,
                 FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false));
         int idOff = id == null ? 0 : fbb.createString(id);
+        int metaOff = withMetadata ? FbsExtension.createMetadataVector(fbb, new byte[0]) : 0;
         FbsExtension.startFbsExtension(fbb);
         if (id != null) {
             FbsExtension.addId(fbb, idOff);
         }
         FbsExtension.addStorageDtype(fbb, storage);
+        if (withMetadata) {
+            FbsExtension.addMetadata(fbb, metaOff);
+        }
         int ext = FbsExtension.endFbsExtension(fbb);
         int root = FbsDType.createFbsDType(fbb, FbsType.FbsExtension, ext);
         fbb.finish(root);

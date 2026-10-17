@@ -306,8 +306,13 @@ try (var iter = reader.scan(ScanOptions.all());
 (`LocalDate` ↔ `vortex.date`, `LocalTime` ↔ `vortex.time`, `Instant` ↔ `vortex.timestamp`,
 `UUID` ↔ `vortex.uuid`, plus any registered third-party type). Both sides run the registered
 `validate(DType.Extension)` — Rust's `validate_dtype` — on every extension dtype, at
-`VortexWriter.create` and at open. The four built-ins do not yet port Rust's checks (e.g.
-timestamp storage must be `I64`) and accept every dtype.
+`VortexWriter.create` and at open, and on the dtypes embedded in Variant metadata. The four
+built-ins apply Rust's `deserialize_metadata` + `validate_dtype` rules
+(`ExtensionId.WellKnown#validate`): `vortex.date` Days → `I32`, Milliseconds → `I64`;
+`vortex.time` s/ms → `I32`, μs/ns → `I64`; `vortex.timestamp` metadata ≥ 3 bytes with a
+UTF-8 zone and `I64` storage; `vortex.uuid` 0–1 metadata bytes (a known version) over
+`FixedSizeList(non-null U8, 16)`. An extension dtype must carry its metadata field, empty when
+there is none, as Rust requires; the writer always emits it.
 
 `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`: the spec ids
 (`VORTEX_DATE`, `VORTEX_TIME`, `VORTEX_TIMESTAMP`, `VORTEX_UUID`) plus any third-party id.

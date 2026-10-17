@@ -23,6 +23,12 @@ public final class DateExtensionEncoder implements ExtensionEncoder {
         return ExtensionId.VORTEX_DATE;
     }
 
+    /// Applies Rust's `validate_dtype` rules for `vortex.date`.
+    @Override
+    public void validate(DType.Extension dtype) {
+        ExtensionId.VORTEX_DATE.validate(dtype);
+    }
+
     @Override
     public DType.Extension dtype(boolean nullable) {
         // Rust vortex.date metadata: 1 byte = TimeUnit tag (Days = 4), required by Rust reader.

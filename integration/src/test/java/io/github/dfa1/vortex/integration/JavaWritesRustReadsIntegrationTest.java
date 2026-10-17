@@ -61,6 +61,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -79,6 +80,7 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Cross-compatibility: Java writer → Rust (JNI) reader.
 class JavaWritesRustReadsIntegrationTest {
@@ -2320,6 +2322,38 @@ class JavaWritesRustReadsIntegrationTest {
             }
         }
         assertThat(ids).containsExactly(7L, 8L);
+    }
+
+    @Test
+    void invalidBuiltInExtensionDtype_refusedByJavaAndRust(@TempDir Path tmp) throws IOException {
+        // Given — vortex.timestamp over I32 storage, which Rust's validate_dtype refuses ("Timestamp
+        // storage dtype must be i64"). Java used to write and read it.
+        DType.Extension invalid = new DType.Extension("vortex.timestamp", DType.I32,
+                MemorySegment.ofArray(new byte[]{2, 0, 0}), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("ts")), List.of(invalid), false);
+        Path file = tmp.resolve("timestamp_i32.vtx");
+
+        // When / Then — the default writer refuses it at create
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            assertThatThrownBy(() -> VortexWriter.create(ch, schema, WriteOptions.defaults()))
+                    .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                    .hasMessageContaining("storage dtype must be I64");
+        }
+
+        // And — a file from a writer with no extension encoders (so nothing validated) is refused
+        // on read by both Java and vortex-jni
+        io.github.dfa1.vortex.writer.WriteRegistry.Builder encodersOnly = io.github.dfa1.vortex.writer.WriteRegistry.builder();
+        io.github.dfa1.vortex.writer.WriteRegistry.loadAll().encoderMap().values().forEach(encodersOnly::register);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = VortexWriter.create(ch, schema, WriteOptions.defaults(), encodersOnly.build())) {
+            writer.writeChunk(Map.of(ColumnName.of("ts"), new int[]{1, 2}));
+        }
+        assertThatThrownBy(() -> io.github.dfa1.vortex.reader.VortexReader.open(file))
+                .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                .hasMessageContaining("storage dtype must be I64");
+        String uri = file.toAbsolutePath().toUri().toString();
+        assertThatThrownBy(() -> DataSource.open(SESSION, uri).scan(ScanOptions.of()))
+                .hasMessageContaining("Timestamp storage dtype must be i64");
     }
 
     @Test
