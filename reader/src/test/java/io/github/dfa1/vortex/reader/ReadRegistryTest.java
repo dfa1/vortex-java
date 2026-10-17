@@ -202,12 +202,6 @@ class ReadRegistryTest {
         assertThat(result.hasDecoder(EncodingId.VORTEX_CONSTANT)).isFalse();
     }
 
-    private static EncodingDecoder decoder(EncodingId id) {
-        EncodingDecoder decoder = mock(EncodingDecoder.class);
-        given(decoder.encodingId()).willReturn(id);
-        return decoder;
-    }
-
     @Test
     void registerExtension_lookupFindsCustomAndBuiltIn() {
         // Given — a Custom id next to the built-ins registerDefaults() adds
@@ -262,6 +256,38 @@ class ReadRegistryTest {
         assertThatThrownBy(() -> sut.validateExtensions(schema))
                 .isInstanceOf(VortexException.class)
                 .hasMessage("bad geopoint");
+    }
+
+    @Test
+    void validateExtensions_noDtype_passes() {
+        // Given — a file without a dtype blob parses with a null schema (PostscriptParserBlobBoundsTest);
+        // the walk's switch used to throw NullPointerException on it
+        ReadRegistry sut = ReadRegistry.loadAll();
+
+        // When / Then
+        sut.validateExtensions(null);
+    }
+
+    @Test
+    void validateExtensions_validateThrowsRuntimeException_wrapsInVortexException() {
+        // Given — a third-party validate that trips over malformed metadata from the file
+        ExtensionDecoder<?> fragile = extension("acme.geopoint");
+        IndexOutOfBoundsException cause = new IndexOutOfBoundsException("metadata too short");
+        org.mockito.BDDMockito.willThrow(cause).given(fragile).validate(org.mockito.ArgumentMatchers.any());
+        ReadRegistry sut = ReadRegistry.builder().register(fragile).build();
+        DType schema = new DType.Extension("acme.geopoint", DTypes.I32, null, false);
+
+        // When / Then — reading a file only ever fails with VortexException
+        assertThatThrownBy(() -> sut.validateExtensions(schema))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("acme.geopoint")
+                .hasCause(cause);
+    }
+
+    private static EncodingDecoder decoder(EncodingId id) {
+        EncodingDecoder decoder = mock(EncodingDecoder.class);
+        given(decoder.encodingId()).willReturn(id);
+        return decoder;
     }
 
     private static ExtensionDecoder<?> extension(String id) {

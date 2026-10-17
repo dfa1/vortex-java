@@ -31,11 +31,7 @@ import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.CascadingCompressor;
 import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder;
-import io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder;
-import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.DecimalBytePartsEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DecimalEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
@@ -123,12 +119,7 @@ public final class VortexWriter implements Closeable {
             new DictEncodingEncoder(), new VarBinEncodingEncoder(), new ExtEncodingEncoder(),
             new FixedSizeListEncodingEncoder(), new ListEncodingEncoder(), new DecimalEncodingEncoder());
 
-    private static final WriteRegistry DEFAULT_EXTENSIONS = WriteRegistry.builder()
-            .register(DateExtensionEncoder.INSTANCE)
-            .register(TimeExtensionEncoder.INSTANCE)
-            .register(TimestampExtensionEncoder.INSTANCE)
-            .register(UuidExtensionEncoder.INSTANCE)
-            .build();
+    private static final WriteRegistry DEFAULT_EXTENSIONS = WriteRegistry.builder().registerDefaultExtensions().build();
 
     // Base cascade codec list — no Zstd or Pco. They are appended (before PrimitiveEncoding) when
     // WriteOptions.compact() is true. See WriteOptions.withCompact(boolean) for the tradeoff.

@@ -196,8 +196,7 @@ Add an `ExtensionId.WellKnown` constant `VORTEX_FOO("vortex.foo")` (re-exported 
 - **Decode:** singleton `FooExtensionDecoder implements ExtensionDecoder<Domain>` in `reader.extension` +
   a `.register(FooExtensionDecoder.INSTANCE)` call in `ReadRegistry.Builder#registerDefaults()`.
 - **Encode:** `FooExtensionEncoder implements ExtensionEncoder` in `writer.encode` + a
-  `.register(FooExtensionEncoder.INSTANCE)` call in `WriteRegistry.Builder#registerDefaults()`
-  (and in `VortexWriter.DEFAULT_EXTENSIONS`).
+  `.register(FooExtensionEncoder.INSTANCE)` call in `WriteRegistry.Builder#registerDefaultExtensions()`.
 - Both may override `validate(DType.Extension)` (Rust's `validate_dtype`). Third-party types skip the
   constant: `ExtensionId.parse("acme.foo")` gives a `Custom` id, registered the same way.
 

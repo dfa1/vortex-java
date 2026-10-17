@@ -12,7 +12,9 @@ import java.util.List;
 /// decode a column's storage array into domain values. Register one on
 /// [io.github.dfa1.vortex.reader.ReadRegistry.Builder#register(ExtensionDecoder)] and
 /// [io.github.dfa1.vortex.reader.Chunk#as(io.github.dfa1.vortex.core.model.ColumnName, Class)]
-/// dispatches to it. An extension id with no registered decoder still reads, as its storage array.
+/// dispatches to it. A file with an extension id that has no registered decoder fails to open
+/// unless [io.github.dfa1.vortex.reader.ReadRegistry.Builder#allowUnknown()] is set; the column
+/// then reads as its storage array.
 ///
 /// @param <T> the domain type one row decodes to (e.g. [java.time.LocalDate] for `vortex.date`)
 public interface ExtensionDecoder<T> {
