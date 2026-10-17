@@ -50,10 +50,22 @@ import java.util.concurrent.atomic.AtomicLong;
 /// only partially captures is left in `filters` for Calcite's own row check. The win is decoding
 /// far fewer chunks when the filter is selective on a clustered column, and — for a fully captured
 /// filter — not re-evaluating it a second time over the chunks that are decoded.
+///
+/// The schema and row count are read from the footer on first use and cached:
+/// a Vortex file is written once, so they cannot change under the table.
 public final class VortexTable extends AbstractTable implements ProjectableFilterableTable, TranslatableTable {
 
     private final Path file;
     private final AtomicLong chunksScannedLastQuery = new AtomicLong();
+    // Read lazily so a missing file fails at query time, as before; a racing first read only
+    // reads the footer twice, so no lock.
+    private volatile Footer footer;
+
+    /// The footer facts every planning call needs, read once instead of reopening the file for each
+    /// `getRowType`, `scan` and aggregate. Column statistics stay out: folding them walks every
+    /// column's zones, which only the aggregate rule needs.
+    private record Footer(DType.Struct struct, long totalRows) {
+    }
 
     /// Creates a table backed by the Vortex file at `file`.
     ///
@@ -88,9 +100,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param column the column name
     /// @return the column's aggregated statistics paired with the file's total row count
     public ColumnStats statsAndRows(ColumnName column) {
+        long totalRows = footer().totalRows();
         try (VortexReader reader = VortexReader.open(file)) {
-            ArrayStats stats = reader.columnStats().getOrDefault(column, ArrayStats.empty());
-            return new ColumnStats(stats, countRows(reader));
+            return new ColumnStats(reader.columnStats().getOrDefault(column, ArrayStats.empty()), totalRows);
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read stats of " + file, e);
         }
@@ -120,11 +132,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param column the numeric column name
     /// @return the folded sum with the null and row counts needed to interpret a zero
     public ZoneSum zoneSum(ColumnName column) {
+        long totalRows = footer().totalRows();
         try (VortexReader reader = VortexReader.open(file)) {
             Number sum = new ZoneReducer(reader).sum(column);
             Long nullCount = reader.columnStats()
                     .getOrDefault(column, ArrayStats.empty()).nullCount();
-            return new ZoneSum(sum, nullCount, countRows(reader));
+            return new ZoneSum(sum, nullCount, totalRows);
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read zone sum of " + file, e);
         }
@@ -134,15 +147,30 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     ///
     /// @return the number of rows in the file
     public long totalRows() {
+        return footer().totalRows();
+    }
+
+    private Footer footer() {
+        Footer f = footer;
+        if (f == null) {
+            f = readFooter();
+            footer = f;
+        }
+        return f;
+    }
+
+    private Footer readFooter() {
         try (VortexReader reader = VortexReader.open(file)) {
-            return countRows(reader);
+            if (!(reader.dtype() instanceof DType.Struct s)) {
+                throw new IllegalStateException("top-level Vortex dtype is not a struct: " + reader.dtype());
+            }
+            return new Footer(s, countRows(reader));
         } catch (IOException e) {
-            throw new UncheckedIOException("cannot count rows of " + file, e);
+            throw new UncheckedIOException("cannot read the footer of " + file, e);
         }
     }
 
-    /// Sums the chunk row counts of `reader` from chunk metadata, without decoding data — shared by
-    /// [#totalRows()] and [#zoneSum(ColumnName)] so both read the count from a single open reader.
+    /// Sums the chunk row counts of `reader` from chunk metadata, without decoding data.
     private static long countRows(VortexReader reader) throws IOException {
         long total = 0;
         try (ScanIterator scan = reader.scan(ScanOptions.all())) {
@@ -699,14 +727,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     private DType.Struct struct() {
-        try (VortexReader reader = VortexReader.open(file)) {
-            if (!(reader.dtype() instanceof DType.Struct s)) {
-                throw new IllegalStateException("top-level Vortex dtype is not a struct: " + reader.dtype());
-            }
-            return s;
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot read schema of " + file, e);
-        }
+        return footer().struct();
     }
 
     private static int[] allColumns(int n) {

@@ -138,6 +138,22 @@ class VortexAdapterCoverageTest {
     }
 
     @Test
+    void schemaAndRowCount_areReadFromTheFooterOnce(@TempDir Path dir) throws Exception {
+        // Given a table whose footer was read, then the file goes away
+        Path copy = java.nio.file.Files.copy(file, dir.resolve("copy.vortex"));
+        VortexTable table = new VortexTable(copy);
+        table.getRowType(new JavaTypeFactoryImpl());
+        java.nio.file.Files.delete(copy);
+
+        // When — planning calls that used to reopen the file each time
+        long result = table.totalRows();
+
+        // Then
+        assertThat(result).isEqualTo(3);
+        assertThat(table.getRowType(new JavaTypeFactoryImpl()).getFieldCount()).isEqualTo(12);
+    }
+
+    @Test
     void enumerator_resetUnsupportedAndCloseReleasesOpenChunk() {
         // Given a scan positioned inside the first chunk
         Enumerator<Object[]> en = new VortexTable(file).scan(null, List.of(), null).enumerator();
