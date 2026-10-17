@@ -340,7 +340,7 @@ type](../CLAUDE.md#adding-an-extension-type)).
 
 Frozen, named, additive sets of encoding IDs, each carrying a forever read-compatibility
 guarantee once frozen (see ADR 0023). vortex-java mirrors Rust's `vortex-edition` declarations at
-the pinned vortex-jni release (0.86.1); `EditionCatalogParityIntegrationTest` fails the build if the
+the pinned vortex-jni release (0.88.0); `EditionCatalogParityIntegrationTest` fails the build if the
 two drift. Editions are a **write/read policy, not part of the wire format**: nothing about a
 targeted edition is ever persisted into a `.vortex` file.
 

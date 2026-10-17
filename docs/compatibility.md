@@ -1,6 +1,6 @@
 # Compatibility
 
-Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.85.0.
+Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.88.0.
 For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](reference.md).
 
 ## Read-only deployment
@@ -39,7 +39,7 @@ only the built-in decoders in `reader`; no encoder class is loaded.
 | `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ⚠️ Read: `DType.Union` (Rust's shape rules) and the `vortex.union` sparse union array (`UnionArray`). Not written: `vortex.union` is in no Rust edition. No interop test: vortex-jni's Arrow bridge rejects unions, so no Rust producer exists. |
 | `vortex.onpair` experimental string encoding | Rust 0.74.0 | ✅ Read and written. In `core2026.08.1`, so default cascading writes offer it, as Rust's default compressor does; the trained dictionary is valid for Rust but not byte-identical to Rust's (Rust's sampling RNG is not portable). |
 | `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java reads `vortex.parquet.variant`, the Apache Variant binary encoding vortex-jni's default writer uses for Arrow `arrow.parquet.variant` columns, as a struct of per-row `metadata`/`value` binaries; it does not interpret the Variant binary itself. Java writes variant columns of **typed scalar** values only (constant / chunked-of-constants core, optional shredded child), via `vortex.variant`; writing `vortex.parquet.variant` is not implemented ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). |
-| Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested against the currently pinned v0.85.0 fixtures; #8125 not yet re-verified. |
+| Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested against the currently pinned v0.88.0 fixtures; #8125 not yet re-verified. |
 | `vortex.dict` **layout** over a values pool that is neither VarBin- nor primitive-shaped (e.g. a dict-encoded `vortex.uuid`, whose storage is `FixedSizeList(U8, 16)`) | Not written by Rust: its dict layout admits only `Primitive \| Utf8 \| Binary` (`dict_layout_supported`), and its dict compressor schemes only integers, floats and strings | ⚠️ Unreachable from Rust- or Java-written files. Every type vortex-jni writes reads back exactly, dict-encoded or not (`DictAllTypesInteropIntegrationTest`, which also fails if a Rust bump starts dict-encoding another type). A foreign file with such a pool fails with `VortexException("unsupported dict values shape: …")`. |
 | Duplicate struct field names | Rust writer rejects ("StructLayout must have unique field names"); Rust reader tolerates foreign files (first-match access) | ⚠️ Deliberate divergence on read: Java rejects such files with `VortexException("duplicate field name in file schema")` instead of tolerating them — the name-keyed `Chunk` API cannot represent both columns, and silent column loss is worse than a loud failure on a file the reference writer refuses to produce. Java's writer mirrors the Rust writer's rejection. |
 | Blank / control-character field names | Wire-legal; the Rust writer produces `""` and whitespace-only names. NUL (`U+0000`) additionally aborts the Rust toolchain: Arrow FFI schema export hits a panic-cannot-unwind in `arrow-rs` (`ffi_stream::get_schema`) and SIGABRTs the process (measured against vortex-jni 0.75.0) | ⚠️ Deliberate strictness BOTH ways: vortex-java's writer refuses blank and control-character field names (`IllegalArgumentException`), and its reader rejects files carrying them (`VortexException` naming the producing pipeline as the likely bug) — the JSON-`""`-key principle: wire-legal is a floor, not a policy. Printable names of any shape (`$`-runs, spaces inside, emoji) are legal and round-trip intact both directions (measured; pinned by `ColumnNameEdgeCasesIntegrationTest`). |
@@ -57,8 +57,8 @@ Rust's checked add per element, so `[MAX, 1, -1]` is dropped in both. `F16` sum 
 
 Separate from the Vector API, found while comparing against the Rust source:
 
-- Float min/max statistics now order `-0.0` before `0.0` and skip `NaN`, as Rust's `total_compare` with
-  `skip_nans` does. Before, the first zero met in array order was kept.
+- Float min/max statistics order `-0.0` before `0.0` and skip `NaN`, as Rust's `total_compare` with
+  `skip_nans` does.
 - Float filters order values totally, as vortex-jni does: `-0.0 < 0.0`, and `NaN` equals itself and is the
   maximum (so `NaN >= 0.0` matches, where IEEE says it does not). Zone-map pruning follows: a float zone
   without a `nan_count` (the legacy `vortex.stats` table) may hold a `NaN`, so it is never pruned on its
@@ -112,7 +112,7 @@ decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nul
 
 | Encoding ID                 | Decoder                          | Encoder                          | Decode | Encode | Notes                                                                 |
 |-----------------------------|----------------------------------|----------------------------------|--------|--------|-----------------------------------------------------------------------|
-| `vortex.primitive`          | `PrimitiveEncodingDecoder`       | `PrimitiveEncodingEncoder`       | ✅      | ✅      | All `PType` (I8–I64, U8–U64, F32, F64)                                |
+| `vortex.primitive`          | `PrimitiveEncodingDecoder`       | `PrimitiveEncodingEncoder`       | ✅      | ✅      | All `PType` (I8–I64, U8–U64, F16, F32, F64)                              |
 | `vortex.bool`               | `BoolEncodingDecoder`            | `BoolEncodingEncoder`            | ✅      | ✅      | Bool (bit-packed)                                                     |
 | `vortex.null`               | `NullEncodingDecoder`            | `NullEncodingEncoder`            | ✅      | ✅      | Null                                                                  |
 | `vortex.bytebool`           | `ByteBoolEncodingDecoder`        | `ByteBoolEncodingEncoder`        | ✅      | ✅      | Bool (byte-per-element)                                               |
@@ -247,7 +247,7 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `preview2026.08.0` | `preview` | nothing yet |
 | `zstd2026.02.0` | `zstd` | `vortex.zstd_buffers` (read only; buffer-level Zstd for GPU decode; declared by Rust's `vortex-zstd` plugin, opt-in) |
 
-Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.86.1);
+Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.88.0);
 `EditionCatalogParityIntegrationTest` fails the build on drift. `core` editions are frozen with a
 forever read-compatibility guarantee; `preview` holds opt-in components not yet adopted by `core`;
 `zstd` is declared by Rust's `vortex-zstd` plugin crate rather than the core declarations, and is
@@ -335,16 +335,16 @@ For unsupported extension ids the inspector falls back to a placeholder cell
 correctly via the primitive accessors, callers just have to format the value
 themselves.
 
-## S3 Fixture Status (v0.86.1)
+## S3 Fixture Status (v0.88.0)
 
-> **Note:** the oracle round-trip suite is pinned to `v0.86.1/` (current Rust
+> **Note:** the oracle round-trip suite is pinned to `v0.88.0/` (current Rust
 > release). The bucket reuses identical fixture file names across versions but
 > rewrites the bytes, so the local cache is version-keyed; bump the
 > `RustFixtures.VERSION` constant in the integration tests and refresh this section
 > when a newer set is published.
 
 Cross-language round-trips tested against Rust-written fixture files hosted at
-`s3://vortex-compat-fixtures/v0.86.1/arrays/`.
+`s3://vortex-compat-fixtures/v0.88.0/arrays/`.
 
 | Fixture                             | Status |
 |-------------------------------------|--------|
@@ -383,7 +383,7 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `pco.vortex`                        | ✅      |
 | `clickbench_hits_5k.compact.vortex` | ✅      |
 | `clickbench_hits_5k.regular.vortex` | ✅      | Full scan of every Utf8 column (`vortex.onpair`) compared against vortex-jni |
-| `masked.vortex`                     | ❓      | No fixture through v0.86.1, and vortex-jni's writer folds validity into each encoding rather than emitting `vortex.masked` for nullable primitive, string, struct or list input |
-| `patched.vortex`                    | ❓      | No fixture through v0.86.1; `vortex.patched` is in no edition, so vortex-jni's default writer never emits it |
-| `variant.vortex`                    | ✅      | No fixture through v0.86.1; covered instead by `ParquetVariantInteropIntegrationTest`, which has vortex-jni write an Arrow `arrow.parquet.variant` column (`vortex.variant` over `vortex.parquet.variant`, plain and shredded) |
+| `masked.vortex`                     | ❓      | No fixture through v0.88.0, and vortex-jni's writer folds validity into each encoding rather than emitting `vortex.masked` for nullable primitive, string, struct or list input |
+| `patched.vortex`                    | ❓      | No fixture through v0.88.0; `vortex.patched` is in no edition, so vortex-jni's default writer never emits it |
+| `variant.vortex`                    | ✅      | No fixture through v0.88.0; covered instead by `ParquetVariantInteropIntegrationTest`, which has vortex-jni write an Arrow `arrow.parquet.variant` column (`vortex.variant` over `vortex.parquet.variant`, plain and shredded) |
 | `map.vortex`                        | ✅      | New in v0.86.1; also covered directly (both directions, nullable) by the vortex-jni oracle (issue #351) |

@@ -84,7 +84,7 @@ fixtures on S3:
 
 ```bash
 java -jar cli/target/vortex-cli-*-all.jar inspect --html \
-    https://vortex-compat-fixtures.s3.amazonaws.com/v0.86.1/arrays/tpch_orders.compact.vortex \
+    https://vortex-compat-fixtures.s3.amazonaws.com/v0.88.0/arrays/tpch_orders.compact.vortex \
     > report.html
 ```
 
