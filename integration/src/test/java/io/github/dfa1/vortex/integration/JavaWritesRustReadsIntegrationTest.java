@@ -2287,6 +2287,42 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_extensionWithNullMetadata(@TempDir Path tmp) throws IOException {
+        // Given — an extension dtype with null metadata, here vortex.json (Utf8 storage, no
+        // metadata), which the vortex-jni session registers. The writer used to omit the metadata
+        // field for null, and Rust refuses an absent field ("failed to parse extension metadata")
+        // for the whole file, even when only a sibling column is projected.
+        Path file = tmp.resolve("java_json_null_metadata.vtx");
+        DType.Extension json = new DType.Extension("vortex.json", DType.UTF8, null, false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("j")),
+                List.of(DType.I64, json), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{7L, 8L},
+                    ColumnName.of("j"), new String[]{"{\"a\":1}", "[]"}));
+        }
+
+        // Then — vortex-jni opens the file and reads the sibling column
+        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString())
+                .scan(ScanOptions.builder()
+                        .projection(Expression.select(new String[]{"id"}, Expression.root()))
+                        .build());
+        var ids = new ArrayList<Long>();
+        while (scan.hasNext()) {
+            try (ArrowReader reader = scan.next().scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    BigIntVector vec = (BigIntVector) reader.getVectorSchemaRoot().getVector("id");
+                    for (int i = 0; i < vec.getValueCount(); i++) {
+                        ids.add(vec.get(i));
+                    }
+                }
+            }
+        }
+        assertThat(ids).containsExactly(7L, 8L);
+    }
+
+    @Test
     void javaWriter_rustReader_nullable_date(@TempDir Path tmp) throws IOException {
         // Given — nullable vortex.date column; row 1 is null.
         // Validates MaskedEncoding → ExtEncoding → PrimitiveEncoding layout survives Java→Rust read.
