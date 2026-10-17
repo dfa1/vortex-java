@@ -24,6 +24,12 @@ public final class TimeExtensionDecoder implements ExtensionDecoder<LocalTime> {
         return ExtensionId.VORTEX_TIME;
     }
 
+    /// Applies Rust's `validate_dtype` rules for `vortex.time`.
+    @Override
+    public void validate(DType.Extension dtype) {
+        ExtensionId.VORTEX_TIME.validate(dtype);
+    }
+
     @Override
     public Class<LocalTime> domainType() {
         return LocalTime.class;

@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.testing.TestSegments;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
@@ -285,6 +286,61 @@ class VariantEncodingDecoderTest {
 
             // Then
             assertThat(result.metadata().byteSize()).isZero();
+        }
+
+        @Test
+        void extension_nullableStorage_extensionIsNullable() {
+            // Given — the conversion hardcoded nullable=false; Rust's extension nullability is its storage's
+            var proto = io.github.dfa1.vortex.core.proto.ProtoDType.ofExtension(new io.github.dfa1.vortex.core.proto.ProtoExtension(
+                    "ip.address", prim(io.github.dfa1.vortex.core.proto.ProtoPType.I32, true), new byte[0]));
+
+            // When
+            DType result = VariantEncodingDecoder.dtypeFromProto(proto);
+
+            // Then
+            assertThat(result.nullable()).isTrue();
+        }
+
+        @Test
+        void extension_unregisteredId_throwsUnlessAllowUnknown() {
+            // Given — Rust's DType::from_proto refuses an unregistered id ("Unregistered extension
+            // type ID") unless the session allows unknown ids
+            var proto = io.github.dfa1.vortex.core.proto.ProtoDType.ofExtension(new io.github.dfa1.vortex.core.proto.ProtoExtension(
+                    "ip.address", prim(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false), new byte[0]));
+            ReadRegistry strict = ReadRegistry.loadAll();
+            ReadRegistry lenient = ReadRegistry.builder().registerDefaults().allowUnknown().build();
+
+            // When / Then
+            assertThatThrownBy(() -> VariantEncodingDecoder.dtypeFromProto(proto, strict))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("no extension decoder registered for ip.address");
+            assertThat(VariantEncodingDecoder.dtypeFromProto(proto, lenient)).isInstanceOf(DType.Extension.class);
+        }
+
+        @Test
+        void extension_invalidBuiltIn_throws() {
+            // Given — vortex.timestamp over I32 storage, which Rust's validate_dtype refuses
+            var proto = io.github.dfa1.vortex.core.proto.ProtoDType.ofExtension(new io.github.dfa1.vortex.core.proto.ProtoExtension(
+                    "vortex.timestamp", prim(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false), new byte[]{2, 0, 0}));
+            ReadRegistry registry = ReadRegistry.loadAll();
+
+            // When / Then
+            assertThatThrownBy(() -> VariantEncodingDecoder.dtypeFromProto(proto, registry))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("storage dtype must be I64");
+        }
+
+        @Test
+        void extension_controlCharacterId_throwsVortexException() {
+            // Given — the id is untrusted file content; ExtensionId.parse would throw IllegalArgumentException
+            var proto = io.github.dfa1.vortex.core.proto.ProtoDType.ofExtension(new io.github.dfa1.vortex.core.proto.ProtoExtension(
+                    "a\nb", prim(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false), new byte[0]));
+            ReadRegistry registry = ReadRegistry.loadAll();
+
+            // When / Then
+            assertThatThrownBy(() -> VariantEncodingDecoder.dtypeFromProto(proto, registry))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("invalid extension id");
         }
 
         @Test

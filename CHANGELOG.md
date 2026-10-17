@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Breaking:** opening a file with an extension id that has no registered decoder fails unless `ReadRegistry.Builder#allowUnknown()` is set, as in Rust; the column then reads as its storage array. ([#530](https://github.com/dfa1/vortex-java/issues/530))
+- **Breaking:** `vortex.date`, `vortex.time`, `vortex.timestamp` and `vortex.uuid` dtypes are checked as Rust checks them (time unit, storage type, metadata) when writing and reading, and a file whose extension dtype has no metadata field is refused, as Rust refuses it. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - **Breaking:** `ExtensionDecoder` is generic in its domain type and declares `domainType()` and `decodeAll(DType.Extension, Array)`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 

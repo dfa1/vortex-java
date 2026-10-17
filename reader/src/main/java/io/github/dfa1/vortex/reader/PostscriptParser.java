@@ -339,10 +339,15 @@ final class PostscriptParser {
             case FbsType.FbsExtension -> {
                 var e = fbs.type(new FbsExtension());
                 DType storage = convertDType(e.storageDtype(), depth + 1);
+                // Rust requires the field, empty when there is no metadata
+                MemorySegment metadata = e.metadataAsSegment();
+                if (metadata == null) {
+                    throw new VortexException("extension dtype missing metadata");
+                }
                 yield new DType.Extension(
                         parseExtensionId(e.id()).id(),
                         storage,
-                        e.metadataAsSegment(),
+                        metadata,
                         storage.nullable());
             }
             case FbsType.FbsVariant -> new DType.Variant(fbs.type(new FbsVariant()).nullable());

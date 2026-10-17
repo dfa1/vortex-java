@@ -28,6 +28,12 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder<Instant
         return ExtensionId.VORTEX_TIMESTAMP;
     }
 
+    /// Applies Rust's `validate_dtype` rules for `vortex.timestamp`.
+    @Override
+    public void validate(DType.Extension dtype) {
+        ExtensionId.VORTEX_TIMESTAMP.validate(dtype);
+    }
+
     @Override
     public Class<Instant> domainType() {
         return Instant.class;

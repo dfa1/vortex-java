@@ -23,6 +23,12 @@ public final class TimestampExtensionEncoder implements ExtensionEncoder {
         return ExtensionId.VORTEX_TIMESTAMP;
     }
 
+    /// Applies Rust's `validate_dtype` rules for `vortex.timestamp`.
+    @Override
+    public void validate(DType.Extension dtype) {
+        ExtensionId.VORTEX_TIMESTAMP.validate(dtype);
+    }
+
     /// Returns the default dtype using milliseconds resolution and no timezone.
     /// Use [#dtype(TimeUnit, ZoneId, boolean)] for non-default settings.
     @Override

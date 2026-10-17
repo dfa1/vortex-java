@@ -145,18 +145,18 @@ public final class ReadRegistry {
     /// Checks every extension dtype in `dtype`, nested ones included, as Rust does when it
     /// deserializes one: a registered decoder validates it; an unregistered id is refused unless
     /// [Builder#allowUnknown()] is set, when it reads as its storage (Rust's `ForeignExtDType`).
-    /// The file parser has already checked every extension id.
+    /// Run on a file's schema at open, and on the dtypes embedded in Variant metadata at decode.
     ///
     /// @param dtype a file's schema, or `null` when the file carries no dtype blob
     /// @throws VortexException if a registered decoder rejects its dtype, or an extension id has no
     ///         decoder and unknown ids are not allowed
-    void validateExtensions(DType dtype) {
+    public void validateExtensions(DType dtype) {
         switch (dtype) {
             case null -> {
                 // a file without a dtype blob parses with no schema: nothing to check
             }
             case DType.Extension ext -> {
-                ExtensionDecoder<?> decoder = extensions.get(ExtensionId.parse(ext.extensionId()));
+                ExtensionDecoder<?> decoder = extensions.get(parseId(ext.extensionId()));
                 if (decoder != null) {
                     validate(decoder, ext);
                 } else if (!allowUnknown) {
@@ -177,6 +177,18 @@ public final class ReadRegistry {
                  DType.Binary _, DType.Variant _ -> {
                 // no nested dtype
             }
+        }
+    }
+
+    /// Parses an extension id read from a file; an id [ExtensionId#parse] refuses is corrupt input.
+    private static ExtensionId parseId(String raw) {
+        if (raw == null) {
+            throw new VortexException("extension dtype missing id");
+        }
+        try {
+            return ExtensionId.parse(raw);
+        } catch (IllegalArgumentException e) {
+            throw new VortexException("invalid extension id: " + e.getMessage());
         }
     }
 

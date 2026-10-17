@@ -67,7 +67,7 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | Type | Shape | Notes |
 |------|-------|-------|
 | `EncodingId` | `sealed interface` — `WellKnown` enum + `Custom` record | Array-encoding identity; total `parse(String)` over non-blank ids; constants re-exported (`EncodingId.VORTEX_PRIMITIVE`, …) |
-| `ExtensionId` | `sealed interface` — `WellKnown` enum + `Custom` record | Extension-type identity (`vortex.date`/`time`/`timestamp`/`uuid` well-known); same `parse(String)` and `Custom` policy as `EncodingId`. `DType.Extension` still carries the raw string; the file parser rejects ids `parse` would refuse |
+| `ExtensionId` | `sealed interface` — `WellKnown` enum + `Custom` record | Extension-type identity (`vortex.date`/`time`/`timestamp`/`uuid` well-known); same `parse(String)` and `Custom` policy as `EncodingId`. `WellKnown#validate(DType.Extension)` applies Rust's metadata and storage checks for the four spec types. `DType.Extension` still carries the raw string; the file parser rejects ids `parse` would refuse |
 | `LayoutId` | `sealed interface` — `WellKnown` enum + `Custom` record | Layout identity (separate namespace from encodings; `vortex.flat` is layout-only); both zoned aliases `vortex.zoned`/`vortex.stats` |
 | `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
 | `MemorySize` | `record MemorySize(long bytes)` | Validated non-negative byte count; `ofKiB`/`ofMiB`/`ofGiB` factories, `toGiB()` for display. Rejects negative values (`IllegalArgumentException`) — a programmer-error guard, not a `VortexException`-worthy untrusted-input check |

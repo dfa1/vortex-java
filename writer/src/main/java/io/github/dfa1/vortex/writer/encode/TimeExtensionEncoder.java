@@ -22,6 +22,12 @@ public final class TimeExtensionEncoder implements ExtensionEncoder {
         return ExtensionId.VORTEX_TIME;
     }
 
+    /// Applies Rust's `validate_dtype` rules for `vortex.time`.
+    @Override
+    public void validate(DType.Extension dtype) {
+        ExtensionId.VORTEX_TIME.validate(dtype);
+    }
+
     /// Returns the default dtype using [TimeUnit#Milliseconds] over I32 storage.
     /// Use [#dtype(TimeUnit, boolean)] for non-default units.
     @Override

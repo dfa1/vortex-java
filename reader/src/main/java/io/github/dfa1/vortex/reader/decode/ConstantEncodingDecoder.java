@@ -62,7 +62,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             if (inner == null || inner.value() == null) {
                 throw new VortexException(EncodingId.VORTEX_CONSTANT, "constant variant missing variant_value");
             }
-            DType innerDtype = VariantEncodingDecoder.dtypeFromProto(inner.dtype());
+            DType innerDtype = VariantEncodingDecoder.dtypeFromProto(inner.dtype(), ctx.registry());
             return arrayFromScalar(ctx, inner.value(), innerDtype, n);
         }
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {

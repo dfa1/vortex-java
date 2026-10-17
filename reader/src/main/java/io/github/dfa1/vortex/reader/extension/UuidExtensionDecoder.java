@@ -24,6 +24,12 @@ public final class UuidExtensionDecoder implements ExtensionDecoder<UUID> {
         return ExtensionId.VORTEX_UUID;
     }
 
+    /// Applies Rust's `validate_dtype` rules for `vortex.uuid`.
+    @Override
+    public void validate(DType.Extension dtype) {
+        ExtensionId.VORTEX_UUID.validate(dtype);
+    }
+
     @Override
     public Class<UUID> domainType() {
         return UUID.class;
