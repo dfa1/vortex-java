@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
-import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -153,6 +152,22 @@ abstract class SimdOperationsTest {
         // Given a prefix sum past Long.MAX_VALUE that the last term brings back: Rust's checked_add
         // drops the sum, while a final-total check would not notice
         long[] values = {Long.MAX_VALUE, 1L, -1L};
+
+        // When
+        OptionalLong result = sut.sum(values, PType.I64);
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void sum_i64_prefixOverflowPastTheVectorWidthIsStillOverflow() {
+        // Given the [MAX, 1, -1] case buried in an array long enough to take the vector loop, where no
+        // single lane overflows
+        long[] values = new long[64];
+        values[0] = Long.MAX_VALUE;
+        values[1] = 1L;
+        values[2] = -1L;
 
         // When
         OptionalLong result = sut.sum(values, PType.I64);
@@ -810,11 +825,49 @@ abstract class SimdOperationsTest {
         }
     }
 
+    @Test
+    void sum_i64_nearTheFastPathBound_matchesReference() {
+        // Given, per length, values hugging the +-2^k edge where the vector path hands over to the checked loop
+        // (k = 63 - ceil(log2 n)): an off-by-one in k, or floor instead of ceil, flips the answer at some length
+        Random random = new Random(535);
+        for (int length : LENGTHS) {
+            int log2n = length <= 1 ? 0 : 64 - Long.numberOfLeadingZeros(length - 1L);
+            long edge = 1L << (63 - log2n);
+            long[][] pool = {{edge - 1, -edge}, {edge, -edge - 1}, {Long.MAX_VALUE, Long.MIN_VALUE}};
+            for (int round = 0; round < 20; round++) {
+                long[] values = new long[length];
+                for (int i = 0; i < length; i++) {
+                    values[i] = random.nextInt(4) == 0 ? random.nextLong() >> random.nextInt(64)
+                            : pool[random.nextInt(2)][random.nextInt(2)];
+                }
+                if (length > 0 && random.nextBoolean()) {
+                    values[random.nextInt(length)] = pool[2][random.nextInt(2)];
+                }
+
+                // When / Then
+                assertThat(sut.sum(values, PType.I64)).as("length=%d round=%d", length, round)
+                        .isEqualTo(reference.sum(values, PType.I64));
+            }
+        }
+    }
+
+    @Test
+    void sum_i64_exactEdgeOfTheBound() {
+        // Given n * 2^k == 2^63 exactly (8 * -2^60), and three values whose sum passes MAX though n=3 rounds to 4
+        long[] fits = new long[8];
+        java.util.Arrays.fill(fits, -(1L << 60));
+        long[] overflows = {(1L << 62) - 1, (1L << 62) - 1, (1L << 62) - 1};
+
+        // When / Then
+        assertThat(sut.sum(fits, PType.I64)).hasValue(Long.MIN_VALUE);
+        assertThat(sut.sum(overflows, PType.I64)).isEqualTo(reference.sum(overflows, PType.I64)).isEmpty();
+    }
+
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16", "I32", "U32", "I64", "U64"})
     void sum_matchesReference(PType ptype) {
         // Given random data at every length; the 64-bit types hold values below 2^40 so no partial sum
-        // overflows, which is the case where lane-wise and sequential overflow checks must agree
+        // overflows: the vector path of I64, and U64 without carries
         for (int length : LENGTHS) {
             Object values = arrayWithRuns(ptype, length, 1, new Random(length * 13L));
             if (values instanceof long[] longs) {
@@ -930,8 +983,7 @@ abstract class SimdOperationsTest {
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"F16", "F32", "F64"})
     void sumFloating_agreesWithTheReferenceToRoundingError(PType ptype) {
-        // Given values small enough that the sum is well inside the double range. The Vector API sums
-        // lane-wise, so the last bits legitimately differ from the sequential reference.
+        // Given values small enough that the sum is well inside the double range
         for (int length : LENGTHS) {
             Object values = arrayWithRuns(ptype, length, 1, new Random(length * 19L));
             if (values instanceof float[] f) {
@@ -952,10 +1004,8 @@ abstract class SimdOperationsTest {
             // When
             double result = sut.sumFloating(values, ptype);
 
-            // Then within a relative 1e-9 of the sum of the magnitudes (the error scale of reordering)
-            double scale = Math.max(1.0, magnitude(values, ptype));
-            assertThat(result).as("%s length=%d", ptype, length).isCloseTo(expected,
-                    Offset.offset(scale * 1e-9));
+            // Then bit-identical: Rust adds sequentially, so any reordering would show in the last bits
+            assertThat(result).as("%s length=%d", ptype, length).isEqualTo(expected);
         }
     }
 
@@ -1154,30 +1204,6 @@ abstract class SimdOperationsTest {
             case F32 -> new float[length];
             case F64 -> new double[length];
         };
-    }
-
-    /// The sum of the absolute values: the scale of the rounding error a reordered float sum can have.
-    private static double magnitude(Object values, PType ptype) {
-        double total = 0;
-        switch (values) {
-            case float[] f -> {
-                for (float v : f) {
-                    total += Math.abs(v);
-                }
-            }
-            case double[] d -> {
-                for (double v : d) {
-                    total += Math.abs(v);
-                }
-            }
-            case short[] h -> {
-                for (short v : h) {
-                    total += Math.abs(Float.float16ToFloat(v));
-                }
-            }
-            default -> throw new IllegalArgumentException(ptype.toString());
-        }
-        return total;
     }
 
     private static byte[] filled(byte[] array, byte value) {

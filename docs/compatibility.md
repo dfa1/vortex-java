@@ -50,18 +50,10 @@ Bulk loops (min/max, sums, run counting, widening, bit-packing, ...) live behind
 Two implementations exist: the default, plain Java loops shaped for C2's auto-vectorizer, and one written
 with the incubating Vector API, selected only when the JVM is launched with
 `--add-modules jdk.incubator.vector` (omitting the flag is the opt-out; the JVM prints
-`WARNING: Using incubator modules` once). The default follows Rust. **The Vector API implementation is a
-deliberate, documented departure in the cases below**, because forcing a scalar loop to keep Rust's exact
-order would defeat the point of using the Vector API.
-
-| Kernel | Rust | Vector API implementation | Effect |
-|--------|------|---------------------------|--------|
-| Floating-point sum (zone-map `Sum`) | Sequential `f64` accumulation | Lane-wise accumulation, one reduction at the end. The JDK documents `reduceLanes(ADD)` on floats as using "an arbitrary order of operations, which may even vary over time" | The sum can differ in its last bits from Rust's and from the default implementation, and between CPUs of different vector width. Integer sums are exact. |
-| `I64` / `U64` sum | A checked add per element: any overflowing prefix drops the sum | Overflow detected on each lane's running sum, then lanes and tail combined with checked adds | Can report an overflow Rust does not, or the reverse, when partial sums approach the limits (`[MAX, 1, -1]` overflows Rust's prefix but not the total). Narrower integer sums are exact in both. |
-| `F16` sum and min/max | Scalar | Scalar | The Vector API has no half-float lanes. No difference. |
-
-Statistics derived from these (the zone-map sum) therefore depend on whether the module is enabled. The
-other kernels give identical results in both implementations, pinned by a differential test.
+`WARNING: Using incubator modules` once). Both give Rust's results, pinned by a differential test:
+floating-point sums are sequential (lane-wise accumulation would change the last bits), and the `I64` sum
+sums in vector lanes only when no prefix can overflow (every element in `[-2^k, 2^k)` with `n * 2^k <= 2^63`), otherwise it runs
+Rust's checked add per element, so `[MAX, 1, -1]` is dropped in both. `F16` sum and min/max are scalar in both.
 
 Separate from the Vector API, found while comparing against the Rust source:
 

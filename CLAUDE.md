@@ -41,8 +41,8 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
           core.compute  FastLanes, PrimitiveArrays, Utf8Order
           core.simd     SimdOperations (kernels shared by reader+writer, all eleven ptypes),
                         AutoVectorizedSimdOperations (C2-shaped loops, the Rust-parity default),
-                        VectorApiSimdOperations (opt-in via --add-modules jdk.incubator.vector; a few documented
-                        differences from Rust, see docs/compatibility.md), SimdOperationsSupport#preferred() (picks one)
+                        VectorApiSimdOperations (opt-in via --add-modules jdk.incubator.vector; Rust-parity results,
+                        see docs/compatibility.md), SimdOperationsSupport#preferred() (picks one)
           core.fbs / core.proto — generated wire codecs + their runtimes
 reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats, Zone,
           ScanOptions, RowFilter; file internals (Footer, Trailer, PostscriptParser, …)
@@ -275,10 +275,9 @@ When stuck on encode/decode behavior, consult **in this order**:
   starting point and `withXxx` methods return copies. Never a record and never a public
   constructor — they hold callbacks or executors with no meaningful `equals`, and a constructor
   freezes the field list as API.
-- **The Vector API implementation may differ from Rust in a few reductions** (decision recorded in
-  `docs/compatibility.md` and `VectorApiSimdOperations`): lane-wise float sums and per-lane `I64`/`U64`
-  overflow detection, instead of forcing scalar loops to keep Rust's exact order. It is opt-in
-  (`--add-modules jdk.incubator.vector`); the default `AutoVectorizedSimdOperations` stays Rust-parity.
+- **The Vector API implementation is Rust-parity too** (#535): float sums are sequential and the `I64` sum
+  vectorizes only when no prefix can overflow, else runs the checked sequential loop. It is opt-in
+  (`--add-modules jdk.incubator.vector`) because the module is still incubating, not because it differs.
 - **Small public APIs.** Don't expose internals — when in doubt, leave it out or make it private.
 - **POM deps** grouped with comments: `<!-- production -->` then `<!-- testing -->`, each with
   project-internal (`io.github.dfa1.vortex:*`) deps first, then external. Omit empty sections.
