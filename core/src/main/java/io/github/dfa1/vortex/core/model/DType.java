@@ -365,6 +365,13 @@ public sealed interface DType
                 throw new VortexException("extension metadata too large: "
                         + metadata.byteSize() + " > " + MAX_METADATA_SIZE.bytes());
             }
+            // A dtype outlives the reader that parsed it (callers keep reader.dtype()), but a slice
+            // of the file mapping fails once the reader closes: copy it onto the heap. Small, as
+            // the cap above bounds it.
+            if (metadata != null && metadata.isNative()) {
+                metadata = MemorySegment.ofArray(metadata.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE))
+                        .asReadOnly();
+            }
         }
 
         /// Value equality with content-based metadata comparison.

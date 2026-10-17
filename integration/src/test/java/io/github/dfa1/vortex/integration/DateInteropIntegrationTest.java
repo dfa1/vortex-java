@@ -110,6 +110,24 @@ class DateInteropIntegrationTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(DateUnit.class)
+    void rustWrites_dtypeOutlivesTheReader(DateUnit unit, @TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("dates.vortex");
+        writeWithJni(file, unit);
+        DType.Extension result;
+
+        // When — the dtype is kept past close, as a SQL schema caches it
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
+            result = (DType.Extension) ((DType.Struct) reader.dtype()).fieldTypes().get(1);
+        }
+
+        // Then — the metadata was a slice of the closed file mapping, so this threw "Already closed"
+        TimeUnit expectedUnit = unit == DateUnit.DAY ? TimeUnit.Days : TimeUnit.Milliseconds;
+        assertThat(TimeUnit.fromTag(result.metadata().get(ValueLayout.JAVA_BYTE, 0))).isEqualTo(expectedUnit);
+    }
+
     /// Every ninth row is null; the rest step 37 days from 1915, so a quarter of them precede the
     /// epoch, where flooring a millisecond count must not round toward zero.
     private static LocalDate expected(long row) {
