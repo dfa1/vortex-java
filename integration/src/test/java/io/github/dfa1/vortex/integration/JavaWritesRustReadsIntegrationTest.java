@@ -2340,14 +2340,19 @@ class JavaWritesRustReadsIntegrationTest {
                     .hasMessageContaining("storage dtype must be I64");
         }
 
-        // And — a file from a writer with no extension encoders (so nothing validated) is refused
-        // on read by both Java and vortex-jni
-        io.github.dfa1.vortex.writer.WriteRegistry.Builder encodersOnly = io.github.dfa1.vortex.writer.WriteRegistry.builder();
-        io.github.dfa1.vortex.writer.WriteRegistry.loadAll().encoderMap().values().forEach(encodersOnly::register);
-        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var writer = VortexWriter.create(ch, schema, WriteOptions.defaults(), encodersOnly.build())) {
+        // And — such a file, from another writer, is refused on read by both Java and vortex-jni.
+        // No Java write path emits it any more, so write the column under a custom id of the same
+        // length and rename it in place: a FlatBuffer string is stored verbatim, once.
+        DType.Struct disguised = new DType.Struct(List.of(ColumnName.of("ts")), List.of(new DType.Extension(
+                "vortex.timestamq", DType.I32, MemorySegment.ofArray(new byte[]{2, 0, 0}), false)), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING);
+             var writer = VortexWriter.create(ch, disguised, WriteOptions.defaults())) {
             writer.writeChunk(Map.of(ColumnName.of("ts"), new int[]{1, 2}));
         }
+        String bytes = Files.readString(file, java.nio.charset.StandardCharsets.ISO_8859_1);
+        assertThat(bytes.indexOf("vortex.timestamq")).isEqualTo(bytes.lastIndexOf("vortex.timestamq")).isNotNegative();
+        Files.writeString(file, bytes.replace("vortex.timestamq", "vortex.timestamp"), java.nio.charset.StandardCharsets.ISO_8859_1);
         assertThatThrownBy(() -> io.github.dfa1.vortex.reader.VortexReader.open(file))
                 .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                 .hasMessageContaining("storage dtype must be I64");

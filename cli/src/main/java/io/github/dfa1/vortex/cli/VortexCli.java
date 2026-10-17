@@ -22,6 +22,9 @@ public final class VortexCli {
 
     /// Global flag, accepted anywhere on the command line: prints how long the operation took.
     private static final String TIMING_FLAG = "--timing";
+    /// Global flag, accepted anywhere on the command line: opens files whose extension types have no
+    /// decoder, reading those columns as their storage (`ReadRegistry.Builder#allowUnknown()`).
+    private static final String ALLOW_UNKNOWN_FLAG = "--allow-unknown";
 
     public static void main(String[] args) {
         System.exit(execute(args));
@@ -33,7 +36,10 @@ public final class VortexCli {
     static int execute(String[] args) {
         long start = System.nanoTime();
         boolean timing = Arrays.asList(args).contains(TIMING_FLAG);
-        String[] commandArgs = Arrays.stream(args).filter(arg -> !TIMING_FLAG.equals(arg)).toArray(String[]::new);
+        CliHandles.allowUnknown(Arrays.asList(args).contains(ALLOW_UNKNOWN_FLAG));
+        String[] commandArgs = Arrays.stream(args)
+                .filter(arg -> !TIMING_FLAG.equals(arg) && !ALLOW_UNKNOWN_FLAG.equals(arg))
+                .toArray(String[]::new);
         int exit = dispatch(commandArgs);
         if (timing) {
             Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
@@ -67,7 +73,7 @@ public final class VortexCli {
     }
 
     static void printUsage(PrintStream out) {
-        out.println("Usage: java -jar vortex-cli-<version>-all.jar <subcommand> [args] [--timing]");
+        out.println("Usage: java -jar vortex-cli-<version>-all.jar <subcommand> [args] [--timing] [--allow-unknown]");
         out.println("  inspect [--html] <file|url>         print file structure; --html writes an HTML report");
         out.println("  tui     <file|url>                  open interactive inspector; url is http(s)://");
         out.println("  view    <file|url>                  open scrollable data grid; url is http(s)://");
@@ -80,5 +86,7 @@ public final class VortexCli {
         out.println("  stats   <file.vortex>               print per-column min/max statistics");
         out.println("  filter  <file.vortex> <expr>        filter rows to CSV (e.g. \"price >= 100\")");
         out.println("Any subcommand also takes --timing: print the elapsed time to stderr, JVM start-up excluded.");
+        out.println("Any subcommand also takes --allow-unknown: open a file whose extension types have no decoder,");
+        out.println("  reading those columns as their storage.");
     }
 }

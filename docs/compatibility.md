@@ -316,7 +316,15 @@ there is none, as Rust requires; the writer always emits it.
 
 `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`: the spec ids
 (`VORTEX_DATE`, `VORTEX_TIME`, `VORTEX_TIMESTAMP`, `VORTEX_UUID`) plus any third-party id.
-As in Rust, opening a file with an extension id that has no registered decoder fails
+The ids the vortex-jni session registers by default are `ExtensionId.WellKnown`: besides the
+four above, `vortex.json` and the `vortex.st.*` geometries (`wkb`, `point`, `linestring`,
+`polygon`, `multipoint`, `multilinestring`, `multipolygon`, `box`). A file with one of them opens
+without a decoder and the column reads as its storage — JSON text as `Utf8`, WKB as `Binary`,
+geometries as GeoArrow coordinate structs and lists — validated with Rust's storage rules (the
+spatial CRS metadata is not decoded). Java has no JSON or geometry domain type, so `Chunk.as`
+refuses them.
+
+As in Rust, opening a file with any other extension id that has no registered decoder fails
 (`VortexException`; Rust: "No such DType extension ID"), unless
 `ReadRegistry.Builder#allowUnknown()` is set — then the id round-trips verbatim through
 `DType.Extension`'s raw `String` field and the column reads as its storage array, Rust's
@@ -330,6 +338,8 @@ custom extension id at all. A blank id, or one with a control character, fails t
 | `vortex.time`       | `TimeExtension`        | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                        | ✅          |
 | `vortex.timestamp`  | `TimestampExtension`   | I64 epoch count in the recorded `TimeUnit`      | unit byte + u16 LE tz_len + UTF-8 tz      | ✅          |
 | `vortex.uuid`       | `UuidExtension`        | `FixedSizeList(Primitive(U8), 16)`              | none                                      | ✅          |
+| `vortex.json`       | _none (storage)_       | `Utf8`                                          | empty                                     | storage    |
+| `vortex.st.*`       | _none (storage)_       | `Binary` (wkb) or GeoArrow coordinate `Struct`/`List` | spatial protobuf (not decoded)       | storage    |
 | _custom ids_        | _registered decoder_   | _whatever the column declares_                  | _opaque bytes_                            | ✅ when registered; storage with `allowUnknown()` |
 
 `TimeUnit` (see [`extension/datetime/unit.rs`](https://github.com/vortex-data/vortex/blob/develop/vortex-array/src/extension/datetime/unit.rs))

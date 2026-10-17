@@ -48,7 +48,8 @@ final class SelectCommand {
             System.err.println("error: " + e.getMessage());
             return ExitStatus.USAGE_ERROR;
         }
-        ExportOptions options = ExportOptions.defaults().withColumns(parsed.columns());
+        ExportOptions options = ExportOptions.defaults().withColumns(parsed.columns())
+                .withReadRegistry(CliHandles.readRegistry());
         try {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
             if (parsed.conditions().isEmpty()) {

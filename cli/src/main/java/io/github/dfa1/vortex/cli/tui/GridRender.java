@@ -102,12 +102,14 @@ final class GridRender {
         if (!(ExtensionId.parse(ext.extensionId()) instanceof ExtensionId.WellKnown id)) {
             return Optional.empty();
         }
-        return Optional.of(switch (id) {
-            case VORTEX_DATE -> DateExtensionDecoder.INSTANCE.decode(ext, storage, i).toString();
-            case VORTEX_TIME -> TimeExtensionDecoder.INSTANCE.decode(ext, storage, i).toString();
-            case VORTEX_TIMESTAMP -> TimestampExtensionDecoder.INSTANCE.instant(ext, storage, i).toString();
-            case VORTEX_UUID -> UuidExtensionDecoder.INSTANCE.decode(storage, i).toString();
-        });
+        return switch (id) {
+            case VORTEX_DATE -> Optional.of(DateExtensionDecoder.INSTANCE.decode(ext, storage, i).toString());
+            case VORTEX_TIME -> Optional.of(TimeExtensionDecoder.INSTANCE.decode(ext, storage, i).toString());
+            case VORTEX_TIMESTAMP -> Optional.of(TimestampExtensionDecoder.INSTANCE.instant(ext, storage, i).toString());
+            case VORTEX_UUID -> Optional.of(UuidExtensionDecoder.INSTANCE.decode(storage, i).toString());
+            // JSON text and geometries have no Java domain type yet: render the storage
+            default -> Optional.empty();
+        };
     }
 
     private static String bytesToHex(byte[] bytes) {

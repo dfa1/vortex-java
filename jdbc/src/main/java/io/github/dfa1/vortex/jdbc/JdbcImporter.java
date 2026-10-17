@@ -241,6 +241,8 @@ public final class JdbcImporter {
                 Object raw = rs.getObject(colIdx);
                 buffer.add(rs.wasNull() ? null : toUuid(raw));
             }
+            // SqlTypeToDType never maps a SQL type to the JSON or geometry ids
+            default -> throw new UnsupportedOperationException("unsupported extension: " + ext.extensionId());
         }
     }
 
