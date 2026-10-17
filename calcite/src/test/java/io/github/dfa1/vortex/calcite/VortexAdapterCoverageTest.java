@@ -138,6 +138,19 @@ class VortexAdapterCoverageTest {
     }
 
     @Test
+    void getStatistic_reportsTheRowCount() {
+        // Given
+        VortexTable table = new VortexTable(file);
+
+        // When
+        Double result = table.getStatistic().getRowCount();
+
+        // Then — Calcite's default (no statistic) is a null row count, which makes it guess the
+        // table size when ordering joins
+        assertThat(result).isEqualTo(3.0);
+    }
+
+    @Test
     void schemaAndRowCount_areReadFromTheFooterOnce(@TempDir Path dir) throws Exception {
         // Given a table whose footer was read, then the file goes away
         Path copy = java.nio.file.Files.copy(file, dir.resolve("copy.vortex"));

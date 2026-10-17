@@ -25,6 +25,8 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ProjectableFilterableTable;
+import org.apache.calcite.schema.Statistic;
+import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -62,7 +64,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     private volatile Footer footer;
 
     /// The footer facts every planning call needs, read once instead of reopening the file for each
-    /// `getRowType`, `scan` and aggregate. Column statistics stay out: folding them walks every
+    /// `getRowType`, `scan` and statistic. Column statistics stay out: folding them walks every
     /// column's zones, which only the aggregate rule needs.
     private record Footer(DType.Struct struct, long totalRows) {
     }
@@ -148,6 +150,15 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @return the number of rows in the file
     public long totalRows() {
         return footer().totalRows();
+    }
+
+    /// Gives the planner the file's row count, so join ordering and costing see the real table
+    /// size instead of Calcite's default guess.
+    ///
+    /// @return a statistic carrying the row count, with no declared keys
+    @Override
+    public Statistic getStatistic() {
+        return Statistics.of(footer().totalRows(), List.of());
     }
 
     private Footer footer() {
