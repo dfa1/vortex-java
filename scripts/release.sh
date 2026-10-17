@@ -5,18 +5,18 @@
 # creates the GitHub release from the version's CHANGELOG section. A published version cannot be
 # pulled back, so every check below fails before anything is changed.
 #
-#   scripts/release.sh <release-version> [next-snapshot-version] [--yes]
+#   scripts/release.sh <release-version> [next-snapshot-version] [--batch]
 #
 #   scripts/release.sh 0.17.2            # next defaults to the next patch: 0.17.3-SNAPSHOT
 #   scripts/release.sh 0.18.0 0.18.1-SNAPSHOT
-#   scripts/release.sh 0.17.2 --yes      # skip the confirmation prompt
+#   scripts/release.sh 0.17.2 --batch    # non-interactive, like Maven's --batch-mode: no confirmation prompt
 set -euo pipefail
 
-YES=false
+BATCH=false
 ARGS=()
 for arg in "$@"; do
-    if [[ "$arg" == "--yes" ]]; then
-        YES=true
+    if [[ "$arg" == "--batch" ]]; then
+        BATCH=true
     else
         ARGS+=("$arg")
     fi
@@ -24,7 +24,7 @@ done
 
 VERSION=${ARGS[0]:-}
 if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-    echo "usage: scripts/release.sh <release-version, e.g. 0.17.2> [next-snapshot-version] [--yes]" >&2
+    echo "usage: scripts/release.sh <release-version, e.g. 0.17.2> [next-snapshot-version] [--batch]" >&2
     exit 2
 fi
 NEXT=${ARGS[1]:-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))-SNAPSHOT}
@@ -61,7 +61,7 @@ fi
 
 echo "About to release $VERSION (next development version $NEXT) from $(git rev-parse --short HEAD)."
 echo "This pushes tag $TAG, which publishes to Maven Central."
-if [[ "$YES" != true ]]; then
+if [[ "$BATCH" != true ]]; then
     read -r -p "Continue? [y/N] " reply
     [[ "$reply" == "y" || "$reply" == "Y" ]] || fail "aborted"
 fi
