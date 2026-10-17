@@ -295,10 +295,14 @@ public final class VortexWriter implements Closeable {
     private void validateExtensions(DType dtype) {
         switch (dtype) {
             case DType.Extension ext -> {
-                ExtensionEncoder encoder = extensionRegistry.lookup(
-                        io.github.dfa1.vortex.core.model.ExtensionId.parse(ext.extensionId()));
+                io.github.dfa1.vortex.core.model.ExtensionId id =
+                        io.github.dfa1.vortex.core.model.ExtensionId.parse(ext.extensionId());
+                ExtensionEncoder encoder = extensionRegistry.lookup(id);
                 if (encoder != null) {
                     encoder.validate(ext);
+                } else if (id instanceof io.github.dfa1.vortex.core.model.ExtensionId.WellKnown wellKnown) {
+                    // written from its storage array; still held to Rust's rules for the id
+                    wellKnown.validate(ext);
                 }
                 validateExtensions(ext.storageDType());
             }

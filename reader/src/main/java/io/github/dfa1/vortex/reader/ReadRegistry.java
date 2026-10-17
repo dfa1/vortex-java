@@ -143,8 +143,10 @@ public final class ReadRegistry {
     }
 
     /// Checks every extension dtype in `dtype`, nested ones included, as Rust does when it
-    /// deserializes one: a registered decoder validates it; an unregistered id is refused unless
-    /// [Builder#allowUnknown()] is set, when it reads as its storage (Rust's `ForeignExtDType`).
+    /// deserializes one: a registered decoder validates it; a [ExtensionId.WellKnown] id without a
+    /// decoder is validated by [ExtensionId.WellKnown#validate(DType.Extension)] and reads as its
+    /// storage; any other id is refused unless [Builder#allowUnknown()] is set, when it reads as its
+    /// storage (Rust's `ForeignExtDType`).
     /// Run on a file's schema at open, and on the dtypes embedded in Variant metadata at decode.
     ///
     /// @param dtype a file's schema, or `null` when the file carries no dtype blob
@@ -156,9 +158,13 @@ public final class ReadRegistry {
                 // a file without a dtype blob parses with no schema: nothing to check
             }
             case DType.Extension ext -> {
-                ExtensionDecoder<?> decoder = extensions.get(parseId(ext.extensionId()));
+                ExtensionId id = parseId(ext.extensionId());
+                ExtensionDecoder<?> decoder = extensions.get(id);
                 if (decoder != null) {
                     validate(decoder, ext);
+                } else if (id instanceof ExtensionId.WellKnown wellKnown) {
+                    // the reference session knows it: no decoder needed, the column reads as storage
+                    wellKnown.validate(ext);
                 } else if (!allowUnknown) {
                     throw new VortexException("no extension decoder registered for " + ext.extensionId()
                             + "; register one or enable ReadRegistry.Builder#allowUnknown()");

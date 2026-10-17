@@ -27,7 +27,7 @@ final class StatsCommand {
             System.err.println("file not found: " + path);
             return ExitStatus.FILE_NOT_FOUND;
         }
-        try (VortexReader reader = VortexReader.open(path)) {
+        try (VortexReader reader = VortexReader.open(path, CliHandles.readRegistry())) {
             if (!(reader.dtype() instanceof DType.Struct schema)) {
                 System.err.println("error: root dtype is not a struct");
                 return ExitStatus.ERROR;

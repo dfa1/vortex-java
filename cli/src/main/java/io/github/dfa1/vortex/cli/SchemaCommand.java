@@ -27,7 +27,7 @@ final class SchemaCommand {
             System.err.println("file not found: " + path);
             return ExitStatus.FILE_NOT_FOUND;
         }
-        try (VortexReader reader = VortexReader.open(path)) {
+        try (VortexReader reader = VortexReader.open(path, CliHandles.readRegistry())) {
             printSchema(System.out, path, reader.dtype(), reader.layout().rowCount());
             return ExitStatus.OK;
         } catch (IOException | io.github.dfa1.vortex.core.error.VortexException e) {

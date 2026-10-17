@@ -47,7 +47,7 @@ public final class CsvExporter {
     }
 
     public static void exportCsv(Path vortexPath, Path csvPath, ExportOptions options) throws IOException {
-        try (VortexReader reader = VortexReader.open(vortexPath);
+        try (VortexReader reader = VortexReader.open(vortexPath, options.readRegistry());
              CsvWriter csvWriter = CsvWriter.builder()
                                            .fieldSeparator(options.delimiter())
                                            .build(csvPath)) {
@@ -70,7 +70,7 @@ public final class CsvExporter {
                 // do not close the caller-owned writer
             }
         };
-        try (VortexReader reader = VortexReader.open(vortexPath);
+        try (VortexReader reader = VortexReader.open(vortexPath, options.readRegistry());
              CsvWriter csvWriter = CsvWriter.builder()
                                            .fieldSeparator(options.delimiter())
                                            .build(shielded)) {

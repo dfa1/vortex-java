@@ -1,13 +1,21 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.writer.VortexWriter;
+import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.List;
+import java.util.Map;
 
 import static io.github.dfa1.vortex.cli.CliTestSupport.capture;
 import static io.github.dfa1.vortex.cli.CliTestSupport.writeSmallVortex;
@@ -39,7 +47,8 @@ class VortexCliTest {
                 .contains("select")
                 .contains("stats")
                 .contains("filter")
-                .contains("--timing");
+                .contains("--timing")
+                .contains("--allow-unknown");
     }
 
     @Test
@@ -104,5 +113,59 @@ class VortexCliTest {
         // Then
         assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
         assertThat(result.stderr()).contains("Usage:");
+    }
+
+    @Test
+    void customExtension_withoutAllowUnknown_isRefused(@TempDir Path tmp) throws IOException {
+        // Given — a column of an extension type with no decoder; Rust refuses it unless the session
+        // allows unknown ids, and so does the CLI by default
+        Path file = writeCustomExtensionVortex(tmp);
+
+        // When
+        CliTestSupport.Captured result = capture(() -> VortexCli.execute(new String[]{"count", file.toString()}));
+
+        // Then
+        assertThat(result.status()).isNotEqualTo(ExitStatus.OK);
+        assertThat(result.stderr()).contains("no extension decoder registered for acme.money");
+    }
+
+    @Test
+    void customExtension_withAllowUnknown_readsTheStorage(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = writeCustomExtensionVortex(tmp);
+
+        // When — the flag reaches the CSV path too, which opens the file itself
+        CliTestSupport.Captured result = capture(() -> VortexCli.execute(
+                new String[]{"select", file.toString(), "price", "--allow-unknown"}));
+
+        // Then — the column reads as its I64 storage
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout()).contains("999").contains("12050");
+    }
+
+    @Test
+    void allowUnknown_doesNotLeakIntoTheNextInvocation(@TempDir Path tmp) throws IOException {
+        // Given — the registry is process state, reset by every execute
+        Path file = writeCustomExtensionVortex(tmp);
+        capture(() -> VortexCli.execute(new String[]{"count", file.toString(), "--allow-unknown"}));
+
+        // When
+        CliTestSupport.Captured result = capture(() -> VortexCli.execute(new String[]{"count", file.toString()}));
+
+        // Then
+        assertThat(result.status()).isNotEqualTo(ExitStatus.OK);
+    }
+
+    private static Path writeCustomExtensionVortex(Path dir) throws IOException {
+        Path file = dir.resolve("money.vortex");
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("price")),
+                List.of(new DType.Extension("acme.money", DType.I64,
+                        java.lang.foreign.MemorySegment.ofArray("EUR".getBytes(StandardCharsets.US_ASCII)), false)),
+                false);
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("price"), new long[]{999L, 12_050L}));
+        }
+        return file;
     }
 }

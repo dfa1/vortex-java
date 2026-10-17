@@ -13,7 +13,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/// Identity of an extension type — either a spec [WellKnown] constant or a third-party [Custom] id.
+/// Identity of an extension type — either a [WellKnown] constant or a third-party [Custom] id.
+///
+/// [WellKnown] holds every id the vortex-jni reference session registers by default: the
+/// temporal types and `vortex.uuid`, plus `vortex.json` and the `vortex.st.*` geometry types. A
+/// file with one of them opens without a registered decoder, the column reading as its storage.
 /// Mirrors [EncodingId] in shape so callers reach for the same pattern across both registries.
 ///
 /// The wire representation is always a string (e.g. `"vortex.timestamp"`); [#parse(String)] maps any
@@ -38,7 +42,7 @@ public sealed interface ExtensionId extends Serializable permits ExtensionId.Wel
         return known != null ? known : new Custom(raw);
     }
 
-    /// Extension ids defined by the Vortex specification and understood by this build.
+    /// Extension ids the vortex-jni reference session registers by default.
     enum WellKnown implements ExtensionId {
         /// `vortex.date`.
         VORTEX_DATE("vortex.date"),
@@ -47,7 +51,35 @@ public sealed interface ExtensionId extends Serializable permits ExtensionId.Wel
         /// `vortex.timestamp`.
         VORTEX_TIMESTAMP("vortex.timestamp"),
         /// `vortex.uuid`.
-        VORTEX_UUID("vortex.uuid");
+        VORTEX_UUID("vortex.uuid"),
+        /// `vortex.json`: a JSON document per row over `Utf8` storage (Rust's `vortex-json`).
+        VORTEX_JSON("vortex.json"),
+        /// `vortex.st.wkb`: a Well-Known Binary geometry per row over `Binary` storage (Rust's `vortex-spatial`).
+        VORTEX_ST_WKB("vortex.st.wkb"),
+        /// `vortex.st.point` (Rust's `vortex-spatial`).
+        VORTEX_ST_POINT("vortex.st.point"),
+        /// `vortex.st.linestring` (Rust's `vortex-spatial`).
+        VORTEX_ST_LINESTRING("vortex.st.linestring"),
+        /// `vortex.st.polygon` (Rust's `vortex-spatial`).
+        VORTEX_ST_POLYGON("vortex.st.polygon"),
+        /// `vortex.st.multipoint` (Rust's `vortex-spatial`).
+        VORTEX_ST_MULTIPOINT("vortex.st.multipoint"),
+        /// `vortex.st.multilinestring` (Rust's `vortex-spatial`).
+        VORTEX_ST_MULTILINESTRING("vortex.st.multilinestring"),
+        /// `vortex.st.multipolygon` (Rust's `vortex-spatial`).
+        VORTEX_ST_MULTIPOLYGON("vortex.st.multipolygon"),
+        /// `vortex.st.box` (Rust's `vortex-spatial`).
+        VORTEX_ST_BOX("vortex.st.box");
+
+        // GeoArrow field names per dimension (vortex-spatial coordinate.rs and rect.rs)
+        private static final java.util.List<java.util.List<String>> COORDINATE_FIELDS = java.util.List.of(
+                java.util.List.of("x", "y"), java.util.List.of("x", "y", "z"),
+                java.util.List.of("x", "y", "m"), java.util.List.of("x", "y", "z", "m"));
+        private static final java.util.List<java.util.List<String>> BOX_FIELDS = java.util.List.of(
+                java.util.List.of("xmin", "ymin", "xmax", "ymax"),
+                java.util.List.of("xmin", "ymin", "zmin", "xmax", "ymax", "zmax"),
+                java.util.List.of("xmin", "ymin", "mmin", "xmax", "ymax", "mmax"),
+                java.util.List.of("xmin", "ymin", "zmin", "mmin", "xmax", "ymax", "zmax", "mmax"));
 
         private static final Map<String, WellKnown> LOOKUP = Stream.of(values())
                 .collect(Collectors.toUnmodifiableMap(WellKnown::id, Function.identity()));
@@ -76,10 +108,12 @@ public sealed interface ExtensionId extends Serializable permits ExtensionId.Wel
             return id;
         }
 
-        /// Rejects a dtype this spec extension cannot represent, with the rules of Rust's
+        /// Rejects a dtype this extension cannot represent, with the rules of Rust's
         /// `deserialize_metadata` and `validate_dtype` for it: the time-unit byte and storage ptype
         /// of `vortex.date`/`vortex.time`, the metadata layout and `I64` storage of
-        /// `vortex.timestamp`, the version byte and `FixedSizeList<U8, 16>` storage of `vortex.uuid`.
+        /// `vortex.timestamp`, the version byte and `FixedSizeList<U8, 16>` storage of `vortex.uuid`,
+        /// empty metadata over `Utf8` for `vortex.json`, `Binary` storage for `vortex.st.wkb`, and
+        /// the GeoArrow coordinate-struct storage of the other `vortex.st.*` geometries.
         ///
         /// @param dtype an extension dtype with this id
         /// @throws VortexException if the metadata or storage dtype is invalid for this extension
@@ -138,6 +172,56 @@ public sealed interface ExtensionId extends Serializable permits ExtensionId.Wel
                         throw new VortexException(id + " storage dtype must be FixedSizeList<non-null U8, 16>, got " + storage);
                     }
                 }
+                case VORTEX_JSON -> {
+                    if (meta.length != 0) {
+                        throw new VortexException(id + " metadata must be empty");
+                    }
+                    if (!(storage instanceof DType.Utf8)) {
+                        throw new VortexException(id + " storage dtype must be Utf8, got " + storage);
+                    }
+                }
+                // ponytail: the spatial metadata (a SpatialMetadata protobuf: CRS, edges) is not decoded,
+                // so malformed metadata Rust refuses still opens here; decode it when Java reads geometries
+                case VORTEX_ST_WKB -> {
+                    if (!(storage instanceof DType.Binary)) {
+                        throw new VortexException(id + " storage dtype must be Binary, got " + storage);
+                    }
+                }
+                case VORTEX_ST_POINT -> requireF64Struct(storage, COORDINATE_FIELDS);
+                case VORTEX_ST_LINESTRING, VORTEX_ST_MULTIPOINT -> requireF64Struct(listElement(storage, 1), COORDINATE_FIELDS);
+                case VORTEX_ST_POLYGON, VORTEX_ST_MULTILINESTRING -> requireF64Struct(listElement(storage, 2), COORDINATE_FIELDS);
+                case VORTEX_ST_MULTIPOLYGON -> requireF64Struct(listElement(storage, 3), COORDINATE_FIELDS);
+                case VORTEX_ST_BOX -> requireF64Struct(storage, BOX_FIELDS);
+            }
+        }
+
+        /// Unwraps `depth` levels of `List`: a linestring is a list of coordinates, a polygon a list
+        /// of rings, a multipolygon a list of polygons.
+        private DType listElement(DType storage, int depth) {
+            DType current = storage;
+            for (int i = 0; i < depth; i++) {
+                if (!(current instanceof DType.List list)) {
+                    throw new VortexException(id + " storage must nest " + depth + " List level(s) over coordinates, got " + storage);
+                }
+                current = list.elementType();
+            }
+            return current;
+        }
+
+        /// A coordinate or box: a `Struct` of non-nullable `F64` fields named for one GeoArrow
+        /// dimension (xy, xyz, xym or xyzm).
+        private void requireF64Struct(DType dtype, java.util.List<java.util.List<String>> dimensions) {
+            if (!(dtype instanceof DType.Struct struct)) {
+                throw new VortexException(id + " coordinates must be a Struct, got " + dtype);
+            }
+            for (DType field : struct.fieldTypes()) {
+                if (!(field instanceof DType.Primitive p && p.ptype() == PType.F64 && !p.nullable())) {
+                    throw new VortexException(id + " coordinate fields must be non-nullable F64, got " + field);
+                }
+            }
+            java.util.List<String> names = struct.fieldNames().stream().map(ColumnName::value).toList();
+            if (!dimensions.contains(names)) {
+                throw new VortexException(id + " is not a valid GeoArrow dimension: " + names);
             }
         }
 
@@ -207,4 +291,22 @@ public sealed interface ExtensionId extends Serializable permits ExtensionId.Wel
     WellKnown VORTEX_TIMESTAMP = WellKnown.VORTEX_TIMESTAMP;
     /// Well-known `vortex.uuid` id.
     WellKnown VORTEX_UUID = WellKnown.VORTEX_UUID;
+    /// Well-known `vortex.json` id.
+    WellKnown VORTEX_JSON = WellKnown.VORTEX_JSON;
+    /// Well-known `vortex.st.wkb` id.
+    WellKnown VORTEX_ST_WKB = WellKnown.VORTEX_ST_WKB;
+    /// Well-known `vortex.st.point` id.
+    WellKnown VORTEX_ST_POINT = WellKnown.VORTEX_ST_POINT;
+    /// Well-known `vortex.st.linestring` id.
+    WellKnown VORTEX_ST_LINESTRING = WellKnown.VORTEX_ST_LINESTRING;
+    /// Well-known `vortex.st.polygon` id.
+    WellKnown VORTEX_ST_POLYGON = WellKnown.VORTEX_ST_POLYGON;
+    /// Well-known `vortex.st.multipoint` id.
+    WellKnown VORTEX_ST_MULTIPOINT = WellKnown.VORTEX_ST_MULTIPOINT;
+    /// Well-known `vortex.st.multilinestring` id.
+    WellKnown VORTEX_ST_MULTILINESTRING = WellKnown.VORTEX_ST_MULTILINESTRING;
+    /// Well-known `vortex.st.multipolygon` id.
+    WellKnown VORTEX_ST_MULTIPOLYGON = WellKnown.VORTEX_ST_MULTIPOLYGON;
+    /// Well-known `vortex.st.box` id.
+    WellKnown VORTEX_ST_BOX = WellKnown.VORTEX_ST_BOX;
 }

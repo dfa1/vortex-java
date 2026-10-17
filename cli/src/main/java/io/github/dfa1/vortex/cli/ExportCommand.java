@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.inspect.ByteSize;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.parquet.ParquetExporter;
 import io.github.dfa1.vortex.reader.VortexHandle;
+import io.github.dfa1.vortex.reader.VortexReader;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -78,7 +79,8 @@ final class ExportCommand {
 
     private static int runCsv(Path inputPath, Path outputPath, boolean toStdout) throws IOException {
         ExportOptions options = ExportOptions.defaults()
-                .withProgressListener(ProgressBar::render);
+                .withProgressListener(ProgressBar::render)
+                .withReadRegistry(CliHandles.readRegistry());
         if (toStdout) {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
             CsvExporter.exportCsv(inputPath, stdout, options);
@@ -96,7 +98,9 @@ final class ExportCommand {
         io.github.dfa1.vortex.parquet.ExportOptions options =
                 io.github.dfa1.vortex.parquet.ExportOptions.defaults()
                         .withProgressListener(ProgressBar::render);
-        ParquetExporter.exportParquet(inputPath, outputPath, options);
+        try (VortexReader reader = VortexReader.open(inputPath, CliHandles.readRegistry())) {
+            ParquetExporter.exportParquet(reader, outputPath, options);
+        }
         ProgressBar.clear();
         printResult(inputPath, outputPath);
         return ExitStatus.OK;

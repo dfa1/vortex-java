@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.MemorySegment;
+import java.util.List;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -125,7 +126,17 @@ class ExtensionIdTest {
                     Arguments.of("uuid v4", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 4)),
                     Arguments.of("uuid max 0x0f", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 0x0f)),
                     Arguments.of("uuid max 0xff", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 0xff)),
-                    Arguments.of("date nullable storage", ext(ExtensionId.VORTEX_DATE, DType.I32.asNullable(), 4)));
+                    Arguments.of("date nullable storage", ext(ExtensionId.VORTEX_DATE, DType.I32.asNullable(), 4)),
+                    Arguments.of("json", ext(ExtensionId.VORTEX_JSON, DType.UTF8)),
+                    Arguments.of("wkb", ext(ExtensionId.VORTEX_ST_WKB, DType.BINARY)),
+                    Arguments.of("point xy", ext(ExtensionId.VORTEX_ST_POINT, coords("x", "y"))),
+                    Arguments.of("point xyzm", ext(ExtensionId.VORTEX_ST_POINT, coords("x", "y", "z", "m"))),
+                    Arguments.of("linestring", ext(ExtensionId.VORTEX_ST_LINESTRING, lists(coords("x", "y"), 1))),
+                    Arguments.of("multipoint", ext(ExtensionId.VORTEX_ST_MULTIPOINT, lists(coords("x", "y", "z"), 1))),
+                    Arguments.of("polygon", ext(ExtensionId.VORTEX_ST_POLYGON, lists(coords("x", "y"), 2))),
+                    Arguments.of("multilinestring", ext(ExtensionId.VORTEX_ST_MULTILINESTRING, lists(coords("x", "y", "m"), 2))),
+                    Arguments.of("multipolygon", ext(ExtensionId.VORTEX_ST_MULTIPOLYGON, lists(coords("x", "y"), 3))),
+                    Arguments.of("box xy", ext(ExtensionId.VORTEX_ST_BOX, coords("xmin", "ymin", "xmax", "ymax"))));
         }
 
         static Stream<Arguments> invalid() {
@@ -145,7 +156,18 @@ class ExtensionIdTest {
                     Arguments.of(ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 9), "unknown UUID version"),
                     Arguments.of(ext(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DType.U8, 8, false)), "FixedSizeList<non-null U8, 16>"),
                     Arguments.of(ext(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DType.U8.asNullable(), 16, false)), "FixedSizeList<non-null U8, 16>"),
-                    Arguments.of(ext(ExtensionId.VORTEX_UUID, DType.I64), "FixedSizeList<non-null U8, 16>"));
+                    Arguments.of(ext(ExtensionId.VORTEX_UUID, DType.I64), "FixedSizeList<non-null U8, 16>"),
+                    Arguments.of(ext(ExtensionId.VORTEX_JSON, DType.BINARY), "storage dtype must be Utf8"),
+                    Arguments.of(ext(ExtensionId.VORTEX_JSON, DType.UTF8, 1), "metadata must be empty"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_WKB, DType.UTF8), "storage dtype must be Binary"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_POINT, coords("y", "x")), "not a valid GeoArrow dimension"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_POINT, new DType.Struct(
+                            List.of(ColumnName.of("x"), ColumnName.of("y")), List.of(DType.F64, DType.F32), false)),
+                            "must be non-nullable F64"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_POINT, DType.F64), "must be a Struct"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_POLYGON, lists(coords("x", "y"), 1)), "must nest 2 List level(s)"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_MULTIPOLYGON, coords("x", "y")), "must nest 3 List level(s)"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_BOX, coords("x", "y")), "not a valid GeoArrow dimension"));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -180,6 +202,20 @@ class ExtensionIdTest {
         }
 
         private static final DType UUID_STORAGE = new DType.FixedSizeList(DType.U8, 16, false);
+
+        /// A GeoArrow coordinate (or box) struct of non-nullable F64 fields.
+        private static DType coords(String... names) {
+            return new DType.Struct(java.util.Arrays.stream(names).map(ColumnName::of).toList(),
+                    java.util.Arrays.stream(names).map(n -> (DType) DType.F64).toList(), false);
+        }
+
+        private static DType lists(DType element, int depth) {
+            DType out = element;
+            for (int i = 0; i < depth; i++) {
+                out = new DType.List(out, false);
+            }
+            return out;
+        }
 
         private static DType.Extension ext(ExtensionId id, DType storage, int... meta) {
             byte[] bytes = new byte[meta.length];

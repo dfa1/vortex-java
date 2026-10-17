@@ -654,6 +654,11 @@ even if the command fails, and the exit status is unchanged. The clock starts wh
 JVM's start-up (roughly half of a short command such as `count`: 33 ms of work in a 60 ms process on a 127 MB file).
 For the interactive `tui` and `view` it includes the time you spend in them.
 
+Any subcommand also takes `--allow-unknown`, anywhere on the command line: a file with an extension type the CLI has
+no decoder for opens, and those columns read as their storage (`ReadRegistry.Builder#allowUnknown()`). Without it
+such a file is refused, as the Rust reference refuses it. `vortex.json` and the `vortex.st.*` geometry types need no
+flag: they are well-known and always read as their storage.
+
 ### `filter` expression syntax
 
 ```

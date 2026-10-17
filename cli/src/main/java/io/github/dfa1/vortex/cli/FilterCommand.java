@@ -58,7 +58,8 @@ final class FilterCommand {
         RowPredicate rowPred = toRowPredicate(filter);
         try {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
-            CsvExporter.exportCsvFiltered(path, stdout, ExportOptions.defaults(), scanOptions, rowPred);
+            CsvExporter.exportCsvFiltered(path, stdout,
+                    ExportOptions.defaults().withReadRegistry(CliHandles.readRegistry()), scanOptions, rowPred);
             stdout.flush();
             return ExitStatus.OK;
         } catch (IOException | io.github.dfa1.vortex.core.error.VortexException e) {

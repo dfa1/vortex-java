@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.cli.tui.IoWorker;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.VortexHttpReader;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -88,9 +89,10 @@ final class CliHandles {
     /// @return the opened handle, or `null` if the target is missing or malformed
     /// @throws IOException if opening the file or URL fails
     static VortexHandle openTarget(String target) throws IOException {
+        ReadRegistry registry = readRegistry();
         if (target.startsWith("http://") || target.startsWith("https://")) {
             try {
-                return VortexHttpReader.open(new URI(target));
+                return VortexHttpReader.open(new URI(target), registry);
             } catch (URISyntaxException _) {
                 System.err.println("invalid URL: " + target);
                 return null;
@@ -101,6 +103,25 @@ final class CliHandles {
             System.err.println("file not found: " + path);
             return null;
         }
-        return VortexReader.open(path);
+        return VortexReader.open(path, registry);
+    }
+
+    // One CLI invocation per process; VortexCli.execute sets it before every dispatch.
+    private static ReadRegistry readRegistry = ReadRegistry.loadAll();
+
+    /// Sets whether files open with unknown extension ids allowed (the `--allow-unknown` flag).
+    ///
+    /// @param allowUnknown `true` to read unregistered extension types as their storage
+    static void allowUnknown(boolean allowUnknown) {
+        readRegistry = allowUnknown
+                ? ReadRegistry.builder().registerDefaults().allowUnknown().build()
+                : ReadRegistry.loadAll();
+    }
+
+    /// The registry every subcommand opens Vortex files with.
+    ///
+    /// @return the read registry for this invocation
+    static ReadRegistry readRegistry() {
+        return readRegistry;
     }
 }
