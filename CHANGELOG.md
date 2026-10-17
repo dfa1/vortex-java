@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.2] — 2026-10-17
+
 ### Changed
 - Cascading writes allocate about 13% less and run faster, from cheaper ALP-RD encoding, dictionary string statistics and float statistics. ([#543](https://github.com/dfa1/vortex-java/pull/543))
 - The opt-in Vector API kernels now sum floats and check 64-bit overflow exactly as Rust does. ([#535](https://github.com/dfa1/vortex-java/issues/535))
