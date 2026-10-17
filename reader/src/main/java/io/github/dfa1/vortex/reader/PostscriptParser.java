@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.core.model.PType;
@@ -151,6 +152,23 @@ final class PostscriptParser {
             throw new VortexException("blank encoding id at array spec index " + index);
         }
         return EncodingId.parse(raw);
+    }
+
+    /// Parses an extension dtype's wire id at the schema boundary, so every [DType.Extension] read
+    /// from a file carries an id [ExtensionId#parse] accepts. A missing, blank or control-character
+    /// id is untrusted-input corruption that would otherwise surface as an [IllegalArgumentException].
+    ///
+    /// @param raw the wire string from the extension dtype, or `null` when the field is absent
+    /// @return the typed [ExtensionId]
+    private static ExtensionId parseExtensionId(String raw) {
+        if (raw == null) {
+            throw new VortexException("extension dtype missing id");
+        }
+        try {
+            return ExtensionId.parse(raw);
+        } catch (IllegalArgumentException ex) {
+            throw new VortexException("invalid extension id in file schema: " + ex.getMessage());
+        }
     }
 
     /// Parses one layout-spec wire string to its [LayoutId] at the footer boundary. A blank id
@@ -322,7 +340,7 @@ final class PostscriptParser {
                 var e = fbs.type(new FbsExtension());
                 DType storage = convertDType(e.storageDtype(), depth + 1);
                 yield new DType.Extension(
-                        e.id(),
+                        parseExtensionId(e.id()).id(),
                         storage,
                         e.metadataAsSegment(),
                         storage.nullable());

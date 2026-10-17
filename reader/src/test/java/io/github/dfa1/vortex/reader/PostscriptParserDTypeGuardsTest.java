@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.fbs.FbsDType;
+import io.github.dfa1.vortex.core.fbs.FbsExtension;
 import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
@@ -109,6 +110,48 @@ class PostscriptParserDTypeGuardsTest {
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("blank encoding id at array spec index 0");
+    }
+
+    @Test
+    void convertDType_customExtensionId_isAccepted() {
+        // Given — an extension id this build has no constant for (Rust reads it as a foreign
+        // extension over its storage)
+        MemorySegment dtype = extensionDType("acme.geopoint");
+
+        // When
+        PostscriptParser.ParsedFile result = PostscriptParser.parseBlobs(minimalFooter(), flatLayout(), dtype);
+
+        // Then
+        assertThat(result.dtype()).isInstanceOfSatisfying(DType.Extension.class, ext ->
+                assertThat(ext.extensionId()).isEqualTo("acme.geopoint"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", "a\nb"})
+    void convertDType_invalidExtensionId_throwsVortexException(String id) {
+        // Given — an id ExtensionId.parse rejects with IllegalArgumentException; validating at the
+        // schema boundary lets every later ExtensionId.parse of a read dtype run unguarded
+        MemorySegment dtype = extensionDType(id);
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("invalid extension id in file schema");
+    }
+
+    @Test
+    void convertDType_extensionMissingId_throwsVortexException() {
+        // Given — FlatBuffers fields are optional on the wire; a crafted extension omits its id
+        MemorySegment dtype = extensionDType(null);
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("extension dtype missing id");
     }
 
     @Test
@@ -237,6 +280,23 @@ class PostscriptParserDTypeGuardsTest {
         return fbb.dataSegment();
     }
 
+
+    /// Builds an extension dtype blob over non-nullable I64 storage; a `null` id omits the field.
+    private static MemorySegment extensionDType(String id) {
+        var fbb = new FbsBuilder(256);
+        int storage = FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive,
+                FbsPrimitive.createFbsPrimitive(fbb, FbsPType.I64, false));
+        int idOff = id == null ? 0 : fbb.createString(id);
+        FbsExtension.startFbsExtension(fbb);
+        if (id != null) {
+            FbsExtension.addId(fbb, idOff);
+        }
+        FbsExtension.addStorageDtype(fbb, storage);
+        int ext = FbsExtension.endFbsExtension(fbb);
+        int root = FbsDType.createFbsDType(fbb, FbsType.FbsExtension, ext);
+        fbb.finish(root);
+        return fbb.dataSegment();
+    }
 
     private static MemorySegment footerWithArraySpec(String arraySpec) {
         var fbb = new FbsBuilder(256);

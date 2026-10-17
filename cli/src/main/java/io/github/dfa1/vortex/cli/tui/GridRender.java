@@ -99,11 +99,10 @@ final class GridRender {
     }
 
     private static Optional<String> formatExtension(DType.Extension ext, Array storage, long i) {
-        Optional<ExtensionId> idOpt = ExtensionId.parse(ext.extensionId());
-        if (idOpt.isEmpty()) {
+        if (!(ExtensionId.parse(ext.extensionId()) instanceof ExtensionId.WellKnown id)) {
             return Optional.empty();
         }
-        return Optional.of(switch (idOpt.get()) {
+        return Optional.of(switch (id) {
             case VORTEX_DATE -> DateExtensionDecoder.INSTANCE.decode(storage, i).toString();
             case VORTEX_TIME -> TimeExtensionDecoder.INSTANCE.decode(ext, storage, i).toString();
             case VORTEX_TIMESTAMP -> TimestampExtensionDecoder.INSTANCE.instant(ext, storage, i).toString();
