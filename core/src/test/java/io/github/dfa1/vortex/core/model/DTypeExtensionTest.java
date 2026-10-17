@@ -37,6 +37,22 @@ class DTypeExtensionTest {
     }
 
     @Test
+    void nativeMetadata_outlivesItsArena() {
+        // Given metadata sliced from off-heap memory, as a reader parses it out of the file mapping
+        DType.Extension result;
+        try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
+            MemorySegment meta = arena.allocate(2);
+            meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 3);
+
+            // When
+            result = new DType.Extension("vortex.timestamp", DType.I64, meta, false);
+        }
+
+        // Then — the dtype is still readable after the arena (the reader) is closed
+        assertThat(result.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) 3);
+    }
+
+    @Test
     void nullMetadata_accepted() {
         // Given / When / Then — date/uuid extensions carry no metadata; null must remain valid
         assertThat(new DType.Extension("vortex.date", I32, null, false).metadata()).isNull();
