@@ -421,6 +421,11 @@ Generated proto records live in `io.github.dfa1.vortex.core.proto`; the runtime 
   one for every encoding round-trip and file-format boundary. Include **filtered and row-range**
   vortex-jni reads, not just full scans: a full scan never prunes or slices, which hid a JVM abort
   (buffer alignment) and silently empty filtered results (zone stride) until 0.15.x.
+- **Every fix and feature gets a cross-check test against vortex-jni**, not only Java unit tests:
+  vortex-jni writes and Java reads, and/or Java writes and vortex-jni reads, asserting both agree.
+  Write it first, so it fails without the change. Java-only tests share Java's assumptions;
+  cross-checks are what caught unknown extension ids that Rust refuses, absent extension metadata
+  that made files unreadable, and `vortex.date` milliseconds read as days (#547).
 - JUnit 5 + Mockito (BDDMockito) + AssertJ. Class under test named `sut`. Every test has
   `// Given` / `// When` / `// Then`. BDDMockito only: `given(mock.m()).willReturn(v)` /
   `then(...)` (static-import only `given`/`then`, never `willReturn`/`willThrow`).
