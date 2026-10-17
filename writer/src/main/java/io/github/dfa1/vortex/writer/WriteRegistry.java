@@ -203,11 +203,16 @@ public final class WriteRegistry {
                     .register(new VarBinViewEncodingEncoder())
                     .register(new ZigZagEncodingEncoder())
                     .register(new ZstdEncodingEncoder());
-            register(DateExtensionEncoder.INSTANCE)
+            return registerDefaultExtensions();
+        }
+
+        /// Registers the built-in [ExtensionEncoder]s only — also the writer's extension set when
+        /// it is created without a [WriteRegistry].
+        Builder registerDefaultExtensions() {
+            return register(DateExtensionEncoder.INSTANCE)
                     .register(TimeExtensionEncoder.INSTANCE)
                     .register(TimestampExtensionEncoder.INSTANCE)
                     .register(UuidExtensionEncoder.INSTANCE);
-            return this;
         }
 
         /// Builds an immutable [WriteRegistry].

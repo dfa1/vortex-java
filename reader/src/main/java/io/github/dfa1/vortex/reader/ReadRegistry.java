@@ -87,7 +87,7 @@ public final class ReadRegistry {
         this.allowUnknown = allowUnknown;
     }
 
-    /// Loads all built-in [EncodingDecoder] implementations.
+    /// Loads all built-in [EncodingDecoder] and [ExtensionDecoder] implementations.
     ///
     /// @return an immutable [ReadRegistry] populated with all built-in decoders
     public static ReadRegistry loadAll() {
@@ -115,10 +115,11 @@ public final class ReadRegistry {
         return decoders;
     }
 
-    /// Returns whether passthrough decode for unknown encoding ids is enabled.
+    /// Returns whether passthrough decode for unknown encoding and extension ids is enabled.
     ///
     /// @return `true` if unknown encodings are silently wrapped as
-    ///         [io.github.dfa1.vortex.reader.array.UnknownArray]
+    ///         [io.github.dfa1.vortex.reader.array.UnknownArray] and unknown extension ids read as
+    ///         their storage array
     public boolean isAllowUnknown() {
         return allowUnknown;
     }
@@ -146,15 +147,18 @@ public final class ReadRegistry {
     /// [Builder#allowUnknown()] is set, when it reads as its storage (Rust's `ForeignExtDType`).
     /// The file parser has already checked every extension id.
     ///
-    /// @param dtype a file's schema
+    /// @param dtype a file's schema, or `null` when the file carries no dtype blob
     /// @throws VortexException if a registered decoder rejects its dtype, or an extension id has no
     ///         decoder and unknown ids are not allowed
     void validateExtensions(DType dtype) {
         switch (dtype) {
+            case null -> {
+                // a file without a dtype blob parses with no schema: nothing to check
+            }
             case DType.Extension ext -> {
                 ExtensionDecoder<?> decoder = extensions.get(ExtensionId.parse(ext.extensionId()));
                 if (decoder != null) {
-                    decoder.validate(ext);
+                    validate(decoder, ext);
                 } else if (!allowUnknown) {
                     throw new VortexException("no extension decoder registered for " + ext.extensionId()
                             + "; register one or enable ReadRegistry.Builder#allowUnknown()");
@@ -173,6 +177,19 @@ public final class ReadRegistry {
                  DType.Binary _, DType.Variant _ -> {
                 // no nested dtype
             }
+        }
+    }
+
+    /// Runs a decoder's [ExtensionDecoder#validate(DType.Extension)] on a dtype from an untrusted
+    /// file. A third-party check may trip over malformed metadata with any runtime exception;
+    /// reading a file must only ever fail with [VortexException].
+    private static void validate(ExtensionDecoder<?> decoder, DType.Extension ext) {
+        try {
+            decoder.validate(ext);
+        } catch (VortexException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new VortexException("extension " + ext.extensionId() + " rejected its dtype", e);
         }
     }
 
