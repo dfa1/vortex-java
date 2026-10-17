@@ -55,9 +55,13 @@ writer  — VortexWriter, WriteRegistry, WriteOptions, ColumnEncoding, Extension
           writer.encode — EncodingEncoder, EncodeContext, EncodeResult, EncodedBuffer, NullableData
           + *EncodingEncoder impls,
           extension encoders
+mapper  — io.github.dfa1.vortex.mapper: objects in and out as rows through explicit callbacks
+          (no reflection/annotations) — ColumnMapping (write: name + type + getter per column),
+          Rows.stream + Row (read: projection-first, cells by projection position)
 ```
 
 Dependency rule: `writer → core`, `reader → core`. **Writer never depends on reader.**
+`mapper` is the only library module that depends on both.
 `Array` and subtypes are decode outputs — they live in `reader.array`, not `core`.
 
 ## Branching

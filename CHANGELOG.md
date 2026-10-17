@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New `vortex-mapper` module reads and writes your own objects as rows: `ColumnMapping` declares each column with a getter, and `Rows.stream` maps a projected scan through a `Row` callback. ([#528](https://github.com/dfa1/vortex-java/issues/528))
 - `vortex.json` and the `vortex.st.*` geometry columns open without a decoder and read as their storage, as vortex-jni reads them. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - The CLI takes `--allow-unknown` to open files with extension types it has no decoder for, and CSV `ExportOptions.withReadRegistry` picks the registry an export opens the file with. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
