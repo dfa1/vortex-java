@@ -224,6 +224,7 @@ public final class VortexWriter implements Closeable {
         this.encodings = encodings;
         this.defaultRegistry = buildRegistry(encodings);
         this.extensionRegistry = extensionRegistry;
+        validateExtensions(schema);
         // A custom encoder list is the whole candidate set, cascade included: emitting a built-in
         // the caller left out would produce a file their own read registry may not decode.
         this.cascadeCodecs = encodings == DEFAULT_CODECS ? buildCascadeCodecs(options) : List.copyOf(encodings);
@@ -296,6 +297,33 @@ public final class VortexWriter implements Closeable {
             }
         }
         return Set.copyOf(excluded);
+    }
+
+    /// Runs [ExtensionEncoder#validate(DType.Extension)] on every extension dtype in `dtype`, nested
+    /// ones included, that has a registered encoder — Rust validates each extension dtype it builds.
+    private void validateExtensions(DType dtype) {
+        switch (dtype) {
+            case DType.Extension ext -> {
+                ExtensionEncoder encoder = extensionRegistry.lookup(
+                        io.github.dfa1.vortex.core.model.ExtensionId.parse(ext.extensionId()));
+                if (encoder != null) {
+                    encoder.validate(ext);
+                }
+                validateExtensions(ext.storageDType());
+            }
+            case DType.Struct struct -> struct.fieldTypes().forEach(this::validateExtensions);
+            case DType.List list -> validateExtensions(list.elementType());
+            case DType.FixedSizeList list -> validateExtensions(list.elementType());
+            case DType.Map map -> {
+                validateExtensions(map.keyType());
+                validateExtensions(map.valueType());
+            }
+            case DType.Union union -> union.variantTypes().forEach(this::validateExtensions);
+            case DType.Null _, DType.Bool _, DType.Primitive _, DType.Decimal _, DType.Utf8 _,
+                 DType.Binary _, DType.Variant _ -> {
+                // no nested dtype
+            }
+        }
     }
 
     /// Builds a [WriteRegistry] from the given encoder list.

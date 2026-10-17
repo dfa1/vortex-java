@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 /// `vortex.timestamp` — I64 epoch count plus optional IANA timezone.
-public final class TimestampExtensionDecoder implements ExtensionDecoder {
+public final class TimestampExtensionDecoder implements ExtensionDecoder<Instant> {
 
     /// Singleton instance.
     public static final TimestampExtensionDecoder INSTANCE = new TimestampExtensionDecoder();
@@ -26,6 +26,11 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_TIMESTAMP;
+    }
+
+    @Override
+    public Class<Instant> domainType() {
+        return Instant.class;
     }
 
     /// Returns the default dtype using milliseconds resolution and no timezone.
@@ -88,6 +93,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
     /// @param ext     declared extension dtype carrying the unit
     /// @param storage signed-integer storage array (optionally wrapped in `MaskedArray`)
     /// @return list of decoded instants in row order; `null` entries mark invalid rows
+    @Override
     public List<Instant> decodeAll(DType.Extension ext, Array storage) {
         int n = IoBounds.toIntSize(storage.length());
         List<Instant> out = new ArrayList<>(n);

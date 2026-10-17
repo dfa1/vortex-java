@@ -5,7 +5,9 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.core.model.Edition;
 import io.github.dfa1.vortex.core.model.Editions;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -47,15 +49,22 @@ import io.github.dfa1.vortex.reader.decode.VariantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ZstdBuffersEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ZstdEncodingDecoder;
+import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 
-/// Read-side registry: maps [EncodingId] to [EncodingDecoder] implementations.
+/// Read-side registry: maps [EncodingId] to [EncodingDecoder] implementations,
+/// and [ExtensionId] to [ExtensionDecoder] implementations.
 ///
 /// Instances are immutable after construction. Build one via [#builder()] or
 /// via the [#loadAll()] and [#empty()] convenience factories.
@@ -66,12 +75,15 @@ public final class ReadRegistry {
     // that string (EncodingId is not Comparable; a Custom key must not throw); order is not
     // load-bearing, but stable ordering keeps the registries consistent.
     private final Map<EncodingId, EncodingDecoder> decoders;
+    private final Map<ExtensionId, ExtensionDecoder<?>> extensions;
     private final boolean allowUnknown;
 
-    private ReadRegistry(Map<EncodingId, EncodingDecoder> decoders, boolean allowUnknown) {
+    private ReadRegistry(Map<EncodingId, EncodingDecoder> decoders,
+            Map<ExtensionId, ExtensionDecoder<?>> extensions, boolean allowUnknown) {
         var sorted = new TreeMap<EncodingId, EncodingDecoder>(Comparator.comparing(EncodingId::id));
         sorted.putAll(decoders);
         this.decoders = Collections.unmodifiableMap(sorted);
+        this.extensions = Map.copyOf(extensions);
         this.allowUnknown = allowUnknown;
     }
 
@@ -117,6 +129,51 @@ public final class ReadRegistry {
     /// @return `true` if a decoder is registered
     public boolean hasDecoder(EncodingId encodingId) {
         return decoders.containsKey(encodingId);
+    }
+
+    /// Returns the registered extension decoder for `extensionId`, or `null` if not registered.
+    /// A file with an unregistered extension id opens only with [Builder#allowUnknown()], and the
+    /// column then reads as its storage array (Rust's foreign extension).
+    ///
+    /// @param extensionId the extension id to look up
+    /// @return the registered [ExtensionDecoder], or `null`
+    public ExtensionDecoder<?> lookup(ExtensionId extensionId) {
+        return extensions.get(extensionId);
+    }
+
+    /// Checks every extension dtype in `dtype`, nested ones included, as Rust does when it
+    /// deserializes one: a registered decoder validates it; an unregistered id is refused unless
+    /// [Builder#allowUnknown()] is set, when it reads as its storage (Rust's `ForeignExtDType`).
+    /// The file parser has already checked every extension id.
+    ///
+    /// @param dtype a file's schema
+    /// @throws VortexException if a registered decoder rejects its dtype, or an extension id has no
+    ///         decoder and unknown ids are not allowed
+    void validateExtensions(DType dtype) {
+        switch (dtype) {
+            case DType.Extension ext -> {
+                ExtensionDecoder<?> decoder = extensions.get(ExtensionId.parse(ext.extensionId()));
+                if (decoder != null) {
+                    decoder.validate(ext);
+                } else if (!allowUnknown) {
+                    throw new VortexException("no extension decoder registered for " + ext.extensionId()
+                            + "; register one or enable ReadRegistry.Builder#allowUnknown()");
+                }
+                validateExtensions(ext.storageDType());
+            }
+            case DType.Struct struct -> struct.fieldTypes().forEach(this::validateExtensions);
+            case DType.List list -> validateExtensions(list.elementType());
+            case DType.FixedSizeList list -> validateExtensions(list.elementType());
+            case DType.Map map -> {
+                validateExtensions(map.keyType());
+                validateExtensions(map.valueType());
+            }
+            case DType.Union union -> union.variantTypes().forEach(this::validateExtensions);
+            case DType.Null _, DType.Bool _, DType.Primitive _, DType.Decimal _, DType.Utf8 _,
+                 DType.Binary _, DType.Variant _ -> {
+                // no nested dtype
+            }
+        }
     }
 
     /// Decodes the array described by `ctx`.
@@ -189,6 +246,7 @@ public final class ReadRegistry {
     public static final class Builder {
 
         private final Map<EncodingId, EncodingDecoder> decoders = new TreeMap<>(Comparator.comparing(EncodingId::id));
+        private final Map<ExtensionId, ExtensionDecoder<?>> extensions = new HashMap<>();
         private boolean allowUnknown = false;
 
         private Builder() {
@@ -207,11 +265,28 @@ public final class ReadRegistry {
             return this;
         }
 
-        /// Registers all built-in [EncodingDecoder] implementations.
+        /// Registers an extension decoder.
+        ///
+        /// @param extension the [ExtensionDecoder] to register
+        /// @return this builder, for chaining
+        /// @throws VortexException if an extension with the same id is already registered
+        public Builder register(ExtensionDecoder<?> extension) {
+            ExtensionDecoder<?> old = extensions.put(extension.extensionId(), extension);
+            if (old != null) {
+                throw new VortexException("extension %s already registered".formatted(extension.extensionId()));
+            }
+            return this;
+        }
+
+        /// Registers all built-in [EncodingDecoder] and [ExtensionDecoder] implementations.
         ///
         /// @return this builder, for chaining
-        /// @throws VortexException if a built-in decoder collides with one already registered
+        /// @throws VortexException if a built-in entry collides with one already registered
         public Builder registerDefaults() {
+            register(DateExtensionDecoder.INSTANCE)
+                    .register(TimeExtensionDecoder.INSTANCE)
+                    .register(TimestampExtensionDecoder.INSTANCE)
+                    .register(UuidExtensionDecoder.INSTANCE);
             return register(new AlpEncodingDecoder())
                     .register(new AlpRdEncodingDecoder())
                     .register(new BitpackedEncodingDecoder())
@@ -252,10 +327,11 @@ public final class ReadRegistry {
                     .register(new ZstdEncodingDecoder());
         }
 
-        /// Enable passthrough decode for unknown encoding ids.
+        /// Enable passthrough decode for unknown encoding and extension ids.
         ///
         /// Default is strict: unknown ids throw [VortexException]. When enabled, unknown
-        /// nodes are wrapped as [io.github.dfa1.vortex.reader.array.UnknownArray].
+        /// encoding nodes are wrapped as [io.github.dfa1.vortex.reader.array.UnknownArray], and
+        /// an extension id with no registered [ExtensionDecoder] reads as its storage array.
         /// Mirrors Rust `VortexSession::allow_unknown()`.
         ///
         /// @return this builder, for chaining
@@ -268,7 +344,7 @@ public final class ReadRegistry {
         ///
         /// @return the immutable registry
         public ReadRegistry build() {
-            return new ReadRegistry(decoders, allowUnknown);
+            return new ReadRegistry(decoders, extensions, allowUnknown);
         }
     }
 }
