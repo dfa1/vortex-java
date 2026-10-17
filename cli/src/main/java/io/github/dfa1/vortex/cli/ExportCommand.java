@@ -43,7 +43,7 @@ final class ExportCommand {
                 return runParquet(inputPath, outputPath);
             }
             return runCsv(inputPath, outputPath, toStdout);
-        } catch (IOException e) {
+        } catch (IOException | io.github.dfa1.vortex.core.error.VortexException e) {
             ProgressBar.clear();
             System.err.println("error: " + e.getMessage());
             return ExitStatus.ERROR;
@@ -69,7 +69,7 @@ final class ExportCommand {
             ProgressBar.clear();
             System.out.printf("written: %s  (%s)%n", outputPath, ByteSize.format(Files.size(outputPath)));
             return ExitStatus.OK;
-        } catch (IOException e) {
+        } catch (IOException | io.github.dfa1.vortex.core.error.VortexException e) {
             ProgressBar.clear();
             System.err.println("error: " + e.getMessage());
             return ExitStatus.ERROR;
