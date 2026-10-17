@@ -67,6 +67,7 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 | Type | Shape | Notes |
 |------|-------|-------|
 | `EncodingId` | `sealed interface` — `WellKnown` enum + `Custom` record | Array-encoding identity; total `parse(String)` over non-blank ids; constants re-exported (`EncodingId.VORTEX_PRIMITIVE`, …) |
+| `ExtensionId` | `sealed interface` — `WellKnown` enum + `Custom` record | Extension-type identity (`vortex.date`/`time`/`timestamp`/`uuid` well-known); same `parse(String)` and `Custom` policy as `EncodingId`. `DType.Extension` still carries the raw string; the file parser rejects ids `parse` would refuse |
 | `LayoutId` | `sealed interface` — `WellKnown` enum + `Custom` record | Layout identity (separate namespace from encodings; `vortex.flat` is layout-only); both zoned aliases `vortex.zoned`/`vortex.stats` |
 | `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
 | `MemorySize` | `record MemorySize(long bytes)` | Validated non-negative byte count; `ofKiB`/`ofMiB`/`ofGiB` factories, `toGiB()` for display. Rejects negative values (`IllegalArgumentException`) — a programmer-error guard, not a `VortexException`-worthy untrusted-input check |
@@ -267,7 +268,7 @@ never desync.
 | `rowCount()`                                | Rows in this chunk                                       |
 | `columns()`                                 | `SequencedMap<ColumnName, Chunk.Column>`, schema order, unmodifiable |
 | `<T extends Array> column(ColumnName name)` | Typed column lookup; throws `VortexException` if absent  |
-| `as(ColumnName name, Class<T> domainType)` | Extension column → typed `List<T>`                       |
+| `as(ColumnName name, Class<T> domainType)` | Extension column → typed `List<T>`, via the registered `ExtensionDecoder` |
 | `isClosed()`                                | Whether `close()` has run                                |
 | `close()`                                   | Releases the chunk's arena. Idempotent.                  |
 
@@ -282,9 +283,10 @@ Immutable after construction. Build via `ReadRegistry.builder()` or the static c
 | Method                      | Notes                                                                        |
 |-----------------------------|------------------------------------------------------------------------------|
 | `static builder()`          | Returns a fresh `Builder`                                                    |
-| `static loadAll()`          | Immutable registry populated with all built-in decoders                      |
+| `static loadAll()`          | Immutable registry populated with all built-in decoders and extension decoders |
 | `static empty()`            | Immutable empty registry (strict mode)                                       |
 | `hasDecoder(EncodingId)`    | Lookup                                                                       |
+| `lookup(ExtensionId)`       | Registered `ExtensionDecoder` for the id, or `null`                          |
 | `isAllowUnknown()`          | Predicate                                                                    |
 
 ### `ReadRegistry.Builder`
@@ -292,14 +294,16 @@ Immutable after construction. Build via `ReadRegistry.builder()` or the static c
 | Method                       | Notes                                                                                    |
 |------------------------------|------------------------------------------------------------------------------------------|
 | `register(EncodingDecoder)`  | Add a custom encoding decoder; throws if already registered                              |
-| `registerDefaults()`         | Add every built-in `EncodingDecoder`                                                     |
-| `allowUnknown()`             | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray` |
+| `register(ExtensionDecoder)` | Add an extension decoder, keyed by `ExtensionDecoder#extensionId()`; throws on duplicate |
+| `registerDefaults()`         | Add every built-in `EncodingDecoder` and `ExtensionDecoder`                              |
+| `allowUnknown()`             | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray`, and an extension id with no decoder reads as its storage array |
 | `build()`                    | Produce the immutable `ReadRegistry`                                                     |
 
-Register custom encoding decoders programmatically via `register(EncodingDecoder)` — there is no
-`ServiceLoader` discovery. Extension decoders
-(`io.github.dfa1.vortex.reader.extension.ExtensionDecoder`) are not registry-managed: the built-in
-implementations are singletons invoked directly by their `ExtensionId`.
+Register custom encoding and extension decoders programmatically via `register(...)` — there is no
+`ServiceLoader` discovery. `Chunk.as(name, Class)` decodes an extension column through the
+`ExtensionDecoder` registered for its id. Opening a file runs each registered decoder's
+`validate(DType.Extension)` on its dtypes, and refuses an extension id with no decoder unless
+`allowUnknown()` is set — Rust's behavior for an id its session has no vtable for.
 
 ### `WriteRegistry` (`io.github.dfa1.vortex.writer.WriteRegistry`)
 
@@ -327,12 +331,12 @@ convenience factories.
 `EncodingId` is a sealed `WellKnown`/`Custom` type (see [Identity types](#identity-types-iogithubdfa1vortexcoremodel)),
 so `register(EncodingEncoder)` accepts a genuinely third-party encoding — `encodingId()` can return
 `new EncodingId.Custom("acme.myencoding")`, and `VortexWriter.create(channel, schema, options,
-registry)` will pick it whenever its `accepts(DType)` matches. `ExtensionId`, by contrast, is a
-**closed enum** with only the four spec-defined constants (`VORTEX_DATE`/`VORTEX_TIME`/
-`VORTEX_TIMESTAMP`/`VORTEX_UUID`) — `register(ExtensionEncoder)` can only re-implement one of
-those four, not introduce a wire-new extension type; adding a genuinely new extension type means
-adding an `ExtensionId` constant in `core` itself (see [CLAUDE.md § Adding an extension
-type](../CLAUDE.md#adding-an-extension-type)).
+registry)` will pick it whenever its `accepts(DType)` matches. `ExtensionId` has the same shape, so
+`register(ExtensionEncoder)` accepts a third-party extension type: `VortexWriter.create(channel,
+schema, options, registry)` runs its `validate(DType.Extension)` on the schema and routes a
+`Collection` for a top-level column with that id through `encodeAll`. A `Collection` for an
+extension id with no registered encoder fails with `VortexException`; the storage array itself can
+always be written. See [how-to.md § Add a custom extension type](how-to.md#add-a-custom-extension-type).
 
 ---
 

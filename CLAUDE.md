@@ -192,11 +192,14 @@ Add an `EncodingId.WellKnown` constant `VORTEX_FOO("vortex.foo")` (re-exported o
 
 ### Adding an extension type
 
-Add `ExtensionId` constant, then per side:
-- **Decode:** singleton `FooExtensionDecoder implements ExtensionDecoder` in `reader.extension` +
-  a `case VORTEX_FOO` in `Chunk.as()` — not registry-managed.
-- **Encode:** `FooExtensionEncoder implements ExtensionEncoder` in `writer` + a
+Add an `ExtensionId.WellKnown` constant `VORTEX_FOO("vortex.foo")` (re-exported on the interface), then per side:
+- **Decode:** singleton `FooExtensionDecoder implements ExtensionDecoder<Domain>` in `reader.extension` +
+  a `.register(FooExtensionDecoder.INSTANCE)` call in `ReadRegistry.Builder#registerDefaults()`.
+- **Encode:** `FooExtensionEncoder implements ExtensionEncoder` in `writer.encode` + a
   `.register(FooExtensionEncoder.INSTANCE)` call in `WriteRegistry.Builder#registerDefaults()`
+  (and in `VortexWriter.DEFAULT_EXTENSIONS`).
+- Both may override `validate(DType.Extension)` (Rust's `validate_dtype`). Third-party types skip the
+  constant: `ExtensionId.parse("acme.foo")` gives a `Custom` id, registered the same way.
 
 ## Memory model
 
@@ -267,8 +270,9 @@ When stuck on encode/decode behavior, consult **in this order**:
 
 - **DType is pluggable only via `Extension`.** `DType` is a sealed interface; downstream code must
   not add variants. Use `new DType.Extension("ip.address", new DType.Primitive(PType.I32, false),
-  null, false)` and register decoders/encoders on the registries.
-  Mirrors Rust (`vortex.date`, `vortex.uuid`, …). No SPI for DType variants planned.
+  null, false)` and register an `ExtensionDecoder`/`ExtensionEncoder` on `ReadRegistry`/`WriteRegistry`.
+  Mirrors Rust's `ExtVTable` (`vortex.date`, `vortex.uuid`, …): an unregistered id fails the read
+  unless `allowUnknown()`, then reads as storage. No SPI for DType variants planned.
 - **Encoding and layout decode are both pluggable via builder-only registries** — no
   `ServiceLoader`. Encodings register on `ReadRegistry`/`WriteRegistry`
   (`ReadRegistry.builder().registerDefaults().register(custom).build()`); layouts register on

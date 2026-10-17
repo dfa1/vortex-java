@@ -868,10 +868,148 @@ try (VortexReader vf = VortexReader.open(Path.of("data.vortex"), readRegistry)) 
 }
 ```
 
-`ExtensionId` (the `vortex.date`/`vortex.time`/`vortex.timestamp`/`vortex.uuid` family) is a
-**closed enum**, unlike `EncodingId` — a custom `ExtensionEncoder`/`ExtensionDecoder` pair can only
-re-implement one of those four spec-defined ids, not introduce a wire-new extension type from
-outside the codebase.
+---
+
+## Add a custom extension type
+
+An extension type gives a storage dtype a logical meaning, as `vortex.timestamp` does for `I64`.
+`ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so a third party names its
+own id, writes domain values through an `ExtensionEncoder` and reads them back through an
+`ExtensionDecoder` — the Java side of Rust's `ExtVTable`. Both sides may override `validate` (Rust's
+`validate_dtype`), run on every dtype with that id when the writer is created and when a file is
+opened.
+
+The example is a money column with one currency per column: amounts are `I64` minor units
+(cents for EUR), and the ISO 4217 code is the extension metadata, as a timestamp keeps its zone.
+Never store money as a float.
+
+**Write side:**
+
+```java
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.writer.ExtensionEncoder;
+
+import java.lang.foreign.ValueLayout;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.Collection;
+import java.util.Currency;
+
+final class MoneyEncoder implements ExtensionEncoder {
+    static final ExtensionId ID = ExtensionId.parse("acme.money");
+
+    static DType.Extension dtype(Currency currency) {
+        byte[] code = currency.getCurrencyCode().getBytes(StandardCharsets.US_ASCII);
+        return new DType.Extension(ID.id(), DType.I64, MemorySegment.ofArray(code), false);
+    }
+
+    @Override
+    public ExtensionId extensionId() {
+        return ID;
+    }
+
+    @Override
+    public DType.Extension dtype(boolean nullable) {
+        return dtype(Currency.getInstance("EUR"));
+    }
+
+    @Override
+    public void validate(DType.Extension dtype) {
+        if (!dtype.storageDType().equals(DType.I64)) {
+            throw new VortexException("acme.money storage must be non-nullable I64");
+        }
+        currency(dtype); // rejects a code that is not ISO 4217
+    }
+
+    @Override
+    public Object encodeAll(DType.Extension dtype, Collection<?> values) {
+        int digits = currency(dtype).getDefaultFractionDigits();
+        long[] minorUnits = new long[values.size()];
+        int i = 0;
+        for (Object value : values) {
+            // throws on an amount finer than the currency's minor unit (e.g. 0.001 EUR)
+            minorUnits[i++] = ((BigDecimal) value).movePointRight(digits).longValueExact();
+        }
+        return minorUnits;
+    }
+
+    static Currency currency(DType.Extension dtype) {
+        return Currency.getInstance(new String(dtype.metadata().toArray(ValueLayout.JAVA_BYTE),
+                StandardCharsets.US_ASCII));
+    }
+}
+
+DType.Struct schema = new DType.Struct(List.of(ColumnName.of("price")),
+        List.of(MoneyEncoder.dtype(Currency.getInstance("EUR"))), false);
+WriteRegistry registry = WriteRegistry.builder().registerDefaults().register(new MoneyEncoder()).build();
+
+try (var ch = FileChannel.open(Path.of("prices.vortex"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+     var writer = VortexWriter.create(ch, schema, WriteOptions.defaults(), registry)) {
+    writer.writeChunk(chunk -> chunk.put(ColumnName.of("price"),
+            List.of(new BigDecimal("9.99"), new BigDecimal("120.50"))));
+}
+```
+
+**Read side:**
+
+```java
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
+
+import java.util.ArrayList;
+
+final class MoneyDecoder implements ExtensionDecoder<BigDecimal> {
+    static final ExtensionId ID = ExtensionId.parse("acme.money");
+
+    @Override
+    public ExtensionId extensionId() {
+        return ID;
+    }
+
+    @Override
+    public DType.Extension dtype(boolean nullable) {
+        byte[] code = "EUR".getBytes(StandardCharsets.US_ASCII);
+        return new DType.Extension(ID.id(), DType.I64, MemorySegment.ofArray(code), false);
+    }
+
+    @Override
+    public Class<BigDecimal> domainType() {
+        return BigDecimal.class;
+    }
+
+    @Override
+    public List<BigDecimal> decodeAll(DType.Extension dtype, Array storage) {
+        Currency currency = Currency.getInstance(new String(dtype.metadata().toArray(ValueLayout.JAVA_BYTE),
+                StandardCharsets.US_ASCII));
+        LongArray minorUnits = (LongArray) storage;
+        List<BigDecimal> out = new ArrayList<>();
+        for (long i = 0; i < minorUnits.length(); i++) {
+            out.add(BigDecimal.valueOf(minorUnits.getLong(i), currency.getDefaultFractionDigits()));
+        }
+        return out;
+    }
+}
+
+ReadRegistry readRegistry = ReadRegistry.builder().registerDefaults().register(new MoneyDecoder()).build();
+
+try (VortexReader vf = VortexReader.open(Path.of("prices.vortex"), readRegistry);
+     var iter = vf.scan(ScanOptions.all())) {
+    while (iter.hasNext()) {
+        try (Chunk chunk = iter.next()) {
+            List<BigDecimal> prices = chunk.as(ColumnName.of("price"), BigDecimal.class); // 9.99, 120.50
+        }
+    }
+}
+```
+
+`validate` checks the dtype, not the values: per-value rules belong in `encodeAll`. Filters and zone
+maps see the stored `I64`. A reader without the decoder — including the Rust reference — refuses
+the file, as Rust does for an extension id its session has no vtable for; with
+`ReadRegistry.Builder#allowUnknown()` the column reads as its storage array. Writing a `Collection`
+for an extension column needs a registered encoder; the storage array itself (`long[]` here) can
+always be written. Auto-routing a `Collection` applies to top-level columns only.
 
 ---
 

@@ -123,6 +123,13 @@ public final class VortexWriter implements Closeable {
             new DictEncodingEncoder(), new VarBinEncodingEncoder(), new ExtEncodingEncoder(),
             new FixedSizeListEncodingEncoder(), new ListEncodingEncoder(), new DecimalEncodingEncoder());
 
+    private static final WriteRegistry DEFAULT_EXTENSIONS = WriteRegistry.builder()
+            .register(DateExtensionEncoder.INSTANCE)
+            .register(TimeExtensionEncoder.INSTANCE)
+            .register(TimestampExtensionEncoder.INSTANCE)
+            .register(UuidExtensionEncoder.INSTANCE)
+            .build();
+
     // Base cascade codec list — no Zstd or Pco. They are appended (before PrimitiveEncoding) when
     // WriteOptions.compact() is true. See WriteOptions.withCompact(boolean) for the tradeoff.
 
@@ -131,6 +138,8 @@ public final class VortexWriter implements Closeable {
     private final WriteOptions options;
     private final List<EncodingEncoder> encodings;
     private final WriteRegistry defaultRegistry;
+    // Extension encoders for the Collection auto-route: the built-ins, or the caller's registry.
+    private final WriteRegistry extensionRegistry;
     private final List<EncodingEncoder> cascadeCodecs;
     private final WriteRegistry cascadeRegistry;
     private final List<SegRef> segs = new ArrayList<>();
@@ -193,7 +202,8 @@ public final class VortexWriter implements Closeable {
     private int submittedSegments = 0;
 
     private VortexWriter(
-            WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings
+            WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings,
+            WriteRegistry extensionRegistry
     ) {
         // Wire contract, enforced by the reference writer ("StructLayout must have unique field
         // names"): duplicate-name schemas are constructible via the DType.Struct record (only
@@ -213,6 +223,8 @@ public final class VortexWriter implements Closeable {
         this.dictRetainedBudget = options.globalDictMaxRetainedBytes().bytes();
         this.encodings = encodings;
         this.defaultRegistry = buildRegistry(encodings);
+        this.extensionRegistry = extensionRegistry;
+        validateExtensions(schema);
         // A custom encoder list is the whole candidate set, cascade included: emitting a built-in
         // the caller left out would produce a file their own read registry may not decode.
         this.cascadeCodecs = encodings == DEFAULT_CODECS ? buildCascadeCodecs(options) : List.copyOf(encodings);
@@ -287,16 +299,39 @@ public final class VortexWriter implements Closeable {
         return Set.copyOf(excluded);
     }
 
-    /// Builds a [WriteRegistry] from the given encoder list plus all built-in extension encoders.
+    /// Runs [ExtensionEncoder#validate(DType.Extension)] on every extension dtype in `dtype`, nested
+    /// ones included, that has a registered encoder — Rust validates each extension dtype it builds.
+    private void validateExtensions(DType dtype) {
+        switch (dtype) {
+            case DType.Extension ext -> {
+                ExtensionEncoder encoder = extensionRegistry.lookup(
+                        io.github.dfa1.vortex.core.model.ExtensionId.parse(ext.extensionId()));
+                if (encoder != null) {
+                    encoder.validate(ext);
+                }
+                validateExtensions(ext.storageDType());
+            }
+            case DType.Struct struct -> struct.fieldTypes().forEach(this::validateExtensions);
+            case DType.List list -> validateExtensions(list.elementType());
+            case DType.FixedSizeList list -> validateExtensions(list.elementType());
+            case DType.Map map -> {
+                validateExtensions(map.keyType());
+                validateExtensions(map.valueType());
+            }
+            case DType.Union union -> union.variantTypes().forEach(this::validateExtensions);
+            case DType.Null _, DType.Bool _, DType.Primitive _, DType.Decimal _, DType.Utf8 _,
+                 DType.Binary _, DType.Variant _ -> {
+                // no nested dtype
+            }
+        }
+    }
+
+    /// Builds a [WriteRegistry] from the given encoder list.
     private static WriteRegistry buildRegistry(List<EncodingEncoder> encoders) {
         WriteRegistry.Builder b = WriteRegistry.builder();
         for (EncodingEncoder e : encoders) {
             b.register(e);
         }
-        b.register(DateExtensionEncoder.INSTANCE)
-                .register(TimeExtensionEncoder.INSTANCE)
-                .register(TimestampExtensionEncoder.INSTANCE)
-                .register(UuidExtensionEncoder.INSTANCE);
         return b.build();
     }
 
@@ -378,7 +413,7 @@ public final class VortexWriter implements Closeable {
     public static VortexWriter create(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options
     ) {
-        return new VortexWriter(channel, schema, options, DEFAULT_CODECS);
+        return new VortexWriter(channel, schema, options, DEFAULT_CODECS, DEFAULT_EXTENSIONS);
     }
 
     /// Creates a [VortexWriter] with a custom encoder list.
@@ -395,7 +430,7 @@ public final class VortexWriter implements Closeable {
     ) {
         // Custom encoding list: disable global dict — using DEFAULT_CODECS for values/codes behind the scenes
         // would violate the user's expectation that only their encoding list is used.
-        return new VortexWriter(channel, schema, options.withGlobalDict(false), encodings);
+        return new VortexWriter(channel, schema, options.withGlobalDict(false), encodings, DEFAULT_EXTENSIONS);
     }
 
     /// Creates a [VortexWriter] with a custom [WriteRegistry].
@@ -409,7 +444,7 @@ public final class VortexWriter implements Closeable {
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, WriteRegistry registry
     ) {
         return new VortexWriter(channel, schema, options.withGlobalDict(false),
-                List.copyOf(registry.encoderMap().values()));
+                List.copyOf(registry.encoderMap().values()), registry);
     }
 
     /// Counts rows for the length-consistency check in [#writeChunk]. Accepts the
@@ -555,14 +590,16 @@ public final class VortexWriter implements Closeable {
             // ExtEncoding wraps the storage child below — matches Rust's nested layout
             // (ExtEncoding → PrimitiveEncoding) and lets Registry skip its unwrap path.
             if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
-                ExtensionEncoder impl =
-                        io.github.dfa1.vortex.core.model.ExtensionId.parse(extDtype.extensionId())
-                                .map(defaultRegistry::lookup)
-                                .orElse(null);
-                if (impl != null) {
-                    data = impl.encodeAll(extDtype, coll);
-                    adapted.put(colName, data);
+                ExtensionEncoder impl = extensionRegistry.lookup(
+                        io.github.dfa1.vortex.core.model.ExtensionId.parse(extDtype.extensionId()));
+                if (impl == null) {
+                    // Without an encoder the Collection would reach the encoders unconverted and
+                    // fail far from the cause; raw storage arrays still pass through.
+                    throw new VortexException("column '" + colName + "': no extension encoder registered for "
+                            + extDtype.extensionId() + "; register one or pass the storage array");
                 }
+                data = impl.encodeAll(extDtype, coll);
+                adapted.put(colName, data);
             }
 
             // Sizing a string batch reads every string and was the caller thread's largest cost

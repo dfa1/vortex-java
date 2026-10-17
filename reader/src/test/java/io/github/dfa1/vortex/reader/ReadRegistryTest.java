@@ -4,7 +4,12 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
@@ -12,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -199,6 +205,68 @@ class ReadRegistryTest {
     private static EncodingDecoder decoder(EncodingId id) {
         EncodingDecoder decoder = mock(EncodingDecoder.class);
         given(decoder.encodingId()).willReturn(id);
+        return decoder;
+    }
+
+    @Test
+    void registerExtension_lookupFindsCustomAndBuiltIn() {
+        // Given — a Custom id next to the built-ins registerDefaults() adds
+        ExtensionDecoder<?> custom = extension("acme.geopoint");
+
+        // When
+        ReadRegistry result = ReadRegistry.builder().registerDefaults().register(custom).build();
+
+        // Then
+        assertThat(result.lookup(ExtensionId.parse("acme.geopoint"))).isSameAs(custom);
+        assertThat(result.lookup(ExtensionId.VORTEX_DATE)).isSameAs(DateExtensionDecoder.INSTANCE);
+    }
+
+    @Test
+    void registerExtension_duplicateId_throws() {
+        // Given
+        ReadRegistry.Builder sut = ReadRegistry.builder().register(extension("acme.geopoint"));
+        ExtensionDecoder<?> duplicate = extension("acme.geopoint");
+
+        // When / Then
+        assertThatThrownBy(() -> sut.register(duplicate))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    void validateExtensions_unregisteredNestedId_throwsUnlessAllowUnknown() {
+        // Given — the unknown id sits inside a list inside a struct: Rust checks every extension
+        // dtype it deserializes, not only top-level columns
+        DType schema = new DType.Struct(List.of(ColumnName.of("c")),
+                List.of(new DType.List(new DType.Extension("acme.geopoint", DTypes.I32, null, false), false)), false);
+        ReadRegistry strict = ReadRegistry.loadAll();
+        ReadRegistry lenient = ReadRegistry.builder().registerDefaults().allowUnknown().build();
+
+        // When / Then
+        assertThatThrownBy(() -> strict.validateExtensions(schema))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("no extension decoder registered for acme.geopoint");
+        lenient.validateExtensions(schema);
+    }
+
+    @Test
+    void validateExtensions_registeredDecoder_runsItsValidate() {
+        // Given — a decoder whose validate refuses every dtype
+        ExtensionDecoder<?> refusing = extension("acme.geopoint");
+        org.mockito.BDDMockito.willThrow(new VortexException("bad geopoint")).given(refusing).validate(org.mockito.ArgumentMatchers.any());
+        ReadRegistry sut = ReadRegistry.builder().register(refusing).build();
+        DType schema = new DType.Struct(List.of(ColumnName.of("c")),
+                List.of(new DType.Extension("acme.geopoint", DTypes.I32, null, false)), false);
+
+        // When / Then
+        assertThatThrownBy(() -> sut.validateExtensions(schema))
+                .isInstanceOf(VortexException.class)
+                .hasMessage("bad geopoint");
+    }
+
+    private static ExtensionDecoder<?> extension(String id) {
+        ExtensionDecoder<?> decoder = mock(ExtensionDecoder.class);
+        given(decoder.extensionId()).willReturn(ExtensionId.parse(id));
         return decoder;
     }
 }

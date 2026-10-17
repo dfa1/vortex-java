@@ -583,10 +583,11 @@ public final class HtmlReport {
             return raw;
         }
         try {
-            return switch (ExtensionId.parse(ext.extensionId()).orElse(null)) {
-                case VORTEX_TIMESTAMP -> ExtensionStorage.instantFromRaw(epoch, ExtensionStorage.readUnit(ext));
-                case VORTEX_DATE -> LocalDate.ofEpochDay(epoch);
-                case null, default -> raw;
+            return switch (ExtensionId.parse(ext.extensionId())) {
+                case ExtensionId.WellKnown.VORTEX_TIMESTAMP ->
+                        ExtensionStorage.instantFromRaw(epoch, ExtensionStorage.readUnit(ext));
+                case ExtensionId.WellKnown.VORTEX_DATE -> LocalDate.ofEpochDay(epoch);
+                default -> raw;
             };
         } catch (RuntimeException e) {
             return raw;

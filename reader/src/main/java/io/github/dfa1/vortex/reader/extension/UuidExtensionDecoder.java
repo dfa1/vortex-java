@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 /// `vortex.uuid` — 16-byte UUID stored as `FixedSizeList(Primitive(U8), 16)`.
-public final class UuidExtensionDecoder implements ExtensionDecoder {
+public final class UuidExtensionDecoder implements ExtensionDecoder<UUID> {
 
     /// Singleton instance.
     public static final UuidExtensionDecoder INSTANCE = new UuidExtensionDecoder();
@@ -22,6 +22,16 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_UUID;
+    }
+
+    @Override
+    public Class<UUID> domainType() {
+        return UUID.class;
+    }
+
+    @Override
+    public List<UUID> decodeAll(DType.Extension dtype, Array storage) {
+        return decodeAll(storage);
     }
 
     @Override

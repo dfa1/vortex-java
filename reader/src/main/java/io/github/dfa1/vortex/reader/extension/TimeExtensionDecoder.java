@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /// `vortex.time` — sub-day count in the [TimeUnit] recorded in the metadata byte.
-public final class TimeExtensionDecoder implements ExtensionDecoder {
+public final class TimeExtensionDecoder implements ExtensionDecoder<LocalTime> {
 
     /// Singleton instance.
     public static final TimeExtensionDecoder INSTANCE = new TimeExtensionDecoder();
@@ -22,6 +22,11 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_TIME;
+    }
+
+    @Override
+    public Class<LocalTime> domainType() {
+        return LocalTime.class;
     }
 
     /// Returns the default dtype using [TimeUnit#Milliseconds] over I32 storage.
@@ -65,6 +70,7 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
     /// @param ext     declared extension dtype carrying the unit
     /// @param storage signed-integer storage array (optionally wrapped in `MaskedArray`)
     /// @return list of decoded times in row order; `null` entries mark invalid rows
+    @Override
     public List<LocalTime> decodeAll(DType.Extension ext, Array storage) {
         int n = IoBounds.toIntSize(storage.length());
         List<LocalTime> out = new ArrayList<>(n);

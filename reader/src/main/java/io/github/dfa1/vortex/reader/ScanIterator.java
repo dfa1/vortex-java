@@ -350,7 +350,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 columns = limitedColumns(columns, chunkRows);
             }
             rowsReturned += chunkRows;
-            Chunk chunk = new Chunk(chunkRows, columns, arena, this::onChunkClosed);
+            Chunk chunk = new Chunk(chunkRows, columns, arena, file.registry(), this::onChunkClosed);
             openChunk = chunk;
             return chunk;
         } catch (RuntimeException e) {
@@ -395,7 +395,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Arena arena = Arena.ofConfined();
         try {
             SequencedMap<ColumnName, Chunk.Column> columns = buildSelfContainedColumnMap(spec, arena);
-            return new Chunk(spec.rowCount(), columns, arena, _ -> { });
+            return new Chunk(spec.rowCount(), columns, arena, file.registry(), _ -> { });
         } catch (RuntimeException e) {
             arena.close();
             throw e;

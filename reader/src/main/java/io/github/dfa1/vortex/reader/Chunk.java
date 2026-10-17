@@ -5,19 +5,12 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.core.model.ExtensionId;
-import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
-import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
-import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
-import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 
 import java.lang.foreign.Arena;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.SequencedMap;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 /// One decoded row group returned by [ScanIterator#next()].
@@ -49,14 +42,16 @@ public final class Chunk implements AutoCloseable {
     private final long rowCount;
     private final SequencedMap<ColumnName, Column> columns;
     private final Arena arena;
+    private final ReadRegistry registry;
     private final Consumer<Chunk> onClose;
     private boolean closed;
 
     Chunk(long rowCount, SequencedMap<ColumnName, Column> columns,
-            Arena arena, Consumer<Chunk> onClose) {
+            Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
         this.rowCount = rowCount;
         this.columns = Objects.requireNonNull(columns);
         this.arena = Objects.requireNonNull(arena);
+        this.registry = Objects.requireNonNull(registry);
         this.onClose = Objects.requireNonNull(onClose);
     }
 
@@ -109,25 +104,21 @@ public final class Chunk implements AutoCloseable {
         return (T) col.array();
     }
 
-    /// Decodes an extension column into a typed `List<T>` of domain values.
-    ///
-    /// Hides extension-decode boilerplate for the four spec extensions:
+    /// Decodes an extension column into a typed `List<T>` of domain values, through the
+    /// [io.github.dfa1.vortex.reader.extension.ExtensionDecoder] registered for the column's
+    /// extension id on the [ReadRegistry] the file was opened with:
     ///
     /// ```java
     /// List<LocalDate> dates = chunk.as(ColumnName.of("birthdays"), LocalDate.class);
     /// List<Instant>   ts    = chunk.as(ColumnName.of("events"), Instant.class);
     /// ```
     ///
-    /// Third-party extensions call the extension's own typed methods directly —
-    /// this accessor is closed over the spec set.
-    ///
     /// @param name       column name as declared in the file's schema
-    /// @param domainType the spec extension's Java domain type (e.g. [LocalDate] for
-    ///                   `vortex.date`, [Instant] for `vortex.timestamp`)
+    /// @param domainType the decoder's domain type (e.g. [java.time.LocalDate] for `vortex.date`)
     /// @param <T>        domain element type
     /// @return decoded values in row order
-    /// @throws VortexException if `name` isn't present, isn't an extension column,
-    ///         or the requested `domainType` doesn't match the column's extension id
+    /// @throws VortexException if `name` isn't present, isn't an extension column, has no
+    ///         registered decoder, or the decoder's domain type isn't `domainType`
     @SuppressWarnings("unchecked")
     public <T> List<T> as(ColumnName name, Class<T> domainType) {
         Column col = columns.get(name);
@@ -137,35 +128,16 @@ public final class Chunk implements AutoCloseable {
         if (!(col.dtype() instanceof DType.Extension ext)) {
             throw new VortexException("not an extension column: " + name);
         }
-        ExtensionId id = ExtensionId.parse(ext.extensionId())
-                .orElseThrow(() -> new VortexException("not a spec extension id: " + ext.extensionId()));
-        Array storage = col.array();
-        Object result = switch (id) {
-            case VORTEX_DATE -> {
-                requireDomainType(name, domainType, LocalDate.class);
-                yield DateExtensionDecoder.INSTANCE.decodeAll(storage);
-            }
-            case VORTEX_TIME -> {
-                requireDomainType(name, domainType, LocalTime.class);
-                yield TimeExtensionDecoder.INSTANCE.decodeAll(ext, storage);
-            }
-            case VORTEX_TIMESTAMP -> {
-                requireDomainType(name, domainType, Instant.class);
-                yield TimestampExtensionDecoder.INSTANCE.decodeAll(ext, storage);
-            }
-            case VORTEX_UUID -> {
-                requireDomainType(name, domainType, UUID.class);
-                yield UuidExtensionDecoder.INSTANCE.decodeAll(storage);
-            }
-        };
-        return (List<T>) result;
-    }
-
-    private static void requireDomainType(ColumnName name, Class<?> requested, Class<?> expected) {
-        if (!requested.equals(expected)) {
-            throw new VortexException("column '" + name + "' decodes to " + expected.getSimpleName()
-                    + ", not " + requested.getSimpleName());
+        ExtensionDecoder<?> decoder = registry.lookup(ExtensionId.parse(ext.extensionId()));
+        if (decoder == null) {
+            throw new VortexException("no extension decoder registered for " + ext.extensionId()
+                    + " (column '" + name + "')");
         }
+        if (!domainType.equals(decoder.domainType())) {
+            throw new VortexException("column '" + name + "' decodes to " + decoder.domainType().getSimpleName()
+                    + ", not " + domainType.getSimpleName());
+        }
+        return (List<T>) decoder.decodeAll(ext, col.array());
     }
 
     /// Returns whether this chunk has already been closed.

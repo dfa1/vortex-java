@@ -68,8 +68,8 @@ public final class WriteRegistry {
 
     private WriteRegistry(Map<EncodingId, EncodingEncoder> encoders,
             Map<ExtensionId, ExtensionEncoder> extensions) {
-        // Order by encoding name so it is stable regardless of enum declaration order. (The id
-        // enums sort by ordinal naturally — Enum.compareTo is final — so a Comparator is required.)
+        // Order by id string so it is stable regardless of declaration order. (The id types are not
+        // Comparable — a WellKnown enum would sort by ordinal, a Custom record not at all.)
         // VortexWriter.create(.., WriteRegistry) selects the first encoder whose accepts() matches
         // the dtype, so iteration order is significant: a HashMap would make selection vary across
         // runs and platforms. Sorting by id makes the order a pure function of the registered set,
@@ -128,7 +128,8 @@ public final class WriteRegistry {
         // EncodingId is not Comparable (a Custom id would throw on natural ordering); order by
         // wire string, matching the constructor's sortedByName.
         private final Map<EncodingId, EncodingEncoder> encoders = new TreeMap<>(Comparator.comparing(EncodingId::id));
-        private final Map<ExtensionId, ExtensionEncoder> extensions = new TreeMap<>();
+        // Same as encoders: ExtensionId is not Comparable, so a Custom key would throw on natural ordering.
+        private final Map<ExtensionId, ExtensionEncoder> extensions = new TreeMap<>(Comparator.comparing(ExtensionId::id));
 
         private Builder() {
         }
