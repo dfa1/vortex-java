@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
@@ -10,6 +11,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.Zone;
 import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.compute.FilteredAggregate;
@@ -223,14 +225,18 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// `aggColumn` is the column whose values are reduced over the selected rows (`null` for
     /// `COUNT(*)`, which needs only the selected row count). The result is empty — abandoning to a
     /// full scan, which is always correctness-safe — when the fold cannot be trusted: a `U64`
-    /// column involved (whose stat order [#isU64] cannot classify — see the guard below), a
-    /// zone-map zone count that does not align 1:1 with the chunks, or a boundary zone whose mask
-    /// cannot be built.
+    /// column involved (whose stat order [#isU64] cannot classify — see the guard below), columns
+    /// whose zones lie on different rows, zones that do not tile the chunks' rows, or a boundary
+    /// zone whose columns cannot be sliced.
+    ///
+    /// Zones need not line up with chunks: Rust's `vortex.zoned` writes fixed 8192-row zones while a
+    /// chunk often spans many of them, so a boundary zone is folded from just its rows of the chunk
+    /// (or two chunks) holding it.
     ///
     /// The fold also abandons for performance, not correctness, when there is at least one boundary
     /// zone but no fully-selected (IN) zone: the only win the fold has over a scan is folding IN zones
     /// from statistics without decoding them, so with zero IN zones it would decode exactly the chunks
-    /// a scan decodes and only add the stats-table classify and mask-building overhead. The
+    /// a scan decodes and only add the stats-table classify overhead. The
     /// zone-map-pruned scan is the cheaper answer. An all-OUT selection (no IN, no boundary) is not
     /// this case — it folds to a correct empty aggregate with no decode and is kept.
     ///
@@ -264,30 +270,35 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                     return Optional.empty();
                 }
             }
-            long[] rowCounts = scan.chunkRowCounts();
-            int zones = rowCounts.length;
+            long[] chunkRows = scan.chunkRowCounts();
+            // Every column must place its zones on the same rows, so one zone index classifies
+            // the whole filter. Rust's vortex.zoned uses fixed zones independent of the chunks;
+            // the legacy vortex.stats and the no-zone-map fallback have one zone per chunk.
+            List<Zone> geometry = null;
             java.util.Map<ColumnName, List<ArrayStats>> zoneStats = new java.util.HashMap<>();
             for (ColumnName column : columns) {
-                List<ArrayStats> perZone = scan.columnZoneStats(column);
-                if (perZone.size() != zones) {
-                    return Optional.empty(); // zone-map zones don't align 1:1 with chunks — cannot classify
+                List<Zone> zones = zonesOf(scan, column, chunkRows);
+                if (zones == null || geometry != null && !sameRows(geometry, zones)) {
+                    return Optional.empty();
                 }
-                zoneStats.put(column, perZone);
+                geometry = zones;
+                zoneStats.put(column, zones.stream().map(Zone::stats).toList());
+            }
+            if (!tiles(geometry, chunkRows)) {
+                return Optional.empty(); // zones and chunks disagree on the rows
             }
 
             // Classify every zone first, so the IN count is known before any boundary decode. The
-            // fold's only win over a scan is folding IN zones from statistics with no decode; a
-            // BOUNDARY zone is decoded exactly as a scan would decode it. So when there is at least
-            // one BOUNDARY zone but no IN zone, the fold decodes the same chunks a scan does and adds
-            // the stats-table classify + mask-building overhead on top — a net loss. Abandon to the
-            // (zone-map-pruned) scan in that case. The all-OUT case (no IN, no BOUNDARY) is NOT this
-            // case: it folds to a correct empty/zero aggregate with no decode at all, so it is kept.
-            Match[] matches = new Match[zones];
+            // fold's only win over a scan is folding IN zones from statistics with no decode, so
+            // when there is at least one BOUNDARY zone but no IN zone, abandon to the
+            // (zone-map-pruned) scan. The all-OUT case (no IN, no BOUNDARY) folds to a correct
+            // empty/zero aggregate with no decode at all, so it is kept.
+            Match[] matches = new Match[geometry.size()];
             int inZones = 0;
             int boundaryZones = 0;
-            for (int zone = 0; zone < zones; zone++) {
-                Match match = classify(filter, zone, zoneStats, rowCounts[zone], struct);
-                matches[zone] = match;
+            for (int z = 0; z < geometry.size(); z++) {
+                Match match = classify(filter, z, zoneStats, geometry.get(z).rowCount(), struct);
+                matches[z] = match;
                 if (match == Match.IN) {
                     inZones++;
                 } else if (match == Match.BOUNDARY) {
@@ -300,27 +311,32 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
 
             List<ColumnName> decodeColumns = new ArrayList<>(columns);
             Fold fold = new Fold();
-            for (int zone = 0; zone < zones; zone++) {
-                Match match = matches[zone];
-                if (match == Match.OUT) {
-                    continue;
-                }
-                if (match == Match.BOUNDARY) {
-                    // Tier 2: a partially-selected zone. Decode this chunk (and the filter columns),
-                    // build a row mask from the filter, and reduce the masked rows. The chunk index
-                    // equals the zone index — the perZone.size() == zones guard above proved the
-                    // zone-map rows align 1:1 with the chunks.
-                    foldBoundaryZone(reader, zone, decodeColumns, filter, aggColumn, fold);
-                    continue;
-                }
-                // Tier 1 (Match.IN): every row matches — fold the whole zone from its statistics.
-                fold.keptRows += rowCounts[zone];
-                if (aggColumn != null) {
-                    ArrayStats stats = zoneStats.get(aggColumn).get(zone);
-                    fold.addSum(stats.sum());
-                    fold.addMin(stats.min());
-                    fold.addMax(stats.max());
-                    fold.addNulls(stats.nullCount());
+            try (BoundaryChunks chunks = new BoundaryChunks(reader, decodeColumns, chunkRows)) {
+                for (int z = 0; z < geometry.size(); z++) {
+                    Zone zone = geometry.get(z);
+                    if (matches[z] == Match.OUT) {
+                        continue;
+                    }
+                    if (matches[z] == Match.BOUNDARY) {
+                        // Tier 2: fold the rows the filter selects, from the zone's rows of the
+                        // chunks holding it — a zone may straddle a chunk edge.
+                        if (!chunks.fold(zone, filter, aggColumn, fold)) {
+                            return Optional.empty();
+                        }
+                        continue;
+                    }
+                    // Tier 1 (Match.IN): every row matches — fold the whole zone from its statistics.
+                    fold.keptRows += zone.rowCount();
+                    if (aggColumn != null) {
+                        ArrayStats stats = zoneStats.get(aggColumn).get(z);
+                        // a zone with values but no min/max stat (a string zone holds only bounds)
+                        // leaves the extreme unknown, rather than silently ignored
+                        boolean hasValues = stats.nullCount() == null || stats.nullCount() < zone.rowCount();
+                        fold.addSum(stats.sum());
+                        fold.addMin(stats.min(), hasValues);
+                        fold.addMax(stats.max(), hasValues);
+                        fold.addNulls(stats.nullCount());
+                    }
                 }
             }
             return Optional.of(fold.result());
@@ -329,30 +345,79 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
     }
 
-    /// Decodes one boundary chunk and folds the aggregate over the rows the filter selects in it,
-    /// contributing to the running [Fold]. The chunk is released per zone via try-with-resources, so
-    /// nothing outlives the reduction.
-    ///
-    /// The whole filter — an n-ary `AND` of column-bound [Predicate] leaves — and the aggregate fold
-    /// run in one fused pass over the chunk's rows via
-    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)], with no intermediate selection bitmap.
-    /// `SUM` is guarded: the fused kernel reports a `null` sum for a non-numeric aggregate column,
-    /// which disables the sum (mirroring a zone that records no usable sum) rather than failing the
-    /// whole fold — a `MIN`/`MAX` over the same column still folds. The aggregate column's null count
-    /// among the selected rows is the selected count minus the non-null count.
-    private static void foldBoundaryZone(VortexReader reader, int zone, List<ColumnName> columns,                                         RowFilter filter, ColumnName aggColumn, Fold fold) {
-        try (Chunk chunk = reader.decodeChunk(zone, columns)) {
-            FilteredAggregate aggregate = Compute.filteredAggregate(chunk, filter, aggColumn);
-            fold.keptRows += aggregate.selectedRows();
-            if (aggColumn == null) {
+    /// Decodes the chunks that hold boundary zones, each once, in row order, and folds a zone's rows
+    /// through a [Chunk#slice(long, long)] view. Zones arrive in row order, so only the chunk under
+    /// the current zone is kept open.
+    private static final class BoundaryChunks implements AutoCloseable {
+        private final VortexReader reader;
+        private final List<ColumnName> columns;
+        private final long[] chunkRows;
+        private int index = -1;
+        private long chunkStart;
+        private Chunk chunk;
+
+        BoundaryChunks(VortexReader reader, List<ColumnName> columns, long[] chunkRows) {
+            this.reader = reader;
+            this.columns = columns;
+            this.chunkRows = chunkRows;
+        }
+
+        /// Folds the rows `filter` selects in `zone`, in one fused pass per chunk part via
+        /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]. `SUM` is guarded: the kernel
+        /// reports a `null` sum for a non-numeric aggregate column, which disables only the sum.
+        ///
+        /// @return `false` when a column cannot be sliced, so the caller abandons to the scan
+        boolean fold(Zone zone, RowFilter filter, ColumnName aggColumn, Fold fold) {
+            long row = zone.firstRow();
+            long end = row + zone.rowCount();
+            while (row < end) {
+                moveTo(row);
+                long offset = row - chunkStart;
+                long length = Math.min(end, chunkStart + chunkRows[index]) - row;
+                FilteredAggregate aggregate;
+                try (Chunk part = chunk.slice(offset, length)) {
+                    aggregate = Compute.filteredAggregate(part, filter, aggColumn);
+                } catch (VortexException e) {
+                    // ponytail: some array types (F16, variant) have no slice yet; the scan answers
+                    return false;
+                }
+                fold.keptRows += aggregate.selectedRows();
+                if (aggColumn != null) {
+                    // the kernel's min/max are null only when no selected row has a value
+                    fold.addSum(aggregate.sum());
+                    fold.addMin(aggregate.min(), false);
+                    fold.addMax(aggregate.max(), false);
+                    fold.addNulls(aggregate.selectedRows() - aggregate.aggNonNullCount());
+                }
+                row += length;
+            }
+            return true;
+        }
+
+        /// Opens the chunk holding `row`; `tiles` proved every row lies in some chunk.
+        private void moveTo(long row) {
+            if (chunk != null && row < chunkStart + chunkRows[index]) {
                 return;
             }
-            // A null sum marks a non-numeric aggregate column — unanswerable, like a missing zone sum;
-            // addSum(null) disables only the sum, leaving MIN/MAX to fold.
-            fold.addSum(aggregate.sum());
-            fold.addMin(aggregate.min());
-            fold.addMax(aggregate.max());
-            fold.addNulls(aggregate.selectedRows() - aggregate.aggNonNullCount());
+            if (chunk != null) {
+                chunk.close();
+                chunk = null;
+            }
+            if (index < 0) {
+                index = 0;
+            }
+            while (row >= chunkStart + chunkRows[index]) {
+                chunkStart += chunkRows[index];
+                index++;
+            }
+            chunk = reader.decodeChunk(index, columns);
+        }
+
+        @Override
+        public void close() {
+            if (chunk != null) {
+                chunk.close();
+            }
         }
     }
 
@@ -367,6 +432,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         private boolean sumUsable = true;
         private Object min;
         private Object max;
+        private boolean extremesKnown = true;
         private long nullCount;
         private boolean nullCountKnown = true;
         private long keptRows;
@@ -388,11 +454,18 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             }
         }
 
-        private void addMin(Object candidate) {
+        /// Adds a min candidate; a `null` one from rows that do hold values makes the min unknown.
+        private void addMin(Object candidate, boolean hasValues) {
+            if (candidate == null && hasValues) {
+                extremesKnown = false;
+            }
             min = pickExtreme(min, candidate, true);
         }
 
-        private void addMax(Object candidate) {
+        private void addMax(Object candidate, boolean hasValues) {
+            if (candidate == null && hasValues) {
+                extremesKnown = false;
+            }
             max = pickExtreme(max, candidate, false);
         }
 
@@ -418,7 +491,10 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 foldedSum = longSum;
             }
             Long foldedNulls = nullCountKnown ? nullCount : null;
-            return new FilteredFold(foldedSum, min, max, foldedNulls, keptRows);
+            // an unknown extreme is reported as absent, which the rule cannot mistake for an empty
+            // selection while rows were kept
+            return new FilteredFold(foldedSum, extremesKnown ? min : null, extremesKnown ? max : null,
+                    foldedNulls, keptRows);
         }
     }
 
@@ -437,6 +513,55 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         List<ColumnName> names = struct.fieldNames();
         List<DType> types = struct.fieldTypes();
         return RexFilterTranslator.translateStrict(filters, names, types);
+    }
+
+    /// A column's zones: its zone map when the zones can be placed on rows, else one zone per chunk
+    /// from the chunks' own statistics (the legacy `vortex.stats` table with batches of mixed
+    /// length, or no zone map at all). `null` when neither lines up with the chunks.
+    private static List<Zone> zonesOf(ScanIterator scan, ColumnName column, long[] chunkRows) {
+        List<Zone> zones = scan.columnZones(column);
+        if (!zones.isEmpty()) {
+            return zones;
+        }
+        List<ArrayStats> perChunk = scan.columnZoneStats(column);
+        if (perChunk.size() != chunkRows.length) {
+            return null;
+        }
+        List<Zone> out = new ArrayList<>(chunkRows.length);
+        long first = 0;
+        for (int c = 0; c < chunkRows.length; c++) {
+            out.add(new Zone(first, chunkRows[c], perChunk.get(c)));
+            first += chunkRows[c];
+        }
+        return out;
+    }
+
+    private static boolean sameRows(List<Zone> a, List<Zone> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (int i = 0; i < a.size(); i++) {
+            if (a.get(i).firstRow() != b.get(i).firstRow() || a.get(i).rowCount() != b.get(i).rowCount()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// Whether `zones` cover the chunks' rows exactly, in order and with no gap or overlap.
+    private static boolean tiles(List<Zone> zones, long[] chunkRows) {
+        long next = 0;
+        for (Zone zone : zones) {
+            if (zone.firstRow() != next) {
+                return false;
+            }
+            next += zone.rowCount();
+        }
+        long total = 0;
+        for (long rows : chunkRows) {
+            total += rows;
+        }
+        return next == total;
     }
 
     /// How a zone relates to a filter: every row matches ([Match#IN]), no row matches

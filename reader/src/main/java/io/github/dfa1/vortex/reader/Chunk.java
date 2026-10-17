@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 
 import java.lang.foreign.Arena;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.SequencedMap;
@@ -44,15 +46,39 @@ public final class Chunk implements AutoCloseable {
     private final Arena arena;
     private final ReadRegistry registry;
     private final Consumer<Chunk> onClose;
+    // a slice shares its parent's arena, which only the parent releases
+    private final boolean ownsArena;
     private boolean closed;
 
     Chunk(long rowCount, SequencedMap<ColumnName, Column> columns,
             Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
+        this(rowCount, columns, arena, registry, onClose, true);
+    }
+
+    private Chunk(long rowCount, SequencedMap<ColumnName, Column> columns,
+                  Arena arena, ReadRegistry registry, Consumer<Chunk> onClose, boolean ownsArena) {
         this.rowCount = rowCount;
         this.columns = Objects.requireNonNull(columns);
         this.arena = Objects.requireNonNull(arena);
         this.registry = Objects.requireNonNull(registry);
         this.onClose = Objects.requireNonNull(onClose);
+        this.ownsArena = ownsArena;
+    }
+
+    /// A view of rows `[offset, offset + length)` of every column, sharing this chunk's memory
+    /// with no copy. The view is valid while this chunk is open; closing the view does nothing.
+    ///
+    /// @param offset first row of the view
+    /// @param length number of rows in the view
+    /// @return the row-range view
+    /// @throws IndexOutOfBoundsException if the range is not within `[0, rowCount())`
+    /// @throws VortexException if a column's array type cannot be sliced
+    public Chunk slice(long offset, long length) {
+        Objects.checkFromIndexSize(offset, length, rowCount);
+        SequencedMap<ColumnName, Column> sliced = new LinkedHashMap<>();
+        columns.forEach((name, column) -> sliced.put(name, new Column(
+                ScanIterator.sliceArray(column.array(), offset, length, column.dtype()), column.dtype())));
+        return new Chunk(length, Collections.unmodifiableSequencedMap(sliced), arena, registry, _ -> { }, false);
     }
 
     /// One decoded column: its zero-copy [Array] view and the [DType] it was declared with in the
@@ -155,6 +181,9 @@ public final class Chunk implements AutoCloseable {
             return;
         }
         closed = true;
+        if (!ownsArena) {
+            return;
+        }
         try {
             onClose.accept(this);
         } finally {
