@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.calcite;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.compute.Predicate;
 
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.rex.RexBuilder;
@@ -32,9 +33,10 @@ final class RexFilterTranslator {
     private RexFilterTranslator() {
     }
 
-    /// Translates the Calcite predicates into a zone-map [RowFilter], keeping only the comparisons
-    /// we can prune on (`=`, `<>`, `<`, `<=`, `>`, `>=` between a column and a literal, plus `AND`).
-    /// Predicates we don't understand are simply not pushed — Calcite still applies them.
+    /// Translates the Calcite predicates into a zone-map [RowFilter], keeping only what we can prune
+    /// on: `=`, `<>`, `<`, `<=`, `>`, `>=` between a column and a literal, `IS [NOT] NULL`, a
+    /// single-column `OR` (such as an `IN` list), and `AND`. Predicates we don't understand are
+    /// simply not pushed — Calcite still applies them.
     ///
     /// @param filters the predicates Calcite pushed onto the scan
     /// @param names   the table's column names, by field index
@@ -108,9 +110,8 @@ final class RexFilterTranslator {
         return comparison(node, names, types, false);
     }
 
-    /// Strict counterpart of [#toComparison]: the same column-vs-literal / `AND` grammar, but a
-    /// single unrecognized node (or one `AND` conjunct) collapses the whole result to empty rather
-    /// than being dropped, and bare `IS NULL` / `IS NOT NULL` are also translatable. Used by
+    /// Strict counterpart of [#toComparison]: the same grammar, but a single unrecognized node (or
+    /// one `AND` conjunct) collapses the whole result to empty rather than being dropped. Used by
     /// [#translateStrict] so aggregate push-down answers from stats only when the [RowFilter]
     /// captures the predicate in full. Delegates to the shared [#comparison] dispatch with
     /// `strict = true`.
@@ -119,14 +120,14 @@ final class RexFilterTranslator {
     }
 
     /// Shared comparison-kind dispatch behind [#toComparison] (lenient) and [#strictComparison]
-    /// (strict). The two differ only in how an untranslatable node is handled and whether the null
-    /// tests are accepted, both keyed off `strict`:
-    /// - in an `AND`, a `strict` walk abandons the whole predicate on the first untranslatable
-    ///   conjunct, while a lenient walk drops it and keeps the rest;
-    /// - bare `IS NULL` / `IS NOT NULL` translate only in the `strict` walk (the lenient scan path has
-    ///   no zone-map use for them and drops them).
-    /// The column-vs-literal comparison kinds (`=`, `<>`, `<`, `<=`, `>`, `>=`) translate identically
-    /// in both walks through [#binary].
+    /// (strict). The two differ only in how an untranslatable `AND` conjunct is handled: a `strict`
+    /// walk abandons the whole predicate on the first one, while a lenient walk drops it and keeps
+    /// the rest. Comparisons (`=`, `<>`, `<`, `<=`, `>`, `>=`, either operand order) and the null
+    /// tests translate identically in both walks.
+    ///
+    /// An `OR` translates only when every disjunct does and all of them test one column, into one
+    /// column predicate (an `IN` list arrives this way once `SEARCH` is expanded). Dropping a
+    /// disjunct would narrow the filter and lose rows, so an `OR` is all-or-nothing in both walks.
     ///
     /// @param node   the (already `SEARCH`-expanded) predicate node
     /// @param names  the table's column names, by field index
@@ -153,10 +154,47 @@ final class RexFilterTranslator {
                 yield parts.isEmpty() ? Optional.empty()
                         : Optional.of(RowFilter.and(parts.toArray(RowFilter[]::new)));
             }
+            case OR -> {
+                ColumnName column = null;
+                Predicate predicate = null;
+                for (RexNode operand : call.getOperands()) {
+                    Optional<RowFilter.Column> part = comparison(operand, names, types, true)
+                            .flatMap(RexFilterTranslator::singleColumn);
+                    if (part.isEmpty() || column != null && !column.equals(part.get().column())) {
+                        yield Optional.empty();
+                    }
+                    column = part.get().column();
+                    predicate = predicate == null ? part.get().predicate()
+                            : new Predicate.Or(predicate, part.get().predicate());
+                }
+                yield Optional.of(new RowFilter.Column(column, predicate));
+            }
             case EQUALS, NOT_EQUALS, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL ->
                     binary(call, names, types);
-            case IS_NULL, IS_NOT_NULL -> strict ? nullCheck(call, names) : Optional.empty();
+            case IS_NULL, IS_NOT_NULL -> nullCheck(call, names);
             default -> Optional.empty();
+        };
+    }
+
+    /// The filter as one column's predicate: itself for a column filter, the conjunction of an `AND`
+    /// whose parts all test the same column, else empty.
+    private static Optional<RowFilter.Column> singleColumn(RowFilter filter) {
+        return switch (filter) {
+            case RowFilter.Column column -> Optional.of(column);
+            case RowFilter.And(var parts) -> {
+                ColumnName column = null;
+                Predicate predicate = null;
+                for (RowFilter part : parts) {
+                    Optional<RowFilter.Column> one = singleColumn(part);
+                    if (one.isEmpty() || column != null && !column.equals(one.get().column())) {
+                        yield Optional.empty();
+                    }
+                    column = one.get().column();
+                    predicate = predicate == null ? one.get().predicate()
+                            : new Predicate.And(predicate, one.get().predicate());
+                }
+                yield Optional.of(new RowFilter.Column(column, predicate));
+            }
         };
     }
 
@@ -177,7 +215,21 @@ final class RexFilterTranslator {
 
     private static Optional<RowFilter> binary(RexCall call, List<ColumnName> names, List<DType> types) {
         List<RexNode> ops = call.getOperands();
-        if (ops.size() != 2 || !(ops.get(0) instanceof RexInputRef ref) || !(ops.get(1) instanceof RexLiteral lit)) {
+        if (ops.size() != 2) {
+            return Optional.empty();
+        }
+        SqlKind kind = call.getKind();
+        RexInputRef ref;
+        RexLiteral lit;
+        if (ops.get(0) instanceof RexInputRef r && ops.get(1) instanceof RexLiteral l) {
+            ref = r;
+            lit = l;
+        } else if (ops.get(0) instanceof RexLiteral l && ops.get(1) instanceof RexInputRef r) {
+            // `5 < x` is `x > 5`
+            ref = r;
+            lit = l;
+            kind = kind.reverse();
+        } else {
             return Optional.empty();
         }
         Object val = literalValue(lit, types.get(ref.getIndex()));
@@ -186,14 +238,14 @@ final class RexFilterTranslator {
         }
         ColumnName col = names.get(ref.getIndex());
         Comparable<?> cmp = (Comparable<?>) val;
-        return Optional.of(switch (call.getKind()) {
+        return Optional.of(switch (kind) {
             case EQUALS -> RowFilter.eq(col, val);
             case NOT_EQUALS -> RowFilter.neq(col, val);
             case LESS_THAN -> RowFilter.lt(col, cmp);
             case LESS_THAN_OR_EQUAL -> RowFilter.lte(col, cmp);
             case GREATER_THAN -> RowFilter.gt(col, cmp);
             case GREATER_THAN_OR_EQUAL -> RowFilter.gte(col, cmp);
-            default -> throw new IllegalStateException("unreachable kind: " + call.getKind());
+            default -> throw new IllegalStateException("unreachable kind: " + kind);
         });
     }
 

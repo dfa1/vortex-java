@@ -612,6 +612,9 @@ preserved) and the **Babel** SQL parser, so a column named after a reserved word
 keywords that open a typed literal (`date`, `time`, `timestamp`, `interval`), which stay reserved
 even under Babel and need back-ticks: `` select `date` from vtx.ohlc ``.
 
+A `WHERE` of those predicates (an `OR` only within one column) prunes chunks from zone maps and is
+enforced by the scan, so Calcite does not re-check it; anything else is left to Calcite.
+
 Column types map as follows. Unsigned integers widen to the next signed type (`U64` stays `BIGINT`
 and fails on values past 2^63); `F16` reads as `REAL`.
 
@@ -628,8 +631,8 @@ and fails on values past 2^63); `F16` reads as `REAL`.
 `TIMESTAMP WITH LOCAL TIME ZONE` because Avatica's JDBC getters shift that type by the JVM's zone.
 
 `count`/`min`/`max`/`sum` (and `avg`, reduced to `sum`/`count`) are answered from zone-map
-statistics via `VortexAggregatePushDownRule` where possible, with or without a `WHERE` on
-column-vs-literal comparisons: zones the filter selects entirely fold from their statistics, and only
+statistics via `VortexAggregatePushDownRule` where possible, with or without a `WHERE` of
+column-vs-literal comparisons, `IN` lists and `IS [NOT] NULL` joined by `AND`: zones the filter selects entirely fold from their statistics, and only
 the rows of zones it cuts are decoded. `sum` needs a per-zone sum, which only the legacy
 `vortex.stats` zone map records (writes targeting an edition before `core2026.08.0`); with Rust's
 `vortex.zoned` — the default since #447, and every Rust-written file — `sum` is answered by a scan.
