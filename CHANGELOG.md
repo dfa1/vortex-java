@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `VortexWriter.create(…, WriteRegistry)` uses the registry's extension encoders instead of the built-in ones, and a `Collection` for an extension column with no encoder fails with a `VortexException`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
+
 ## [0.17.2] — 2026-10-17
 
 ### Changed

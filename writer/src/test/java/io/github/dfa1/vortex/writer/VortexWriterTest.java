@@ -179,6 +179,72 @@ class VortexWriterTest {
     }
 
     @Test
+    void create_withRegistry_usesItsExtensionEncoders(@TempDir Path tmp) throws IOException {
+        // Given — a registry whose vortex.date encoder takes epoch-day Integers instead of
+        // LocalDates. create(WriteRegistry) used to rebuild the extension set from the four
+        // built-ins, silently dropping this one: the built-in then cast an Integer to LocalDate.
+        var dateSchema = new DType.Struct(
+                List.of(ColumnName.of("d")),
+                List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false)),
+                false);
+        ExtensionEncoder epochDays = new ExtensionEncoder() {
+            @Override
+            public io.github.dfa1.vortex.core.model.ExtensionId extensionId() {
+                return io.github.dfa1.vortex.core.model.ExtensionId.VORTEX_DATE;
+            }
+
+            @Override
+            public DType.Extension dtype(boolean nullable) {
+                return io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(nullable);
+            }
+
+            @Override
+            public Object encodeAll(DType.Extension dtype, java.util.Collection<?> values) {
+                return values.stream().mapToInt(v -> (Integer) v).toArray();
+            }
+        };
+        WriteRegistry.Builder builder = WriteRegistry.builder();
+        WriteRegistry.loadAll().encoderMap().values().forEach(builder::register);
+        WriteRegistry registry = builder.register(epochDays).build();
+        Path file = tmp.resolve("custom_date_encoder.vtx");
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, dateSchema, WriteOptions.defaults(), registry)) {
+            sut.writeChunk(Map.of(ColumnName.of("d"), List.of(0, 20_000)));
+        }
+
+        // Then
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(ScanOptions.all());
+             Chunk chunk = iter.next()) {
+            assertThat(chunk.as(ColumnName.of("d"), java.time.LocalDate.class))
+                    .containsExactly(java.time.LocalDate.ofEpochDay(0), java.time.LocalDate.ofEpochDay(20_000));
+        }
+    }
+
+    @Test
+    void writeChunk_extensionCollectionWithoutEncoder_failsFast(@TempDir Path tmp) throws IOException {
+        // Given — a registry with every encoder but no extension encoders. A Collection used to
+        // pass through unconverted and fail later with an unrelated encoder error.
+        var dateSchema = new DType.Struct(
+                List.of(ColumnName.of("d")),
+                List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false)),
+                false);
+        WriteRegistry.Builder builder = WriteRegistry.builder();
+        WriteRegistry.loadAll().encoderMap().values().forEach(builder::register);
+        Path file = tmp.resolve("no_ext_encoder.vtx");
+
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, dateSchema, WriteOptions.defaults(), builder.build())) {
+            // When / Then
+            assertThatThrownBy(() -> sut.writeChunk(Map.of(ColumnName.of("d"), List.of(java.time.LocalDate.EPOCH))))
+                    .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
+                    .hasMessageContaining("no extension encoder registered for vortex.date");
+        }
+    }
+
+    @Test
     void writeChunk_extensionCollectionColumn_rowCountValidatedAgainstSibling(@TempDir Path tmp)
             throws IOException {
         // Given — a two-column chunk where one column is a List<LocalDate> (extension auto-route)
