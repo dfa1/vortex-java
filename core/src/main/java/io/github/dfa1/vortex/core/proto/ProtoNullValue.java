@@ -24,11 +24,10 @@ public enum ProtoNullValue {
     /// @return matching enum constant
     /// @throws IllegalArgumentException if no constant matches
     public static ProtoNullValue fromValue(int value) {
-        for (ProtoNullValue v : values()) {
-            if (v.value == value) {
-                return v;
-            }
-        }
-        throw new IllegalArgumentException("unknown ProtoNullValue value: " + value);
+        // A switch, not a loop over values(): values() clones its array on every call.
+        return switch (value) {
+            case 0 -> NULL_VALUE;
+            default -> throw new IllegalArgumentException("unknown ProtoNullValue value: " + value);
+        };
     }
 }

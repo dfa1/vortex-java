@@ -34,11 +34,20 @@ public enum ProtoPType {
     /// @return matching enum constant
     /// @throws IllegalArgumentException if no constant matches
     public static ProtoPType fromValue(int value) {
-        for (ProtoPType v : values()) {
-            if (v.value == value) {
-                return v;
-            }
-        }
-        throw new IllegalArgumentException("unknown ProtoPType value: " + value);
+        // A switch, not a loop over values(): values() clones its array on every call.
+        return switch (value) {
+            case 0 -> U8;
+            case 1 -> U16;
+            case 2 -> U32;
+            case 3 -> U64;
+            case 4 -> I8;
+            case 5 -> I16;
+            case 6 -> I32;
+            case 7 -> I64;
+            case 8 -> F16;
+            case 9 -> F32;
+            case 10 -> F64;
+            default -> throw new IllegalArgumentException("unknown ProtoPType value: " + value);
+        };
     }
 }

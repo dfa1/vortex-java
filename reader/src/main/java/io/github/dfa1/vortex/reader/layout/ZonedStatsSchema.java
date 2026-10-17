@@ -61,6 +61,28 @@ public final class ZonedStatsSchema {
         /// Stat ordinal 8.
         NAN_COUNT("nan_count");
 
+        /// The stat at `ordinal`, or `null` past the last one (a bit set by a newer Vortex writer).
+        ///
+        /// A switch, not values()[ordinal]: values() clones the array on every call, and this runs
+        /// per bit of every layout's stats bitset.
+        ///
+        /// @param ordinal the bit index in the layout's stats bitset
+        /// @return the stat, or `null` when `ordinal` is not a known stat
+        static Stat fromOrdinal(int ordinal) {
+            return switch (ordinal) {
+                case 0 -> IS_CONSTANT;
+                case 1 -> IS_SORTED;
+                case 2 -> IS_STRICT_SORTED;
+                case 3 -> MAX;
+                case 4 -> MIN;
+                case 5 -> SUM;
+                case 6 -> NULL_COUNT;
+                case 7 -> UNCOMPRESSED_SIZE_IN_BYTES;
+                case 8 -> NAN_COUNT;
+                default -> null;
+            };
+        }
+
         /// Trailing struct-field name added next to [#MAX] for truncated max indicators.
         public static final ColumnName MAX_IS_TRUNCATED = ColumnName.of("max_is_truncated");
         /// Trailing struct-field name added next to [#MIN] for truncated min indicators.
@@ -129,7 +151,7 @@ public final class ZonedStatsSchema {
 
     /// Returns the stats present in the layout metadata bitset, in ordinal order.
     ///
-    /// Unknown bits (set at an index past [Stat#values()]'s length, which
+    /// Unknown bits (set at an index past the last [Stat], which
     /// would mean a newer Vortex writer) are silently skipped — matching the Rust
     /// reader's forward-compatibility behavior.
     ///
@@ -139,14 +161,16 @@ public final class ZonedStatsSchema {
         if (metadata == null || metadata.byteSize() <= 4) {
             return List.of();
         }
-        Stat[] all = Stat.values();
-        List<Stat> out = new ArrayList<>(all.length);
+        List<Stat> out = new ArrayList<>();
         int bitIndex = 0;
         for (long pos = 4; pos < metadata.byteSize(); pos++) {
             int b = metadata.get(ValueLayout.JAVA_BYTE, pos) & 0xff;
             for (int bit = 0; bit < 8; bit++) {
-                if ((b & (1 << bit)) != 0 && bitIndex < all.length) {
-                    out.add(all[bitIndex]);
+                if ((b & (1 << bit)) != 0) {
+                    Stat stat = Stat.fromOrdinal(bitIndex);
+                    if (stat != null) {
+                        out.add(stat);
+                    }
                 }
                 bitIndex++;
             }

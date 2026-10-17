@@ -109,6 +109,9 @@ import java.util.stream.Collectors;
 public final class VortexWriter implements Closeable {
 
     // Indices into layout_specs list in the FbsFooter
+    // values() clones its array on every call; the edition filter reads it once per writer.
+    private static final List<EncodingId.WellKnown> WELL_KNOWN_IDS = List.of(EncodingId.WellKnown.values());
+
     private static final int LAYOUT_FLAT = 0;
     private static final int LAYOUT_CHUNKED = 1;
     private static final int LAYOUT_STRUCT = 2;
@@ -265,7 +268,7 @@ public final class VortexWriter implements Closeable {
         // Every well-known id, not only the encoders listed here: an encoder can carry its own private
         // candidate list (Sparse's bool patch-index cascade offers fastlanes.delta), and those
         // candidates must be filtered by the same edition policy.
-        for (EncodingId.WellKnown id : EncodingId.WellKnown.values()) {
+        for (EncodingId.WellKnown id : WELL_KNOWN_IDS) {
             if (!allowed.contains(id)) {
                 excluded.add(id);
             }

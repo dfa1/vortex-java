@@ -19,11 +19,14 @@ public enum TimeUnit {
     /// @return the corresponding `TimeUnit`
     public static TimeUnit fromTag(byte tag) {
         int i = Byte.toUnsignedInt(tag);
-        TimeUnit[] values = values();
-        if (i >= values.length) {
-            throw new IllegalArgumentException("unknown TimeUnit tag: " + i);
-        }
-        return values[i];
+        return switch (i) {
+            case 0 -> Nanoseconds;
+            case 1 -> Microseconds;
+            case 2 -> Milliseconds;
+            case 3 -> Seconds;
+            case 4 -> Days;
+            default -> throw new IllegalArgumentException("unknown TimeUnit tag: " + i);
+        };
     }
 
     /// Returns the number of this time unit's divisions in one second (e.g. 1_000_000_000 for nanoseconds).

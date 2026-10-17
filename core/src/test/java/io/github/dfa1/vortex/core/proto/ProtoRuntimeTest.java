@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.core.proto;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -446,5 +447,42 @@ class ProtoRuntimeTest {
     private static ProtoReader readerOver(byte[] bytes) {
         MemorySegment seg = MemorySegment.ofArray(bytes);
         return new ProtoReader(seg, 0, seg.byteSize());
+    }
+
+    @Nested
+    class GeneratedEnums {
+        @ParameterizedTest
+        @EnumSource(ProtoPType.class)
+        void protoPTypeFromValue_mapsEachConstantBack(ProtoPType type) {
+            // Given — fromValue is a generated switch over the proto numbers
+
+            // When
+            ProtoPType result = ProtoPType.fromValue(type.value());
+
+            // Then
+            assertThat(result).isSameAs(type);
+        }
+
+        @ParameterizedTest
+        @EnumSource(ProtoNullValue.class)
+        void protoNullValueFromValue_mapsEachConstantBack(ProtoNullValue value) {
+            // Given — as above
+
+            // When
+            ProtoNullValue result = ProtoNullValue.fromValue(value.value());
+
+            // Then
+            assertThat(result).isSameAs(value);
+        }
+
+        @Test
+        void fromValue_unknownNumber_throws() {
+            // Given — a number no constant declares
+
+            // When / Then
+            assertThatThrownBy(() -> ProtoPType.fromValue(99))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("unknown ProtoPType value: 99");
+        }
     }
 }
