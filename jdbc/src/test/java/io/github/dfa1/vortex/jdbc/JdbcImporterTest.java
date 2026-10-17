@@ -133,7 +133,7 @@ class JdbcImporterTest {
                         assertThat(chunk.rowCount()).isEqualTo(2);
 
                         assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE
-                                .decodeAll(chunk.column(ColumnName.of("D"))))
+                                .decodeAll((DType.Extension) schema.fieldTypes().get(1), chunk.column(ColumnName.of("D"))))
                                 .containsExactly(
                                         java.time.LocalDate.of(1996, 2, 12),
                                         java.time.LocalDate.of(2026, 6, 10));
@@ -202,9 +202,10 @@ class JdbcImporterTest {
                         assertThat(dMasked.isValid(0)).isTrue();
                         assertThat(dMasked.isValid(1)).isFalse();
                         assertThat(dMasked.isValid(2)).isTrue();
-                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decode(dMasked, 0))
+                        DType.Extension dDtype = (DType.Extension) schema.fieldTypes().get(1);
+                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decode(dDtype, dMasked, 0))
                                 .isEqualTo(java.time.LocalDate.of(1996, 2, 12));
-                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decode(dMasked, 2))
+                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decode(dDtype, dMasked, 2))
                                 .isEqualTo(java.time.LocalDate.of(2026, 6, 10));
 
                         DType.Extension tDtype = (DType.Extension) schema.fieldTypes().get(2);
@@ -230,7 +231,7 @@ class JdbcImporterTest {
                                 .isEqualTo(u1);
 
                         // And — decodeAll preserves nulls in the returned list at row 1
-                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decodeAll(dMasked))
+                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decodeAll(dDtype, dMasked))
                                 .containsExactly(
                                         java.time.LocalDate.of(1996, 2, 12),
                                         null,

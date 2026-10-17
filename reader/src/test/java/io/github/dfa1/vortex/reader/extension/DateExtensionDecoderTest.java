@@ -1,14 +1,20 @@
 package io.github.dfa1.vortex.reader.extension;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -19,8 +25,12 @@ import java.util.List;
 import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.I32;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DateExtensionDecoderTest {
+
+    private static final DType.Extension DAYS = DateExtensionDecoder.INSTANCE.dtype(false);
+    private static final DType.Extension MILLIS = dateDtype(TimeUnit.Milliseconds, DType.I64);
 
     private final DateExtensionDecoder sut = DateExtensionDecoder.INSTANCE;
 
@@ -53,7 +63,7 @@ class DateExtensionDecoderTest {
             IntArray storage = new MaterializedIntArray(I32, 1, buf);
 
             // When / Then
-            assertThat(sut.decode(storage, 0)).isEqualTo(LocalDate.of(1996, 2, 12));
+            assertThat(sut.decode(DAYS, storage, 0)).isEqualTo(LocalDate.of(1996, 2, 12));
         }
     }
 
@@ -66,7 +76,7 @@ class DateExtensionDecoderTest {
             IntArray storage = new MaterializedIntArray(I32, 1, buf);
 
             // When / Then
-            assertThat(sut.decode(storage, 0)).isEqualTo(LocalDate.of(1969, 12, 31));
+            assertThat(sut.decode(DAYS, storage, 0)).isEqualTo(LocalDate.of(1969, 12, 31));
         }
     }
 
@@ -86,7 +96,7 @@ class DateExtensionDecoderTest {
             BoolArray validity = new MaterializedBoolArray(DType.BOOL, 3, validityBuf);
 
             // When
-            List<LocalDate> out = sut.decodeAll(new MaskedArray(inner, validity));
+            List<LocalDate> out = sut.decodeAll(DAYS, new MaskedArray(inner, validity));
 
             // Then
             assertThat(out).containsExactly(
@@ -94,5 +104,65 @@ class DateExtensionDecoderTest {
                     null,
                     LocalDate.of(2026, 1, 3));
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            // Rust stores an Arrow Date64 as vortex.date(Milliseconds) over I64. The decoder used
+            // to read the count as days, so these came back ~86 million times too far from 1970.
+            "0, 1970-01-01",
+            "86400000, 1970-01-02",
+            "824083200000, 1996-02-12",
+            // before the epoch a millisecond count floors to the earlier day, not toward zero
+            "-1, 1969-12-31",
+            "-86400000, 1969-12-31",
+            "-86400001, 1969-12-30"
+    })
+    void decode_milliseconds_floorsToTheDay(long millis, LocalDate expected) {
+        // Given
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, millis);
+            LongArray storage = new MaterializedLongArray(DType.I64, 1, buf);
+
+            // When
+            LocalDate result = sut.decode(MILLIS, storage, 0);
+
+            // Then
+            assertThat(result).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void decodeAll_milliseconds_usesTheUnit() {
+        // Given — the same unit must reach decodeAll, the path Chunk.as takes
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(16);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 0L);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, 824_083_200_000L);
+            LongArray storage = new MaterializedLongArray(DType.I64, 2, buf);
+
+            // When
+            List<LocalDate> result = sut.decodeAll(MILLIS, storage);
+
+            // Then
+            assertThat(result).containsExactly(LocalDate.EPOCH, LocalDate.of(1996, 2, 12));
+        }
+    }
+
+    @Test
+    void date_unsupportedUnit_throws() {
+        // Given — Rust's Date supports only Days and Milliseconds
+        DType.Extension seconds = dateDtype(TimeUnit.Seconds, DType.I64);
+
+        // When / Then
+        assertThatThrownBy(() -> sut.date(seconds, 1L))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("does not support time unit Seconds");
+    }
+
+    private static DType.Extension dateDtype(TimeUnit unit, DType storage) {
+        return new DType.Extension("vortex.date", storage,
+                MemorySegment.ofArray(new byte[]{(byte) unit.ordinal()}), false);
     }
 }

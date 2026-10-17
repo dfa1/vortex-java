@@ -13,10 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Breaking:** opening a file with an extension id that has no registered decoder fails unless `ReadRegistry.Builder#allowUnknown()` is set, as in Rust; the column then reads as its storage array. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 - **Breaking:** `vortex.date`, `vortex.time`, `vortex.timestamp` and `vortex.uuid` dtypes are checked as Rust checks them (time unit, storage type, metadata) when writing and reading, and a file whose extension dtype has no metadata field is refused, as Rust refuses it. ([#547](https://github.com/dfa1/vortex-java/pull/547))
+- **Breaking:** `DateExtensionDecoder.decode` and `decodeAll` take the column's `DType.Extension`, which carries the time unit. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - **Breaking:** `ExtensionDecoder` is generic in its domain type and declares `domainType()` and `decodeAll(DType.Extension, Array)`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- `vortex.date` columns in milliseconds, as Rust writes an Arrow `Date64`, decode to the right dates instead of failing or reading the count as days. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - An extension column with no metadata no longer writes a file Rust refuses to read. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - `VortexWriter.create(…, WriteRegistry)` uses the registry's extension encoders instead of the built-in ones, and a `Collection` for an extension column with no encoder fails with a `VortexException`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
