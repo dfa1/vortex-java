@@ -22,29 +22,15 @@ import java.util.OptionalLong;
 /// The [SimdOperations] written with the incubating Vector API: explicit vector loops over the
 /// preferred species of the CPU, each with a scalar tail for the elements that do not fill a vector.
 /// The Vector API does the work, including the reductions; no kernel is forced back to a scalar loop
-/// to protect an ordering, with the two exceptions below.
+/// to protect an ordering, except where Rust's result depends on one: float sums are sequential and
+/// `I64` sums fall back to a checked sequential loop when a prefix could overflow.
 ///
 /// Only [SimdOperationsSupport] instantiates it, and only when `jdk.incubator.vector` is on the
 /// module graph (`--add-modules jdk.incubator.vector`); without it this class fails to link and the
 /// [AutoVectorizedSimdOperations] stays in effect. A differential test pins every kernel to that
 /// implementation, which follows the Rust reference.
 ///
-/// ## Where it differs from Rust (a deliberate decision)
-///
-/// - **Floating-point sums** accumulate lane-wise and reduce once, so they add in a different order
-///   from Rust's sequential `f64` sum. The result can differ in its last bits, and the JDK documents
-///   `reduceLanes(ADD)` on floats as using "an arbitrary order of operations, which may even vary over
-///   time", so it may also differ between runs and between CPUs with different vector widths. Integer
-///   results are exact.
-/// - **`I64`/`U64` sums** detect overflow on each lane's running sum, not on the sequential prefix Rust
-///   checks (a checked add per element). Both can report an overflow the other does not, on arrays whose
-///   partial sums approach the limits: for example `[MAX, 1, -1]` overflows Rust's prefix but not the
-///   total.
-/// - **`F16`** sums and min/max are scalar loops: the Vector API has no half-float lanes.
-///
-/// Outputs derived from these (the zone-map sum statistic) therefore depend on whether the module is
-/// enabled; the auto-vectorized implementation, used without the flag, is the Rust-parity one. See
-/// `docs/compatibility.md`.
+/// `F16` sums and min/max are scalar loops: the Vector API has no half-float lanes.
 ///
 /// The shape follows Hardwood's `VectorOperations` (Apache-2.0, hardwood-hq/hardwood): the
 /// preferred species, a main loop over whole vectors, and a scalar tail.
@@ -998,35 +984,39 @@ final class VectorApiSimdOperations implements SimdOperations {
         return total;
     }
 
-    // Overflow is detected on each lane's running sum (the sign bit of (acc ^ sum) & (v ^ sum) is set
-    // when the addition overflowed), not on the sequential prefix Rust checks, so the two can disagree
-    // in both directions on arrays whose partial sums approach the limits. The lanes and the scalar
-    // tail are then combined with exact checked adds.
+    // Rust drops the sum when any sequential prefix overflows, which a lane-wise check cannot see ([MAX, 1, -1]).
+    // When every element lies in [-2^k, 2^k) with n * 2^k <= 2^63 no prefix can overflow, so the lanes sum
+    // exactly; otherwise the checked sequential loop decides. (v ^ v >> 63) < 2^k tests the range with
+    // shift/xor/or only, as NEON has no 64-bit min/max. Data far from the limits (counts, ids, small amounts) takes the vector path.
     private static OptionalLong sumSigned(long[] a) {
+        int log2n = a.length <= 1 ? 0 : Long.SIZE - Long.numberOfLeadingZeros(a.length - 1L);
+        int k = 63 - log2n;
         LongVector acc = LongVector.zero(LONGS);
-        LongVector overflow = LongVector.zero(LONGS);
+        LongVector magnitude = LongVector.zero(LONGS);
         int i = 0;
         for (; i + LONGS.length() <= a.length; i += LONGS.length()) {
             LongVector v = LongVector.fromArray(LONGS, a, i);
-            LongVector next = acc.add(v);
-            overflow = overflow.or(acc.lanewise(VectorOperators.XOR, next).and(v.lanewise(VectorOperators.XOR, next)));
-            acc = next;
+            acc = acc.add(v);
+            magnitude = magnitude.or(v.lanewise(VectorOperators.XOR, v.lanewise(VectorOperators.ASHR, 63)));
         }
-        if (overflow.compare(VectorOperators.LT, 0L).anyTrue()) {
-            return OptionalLong.empty();
+        long total = acc.reduceLanes(VectorOperators.ADD);
+        long bits = magnitude.reduceLanes(VectorOperators.OR);
+        for (; i < a.length; i++) {
+            bits |= a[i] ^ (a[i] >> 63);
+            total += a[i];
         }
-        long total = 0;
-        try {
-            for (long lane : acc.toArray()) {
-                total = Math.addExact(total, lane);
+        if (bits >>> k == 0) {
+            return OptionalLong.of(total);
+        }
+        long s = 0;
+        for (long v : a) {
+            try {
+                s = Math.addExact(s, v);
+            } catch (ArithmeticException _) {
+                return OptionalLong.empty();
             }
-            for (; i < a.length; i++) {
-                total = Math.addExact(total, a[i]);
-            }
-        } catch (ArithmeticException _) {
-            return OptionalLong.empty();
         }
-        return OptionalLong.of(total);
+        return OptionalLong.of(s);
     }
 
     private static OptionalLong sumUnsigned(long[] a) {
@@ -1061,10 +1051,8 @@ final class VectorApiSimdOperations implements SimdOperations {
         return OptionalLong.of(total);
     }
 
-    // Lane-wise accumulation, reduced once at the end. The order of additions therefore differs from
-    // Rust's sequential f64 sum (and the JDK says reduceLanes(ADD) on floats may use "an arbitrary order
-    // of operations, which may even vary over time"), so the last bits of the result can differ from
-    // Rust's and from the auto-vectorized implementation's. F16 has no vector lanes: a plain loop.
+    // Sequential, as Rust: float addition is not associative and reduceLanes(ADD) has no defined order, so
+    // lanes would change the last bits.
     @Override
     public double sumFloating(Object values, PType ptype) {
         return switch (ptype) {
@@ -1085,36 +1073,20 @@ final class VectorApiSimdOperations implements SimdOperations {
     }
 
     private static double sum(float[] a) {
-        int parts = FLOATS.length() / DOUBLES.length();
-        DoubleVector acc = DoubleVector.zero(DOUBLES);
-        int i = 0;
-        for (; i + FLOATS.length() <= a.length; i += FLOATS.length()) {
-            FloatVector v = FloatVector.fromArray(FLOATS, a, i);
-            for (int part = 0; part < parts; part++) {
-                DoubleVector d = (DoubleVector) v.convertShape(VectorOperators.F2D, DOUBLES, part);
-                acc = acc.add(d, d.eq(d));
-            }
-        }
-        double total = acc.reduceLanes(VectorOperators.ADD);
-        for (; i < a.length; i++) {
-            if (!Float.isNaN(a[i])) {
-                total += a[i];
+        double total = 0;
+        for (float v : a) {
+            if (!Float.isNaN(v)) {
+                total += v;
             }
         }
         return total;
     }
 
     private static double sum(double[] a) {
-        DoubleVector acc = DoubleVector.zero(DOUBLES);
-        int i = 0;
-        for (; i + DOUBLES.length() <= a.length; i += DOUBLES.length()) {
-            DoubleVector v = DoubleVector.fromArray(DOUBLES, a, i);
-            acc = acc.add(v, v.eq(v));
-        }
-        double total = acc.reduceLanes(VectorOperators.ADD);
-        for (; i < a.length; i++) {
-            if (!Double.isNaN(a[i])) {
-                total += a[i];
+        double total = 0;
+        for (double v : a) {
+            if (!Double.isNaN(v)) {
+                total += v;
             }
         }
         return total;
