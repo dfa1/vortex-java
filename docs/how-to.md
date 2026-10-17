@@ -628,6 +628,83 @@ java -jar cli/target/vortex-cli-*-all.jar filter data.vortex "price >= 100" > ou
 
 ---
 
+## Write and read Java objects
+
+The `vortex-mapper` module maps objects to rows through explicit callbacks: no reflection, no
+annotations, any class. On the write side, `ColumnMapping` declares each column once, with its
+name, its Vortex type (the method name) and a getter. The file schema is that list:
+
+```java
+import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.mapper.ColumnMapping;
+import io.github.dfa1.vortex.mapper.Rows;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+import java.util.stream.Stream;
+
+record Trade(long ts, String symbol, double price, int volume, boolean buy, Double fee, byte[] orderId) {}
+
+ColumnMapping<Trade> trades = ColumnMapping.<Trade>builder()
+        .i64("ts", Trade::ts)
+        .utf8("symbol", Trade::symbol)
+        .f64("price", Trade::price)
+        .u32("volume", Trade::volume)            // unsigned: the raw bits of an int
+        .bool("buy", Trade::buy)
+        .nullableF64("fee", Trade::fee)          // null is a null cell
+        .binary("order_id", Trade::orderId)
+        .build();
+
+Path path = Path.of("trades.vortex");
+List<Trade> rows = List.of(
+        new Trade(1_700_000_000_000L, "AAPL", 189.95, 100, true, 0.5, new byte[]{1}),
+        new Trade(1_700_000_001_000L, "MSFT", 410.20, -1, false, null, new byte[]{2}));
+try (var channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+             StandardOpenOption.TRUNCATE_EXISTING);
+     var writer = VortexWriter.create(channel, trades.schema(), WriteOptions.defaults())) {
+    trades.write(writer, rows);          // call again to stream more rows
+}
+```
+
+On the read side, **projection is the model**: list only the columns you need in `ScanOptions`,
+and only those are decoded, however wide the file. `Rows.stream` hands each row to a mapper,
+which reads the cells by their position in that list:
+
+```java
+record PriceOnly(double price) {}
+
+try (var reader = VortexReader.open(Path.of("trades.vortex"));
+     Stream<PriceOnly> prices = Rows.stream(reader,
+             ScanOptions.columns(ColumnName.of("price")),
+             row -> new PriceOnly(row.getDouble(0)))) {
+    prices.forEach(System.out::println);
+}
+```
+
+Nulls and unsigned values are explicit: check `isNull` before a primitive getter on a nullable
+column, and widen unsigned raw bits yourself. Limits and filters on the `ScanOptions` apply as in
+a plain scan:
+
+```java
+record Fill(String symbol, long volume, Double fee) {}
+
+try (var reader = VortexReader.open(Path.of("trades.vortex"));
+     Stream<Fill> fills = Rows.stream(reader,
+             ScanOptions.columns(ColumnName.of("symbol"), ColumnName.of("volume"), ColumnName.of("fee"))
+                     .withLimit(10),
+             row -> new Fill(
+                     row.getString(0),
+                     Integer.toUnsignedLong(row.getInt(1)),
+                     row.isNull(2) ? null : row.getDouble(2)))) {
+    fills.forEach(System.out::println);
+}
+```
+
+A getter of the wrong type for its column (`getLong` on an `F64`) and a projected column the file
+does not have both fail with `IllegalArgumentException`. Encoding overrides stay on
+`WriteOptions#withColumnEncoding`.
+
+---
+
 ## Write and read a Map column
 
 `DType.Map` has no dedicated write-side value type. Physically, a map column's `vortex.map`

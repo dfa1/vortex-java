@@ -230,6 +230,44 @@ class SequenceEncodingEncoderTest {
         }
 
         @Test
+        void encode_u8AboveSignedRange_baseIsTheUnsignedValue() throws Exception {
+            // Given: sign-extended, 200 became a base of -56, which Rust cannot narrow to u8
+            byte[] data = {(byte) 200, (byte) 201, (byte) 202};
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.U8, data, EncodeTestHelper.testCtx());
+
+            // Then
+            MemorySegment metaSeg = result.rootNode().metadata();
+            ProtoSequenceMetadata meta = ProtoSequenceMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            assertThat(meta.base().uint64_value()).isEqualTo(200L);
+            assertThat(meta.multiplier().uint64_value()).isEqualTo(1L);
+        }
+
+        /// Sequences only in wrapping 64-bit arithmetic: Rust's checked arithmetic in the column type
+        /// rejects each, and reading one back fails with "final value not expressible".
+        static Stream<Arguments> wrappingSequences() {
+            return Stream.of(
+                    Arguments.of(DTypes.U64, new long[]{10, 7, 4}),
+                    Arguments.of(DTypes.U64, new long[]{0, -3_000_000_019L, -6_000_000_038L}),
+                    Arguments.of(DTypes.U8, new byte[]{(byte) 2, (byte) 1}),
+                    Arguments.of(DTypes.I8, new byte[]{-128, 127}),
+                    Arguments.of(DTypes.I64, new long[]{Long.MIN_VALUE, Long.MAX_VALUE}),
+                    Arguments.of(DTypes.I64, new long[]{Long.MAX_VALUE - 1, Long.MAX_VALUE, Long.MIN_VALUE}));
+        }
+
+        @ParameterizedTest(name = "{0} {1}")
+        @MethodSource("wrappingSequences")
+        void encode_sequenceOnlyByWrapping_throwsVortexException(DType dtype, Object data) {
+            // Given
+            EncodeContext ctx = EncodeTestHelper.testCtx();
+
+            // When / Then
+            assertThatThrownBy(() -> ENCODER.encode(dtype, data, ctx))
+                    .isInstanceOf(VortexException.class);
+        }
+
+        @Test
         void encode_nonPrimitiveDtype_throwsVortexException() {
             // Given
             EncodeContext ctx = EncodeTestHelper.testCtx();

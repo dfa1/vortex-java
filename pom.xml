@@ -44,6 +44,7 @@
         <module>core</module>
         <module>reader</module>
         <module>writer</module>
+        <module>mapper</module>
         <module>csv</module>
         <module>jdbc</module>
         <module>parquet</module>
@@ -182,6 +183,11 @@
             <dependency>
                 <groupId>io.github.dfa1.vortex</groupId>
                 <artifactId>vortex-csv</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dfa1.vortex</groupId>
+                <artifactId>vortex-mapper</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

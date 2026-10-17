@@ -10,6 +10,7 @@ For task-oriented usage see [how-to.md](how-to.md); for design rationale see [ex
 - [Encoding registry](#encoding-registry)
 - [FSST (`io.github.dfa1.vortex.fsst`)](#fsst-iogithubdfa1vortexfsst)
 - [Parquet / CSV import and Parquet export](#parquet--csv-import-and-parquet-export)
+- [Object mapping](#object-mapping)
 - [JDBC import](#jdbc-import)
 - [Calcite SQL adapter](#calcite-sql-adapter)
 - [CLI](#cli)
@@ -553,6 +554,65 @@ file.
 
 A `URI` source streams the response body directly, front to back, as it arrives — unlike
 Parquet's random-access footer-first format, CSV needs no Range requests and no local temp file.
+
+---
+
+## Object mapping
+
+Module `vortex-mapper`: objects in and out as rows, through explicit callbacks (no reflection, no
+annotations). See [Write and read Java objects](how-to.md#write-and-read-java-objects).
+
+### `ColumnMapping` (`io.github.dfa1.vortex.mapper.ColumnMapping`)
+
+| Method                                     | Description                                                              |
+|--------------------------------------------|--------------------------------------------------------------------------|
+| `ColumnMapping.<T>builder()`               | Starts a mapping; columns are declared in file order                     |
+| `schema()`                                 | The `DType.Struct` to pass to `VortexWriter.create`                      |
+| `write(VortexWriter, List<? extends T>)`   | Gathers each column from the rows and writes one `writeChunk`; empty list writes nothing |
+
+Builder methods, each `(String name, getter)`; every one has a `nullableXxx` twin taking a
+`Function<? super T, Box>` whose `null` is a null cell:
+
+| Method        | Column  | Getter                         |
+|---------------|---------|--------------------------------|
+| `bool`        | `Bool`  | `Predicate<? super T>`         |
+| `i8`, `u8`    | `I8`, `U8` | `Function<? super T, Byte>`  |
+| `i16`, `u16`  | `I16`, `U16` | `Function<? super T, Short>` |
+| `i32`, `u32`  | `I32`, `U32` | `ToIntFunction<? super T>`  |
+| `i64`, `u64`  | `I64`, `U64` | `ToLongFunction<? super T>` |
+| `f32`         | `F32`   | `Function<? super T, Float>`   |
+| `f64`         | `F64`   | `ToDoubleFunction<? super T>`  |
+| `utf8`        | `Utf8`  | `Function<? super T, String>`  |
+| `binary`      | `Binary`| `Function<? super T, byte[]>`  |
+
+Unsigned columns take the raw bits of the same-width Java type. A non-nullable column rejects a
+`null` with `IllegalArgumentException`; a duplicate or invalid column name fails at declaration.
+
+### `Rows` (`io.github.dfa1.vortex.mapper.Rows`)
+
+| Method                                                                        | Description |
+|-------------------------------------------------------------------------------|-------------|
+| `stream(VortexReader, ScanOptions, Function<? super Row, ? extends T>)`       | Lazily maps every row the scan selects; close the stream to release the scan. Fails with `IllegalArgumentException` if a projected column is not in the file |
+
+### `Row` (`io.github.dfa1.vortex.mapper.Row`)
+
+One row of a `Rows.stream` scan; cells are addressed by their position in the projection (file
+order with no projection). The instance moves along the scan, so do not keep it.
+
+| Method                    | Reads                     | Null cell          |
+|---------------------------|---------------------------|--------------------|
+| `isNull(int)`             | any column                | `true`             |
+| `getBoolean(int)`         | `Bool`                    | unspecified        |
+| `getByte(int)`            | `I8`, `U8` (raw bits)     | unspecified        |
+| `getShort(int)`           | `I16`, `U16` (raw bits)   | unspecified        |
+| `getInt(int)`             | `I32`, `U32` (raw bits)   | unspecified        |
+| `getLong(int)`            | `I64`, `U64` (raw bits)   | unspecified        |
+| `getFloat(int)`           | `F32`                     | unspecified        |
+| `getDouble(int)`          | `F64`                     | unspecified        |
+| `getString(int)`          | `Utf8`                    | `null`             |
+| `getBytes(int)`           | `Binary`, `Utf8` (a copy) | `null`             |
+
+A getter on a column of another type throws `IllegalArgumentException`.
 
 ---
 

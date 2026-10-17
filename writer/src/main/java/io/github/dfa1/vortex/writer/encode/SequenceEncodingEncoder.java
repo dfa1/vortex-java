@@ -67,18 +67,24 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         return encodeInteger(((DType.Primitive) dtype).ptype(), data);
     }
 
+    /// Rust's `encode_primitive_array`: the step is a checked subtraction and every next value a
+    /// checked addition, both in the column's own type, so a sequence that only holds by wrapping
+    /// (a negative step for an unsigned column, a step or a value past the type's range) is not one.
+    /// Rust refuses to read such a sequence back: its last value is not expressible in the type.
     private static EncodeResult encodeInteger(PType pt, Object data) {
         int n = Array.getLength(data);
         long base = 0;
         long multiplier = 0;
         if (n > 0) {
             base = readLong(pt, data, 0);
-            multiplier = n > 1 ? readLong(pt, data, 1) - base : 0;
-            for (int i = 2; i < n; i++) {
-                long expected = base + i * multiplier;
-                if (readLong(pt, data, i) != expected) {
+            multiplier = n > 1 ? step(pt, base, readLong(pt, data, 1)) : 0;
+            long previous = base;
+            for (int i = 1; i < n; i++) {
+                long current = readLong(pt, data, i);
+                if (!follows(pt, previous, multiplier, current)) {
                     throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
                 }
+                previous = current;
             }
         }
         ProtoScalarValue baseScalar = buildIntScalar(pt, base);
@@ -111,11 +117,54 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         };
     }
 
+    /// `next - first` in `pt`, or a [VortexException] when the type cannot hold it. Narrow values
+    /// are exact in a `long`, so only their range needs checking; 64-bit ones need overflow checks.
+    private static long step(PType pt, long first, long next) {
+        long step = next - first;
+        boolean fits = switch (pt) {
+            case I8 -> step == (byte) step;
+            case I16 -> step == (short) step;
+            case I32 -> step == (int) step;
+            case I64 -> exact(() -> Math.subtractExact(next, first));
+            case U8, U16, U32 -> step >= 0;
+            default -> Long.compareUnsigned(next, first) >= 0;
+        };
+        if (!fits) {
+            throw new VortexException(EncodingId.VORTEX_SEQUENCE, "step " + first + " -> " + next + " overflows " + pt);
+        }
+        return step;
+    }
+
+    /// Whether `current` is `previous + step` without overflowing `pt`. A narrow sum is exact in a
+    /// `long` and `current` is in range, so equality suffices there.
+    private static boolean follows(PType pt, long previous, long step, long current) {
+        long sum = previous + step;
+        return switch (pt) {
+            case I64 -> sum == current && exact(() -> Math.addExact(previous, step));
+            case U64 -> sum == current && Long.compareUnsigned(sum, previous) >= 0;
+            default -> sum == current;
+        };
+    }
+
+    private static boolean exact(java.util.function.LongSupplier arithmetic) {
+        try {
+            arithmetic.getAsLong();
+            return true;
+        } catch (ArithmeticException _) {
+            return false;
+        }
+    }
+
+    /// The value at `i`, zero-extended for an unsigned type so it compares and serializes as the
+    /// number it stands for (a `U8` of 200 is 200, not -56).
     private static long readLong(PType pt, Object data, int i) {
         return switch (pt) {
-            case I8, U8 -> ((byte[]) data)[i];
-            case I16, U16 -> ((short[]) data)[i];
-            case I32, U32 -> ((int[]) data)[i];
+            case I8 -> ((byte[]) data)[i];
+            case U8 -> Byte.toUnsignedLong(((byte[]) data)[i]);
+            case I16 -> ((short[]) data)[i];
+            case U16 -> Short.toUnsignedLong(((short[]) data)[i]);
+            case I32 -> ((int[]) data)[i];
+            case U32 -> Integer.toUnsignedLong(((int[]) data)[i]);
             case I64, U64 -> ((long[]) data)[i];
             default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unsupported ptype: " + pt);
         };

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New `vortex-mapper` module reads and writes your own objects as rows: `ColumnMapping` declares each column with a getter, and `Rows.stream` maps a projected scan through a `Row` callback. ([#528](https://github.com/dfa1/vortex-java/issues/528))
 - `vortex.json` and the `vortex.st.*` geometry columns open without a decoder and read as their storage, as vortex-jni reads them. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - The CLI takes `--allow-unknown` to open files with extension types it has no decoder for, and CSV `ExportOptions.withReadRegistry` picks the registry an export opens the file with. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- Unsigned integer columns that step evenly only past their type's range, or above the signed range of `U8`/`U16`/`U32`, no longer write a `vortex.sequence` that Rust refuses to read. ([#528](https://github.com/dfa1/vortex-java/issues/528))
 - `vortex count`, `schema`, `stats` and `export` report a malformed file as an error instead of crashing with a stack trace. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - `vortex.date` columns in milliseconds, as Rust writes an Arrow `Date64`, decode to the right dates instead of failing or reading the count as days. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - An extension column with no metadata no longer writes a file Rust refuses to read. ([#547](https://github.com/dfa1/vortex-java/pull/547))
