@@ -11,17 +11,31 @@ import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.DateDayVector;
+import org.apache.arrow.vector.DecimalVector;
+import org.apache.arrow.vector.TimeMilliVector;
+import org.apache.arrow.vector.TimeStampMicroTZVector;
+import org.apache.arrow.vector.TimeStampMicroVector;
+import org.apache.arrow.vector.VarBinaryVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.types.DateUnit;
+import org.apache.arrow.vector.types.TimeUnit;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +50,10 @@ class CalciteInteropIntegrationTest {
     // several batches, so the row count is a sum over chunks, not a single chunk's length
     private static final int BATCHES = 3;
     private static final int BATCH_ROWS = 1_000;
+    private static final LocalDate DATE = LocalDate.of(2024, 2, 29);
+    private static final LocalTime TIME = LocalTime.of(13, 45, 30);
+    // pre-epoch on purpose: millisecond truncation must floor, not round toward zero
+    private static final Instant INSTANT = Instant.parse("1969-12-31T23:59:59.250Z");
 
     static {
         NativeLoader.loadJni();
@@ -58,6 +76,60 @@ class CalciteInteropIntegrationTest {
              ResultSet rs = st.executeQuery("select count(*) from vtx.t")) {
             assertThat(rs.next()).isTrue();
             assertThat(rs.getLong(1)).isEqualTo((long) BATCHES * BATCH_ROWS);
+        }
+    }
+
+    @Test
+    void jniWriter_temporalDecimalAndBinaryColumns_readThroughSql(@TempDir Path tmp) throws Exception {
+        // Given — a file with a timestamp could not be queried at all: the row type threw
+        Path file = tmp.resolve("jni_types.vortex");
+        writeTypesWithJni(file);
+        String sql = "select `day`, at, wall, `instant`, amount, blob from vtx.t";
+
+        // When
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
+             Statement st = conn.createStatement();
+             ResultSet result = st.executeQuery(sql)) {
+
+            // Then
+            assertThat(result.next()).isTrue();
+            assertThat(result.getDate("day").toLocalDate()).isEqualTo(DATE);
+            assertThat(result.getTime("at").toLocalTime()).isEqualTo(TIME);
+            assertThat(result.getTimestamp("wall").toLocalDateTime())
+                    .isEqualTo(LocalDateTime.ofInstant(INSTANT, ZoneOffset.UTC));
+            assertThat(result.getTimestamp("instant").toLocalDateTime())
+                    .isEqualTo(LocalDateTime.ofInstant(INSTANT, ZoneOffset.UTC));
+            assertThat(result.getBigDecimal("amount")).isEqualByComparingTo("12.34");
+            assertThat(result.getBytes("blob")).containsExactly(1, 2, 3);
+            assertThat(result.next()).isFalse();
+        }
+    }
+
+    private static void writeTypesWithJni(Path file) throws Exception {
+        Schema schema = new Schema(List.of(
+                Field.notNullable("day", new ArrowType.Date(DateUnit.DAY)),
+                Field.notNullable("at", new ArrowType.Time(TimeUnit.MILLISECOND, 32)),
+                Field.notNullable("wall", new ArrowType.Timestamp(TimeUnit.MICROSECOND, null)),
+                Field.notNullable("instant", new ArrowType.Timestamp(TimeUnit.MICROSECOND, "UTC")),
+                Field.notNullable("amount", new ArrowType.Decimal(10, 2, 128)),
+                Field.notNullable("blob", new ArrowType.Binary())));
+        long micros = INSTANT.getEpochSecond() * 1_000_000 + INSTANT.getNano() / 1_000;
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+            root.allocateNew();
+            ((DateDayVector) root.getVector("day")).setSafe(0, Math.toIntExact(DATE.toEpochDay()));
+            ((TimeMilliVector) root.getVector("at")).setSafe(0, (int) (TIME.toNanoOfDay() / 1_000_000));
+            ((TimeStampMicroVector) root.getVector("wall")).setSafe(0, micros);
+            ((TimeStampMicroTZVector) root.getVector("instant")).setSafe(0, micros);
+            ((DecimalVector) root.getVector("amount")).setSafe(0, new BigDecimal("12.34"));
+            ((VarBinaryVector) root.getVector("blob")).setSafe(0, new byte[]{1, 2, 3});
+            root.setRowCount(1);
+            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
+                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
+            }
         }
     }
 

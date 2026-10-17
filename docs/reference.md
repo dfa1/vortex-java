@@ -611,6 +611,21 @@ preserved) and the **Babel** SQL parser, so a column named after a reserved word
 keywords that open a typed literal (`date`, `time`, `timestamp`, `interval`), which stay reserved
 even under Babel and need back-ticks: `` select `date` from vtx.ohlc ``.
 
+Column types map as follows. Unsigned integers widen to the next signed type (`U64` stays `BIGINT`
+and fails on values past 2^63); `F16` reads as `REAL`.
+
+| Vortex                                      | SQL                                               |
+|---------------------------------------------|---------------------------------------------------|
+| `bool`, `utf8`, `binary`                    | `BOOLEAN`, `VARCHAR`, `VARBINARY`                 |
+| `decimal(p, s)`                             | `DECIMAL(p, s)`                                   |
+| `vortex.date`, `vortex.time`, `vortex.uuid` | `DATE`, `TIME`, `UUID`                            |
+| `vortex.timestamp`, with or without a zone  | `TIMESTAMP`, the stored instant as a UTC wall clock |
+| other extensions                            | their storage type                                |
+| list, struct, map, union, variant           | `ANY`; selecting the column fails                 |
+
+`DATE`, `TIME` and `TIMESTAMP` values carry millisecond precision. A zoned timestamp is not
+`TIMESTAMP WITH LOCAL TIME ZONE` because Avatica's JDBC getters shift that type by the JVM's zone.
+
 Whole-table aggregates (`min`/`max`/`sum`) are answered from zone-map statistics via
 `VortexAggregatePushDownRule` where possible — no data segment is decoded. The fold needs one zone
 per chunk and a per-zone sum, i.e. the legacy `vortex.stats` zone map (writes targeting an edition
