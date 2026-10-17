@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -754,6 +755,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// `U32`->`BIGINT`); `U64` is the exception — no wider SQL integer exists, so it maps to
     /// `BIGINT` and [VortexEnumerator] guards the high-half values that cannot fit.
     ///
+    /// `vortex.timestamp` is a `TIMESTAMP` holding the stored value as a UTC wall clock, zone or
+    /// not: Avatica shifts `TIMESTAMP WITH LOCAL TIME ZONE` by the JVM's zone in its JDBC getters,
+    /// so a zoned instant would read back wrong. An extension with no SQL counterpart reads as its storage
+    /// type. Nested types (list, struct, map, union, variant) map to `ANY` so the rest of the table
+    /// stays queryable; selecting one fails in [VortexEnumerator].
+    ///
     /// @param factory the Calcite type factory
     /// @param type    the Vortex column dtype
     /// @return the nullable-adjusted SQL type
@@ -769,8 +776,19 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 case I8 -> factory.createSqlType(SqlTypeName.TINYINT);
             };
             case DType.Utf8 _ -> factory.createSqlType(SqlTypeName.VARCHAR);
+            case DType.Binary _ -> factory.createSqlType(SqlTypeName.VARBINARY);
             case DType.Bool _ -> factory.createSqlType(SqlTypeName.BOOLEAN);
-            default -> throw new IllegalStateException("unsupported column dtype: " + type);
+            case DType.Null _ -> factory.createSqlType(SqlTypeName.NULL);
+            case DType.Decimal d -> factory.createSqlType(SqlTypeName.DECIMAL, d.precision(), d.scale());
+            case DType.Extension ext -> switch (ExtensionId.parse(ext.extensionId())) {
+                case ExtensionId.WellKnown.VORTEX_DATE -> factory.createSqlType(SqlTypeName.DATE);
+                case ExtensionId.WellKnown.VORTEX_TIME -> factory.createSqlType(SqlTypeName.TIME);
+                case ExtensionId.WellKnown.VORTEX_TIMESTAMP -> factory.createSqlType(SqlTypeName.TIMESTAMP);
+                case ExtensionId.WellKnown.VORTEX_UUID -> factory.createSqlType(SqlTypeName.UUID);
+                default -> toSqlType(factory, ext.storageDType());
+            };
+            case DType.List _, DType.FixedSizeList _, DType.Struct _, DType.Map _, DType.Union _,
+                 DType.Variant _ -> factory.createSqlType(SqlTypeName.ANY);
         };
         return factory.createTypeWithNullability(sql, type.nullable());
     }

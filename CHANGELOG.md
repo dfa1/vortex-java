@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- The Calcite adapter reads decimal, binary, date, time, timestamp and uuid columns, and a list, struct, map, union or variant column no longer stops the other columns of its table from being queried. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - An extension dtype read from a file stays usable after its `VortexReader` is closed, instead of failing with "Already closed". ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - `vortex count`, `schema`, `stats` and `export` report a malformed file as an error instead of crashing with a stack trace. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - `vortex.date` columns in milliseconds, as Rust writes an Arrow `Date64`, decode to the right dates instead of failing or reading the count as days. ([#547](https://github.com/dfa1/vortex-java/pull/547))

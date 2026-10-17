@@ -3,14 +3,17 @@ package io.github.dfa1.vortex.calcite;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.compute.Compute;
+import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -19,7 +22,12 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
 
+import org.apache.calcite.avatica.util.ByteString;
 import org.apache.calcite.linq4j.Enumerator;
 
 import java.io.IOException;
@@ -168,8 +176,24 @@ final class VortexEnumerator implements Enumerator<Object[]> {
                 case I8, U8 -> ((ByteArray) array).getInt(r);
             };
             case DType.Utf8 _ -> ((VarBinArray) array).getString(r);
+            case DType.Binary _ -> new ByteString(((VarBinArray) array).getBytes(r));
             case DType.Bool _ -> ((BoolArray) array).getBoolean(r);
-            default -> throw new IllegalStateException("unsupported column dtype: " + type);
+            case DType.Null _ -> null;
+            case DType.Decimal _ -> ((DecimalArray) array).getDecimal(r);
+            // Calcite's internal forms: DATE is days since the epoch (int), TIME milliseconds of the
+            // day (int), TIMESTAMP milliseconds since the epoch (long)
+            case DType.Extension ext -> switch (ExtensionId.parse(ext.extensionId())) {
+                case ExtensionId.WellKnown.VORTEX_DATE ->
+                        Math.toIntExact(DateExtensionDecoder.INSTANCE.decode(ext, (Array) array, r).toEpochDay());
+                case ExtensionId.WellKnown.VORTEX_TIME ->
+                        (int) (TimeExtensionDecoder.INSTANCE.decode(ext, (Array) array, r).toNanoOfDay() / 1_000_000);
+                case ExtensionId.WellKnown.VORTEX_TIMESTAMP ->
+                        TimestampExtensionDecoder.INSTANCE.instant(ext, (Array) array, r).toEpochMilli();
+                case ExtensionId.WellKnown.VORTEX_UUID -> UuidExtensionDecoder.INSTANCE.decode((Array) array, r);
+                default -> value(array, ext.storageDType(), r);
+            };
+            case DType.List _, DType.FixedSizeList _, DType.Struct _, DType.Map _, DType.Union _,
+                 DType.Variant _ -> throw new VortexException("SQL cannot read a " + type + " column yet");
         };
     }
 
