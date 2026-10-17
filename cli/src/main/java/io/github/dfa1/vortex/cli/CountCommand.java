@@ -25,7 +25,7 @@ final class CountCommand {
         try (VortexReader reader = VortexReader.open(path)) {
             System.out.println(reader.layout().rowCount());
             return ExitStatus.OK;
-        } catch (IOException e) {
+        } catch (IOException | io.github.dfa1.vortex.core.error.VortexException e) {
             System.err.println("error: " + e.getMessage());
             return ExitStatus.ERROR;
         }
