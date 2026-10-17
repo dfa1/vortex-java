@@ -306,10 +306,11 @@ spec extensions (`LocalDate` ↔ `vortex.date`, `LocalTime` ↔ `vortex.time`,
 `Instant` ↔ `vortex.timestamp`, `UUID` ↔ `vortex.uuid`); the dispatch is closed over the
 spec set. Third-party extensions call their own impl's typed methods directly.
 
-`ExtensionId` is the enum of known spec ids (`VORTEX_DATE`, `VORTEX_TIME`,
-`VORTEX_TIMESTAMP`, `VORTEX_UUID`). Unknown wire ids on `DType.Extension`
-round-trip verbatim through the raw `String` field — the registry simply
-returns `null` for them and callers can read the storage column directly.
+`ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`: the spec ids
+(`VORTEX_DATE`, `VORTEX_TIME`, `VORTEX_TIMESTAMP`, `VORTEX_UUID`) plus any third-party id.
+Unknown wire ids on `DType.Extension` round-trip verbatim through the raw `String` field and
+read as their storage array, as Rust's `ForeignExtDType` does. A blank id, or one with a control
+character, fails the read with `VortexException` (Rust accepts any string).
 
 | Extension id        | Impl                   | Storage                                         | Metadata                                  | Round-trip |
 |---------------------|------------------------|-------------------------------------------------|-------------------------------------------|------------|

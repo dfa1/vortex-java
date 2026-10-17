@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
+
 ### Fixed
 - `VortexWriter.create(…, WriteRegistry)` uses the registry's extension encoders instead of the built-in ones, and a `Collection` for an extension column with no encoder fails with a `VortexException`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 

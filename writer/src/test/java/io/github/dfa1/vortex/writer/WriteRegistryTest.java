@@ -104,6 +104,21 @@ class WriteRegistryTest {
     }
 
     @Test
+    void registerExtension_customAndWellKnownIds_bothLookUp() {
+        // Given — a Custom id next to a WellKnown one. The builder's TreeMap used natural ordering,
+        // which a Custom record does not have: the second put threw ClassCastException.
+        ExtensionEncoder custom = extension(new ExtensionId.Custom("acme.geopoint"));
+        ExtensionEncoder date = extension(ExtensionId.VORTEX_DATE);
+
+        // When
+        WriteRegistry result = WriteRegistry.builder().register(date).register(custom).build();
+
+        // Then
+        assertThat(result.lookup(ExtensionId.parse("acme.geopoint"))).isSameAs(custom);
+        assertThat(result.lookup(ExtensionId.VORTEX_DATE)).isSameAs(date);
+    }
+
+    @Test
     void lookup_unregisteredExtension_returnsNull() {
         // Given — empty registry
 
