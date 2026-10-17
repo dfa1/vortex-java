@@ -143,10 +143,21 @@ an unkillable test. Only add a test when the mutated bound is a genuine, indepen
 ### Releasing
 
 ```bash
+scripts/release.sh <version> [<next>-SNAPSHOT]   # next defaults to the next patch
+```
+
+The script refuses unless you are on a clean `main` equal to `origin/main`, CI is green for that commit, the
+tag is new and `CHANGELOG.md` has the `## [<version>] — <date>` section. It then runs the two steps below,
+which are what to run by hand if it is unavailable:
+
+```bash
 ./mvnw --batch-mode release:clean release:prepare \
     -DreleaseVersion=<version> -DdevelopmentVersion=<next>-SNAPSHOT
 git push && git push --tags          # GitHub Actions deploys the tag to Maven Central
 ```
+
+The tag push also creates the GitHub release, from the version's CHANGELOG section
+(`.github/workflows/publish.yml`).
 
 ## File format
 
