@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import java.util.List;
 import java.util.Optional;
 
 /// The file formats `import`/`export` recognize by extension. The single source of truth for
@@ -10,6 +11,9 @@ enum FileFormat {
     CSV(".csv"),
     PARQUET(".parquet"),
     VORTEX(".vortex");
+
+    // values() clones its array on every call; take it once.
+    private static final List<FileFormat> ALL = List.of(values());
 
     private final String extension;
 
@@ -30,7 +34,7 @@ enum FileFormat {
     /// @param fileName a file name or URL path, e.g. `"data.parquet"`
     /// @return the matching format, or empty if none of `.csv`/`.parquet`/`.vortex` matches
     static Optional<FileFormat> of(String fileName) {
-        for (FileFormat format : values()) {
+        for (FileFormat format : ALL) {
             if (format.matches(fileName)) {
                 return Optional.of(format);
             }

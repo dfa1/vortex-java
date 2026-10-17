@@ -326,6 +326,13 @@ procedure):
   `forEachChunk`; use `Optional`, records, sealed types, pattern switches, virtual threads, FFM).
   New APIs should feel like JDK APIs.
 - Always braces for `if`/`else`/`for`/`while`, even one-liners (`if (c) { return a; }`).
+- **Enums: never call `values()` on a call path.** `values()` allocates a fresh array on every call (64 B for
+  `PType`), which the JIT does not remove. Look a constant up by wire tag, ordinal or number with a `switch`
+  expression: no allocation, and about 4x faster than `values()[i]` when the ordinals repeat, as in real files
+  (it is a jump table, so uniformly random ordinals cost a mispredict). Pin it to the declaration order with an
+  `@EnumSource` round-trip test. The generated proto enums already do this (`proto-gen`'s `CodeGen`). To
+  iterate all constants, take the array once: `private static final List<X> ALL = List.of(values());`.
+  `values()` inside a static initializer is fine; tests are exempt.
 - **Time quantities use `java.time.Duration`, never `long`** (no `long timeoutMs`/`delayNanos`).
   Exception: low-level JDK interop taking `long ns` (`Thread.sleep`, `LockSupport.parkNanos`,
   `System.nanoTime` math) — convert at the call site via `duration.toNanos()`/`toMillis()`.

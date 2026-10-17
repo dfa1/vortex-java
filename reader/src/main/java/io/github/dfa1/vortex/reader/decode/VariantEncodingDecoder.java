@@ -66,7 +66,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         }
         if (proto.primitive() != null) {
             return new DType.Primitive(
-                    PType.values()[proto.primitive().type().value()],
+                    PType.fromOrdinal(proto.primitive().type().value()),
                     proto.primitive().nullable());
         }
         if (proto.decimal() != null) {

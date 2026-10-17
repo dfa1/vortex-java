@@ -93,13 +93,23 @@ public enum PType {
     /// @throws VortexException if `ordinal` is negative or greater than the largest defined
     ///                         [PType] ordinal
     public static PType fromOrdinal(int ordinal) {
-        PType[] all = values();
-        if (ordinal < 0 || ordinal >= all.length) {
-            throw new VortexException(
-                    "invalid PType ordinal=" + ordinal
-                            + " (expected 0.." + (all.length - 1) + ")");
-        }
-        return all[ordinal];
+        // A switch, not values()[ordinal]: values() clones the array on every call, and this runs
+        // for every dtype decoded. A test pins the cases to the declaration order.
+        return switch (ordinal) {
+            case 0 -> U8;
+            case 1 -> U16;
+            case 2 -> U32;
+            case 3 -> U64;
+            case 4 -> I8;
+            case 5 -> I16;
+            case 6 -> I32;
+            case 7 -> I64;
+            case 8 -> F16;
+            case 9 -> F32;
+            case 10 -> F64;
+            default -> throw new VortexException(
+                    "invalid PType ordinal=" + ordinal + " (expected 0.." + F64.ordinal() + ")");
+        };
     }
 
     /// Returns the narrowest unsigned integer ptype that can hold every value in

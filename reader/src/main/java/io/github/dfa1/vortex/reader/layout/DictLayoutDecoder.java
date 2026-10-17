@@ -328,9 +328,8 @@ final class DictLayoutDecoder implements LayoutDecoder {
         byte tag = rawMeta.get(ValueLayout.JAVA_BYTE, 0);
         if (tag == 0x08 && rawMeta.byteSize() > 1) {
             int ordinal = rawMeta.get(ValueLayout.JAVA_BYTE, 1) & 0xFF;
-            PType[] values = PType.values();
-            if (ordinal < values.length) {
-                return values[ordinal];
+            if (ordinal <= PType.F64.ordinal()) {
+                return PType.fromOrdinal(ordinal);
             }
         }
         return PType.U8;

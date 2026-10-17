@@ -8,6 +8,9 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.EnumSet;
 import java.util.List;
@@ -50,6 +53,33 @@ class ZonedStatsSchemaTest {
 
             // Then — defensively zero rather than throwing
             assertThat(result).isZero();
+        }
+    }
+
+    @Nested
+    class StatLookup {
+        @ParameterizedTest
+        @EnumSource(ZonedStatsSchema.Stat.class)
+        void fromOrdinal_mapsEachStatBack(ZonedStatsSchema.Stat stat) {
+            // Given — fromOrdinal is a switch, so it can drift from the declaration order
+
+            // When
+            ZonedStatsSchema.Stat result = ZonedStatsSchema.Stat.fromOrdinal(stat.ordinal());
+
+            // Then
+            assertThat(result).isSameAs(stat);
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = {-1, 9, 63})
+        void fromOrdinal_pastTheLastStat_isNull(int ordinal) {
+            // Given — a bit set by a newer Vortex writer, which readers skip
+
+            // When
+            ZonedStatsSchema.Stat result = ZonedStatsSchema.Stat.fromOrdinal(ordinal);
+
+            // Then
+            assertThat(result).isNull();
         }
     }
 

@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /// Walks a [TypeRegistry] and emits one `.java` file per message or enum.
 ///
@@ -86,12 +88,19 @@ public final class CodeGen {
                     /// @return matching enum constant
                     /// @throws IllegalArgumentException if no constant matches
                     public static %1$s fromValue(int value) {
-                        for (%1$s v : values()) {
-                            if (v.value == value) {
-                                return v;
-                            }
-                        }
-                        throw new IllegalArgumentException("unknown %1$s value: " + value);
+                        // A switch, not a loop over values(): values() clones its array on every call.
+                        return switch (value) {
+                """.formatted(e.javaName()));
+        Set<Integer> seen = new HashSet<>();
+        for (Ast.EnumValue v : values) {
+            // An aliased number keeps the first constant, as a linear scan would.
+            if (seen.add(v.number())) {
+                sb.append("            case ").append(v.number()).append(" -> ").append(v.name()).append(";\n");
+            }
+        }
+        sb.append("""
+                            default -> throw new IllegalArgumentException("unknown %1$s value: " + value);
+                        };
                     }
                 """.formatted(e.javaName()));
         sb.append("}\n");
