@@ -108,11 +108,10 @@ final class DTypeFbsSerializer {
             case DType.Extension e -> {
                 int idOff = fbb.createString(e.extensionId());
                 int storageDtypeOff = serializeDType(fbb, e.storageDType());
-                int metaOff = 0;
-                if (e.metadata() != null) {
-                    byte[] metaBytes = e.metadata().toArray(ValueLayout.JAVA_BYTE);
-                    metaOff = FbsExtension.createMetadataVector(fbb, metaBytes);
-                }
+                // Always present, empty when there is none: Rust refuses an extension dtype whose
+                // metadata field is absent ("failed to parse extension metadata"), failing the file.
+                byte[] metaBytes = e.metadata() == null ? new byte[0] : e.metadata().toArray(ValueLayout.JAVA_BYTE);
+                int metaOff = FbsExtension.createMetadataVector(fbb, metaBytes);
                 int inner = FbsExtension.createFbsExtension(fbb, idOff, storageDtypeOff, metaOff);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsExtension, inner);
             }
