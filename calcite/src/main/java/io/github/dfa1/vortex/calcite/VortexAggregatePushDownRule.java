@@ -173,7 +173,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         List<AggregateCall> calls = aggregate.getAggCallList();
         for (int i = 0; i < calls.size(); i++) {
             RexLiteral literal = evaluate(calls.get(i), outTypes.get(i), table, scanColumns, scanRowType,
-                    project, rexBuilder, pushedFilter);
+                    project, rexBuilder, pushedFilter, call.getPlanner());
             if (literal == null) {
                 return; // an aggregate we can't answer from stats — abandon the rewrite
             }
@@ -220,7 +220,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
             aggColumns.add(column);
         }
         // ConcurrentHashMap keys cannot be null, so a missing filter is keyed as an empty list
-        List<Object> foldKey = List.of(table, group, filter == null ? List.of() : filter, aggColumns);
+        List<Object> foldKey = List.of("grouped", table, group, filter == null ? List.of() : filter, aggColumns);
         Optional<Map<String, VortexTable.GroupFold>> folds =
                 memo(call.getPlanner(), foldKey, () -> table.groupedFold(group, filter, aggColumns));
         if (folds.isEmpty()) {
@@ -277,21 +277,22 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     /// abandons.
     private static RexLiteral evaluate(AggregateCall agg, RelDataType outType, VortexTable table,
                                        List<ColumnName> scanColumns, RelDataType scanRowType,
-                                       Project project, RexBuilder rexBuilder, RowFilter filter) {
+                                       Project project, RexBuilder rexBuilder, RowFilter filter,
+                                       RelOptPlanner planner) {
         return switch (agg.getAggregation().getKind()) {
             case COUNT -> {
                 if (agg.getArgList().isEmpty()) {                  // COUNT(*)
                     if (filter == null) {
                         yield exact(rexBuilder, table.totalRows(), outType);
                     }
-                    Optional<VortexTable.FilteredFold> fold = table.filteredFold(filter, null);
+                    Optional<VortexTable.FilteredFold> fold = filteredFold(planner, table, filter, null);
                     yield fold.map(f -> exact(rexBuilder, f.rows(), outType)).orElse(null);
                 }
                 ColumnName col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
                 if (col == null) {
                     yield null;
                 }
-                ColumnFold fold = columnFold(table, col, filter);
+                ColumnFold fold = columnFold(table, col, filter, planner);
                 if (fold == null) {
                     yield null;
                 }
@@ -312,7 +313,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (col == null) {
                     yield null;
                 }
-                ColumnFold fold = columnFold(table, col, filter);
+                ColumnFold fold = columnFold(table, col, filter, planner);
                 if (fold == null) {
                     yield null;
                 }
@@ -335,7 +336,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (col == null) {
                     yield null;
                 }
-                ColumnFold fold = columnFold(table, col, filter);
+                ColumnFold fold = columnFold(table, col, filter, planner);
                 if (fold == null) {
                     yield null;
                 }
@@ -353,16 +354,24 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     private record ColumnFold(Number sum, Object min, Object max, Long nullCount, long rows) {
     }
 
-    private static ColumnFold columnFold(VortexTable table, ColumnName column, RowFilter filter) {
+    private static ColumnFold columnFold(VortexTable table, ColumnName column, RowFilter filter,
+                                         RelOptPlanner planner) {
         if (filter == null) {
             VortexTable.ColumnStats stats = table.statsAndRows(column);
             VortexTable.ZoneSum zoneSum = table.zoneSum(column);
             return new ColumnFold(zoneSum.sum(), stats.stats().min(), stats.stats().max(),
                     stats.stats().nullCount(), stats.totalRows());
         }
-        return table.filteredFold(filter, column)
+        return filteredFold(planner, table, filter, column)
                 .map(f -> new ColumnFold(f.sum(), f.min(), f.max(), f.nullCount(), f.rows()))
                 .orElse(null);
+    }
+
+    /// [VortexTable#filteredFold(RowFilter, ColumnName)], computed once per planner run.
+    private static Optional<VortexTable.FilteredFold> filteredFold(RelOptPlanner planner, VortexTable table,
+                                                                    RowFilter filter, ColumnName column) {
+        List<Object> foldKey = List.of("filtered", table, filter, column == null ? List.of() : column);
+        return memo(planner, foldKey, () -> table.filteredFold(filter, column));
     }
 
     /// Builds the literal for a `SUM`, resolving the all-null-vs-genuine-zero ambiguity from the
