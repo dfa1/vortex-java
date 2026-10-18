@@ -595,15 +595,28 @@ policy.
 ## Query Vortex files from an SQL tool (IntelliJ, DBeaver)
 
 `vortex-jdbc-driver` is a JDBC driver: one self-contained jar (Calcite and the Vortex modules
-inside), so a tool that only takes a driver jar and a URL can query `.vortex` files. It is an
-embedded engine like DuckDB or SQLite: the query runs inside the tool's JVM, which must be JDK 25 or
-later.
+inside), so a tool that only takes a driver jar and a URL can browse and query `.vortex` files. It is
+an embedded engine like DuckDB or SQLite: the query runs inside the tool's JVM, which must be JDK 25
+or later. It is read-only.
 
-1. Build or download `vortex-jdbc-driver-<version>-all.jar`.
-2. In IntelliJ: *Database* → *+* → *Driver*; add that jar, and set the class to
-   `io.github.dfa1.vortex.jdbc.driver.VortexDriver`. In DBeaver: *Database* → *Driver Manager* →
-   *New*, same jar and class.
-3. Create a data source with the URL:
+### Set it up in IntelliJ
+
+1. **Get the jar.** Download `vortex-jdbc-driver-<version>-all.jar` from Maven Central, or build it:
+   `./mvnw package -pl jdbc-driver -am -DskipTests` leaves it in `jdbc-driver/target/`. Use the
+   `-all` jar, not the plain one.
+2. **Add the driver.** Open the *Database* tool window, then *+* → *Driver*. Name it `Vortex`. Under
+   *Driver Files* click *+* → *Custom JARs* and pick the jar. Set *Class* to
+   `io.github.dfa1.vortex.jdbc.driver.VortexDriver` (it appears in the dropdown once the jar is
+   added). Apply.
+3. **Add a data source.** *+* → *Data Source* → *Vortex*. Set the URL (see below), leave user and
+   password empty, and press *Test Connection*.
+4. **Browse.** In the schema list tick `vtx`. Each `.vortex` file is a table, with its columns and
+   types. Double-click a table for the data grid, or open a query console on the data source and run SQL.
+
+DBeaver is the same: *Database* → *Driver Manager* → *New* with the same jar and class, then a
+connection with the URL.
+
+### The URL
 
 ```
 jdbc:vortex:/data/vortex
@@ -611,10 +624,45 @@ jdbc:vortex:/data/vortex?schema=lake&table.trades=/other/trades.vortex
 ```
 
 Every `*.vortex` file in the directory becomes a table named after the file (`ohlc.vortex` is
-`vtx.ohlc`); columns come from the file. `schema` renames `vtx`, and `table.<name>=<path>` adds or
-overrides one file. Any other key is an error, so a typo cannot silently expose no tables. Leave user
-and password empty. The directory is scanned when the connection opens, so a file added later needs a
-reconnect.
+`vtx.ohlc`); columns come from the file, so there is nothing to declare. `schema` renames `vtx`, and
+`table.<name>=<path>` adds a file from elsewhere or overrides a discovered one. Any other key is an
+error, so a typo cannot silently expose no tables. Values are URL-decoded.
+
+The directory is scanned when the connection opens, so a file added later needs a reconnect (and a
+*Synchronize* in the Database tool window).
+
+### Writing queries
+
+```sql
+select symbol, count(*), max(high) from vtx.ohlc group by symbol order by 2 desc;
+select close, open from vtx.ohlc where `date` > 20000 limit 100;
+```
+
+- **Quote with back-ticks, not double quotes.** Identifiers are case-sensitive, and `"x"` is not an
+  identifier. `date`, `time`, `timestamp` and `interval` still need back-ticks even as column names;
+  other reserved words such as `close`, `open` and `value` work unquoted.
+- **Filters and `LIMIT` are cheap.** A `WHERE` on a clustered column skips whole chunks using the
+  files' zone maps, and the data grid only reads the page it shows.
+- **A query that must hold every row in memory can run out of it.** `select distinct` or
+  `count(distinct ...)` over a column with millions of distinct values (a 100M-row table with a
+  unique id, say) is built in a hash table inside the JDBC process, and IntelliJ runs JDBC in its own
+  process with a limited heap. It then fails with `java.lang.OutOfMemoryError: Java heap space`
+  (shown as a `java.rmi.ServerError`). Filter first, group by a column with few values, or run the
+  query where you can give the JVM more heap. I have not checked where IntelliJ lets you raise that
+  heap, so look for it under *Settings → Advanced Settings* and the Database settings.
+- **A sort or grouping that returns thousands of values is handed to Calcite's own engine** instead
+  of being answered from the file's statistics. The result is the same, only slower. A huge result in
+  the grid is still paged.
+
+### Troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| `class file has wrong version` or `UnsupportedClassVersionError` | The JDBC process runs on a JDK older than 25. Set the project or IDE SDK to 25+. |
+| `invalid Vortex URL ... unknown key` | A misspelled option; the message lists the keys that exist. |
+| `Object 'OHLC' not found ... did you mean 'ohlc'?` | Names are case-sensitive; write `ohlc` as the file is named. |
+| `parse failed: Encountered ". \""` | A double-quoted identifier; use back-ticks. |
+| `OutOfMemoryError: Java heap space` | See above: a query that holds every row. |
 
 On JDK 25 the first query prints a `sun.misc.Unsafe` warning from protobuf, a Calcite dependency;
 it is harmless.
