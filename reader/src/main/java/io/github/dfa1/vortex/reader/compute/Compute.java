@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 
 import java.util.Objects;
+import java.util.function.LongPredicate;
 
 /// The minimal, low-level entry point to the compute primitives of ADR 0013 — the fused, single-pass
 /// filter-and-aggregate kernels.
@@ -21,7 +22,7 @@ import java.util.Objects;
 /// aggregate column's `SUM` / `MIN` / `MAX` / non-null count over the rows it selects.
 /// [#matches(Chunk, RowFilter, long)] is the un-fused, per-row counterpart of the two: a plain
 /// boolean test with no aggregate at all, for a caller that needs to select rows rather than reduce
-/// them.
+/// them; [#matcher(Chunk, RowFilter)] lowers that test once per chunk for a caller testing many rows.
 ///
 /// Null handling follows the Rust reference: a filter excludes null positions (a null value makes a
 /// value predicate false), and the reduce skips them — `SUM` and `COUNT` over zero selected non-null
@@ -94,6 +95,23 @@ public final class Compute {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(filter, "filter");
         return evaluate(chunk, filter, row);
+    }
+
+    /// Lowers `filter` once for `chunk` and returns the row test, the form of
+    /// [#matches(Chunk, RowFilter, long)] for a caller that tests many rows of one chunk.
+    ///
+    /// The per-leaf work that does not depend on the row is done here rather than per row: a
+    /// numeric comparison resolves its bounds once, and a comparison over a dictionary-encoded
+    /// string column is evaluated once per dictionary entry, so each row costs a code lookup instead
+    /// of a string comparison. The selected rows are the same as [#matches(Chunk, RowFilter, long)].
+    ///
+    /// @param chunk  the decoded chunk holding every column `filter` references
+    /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
+    /// @return a test of a zero-based row of `chunk`, valid while `chunk` is open
+    public static LongPredicate matcher(Chunk chunk, RowFilter filter) {
+        Objects.requireNonNull(chunk, "chunk");
+        Objects.requireNonNull(filter, "filter");
+        return FusedFilterAggregate.rowTest(chunk, filter);
     }
 
     private static boolean evaluate(Chunk chunk, RowFilter filter, long row) {

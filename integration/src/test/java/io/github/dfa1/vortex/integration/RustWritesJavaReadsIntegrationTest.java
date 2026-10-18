@@ -39,7 +39,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -54,6 +56,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -384,6 +387,110 @@ class RustWritesJavaReadsIntegrationTest {
 
         // Then
         assertThat(result).containsExactly(values);
+    }
+
+    static Stream<Arguments> dictStringFilters() {
+        List<Arguments> cases = new ArrayList<>();
+        for (String op : List.of("EQ", "NOT_EQ", "GT", "GTE", "LT", "LTE")) {
+            for (String bound : new String[]{"café", "", "ZZZ"}) {
+                cases.add(Arguments.of(op, bound));
+            }
+        }
+        return cases.stream();
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("dictStringFilters")
+    void jniWriter_dictUtf8Filter_selectsTheRowsJniSelects(String op, String bound, @TempDir Path tmp)
+            throws IOException {
+        // Given — Rust dict-encodes a nullable low-cardinality string column. Java now evaluates a
+        // filter once per dictionary entry and tests rows by code (#552), as Rust's dict compare does.
+        // The emoji and U+E000 sort one way in UTF-8 (Rust's order) and the other in UTF-16, and
+        // null rows must never match, so Java must keep exactly the rows vortex-jni keeps.
+        String[] symbols = {"AAPL", "MSFT", "café", "😀", "", null};
+        String[] values = new String[20_000];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = symbols[(i * 7 + i / 3) % symbols.length];
+        }
+        Path file = tmp.resolve("jni_dict_utf8_filter.vtx");
+        writeJniNullableUtf8(file, values);
+        ColumnName column = ColumnName.of("k");
+        io.github.dfa1.vortex.reader.RowFilter filter = switch (op) {
+            case "EQ" -> io.github.dfa1.vortex.reader.RowFilter.eq(column, bound);
+            case "NOT_EQ" -> io.github.dfa1.vortex.reader.RowFilter.neq(column, bound);
+            case "GT" -> io.github.dfa1.vortex.reader.RowFilter.gt(column, bound);
+            case "GTE" -> io.github.dfa1.vortex.reader.RowFilter.gte(column, bound);
+            case "LT" -> io.github.dfa1.vortex.reader.RowFilter.lt(column, bound);
+            default -> io.github.dfa1.vortex.reader.RowFilter.lte(column, bound);
+        };
+
+        // When
+        List<String> jni = readJniUtf8Filtered(file, Expression.binary(Expression.BinaryOp.valueOf(op),
+                Expression.column("k"), Expression.literal(bound)));
+        List<String> result = new ArrayList<>();
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all().withFilter(filter))) {
+            iter.forEachRemaining(c -> {
+                Array k = c.column(column);
+                Array data = MaskedArray.unwrap(k).inner();
+                assertThat(data instanceof io.github.dfa1.vortex.reader.array.VarBinSlicedArray s ? s.inner() : data)
+                        .isInstanceOf(io.github.dfa1.vortex.reader.array.VarBinDictArray.class);
+                var matcher = io.github.dfa1.vortex.reader.compute.Compute.matcher(c, filter);
+                for (long i = 0; i < k.length(); i++) {
+                    if (matcher.test(i)) {
+                        result.add(((VarBinArray) data).getString(i));
+                    }
+                }
+            });
+        }
+
+        // Then
+        assertThat(result).containsExactlyInAnyOrderElementsOf(jni);
+    }
+
+    private static void writeJniNullableUtf8(Path file, String[] values) throws IOException {
+        Schema schema = new Schema(List.of(Field.nullable("k", new ArrowType.Utf8())));
+        String uri = file.toAbsolutePath().toUri().toString();
+        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, schema, ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+            VarCharVector vec = (VarCharVector) root.getVector("k");
+            vec.allocateNew(values.length);
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] == null) {
+                    vec.setNull(i);
+                } else {
+                    vec.setSafe(i, values[i].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+            root.setRowCount(values.length);
+            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, arrowSchema);
+                writer.writeBatch(arr.memoryAddress(), arrowSchema.memoryAddress());
+            }
+        }
+    }
+
+    private static List<String> readJniUtf8Filtered(Path file, Expression filter) throws IOException {
+        ScanOptions opts = ScanOptions.builder()
+                .projection(Expression.select(new String[]{"k"}, Expression.root()))
+                .filter(filter)
+                .build();
+        var out = new ArrayList<String>();
+        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(opts);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    var vec = root.getVector("k");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        out.add(vec.isNull(i) ? null : vec.getObject(i).toString());
+                    }
+                }
+            }
+        }
+        return out;
     }
 
     private static long countChunks(Path file, io.github.dfa1.vortex.reader.ScanOptions opts) throws IOException {

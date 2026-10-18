@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `Chunk.slice(offset, length)` gives a zero-copy view of a row range. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter tells the planner each table's row count, so join order and costing use the real table size. ([#550](https://github.com/dfa1/vortex-java/pull/550))
+- `Compute.matcher(Chunk, RowFilter)` lowers a filter once per chunk and returns a row test, for callers that test many rows. ([#552](https://github.com/dfa1/vortex-java/issues/552))
 - `vortex.json` and the `vortex.st.*` geometry columns open without a decoder and read as their storage, as vortex-jni reads them. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - The CLI takes `--allow-unknown` to open files with extension types it has no decoder for, and CSV `ExportOptions.withReadRegistry` picks the registry an export opens the file with. ([#547](https://github.com/dfa1/vortex-java/pull/547))
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Calcite adapter answers a filtered `COUNT`, `MIN` or `MAX` from Rust's `vortex.zoned` zone maps, the default, decoding only the zones the filter cuts. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter reads a table's schema and row count once instead of reopening the file for every planning call. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - Reading strings from a dictionary-encoded column is about 4× faster, and SQL over it about 30% faster: each distinct value is decoded once, not once per row. ([#551](https://github.com/dfa1/vortex-java/issues/551))
+- SQL filters on a dictionary-encoded string column are about twice as fast: the filter is evaluated once per dictionary value, as in Rust, not once per row. ([#552](https://github.com/dfa1/vortex-java/issues/552))
 - **Breaking:** `VarBinDictArray` and `VarBinConstantArray` are final classes instead of records, with the same accessors. ([#551](https://github.com/dfa1/vortex-java/issues/551))
 - **Breaking:** opening a file with an extension id that has no registered decoder fails unless `ReadRegistry.Builder#allowUnknown()` is set, as in Rust; the column then reads as its storage array. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 - **Breaking:** `vortex.date`, `vortex.time`, `vortex.timestamp` and `vortex.uuid` dtypes are checked as Rust checks them (time unit, storage type, metadata) when writing and reading, and a file whose extension dtype has no metadata field is refused, as Rust refuses it. ([#547](https://github.com/dfa1/vortex-java/pull/547))

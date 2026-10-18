@@ -831,8 +831,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         Optional<RowFilter> pushed = RexFilterTranslator.toRowFilter(filters, allNames, allTypes);
 
         // Exact push-down: a top-level predicate captured *in full* is enforced row-by-row below
-        // (via Compute#matches, which routes through the NaN-correct PredicateEvaluator /
-        // PrimitiveFilter) and removed from Calcite's own re-check list, so Calcite stops
+        // (via Compute#matcher, which lowers it per chunk through the NaN-correct PrimitiveFilter /
+        // PredicateEvaluator) and removed from Calcite's own re-check list, so Calcite stops
         // redundantly re-evaluating rows this scan has already excluded — Calcite's
         // TableScanNode#createProjectableFilterable wraps a `.where()` residual check around
         // whatever is still left in `filters` after this call returns.

@@ -8,6 +8,9 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.VarBinDictArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
+import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -432,7 +435,68 @@ final class FusedFilterAggregate {
                 return longLeaf(data, validity, predicate);
             }
         }
-        return i -> PredicateEvaluator.evaluate(column, i, predicate);
+        LongPredicate generic = i -> PredicateEvaluator.evaluate(column, i, predicate);
+        if (data instanceof VarBinDictArray dict) {
+            return dictLeaf(dict, 0, dict.length(), validity, predicate, generic);
+        }
+        // A dictionary spanning many scan chunks (Rust's global dict layout) is decoded once and
+        // sliced per chunk, so real files mostly reach here as a slice.
+        if (data instanceof VarBinSlicedArray(var _, long rows, VarBinDictArray dict, long offset)) {
+            return dictLeaf(dict, offset, rows, validity, predicate, generic);
+        }
+        return generic;
+    }
+
+    /// Builds a string dictionary leaf the way Rust's dict compare kernel does: the predicate is
+    /// evaluated once per dictionary entry, and a row tests its entry's result by code (#552). A
+    /// low-cardinality column then costs one code read per row instead of a string comparison.
+    ///
+    /// A null row still goes through `generic`, so a null-aware predicate (`IS NULL` under an `OR`)
+    /// answers exactly as before, and so does a code outside the dictionary, which `generic` reports
+    /// as malformed input. Like Rust, the lowering declines when the dictionary has more entries
+    /// than there are rows to test, where testing every entry costs more than testing the rows.
+    ///
+    /// @param dict      the dictionary-encoded array the rows read from
+    /// @param offset    the dictionary row of the first tested row (non-zero for a slice)
+    /// @param rows      how many rows will be tested
+    /// @param validity  the filter validity bitmap, or `null` when every row is valid
+    /// @param predicate the column-bound predicate
+    /// @param generic   the per-row evaluator over the original (possibly masked) column
+    /// @return the lowered row predicate
+    private static LongPredicate dictLeaf(VarBinDictArray dict, long offset, long rows, BoolArray validity,
+                                          Predicate predicate, LongPredicate generic) {
+        VarBinOffsetArray values = dict.values();
+        long size = values.length();
+        if (size > rows || size > Integer.MAX_VALUE) {
+            return generic;
+        }
+        boolean[] entryMatches = new boolean[(int) size];
+        for (int c = 0; c < size; c++) {
+            entryMatches[c] = PredicateEvaluator.evaluate(values, c, predicate);
+        }
+        return i -> {
+            if (validity != null && !validity.getBoolean(i)) {
+                return generic.test(i);
+            }
+            long code = dict.code(i + offset);
+            return code >= 0 && code < size ? entryMatches[(int) code] : generic.test(i);
+        };
+    }
+
+    /// Lowers a whole [RowFilter] over `chunk` into one row predicate: each leaf is lowered once by
+    /// [#leafTest(Array, Predicate)], and a row matches when every leaf accepts it.
+    ///
+    /// @param chunk  the decoded chunk holding every column `filter` references
+    /// @param filter the whole predicate
+    /// @return a row predicate valid for `chunk`'s rows
+    static LongPredicate rowTest(Chunk chunk, RowFilter filter) {
+        List<LongPredicate> leafList = new ArrayList<>();
+        collectLeaves(chunk, filter, leafList);
+        if (leafList.size() == 1) {
+            return leafList.getFirst();
+        }
+        LongPredicate[] leaves = leafList.toArray(LongPredicate[]::new);
+        return i -> allMatch(leaves, i);
     }
 
     /// Builds a hoisted long-domain comparison leaf: the predicate lowers once to an inclusive range

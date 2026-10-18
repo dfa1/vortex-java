@@ -147,6 +147,23 @@ final class ComputeArrays {
                 offsets, PType.I32);
     }
 
+    /// Builds a dictionary-encoded Utf8 [VarBinArray]: `pool` holds the entries and each row is an
+    /// I32 code into it, the shape the reader decodes a string dictionary to.
+    ///
+    /// @param arena the allocator for the off-heap buffers
+    /// @param pool  the dictionary entries
+    /// @param codes the per-row codes into `pool`
+    /// @return a [VarBinArray] of [DType#UTF8] with `codes.length` rows
+    static VarBinArray utf8DictArray(Arena arena, String[] pool, int[] codes) {
+        VarBinOffsetArray values = (VarBinOffsetArray) utf8Array(arena, pool);
+        MemorySegment codeSegment = arena.allocate((long) Math.max(1, codes.length) * Integer.BYTES, Integer.BYTES);
+        for (int i = 0; i < codes.length; i++) {
+            codeSegment.setAtIndex(VortexFormat.LE_INT, i, codes[i]);
+        }
+        return VarBinArray.ofDict(DType.UTF8, codes.length, values.bytesSegment(), values.offsetsSegment(),
+                values.offsetsPtype(), codeSegment, PType.I32);
+    }
+
     private static MemorySegment longSegment(Arena arena, long... values) {
         MemorySegment seg = arena.allocate(Math.max(1, values.length * 8L), 8);
         for (int i = 0; i < values.length; i++) {
