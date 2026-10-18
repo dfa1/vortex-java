@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.calcite.interpreter.Bindables;
+import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptRuleOperand;
@@ -29,11 +30,15 @@ import org.apache.calcite.util.Util;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /// Rewrites a whole-table `MIN`/`MAX`/`COUNT`/`SUM` aggregate over a [VortexTable] into a
 /// single-row [LogicalValues] computed from the footer zone-map statistics — answering the query
 /// without decoding a single data segment (ADR 0013 §6, ADR 0018 Phase 2).
+///
+/// A `GROUP BY` on one dictionary-encoded string column is rewritten the same way, into one
+/// [LogicalValues] row per group, folded per dictionary code instead of from statistics.
 ///
 /// Fires only when it can answer *every* aggregate from statistics: no `GROUP BY`, and each call
 /// is `COUNT(*)`, `COUNT(col)`, `MIN(col)`, `MAX(col)` (numeric or `VARCHAR`/`CHAR`), or `SUM(col)`
@@ -79,14 +84,28 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     public static final java.util.List<RelOptRule> RULES =
             java.util.List.of(WITH_PROJECT, NO_PROJECT, PROJECT_FILTER, FILTER_ONLY);
 
+    /// Plan-time folds per planning run. Calcite fires this rule several times per query (6 to 9
+    /// measured), once per matching operand and subset, and each firing would re-read the columns.
+    /// Keyed weakly by the planner, so a fold lives as long as its query's planning and the next
+    /// query computes its own.
+    private static final Map<RelOptPlanner, Map<List<Object>, Object>> FOLDS =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
     private VortexAggregatePushDownRule(RelOptRuleOperand operand, String description) {
         super(operand, description);
+    }
+
+    /// Returns the fold cached under `key` for `planner`'s run, computing it on the first call.
+    @SuppressWarnings("unchecked")
+    private static <T> T memo(RelOptPlanner planner, List<Object> key, java.util.function.Supplier<T> compute) {
+        Map<List<Object>, Object> folds = FOLDS.computeIfAbsent(planner, p -> new java.util.concurrent.ConcurrentHashMap<>());
+        return (T) folds.computeIfAbsent(key, k -> compute.get());
     }
 
     @Override
     public void onMatch(RelOptRuleCall call) {
         Aggregate aggregate = call.rel(0);
-        if (aggregate.getGroupCount() != 0) {
+        if (aggregate.getGroupCount() > 1 || aggregate.getGroupType() != Aggregate.Group.SIMPLE) {
             return;
         }
         // Statistics describe every row of a zone, so they cannot answer an aggregate over a subset
@@ -144,6 +163,12 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         List<RelDataType> outTypes = aggregate.getRowType().getFieldList().stream()
                 .map(f -> f.getType()).toList();
 
+        if (aggregate.getGroupCount() == 1) {
+            rewriteGrouped(call, aggregate, table, scanColumns, scanRowType, project, rexBuilder, outTypes,
+                    pushedFilter);
+            return;
+        }
+
         List<RexLiteral> row = new ArrayList<>();
         List<AggregateCall> calls = aggregate.getAggCallList();
         for (int i = 0; i < calls.size(); i++) {
@@ -159,6 +184,90 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 aggregate.getCluster(), aggregate.getRowType(),
                 ImmutableList.of(ImmutableList.copyOf(row)));
         call.transformTo(values);
+    }
+
+    /// Rewrites a `GROUP BY` on one string column into a [LogicalValues] with one row per group,
+    /// folded per dictionary code by [VortexTable#groupedFold(ColumnName, RowFilter, java.util.Set)]
+    /// instead of materializing every row for Calcite to hash. Leaves the plan alone when the group
+    /// column is not a string, an aggregate is not `COUNT`/`SUM`/`MIN`/`MAX` over a plain column, or
+    /// the fold declines (a chunk not dictionary-encoded, an aggregate column it cannot total, too
+    /// many groups).
+    private static void rewriteGrouped(RelOptRuleCall call, Aggregate aggregate, VortexTable table,
+                                       List<ColumnName> scanColumns, RelDataType scanRowType, Project project,
+                                       RexBuilder rexBuilder, List<RelDataType> outTypes, RowFilter filter) {
+        ColumnName group = resolveColumn(aggregate.getGroupSet().nth(0), scanColumns, project);
+        RelDataTypeField groupField = group == null ? null : scanRowType.getField(group.value(), true, false);
+        if (groupField == null || !SqlTypeName.CHAR_TYPES.contains(groupField.getType().getSqlTypeName())) {
+            return;
+        }
+        List<AggregateCall> calls = aggregate.getAggCallList();
+        List<ColumnName> callColumns = new ArrayList<>();
+        java.util.Set<ColumnName> aggColumns = new java.util.LinkedHashSet<>();
+        for (AggregateCall aggCall : calls) {
+            SqlKind kind = aggCall.getAggregation().getKind();
+            if (kind == SqlKind.COUNT && aggCall.getArgList().isEmpty()) {
+                callColumns.add(null);
+                continue;
+            }
+            boolean supported = kind == SqlKind.COUNT || kind == SqlKind.SUM || kind == SqlKind.MIN
+                    || kind == SqlKind.MAX;
+            ColumnName column = aggCall.getArgList().size() == 1
+                    ? resolveColumn(aggCall.getArgList().getFirst(), scanColumns, project) : null;
+            if (!supported || column == null) {
+                return;
+            }
+            callColumns.add(column);
+            aggColumns.add(column);
+        }
+        // ConcurrentHashMap keys cannot be null, so a missing filter is keyed as an empty list
+        List<Object> foldKey = List.of(table, group, filter == null ? List.of() : filter, aggColumns);
+        Optional<Map<String, VortexTable.GroupFold>> folds =
+                memo(call.getPlanner(), foldKey, () -> table.groupedFold(group, filter, aggColumns));
+        if (folds.isEmpty()) {
+            return;
+        }
+        RelDataType groupType = aggregate.getRowType().getFieldList().getFirst().getType();
+        List<ImmutableList<RexLiteral>> tuples = new ArrayList<>();
+        for (Map.Entry<String, VortexTable.GroupFold> entry : folds.get().entrySet()) {
+            RexLiteral key = entry.getKey() == null ? rexBuilder.makeNullLiteral(groupType)
+                    : minMaxLiteral(rexBuilder, entry.getKey(), groupType);
+            if (key == null) {
+                return; // a key the column's charset cannot hold as a literal
+            }
+            List<RexLiteral> row = new ArrayList<>();
+            row.add(key);
+            for (int i = 0; i < calls.size(); i++) {
+                RexLiteral literal = groupedLiteral(calls.get(i), callColumns.get(i), entry.getValue(),
+                        outTypes.get(i + 1), scanRowType, rexBuilder);
+                if (literal == null) {
+                    return;
+                }
+                row.add(literal);
+            }
+            tuples.add(ImmutableList.copyOf(row));
+        }
+        call.transformTo(LogicalValues.create(aggregate.getCluster(), aggregate.getRowType(),
+                ImmutableList.copyOf(tuples)));
+    }
+
+    /// One aggregate call's literal for one group, or `null` when it cannot be built.
+    private static RexLiteral groupedLiteral(AggregateCall aggCall, ColumnName column, VortexTable.GroupFold fold,
+                                             RelDataType outType, RelDataType scanRowType, RexBuilder rexBuilder) {
+        if (column == null) {
+            return exact(rexBuilder, fold.rows(), outType);
+        }
+        VortexTable.FilteredFold columnFold = fold.columns().get(column);
+        long nulls = columnFold.nullCount();
+        return switch (aggCall.getAggregation().getKind()) {
+            case COUNT -> exact(rexBuilder, columnFold.rows() - nulls, outType);
+            case SUM -> sumLiteral(rexBuilder, outType, columnFold.sum(), nulls, columnFold.rows(),
+                    isNullable(scanRowType, column.value()));
+            case MIN, MAX -> {
+                Object value = aggCall.getAggregation().getKind() == SqlKind.MIN ? columnFold.min() : columnFold.max();
+                yield value == null ? rexBuilder.makeNullLiteral(outType) : minMaxLiteral(rexBuilder, value, outType);
+            }
+            default -> null;
+        };
     }
 
     /// Evaluates one aggregate call from zone-map stats, returning a literal of `outType`, or

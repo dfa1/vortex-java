@@ -5,7 +5,9 @@ import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.LongPredicate;
 
 /// The minimal, low-level entry point to the compute primitives of ADR 0013 — the fused, single-pass
@@ -112,6 +114,30 @@ public final class Compute {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(filter, "filter");
         return FusedFilterAggregate.rowTest(chunk, filter);
+    }
+
+    /// Folds `aggColumn` per value of a dictionary-encoded string `groupColumn` over the rows `filter`
+    /// selects: the per-group counterpart of [#filteredAggregate(Chunk, RowFilter, ColumnName)].
+    ///
+    /// Rows accumulate per dictionary code, so a row costs a code read and a few array updates, and
+    /// each code becomes its string once per chunk. A null group value is its own group, under the
+    /// `null` key. Each group's [FilteredAggregate] follows the same null semantics as the ungrouped
+    /// fold.
+    ///
+    /// The result is empty when the shapes do not qualify: `groupColumn` is not dictionary-encoded
+    /// in this chunk, or `aggColumn` is not an integer or floating column (`f16` and `u64` included,
+    /// which this fold does not total). The caller then groups the rows itself.
+    ///
+    /// @param chunk       the decoded chunk holding every referenced column
+    /// @param groupColumn the dictionary-encoded string column to group by
+    /// @param filter      the rows to fold, or `null` for every row
+    /// @param aggColumn   the numeric column to reduce, or `null` to count rows only
+    /// @return the fold per group value, or empty when the columns do not qualify
+    public static Optional<Map<String, FilteredAggregate>> groupedAggregate(Chunk chunk, ColumnName groupColumn,
+                                                                            RowFilter filter, ColumnName aggColumn) {
+        Objects.requireNonNull(chunk, "chunk");
+        Objects.requireNonNull(groupColumn, "groupColumn");
+        return GroupedAggregate.aggregate(chunk, groupColumn, filter, aggColumn);
     }
 
     private static boolean evaluate(Chunk chunk, RowFilter filter, long row) {

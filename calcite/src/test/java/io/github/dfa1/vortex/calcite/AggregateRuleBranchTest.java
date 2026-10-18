@@ -124,10 +124,24 @@ class AggregateRuleBranchTest {
     }
 
     @Test
-    void groupedAggregate_isLeftUntouched() {
-        // Given a GROUP BY — group count != 0, the rule returns immediately
-        // When / Then — Aggregate stays
-        assertThat(optimize("select symbol, max(high) from ohlc group by symbol")).contains("Aggregate");
+    void groupedOnDictionaryString_rewritesToValues() {
+        // Given a GROUP BY on the dictionary-encoded symbol column
+        // When / Then — folded per dictionary code into one Values row per symbol
+        assertThat(optimize("select symbol, max(high), count(*) from ohlc group by symbol"))
+                .contains("LogicalValues").doesNotContain("Aggregate");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            // a numeric group key has no dictionary codes to fold by
+            "select volume, count(*) from ohlc group by volume",
+            // only a single group key is folded
+            "select symbol, volume, count(*) from ohlc group by symbol, volume",
+            // AVG reaches the rule unreduced here; only COUNT/SUM/MIN/MAX fold
+            "select symbol, avg(high) from ohlc group by symbol"})
+    void groupedAggregateTheFoldCannotAnswer_isLeftUntouched(String sql) {
+        // Given / When / Then — Aggregate stays
+        assertThat(optimize(sql)).contains("Aggregate");
     }
 
     /// Zone statistics cover every row, so they cannot answer an aggregate over a subset of rows:

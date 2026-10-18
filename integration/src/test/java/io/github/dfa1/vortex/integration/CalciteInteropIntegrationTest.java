@@ -264,6 +264,121 @@ class CalciteInteropIntegrationTest {
         assertThat(max).isEqualTo("\u03A9mega");
     }
 
+    @ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " where id < 1234", " where x > 0.5 and id >= 100"})
+    void jniWriter_groupByDictionaryString_foldsEveryGroupLikeTheRows(String where, @TempDir Path tmp)
+            throws Exception {
+        // Given — Rust dict-encodes a low-cardinality string column with nulls. GROUP BY on it folds
+        // per dictionary code into a Values row per group; every group's aggregates must equal the
+        // ones computed from the rows written
+        assertGroupBy(where, new String[]{"AAPL", "MSFT", "NVDA", "caf\u00E9", "AMZN", "META", "TSLA", null},
+                true, tmp);
+    }
+
+    @Test
+    void jniWriter_groupByStringOutsideLatin1_answersThroughTheScan(@TempDir Path tmp) throws Exception {
+        // Given — a group key Latin-1 cannot hold has no VARCHAR literal, so the fold leaves the query
+        // to the scan; the answer must not change
+        assertGroupBy("", new String[]{"AAPL", "\u03A9mega", null}, false, tmp);
+    }
+
+    private static void assertGroupBy(String where, String[] symbols, boolean folded, Path tmp) throws Exception {
+        Path file = tmp.resolve("jni_groups.vortex");
+        List<Object[]> rows = writeGroupsWithJni(file, symbols);
+        java.util.function.Predicate<Object[]> selected = switch (where) {
+            case "" -> r -> true;
+            case " where id < 1234" -> r -> (long) r[1] < 1234;
+            default -> r -> (double) r[3] > 0.5 && (long) r[1] >= 100;
+        };
+        Map<String, List<Object[]>> byGroup = new java.util.HashMap<>();
+        rows.stream().filter(selected).forEach(r -> byGroup.computeIfAbsent((String) r[0], k -> new java.util.ArrayList<>()).add(r));
+        Map<String, String> expected = new java.util.HashMap<>();
+        byGroup.forEach((group, groupRows) -> {
+            List<Long> ns = groupRows.stream().map(r -> (Long) r[2]).filter(java.util.Objects::nonNull).toList();
+            expected.put(group, groupRows.size() + "|" + ns.size()
+                    + "|" + groupRows.stream().mapToLong(r -> (long) r[1]).sum()
+                    + "|" + groupRows.stream().mapToLong(r -> (long) r[1]).min().orElseThrow()
+                    + "|" + (ns.isEmpty() ? null : java.util.Collections.max(ns))
+                    + "|" + groupRows.stream().mapToDouble(r -> (double) r[3]).max().orElseThrow());
+        });
+        String sql = "select s, count(*), count(n), sum(id), min(id), max(n), max(x) from vtx.t" + where + " group by s";
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            String plan;
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + sql)) {
+                rs.next();
+                plan = rs.getString(1);
+            }
+            Map<String, String> result = new java.util.HashMap<>();
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+                while (rs.next()) {
+                    result.put(rs.getString(1), rs.getLong(2) + "|" + rs.getLong(3) + "|" + rs.getLong(4)
+                            + "|" + rs.getLong(5) + "|" + rs.getObject(6) + "|" + rs.getDouble(7));
+                }
+            }
+
+            // Then — equal to the rows, and folded rather than scanned when the keys allow it
+            assertThat(result).isEqualTo(expected);
+            if (folded) {
+                assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+            }
+        }
+    }
+
+    /// Writes `s` drawn from `symbols`, `id`, `n` (null every 5th row, and always null for the first
+    /// symbol so its MAX(n) is SQL NULL) and `x`; returns the rows written.
+    private static List<Object[]> writeGroupsWithJni(Path file, String[] symbols) throws Exception {
+        Schema schema = new Schema(List.of(
+                Field.nullable("s", new ArrowType.Utf8()),
+                Field.notNullable("id", new ArrowType.Int(64, true)),
+                Field.nullable("n", new ArrowType.Int(64, true)),
+                Field.notNullable("x", new ArrowType.FloatingPoint(org.apache.arrow.vector.types.FloatingPointPrecision.DOUBLE))));
+        List<Object[]> rows = new java.util.ArrayList<>();
+        java.util.Random random = new java.util.Random(7);
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build()) {
+            for (int batch = 0; batch < BATCHES; batch++) {
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+                    org.apache.arrow.vector.VarCharVector s = (org.apache.arrow.vector.VarCharVector) root.getVector("s");
+                    BigIntVector ids = (BigIntVector) root.getVector("id");
+                    BigIntVector n = (BigIntVector) root.getVector("n");
+                    org.apache.arrow.vector.Float8Vector x = (org.apache.arrow.vector.Float8Vector) root.getVector("x");
+                    s.allocateNew(BATCH_ROWS);
+                    ids.allocateNew(BATCH_ROWS);
+                    n.allocateNew(BATCH_ROWS);
+                    x.allocateNew(BATCH_ROWS);
+                    for (int i = 0; i < BATCH_ROWS; i++) {
+                        long id = (long) batch * BATCH_ROWS + i;
+                        String symbol = symbols[random.nextInt(symbols.length)];
+                        Long nValue = id % 5 == 0 || symbols[0].equals(symbol) ? null : id * 3;
+                        double xValue = random.nextDouble();
+                        if (symbol == null) {
+                            s.setNull(i);
+                        } else {
+                            s.setSafe(i, symbol.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        }
+                        ids.set(i, id);
+                        if (nValue == null) {
+                            n.setNull(i);
+                        } else {
+                            n.set(i, nValue);
+                        }
+                        x.set(i, xValue);
+                        rows.add(new Object[]{symbol, id, nValue, xValue});
+                    }
+                    root.setRowCount(BATCH_ROWS);
+                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                         ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
+                        writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
+                    }
+                }
+            }
+        }
+        return rows;
+    }
+
     private static void writeIdsWithJni(Path file, int batches, int batchRows) throws Exception {
         Schema schema = new Schema(List.of(
                 Field.notNullable("id", new ArrowType.Int(64, true)),

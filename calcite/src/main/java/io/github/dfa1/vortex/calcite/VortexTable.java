@@ -39,7 +39,9 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /// A single Vortex file exposed to Calcite as a flat SQL table with column projection and
@@ -343,6 +345,91 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         } catch (IOException e) {
             throw new UncheckedIOException("cannot fold filtered zones of " + file, e);
         }
+    }
+
+    /// Most groups [#groupedFold(ColumnName, RowFilter, Set)] answers. Each group becomes one literal
+    /// row of the plan, so a high-cardinality column is left to the scan.
+    private static final int MAX_GROUPS = 10_000;
+
+    /// One group's fold, returned by [#groupedFold(ColumnName, RowFilter, Set)].
+    ///
+    /// @param rows    the rows of the group the filter selects
+    /// @param columns per aggregate column, its fold over those rows
+    public record GroupFold(long rows, Map<ColumnName, FilteredFold> columns) {
+    }
+
+    /// Folds aggregates per value of a dictionary-encoded string column over the rows `filter`
+    /// selects, reading the group column's codes instead of building a row per record: each chunk
+    /// goes through [Compute#groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)] and the
+    /// chunks' results merge per group value.
+    ///
+    /// The result is empty, leaving the query to the scan, when any chunk's group column is not
+    /// dictionary-encoded, an aggregate column has no long or double fold, or there are more than
+    /// [#MAX_GROUPS] groups.
+    ///
+    /// @param group      the string column to group by
+    /// @param filter     the pushed predicate, or `null` for every row
+    /// @param aggColumns the columns the aggregates reduce; empty when only rows are counted
+    /// @return the fold per group value (`null` is the null group), or empty
+    public Optional<Map<String, GroupFold>> groupedFold(ColumnName group, RowFilter filter, Set<ColumnName> aggColumns) {
+        java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
+        columns.add(group);
+        if (filter != null) {
+            RexFilterTranslator.collectColumns(filter, columns);
+        }
+        columns.addAll(aggColumns);
+        ScanOptions options = ScanOptions.columns(columns.toArray(ColumnName[]::new));
+        if (filter != null) {
+            options = options.withFilter(filter);
+        }
+        // one pass per aggregate column (a null column counts rows only)
+        List<ColumnName> passes = aggColumns.isEmpty() ? java.util.Collections.singletonList(null)
+                : List.copyOf(aggColumns);
+        Map<String, long[]> rows = new java.util.HashMap<>();
+        Map<String, Map<ColumnName, Fold>> byGroup = new java.util.HashMap<>();
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(options)) {
+            while (scan.hasNext()) {
+                try (Chunk chunk = scan.next()) {
+                    for (int p = 0; p < passes.size(); p++) {
+                        ColumnName aggColumn = passes.get(p);
+                        Optional<Map<String, FilteredAggregate>> part =
+                                Compute.groupedAggregate(chunk, group, filter, aggColumn);
+                        if (part.isEmpty()) {
+                            return Optional.empty();
+                        }
+                        for (Map.Entry<String, FilteredAggregate> entry : part.get().entrySet()) {
+                            FilteredAggregate aggregate = entry.getValue();
+                            if (p == 0) {
+                                rows.computeIfAbsent(entry.getKey(), k -> new long[1])[0] += aggregate.selectedRows();
+                            }
+                            if (aggColumn != null) {
+                                Fold fold = byGroup.computeIfAbsent(entry.getKey(), k -> new java.util.HashMap<>())
+                                        .computeIfAbsent(aggColumn, k -> new Fold());
+                                fold.keptRows += aggregate.selectedRows();
+                                // the kernel's min/max are null only when no selected row has a value
+                                fold.addSum(aggregate.sum());
+                                fold.addMin(aggregate.min(), false);
+                                fold.addMax(aggregate.max(), false);
+                                fold.addNulls(aggregate.selectedRows() - aggregate.aggNonNullCount());
+                            }
+                        }
+                    }
+                    if (rows.size() > MAX_GROUPS) {
+                        return Optional.empty();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot fold groups of " + file, e);
+        }
+        Map<String, GroupFold> result = new java.util.HashMap<>();
+        rows.forEach((key, count) -> {
+            Map<ColumnName, FilteredFold> columnFolds = new java.util.HashMap<>();
+            byGroup.getOrDefault(key, Map.of()).forEach((column, fold) -> columnFolds.put(column, fold.result()));
+            result.put(key, new GroupFold(count[0], Map.copyOf(columnFolds)));
+        });
+        return Optional.of(java.util.Collections.unmodifiableMap(result));
     }
 
     /// Decodes the chunks that hold boundary zones, each once, in row order, and folds a zone's rows

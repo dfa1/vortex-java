@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `Compute.groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)` folds an aggregate per value of a dictionary-encoded string column. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - `Chunk.slice(offset, length)` gives a zero-copy view of a row range. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter tells the planner each table's row count, so join order and costing use the real table size. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - `Compute.matcher(Chunk, RowFilter)` lowers a filter once per chunk and returns a row test, for callers that test many rows. ([#552](https://github.com/dfa1/vortex-java/issues/552))
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- SQL `GROUP BY` on a dictionary-encoded string column is 10 to 30 times faster: rows are counted and summed per dictionary code instead of being built one by one for Calcite. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - The Calcite adapter pushes `IN` lists, comparisons with the literal on the left and `IS NULL` into the scan, so they prune chunks instead of being re-checked row by row. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter answers a filtered `COUNT`, `MIN` or `MAX` from Rust's `vortex.zoned` zone maps, the default, decoding only the zones the filter cuts. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter reads a table's schema and row count once instead of reopening the file for every planning call. ([#550](https://github.com/dfa1/vortex-java/pull/550))
