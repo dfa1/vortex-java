@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.performance;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.calcite.VortexTable;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -23,6 +24,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.BenchmarkParams;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -70,8 +72,8 @@ import java.util.concurrent.TimeUnit;
 /// [#fullScanBaseline] decodes one chunk per surviving zone, so the fold wins in proportion to the
 /// interior-chunk count — large on `wide`, smaller on `medium`, parity on `narrow`. The mode is
 /// [Mode#AverageTime] in milliseconds because the metric of interest is per-query latency. Both
-/// methods return the sum so JMH cannot dead-code-eliminate the work; [#setup] asserts the two paths
-/// agree once before timing so the A/B is honest.
+/// methods return the sum so JMH cannot dead-code-eliminate the work; the fold's trial asserts in
+/// [#setup] that the two paths agree before timing, so the A/B is honest.
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -103,7 +105,7 @@ public class CalciteBoundaryAggregateBenchmark {
     private long hi;
 
     @Setup(Level.Trial)
-    public void setup() throws IOException {
+    public void setup(BenchmarkParams params) throws IOException {
         long[] bounds = bounds(range);
         lo = bounds[0];
         hi = bounds[1];
@@ -116,6 +118,17 @@ public class CalciteBoundaryAggregateBenchmark {
         filter = RowFilter.and(RowFilter.gte(ColumnName.of("id"), lo), RowFilter.lte(ColumnName.of("id"), hi));
         baselineOptions = ScanOptions.columns(ColumnName.of("id"), ColumnName.of(AGG_COLUMN)).withFilter(filter);
 
+        // Only the fold's trial runs the checks: decoding through the fold in the baseline's JVM
+        // pollutes the reader's type profiles and slowed the scan 2-3x, timing the setup, not the scan.
+        if (!params.getBenchmark().endsWith(".boundaryFold")) {
+            return;
+        }
+        // The fold must not abandon where interior zones exist: an abandoned fold falls back to the
+        // scan, and the A/B would silently time the baseline twice.
+        if (!"narrow".equals(range) && table.filteredFold(filter, ColumnName.of(AGG_COLUMN))
+                .map(VortexTable.FilteredFold::sum).isEmpty()) {
+            throw new IllegalStateException("boundary fold cannot answer SUM for range=" + range);
+        }
         // Honesty check: the optimized fold and the full-scan baseline must agree before we time them.
         long folded = boundaryFold();
         long scanned = fullScanBaseline();
@@ -193,8 +206,11 @@ public class CalciteBoundaryAggregateBenchmark {
                 .field(ColumnName.of("id"), DType.I64)
                 .field(ColumnName.of("val"), DType.I64)
                 .build();
-        // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the interior-zone fold reads.
-        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withoutEditions();
+        // core2025.10.0 predates Rust's vortex.zoned, so the writer emits the legacy vortex.stats zone
+        // map: one zone per batch with the min/max/sum/null-count the interior-zone fold reads. The
+        // default vortex.zoned has 8192-row zones and no sum, so a filtered SUM always scans.
+        WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true)
+                .withEdition(Editions.CORE_2025_10_0);
         java.util.Random rng = new java.util.Random(SEED);
         try (FileChannel ch = FileChannel.open(file,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
