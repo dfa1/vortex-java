@@ -9,12 +9,14 @@ import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -61,17 +63,26 @@ final class GroupedAggregate {
         Array group = chunk.column(groupColumn);
         BoolArray validity = NumericColumns.validityOf(group);
         LongPredicate selected = filter == null ? null : FusedFilterAggregate.rowTest(chunk, filter);
+        try {
+            return group(group, validity, selected, lane, chunk.rowCount());
+        } catch (ArithmeticException overflow) {
+            return Optional.empty(); // a decimal sum past a long: the caller folds the rows exactly
+        }
+    }
+
+    private static Optional<Map<Object, FilteredAggregate>> group(Array group, BoolArray validity,
+            LongPredicate selected, Lane lane, long rowCount) {
         return switch (NumericColumns.unwrap(group)) {
-            case VarBinDictArray d -> byCode(d, 0, validity, selected, lane, chunk.rowCount());
+            case VarBinDictArray d -> byCode(d, 0, validity, selected, lane, rowCount);
             case VarBinSlicedArray(var _, var _, VarBinDictArray d, long offset) ->
-                    byCode(d, offset, validity, selected, lane, chunk.rowCount());
-            case BoolArray b -> byKey(i -> b.getBoolean(i) ? 1 : 0, validity, selected, lane, chunk.rowCount(),
+                    byCode(d, offset, validity, selected, lane, rowCount);
+            case BoolArray b -> byKey(i -> b.getBoolean(i) ? 1 : 0, validity, selected, lane, rowCount,
                     key -> key != 0);
             case Array data when NumericColumns.isLongDomain(data)
                     && data.dtype() instanceof DType.Primitive p && p.ptype() != PType.U64 -> {
                 boolean unsigned = p.ptype().isUnsigned();
                 yield byKey(i -> NumericColumns.widenLong(data, unsigned, i), validity, selected, lane,
-                        chunk.rowCount(), key -> key);
+                        rowCount, key -> key);
             }
             default -> Optional.empty();
         };
@@ -174,6 +185,8 @@ final class GroupedAggregate {
             sum = null;
         } else if (a.sum() instanceof Double x) {
             sum = x + b.sum().doubleValue();
+        } else if (a.sum() instanceof BigDecimal x) {
+            sum = x.add((BigDecimal) b.sum());
         } else {
             sum = a.sum().longValue() + b.sum().longValue();
         }
@@ -194,13 +207,20 @@ final class GroupedAggregate {
         return (min ? cmp <= 0 : cmp >= 0) ? a : b;
     }
 
-    /// How the aggregate column's values are read: not at all (a row count), as longs, or as doubles.
-    private record Lane(Array data, BoolArray validity, boolean unsigned, boolean floating, boolean isFloat) {
+    /// How the aggregate column's values are read: not at all (a row count), as longs, as doubles, or
+    /// as the unscaled longs of a decimal (`scale >= 0`).
+    private record Lane(Array data, BoolArray validity, boolean unsigned, boolean floating, boolean isFloat,
+                        int scale) {
 
-        private static final Lane COUNT_ONLY = new Lane(null, null, false, false, false);
+        private static final Lane COUNT_ONLY = new Lane(null, null, false, false, false, -1);
+
+        boolean decimal() {
+            return scale >= 0;
+        }
 
         /// Picks the lane for `column`, or `null` when no lane folds it: a non-numeric column, an
-        /// `f16`, or a `u64` whose values past 2^63 have no signed-long home.
+        /// `f16`, a `u64` whose values past 2^63 have no signed-long home, or a decimal of precision
+        /// past 18, whose unscaled values need not fit a long.
         static Lane of(Array column) {
             if (column == null) {
                 return COUNT_ONLY;
@@ -208,11 +228,14 @@ final class GroupedAggregate {
             Array data = NumericColumns.unwrap(column);
             BoolArray validity = NumericColumns.validityOf(column);
             if (data instanceof DoubleArray || data instanceof FloatArray) {
-                return new Lane(data, validity, false, true, data instanceof FloatArray);
+                return new Lane(data, validity, false, true, data instanceof FloatArray, -1);
             }
             if (NumericColumns.isLongDomain(data)
                     && data.dtype() instanceof DType.Primitive p && p.ptype() != PType.U64) {
-                return new Lane(data, validity, p.ptype().isUnsigned(), false, false);
+                return new Lane(data, validity, p.ptype().isUnsigned(), false, false, -1);
+            }
+            if (data instanceof DecimalArray && data.dtype() instanceof DType.Decimal d && d.precision() <= 18) {
+                return new Lane(data, validity, false, false, false, d.scale());
             }
             return null;
         }
@@ -261,6 +284,16 @@ final class GroupedAggregate {
                 if (first || Double.compare(v, doubleMax[g]) > 0) {
                     doubleMax[g] = v;
                 }
+            } else if (lane.decimal()) {
+                long v = ((DecimalArray) data).getUnscaledLong(i);
+                // a decimal sum must be exact: an overflow throws, and the caller declines the chunk
+                longSum[g] = Math.addExact(longSum[g], v);
+                if (first || v < longMin[g]) {
+                    longMin[g] = v;
+                }
+                if (first || v > longMax[g]) {
+                    longMax[g] = v;
+                }
             } else {
                 long v = NumericColumns.widenLong(data, lane.unsigned(), i);
                 longSum[g] += v;
@@ -281,6 +314,12 @@ final class GroupedAggregate {
             if (lane.floating()) {
                 return new FilteredAggregate(rows[g], nonNull[g], doubleSum[g],
                         any ? doubleMin[g] : null, any ? doubleMax[g] : null);
+            }
+            if (lane.decimal()) {
+                int scale = lane.scale();
+                return new FilteredAggregate(rows[g], nonNull[g], BigDecimal.valueOf(longSum[g], scale),
+                        any ? BigDecimal.valueOf(longMin[g], scale) : null,
+                        any ? BigDecimal.valueOf(longMax[g], scale) : null);
             }
             return new FilteredAggregate(rows[g], nonNull[g], longSum[g],
                     any ? longMin[g] : null, any ? longMax[g] : null);

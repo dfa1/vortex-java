@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinDictArray;
@@ -17,6 +18,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.function.LongPredicate;
@@ -374,6 +376,46 @@ class ComputeTest {
 
             // When / Then
             assertThat(Compute.groupedAggregate(chunk, G, null, null)).isEmpty();
+        }
+
+        /// A decimal of precision up to 18 folds as unscaled longs and comes back exact, at its scale.
+        @Test
+        void decimalAggregate_foldsExactlyAtTheColumnScale() {
+            // Given — groups a, b, a; v = 1.25, -0.50, 2.00 as DECIMAL(10, 2)
+            Array group = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"}, new int[]{0, 1, 0});
+            Array v = new LazyDecimalBytePartsArray(new DType.Decimal((byte) 10, (byte) 2, false), 3,
+                    ComputeArrays.longArray(ARENA, 125, -50, 200));
+
+            // When
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, null, V).orElseThrow();
+
+            // Then
+            assertThat(result.get("a")).isEqualTo(new FilteredAggregate(2, 2, new BigDecimal("3.25"),
+                    new BigDecimal("1.25"), new BigDecimal("2.00")));
+            assertThat(result.get("b").sum()).isEqualTo(new BigDecimal("-0.50"));
+        }
+
+        /// A decimal sum must be exact: one past a long declines rather than wrap.
+        @Test
+        void decimalSumPastALong_isEmpty() {
+            // Given
+            Array group = ComputeArrays.utf8DictArray(ARENA, new String[]{"a"}, new int[]{0, 0});
+            Array v = new LazyDecimalBytePartsArray(new DType.Decimal((byte) 18, (byte) 0, false), 2,
+                    ComputeArrays.longArray(ARENA, Long.MAX_VALUE, 1));
+
+            // When / Then
+            assertThat(Compute.groupedAggregate(chunk(group, v), G, null, V)).isEmpty();
+        }
+
+        @Test
+        void decimalPastPrecision18_isEmpty() {
+            // Given
+            Array group = ComputeArrays.utf8DictArray(ARENA, new String[]{"a"}, new int[]{0});
+            Array v = new LazyDecimalBytePartsArray(new DType.Decimal((byte) 19, (byte) 0, false), 1,
+                    ComputeArrays.longArray(ARENA, 1));
+
+            // When / Then
+            assertThat(Compute.groupedAggregate(chunk(group, v), G, null, V)).isEmpty();
         }
 
         /// The caller groups the rows itself when the kernel cannot: it must say so, not guess.

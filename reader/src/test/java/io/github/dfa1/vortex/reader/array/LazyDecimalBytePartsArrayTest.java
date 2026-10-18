@@ -120,4 +120,16 @@ class LazyDecimalBytePartsArrayTest {
                     .hasMessageContaining("non-decimal");
         }
     }
+
+    /// The decimal fold reads the mantissa child at its own width instead of through a BigInteger.
+    @Test
+    void getUnscaledLong_readsTheMantissaChild() {
+        // Given
+        LazyDecimalBytePartsArray sut = new LazyDecimalBytePartsArray(
+                new DType.Decimal((byte) 10, (byte) 2, false), 2, TestArrays.longs(-12_345L, 7L));
+
+        // When / Then
+        assertThat(sut.getUnscaledLong(0)).isEqualTo(-12_345L);
+        assertThat(sut.getUnscaledLong(1)).isEqualTo(7L);
+    }
 }

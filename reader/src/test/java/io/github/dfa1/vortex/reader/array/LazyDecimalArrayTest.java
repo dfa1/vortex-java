@@ -4,6 +4,8 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -141,6 +143,42 @@ class LazyDecimalArrayTest {
             assertThatThrownBy(() -> sut.getDecimal(0))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unsupported element width");
+        }
+    }
+
+    /// A decimal fold totals unscaled longs read straight from the buffer; at every width they must
+    /// equal the unscaled value [LazyDecimalArray#getDecimal(long)] decodes, negatives included.
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 4, 8, 16})
+    void getUnscaledLong_matchesTheDecodedDecimalAtEveryWidth(int width) {
+        // Given — -7 and 42, each written sign-extended to `width` little-endian bytes
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(2L * width);
+            long[] values = {-7, 42};
+            for (int row = 0; row < 2; row++) {
+                for (int b = 0; b < width; b++) {
+                    buf.set(ValueLayout.JAVA_BYTE, (long) row * width + b, (byte) (values[row] >> Math.min(8 * b, 63)));
+                }
+            }
+            LazyDecimalArray sut = new LazyDecimalArray(new DType.Decimal((byte) 2, (byte) 1, false), 2, buf, width);
+
+            // When / Then
+            assertThat(sut.getUnscaledLong(0)).isEqualTo(-7L).isEqualTo(sut.getDecimal(0).unscaledValue().longValue());
+            assertThat(sut.getUnscaledLong(1)).isEqualTo(42L);
+        }
+    }
+
+    /// A 16-byte value past a long cannot be totalled as one; the caller must see it, not a wrapped value.
+    @Test
+    void getUnscaledLong_wideValuePastALong_throws() {
+        // Given — 2^64 as a 16-byte little-endian value
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(16);
+            buf.set(ValueLayout.JAVA_BYTE, 8, (byte) 1);
+            LazyDecimalArray sut = new LazyDecimalArray(new DType.Decimal((byte) 38, (byte) 0, false), 1, buf, 16);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.getUnscaledLong(0)).isInstanceOf(ArithmeticException.class);
         }
     }
 }

@@ -25,16 +25,21 @@ final class DecimalBytePartsArrays {
     /// @return cell value as a [BigInteger]
     /// @throws VortexException for null cells or unsupported array types
     static BigInteger readMantissa(Array arr, long i) {
+        return BigInteger.valueOf(readMantissaLong(arr, i));
+    }
+
+    /// Reads the mantissa at `i` at the child's own width; every supported child fits a `long`.
+    static long readMantissaLong(Array arr, long i) {
         return switch (arr) {
-            case ByteArray a -> BigInteger.valueOf(a.getByte(i));
-            case ShortArray a -> BigInteger.valueOf(a.getShort(i));
-            case IntArray a -> BigInteger.valueOf(a.getInt(i));
-            case LongArray a -> BigInteger.valueOf(a.getLong(i));
+            case ByteArray a -> a.getByte(i);
+            case ShortArray a -> a.getShort(i);
+            case IntArray a -> a.getInt(i);
+            case LongArray a -> a.getLong(i);
             case MaskedArray a -> {
                 if (!a.isValid(i)) {
                     throw new VortexException("DecimalByteParts: null cell at index " + i);
                 }
-                yield readMantissa(a.inner(), i);
+                yield readMantissaLong(a.inner(), i);
             }
             default -> throw new VortexException(
                     "DecimalByteParts: unsupported mantissa child type: " + arr.getClass().getSimpleName());
