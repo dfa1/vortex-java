@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- SQL `COUNT(DISTINCT col)` is up to 4 times faster: distinct values are counted in the scan, integers by their bits in a primitive map, instead of Calcite hashing a boxed value per row. ([#562](https://github.com/dfa1/vortex-java/pull/562))
 - A SQL `WHERE` comparing a `SMALLINT` or `TINYINT` column with a literal is pushed into the scan and its aggregates, instead of being left to Calcite because of the cast Calcite adds. ([#560](https://github.com/dfa1/vortex-java/pull/560))
 - SQL `MIN`/`MAX` of a date, time or timestamp column is answered from zone maps, and scans read those columns without building a `java.time` object per row. ([#559](https://github.com/dfa1/vortex-java/pull/559))
 - The Calcite adapter declares `TIME` and `TIMESTAMP` columns with millisecond precision, so `getString` shows the milliseconds the values carry. ([#559](https://github.com/dfa1/vortex-java/pull/559))

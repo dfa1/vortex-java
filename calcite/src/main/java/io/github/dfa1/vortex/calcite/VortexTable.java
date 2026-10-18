@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.compute.LongIntMap;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -12,6 +13,19 @@ import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Zone;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinDictArray;
+import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
+import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.compute.FilteredAggregate;
@@ -437,6 +451,98 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     DType columnType(ColumnName column) {
         DType.Struct struct = struct();
         return struct.fieldTypes().get(struct.fieldNames().indexOf(column));
+    }
+
+    /// `COUNT(DISTINCT column)` over the rows `filter` selects: the number of distinct non-null
+    /// values, counted without a boxed value per row. Integer and temporal storage, and doubles,
+    /// are counted by their raw bits in a primitive [LongIntMap] (for doubles the same equality as
+    /// `Double.equals`, which Calcite's own `DISTINCT` uses); a dictionary-encoded string column
+    /// marks the codes a chunk uses and decodes each once; other strings go through a set.
+    ///
+    /// @param column the column to count distinct values of
+    /// @param filter the rows to count over, or `null` for every row
+    /// @return the count, or empty for a column type this does not count (decimals, binary, nested)
+    public Optional<Long> distinctCount(ColumnName column, RowFilter filter) {
+        java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
+        columns.add(column);
+        ScanOptions options;
+        if (filter == null) {
+            options = ScanOptions.columns(column);
+        } else {
+            RexFilterTranslator.collectColumns(filter, columns);
+            options = ScanOptions.columns(columns.toArray(ColumnName[]::new)).withFilter(filter);
+        }
+        LongIntMap bits = new LongIntMap(1024);
+        java.util.Set<String> strings = new java.util.HashSet<>();
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(options)) {
+            while (scan.hasNext()) {
+                try (Chunk chunk = scan.next()) {
+                    java.util.function.LongPredicate selected = filter == null ? null : Compute.matcher(chunk, filter);
+                    Array array = chunk.column(column);
+                    BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
+                    Array data = array instanceof MaskedArray masked ? masked.inner() : array;
+                    long n = chunk.rowCount();
+                    if (!countChunk(data, validity, selected, n, bits, strings)) {
+                        return Optional.empty();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot count distinct values of " + column + " in " + file, e);
+        }
+        return Optional.of((long) bits.size() + strings.size());
+    }
+
+    /// Adds one chunk's distinct values; `false` for a column type [#distinctCount] does not count.
+    private static boolean countChunk(Array data, BoolArray validity, java.util.function.LongPredicate selected,
+                                      long n, LongIntMap bits, java.util.Set<String> strings) {
+        java.util.function.LongUnaryOperator bitsOf = switch (data) {
+            case LongArray a -> a::getLong;
+            case IntArray a -> a::getInt;
+            case ShortArray a -> a::getShort;
+            case ByteArray a -> a::getByte;
+            case DoubleArray a -> i -> Double.doubleToLongBits(a.getDouble(i));
+            case FloatArray a -> i -> Double.doubleToLongBits(a.getFloat(i));
+            case BoolArray a -> i -> a.getBoolean(i) ? 1 : 0;
+            default -> null;
+        };
+        if (bitsOf != null) {
+            for (long i = 0; i < n; i++) {
+                if ((selected == null || selected.test(i)) && (validity == null || validity.getBoolean(i))) {
+                    bits.add(bitsOf.applyAsLong(i));
+                }
+            }
+            return true;
+        }
+        VarBinDictArray dict = data instanceof VarBinDictArray d ? d
+                : data instanceof VarBinSlicedArray(var _, var _, VarBinDictArray d, var _) ? d : null;
+        if (dict != null && data.dtype() instanceof DType.Utf8) {
+            long offset = data instanceof VarBinSlicedArray sliced ? sliced.offset() : 0;
+            VarBinOffsetArray values = dict.values();
+            java.util.BitSet used = new java.util.BitSet();
+            for (long i = 0; i < n; i++) {
+                if ((selected == null || selected.test(i)) && (validity == null || validity.getBoolean(i))) {
+                    long code = dict.code(i + offset);
+                    if (code < 0 || code >= values.length()) {
+                        throw new VortexException("dict code " + code + " out of range for "
+                                + values.length() + " dictionary entries");
+                    }
+                    used.set((int) code);
+                }
+            }
+            used.stream().forEach(code -> strings.add(values.getString(code)));
+            return true;
+        }
+        if (data instanceof VarBinArray varBin && data.dtype() instanceof DType.Utf8) {
+            for (long i = 0; i < n; i++) {
+                if ((selected == null || selected.test(i)) && (validity == null || validity.getBoolean(i))) {
+                    strings.add(varBin.getString(i));
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     /// One `ORDER BY` key of [#topN(int[], RowFilter, List, int)].

@@ -199,6 +199,8 @@ class CalciteInteropIntegrationTest {
             // g = id % 7 has 7 distinct values over 3000 rows
             "select count(distinct g) from vtx.t                     | 7",
             "select count(distinct g) from vtx.t where id < 3        | 3",
+            // n is null on ids 0 and 1000 and distinct elsewhere
+            "select count(distinct n) from vtx.t where id < 1001     | 999",
             "select count(*) filter (where id < 10) from vtx.t       | 10",
             "select count(n) filter (where id < 1001) from vtx.t     | 999",
             "select min(id) filter (where id > 2000) from vtx.t      | 2001",

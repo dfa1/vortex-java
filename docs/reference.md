@@ -641,7 +641,10 @@ A `GROUP BY` on one column (a dictionary-encoded string, a boolean, or an intege
 `u64`), with `count`/`sum`/`min`/`max` of plain numeric columns and the same kind of `WHERE`, is
 folded per group into one row per group instead of building a row per record; it falls back to the
 scan when a chunk of a string column is not dictionary-encoded, there are more than 10,000 groups,
-or a group value is outside Latin-1 (Calcite's `VARCHAR` charset). `DISTINCT` and `FILTER (WHERE ...)` aggregates are always computed by the scan.
+or a group value is outside Latin-1 (Calcite's `VARCHAR` charset). An ungrouped `count(distinct col)` (with the same kind of `WHERE`) counts distinct values
+without boxing one per row: integers, temporals, doubles and booleans by their bits, dictionary
+strings by the codes a chunk uses; other `DISTINCT` and `FILTER (WHERE ...)` aggregates are computed
+by the scan.
 `ORDER BY ... LIMIT n` (any `OFFSET`, `n + offset` up to 1,000) over plain columns, with the same
 kind of `WHERE`, keeps the first rows in a bounded heap during the scan instead of sorting every
 row; it falls back to Calcite's sort when a returned value has no SQL literal of its type (`NaN`,
