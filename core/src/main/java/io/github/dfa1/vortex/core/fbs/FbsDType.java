@@ -9,11 +9,41 @@ import javax.annotation.processing.Generated;
 @Generated("io.github.dfa1.vortex.fbsgen.CodeGen")
 public final class FbsDType extends FbsTable {
 
-    /// Positions a reader at the root table of a finished buffer.
+    /// Verifies a finished buffer and positions a reader at its root table.
     /// @param seg the buffer
     /// @return a reader positioned at the root
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if the buffer is malformed
     public static FbsDType getRootAsFbsDType(MemorySegment seg) {
-        return new FbsDType().assign(seg, FbsTable.rootPosition(seg, 0));
+        return new FbsDType().assign(seg, FbsVerifier.verifyRoot(seg, FbsDType::verify));
+    }
+
+    /// Checks this table and everything reachable from it.
+    /// @param v the verifier walking the buffer
+    /// @param pos the table's absolute position
+    static void verify(FbsVerifier v, long pos) {
+        v.startTable(pos);
+        int typeType = v.unionType(pos, 4, 6, "type");
+        if (typeType != 0) {
+            long member = v.unionValue(pos, 6, "type");
+            switch (typeType) {
+                case 1 -> FbsNull.verify(v, member);
+                case 2 -> FbsBool.verify(v, member);
+                case 3 -> FbsPrimitive.verify(v, member);
+                case 4 -> FbsDecimal.verify(v, member);
+                case 5 -> FbsUtf8.verify(v, member);
+                case 6 -> FbsBinary.verify(v, member);
+                case 7 -> FbsStruct.verify(v, member);
+                case 8 -> FbsList.verify(v, member);
+                case 9 -> FbsExtension.verify(v, member);
+                case 10 -> FbsFixedSizeList.verify(v, member);
+                case 11 -> FbsVariant.verify(v, member);
+                case 12 -> FbsUnion.verify(v, member);
+                case 13 -> FbsMap.verify(v, member);
+                default -> {
+                }
+            }
+        }
+        v.endTable();
     }
 
     /// Positions this reader at a table.

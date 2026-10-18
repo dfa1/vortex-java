@@ -406,24 +406,16 @@ public record InspectorTree(
             return new Peek(null, ArrayStats.empty(), Set.of());
         }
         Set<String> nested = new LinkedHashSet<>();
-        collectEncodings(root, arraySpecs, nested, 0, new int[]{0});
+        collectEncodings(root, arraySpecs, nested, new int[]{0});
         return new Peek(resolveEncodingId(arraySpecs, root.encoding()), ArrayStats.fromFbs(root.stats()),
                 Set.copyOf(nested));
     }
 
-    /// Hard cap on the `ArrayNode`-tree walk depth in [#collectEncodings(FbsArrayNode, List, Set, int, int[])],
-    /// mirroring `SerializedArrayDecoder.MAX_ARRAY_TREE_DEPTH` in the reader module: a crafted segment with
-    /// deeply nested children could otherwise drive unbounded recursion into a `StackOverflowError`,
-    /// an `Error` that would bypass the [VortexException] contract for malformed untrusted input.
-    static final int MAX_ENCODING_TREE_DEPTH = 64;
-
     /// Hard cap on the total number of `ArrayNode`s visited by one
-    /// [#collectEncodings(FbsArrayNode, List, Set, int, int[])] walk. The depth cap alone is not enough: nothing
-    /// stops two sibling `children` vector slots from resolving to the exact same absolute child position (the
-    /// underlying FlatBuffers `uoffset` mechanism is not validated for aliasing), so a crafted segment with a
-    /// handful of levels, each fanning out to two children that both alias the next level's single node, drives
-    /// the walk to an exponential (up to 2^[#MAX_ENCODING_TREE_DEPTH]) number of visits while depth itself
-    /// never exceeds the limit.
+    /// [#collectEncodings(FbsArrayNode, List, Set, int[])] walk. Depth is already bounded by the FlatBuffer
+    /// verifier `FbsArray.getRootAsFbsArray` runs (64 nested tables, as Rust), and so is the total, but only at
+    /// a million visits: two sibling `children` slots may alias the same child, so a handful of levels fanning
+    /// out to two aliases each reaches that many. The inspector peeks every segment, so it stops far sooner.
     static final int MAX_ENCODING_TREE_NODES = 4096;
 
     /// Resolves a wire-supplied encoding index against the footer's array spec table.
@@ -447,20 +439,16 @@ public record InspectorTree(
     /// @param node       array node to visit
     /// @param arraySpecs footer's array spec table, indexed by [FbsArrayNode#encoding()]
     /// @param into       accumulator for resolved encoding ids
-    /// @param depth      current recursion depth, starting at `0` for the root
     /// @param visited    single-element counter of nodes visited so far across the whole walk
     private static void collectEncodings(FbsArrayNode node, List<EncodingId> arraySpecs, Set<String> into,
-            int depth, int[] visited) {
-        if (depth > MAX_ENCODING_TREE_DEPTH) {
-            throw new VortexException("array tree depth exceeds limit (" + MAX_ENCODING_TREE_DEPTH + ")");
-        }
+            int[] visited) {
         if (++visited[0] > MAX_ENCODING_TREE_NODES) {
             throw new VortexException("array tree node count exceeds limit (" + MAX_ENCODING_TREE_NODES + ")");
         }
         into.add(resolveEncodingId(arraySpecs, node.encoding()));
         int childCount = node.childrenLength();
         for (int i = 0; i < childCount; i++) {
-            collectEncodings(node.children(i), arraySpecs, into, depth + 1, visited);
+            collectEncodings(node.children(i), arraySpecs, into, visited);
         }
     }
 

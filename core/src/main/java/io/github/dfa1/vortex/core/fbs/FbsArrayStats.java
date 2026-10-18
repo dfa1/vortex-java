@@ -9,11 +9,31 @@ import javax.annotation.processing.Generated;
 @Generated("io.github.dfa1.vortex.fbsgen.CodeGen")
 public final class FbsArrayStats extends FbsTable {
 
-    /// Positions a reader at the root table of a finished buffer.
+    /// Verifies a finished buffer and positions a reader at its root table.
     /// @param seg the buffer
     /// @return a reader positioned at the root
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if the buffer is malformed
     public static FbsArrayStats getRootAsFbsArrayStats(MemorySegment seg) {
-        return new FbsArrayStats().assign(seg, FbsTable.rootPosition(seg, 0));
+        return new FbsArrayStats().assign(seg, FbsVerifier.verifyRoot(seg, FbsArrayStats::verify));
+    }
+
+    /// Checks this table and everything reachable from it.
+    /// @param v the verifier walking the buffer
+    /// @param pos the table's absolute position
+    static void verify(FbsVerifier v, long pos) {
+        v.startTable(pos);
+        v.vector(pos, 4, 1, "min", false);
+        v.inline(pos, 6, 1, "min_precision", false);
+        v.vector(pos, 8, 1, "max", false);
+        v.inline(pos, 10, 1, "max_precision", false);
+        v.vector(pos, 12, 1, "sum", false);
+        v.inline(pos, 14, 1, "is_sorted", false);
+        v.inline(pos, 16, 1, "is_strict_sorted", false);
+        v.inline(pos, 18, 1, "is_constant", false);
+        v.inline(pos, 20, 8, "null_count", false);
+        v.inline(pos, 22, 8, "uncompressed_size_in_bytes", false);
+        v.inline(pos, 24, 8, "nan_count", false);
+        v.endTable();
     }
 
     /// Positions this reader at a table.

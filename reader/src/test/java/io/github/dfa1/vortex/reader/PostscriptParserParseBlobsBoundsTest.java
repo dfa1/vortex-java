@@ -54,15 +54,14 @@ class PostscriptParserParseBlobsBoundsTest {
                 .hasMessageContaining("encoding index");
     }
 
-    // ── FbsLayout depth bound: depth > MAX_LAYOUT_DEPTH (64) ────────────────────────
+    // ── Layout nesting: the FlatBuffer verifier caps tables at 64 deep, as Rust does ──
 
     @Test
     void parseBlobs_layoutDepth_atLimit_parses() {
-        // Given — a single-child chain whose deepest node sits at exactly MAX_LAYOUT_DEPTH.
-        // convertLayout is called with depth == 64 there, and `64 > 64` is false. Kills the
-        // `depth >` relaxed to `depth >=` mutant, which would reject the legal max-depth tree.
+        // Given — a single-child chain of 64 layout tables (63 wraps around the leaf): exactly the
+        // verifier's depth limit, so it parses
         MemorySegment footer = footerWithLayoutSpecs("vortex.flat");
-        MemorySegment layout = nestedLayout(PostscriptParser.MAX_LAYOUT_DEPTH);
+        MemorySegment layout = nestedLayout(63);
 
         // When / Then
         assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, null))
@@ -71,14 +70,14 @@ class PostscriptParserParseBlobsBoundsTest {
 
     @Test
     void parseBlobs_layoutDepth_oneOverLimit_throws() {
-        // Given — one level deeper: the deepest node reaches depth 65, tripping `65 > 64`
+        // Given — one table deeper (65): rejected before convertLayout recurses at all
         MemorySegment footer = footerWithLayoutSpecs("vortex.flat");
-        MemorySegment layout = nestedLayout(PostscriptParser.MAX_LAYOUT_DEPTH + 1);
+        MemorySegment layout = nestedLayout(64);
 
         // When / Then
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, null))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("depth");
+                .hasMessageContaining("nest deeper than 64");
     }
 
     // ── FbsDecimal precision bound: precision < 1 || precision > 76 ─────────────────
@@ -162,14 +161,12 @@ class PostscriptParserParseBlobsBoundsTest {
                 .hasMessageContaining("metadata size");
     }
 
-    // ── FbsDType depth bound: depth > MAX_DTYPE_DEPTH (64) ──────────────────────────
+    // ── DType nesting: DType + List per level, so 64 tables allow 31 list wraps ──
 
     @Test
     void parseBlobs_dtypeDepth_atLimit_parses() {
-        // Given — a single-child List chain whose deepest node sits at exactly MAX_DTYPE_DEPTH.
-        // convertDType is entered with depth == 64 there, and `64 > 64` is false. Kills the
-        // `depth >` relaxed to `depth >=` mutant, which would reject the legal max-depth dtype.
-        MemorySegment dtype = nestedListDtype(PostscriptParser.MAX_DTYPE_DEPTH);
+        // Given — 31 List wraps: 64 tables, exactly the verifier's depth limit
+        MemorySegment dtype = nestedListDtype(31);
 
         // When
         DType result = parseDtype(dtype);
@@ -180,13 +177,13 @@ class PostscriptParserParseBlobsBoundsTest {
 
     @Test
     void parseBlobs_dtypeDepth_oneOverLimit_throws() {
-        // Given — one level deeper: the deepest node reaches depth 65, tripping `65 > 64`
-        MemorySegment dtype = nestedListDtype(PostscriptParser.MAX_DTYPE_DEPTH + 1);
+        // Given — one wrap more: 66 tables
+        MemorySegment dtype = nestedListDtype(32);
 
         // When / Then
         assertThatThrownBy(() -> parseDtype(dtype))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("depth");
+                .hasMessageContaining("nest deeper than 64");
     }
 
     // ── parseBlobs dtype-presence guard: dtypeBuf != null && byteSize() > 0 ──────────

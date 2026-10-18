@@ -89,7 +89,7 @@ class SerializedArrayBoundsSecurityTest {
     void rootOffsetPastFlatBuffer_throwsVortexException() {
         try (Arena arena = Arena.ofConfined()) {
             // Given a valid FlatBuffer whose root uoffset is rewritten to land 2 bytes before its
-            // end: the runtime's vtable read there runs off the slice (the first fuzzer finding)
+            // end: the table's soffset there runs off the slice (the first fuzzer finding)
             byte[] fb = arrayFlatBufferWithOneBuffer(0L);
             MemorySegment seg = segmentOf(arena, fb);
             seg.set(VortexFormat.LE_INT, 0, fb.length - 2);
@@ -97,7 +97,7 @@ class SerializedArrayBoundsSecurityTest {
             // When / Then
             assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("malformed array flatbuffer");
+                    .hasMessageContaining("malformed flatbuffer: table");
         }
     }
 
@@ -122,8 +122,8 @@ class SerializedArrayBoundsSecurityTest {
     void childrenVectorClaimingMoreThanTheFlatBuffer_throwsVortexException() {
         try (Arena arena = Arena.ofConfined()) {
             // Given a children vector whose length prefix claims 100 000 entries it does not hold.
-            // At Integer.MAX_VALUE the `new ArrayNode[n]` it sizes would be an OutOfMemoryError,
-            // which no catch of RuntimeException stops; the count is checked before allocating.
+            // At Integer.MAX_VALUE the `new ArrayNode[n]` it sizes would be an OutOfMemoryError;
+            // the verifier rejects the vector before anything is allocated from its length.
             FbsBuilder b = new FbsBuilder();
             FbsArrayNode.startChildrenVector(b, 100_000);
             int children = b.endVector();
@@ -134,7 +134,7 @@ class SerializedArrayBoundsSecurityTest {
             // When / Then
             assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("vector of 100000 elements exceeds");
+                    .hasMessageContaining("vector of 100000 elements");
         }
     }
 

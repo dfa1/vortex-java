@@ -19,13 +19,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// [SerializedArrayDecoder]'s `convertArrayNode`.
 ///
 /// The decoder walks the array node tree recursively (validity, patches, run-ends, dictionary
-/// codes/values, …). Without the [SerializedArrayDecoder#MAX_ARRAY_TREE_DEPTH] cap a crafted segment
-/// with thousands of nested children produces a [StackOverflowError] — an `Error` that escapes the
-/// "malformed input must surface as [VortexException]" contract (ADR 0003).
-///
-/// The two cases bracket the exact `depth > MAX_ARRAY_TREE_DEPTH` boundary: a tree whose deepest
-/// node sits at exactly the limit must clear the guard (and then fail later for an unrelated reason
-/// — no decoder), while one node deeper must be rejected by the depth guard itself.
+/// codes/values, …). A crafted segment with thousands of nested children would overflow the stack
+/// with a [StackOverflowError], an `Error` that escapes the "malformed input must surface as
+/// [VortexException]" contract (ADR 0003). The FlatBuffer verifier bounds it before the walk: like
+/// Rust's, it rejects tables nested deeper than 64, and here the `Array` table plus `depth + 1`
+/// nodes are `depth + 2` tables.
 class ArrayNodeDepthBombSecurityTest {
 
     private static final DType DTYPE = DType.I32;
@@ -35,11 +33,9 @@ class ArrayNodeDepthBombSecurityTest {
     @Test
     void arrayTreeAtDepthLimit_clearsGuard() {
         try (Arena arena = Arena.ofConfined()) {
-            // Given — deepest node at exactly MAX_ARRAY_TREE_DEPTH: convertArrayNode is entered with
-            // depth == limit there, and `limit > limit` is false. The walk completes and only then
-            // fails because the empty registry has no decoder. Kills `depth >` relaxed to `>=`,
-            // which would wrongly reject this legal max-depth tree with the depth message.
-            byte[] fb = deeplyNestedArrayFlatBuffer(SerializedArrayDecoder.MAX_ARRAY_TREE_DEPTH);
+            // Given — 64 tables, exactly the verifier's limit: the walk completes and only then
+            // fails because the empty registry has no decoder
+            byte[] fb = deeplyNestedArrayFlatBuffer(62);
             MemorySegment seg = wrapAsSegment(fb, arena);
             List<EncodingId> encodings = List.of(EncodingId.parse("vortex.flat"));
 
@@ -53,16 +49,15 @@ class ArrayNodeDepthBombSecurityTest {
     @Test
     void arrayTreeOneOverDepthLimit_throwsVortexException() {
         try (Arena arena = Arena.ofConfined()) {
-            // Given — one level deeper: the deepest node reaches limit + 1, tripping the guard
-            // before any StackOverflowError can escape.
-            byte[] fb = deeplyNestedArrayFlatBuffer(SerializedArrayDecoder.MAX_ARRAY_TREE_DEPTH + 1);
+            // Given — one table deeper (65): rejected by the verifier before the walk starts
+            byte[] fb = deeplyNestedArrayFlatBuffer(63);
             MemorySegment seg = wrapAsSegment(fb, arena);
             List<EncodingId> encodings = List.of(EncodingId.parse("vortex.flat"));
 
             // When / Then — must surface as VortexException, not StackOverflowError
             assertThatThrownBy(() -> sut.decode(seg, encodings, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("depth");
+                    .hasMessageContaining("nest deeper than 64");
         }
     }
 

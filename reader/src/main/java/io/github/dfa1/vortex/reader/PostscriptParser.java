@@ -29,25 +29,11 @@ import java.util.List;
 
 final class PostscriptParser {
 
-    /// Hard cap on layout-tree recursion depth. Real-world layouts are typically four levels
-    /// (Struct → Zoned → Chunked → Flat); 64 is well past any expected schema and prevents
-    /// adversarial inputs — deeply nested trees or self-referential FlatBuffer cycles — from
-    /// blowing the JVM stack during [#convertLayout(io.github.dfa1.vortex.core.fbs.FbsLayout, List, int)].
-    static final int MAX_LAYOUT_DEPTH = 64;
-
     /// Hard cap on per-layout metadata size. The FlatBuffer runtime returns an unbounded slice
     /// from `metadataAsSegment()`; a crafted file can claim a multi-gigabyte metadata
     /// blob and force later allocators into pathological behavior. 4 MiB is well above any
     /// real encoding's metadata footprint (the largest is FSST's symbol table at ~32 KiB).
     static final MemorySize MAX_LAYOUT_METADATA_BYTES = MemorySize.ofMiB(4);
-
-    /// Hard cap on DType-tree recursion depth. A `DType` nests through Struct fields, List/
-    /// FixedSizeList element types, and Extension storage types; like the layout tree, a crafted
-    /// or self-referential FlatBuffer can drive [#convertDType(io.github.dfa1.vortex.core.fbs.FbsDType, int)]
-    /// into unbounded recursion and a [StackOverflowError] — which, being an `Error`, would escape
-    /// the [VortexException] sanitization and leak the reader's memory-mapped Arena. 64 is well past
-    /// any real schema's nesting.
-    static final int MAX_DTYPE_DEPTH = 64;
 
     private PostscriptParser() {
     }
@@ -121,11 +107,11 @@ final class PostscriptParser {
             var fbsLayout = io.github.dfa1.vortex.core.fbs.FbsLayout.getRootAsFbsLayout(layoutBuf);
 
             Footer footer = convertFooter(fbsFooter);
-            Layout layout = convertLayout(fbsLayout, footer.layoutSpecs(), 0);
+            Layout layout = convertLayout(fbsLayout, footer.layoutSpecs());
 
             DType dtype = null;
             if (dtypeBuf != null && dtypeBuf.byteSize() > 0) {
-                dtype = convertDType(io.github.dfa1.vortex.core.fbs.FbsDType.getRootAsFbsDType(dtypeBuf), 0);
+                dtype = convertDType(io.github.dfa1.vortex.core.fbs.FbsDType.getRootAsFbsDType(dtypeBuf));
                 checkStructLayouts(layout, dtype);
             }
 
@@ -236,11 +222,7 @@ final class PostscriptParser {
                 List.copyOf(segmentSpecs), List.copyOf(compressionSpecs));
     }
 
-    private static Layout convertLayout(io.github.dfa1.vortex.core.fbs.FbsLayout l, List<LayoutId> layoutSpecs, int depth) {
-        if (depth > MAX_LAYOUT_DEPTH) {
-            throw new VortexException(
-                    "layout tree depth exceeds limit (" + MAX_LAYOUT_DEPTH + ")");
-        }
+    private static Layout convertLayout(io.github.dfa1.vortex.core.fbs.FbsLayout l, List<LayoutId> layoutSpecs) {
         int encIdx = l.encoding();
         if (encIdx < 0 || encIdx >= layoutSpecs.size()) {
             throw new VortexException(
@@ -259,7 +241,7 @@ final class PostscriptParser {
 
         var children = new ArrayList<Layout>(l.childrenLength());
         for (int i = 0; i < l.childrenLength(); i++) {
-            children.add(convertLayout(l.children(i), layoutSpecs, depth + 1));
+            children.add(convertLayout(l.children(i), layoutSpecs));
         }
 
         var segments = new ArrayList<Integer>(l.segmentsLength());
@@ -270,11 +252,7 @@ final class PostscriptParser {
         return new Layout(layoutId, l.rowCount(), metadata, List.copyOf(children), List.copyOf(segments));
     }
 
-    private static DType convertDType(io.github.dfa1.vortex.core.fbs.FbsDType fbs, int depth) {
-        if (depth > MAX_DTYPE_DEPTH) {
-            throw new VortexException(
-                    "DType tree depth exceeds limit (" + MAX_DTYPE_DEPTH + ")");
-        }
+    private static DType convertDType(io.github.dfa1.vortex.core.fbs.FbsDType fbs) {
         int typeType = fbs.typeType();
         return switch (typeType) {
             case FbsType.FbsNull -> new DType.Null(true);
@@ -339,17 +317,17 @@ final class PostscriptParser {
                     names.add(new io.github.dfa1.vortex.core.model.ColumnName(name));
                 }
                 for (int i = 0; i < s.dtypesLength(); i++) {
-                    types.add(convertDType(s.dtypes(i), depth + 1));
+                    types.add(convertDType(s.dtypes(i)));
                 }
                 yield new DType.Struct(List.copyOf(names), List.copyOf(types), s.nullable());
             }
             case FbsType.FbsList -> {
                 var l = fbs.type(new io.github.dfa1.vortex.core.fbs.FbsList());
-                yield new DType.List(convertDType(l.elementType(), depth + 1), l.nullable());
+                yield new DType.List(convertDType(l.elementType()), l.nullable());
             }
             case FbsType.FbsFixedSizeList -> {
                 var fsl = fbs.type(new FbsFixedSizeList());
-                yield new DType.FixedSizeList(convertDType(fsl.elementType(), depth + 1), (int) fsl.size(), fsl.nullable());
+                yield new DType.FixedSizeList(convertDType(fsl.elementType()), (int) fsl.size(), fsl.nullable());
             }
             case FbsType.FbsMap -> {
                 var m = fbs.type(new FbsMap());
@@ -358,15 +336,15 @@ final class PostscriptParser {
                 if (m.keyType() == null || m.valueType() == null) {
                     throw new VortexException("map dtype missing key_type or value_type");
                 }
-                DType keyType = convertDType(m.keyType(), depth + 1);
-                DType valueType = convertDType(m.valueType(), depth + 1);
+                DType keyType = convertDType(m.keyType());
+                DType valueType = convertDType(m.valueType());
                 // A nullable key type is rejected by DType.Map's own constructor, which raises
                 // VortexException — the security contract holds without a second check here.
                 yield new DType.Map(keyType, valueType, m.keysSorted(), m.nullable());
             }
             case FbsType.FbsExtension -> {
                 var e = fbs.type(new FbsExtension());
-                DType storage = convertDType(e.storageDtype(), depth + 1);
+                DType storage = convertDType(e.storageDtype());
                 // Rust requires the field, empty when there is no metadata
                 MemorySegment metadata = e.metadataAsSegment();
                 if (metadata == null) {
@@ -393,7 +371,7 @@ final class PostscriptParser {
                 }
                 var types = new ArrayList<DType>(u.dtypesLength());
                 for (int i = 0; i < u.dtypesLength(); i++) {
-                    types.add(convertDType(u.dtypes(i), depth + 1));
+                    types.add(convertDType(u.dtypes(i)));
                 }
                 var typeIds = new ArrayList<Integer>(u.typeIdsLength());
                 for (int i = 0; i < u.typeIdsLength(); i++) {

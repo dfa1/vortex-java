@@ -83,14 +83,16 @@ public final class CodeGen {
         sb.append("public final class ").append(name).append(" extends FbsTable {\n\n");
 
         sb.append("""
-                    /// Positions a reader at the root table of a finished buffer.
+                    /// Verifies a finished buffer and positions a reader at its root table.
                     /// @param seg the buffer
                     /// @return a reader positioned at the root
+                    /// @throws io.github.dfa1.vortex.core.error.VortexException if the buffer is malformed
                     public static %1$s getRootAs%1$s(MemorySegment seg) {
-                        return new %1$s().assign(seg, FbsTable.rootPosition(seg, 0));
+                        return new %1$s().assign(seg, FbsVerifier.verifyRoot(seg, %1$s::verify));
                     }
 
                 """.formatted(name));
+        emitVerify(sb, table);
 
         sb.append("""
                     /// Positions this reader at a table.
@@ -109,6 +111,96 @@ public final class CodeGen {
         }
         emitTableBuilder(sb, table);
         sb.append("}\n");
+        return sb.toString();
+    }
+
+    /// Emits the table's `verify(FbsVerifier, long)`: one verifier call per field, recursing into
+    /// child tables, mirroring flatc's generated `Verifiable` impls.
+    private void emitVerify(StringBuilder sb, Ast.TableDecl table) {
+        sb.append("""
+                    /// Checks this table and everything reachable from it.
+                    /// @param v the verifier walking the buffer
+                    /// @param pos the table's absolute position
+                    static void verify(FbsVerifier v, long pos) {
+                        v.startTable(pos);
+                """);
+        int vtableIndex = 0;
+        for (Ast.Field field : table.fields()) {
+            int vt = 4 + vtableIndex * 2;
+            vtableIndex += emitVerifyField(sb, field, vt);
+        }
+        sb.append("""
+                        v.endTable();
+                    }
+
+                """);
+    }
+
+    /// Emits the verifier call for one field; returns the vtable slots it uses (two for a union).
+    private int emitVerifyField(StringBuilder sb, Ast.Field field, int vt) {
+        String name = field.name();
+        boolean required = field.required();
+        String call = switch (field.type()) {
+            case Ast.Scalar scalar when scalar == Ast.Scalar.STRING -> "v.string(pos, %d, \"%s\", %b);"
+                    .formatted(vt, name, required);
+            case Ast.Scalar scalar -> inlineCall(vt, TypeRegistry.sizeOf(scalar), name, required);
+            case Ast.Vector vector -> vectorCall(vector.element(), vt, name, required);
+            case Ast.Ref ref -> switch (registry.resolve(ref)) {
+                case Ast.EnumDecl e -> inlineCall(vt, TypeRegistry.sizeOf(e.underlying()), name, required);
+                case Ast.StructDecl s -> inlineCall(vt, registry.layoutOf(s).size(), name, required);
+                case Ast.TableDecl t -> "v.table(pos, %d, \"%s\", %b, %s::verify);"
+                        .formatted(vt, name, required, className(t.name()));
+                case Ast.UnionDecl u -> unionCall(u, vt, name);
+            };
+        };
+        sb.append("        ").append(call).append('\n');
+        return field.type() instanceof Ast.Ref ref && registry.resolve(ref) instanceof Ast.UnionDecl ? 2 : 1;
+    }
+
+    private static String inlineCall(int vt, int size, String name, boolean required) {
+        return "v.inline(pos, %d, %d, \"%s\", %b);".formatted(vt, size, name, required);
+    }
+
+    private String vectorCall(Ast.FieldType element, int vt, String name, boolean required) {
+        return switch (element) {
+            case Ast.Scalar scalar when scalar == Ast.Scalar.STRING -> "v.stringVector(pos, %d, \"%s\", %b);"
+                    .formatted(vt, name, required);
+            case Ast.Scalar scalar -> "v.vector(pos, %d, %d, \"%s\", %b);"
+                    .formatted(vt, TypeRegistry.sizeOf(scalar), name, required);
+            case Ast.Vector _ -> throw new FbsParseException("nested vectors are not supported ('" + name + "')");
+            case Ast.Ref ref -> switch (registry.resolve(ref)) {
+                case Ast.EnumDecl e -> "v.vector(pos, %d, %d, \"%s\", %b);"
+                        .formatted(vt, TypeRegistry.sizeOf(e.underlying()), name, required);
+                case Ast.StructDecl s -> "v.vector(pos, %d, %d, \"%s\", %b);"
+                        .formatted(vt, registry.layoutOf(s).size(), name, required);
+                case Ast.TableDecl t -> "v.tableVector(pos, %d, \"%s\", %b, %s::verify);"
+                        .formatted(vt, name, required, className(t.name()));
+                case Ast.UnionDecl _ -> throw new FbsParseException("vectors of unions are not supported ('" + name + "')");
+            };
+        };
+    }
+
+    /// A union is a discriminator slot plus a value slot, consistent or rejected. Only a member this
+    /// schema knows is verified: like flatc's verifiers, an unknown discriminator is accepted, since
+    /// no accessor reads its value.
+    private static String unionCall(Ast.UnionDecl union, int vt, String name) {
+        StringBuilder sb = new StringBuilder();
+        String type = camelCase(name) + "Type";
+        sb.append("int ").append(type).append(" = v.unionType(pos, ").append(vt).append(", ").append(vt + 2)
+                .append(", \"").append(name).append("\");\n");
+        sb.append("        if (").append(type).append(" != 0) {\n");
+        sb.append("            long member = v.unionValue(pos, ").append(vt + 2).append(", \"").append(name).append("\");\n");
+        sb.append("            switch (").append(type).append(") {\n");
+        long next = 1;
+        for (Ast.UnionMember m : union.members()) {
+            long value = m.number().isPresent() ? m.number().getAsInt() : next;
+            next = value + 1;
+            sb.append("                case ").append(value).append(" -> ")
+                    .append(className(simpleName(m.typeName()))).append(".verify(v, member);\n");
+        }
+        sb.append("                default -> {\n                }\n");
+        sb.append("            }\n");
+        sb.append("        }");
         return sb.toString();
     }
 

@@ -54,10 +54,10 @@ class ChunkedEncodingDecoderTest {
     /// comment is the raw JDK exception the reader leaked before the guards landed.
     ///
     /// The TODO's other Chunked item — a maliciously deep child tree — is guarded and tested one
-    /// layer up, at the point the `ArrayNode` tree is built from the file's FlatBuffer: see
-    /// [io.github.dfa1.vortex.reader.SerializedArrayDecoder] `MAX_ARRAY_TREE_DEPTH` and
-    /// `ArrayNodeDepthBombSecurityTest`. FlatBuffers cannot encode a true cycle, so the depth cap
-    /// is the whole defense and nothing here can reproduce it from a hand-built node.
+    /// layer up, when the segment's FlatBuffer is verified (`FbsVerifier`, at most 64 nested tables)
+    /// before the `ArrayNode` tree is built: see `ArrayNodeDepthBombSecurityTest`. FlatBuffers cannot
+    /// encode a true cycle, so the depth cap is the whole defense and nothing here can reproduce it
+    /// from a hand-built node.
     @Nested
     class AdversarialInput {
 

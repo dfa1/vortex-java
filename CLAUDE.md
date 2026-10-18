@@ -111,7 +111,10 @@ Both schema languages are compiled in-process to MemorySegment-native Java, with
 `flatc`/`protoc` and no `com.google.flatbuffers`/`protobuf-java` runtime (ADR 0017):
 - **`.fbs` → `fbs-gen`** (`io.github.dfa1.vortex.fbsgen`): generates readers extending
   `FbsTable` (vtable-based) or `FbsMemorySegment` (fixed-offset inline) and builders over
-  `FbsBuilder`, all in the same generated package `io.github.dfa1.vortex.core.fbs`. The
+  `FbsBuilder`, all in the same generated package `io.github.dfa1.vortex.core.fbs`. Every
+  generated `getRootAsX` first runs `FbsVerifier` over the whole buffer (Rust's
+  `flatbuffers::root`: bounds, vtables, required fields, ≤ 64 nested tables, ≤ 1M tables), so
+  reader code never guards FlatBuffer offsets itself. The
   runtime base classes `FbsTable`/`FbsMemorySegment` are package-private (only generated
   readers extend them); `FbsBuilder` is public because the writer module assembles FlatBuffers
   with it. Schema names with a trailing `_` (e.g. `Struct_`) have the underscore stripped in
@@ -243,7 +246,8 @@ almost always this.
 The reader memory-maps and parses untrusted binary input. Every malformed input must throw
 `VortexException`, never `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`,
 `OutOfMemoryError`, `StackOverflowError`, a raw FlatBuffer runtime exception, or a Protobuf parser
-exception. See the [`security` issues](https://github.com/dfa1/vortex-java/labels/security) for the current gap list (per-encoding adversarial
+exception. Reject input where it enters, as Rust does: FlatBuffers are verified whole when parsed,
+dtype and layout tree shape at open, and only segment contents at decode. See the [`security` issues](https://github.com/dfa1/vortex-java/labels/security) for the current gap list (per-encoding adversarial
 tests, resource caps, fuzz infra) and [ADR 0003](adr/0003-vortex-exception-sanitization.md) /
 [ADR 0004](adr/0004-resource-caps-read-options.md) for the design.
 

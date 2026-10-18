@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// Adversarial test for the DType-tree recursion in [PostscriptParser]'s `convertDType`.
 ///
 /// `convertDType` walks Struct fields, List/FixedSizeList element types, and Extension storage
-/// types recursively. Without the [PostscriptParser#MAX_DTYPE_DEPTH] cap a crafted file with
+/// types recursively. Without the FlatBuffer verifier's 64-table nesting cap a crafted file with
 /// thousands of nested `List` types produces a [StackOverflowError] during `VortexReader.open` —
 /// an `Error` that escapes the [VortexException] sanitization and leaks the reader's memory-mapped
 /// Arena (`open`'s `catch (Exception)` never runs `arena.close()`). This pins the contract: deeply
@@ -36,8 +36,8 @@ class DTypeDepthBombSecurityTest {
     void deeplyNestedDtype_throwsVortexException(NestKind kind, @TempDir Path tmp) throws Exception {
         // Given — a file whose DType nests 65536 levels of `kind`. Real schemas nest a handful of
         // levels; 65536 reliably blows the JVM stack on the recursive convertDType walk. Each kind
-        // drives a different recursion arm (List/Struct/FixedSizeList/Extension), so all four must
-        // increment the depth counter for the MAX_DTYPE_DEPTH guard to bound them.
+        // drives a different recursion arm (List/Struct/FixedSizeList/Extension); the verifier
+        // walks each union member, so all four must be bounded by its table-nesting cap.
         Path file = buildDeeplyNestedDtypeFile(tmp, 65536, kind);
 
         // When / Then — must surface as VortexException, not StackOverflowError

@@ -66,6 +66,26 @@ class CodeGenTest {
     }
 
     @Test
+    void emitsVerifierRunBeforeEveryRootAccess() throws IOException {
+        // Given — DType is a union holder, ArraySpec has a required string, Footer has table and
+        // struct vectors: between them every verifier call shape
+        String dtype = generateOne("FbsDType.java");
+        String arraySpec = generateOne("FbsArraySpec.java");
+        String footer = generateOne("FbsFooter.java");
+
+        // Then — getRootAs verifies first, and verify walks each field with its wire shape
+        assertThat(dtype)
+                .contains("return new FbsDType().assign(seg, FbsVerifier.verifyRoot(seg, FbsDType::verify));")
+                .contains("int typeType = v.unionType(pos, 4, 6, \"type\");")
+                .contains("long member = v.unionValue(pos, 6, \"type\");")
+                .contains("case 7 -> FbsStruct.verify(v, member);");
+        assertThat(arraySpec).contains("v.string(pos, 4, \"id\", true);");
+        assertThat(footer)
+                .contains("v.tableVector(pos, 4, \"array_specs\", false, FbsArraySpec::verify);")
+                .contains("v.vector(pos, 8, 16, \"segment_specs\", false);");
+    }
+
+    @Test
     void emitsInlineOffsetsForStruct() throws IOException {
         // Given — Buffer struct: padding u16 @0, alignment u8 @2, compression(enum u8) @3,
         // length u32 @4.
