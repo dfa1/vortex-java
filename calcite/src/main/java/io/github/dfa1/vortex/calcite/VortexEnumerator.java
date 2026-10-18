@@ -173,10 +173,14 @@ final class VortexEnumerator implements Enumerator<Object[]> {
                 case U32 -> Integer.toUnsignedLong(((IntArray) array).getInt(r));
                 // Narrow ints decode to their own array width (Byte/Short/Int), not IntArray —
                 // each exposes getInt(r) with the correct sign/zero extension. U16/U8 zero-extend
-                // into the wider signed SQL type (INTEGER/SMALLINT) they map to.
+                // into the wider signed SQL type (INTEGER/SMALLINT) they map to. Each value is
+                // boxed as its SQL type's Java class (SMALLINT a Short, TINYINT a Byte): Calcite's
+                // generated code casts to it, so an Integer failed every WHERE on such a column.
                 case I32 -> ((IntArray) array).getInt(r);
-                case I16, U16 -> ((ShortArray) array).getInt(r);
-                case I8, U8 -> ((ByteArray) array).getInt(r);
+                case U16 -> ((ShortArray) array).getInt(r);
+                case I16 -> (short) ((ShortArray) array).getInt(r);
+                case U8 -> (short) ((ByteArray) array).getInt(r);
+                case I8 -> (byte) ((ByteArray) array).getInt(r);
             };
             case DType.Utf8 _ -> ((VarBinArray) array).getString(r);
             case DType.Binary _ -> new ByteString(((VarBinArray) array).getBytes(r));

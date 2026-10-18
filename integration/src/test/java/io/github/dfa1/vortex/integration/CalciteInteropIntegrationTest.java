@@ -379,6 +379,60 @@ class CalciteInteropIntegrationTest {
         return rows;
     }
 
+    @ParameterizedTest(name = "where {0}")
+    @CsvSource(delimiter = '|', value = {
+            "i16 < 5                        | 2",
+            // 200 is past the signed byte range: UInt8 must zero-extend, not read as -56
+            "u8 > 100                       | 1",
+            "i8 < 0                         | 1",
+            "i16 = 5 and i8 = 9 and u8 = 3  | 1"})
+    void jniWriter_whereOnNarrowIntegers_selectsTheMatchingRows(String where, long expected, @TempDir Path tmp)
+            throws Exception {
+        // Given — SMALLINT and TINYINT values reached Calcite's generated code as Integers, so any
+        // WHERE on an Int16, UInt8 or Int8 column failed with a ClassCastException
+        Path file = tmp.resolve("jni_narrow.vortex");
+        Schema schema = new Schema(List.of(
+                Field.notNullable("i16", new ArrowType.Int(16, true)),
+                Field.notNullable("u8", new ArrowType.Int(8, false)),
+                Field.notNullable("i8", new ArrowType.Int(8, true))));
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+            org.apache.arrow.vector.SmallIntVector i16 = (org.apache.arrow.vector.SmallIntVector) root.getVector("i16");
+            org.apache.arrow.vector.UInt1Vector u8 = (org.apache.arrow.vector.UInt1Vector) root.getVector("u8");
+            org.apache.arrow.vector.TinyIntVector i8 = (org.apache.arrow.vector.TinyIntVector) root.getVector("i8");
+            short[] i16Values = {-300, 5, 2};
+            int[] u8Values = {200, 3, 7};
+            byte[] i8Values = {-5, 9, 1};
+            i16.allocateNew(3);
+            u8.allocateNew(3);
+            i8.allocateNew(3);
+            for (int i = 0; i < 3; i++) {
+                i16.set(i, i16Values[i]);
+                u8.set(i, u8Values[i]);
+                i8.set(i, i8Values[i]);
+            }
+            root.setRowCount(3);
+            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
+                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
+            }
+        }
+
+        // When
+        long result;
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("select count(*) from vtx.t where " + where)) {
+            rs.next();
+            result = rs.getLong(1);
+        }
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
     private static void writeIdsWithJni(Path file, int batches, int batchRows) throws Exception {
         Schema schema = new Schema(List.of(
                 Field.notNullable("id", new ArrowType.Int(64, true)),
