@@ -100,6 +100,42 @@ class FilterTranslationTest {
         assertScan(isNull, List.of(5L), 1);
     }
 
+    /// Calcite casts a narrow column up to meet a wider literal (`CAST($0):INTEGER < 5` for a
+    /// `SMALLINT`), and the translation rejected anything but a bare column, so such a filter was
+    /// neither pushed nor enforced and every aggregate over it fell back to the scan.
+    @Test
+    void wideningCast_translatesAsTheColumn() {
+        // Given smallint < 5, as Calcite writes it
+        RelDataType smallint = REX.getTypeFactory().createSqlType(SqlTypeName.SMALLINT);
+        RelDataType integer = REX.getTypeFactory().createSqlType(SqlTypeName.INTEGER);
+        RexNode cast = REX.makeCast(integer, REX.makeInputRef(smallint, 0));
+        RexNode lessThan = REX.makeCall(SqlStdOperatorTable.LESS_THAN, cast,
+                REX.makeExactLiteral(BigDecimal.valueOf(5), integer));
+
+        // When
+        var result = RexFilterTranslator.translateStrict(List.of(lessThan),
+                List.of(ColumnName.of("small")), List.of(DType.I16));
+
+        // Then
+        assertThat(result).contains(io.github.dfa1.vortex.reader.RowFilter.lt(ColumnName.of("small"), 5L));
+    }
+
+    /// `BIGINT` to `DOUBLE` rounds past 2^53, so comparing the cast is not comparing the column.
+    @Test
+    void lossyCast_isLeftToCalcite() {
+        // Given bigint-as-double > 1.5
+        RelDataType dbl = REX.getTypeFactory().createSqlType(SqlTypeName.DOUBLE);
+        RexNode cast = REX.makeCast(dbl, REX.makeInputRef(BIGINT, 0));
+        RexNode greater = REX.makeCall(SqlStdOperatorTable.GREATER_THAN, cast,
+                REX.makeApproxLiteral(new BigDecimal("1.5"), dbl));
+
+        // When
+        var result = RexFilterTranslator.translateStrict(List.of(greater), List.of(ColumnName.of("id")), List.of(DType.I64));
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
     private static void assertScan(RexNode predicate, List<Long> expectedIds, long expectedChunks) {
         // When
         List<RexNode> filters = new ArrayList<>(List.of(predicate));
