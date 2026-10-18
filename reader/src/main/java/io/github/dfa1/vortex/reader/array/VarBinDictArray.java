@@ -15,18 +15,95 @@ import java.util.function.IntConsumer;
 /// Stores dictionary values and per-row codes; all accessors resolve through the
 /// dictionary without materializing strings at construction time.
 ///
-/// @param dtype           logical type (Utf8 or Binary)
-/// @param length          number of logical elements (rows)
-/// @param bytesSegment    concatenated raw bytes for all dictionary values
-/// @param dictValOffsets  offsets into `bytesSegment` for each dictionary entry (length = dictSize + 1)
-/// @param dictValOffPType physical type of the dictionary value offsets
-/// @param dictCodesSegs   per-row dictionary code indices (length = `length`)
-/// @param dictCodesPType  physical type of the dictionary codes
-@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-public record VarBinDictArray(DType dtype, long length, MemorySegment bytesSegment,
-                              MemorySegment dictValOffsets, PType dictValOffPType,
-                              MemorySegment dictCodesSegs, PType dictCodesPType)
-        implements VarBinArray {
+/// [#getString(long)] decodes each dictionary entry once and returns the same `String` for every
+/// row with that code (#551): a low-cardinality column would otherwise copy and decode the same
+/// few values once per row. The Rust reference has no such cache because its strings are views
+/// into the shared buffer; building a `java.lang.String` always copies, so the cost is JVM-only.
+public final class VarBinDictArray implements VarBinArray {
+
+    /// Most entries the string cache holds. The dictionary size comes from an untrusted offsets
+    /// buffer, so codes past this bound decode per call rather than size a heap array from it.
+    private static final int MAX_CACHED_STRINGS = 1 << 16;
+
+    private final DType dtype;
+    private final long length;
+    private final MemorySegment bytesSegment;
+    private final MemorySegment dictValOffsets;
+    private final PType dictValOffPType;
+    private final MemorySegment dictCodesSegs;
+    private final PType dictCodesPType;
+    /// Codes below this are cached; also bounded by `length` so a dictionary far larger than
+    /// the rows (a shared dictionary over a small chunk) never allocates more than the rows do.
+    private final int cacheSize;
+    /// Allocated on the first [#getString(long)]. Unsynchronized on purpose: `String` is
+    /// immutable, so a race only decodes an entry twice.
+    private String[] strings;
+
+    /// Creates a dictionary-encoded array.
+    ///
+    /// @param dtype           logical type (Utf8 or Binary)
+    /// @param length          number of logical elements (rows)
+    /// @param bytesSegment    concatenated raw bytes for all dictionary values
+    /// @param dictValOffsets  offsets into `bytesSegment` for each dictionary entry (length = dictSize + 1)
+    /// @param dictValOffPType physical type of the dictionary value offsets
+    /// @param dictCodesSegs   per-row dictionary code indices (length = `length`)
+    /// @param dictCodesPType  physical type of the dictionary codes
+    public VarBinDictArray(DType dtype, long length, MemorySegment bytesSegment,
+                           MemorySegment dictValOffsets, PType dictValOffPType,
+                           MemorySegment dictCodesSegs, PType dictCodesPType) {
+        this.dtype = dtype;
+        this.length = length;
+        this.bytesSegment = bytesSegment;
+        this.dictValOffsets = dictValOffsets;
+        this.dictValOffPType = dictValOffPType;
+        this.dictCodesSegs = dictCodesSegs;
+        this.dictCodesPType = dictCodesPType;
+        long dictSize = dictValOffsets.byteSize() / dictValOffPType.byteSize() - 1;
+        this.cacheSize = (int) Math.max(0, Math.min(Math.min(dictSize, length), MAX_CACHED_STRINGS));
+    }
+
+    @Override
+    public DType dtype() {
+        return dtype;
+    }
+
+    @Override
+    public long length() {
+        return length;
+    }
+
+    @Override
+    public MemorySegment bytesSegment() {
+        return bytesSegment;
+    }
+
+    /// Returns the offsets into [#bytesSegment()] for each dictionary entry.
+    ///
+    /// @return the value offsets segment (length = dictSize + 1)
+    public MemorySegment dictValOffsets() {
+        return dictValOffsets;
+    }
+
+    /// Returns the physical type of the dictionary value offsets.
+    ///
+    /// @return the offsets ptype
+    public PType dictValOffPType() {
+        return dictValOffPType;
+    }
+
+    /// Returns the per-row dictionary codes.
+    ///
+    /// @return the codes segment (length = [#length()])
+    public MemorySegment dictCodesSegs() {
+        return dictCodesSegs;
+    }
+
+    /// Returns the physical type of the dictionary codes.
+    ///
+    /// @return the codes ptype
+    public PType dictCodesPType() {
+        return dictCodesPType;
+    }
 
     @Override
     public byte[] getBytes(long i) {
@@ -41,7 +118,21 @@ public record VarBinDictArray(DType dtype, long length, MemorySegment bytesSegme
 
     @Override
     public String getString(long i) {
-        return new String(getBytes(i), StandardCharsets.UTF_8);
+        long code = dictReadCode(i);
+        if (code < 0 || code >= cacheSize) {
+            return new String(getBytes(i), StandardCharsets.UTF_8);
+        }
+        String[] cache = strings;
+        if (cache == null) {
+            cache = new String[cacheSize];
+            strings = cache;
+        }
+        String s = cache[(int) code];
+        if (s == null) {
+            s = new String(getBytes(i), StandardCharsets.UTF_8);
+            cache[(int) code] = s;
+        }
+        return s;
     }
 
     @Override

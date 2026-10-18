@@ -163,6 +163,48 @@ class VarBinArrayTest {
             assertThat(sut.getString(2)).isEqualTo("bar");
         }
 
+        /// #551: rows sharing a code share one decoded `String`, so a low-cardinality column
+        /// decodes once per dictionary entry instead of once per row.
+        @Test
+        void getString_sameCode_returnsSameInstance() {
+            // Given — rows 0 and 2 both carry code 1
+            VarBinArray sut = ofDict(new String[]{"foo", "bar"}, new int[]{1, 0, 1});
+
+            // When
+            String result = sut.getString(2);
+
+            // Then
+            assertThat(result).isSameAs(sut.getString(0)).isEqualTo("bar");
+        }
+
+        /// The cache is bounded by the row count too, so a dictionary larger than the rows (a
+        /// shared dictionary over a small chunk) leaves the high codes uncached. Those must still
+        /// decode correctly, as a fresh `String` per call.
+        @Test
+        void getString_codePastCacheBound_decodesPerCall() {
+            // Given — 3 entries but 2 rows, so only codes 0 and 1 are cacheable; both rows use code 2
+            VarBinArray sut = ofDict(new String[]{"a", "bb", "ccc"}, new int[]{2, 2});
+
+            // When
+            String result = sut.getString(1);
+
+            // Then
+            assertThat(result).isEqualTo("ccc").isNotSameAs(sut.getString(0));
+        }
+
+        /// A code past the dictionary must still fail as malformed input (ADR 0003): the cache
+        /// must never turn an out-of-range code into an `ArrayIndexOutOfBoundsException`.
+        @Test
+        void getString_codeOutsideDictionary_throwsVortexException() {
+            // Given — 2 entries, row 1 carries code 5
+            VarBinArray sut = ofDict(new String[]{"a", "b"}, new int[]{0, 5, 1});
+
+            // When / Then
+            assertThatThrownBy(() -> sut.getString(1))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range");
+        }
+
         @Test
         void getByteLength_resolvesViaDict() {
             // Given — dict=["hi","there"], codes=[0,1,0]
@@ -335,6 +377,20 @@ class VarBinArrayTest {
             // When / Then
             assertThat(sut.getString(0)).isEqualTo("hi");
             assertThat(sut.getString(4)).isEqualTo("hi");
+        }
+
+        /// #551: a single-value dictionary collapses to this array, so every row must share one
+        /// decoded `String` rather than copy and decode the value per row.
+        @Test
+        void getString_everyRow_returnsSameInstance() {
+            // Given
+            VarBinArray sut = new VarBinConstantArray(UTF8, 3, "café".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            String result = sut.getString(2);
+
+            // Then
+            assertThat(result).isSameAs(sut.getString(0)).isEqualTo("café");
         }
 
         @Test
