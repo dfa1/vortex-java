@@ -225,6 +225,45 @@ class CalciteInteropIntegrationTest {
         assertThat(result).isEqualTo(expected);
     }
 
+    @Test
+    void jniWriter_minMaxOfStringsOutsideLatin1_answer(@TempDir Path tmp) throws Exception {
+        // Given — Calcite types VARCHAR as ISO-8859-1, so a pushed-down literal holding 'Ω' failed
+        // the query; the answer must be the strings Rust wrote, however it is computed
+        Path file = tmp.resolve("jni_greek.vortex");
+        Schema schema = new Schema(List.of(Field.notNullable("s", new ArrowType.Utf8())));
+        String[] values = {"MSFT", "\u03A9mega", "AAPL"};
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+            org.apache.arrow.vector.VarCharVector s = (org.apache.arrow.vector.VarCharVector) root.getVector("s");
+            s.allocateNew(values.length);
+            for (int i = 0; i < values.length; i++) {
+                s.setSafe(i, values[i].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            root.setRowCount(values.length);
+            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
+                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
+            }
+        }
+
+        // When
+        String min;
+        String max;
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("select min(s), max(s) from vtx.t")) {
+            rs.next();
+            min = rs.getString(1);
+            max = rs.getString(2);
+        }
+
+        // Then
+        assertThat(min).isEqualTo("AAPL");
+        assertThat(max).isEqualTo("\u03A9mega");
+    }
+
     private static void writeIdsWithJni(Path file, int batches, int batchRows) throws Exception {
         Schema schema = new Schema(List.of(
                 Field.notNullable("id", new ArrowType.Int(64, true)),

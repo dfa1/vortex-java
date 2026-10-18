@@ -147,6 +147,36 @@ class AggregatePushDownTest {
     }
 
     @Test
+    void minMaxOfStringsOutsideLatin1_answerInsteadOfFailing(@TempDir Path localTmp) throws Exception {
+        // Given a VARCHAR column whose zone-map max holds a character ISO-8859-1 cannot encode.
+        // Calcite types VARCHAR as ISO-8859-1, so a literal built from that stat failed the whole
+        // query ("Failed to encode 'Ω'"); the scan returns the same string without a literal
+        Path stringsFile = localTmp.resolve("greek.vortex");
+        DType.Struct stringsSchema = DType.structBuilder().field(ColumnName.of("s"), DType.UTF8).build();
+        WriteOptions stringsOpts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false)
+                .withEdition(Editions.CORE_2025_10_0);
+        try (var ch = FileChannel.open(stringsFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = VortexWriter.create(ch, stringsSchema, stringsOpts)) {
+            writer.writeChunk(Map.of(ColumnName.of("s"), new String[]{"MSFT", "\u03A9mega", "AAPL"}));
+        }
+
+        // When
+        String min;
+        String max;
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", stringsFile));
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("select min(s), max(s) from vtx.t")) {
+            rs.next();
+            min = rs.getString(1);
+            max = rs.getString(2);
+        }
+
+        // Then
+        assertThat(min).isEqualTo("AAPL");
+        assertThat(max).isEqualTo("\u03A9mega");
+    }
+
+    @Test
     void sumRewritesToValuesFromZoneStats() throws Exception {
         // Given a whole-table SUM over an integer column (volume, I64 → exact Long) and a floating
         // column (low, F64 → Double) — both answerable by folding the per-zone SUM rows

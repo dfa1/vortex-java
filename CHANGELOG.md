@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - SQL `COUNT(DISTINCT col)` and aggregates with a `FILTER (WHERE ...)` clause return the right answer; the statistics push-down returned the row count and ignored the filter. ([#554](https://github.com/dfa1/vortex-java/pull/554))
+- SQL `MIN`/`MAX` of a string column whose values fall outside Latin-1 answers instead of failing the query. ([#554](https://github.com/dfa1/vortex-java/pull/554))
 - The Calcite adapter reads decimal, binary, date, time, timestamp and uuid columns, and a list, struct, map, union or variant column no longer stops the other columns of its table from being queried. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - An extension dtype read from a file stays usable after its `VortexReader` is closed, instead of failing with "Already closed". ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - `vortex count`, `schema`, `stats` and `export` report a malformed file as an error instead of crashing with a stack trace. ([#547](https://github.com/dfa1/vortex-java/pull/547))
