@@ -1220,8 +1220,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 return ArrayStats.empty();
             }
             return ArrayStats.fromFbs(root.stats());
-        } catch (RuntimeException _) {
-            // The FlatBuffer runtime trusts the offsets it follows: a crafted one fails inside it.
+        } catch (VortexException _) {
+            // The FlatBuffer verifier rejected the stats segment: malformed stats read as none.
             return ArrayStats.empty();
         }
     }

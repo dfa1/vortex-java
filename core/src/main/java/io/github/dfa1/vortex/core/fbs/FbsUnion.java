@@ -9,11 +9,24 @@ import javax.annotation.processing.Generated;
 @Generated("io.github.dfa1.vortex.fbsgen.CodeGen")
 public final class FbsUnion extends FbsTable {
 
-    /// Positions a reader at the root table of a finished buffer.
+    /// Verifies a finished buffer and positions a reader at its root table.
     /// @param seg the buffer
     /// @return a reader positioned at the root
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if the buffer is malformed
     public static FbsUnion getRootAsFbsUnion(MemorySegment seg) {
-        return new FbsUnion().assign(seg, FbsTable.rootPosition(seg, 0));
+        return new FbsUnion().assign(seg, FbsVerifier.verifyRoot(seg, FbsUnion::verify));
+    }
+
+    /// Checks this table and everything reachable from it.
+    /// @param v the verifier walking the buffer
+    /// @param pos the table's absolute position
+    static void verify(FbsVerifier v, long pos) {
+        v.startTable(pos);
+        v.stringVector(pos, 4, "names", false);
+        v.tableVector(pos, 6, "dtypes", false, FbsDType::verify);
+        v.vector(pos, 8, 1, "type_ids", false);
+        v.inline(pos, 10, 1, "nullable", false);
+        v.endTable();
     }
 
     /// Positions this reader at a table.

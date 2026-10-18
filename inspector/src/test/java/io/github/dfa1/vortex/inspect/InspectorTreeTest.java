@@ -299,14 +299,14 @@ class InspectorTreeTest {
 
     @Test
     void build_flatSegmentEncodingTreeAtDepthLimit_clearsGuard() {
-        // Given — deepest node at exactly MAX_ENCODING_TREE_DEPTH clears the guard
-        // (`depth > limit` is false there); brackets the boundary with the next test.
+        // Given — 64 nested tables (the Array table and 63 nodes), exactly the FlatBuffer verifier's
+        // depth limit, Rust's own; brackets the boundary with the next test.
         try (Arena arena = Arena.ofConfined()) {
             Layout root = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
             DType dtype = DType.I32;
             SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
             givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
-            byte[] fb = deeplyNestedArrayFlatBuffer(InspectorTree.MAX_ENCODING_TREE_DEPTH);
+            byte[] fb = deeplyNestedArrayFlatBuffer(62);
             given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
 
             // When
@@ -319,7 +319,7 @@ class InspectorTreeTest {
 
     @Test
     void build_flatSegmentEncodingTreeOneOverDepthLimit_throwsVortexException() {
-        // Given — one level deeper than MAX_ENCODING_TREE_DEPTH: a crafted file with a very
+        // Given — one table deeper than the verifier allows: a crafted file with a very
         // deep ArrayNode nesting must surface as VortexException, never StackOverflowError
         // (the untrusted-input contract every reader/inspector parse path must uphold).
         try (Arena arena = Arena.ofConfined()) {
@@ -327,13 +327,13 @@ class InspectorTreeTest {
             DType dtype = DType.I32;
             SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
             givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
-            byte[] fb = deeplyNestedArrayFlatBuffer(InspectorTree.MAX_ENCODING_TREE_DEPTH + 1);
+            byte[] fb = deeplyNestedArrayFlatBuffer(63);
             given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
 
             // When / Then
             assertThatThrownBy(() -> InspectorTree.build(handle))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("depth");
+                    .hasMessageContaining("nest deeper than 64");
         }
     }
 
@@ -364,7 +364,7 @@ class InspectorTreeTest {
         // children, so depth never exceeds 1 but total node count does. Without a separate
         // node-count cap, two aliased children per level (both children vector slots resolving
         // to the same table position) could drive collectEncodings to an exponential number of
-        // visits while depth stays within MAX_ENCODING_TREE_DEPTH; this is the simpler,
+        // visits while depth stays within the verifier's limit; this is the simpler,
         // non-aliased way to exercise the same cap.
         try (Arena arena = Arena.ofConfined()) {
             Layout root = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));

@@ -24,10 +24,8 @@ import java.nio.charset.StandardCharsets;
 ///
 /// Bounds: these accessors do not validate offsets or lengths read from the buffer
 /// (e.g. [#readStringAt(long)] allocates `new byte[len]` with `len` taken straight from
-/// the blob). This matches the previous `com.google.flatbuffers` runtime — the caller is
-/// expected to have framed the FlatBuffer from a trusted region. File-level framing
-/// (segment offsets/lengths, trailer, postscript) is range-checked upstream by the
-/// reader's `IoBounds`; intra-FlatBuffer fields are not.
+/// the blob). They need not: a reader is only ever positioned by a generated `getRootAsX`,
+/// which runs [FbsVerifier] over the whole buffer first, as Rust's `flatbuffers::root` does.
 ///
 /// Package-private: only the generated table accessors in this package extend it.
 class FbsTable {
@@ -51,14 +49,6 @@ class FbsTable {
         this.pos = position;
     }
 
-    /// Resolves the root table position of a finished FlatBuffer.
-    ///
-    /// @param segment buffer whose first 4 bytes hold the uoffset to the root table
-    /// @param start   byte position of the buffer start within `segment`
-    /// @return the absolute position of the root table
-    static long rootPosition(MemorySegment segment, long start) {
-        return start + segment.get(LE_INT, start);
-    }
 
     /// Looks up a field's offset relative to this table.
     ///

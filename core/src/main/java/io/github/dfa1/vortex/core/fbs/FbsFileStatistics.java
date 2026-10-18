@@ -9,11 +9,21 @@ import javax.annotation.processing.Generated;
 @Generated("io.github.dfa1.vortex.fbsgen.CodeGen")
 public final class FbsFileStatistics extends FbsTable {
 
-    /// Positions a reader at the root table of a finished buffer.
+    /// Verifies a finished buffer and positions a reader at its root table.
     /// @param seg the buffer
     /// @return a reader positioned at the root
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if the buffer is malformed
     public static FbsFileStatistics getRootAsFbsFileStatistics(MemorySegment seg) {
-        return new FbsFileStatistics().assign(seg, FbsTable.rootPosition(seg, 0));
+        return new FbsFileStatistics().assign(seg, FbsVerifier.verifyRoot(seg, FbsFileStatistics::verify));
+    }
+
+    /// Checks this table and everything reachable from it.
+    /// @param v the verifier walking the buffer
+    /// @param pos the table's absolute position
+    static void verify(FbsVerifier v, long pos) {
+        v.startTable(pos);
+        v.tableVector(pos, 4, "field_stats", false, FbsArrayStats::verify);
+        v.endTable();
     }
 
     /// Positions this reader at a table.

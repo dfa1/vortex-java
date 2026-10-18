@@ -9,11 +9,25 @@ import javax.annotation.processing.Generated;
 @Generated("io.github.dfa1.vortex.fbsgen.CodeGen")
 public final class FbsPostscriptSegment extends FbsTable {
 
-    /// Positions a reader at the root table of a finished buffer.
+    /// Verifies a finished buffer and positions a reader at its root table.
     /// @param seg the buffer
     /// @return a reader positioned at the root
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if the buffer is malformed
     public static FbsPostscriptSegment getRootAsFbsPostscriptSegment(MemorySegment seg) {
-        return new FbsPostscriptSegment().assign(seg, FbsTable.rootPosition(seg, 0));
+        return new FbsPostscriptSegment().assign(seg, FbsVerifier.verifyRoot(seg, FbsPostscriptSegment::verify));
+    }
+
+    /// Checks this table and everything reachable from it.
+    /// @param v the verifier walking the buffer
+    /// @param pos the table's absolute position
+    static void verify(FbsVerifier v, long pos) {
+        v.startTable(pos);
+        v.inline(pos, 4, 8, "offset", false);
+        v.inline(pos, 6, 4, "length", false);
+        v.inline(pos, 8, 1, "alignment_exponent", false);
+        v.table(pos, 10, "_compression", false, FbsCompressionSpec::verify);
+        v.table(pos, 12, "_encryption", false, FbsEncryptionSpec::verify);
+        v.endTable();
     }
 
     /// Positions this reader at a table.
