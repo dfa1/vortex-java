@@ -49,6 +49,12 @@ public final class VortexSortPushDownRule extends RelOptRule {
     /// Most rows a rewrite emits; each becomes a literal row of the plan.
     private static final int MAX_ROWS = 1000;
 
+    /// Most literal cells (rows times columns) a push-down may put in one `VALUES`. Calcite compiles
+    /// the whole `VALUES` into a single Java method, which the JVM caps at 64 KB of bytecode: measured
+    /// on a mixed-type table, 4,500 cells compile and 6,000 do not ("Code grows beyond 64 KB"). A bigger
+    /// result is left to Calcite's own scan and sort, which are slower but correct.
+    static final int MAX_VALUES_CELLS = 4_000;
+
     /// Every rule variant, for registering with a planner in one call.
     public static final List<RelOptRule> RULES = List.of(
             new VortexSortPushDownRule(operand(Sort.class, operand(Project.class,
@@ -108,7 +114,7 @@ public final class VortexSortPushDownRule extends RelOptRule {
             rowFilter = translated.get();
         }
         int[] cols = columns(scan, project);
-        if (cols == null) {
+        if (cols == null || (fetch + (long) offset) * cols.length > MAX_VALUES_CELLS) {
             return;
         }
         List<VortexTable.SortKey> keys = new ArrayList<>();
