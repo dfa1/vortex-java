@@ -190,7 +190,7 @@ public final class OnPairEncodingDecoder implements EncodingDecoder {
             PType ptype = PType.fromOrdinal(wirePtype.value());
             MemorySegment seg = ctx.decodeChildSegment(i, new DType.Primitive(ptype, false), count);
             int width = ptype.byteSize();
-            if (n > 0 && SegmentBroadcast.capacity(seg, width) < n) {
+            if (SegmentBroadcast.capacity(seg, width, n) < n) {
                 MemorySegment expanded = ctx.arena().allocate((long) n * width, width);
                 SegmentBroadcast.broadcastCopy(seg, expanded, n, width);
                 seg = expanded;

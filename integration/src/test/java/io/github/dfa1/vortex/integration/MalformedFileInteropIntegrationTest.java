@@ -47,7 +47,13 @@ class MalformedFileInteropIntegrationTest {
             "zstd-buffers-inner-id-control-char",
             // A file with no dtype blob, which Rust opens only when the caller supplies the dtype:
             // vortex-java opened it with a null dtype and the scan threw NullPointerException.
-            "no-dtype"})
+            "no-dtype",
+            // A dict column whose codes child is empty for a non-empty chunk: the broadcast's
+            // `i % capacity` divided by zero (ArithmeticException).
+            "dict-empty-codes",
+            // A primitive child whose buffer is empty for a non-empty array: the Materialized*
+            // arrays broadcast with `i % elementCount` and divided by zero on the first read.
+            "materialized-empty-buffer"})
     void bothReadersReject(String name) throws URISyntaxException {
         // Given
         Path file = Path.of(Objects.requireNonNull(

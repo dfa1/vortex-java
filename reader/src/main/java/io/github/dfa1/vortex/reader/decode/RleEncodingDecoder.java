@@ -194,11 +194,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         if (buf.byteSize() >= bytes) {
             return IoBounds.slice(buf, 0, bytes);
         }
-        long capacity = SegmentBroadcast.capacity(buf, elemBytes);
-        if (capacity != 1) {
-            throw new VortexException(EncodingId.FASTLANES_RLE,
-                    "child holds " + capacity + " element(s) for a declared length of " + count);
-        }
+        // Shorter than `count`: broadcastCopy admits only the single element of a constant child.
         MemorySegment out = arena.allocate(bytes, elemBytes);
         SegmentBroadcast.broadcastCopy(buf, out, count, elemBytes);
         return out;

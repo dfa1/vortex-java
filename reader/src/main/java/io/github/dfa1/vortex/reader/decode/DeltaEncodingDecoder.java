@@ -90,8 +90,8 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         MemorySegment basesSeg = ctx.decodeChildSegment(0, dtype, basesLen);
         MemorySegment deltasSeg = ctx.decodeChildSegment(1, dtype, deltasLen);
         int elemBytes = ptype.byteSize();
-        long basesCap = SegmentBroadcast.capacity(basesSeg, elemBytes);
-        long deltasCap = SegmentBroadcast.capacity(deltasSeg, elemBytes);
+        long basesCap = SegmentBroadcast.capacity(basesSeg, elemBytes, basesLen);
+        long deltasCap = SegmentBroadcast.capacity(deltasSeg, elemBytes, deltasLen);
 
         // The only row-scaled allocation: the output itself, off-heap and at the column's own
         // width. Everything below is fixed-size scratch — one chunk's worth, cache-resident,

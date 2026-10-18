@@ -102,7 +102,7 @@ class ChunkedEncodingDecoderTest {
             // When / Then
             assertThatThrownBy(() -> decode(DType.I64, 3, segs, offsetsChild, chunkChild))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("decoded child segment is empty");
+                    .hasMessageContaining("child holds 0 element(s)");
         }
 
         /// `IndexOutOfBoundsException` — a decreasing offsets pair yields a negative chunk length.

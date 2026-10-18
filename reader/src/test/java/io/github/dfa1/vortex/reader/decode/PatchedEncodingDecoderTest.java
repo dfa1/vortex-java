@@ -38,7 +38,7 @@ class PatchedEncodingDecoderTest {
         return decode(DType.I32, n,
                 TestSegments.leInts(innerI32), TestSegments.leInts(laneOffsets),
                 TestSegments.leShorts(patchIndices), TestSegments.leInts(patchValues),
-                laneOffsets.length - 1);
+                (laneOffsets.length - 1) / Math.max(1, (n + 1023) / 1024));
     }
 
     private static Array decode(DType dtype, int n,
@@ -69,7 +69,8 @@ class PatchedEncodingDecoderTest {
         int[] inner = {10, 20, 30, 40};
 
         // When
-        Array result = decode(n, inner, new int[]{0, 0}, new short[]{}, new int[]{});
+        // One lane, so one offset per 1024-row chunk plus the end: n_chunks * n_lanes + 1
+        Array result = decode(n, inner, new int[(n + 1023) / 1024 + 1], new short[]{}, new int[]{});
 
         // Then
         assertThat(result).isInstanceOf(IntArray.class);
@@ -172,7 +173,8 @@ class PatchedEncodingDecoderTest {
         int[] inner = new int[n];
 
         // When
-        Array result = decode(n, inner, new int[]{0, 0}, new short[]{}, new int[]{});
+        // One lane, so one offset per 1024-row chunk plus the end: n_chunks * n_lanes + 1
+        Array result = decode(n, inner, new int[(n + 1023) / 1024 + 1], new short[]{}, new int[]{});
 
         // Then
         IntArray ints = (IntArray) result;

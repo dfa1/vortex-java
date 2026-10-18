@@ -306,7 +306,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             return codesValidity;
         }
         MemorySegment bits = ctx.arena().allocate((rowCount + 7) >>> 3);
-        long codesCap = SegmentBroadcast.capacity(codesBuf, codePType.byteSize());
+        long codesCap = SegmentBroadcast.capacity(codesBuf, codePType.byteSize(), rowCount);
         if (codesCap >= rowCount) {
             for (long i = 0; i < rowCount; i++) {
                 boolean valid = (codesValidity == null || codesValidity.getBoolean(i))

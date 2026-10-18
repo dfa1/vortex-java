@@ -273,7 +273,7 @@ class AlpEncodingDecoderTest {
             // When / Then
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("empty patch child");
+                    .hasMessageContaining("child holds 0 element(s)");
         }
 
         private DecodeContext ctx(DType dtype, ProtoALPMetadata meta, MemorySegment encoded, long rowCount) {

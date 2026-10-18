@@ -142,13 +142,7 @@ public record LazyFsstVarBinArray(
     @Override
     public void forEachByteLength(IntConsumer c) {
         long n = length;
-        long cap = SegmentBroadcast.capacity(uncompressedLengths, uncompressedLengthsPType.byteSize());
-        if (cap == 0) {
-            if (n == 0) {
-                return;
-            }
-            throw new VortexException(EncodingId.VORTEX_FSST, "empty uncompressed-lengths child");
-        }
+        long cap = SegmentBroadcast.capacity(uncompressedLengths, uncompressedLengthsPType.byteSize(), n);
         if (cap >= n) {
             forEachClaimedLength(c, n);
             return;

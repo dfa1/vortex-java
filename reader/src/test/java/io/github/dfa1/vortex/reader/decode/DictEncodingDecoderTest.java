@@ -289,20 +289,16 @@ class DictEncodingDecoderTest {
 
         @ParameterizedTest(name = "codes={0}")
         @EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
-        void codesBufferShorterThanRowCount_repeatsTheCodes(PType codePType) {
-            // Given — 4 rows declared, 2 codes on the wire
+        void codesBufferShorterThanRowCount_throws(PType codePType) {
+            // Given — 4 rows declared, 2 codes on the wire: neither every code nor one broadcast
+            // code. It used to wrap around and repeat the pair; Rust has no such shape.
             MemorySegment values = TestSegments.leInts(10, 20);
             MemorySegment codes = codeSegment(codePType, new long[]{1, 0});
 
-            // When
-            Array result = decodeProtoSegments(DType.I32, codePType, codes, values, 2, 4);
-
-            // Then — the code pair repeats across the row count
-            IntArray ints = (IntArray) result;
-            assertThat(ints.getInt(0)).isEqualTo(20);
-            assertThat(ints.getInt(1)).isEqualTo(10);
-            assertThat(ints.getInt(2)).isEqualTo(20);
-            assertThat(ints.getInt(3)).isEqualTo(10);
+            // When / Then
+            assertThatThrownBy(() -> decodeProtoSegments(DType.I32, codePType, codes, values, 2, 4))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("child holds 2 element(s) for a declared length of 4");
         }
     }
 
@@ -731,7 +727,7 @@ class DictEncodingDecoderTest {
             // When / Then
             assertThatThrownBy(() -> decodeProtoSegments(DType.I32, PType.U8, codes, values, 1, 2))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("empty dict child");
+                    .hasMessageContaining("child holds 0 element(s)");
         }
 
         @Test
@@ -743,7 +739,7 @@ class DictEncodingDecoderTest {
             // When / Then
             assertThatThrownBy(() -> decodeProtoSegments(DType.I32, PType.U8, codes, values, 2, 2))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("empty dict child");
+                    .hasMessageContaining("child holds 0 element(s)");
         }
 
         @Test
