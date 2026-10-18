@@ -704,7 +704,9 @@ Values are URL-decoded. An unknown key, a pair without `=`, or a URL exposing no
 The `-all` classifier is the jar to hand to a tool: it merges `META-INF/services` (ours and
 Calcite's `java.sql.Driver` entries), strips signature files and sets `Enable-Native-Access`.
 `ShadedJarIT` loads it alone in an isolated classloader and runs a query, so a lost service entry or a
-stale signature fails `verify`. Needs JDK 25 or later.
+stale signature fails `verify`. Needs JDK 25 or later. The jar leaves out the Calcite dependencies the driver never reaches
+(the Avatica HTTP client, YAML, sketches, connection pooling), so Calcite model URLs
+(`jdbc:calcite:model=...`) are not available through it; use `jdbc:vortex:`, or depend on `vortex-calcite`.
 
 ## CLI
 
