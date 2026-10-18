@@ -91,6 +91,18 @@ class ZstdBuffersEncodingDecoderTest {
         }
 
         @Test
+        void innerEncodingIdWithControlCharacter_throws() {
+            // Given — an inner id EncodingId.parse refuses (a fuzzer finding: it escaped as a raw
+            // IllegalArgumentException)
+            ArrayNode node = zstdBuffers(meta("vortex.\u000Fprimitive", VALUES.length, 4), 0);
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx(node, compress(VALUES))))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("invalid inner encoding id");
+        }
+
+        @Test
         void sizeCountDisagreesWithBuffers_throws() {
             // Given — one compressed buffer, no declared sizes
             ProtoZstdBuffersMetadata meta = new ProtoZstdBuffersMetadata("vortex.primitive", new byte[0],
