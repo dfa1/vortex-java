@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `Compute.groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)` folds an aggregate per value of a dictionary-encoded string column. ([#555](https://github.com/dfa1/vortex-java/pull/555))
+- `Compute.groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)` folds an aggregate per value of a dictionary-encoded string, boolean or integer column. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - `Chunk.slice(offset, length)` gives a zero-copy view of a row range. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter tells the planner each table's row count, so join order and costing use the real table size. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - `Compute.matcher(Chunk, RowFilter)` lowers a filter once per chunk and returns a row test, for callers that test many rows. ([#552](https://github.com/dfa1/vortex-java/issues/552))
@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQL `LIKE 'prefix%'` on a string column is about 5 times faster: it is pushed into the scan as a string range that prunes chunks, instead of being matched by Calcite row by row. ([#558](https://github.com/dfa1/vortex-java/pull/558))
 - SQL `ORDER BY ... LIMIT n` is up to 9 times faster: the first rows are kept in a bounded heap during the scan instead of sorting the whole table. ([#557](https://github.com/dfa1/vortex-java/pull/557))
 - SQL `GROUP BY` on a dictionary-encoded string column is 10 to 30 times faster: rows are counted and summed per dictionary code instead of being built one by one for Calcite. ([#555](https://github.com/dfa1/vortex-java/pull/555))
+- SQL `GROUP BY` on a boolean or integer column is 2 to 4 times faster: rows are folded per group value through a primitive map instead of being built one by one for Calcite. ([#561](https://github.com/dfa1/vortex-java/pull/561))
 - A filtered SQL `COUNT`/`MIN`/`MAX` answered from zone maps decodes the zones its filter cuts once per query instead of up to six times. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - The Calcite adapter pushes `IN` lists, comparisons with the literal on the left and `IS NULL` into the scan, so they prune chunks instead of being re-checked row by row. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter answers a filtered `COUNT`, `MIN` or `MAX` from Rust's `vortex.zoned` zone maps, the default, decoding only the zones the filter cuts. ([#550](https://github.com/dfa1/vortex-java/pull/550))

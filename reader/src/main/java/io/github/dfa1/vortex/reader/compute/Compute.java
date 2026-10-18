@@ -116,24 +116,27 @@ public final class Compute {
         return FusedFilterAggregate.rowTest(chunk, filter);
     }
 
-    /// Folds `aggColumn` per value of a dictionary-encoded string `groupColumn` over the rows `filter`
-    /// selects: the per-group counterpart of [#filteredAggregate(Chunk, RowFilter, ColumnName)].
+    /// Folds `aggColumn` per value of `groupColumn` over the rows `filter` selects: the per-group
+    /// counterpart of [#filteredAggregate(Chunk, RowFilter, ColumnName)].
     ///
-    /// Rows accumulate per dictionary code, so a row costs a code read and a few array updates, and
-    /// each code becomes its string once per chunk. A null group value is its own group, under the
-    /// `null` key. Each group's [FilteredAggregate] follows the same null semantics as the ungrouped
-    /// fold.
+    /// Rows accumulate per group id in primitive arrays, so a row costs a key read and a few array
+    /// updates, and no key is boxed per row. The group column may be a dictionary-encoded string
+    /// column (keys are `String`s, each code turned into its string once per chunk), a boolean column
+    /// (`Boolean` keys) or an integer column other than `u64` (`Long` keys, unsigned values
+    /// zero-extended). A null group value is its own group, under the `null` key. Each group's
+    /// [FilteredAggregate] follows the same null semantics as the ungrouped fold.
     ///
-    /// The result is empty when the shapes do not qualify: `groupColumn` is not dictionary-encoded
-    /// in this chunk, or `aggColumn` is not an integer or floating column (`f16` and `u64` included,
-    /// which this fold does not total). The caller then groups the rows itself.
+    /// The result is empty when the shapes do not qualify: another group column type, a string
+    /// column not dictionary-encoded in this chunk, more than 65,536 groups in the chunk, or an
+    /// `aggColumn` that is not an integer or floating column (`f16` and `u64` included, which this
+    /// fold does not total). The caller then groups the rows itself.
     ///
     /// @param chunk       the decoded chunk holding every referenced column
-    /// @param groupColumn the dictionary-encoded string column to group by
+    /// @param groupColumn the column to group by
     /// @param filter      the rows to fold, or `null` for every row
     /// @param aggColumn   the numeric column to reduce, or `null` to count rows only
     /// @return the fold per group value, or empty when the columns do not qualify
-    public static Optional<Map<String, FilteredAggregate>> groupedAggregate(Chunk chunk, ColumnName groupColumn,
+    public static Optional<Map<Object, FilteredAggregate>> groupedAggregate(Chunk chunk, ColumnName groupColumn,
                                                                             RowFilter filter, ColumnName aggColumn) {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(groupColumn, "groupColumn");

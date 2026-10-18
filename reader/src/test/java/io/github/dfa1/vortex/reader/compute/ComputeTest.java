@@ -206,7 +206,7 @@ class ComputeTest {
             Chunk chunk = chunk(nullableGroups(), null);
 
             // When
-            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, null, null).orElseThrow();
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, null, null).orElseThrow();
 
             // Then
             assertThat(result).containsOnlyKeys("a", "b", null);
@@ -222,7 +222,7 @@ class ComputeTest {
                     new boolean[]{true, true, false, true, true, true});
 
             // When
-            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk(nullableGroups(), v), G, null, V)
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(nullableGroups(), v), G, null, V)
                     .orElseThrow();
 
             // Then — a: rows 0, 2, 5 with row 2 null; b: rows 1, 4; null group: row 3
@@ -253,7 +253,7 @@ class ComputeTest {
             Chunk chunk = chunk(nullableGroups(), v);
 
             // When
-            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, RowFilter.gt(V, 4L), V)
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, RowFilter.gt(V, 4L), V)
                     .orElseThrow();
 
             // Then — groups with no selected row do not appear
@@ -270,7 +270,7 @@ class ComputeTest {
             Chunk chunk = chunk(new VarBinSlicedArray(DType.UTF8, 3, dict, 2), null);
 
             // When
-            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, null, null).orElseThrow();
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, null, null).orElseThrow();
 
             // Then
             assertThat(result.get("b").selectedRows()).isEqualTo(2);
@@ -285,7 +285,7 @@ class ComputeTest {
             Array v = ComputeArrays.longArray(ARENA, 1, 10, 100, 1000);
 
             // When
-            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, null, V).orElseThrow();
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, null, V).orElseThrow();
 
             // Then
             assertThat(result.get("x")).isEqualTo(new FilteredAggregate(3, 3, 1011L, 1L, 1000L));
@@ -315,6 +315,65 @@ class ComputeTest {
             // When / Then
             assertThatThrownBy(() -> Compute.groupedAggregate(chunk, G, null, null))
                     .isInstanceOf(VortexException.class);
+        }
+
+        @Test
+        void booleanGroupColumn_foldsFalseTrueAndNull() {
+            // Given — g = true, false, true, (null); v = 1, 2, 3, 4
+            Array group = new MaskedArray(ComputeArrays.boolArray(ARENA, true, false, true, true),
+                    ComputeArrays.boolArray(ARENA, true, true, true, false));
+            Array v = ComputeArrays.longArray(ARENA, 1, 2, 3, 4);
+
+            // When
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, null, V).orElseThrow();
+
+            // Then
+            assertThat(result).containsOnlyKeys(true, false, null);
+            assertThat(result.get(true)).isEqualTo(new FilteredAggregate(2, 2, 4L, 1L, 3L));
+            assertThat(result.get(false)).isEqualTo(new FilteredAggregate(1, 1, 2L, 2L, 2L));
+            assertThat(result.get(null)).isEqualTo(new FilteredAggregate(1, 1, 4L, 4L, 4L));
+        }
+
+        @Test
+        void integerGroupColumn_foldsEachDistinctValueWithAFilter() {
+            // Given — g = 7, -3, 7, 7, -3; keep v > 1
+            Array group = ComputeArrays.longArray(ARENA, 7, -3, 7, 7, -3);
+            Array v = ComputeArrays.longArray(ARENA, 1, 2, 3, 4, 5);
+
+            // When
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, RowFilter.gt(V, 1L), V)
+                    .orElseThrow();
+
+            // Then
+            assertThat(result).containsOnlyKeys(7L, -3L);
+            assertThat(result.get(7L)).isEqualTo(new FilteredAggregate(2, 2, 7L, 3L, 4L));
+            assertThat(result.get(-3L)).isEqualTo(new FilteredAggregate(2, 2, 7L, 2L, 5L));
+        }
+
+        /// A u64 key past 2^63 has no signed-long home, so the kernel declines rather than group it
+        /// under a negative key.
+        @Test
+        void u64GroupColumn_isEmpty() {
+            // Given
+            Chunk chunk = chunk(ComputeArrays.unsignedLongArray(ARENA, 1, -1), null);
+
+            // When / Then
+            assertThat(Compute.groupedAggregate(chunk, G, null, null)).isEmpty();
+        }
+
+        /// An integer column may hold a value per row; past 65,536 groups in a chunk the per-group
+        /// arrays would grow with the rows, so the kernel declines.
+        @Test
+        void integerGroupColumnWithTooManyValues_isEmpty() {
+            // Given
+            long[] values = new long[70_000];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = i;
+            }
+            Chunk chunk = chunk(ComputeArrays.longArray(ARENA, values), null);
+
+            // When / Then
+            assertThat(Compute.groupedAggregate(chunk, G, null, null)).isEmpty();
         }
 
         /// The caller groups the rows itself when the kernel cannot: it must say so, not guess.
