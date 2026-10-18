@@ -44,6 +44,7 @@ final class VortexTableScan extends TableScan {
     @Override
     public void register(RelOptPlanner planner) {
         VortexAggregatePushDownRule.RULES.forEach(planner::addRule);
+        VortexSortPushDownRule.RULES.forEach(planner::addRule);
         // Reduce AVG (and STDDEV/VAR) to SUM/COUNT so the aggregate rule can answer AVG from the
         // per-zone SUM + row/null counts instead of streaming the column.
         planner.addRule(CoreRules.AGGREGATE_REDUCE_FUNCTIONS);

@@ -282,6 +282,49 @@ class CalciteInteropIntegrationTest {
         assertGroupBy("", new String[]{"AAPL", "\u03A9mega", null}, false, tmp);
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "order by x desc limit 10                     | order by x + 0 desc limit 10",
+            "order by n nulls first, id limit 15 offset 2 | order by n + 0 nulls first, id limit 15 offset 2",
+            "where s = 'AAPL' order by n desc limit 8     | where s = 'AAPL' order by n + 0 desc limit 8"})
+    void jniWriter_orderByLimit_returnsTheRowsCalciteSortReturns(String tail, String oracleTail, @TempDir Path tmp)
+            throws Exception {
+        // Given — ORDER BY ... LIMIT is answered from a bounded heap over the scan; wrapping the key
+        // in "+ 0" keeps the rule out, so Calcite sorts the same Rust-written rows itself
+        Path file = tmp.resolve("jni_sort.vortex");
+        writeGroupsWithJni(file, new String[]{"AAPL", "MSFT", "NVDA", null});
+        String select = "select id, n, x, s from vtx.t ";
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            String plan;
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + select + tail)) {
+                rs.next();
+                plan = rs.getString(1);
+            }
+            List<String> result = sqlRows(conn, select + tail);
+
+            // Then
+            assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+            assertThat(result).isEqualTo(sqlRows(conn, select + oracleTail)).isNotEmpty();
+        }
+    }
+
+    private static List<String> sqlRows(Connection conn, String sql) throws Exception {
+        List<String> out = new java.util.ArrayList<>();
+        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            int columns = rs.getMetaData().getColumnCount();
+            while (rs.next()) {
+                StringBuilder row = new StringBuilder();
+                for (int c = 1; c <= columns; c++) {
+                    row.append(rs.getObject(c)).append('|');
+                }
+                out.add(row.toString());
+            }
+        }
+        return out;
+    }
+
     private static void assertGroupBy(String where, String[] symbols, boolean folded, Path tmp) throws Exception {
         Path file = tmp.resolve("jni_groups.vortex");
         List<Object[]> rows = writeGroupsWithJni(file, symbols);
