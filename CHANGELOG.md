@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- SQL `MIN`/`MAX` of a date, time or timestamp column is answered from zone maps, and scans read those columns without building a `java.time` object per row. ([#559](https://github.com/dfa1/vortex-java/pull/559))
+- The Calcite adapter declares `TIME` and `TIMESTAMP` columns with millisecond precision, so `getString` shows the milliseconds the values carry. ([#559](https://github.com/dfa1/vortex-java/pull/559))
 - SQL `LIKE 'prefix%'` on a string column is about 5 times faster: it is pushed into the scan as a string range that prunes chunks, instead of being matched by Calcite row by row. ([#558](https://github.com/dfa1/vortex-java/pull/558))
 - SQL `ORDER BY ... LIMIT n` is up to 9 times faster: the first rows are kept in a bounded heap during the scan instead of sorting the whole table. ([#557](https://github.com/dfa1/vortex-java/pull/557))
 - SQL `GROUP BY` on a dictionary-encoded string column is 10 to 30 times faster: rows are counted and summed per dictionary code instead of being built one by one for Calcite. ([#555](https://github.com/dfa1/vortex-java/pull/555))

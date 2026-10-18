@@ -238,7 +238,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
             row.add(key);
             for (int i = 0; i < calls.size(); i++) {
                 RexLiteral literal = groupedLiteral(calls.get(i), callColumns.get(i), entry.getValue(),
-                        outTypes.get(i + 1), scanRowType, rexBuilder);
+                        outTypes.get(i + 1), scanRowType, rexBuilder, table);
                 if (literal == null) {
                     return;
                 }
@@ -252,7 +252,8 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
 
     /// One aggregate call's literal for one group, or `null` when it cannot be built.
     private static RexLiteral groupedLiteral(AggregateCall aggCall, ColumnName column, VortexTable.GroupFold fold,
-                                             RelDataType outType, RelDataType scanRowType, RexBuilder rexBuilder) {
+                                             RelDataType outType, RelDataType scanRowType, RexBuilder rexBuilder,
+                                             VortexTable table) {
         if (column == null) {
             return exact(rexBuilder, fold.rows(), outType);
         }
@@ -264,7 +265,8 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                     isNullable(scanRowType, column.value()));
             case MIN, MAX -> {
                 Object value = aggCall.getAggregation().getKind() == SqlKind.MIN ? columnFold.min() : columnFold.max();
-                yield value == null ? rexBuilder.makeNullLiteral(outType) : minMaxLiteral(rexBuilder, value, outType);
+                yield value == null ? rexBuilder.makeNullLiteral(outType)
+                        : extremeLiteral(rexBuilder, value, outType, table.columnType(column));
             }
             default -> null;
         };
@@ -326,7 +328,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                             || (fold.nullCount() != null && fold.nullCount() == fold.rows());
                     yield provablyNoValues ? rexBuilder.makeNullLiteral(outType) : null;
                 }
-                yield minMaxLiteral(rexBuilder, value, outType);
+                yield extremeLiteral(rexBuilder, value, outType, table.columnType(col));
             }
             case SUM -> {
                 if (agg.getArgList().size() != 1) {
@@ -428,6 +430,18 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
 
     private static RexLiteral exact(RexBuilder rexBuilder, long value, RelDataType type) {
         return rexBuilder.makeExactLiteral(BigDecimal.valueOf(value), type);
+    }
+
+    /// The literal for a `MIN`/`MAX` value of a column of `columnType`. A temporal column's statistic
+    /// is its raw storage integer, converted to the `DATE`/`TIME`/`TIMESTAMP` form first; anything
+    /// else goes through [#minMaxLiteral(RexBuilder, Object, RelDataType)].
+    private static RexLiteral extremeLiteral(RexBuilder rexBuilder, Object value, RelDataType type,
+                                             io.github.dfa1.vortex.core.model.DType columnType) {
+        Temporal temporal = Temporal.of(columnType);
+        if (temporal != null && value instanceof Number raw) {
+            return VortexSortPushDownRule.literal(rexBuilder, temporal.convert(raw.longValue()), type);
+        }
+        return minMaxLiteral(rexBuilder, value, type);
     }
 
     /// Builds a literal for a non-null `MIN`/`MAX` value, or `null` (the rule abandons) for a string

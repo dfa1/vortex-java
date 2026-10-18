@@ -96,7 +96,8 @@ class ColumnTypesSqlTest {
             assertThat(result.getBytes("blob")).containsExactly(1, 2, 3);
             assertThat(result.getDate("day").toLocalDate()).isEqualTo(DATE);
             assertThat(result.getTime("at").toLocalTime()).isEqualTo(TIME.withNano(0));
-            assertThat(result.getString("at")).isEqualTo("13:45:30");
+            // TIME is declared with millisecond precision, the precision values carry
+            assertThat(result.getString("at")).isEqualTo("13:45:30.123");
             // TIMESTAMP is a wall clock: the stored value read as UTC, with no zone shift
             assertThat(result.getTimestamp("wall").toLocalDateTime())
                     .isEqualTo(LocalDateTime.ofInstant(INSTANT, ZoneOffset.UTC));

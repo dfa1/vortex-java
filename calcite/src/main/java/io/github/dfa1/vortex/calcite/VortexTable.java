@@ -432,6 +432,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return Optional.of(java.util.Collections.unmodifiableMap(result));
     }
 
+    /// The dtype of `column`.
+    DType columnType(ColumnName column) {
+        DType.Struct struct = struct();
+        return struct.fieldTypes().get(struct.fieldNames().indexOf(column));
+    }
+
     /// One `ORDER BY` key of [#topN(int[], RowFilter, List, int)].
     ///
     /// @param field      the key's position in the projected row
@@ -1088,8 +1094,10 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             case DType.Decimal d -> factory.createSqlType(SqlTypeName.DECIMAL, d.precision(), d.scale());
             case DType.Extension ext -> switch (ExtensionId.parse(ext.extensionId())) {
                 case ExtensionId.WellKnown.VORTEX_DATE -> factory.createSqlType(SqlTypeName.DATE);
-                case ExtensionId.WellKnown.VORTEX_TIME -> factory.createSqlType(SqlTypeName.TIME);
-                case ExtensionId.WellKnown.VORTEX_TIMESTAMP -> factory.createSqlType(SqlTypeName.TIMESTAMP);
+                // millisecond precision, the precision the scan delivers: at Calcite's default of 0 a
+                // literal built for the column (a pushed-down MIN/MAX, a top-N row) lost its millis
+                case ExtensionId.WellKnown.VORTEX_TIME -> factory.createSqlType(SqlTypeName.TIME, 3);
+                case ExtensionId.WellKnown.VORTEX_TIMESTAMP -> factory.createSqlType(SqlTypeName.TIMESTAMP, 3);
                 case ExtensionId.WellKnown.VORTEX_UUID -> factory.createSqlType(SqlTypeName.UUID);
                 default -> toSqlType(factory, ext.storageDType());
             };
