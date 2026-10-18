@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.proto.ProtoNullValue;
@@ -177,6 +178,23 @@ class ConstantEncodingEncoderTest {
             MemorySegment seg = result.encodedBuffers().getFirst().data();
             ProtoScalarValue scalar = ProtoScalarValue.decode(seg, 0, seg.byteSize());
             assertThat(scalar.f16_value()).isEqualTo(0x3E00L);
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.MethodSource("io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoderTest#highUnsignedConstants")
+        void encode_unsignedAboveSignedRange_writesZeroExtendedScalar(PType ptype, Object data, long expected)
+                throws java.io.IOException {
+            // Given — a constant past the signed range of its width: it was sign-extended, so a u8 230
+            // became the u64 scalar 2^64 - 26, which vortex-jni refuses ("out of range for dtype u8";
+            // found by the differential fuzz target)
+
+            // When
+            EncodeResult result = ENCODER.encode(new DType.Primitive(ptype, false), data, EncodeTestHelper.testCtx());
+
+            // Then
+            MemorySegment seg = result.encodedBuffers().getFirst().data();
+            ProtoScalarValue scalar = ProtoScalarValue.decode(seg, 0, seg.byteSize());
+            assertThat(scalar.uint64_value()).isEqualTo(expected);
         }
 
         @Test
@@ -474,5 +492,12 @@ class ConstantEncodingEncoderTest {
             assertThat(result).isInstanceOf(NullArray.class);
             assertThat(result.length()).isEqualTo(rowCount);
         }
+    }
+
+    static Stream<Arguments> highUnsignedConstants() {
+        return Stream.of(
+                Arguments.of(PType.U8, new byte[]{(byte) 230, (byte) 230}, 230L),
+                Arguments.of(PType.U16, new short[]{(short) 0xFFF0, (short) 0xFFF0}, 0xFFF0L),
+                Arguments.of(PType.U32, new int[]{0xFFFF_FFF0, 0xFFFF_FFF0}, 0xFFFF_FFF0L));
     }
 }
