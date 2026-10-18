@@ -109,10 +109,13 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
             return;
         }
         // Statistics describe every row of a zone, so they cannot answer an aggregate over a subset
-        // of its rows: COUNT(DISTINCT g) is not COUNT(g), and a FILTER (WHERE ...) clause narrows
-        // the rows one call sees. Leave either to the scan.
+        // of its rows: a FILTER (WHERE ...) clause narrows the rows one call sees, and DISTINCT is not
+        // the plain aggregate. Leave those to the scan, except an ungrouped COUNT(DISTINCT col),
+        // which VortexTable#distinctCount answers by its own pass.
         for (AggregateCall aggCall : aggregate.getAggCallList()) {
-            if (aggCall.isDistinct() || aggCall.hasFilter()) {
+            boolean countDistinct = aggCall.isDistinct() && aggCall.getAggregation().getKind() == SqlKind.COUNT
+                    && aggCall.getArgList().size() == 1 && aggregate.getGroupCount() == 0;
+            if (aggCall.hasFilter() || aggCall.isDistinct() && !countDistinct) {
                 return;
             }
         }
@@ -287,6 +290,15 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                                        RelOptPlanner planner) {
         return switch (agg.getAggregation().getKind()) {
             case COUNT -> {
+                if (agg.isDistinct()) {                            // COUNT(DISTINCT col): no statistic holds it
+                    ColumnName col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
+                    if (col == null) {
+                        yield null;
+                    }
+                    List<Object> foldKey = List.of("distinct", table, filter == null ? List.of() : filter, col);
+                    Optional<Long> distinct = memo(planner, foldKey, () -> table.distinctCount(col, filter));
+                    yield distinct.map(count -> exact(rexBuilder, count, outType)).orElse(null);
+                }
                 if (agg.getArgList().isEmpty()) {                  // COUNT(*)
                     if (filter == null) {
                         yield exact(rexBuilder, table.totalRows(), outType);

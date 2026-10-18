@@ -146,9 +146,11 @@ class AggregateRuleBranchTest {
 
     /// Zone statistics cover every row, so they cannot answer an aggregate over a subset of rows:
     /// answering these from stats returned the row count for `COUNT(DISTINCT)` and ignored `FILTER`.
+    /// An ungrouped `COUNT(DISTINCT)` is now counted by its own pass, so a `SUM(DISTINCT)` stands in.
     @ParameterizedTest
     @ValueSource(strings = {
-            "select count(distinct volume) from ohlc",
+            // COUNT(DISTINCT) has its own count (CountDistinctTest); any other DISTINCT stays with Calcite
+            "select sum(distinct volume) from ohlc",
             "select count(*) filter (where volume > 0) from ohlc",
             "select min(low) filter (where high > 0), count(*) from ohlc"})
     void distinctOrFilteredAggregate_isLeftUntouched(String sql) {
