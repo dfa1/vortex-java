@@ -137,11 +137,16 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         if (!SimdOperationsSupport.preferred().allEqual(data, ptype)) {
             return OptionalLong.empty();
         }
-        // No default: every PType is handled, so a new one fails to compile here instead of at write time
+        // No default: every PType is handled, so a new one fails to compile here instead of at write
+        // time. Unsigned values widen unsigned: a sign-extended u8 230 became the u64 scalar
+        // 2^64 - 26, which Rust refuses to read ("out of range for dtype u8").
         return OptionalLong.of(switch (ptype) {
-            case I8, U8 -> ((byte[]) data)[0];
-            case I16, U16, F16 -> ((short[]) data)[0];
-            case I32, U32 -> ((int[]) data)[0];
+            case I8 -> ((byte[]) data)[0];
+            case U8 -> Byte.toUnsignedLong(((byte[]) data)[0]);
+            case I16, F16 -> ((short[]) data)[0];
+            case U16 -> Short.toUnsignedLong(((short[]) data)[0]);
+            case I32 -> ((int[]) data)[0];
+            case U32 -> Integer.toUnsignedLong(((int[]) data)[0]);
             case I64, U64 -> ((long[]) data)[0];
             case F32 -> Float.floatToRawIntBits(((float[]) data)[0]);
             case F64 -> Double.doubleToRawLongBits(((double[]) data)[0]);
