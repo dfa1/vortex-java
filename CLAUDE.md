@@ -84,8 +84,8 @@ and merge commits are disabled): squash a PR's commits locally into one, force-p
 scripts/simd-benchmark.sh                  # auto-vectorized vs Vector API kernels, table of speedups (also a CI job)
 scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conformance corpus (#205), then:
 ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test="RaincloudConformanceIntegrationTest"
-./mvnw test -pl fuzz -am -Dvortex.fuzz.excludedGroups=                # Jazzer regression mode (ADR 0020)
-JAZZER_FUZZ=1 ./mvnw test -pl fuzz -am -Dvortex.fuzz.excludedGroups=  # actually fuzz (unbounded)
+JAZZER_FUZZ=1 JAZZER_MAX_DURATION=5m ./mvnw test -pl fuzz -am -Dtest='VortexReaderFuzzTest#scanMalformedFile' -Dsurefire.failIfNoSpecifiedTests=false  # fuzz one target (ADR 0020)
+JAZZER_FUZZ=1 JAZZER_MAX_DURATION=5m ./mvnw verify -pl integration -am -Dit.test='WriteReadFuzzIntegrationTest#jniReadsJavaWrite' -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false
 ./mvnw test -pl fuzz -am -Dtest=SeedCorpusGenerator -Dsurefire.failIfNoSpecifiedTests=false -Dvortex.fuzz.regenerateSeeds=true  # rewrite per-encoding seeds
 ```
 
@@ -96,9 +96,16 @@ Tag-excluded from a routine local build, even when named with `-Dit.test`/`-Dtes
   integration test taking over ~1 s.
 - **Raincloud corpus** (`@Tag("raincloud")`, failsafe): clear the exclusion with
   `-Dvortex.it.excludedGroups=` as shown above. Not run by the `ci` profile.
-- **Jazzer fuzz** (`@Tag("fuzz")`, own `fuzz` module): clear it with `-Dvortex.fuzz.excludedGroups=`.
-  Without `JAZZER_FUZZ=1` it only replays the saved corpus; with it, it fuzzes until stopped —
-  never in CI or unattended. See [ADR 0020](adr/0020-jazzer-fuzz-infrastructure.md).
+
+Jazzer fuzz targets (`@FuzzTest`, ADR 0020) are **not** excluded: without `JAZZER_FUZZ=1` each
+replays its saved inputs (`*Inputs/<method>/`: seeds plus every past finding) in about a second,
+as part of the routine build. `JAZZER_FUZZ=1` explores new inputs, one target per run, bounded by
+`JAZZER_MAX_DURATION`; the weekly `Fuzz` workflow does that for every target. Targets: reader
+`open`/`scan`/`filter`/metadata-blob and FSST round-trip in `fuzz`; write→read round-trip and the
+vortex-jni differential in `integration` (`WriteReadFuzzIntegrationTest`). A finding is written
+next to the target's inputs as `crash-<hash>`: rename it after the bug, fix, and commit it with
+the fix, plus a `MalformedFileInteropIntegrationTest` case when it is a file vortex-jni also
+reads.
 
 Regenerate after editing `.fbs`/`.proto` (both generators are in-house, no external tools):
 

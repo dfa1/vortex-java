@@ -11,16 +11,11 @@
 
     <name>vortex-fuzz</name>
     <description>Coverage-guided fuzz testing (ADR 0020) for the Vortex columnar file format Java implementation.
-        Opt-in only — see CLAUDE.md.
+        Saved inputs replay in every build; JAZZER_FUZZ=1 explores new ones — see CLAUDE.md.
     </description>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
-        <!-- JUnit tags excluded from a routine `./mvnw test` / `./mvnw verify`. Defaults to `fuzz`
-             so the Jazzer @FuzzTest targets never run by default — see the surefire plugin config
-             below. Override on the CLI to opt in, e.g. `-Dvortex.fuzz.excludedGroups=` (empty)
-             runs every tag; a literal pom value could not be cleared this way. -->
-        <vortex.fuzz.excludedGroups>fuzz</vortex.fuzz.excludedGroups>
     </properties>
 
     <dependencies>
@@ -47,23 +42,4 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <!-- Exclude the Jazzer @FuzzTest targets from a routine `./mvnw test` /
-                         `./mvnw verify`: fuzzing is opt-in and, under JAZZER_FUZZ=1, unbounded and
-                         non-deterministic — not something a default build should run. Bound to a
-                         property (not a literal) so the CLI can clear it:
-                         `-Dvortex.fuzz.excludedGroups=` opts every fuzz target back in. This
-                         exclusion filters even an explicit `-Dtest=VortexReaderFuzzTest` class
-                         selection, so running a fuzz target always requires clearing the property
-                         as well. -->
-                    <excludedGroups>${vortex.fuzz.excludedGroups}</excludedGroups>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 </project>
