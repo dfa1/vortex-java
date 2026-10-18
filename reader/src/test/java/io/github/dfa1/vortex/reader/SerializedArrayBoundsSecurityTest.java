@@ -85,6 +85,76 @@ class SerializedArrayBoundsSecurityTest {
         }
     }
 
+    @Test
+    void rootOffsetPastFlatBuffer_throwsVortexException() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given a valid FlatBuffer whose root uoffset is rewritten to land 2 bytes before its
+            // end: the runtime's vtable read there runs off the slice (the first fuzzer finding)
+            byte[] fb = arrayFlatBufferWithOneBuffer(0L);
+            MemorySegment seg = segmentOf(arena, fb);
+            seg.set(VortexFormat.LE_INT, 0, fb.length - 2);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("malformed array flatbuffer");
+        }
+    }
+
+    @Test
+    void encodingIndexPastSpecTable_throwsVortexException() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given a root node naming encoding #5 while the footer declares a single encoding
+            FbsBuilder b = new FbsBuilder();
+            int children = FbsArrayNode.createChildrenVector(b, new int[0]);
+            int buffers = FbsArrayNode.createBuffersVector(b, new int[0]);
+            int root = FbsArrayNode.createFbsArrayNode(b, 5, 0, children, buffers, 0);
+            MemorySegment seg = segmentOf(arena, finish(b, root));
+
+            // When / Then
+            assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("encoding index 5 out of range");
+        }
+    }
+
+    @Test
+    void childrenVectorClaimingMoreThanTheFlatBuffer_throwsVortexException() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given a children vector whose length prefix claims 100 000 entries it does not hold.
+            // At Integer.MAX_VALUE the `new ArrayNode[n]` it sizes would be an OutOfMemoryError,
+            // which no catch of RuntimeException stops; the count is checked before allocating.
+            FbsBuilder b = new FbsBuilder();
+            FbsArrayNode.startChildrenVector(b, 100_000);
+            int children = b.endVector();
+            int buffers = FbsArrayNode.createBuffersVector(b, new int[0]);
+            int root = FbsArrayNode.createFbsArrayNode(b, 0, 0, children, buffers, 0);
+            MemorySegment seg = segmentOf(arena, finish(b, root));
+
+            // When / Then
+            assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("vector of 100000 elements exceeds");
+        }
+    }
+
+    /// Lays out `fb` as a flat segment: the FlatBuffer followed by its u32 LE length.
+    private static MemorySegment segmentOf(Arena arena, byte[] fb) {
+        MemorySegment seg = arena.allocate(fb.length + 4L);
+        MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
+        seg.set(VortexFormat.LE_INT, fb.length, fb.length);
+        return seg;
+    }
+
+    /// Wraps `root` in an `FbsArray` with no buffer descriptors.
+    private static byte[] finish(FbsBuilder b, int root) {
+        FbsArray.startBuffersVector(b, 0);
+        int buffers = b.endVector();
+        int array = FbsArray.createFbsArray(b, root, buffers);
+        FbsArray.finishFbsArrayBuffer(b, array);
+        return b.sizedByteArray();
+    }
+
     /// Builds a minimal valid `FbsArray` FlatBuffer with one buffer descriptor of the given length.
     private static byte[] arrayFlatBufferWithOneBuffer(long bufferLength) {
         FbsBuilder b = new FbsBuilder();

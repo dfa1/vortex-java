@@ -1192,8 +1192,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
         long segLen = spec.length();
         // Stats are an optional zone-map pruning optimization: a malformed stats segment
-        // degrades to "no stats" (empty) and never aborts the scan. This mirrors
-        // VortexReader.readFlatStats — both stats readers swallow bounds errors here.
+        // degrades to "no stats" (empty) and never aborts the scan.
         // The trailing 4-byte fbLen lives in the segment's last bytes; reading the whole
         // segment as a ByteBuffer would fail for segments larger than 2 GB (ByteBuffer cap).
         if (segLen < 4) {
@@ -1205,13 +1204,17 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return ArrayStats.empty();
         }
         long fbStart = segLen - 4L - fbLen;
-        var fbArray = io.github.dfa1.vortex.core.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
-
-        io.github.dfa1.vortex.core.fbs.FbsArrayNode root = fbArray.root();
-        if (root == null) {
+        try {
+            var fbArray = io.github.dfa1.vortex.core.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
+            io.github.dfa1.vortex.core.fbs.FbsArrayNode root = fbArray.root();
+            if (root == null) {
+                return ArrayStats.empty();
+            }
+            return ArrayStats.fromFbs(root.stats());
+        } catch (RuntimeException _) {
+            // The FlatBuffer runtime trusts the offsets it follows: a crafted one fails inside it.
             return ArrayStats.empty();
         }
-        return ArrayStats.fromFbs(root.stats());
     }
 
     // ── Layout decode context ─────────────────────────────────────────────────
