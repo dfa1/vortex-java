@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.reader.Zone;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -545,6 +546,67 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return false;
     }
 
+    /// `SUM`/`MIN`/`MAX`/null count of a decimal column over the rows `filter` selects, totalled as
+    /// unscaled longs ([DecimalArray#getUnscaledLong(long)]) instead of a `BigDecimal` per row. Zone
+    /// statistics carry no decimal sum, so without this every decimal `SUM` was left to Calcite.
+    ///
+    /// @param column the decimal column
+    /// @param filter the rows to fold, or `null` for every row
+    /// @return the fold, or empty for a precision past 18 or a sum past a long, which Calcite totals
+    public Optional<FilteredFold> decimalFold(ColumnName column, RowFilter filter) {
+        if (!(columnType(column) instanceof DType.Decimal decimal) || decimal.precision() > 18) {
+            return Optional.empty();
+        }
+        java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
+        columns.add(column);
+        ScanOptions options;
+        if (filter == null) {
+            options = ScanOptions.columns(column);
+        } else {
+            RexFilterTranslator.collectColumns(filter, columns);
+            options = ScanOptions.columns(columns.toArray(ColumnName[]::new)).withFilter(filter);
+        }
+        long sum = 0;
+        long min = Long.MAX_VALUE;
+        long max = Long.MIN_VALUE;
+        long rows = 0;
+        long nonNull = 0;
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(options)) {
+            while (scan.hasNext()) {
+                try (Chunk chunk = scan.next()) {
+                    java.util.function.LongPredicate selected = filter == null ? null : Compute.matcher(chunk, filter);
+                    Array array = chunk.column(column);
+                    BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
+                    DecimalArray data = (DecimalArray) (array instanceof MaskedArray masked ? masked.inner() : array);
+                    long n = chunk.rowCount();
+                    for (long i = 0; i < n; i++) {
+                        if (selected != null && !selected.test(i)) {
+                            continue;
+                        }
+                        rows++;
+                        if (validity != null && !validity.getBoolean(i)) {
+                            continue;
+                        }
+                        long v = data.getUnscaledLong(i);
+                        sum = Math.addExact(sum, v);
+                        min = Math.min(min, v);
+                        max = Math.max(max, v);
+                        nonNull++;
+                    }
+                }
+            }
+        } catch (ArithmeticException overflow) {
+            return Optional.empty();
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot sum " + column + " in " + file, e);
+        }
+        int scale = decimal.scale();
+        return Optional.of(new FilteredFold(java.math.BigDecimal.valueOf(sum, scale),
+                nonNull == 0 ? null : java.math.BigDecimal.valueOf(min, scale),
+                nonNull == 0 ? null : java.math.BigDecimal.valueOf(max, scale), rows - nonNull, rows));
+    }
+
     /// One `ORDER BY` key of [#topN(int[], RowFilter, List, int)].
     ///
     /// @param field      the key's position in the projected row
@@ -719,6 +781,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         private long longSum;
         private double doubleSum;
         private boolean floatingSum;
+        private java.math.BigDecimal decimalSum;
         private boolean sumUsable = true;
         private Object min;
         private Object max;
@@ -739,6 +802,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             } else if (contribution instanceof Double d) {
                 floatingSum = true;
                 doubleSum += d;
+            } else if (contribution instanceof java.math.BigDecimal d) {
+                decimalSum = decimalSum == null ? d : decimalSum.add(d);
             } else {
                 longSum += ((Number) contribution).longValue();
             }
@@ -777,6 +842,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 foldedSum = null;             // a contributing zone carried no usable sum
             } else if (floatingSum) {
                 foldedSum = doubleSum;
+            } else if (decimalSum != null) {
+                foldedSum = decimalSum;
             } else {
                 foldedSum = longSum;
             }

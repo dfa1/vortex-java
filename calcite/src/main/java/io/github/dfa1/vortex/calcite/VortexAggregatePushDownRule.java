@@ -217,7 +217,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 callColumns.add(null);
                 continue;
             }
-            boolean supported = kind == SqlKind.COUNT || kind == SqlKind.SUM || kind == SqlKind.MIN
+            boolean supported = kind == SqlKind.COUNT || kind == SqlKind.SUM || kind == SqlKind.SUM0 || kind == SqlKind.MIN
                     || kind == SqlKind.MAX;
             ColumnName column = aggCall.getArgList().size() == 1
                     ? resolveColumn(aggCall.getArgList().getFirst(), scanColumns, project) : null;
@@ -268,8 +268,8 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         long nulls = columnFold.nullCount();
         return switch (aggCall.getAggregation().getKind()) {
             case COUNT -> exact(rexBuilder, columnFold.rows() - nulls, outType);
-            case SUM -> sumLiteral(rexBuilder, outType, columnFold.sum(), nulls, columnFold.rows(),
-                    isNullable(scanRowType, column.value()));
+            case SUM, SUM0 -> sum0(aggCall, rexBuilder, outType, sumLiteral(rexBuilder, outType, columnFold.sum(), nulls, columnFold.rows(),
+                    isNullable(scanRowType, column.value())));
             case MIN, MAX -> {
                 Object value = aggCall.getAggregation().getKind() == SqlKind.MIN ? columnFold.min() : columnFold.max();
                 yield value == null ? rexBuilder.makeNullLiteral(outType)
@@ -346,7 +346,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 }
                 yield extremeLiteral(rexBuilder, value, outType, table.columnType(col));
             }
-            case SUM -> {
+            case SUM, SUM0 -> {
                 if (agg.getArgList().size() != 1) {
                     yield null;
                 }
@@ -354,12 +354,15 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (col == null) {
                     yield null;
                 }
-                ColumnFold fold = columnFold(table, col, filter, planner);
+                // zone statistics carry no decimal sum, so a decimal column is totalled by its own pass
+                ColumnFold fold = table.columnType(col) instanceof io.github.dfa1.vortex.core.model.DType.Decimal
+                        ? decimalFold(table, col, filter, planner)
+                        : columnFold(table, col, filter, planner);
                 if (fold == null) {
                     yield null;
                 }
-                yield sumLiteral(rexBuilder, outType, fold.sum(), fold.nullCount(), fold.rows(),
-                        isNullable(scanRowType, col.value()));
+                yield sum0(agg, rexBuilder, outType, sumLiteral(rexBuilder, outType, fold.sum(), fold.nullCount(),
+                        fold.rows(), isNullable(scanRowType, col.value())));
             }
             default -> null;
         };
@@ -380,9 +383,23 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
             return new ColumnFold(zoneSum.sum(), stats.stats().min(), stats.stats().max(),
                     stats.stats().nullCount(), stats.totalRows());
         }
-        return filteredFold(planner, table, filter, column)
+        ColumnFold zones = filteredFold(planner, table, filter, column)
                 .map(f -> new ColumnFold(f.sum(), f.min(), f.max(), f.nullCount(), f.rows()))
                 .orElse(null);
+        // when the zones cannot answer (the filter cuts every zone it keeps), a decimal column still
+        // has its own exact pass
+        if (zones == null && table.columnType(column) instanceof io.github.dfa1.vortex.core.model.DType.Decimal) {
+            return decimalFold(table, column, filter, planner);
+        }
+        return zones;
+    }
+
+    /// [VortexTable#decimalFold(ColumnName, RowFilter)], computed once per planner run.
+    private static ColumnFold decimalFold(VortexTable table, ColumnName column, RowFilter filter,
+                                          RelOptPlanner planner) {
+        List<Object> foldKey = List.of("decimal", table, filter == null ? List.of() : filter, column);
+        Optional<VortexTable.FilteredFold> fold = memo(planner, foldKey, () -> table.decimalFold(column, filter));
+        return fold.map(f -> new ColumnFold(f.sum(), f.min(), f.max(), f.nullCount(), f.rows())).orElse(null);
     }
 
     /// [VortexTable#filteredFold(RowFilter, ColumnName)], computed once per planner run.
@@ -390,6 +407,15 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                                                                     RowFilter filter, ColumnName column) {
         List<Object> foldKey = List.of("filtered", table, filter, column == null ? List.of() : column);
         return memo(planner, foldKey, () -> table.filteredFold(filter, column));
+    }
+
+    /// `$SUM0`, which Calcite reduces `AVG` to, is `SUM` that returns `0` instead of `NULL` over no
+    /// non-null rows: turns the `SUM` literal's `NULL` into that zero, and leaves `SUM` alone.
+    private static RexLiteral sum0(AggregateCall agg, RexBuilder rexBuilder, RelDataType outType, RexLiteral sum) {
+        if (sum == null || agg.getAggregation().getKind() != SqlKind.SUM0 || !sum.isNull()) {
+            return sum;
+        }
+        return numericLiteral(rexBuilder, 0L, outType);
     }
 
     /// Builds the literal for a `SUM`, resolving the all-null-vs-genuine-zero ambiguity from the
@@ -492,7 +518,10 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         return switch (type.getSqlTypeName()) {
             case TINYINT, SMALLINT, INTEGER, BIGINT ->
                     rexBuilder.makeExactLiteral(BigDecimal.valueOf(number.longValue()), type);
-            case FLOAT, REAL, DOUBLE, DECIMAL ->
+            // a DECIMAL literal is exact: a decimal sum or extreme must not round through a double
+            case DECIMAL -> rexBuilder.makeExactLiteral(number instanceof BigDecimal d ? d
+                    : new BigDecimal(number.toString()), type);
+            case FLOAT, REAL, DOUBLE ->
                     rexBuilder.makeApproxLiteral(BigDecimal.valueOf(number.doubleValue()), type);
             default -> null;
         };

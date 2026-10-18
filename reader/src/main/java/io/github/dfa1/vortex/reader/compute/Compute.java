@@ -128,8 +128,9 @@ public final class Compute {
     ///
     /// The result is empty when the shapes do not qualify: another group column type, a string
     /// column not dictionary-encoded in this chunk, more than 65,536 groups in the chunk, or an
-    /// `aggColumn` that is not an integer or floating column (`f16` and `u64` included, which this
-    /// fold does not total). The caller then groups the rows itself.
+    /// `aggColumn` that is not an integer, floating or decimal column (`f16`, `u64` and decimals past
+    /// precision 18 included, which this fold does not total; a decimal folds exactly, as unscaled
+    /// longs, and a decimal sum past a long declines too). The caller then groups the rows itself.
     ///
     /// @param chunk       the decoded chunk holding every referenced column
     /// @param groupColumn the column to group by

@@ -435,6 +435,77 @@ class CalciteInteropIntegrationTest {
         }
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', quoteCharacter = '"', value = {
+            "select sum(amount) from vtx.t "
+                    + "| select sum(case when id > -1 then amount end) from vtx.t",
+            "select sum(amount), count(amount) from vtx.t where id < 1700 "
+                    + "| select sum(case when id > -1 then amount end), count(case when id > -1 then amount end) "
+                    + "from vtx.t where id + 0 < 1700",
+            "select s, sum(amount), min(amount), max(amount) from vtx.t group by s order by s "
+                    + "| select s, sum(case when id > -1 then amount end), min(case when id > -1 then amount end), "
+                    + "max(case when id > -1 then amount end) from vtx.t group by s order by s"})
+    void jniWriter_decimalAggregates_arePushedDownAndEqualTheScan(String sql, String oracle, @TempDir Path tmp)
+            throws Exception {
+        // Given — Rust writes a nullable DECIMAL(10, 2) column; its sums are totalled as unscaled longs
+        // instead of a BigDecimal per row, and a CASE around the column keeps Calcite's own path
+        Path file = tmp.resolve("jni_decimal.vortex");
+        Schema schema = new Schema(List.of(
+                Field.notNullable("id", new ArrowType.Int(64, true)),
+                Field.notNullable("s", new ArrowType.Utf8()),
+                Field.nullable("amount", new ArrowType.Decimal(10, 2, 128))));
+        String[] symbols = {"AAPL", "MSFT", "NVDA"};
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build()) {
+            for (int batch = 0; batch < BATCHES; batch++) {
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+                    BigIntVector ids = (BigIntVector) root.getVector("id");
+                    org.apache.arrow.vector.VarCharVector s = (org.apache.arrow.vector.VarCharVector) root.getVector("s");
+                    DecimalVector amount = (DecimalVector) root.getVector("amount");
+                    ids.allocateNew(BATCH_ROWS);
+                    s.allocateNew(BATCH_ROWS);
+                    amount.allocateNew(BATCH_ROWS);
+                    for (int i = 0; i < BATCH_ROWS; i++) {
+                        long id = (long) batch * BATCH_ROWS + i;
+                        ids.set(i, id);
+                        s.setSafe(i, symbols[(int) (id % symbols.length)].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        if (id % 13 == 0) {
+                            amount.setNull(i);
+                        } else {
+                            amount.setSafe(i, BigDecimal.valueOf((id * 7919 % 2_000_003) - 1_000_000, 2));
+                        }
+                    }
+                    root.setRowCount(BATCH_ROWS);
+                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                         ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
+                        writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
+                    }
+                }
+            }
+        }
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            String plan;
+            String oraclePlan;
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + sql)) {
+                rs.next();
+                plan = rs.getString(1);
+            }
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + oracle)) {
+                rs.next();
+                oraclePlan = rs.getString(1);
+            }
+            List<String> result = sqlRows(conn, sql);
+
+            // Then
+            assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+            assertThat(oraclePlan).contains("TableScan");
+            assertThat(result).isEqualTo(sqlRows(conn, oracle)).isNotEmpty();
+        }
+    }
+
     private static List<String> sqlRows(Connection conn, String sql) throws Exception {
         List<String> out = new java.util.ArrayList<>();
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {

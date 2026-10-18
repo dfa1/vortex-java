@@ -45,6 +45,24 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
         return new BigDecimal(readSignedLe(buf, i * byteWidth, byteWidth), d.scale());
     }
 
+    /// Reads widths up to 8 bytes straight from the buffer, without a [BigInteger].
+    ///
+    /// @param i row index, `0 <= i < length()`
+    /// @return the unscaled value at `i`
+    /// @throws ArithmeticException if a 16- or 32-byte value does not fit a `long`
+    @Override
+    public long getUnscaledLong(long i) {
+        Objects.checkIndex(i, length);
+        long offset = i * byteWidth;
+        return switch (byteWidth) {
+            case 1 -> buf.get(ValueLayout.JAVA_BYTE, offset);
+            case 2 -> buf.get(LE_SHORT, offset);
+            case 4 -> buf.get(LE_INT, offset);
+            case 8 -> buf.get(LE_LONG, offset);
+            default -> readSignedLe(buf, offset, byteWidth).longValueExact();
+        };
+    }
+
     private static BigInteger readSignedLe(MemorySegment buf, long offset, int width) {
         return switch (width) {
             case 1 -> BigInteger.valueOf(buf.get(ValueLayout.JAVA_BYTE, offset));

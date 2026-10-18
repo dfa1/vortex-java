@@ -38,6 +38,16 @@ public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) imp
         return new BigDecimal(DecimalBytePartsArrays.readMantissa(msp, i), d.scale());
     }
 
+    /// Reads the mantissa child at its own width, without a [java.math.BigInteger].
+    ///
+    /// @param i row index, `0 <= i < length()`
+    /// @return the unscaled value at `i`
+    @Override
+    public long getUnscaledLong(long i) {
+        Objects.checkIndex(i, length);
+        return DecimalBytePartsArrays.readMantissaLong(msp, i);
+    }
+
     @Override
     public Array limited(long rows) {
         return new LazyDecimalBytePartsArray(dtype, rows, Array.limited(msp, rows));
