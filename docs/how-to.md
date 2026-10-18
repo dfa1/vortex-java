@@ -643,13 +643,6 @@ select close, open from vtx.ohlc where `date` > 20000 limit 100;
   other reserved words such as `close`, `open` and `value` work unquoted.
 - **Filters and `LIMIT` are cheap.** A `WHERE` on a clustered column skips whole chunks using the
   files' zone maps, and the data grid only reads the page it shows.
-- **A query that must hold every row in memory can run out of it.** `select distinct` or
-  `count(distinct ...)` over a column with millions of distinct values (a 100M-row table with a
-  unique id, say) is built in a hash table inside the JDBC process, and IntelliJ runs JDBC in its own
-  process with a limited heap. It then fails with `java.lang.OutOfMemoryError: Java heap space`
-  (shown as a `java.rmi.ServerError`). Filter first, group by a column with few values, or run the
-  query where you can give the JVM more heap. I have not checked where IntelliJ lets you raise that
-  heap, so look for it under *Settings → Advanced Settings* and the Database settings.
 - **A sort or grouping that returns thousands of values is handed to Calcite's own engine** instead
   of being answered from the file's statistics. The result is the same, only slower. A huge result in
   the grid is still paged.
@@ -662,7 +655,6 @@ select close, open from vtx.ohlc where `date` > 20000 limit 100;
 | `invalid Vortex URL ... unknown key` | A misspelled option; the message lists the keys that exist. |
 | `Object 'OHLC' not found ... did you mean 'ohlc'?` | Names are case-sensitive; write `ohlc` as the file is named. |
 | `parse failed: Encountered ". \""` | A double-quoted identifier; use back-ticks. |
-| `OutOfMemoryError: Java heap space` | See above: a query that holds every row. |
 
 On JDK 25 the first query prints a `sun.misc.Unsafe` warning from protobuf, a Calcite dependency;
 it is harmless.
