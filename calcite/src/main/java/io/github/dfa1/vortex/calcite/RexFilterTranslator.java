@@ -35,7 +35,7 @@ final class RexFilterTranslator {
 
     /// Translates the Calcite predicates into a zone-map [RowFilter], keeping only what we can prune
     /// on: `=`, `<>`, `<`, `<=`, `>`, `>=` between a column and a literal, `IS [NOT] NULL`, a
-    /// single-column `OR` (such as an `IN` list), and `AND`. Predicates we don't understand are
+    /// prefix `LIKE 'abc%'`, a single-column `OR` (such as an `IN` list), and `AND`. Predicates we don't understand are
     /// simply not pushed — Calcite still applies them.
     ///
     /// @param filters the predicates Calcite pushed onto the scan
@@ -172,6 +172,7 @@ final class RexFilterTranslator {
             case EQUALS, NOT_EQUALS, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL ->
                     binary(call, names, types);
             case IS_NULL, IS_NOT_NULL -> nullCheck(call, names);
+            case LIKE -> like(call, names, types);
             default -> Optional.empty();
         };
     }
@@ -211,6 +212,52 @@ final class RexFilterTranslator {
         return Optional.of(call.getKind() == SqlKind.IS_NULL
                 ? RowFilter.isNull(col)
                 : RowFilter.isNotNull(col));
+    }
+
+    /// Translates `col LIKE 'prefix%'` on a string column into the range `col >= prefix AND col <
+    /// successor(prefix)`, which holds exactly the strings starting with `prefix`: the successor
+    /// raises the prefix's last code point by one, and code-point order is the UTF-8 byte order
+    /// [RowFilter] compares strings in. A pattern with any other wildcard (`_`, an inner `%`) or an
+    /// `ESCAPE` clause is not translated; Calcite evaluates it. `LIKE '%'` keeps every non-null row.
+    private static Optional<RowFilter> like(RexCall call, List<ColumnName> names, List<DType> types) {
+        List<RexNode> ops = call.getOperands();
+        if (ops.size() != 2 || !(ops.get(0) instanceof RexInputRef ref) || !(ops.get(1) instanceof RexLiteral lit)
+                || !(types.get(ref.getIndex()) instanceof DType.Utf8)) {
+            return Optional.empty();
+        }
+        String pattern = lit.getValueAs(String.class);
+        if (pattern == null || !pattern.endsWith("%")) {
+            return Optional.empty();
+        }
+        String prefix = pattern.substring(0, pattern.length() - 1);
+        if (prefix.indexOf('%') >= 0 || prefix.indexOf('_') >= 0) {
+            return Optional.empty();
+        }
+        ColumnName col = names.get(ref.getIndex());
+        if (prefix.isEmpty()) {
+            return Optional.of(RowFilter.isNotNull(col));
+        }
+        return Optional.of(successor(prefix)
+                .map(upper -> RowFilter.and(RowFilter.gte(col, prefix), RowFilter.lt(col, upper)))
+                .orElseGet(() -> RowFilter.gte(col, prefix)));
+    }
+
+    /// The least string greater than every string starting with `prefix`: its last code point raised
+    /// by one, skipping the surrogate block; a trailing U+10FFFF has no successor and is dropped
+    /// first. Empty when every code point is U+10FFFF.
+    static Optional<String> successor(String prefix) {
+        int[] codePoints = prefix.codePoints().toArray();
+        for (int end = codePoints.length - 1; end >= 0; end--) {
+            int next = codePoints[end] + 1;
+            if (next == Character.MIN_SURROGATE) {
+                next = Character.MAX_SURROGATE + 1;
+            }
+            if (next <= Character.MAX_CODE_POINT) {
+                codePoints[end] = next;
+                return Optional.of(new String(codePoints, 0, end + 1));
+            }
+        }
+        return Optional.empty();
     }
 
     private static Optional<RowFilter> binary(RexCall call, List<ColumnName> names, List<DType> types) {

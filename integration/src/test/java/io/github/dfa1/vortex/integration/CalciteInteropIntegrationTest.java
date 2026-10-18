@@ -310,6 +310,24 @@ class CalciteInteropIntegrationTest {
         }
     }
 
+    @ParameterizedTest(name = "like {0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"A%", "caf%", "MS%", "NVDB%", "%", "_APL%"})
+    void jniWriter_likePrefix_returnsTheRowsCalciteReturns(String pattern, @TempDir Path tmp) throws Exception {
+        // Given — a prefix LIKE is pushed into the scan as a string range; "s || ''" keeps it out,
+        // so Calcite evaluates the pattern over the same Rust-written rows itself
+        Path file = tmp.resolve("jni_like.vortex");
+        writeGroupsWithJni(file, new String[]{"AAPL", "MSFT", "NVDA", "caf\u00E9", "AMZN", null});
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            List<String> result = sqlRows(conn, "select id, s from vtx.t where s like '" + pattern + "' order by id");
+
+            // Then
+            assertThat(result).isEqualTo(
+                    sqlRows(conn, "select id, s from vtx.t where s || '' like '" + pattern + "' order by id"));
+        }
+    }
+
     private static List<String> sqlRows(Connection conn, String sql) throws Exception {
         List<String> out = new java.util.ArrayList<>();
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
