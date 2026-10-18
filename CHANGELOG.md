@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- SQL `WHERE` on an `I16`, `U8` or `I8` column no longer fails with a `ClassCastException`. ([#556](https://github.com/dfa1/vortex-java/pull/556))
 - SQL `COUNT(DISTINCT col)` and aggregates with a `FILTER (WHERE ...)` clause return the right answer; the statistics push-down returned the row count and ignored the filter. ([#554](https://github.com/dfa1/vortex-java/pull/554))
 - SQL `MIN`/`MAX` of a string column whose values fall outside Latin-1 answers instead of failing the query. ([#554](https://github.com/dfa1/vortex-java/pull/554))
 - The Calcite adapter reads decimal, binary, date, time, timestamp and uuid columns, and a list, struct, map, union or variant column no longer stops the other columns of its table from being queried. ([#550](https://github.com/dfa1/vortex-java/pull/550))

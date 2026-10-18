@@ -117,9 +117,13 @@ class VortexAdapterCoverageTest {
         assertThat(rows).hasSize(3);
         Object[] r0 = rows.getFirst();
         // column order matches the schema
-        assertThat(r0[0]).isEqualTo(1);          // i8  -> Integer
+        // each narrow integer boxes as its SQL type's class, which Calcite's generated code casts to
+        assertThat(r0[0]).isEqualTo((byte) 1);   // i8  -> Byte, as TINYINT needs
+        assertThat(r0[1]).isEqualTo((short) 10); // i16 -> Short, as SMALLINT needs
         assertThat(r0[2]).isEqualTo(100);        // i32 -> Integer
         assertThat(r0[3]).isEqualTo(1000L);      // i64 -> Long
+        assertThat(r0[4]).isEqualTo((short) 4);  // u8  -> Short (zero-extended into SMALLINT)
+        assertThat(r0[5]).isEqualTo(40);         // u16 -> Integer (zero-extended into INTEGER)
         assertThat(r0[7]).isEqualTo(4000L);      // u64 -> Long
         assertThat(r0[8]).isEqualTo(1.5f);       // f32 -> Float, as its REAL type needs
         assertThat(r0[9]).isEqualTo(1.25);       // f64 -> Double
