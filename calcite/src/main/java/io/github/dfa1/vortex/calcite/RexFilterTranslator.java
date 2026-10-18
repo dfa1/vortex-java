@@ -13,6 +13,7 @@ import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -268,10 +269,10 @@ final class RexFilterTranslator {
         SqlKind kind = call.getKind();
         RexInputRef ref;
         RexLiteral lit;
-        if (ops.get(0) instanceof RexInputRef r && ops.get(1) instanceof RexLiteral l) {
+        if (columnRef(ops.get(0)) instanceof RexInputRef r && ops.get(1) instanceof RexLiteral l) {
             ref = r;
             lit = l;
-        } else if (ops.get(0) instanceof RexLiteral l && ops.get(1) instanceof RexInputRef r) {
+        } else if (ops.get(0) instanceof RexLiteral l && columnRef(ops.get(1)) instanceof RexInputRef r) {
             // `5 < x` is `x > 5`
             ref = r;
             lit = l;
@@ -294,6 +295,42 @@ final class RexFilterTranslator {
             case GREATER_THAN_OR_EQUAL -> RowFilter.gte(col, cmp);
             default -> throw new IllegalStateException("unreachable kind: " + kind);
         });
+    }
+
+    /// The column a comparison operand reads: a bare reference, or one under a `CAST` that widens it
+    /// without loss, which Calcite adds when a narrow column meets a wider literal
+    /// (`order_serverId < 5` arrives as `CAST($5):INTEGER < 5` for a `SMALLINT` column). Comparing
+    /// the column itself is then the same comparison. `null` for anything else, including a `CAST`
+    /// that can change a value (`BIGINT` to `DOUBLE` rounds past 2^53).
+    private static RexInputRef columnRef(RexNode node) {
+        if (node instanceof RexInputRef ref) {
+            return ref;
+        }
+        if (node instanceof RexCall cast && cast.getKind() == SqlKind.CAST
+                && cast.getOperands().getFirst() instanceof RexInputRef ref
+                && widens(ref.getType().getSqlTypeName(), cast.getType().getSqlTypeName())) {
+            return ref;
+        }
+        return null;
+    }
+
+    private static boolean widens(SqlTypeName from, SqlTypeName to) {
+        int fromRank = integerRank(from);
+        int toRank = integerRank(to);
+        if (fromRank > 0 && toRank > 0) {
+            return toRank >= fromRank;
+        }
+        return (from == SqlTypeName.REAL || from == SqlTypeName.FLOAT) && to == SqlTypeName.DOUBLE;
+    }
+
+    private static int integerRank(SqlTypeName type) {
+        return switch (type) {
+            case TINYINT -> 1;
+            case SMALLINT -> 2;
+            case INTEGER -> 3;
+            case BIGINT -> 4;
+            default -> 0;
+        };
     }
 
     /// Coerces a SQL literal to the Java type the column's zone-map statistics are stored as, so

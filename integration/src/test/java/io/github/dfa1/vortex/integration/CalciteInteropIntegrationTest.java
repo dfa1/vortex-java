@@ -349,6 +349,56 @@ class CalciteInteropIntegrationTest {
         }
     }
 
+    @ParameterizedTest(name = "where {0}")
+    @CsvSource(delimiter = '|', value = {
+            "i16 < 5                 | i16 + 0 < 5",
+            "i16 >= -3 and i16 <> 7  | i16 + 0 >= -3 and i16 + 0 <> 7",
+            "2 > i16                 | 2 > i16 + 0"})
+    void jniWriter_aggregateWhereOnSmallint_isPushedDownAndEqualsTheScan(String where, String oracle, @TempDir Path tmp)
+            throws Exception {
+        // Given — Calcite compares a SMALLINT column through CAST(col AS INTEGER); the filter
+        // translation rejected the cast, so every aggregate filtered on such a column scanned
+        Path file = tmp.resolve("jni_smallint.vortex");
+        Schema schema = new Schema(List.of(
+                Field.notNullable("s", new ArrowType.Utf8()),
+                Field.notNullable("i16", new ArrowType.Int(16, true))));
+        String[] symbols = {"AAPL", "MSFT", "NVDA"};
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+            org.apache.arrow.vector.VarCharVector s = (org.apache.arrow.vector.VarCharVector) root.getVector("s");
+            org.apache.arrow.vector.SmallIntVector i16 = (org.apache.arrow.vector.SmallIntVector) root.getVector("i16");
+            s.allocateNew(BATCH_ROWS);
+            i16.allocateNew(BATCH_ROWS);
+            for (int i = 0; i < BATCH_ROWS; i++) {
+                s.setSafe(i, symbols[i % symbols.length].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                i16.set(i, (short) (i % 20 - 10));
+            }
+            root.setRowCount(BATCH_ROWS);
+            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
+                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
+            }
+        }
+        String select = "select s, count(*), min(i16), max(i16) from vtx.t where ";
+        String sql = select + where + " group by s order by s";
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            String plan;
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + sql)) {
+                rs.next();
+                plan = rs.getString(1);
+            }
+            List<String> result = sqlRows(conn, sql);
+
+            // Then
+            assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+            assertThat(result).isEqualTo(sqlRows(conn, select + oracle + " group by s order by s"));
+        }
+    }
+
     private static List<String> sqlRows(Connection conn, String sql) throws Exception {
         List<String> out = new java.util.ArrayList<>();
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
