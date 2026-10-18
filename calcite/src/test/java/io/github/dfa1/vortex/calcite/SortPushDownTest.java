@@ -26,8 +26,10 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [VortexSortPushDownRule] answers `ORDER BY ... LIMIT n` from a bounded heap over the scan. Each
-/// query is checked against the same query with the sort key wrapped in `+ 0`, which the rule cannot
-/// push, so Calcite sorts it: both must return the same rows in the same order.
+/// query is checked against the same query with the sort key wrapped in `CASE WHEN id > -1 THEN ...
+/// END` (`id` is never null), which the rule cannot push, so Calcite sorts it: both must return the
+/// same rows in the same order. A plainer wrapper such as `x + 0` does not work: Calcite simplifies
+/// it back to `x` and pushes the oracle down too, so the test asserts the oracle really scans.
 class SortPushDownTest {
 
     private static final int ROWS = 5_000;
@@ -67,14 +69,14 @@ class SortPushDownTest {
 
     @ParameterizedTest(name = "{0}")
     @CsvSource(delimiter = '|', value = {
-            "order by x desc limit 10                         | order by x + 0 desc limit 10",
+            "order by x desc limit 10                         | order by case when id > -1 then x end desc limit 10",
             // Calcite puts nulls last ascending and first descending unless told otherwise
-            "order by x limit 10                              | order by x + 0 limit 10",
-            "order by x desc nulls last limit 10              | order by x + 0 desc nulls last limit 10",
-            "order by x nulls first limit 10                  | order by x + 0 nulls first limit 10",
-            "order by s, id desc limit 12 offset 3            | order by s, id + 0 desc limit 12 offset 3",
-            "where s = 'echo' order by x desc limit 7         | where s = 'echo' order by x + 0 desc limit 7",
-            "where id < 50 order by id desc limit 100         | where id < 50 order by id + 0 desc limit 100"})
+            "order by x limit 10                              | order by case when id > -1 then x end limit 10",
+            "order by x desc nulls last limit 10              | order by case when id > -1 then x end desc nulls last limit 10",
+            "order by x nulls first limit 10                  | order by case when id > -1 then x end nulls first limit 10",
+            "order by s, id desc limit 12 offset 3            | order by case when id > -1 then s end, id desc limit 12 offset 3",
+            "where s = 'echo' order by x desc limit 7         | where s = 'echo' order by case when id > -1 then x end desc limit 7",
+            "where id < 50 order by id desc limit 100         | where id < 50 order by case when id > -1 then id end desc limit 100"})
     void orderByLimit_returnsTheRowsCalciteSortReturns(String tail, String oracleTail) throws Exception {
         // Given
         String sql = "select id, x, s from vtx.t " + tail;
@@ -83,8 +85,10 @@ class SortPushDownTest {
         List<String> result = rows(sql);
 
         // Then — pushed down, and equal to Calcite's own sort
+        String oracle = "select id, x, s from vtx.t " + oracleTail;
         assertThat(plan(sql)).contains("Values").doesNotContain("TableScan");
-        assertThat(result).isEqualTo(rows("select id, x, s from vtx.t " + oracleTail)).isNotEmpty();
+        assertThat(plan(oracle)).contains("TableScan");
+        assertThat(result).isEqualTo(rows(oracle)).isNotEmpty();
     }
 
     @ParameterizedTest

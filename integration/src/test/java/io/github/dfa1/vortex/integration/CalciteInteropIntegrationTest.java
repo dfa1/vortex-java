@@ -284,13 +284,14 @@ class CalciteInteropIntegrationTest {
 
     @ParameterizedTest(name = "{0}")
     @CsvSource(delimiter = '|', value = {
-            "order by x desc limit 10                     | order by x + 0 desc limit 10",
-            "order by n nulls first, id limit 15 offset 2 | order by n + 0 nulls first, id limit 15 offset 2",
-            "where s = 'AAPL' order by n desc limit 8     | where s = 'AAPL' order by n + 0 desc limit 8"})
+            "order by x desc limit 10                     | order by case when id > -1 then x end desc limit 10",
+            "order by n nulls first, id limit 15 offset 2 | order by case when id > -1 then n end nulls first, id limit 15 offset 2",
+            "where s = 'AAPL' order by n desc limit 8     | where s = 'AAPL' order by case when id > -1 then n end desc limit 8"})
     void jniWriter_orderByLimit_returnsTheRowsCalciteSortReturns(String tail, String oracleTail, @TempDir Path tmp)
             throws Exception {
-        // Given — ORDER BY ... LIMIT is answered from a bounded heap over the scan; wrapping the key
-        // in "+ 0" keeps the rule out, so Calcite sorts the same Rust-written rows itself
+        // Given — ORDER BY ... LIMIT is answered from a bounded heap over the scan; a CASE around the
+        // key keeps the rule out (Calcite would simplify "x + 0" back to x), so Calcite sorts the same
+        // Rust-written rows itself
         Path file = tmp.resolve("jni_sort.vortex");
         writeGroupsWithJni(file, new String[]{"AAPL", "MSFT", "NVDA", null});
         String select = "select id, n, x, s from vtx.t ";
@@ -306,6 +307,11 @@ class CalciteInteropIntegrationTest {
 
             // Then
             assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("explain plan for " + select + oracleTail)) {
+                rs.next();
+                assertThat(rs.getString(1)).contains("TableScan");
+            }
             assertThat(result).isEqualTo(sqlRows(conn, select + oracleTail)).isNotEmpty();
         }
     }
