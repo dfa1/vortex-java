@@ -311,6 +311,81 @@ class RustWritesJavaReadsIntegrationTest {
         assertThat(result).isEqualTo(1);
     }
 
+    @Test
+    void jniWriter_lowCardinalityUtf8_cachedDictStringsMatchRows(@TempDir Path tmp) throws IOException {
+        // Given — Rust dict-encodes a low-cardinality string column; Java caches one decoded String
+        // per dictionary entry (#551). Every row must still read its own value, through a full scan
+        // and through a filtered scan (whose predicate reads the same cached strings). The non-ASCII
+        // value checks the cached entry is the UTF-8 decode, not a byte-per-char shortcut.
+        String[] symbols = {"AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "café"};
+        int n = 100_000;
+        String[] values = new String[n];
+        for (int i = 0; i < n; i++) {
+            values[i] = symbols[(i * 7 + i / 3) % symbols.length];
+        }
+        Path file = tmp.resolve("jni_utf8_lowcard.vtx");
+        writeJniUtf8(file, values);
+        long expectedMatches = Arrays.stream(values).filter("café"::equals).count();
+
+        // When
+        var all = new ArrayList<String>();
+        var filtered = new ArrayList<String>();
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            try (var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+                iter.forEachRemaining(c -> {
+                    VarBinArray k = c.column(ColumnName.of("k"));
+                    assertThat(k).isInstanceOf(io.github.dfa1.vortex.reader.array.VarBinDictArray.class);
+                    for (long i = 0; i < k.length(); i++) {
+                        all.add(k.getString(i));
+                    }
+                });
+            }
+            // The scan filter only prunes zones; rows are matched per row, as the Calcite adapter does
+            var filter = io.github.dfa1.vortex.reader.RowFilter.eq(ColumnName.of("k"), "café");
+            try (var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all().withFilter(filter))) {
+                iter.forEachRemaining(c -> {
+                    VarBinArray k = c.column(ColumnName.of("k"));
+                    for (long i = 0; i < k.length(); i++) {
+                        if (io.github.dfa1.vortex.reader.compute.Compute.matches(c, filter, i)) {
+                            filtered.add(k.getString(i));
+                        }
+                    }
+                });
+            }
+        }
+
+        // Then
+        assertThat(all).containsExactly(values);
+        assertThat(filtered).hasSize((int) expectedMatches).containsOnly("café");
+    }
+
+    @Test
+    void jniWriter_singleValueUtf8_cachedConstantStringMatchesRows(@TempDir Path tmp) throws IOException {
+        // Given — one distinct value: Rust writes it as a constant, which Java reads as a
+        // VarBinConstantArray that decodes the value once and shares it across rows (#551)
+        int n = 10_000;
+        String[] values = new String[n];
+        Arrays.fill(values, "café");
+        Path file = tmp.resolve("jni_utf8_single.vtx");
+        writeJniUtf8(file, values);
+
+        // When
+        var result = new ArrayList<String>();
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                VarBinArray k = c.column(ColumnName.of("k"));
+                assertThat(k).isInstanceOf(io.github.dfa1.vortex.reader.array.VarBinConstantArray.class);
+                for (long i = 0; i < k.length(); i++) {
+                    result.add(k.getString(i));
+                }
+            });
+        }
+
+        // Then
+        assertThat(result).containsExactly(values);
+    }
+
     private static long countChunks(Path file, io.github.dfa1.vortex.reader.ScanOptions opts) throws IOException {
         long[] count = {0};
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());

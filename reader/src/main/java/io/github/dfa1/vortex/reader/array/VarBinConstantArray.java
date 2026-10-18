@@ -13,12 +13,46 @@ import java.util.function.IntConsumer;
 /// materialization occurs — every accessor returns the same shared bytes, mirroring the
 /// `LazyConstantXxxArray` family the primitive array types use for the same encoding.
 ///
-/// @param dtype  logical element type (Utf8 or Binary)
-/// @param length number of logical rows the constant is broadcast across
-/// @param bytes  the constant value's raw bytes, shared across every row; [#getBytes(long)]
-///               clones it per that method's copy contract
-@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-public record VarBinConstantArray(DType dtype, long length, byte[] bytes) implements VarBinArray {
+/// [#getString(long)] decodes the value once and returns that `String` for every row (#551): a
+/// single-value dictionary collapses to this array, and decoding per row would pay the copy and
+/// UTF-8 decode the dictionary cache avoids.
+public final class VarBinConstantArray implements VarBinArray {
+
+    private final DType dtype;
+    private final long length;
+    private final byte[] bytes;
+    /// Decoded on the first [#getString(long)]. Unsynchronized on purpose: `String` is immutable,
+    /// so a race only decodes the value twice.
+    private String string;
+
+    /// Creates a constant array.
+    ///
+    /// @param dtype  logical element type (Utf8 or Binary)
+    /// @param length number of logical rows the constant is broadcast across
+    /// @param bytes  the constant value's raw bytes, shared across every row; [#getBytes(long)]
+    ///               clones it per that method's copy contract
+    public VarBinConstantArray(DType dtype, long length, byte[] bytes) {
+        this.dtype = dtype;
+        this.length = length;
+        this.bytes = bytes;
+    }
+
+    @Override
+    public DType dtype() {
+        return dtype;
+    }
+
+    @Override
+    public long length() {
+        return length;
+    }
+
+    /// Returns the constant value's raw bytes, shared rather than copied.
+    ///
+    /// @return the shared bytes; callers must not mutate them
+    public byte[] bytes() {
+        return bytes;
+    }
 
     @Override
     public MemorySegment bytesSegment() {
@@ -42,7 +76,12 @@ public record VarBinConstantArray(DType dtype, long length, byte[] bytes) implem
     @Override
     public String getString(long i) {
         Objects.checkIndex(i, length);
-        return new String(bytes, StandardCharsets.UTF_8);
+        String s = string;
+        if (s == null) {
+            s = new String(bytes, StandardCharsets.UTF_8);
+            string = s;
+        }
+        return s;
     }
 
     @Override
