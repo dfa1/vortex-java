@@ -474,30 +474,39 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             options = ScanOptions.columns(scanColumns.toArray(ColumnName[]::new)).withFilter(filter);
         }
         java.util.Comparator<Object[]> order = rowOrder(keys);
+        // equal keys rank by scan position: Calcite's sort is stable, so ties come out in scan order
+        java.util.Comparator<Ranked> ranking = java.util.Comparator.<Ranked, Object[]>comparing(Ranked::row, order)
+                .thenComparingLong(Ranked::position);
         // the worst kept row at the head, so a better row evicts it
-        java.util.PriorityQueue<Object[]> heap = new java.util.PriorityQueue<>(count + 1, order.reversed());
+        java.util.PriorityQueue<Ranked> heap = new java.util.PriorityQueue<>(count + 1, ranking.reversed());
         VortexEnumerator rows = new VortexEnumerator(file, new AtomicLong(), options, outNames, outTypes, filter);
-        // only the key columns are read per row; a row is built once it beats the worst one kept
+        // only the key columns are read per row; a row is built once it beats the worst one kept. A
+        // later row never beats an equal key, so the first rows of a tie are the ones kept
         Object[] probe = new Object[cols.length];
+        long position = 0;
         try {
             while (rows.advance()) {
                 if (heap.size() == count) {
                     for (SortKey key : keys) {
                         probe[key.field()] = rows.column(key.field());
                     }
-                    if (order.compare(probe, heap.peek()) >= 0) {
+                    if (order.compare(probe, heap.peek().row()) >= 0) {
+                        position++;
                         continue;
                     }
                     heap.poll();
                 }
-                heap.add(rows.row());
+                heap.add(new Ranked(rows.row(), position++));
             }
         } finally {
             rows.close();
         }
-        List<Object[]> result = new ArrayList<>(heap);
-        result.sort(order);
-        return result;
+        return heap.stream().sorted(ranking).map(Ranked::row).toList();
+    }
+
+    /// A row kept by [#topN(int[], RowFilter, List, int)] with its position in the scan.
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
+    private record Ranked(Object[] row, long position) {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
