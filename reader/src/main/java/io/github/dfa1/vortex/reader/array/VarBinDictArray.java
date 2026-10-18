@@ -105,6 +105,23 @@ public final class VarBinDictArray implements VarBinArray {
         return dictCodesPType;
     }
 
+    /// Returns the dictionary values as an array, one element per entry, so a predicate can be
+    /// evaluated once per entry instead of once per row (Rust's `DictArray::values`).
+    ///
+    /// @return a zero-copy view over the dictionary entries
+    public VarBinOffsetArray values() {
+        long dictSize = Math.max(0, dictValOffsets.byteSize() / dictValOffPType.byteSize() - 1);
+        return new VarBinOffsetArray(dtype, dictSize, bytesSegment, dictValOffsets, dictValOffPType);
+    }
+
+    /// Returns the dictionary code of row `i`: the index of its entry in [#values()].
+    ///
+    /// @param i zero-based row index
+    /// @return the code, widened to a signed long; not checked against the dictionary size
+    public long code(long i) {
+        return dictReadCode(i);
+    }
+
     @Override
     public byte[] getBytes(long i) {
         long code = dictReadCode(i);

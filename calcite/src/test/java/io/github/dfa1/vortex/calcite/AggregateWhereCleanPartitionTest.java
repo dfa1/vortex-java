@@ -312,7 +312,7 @@ class AggregateWhereCleanPartitionTest {
         // Given a NaN price alongside ordinary values that would all otherwise satisfy the filter
         // below. A mix like this makes every zone at best a BOUNDARY under the floating column's
         // classify (never IN), so the fold abandons to a full scan — this test proves that scan
-        // path (VortexEnumerator -> Compute#matches -> PredicateEvaluator) orders NaN as the maximum
+        // path (VortexEnumerator -> Compute#matcher -> PrimitiveFilter) orders NaN as the maximum
         // (Rust's total order, #518) too, not just the fold's own classify.
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("price"), ColumnName.of("vol")),

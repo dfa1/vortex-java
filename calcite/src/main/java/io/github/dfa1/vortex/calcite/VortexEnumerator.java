@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongPredicate;
 
 /// Streaming [Enumerator] over a Vortex scan: advances chunk by chunk, decoding each requested
 /// column once per chunk and materializing one `Object[]` row per [#moveNext()]. Rows are not
@@ -48,6 +49,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     private final VortexReader reader;
     private final ScanIterator scan;
     private Chunk chunk;
+    private LongPredicate rowMatcher;
     private Object[] columns;
     private long rowInChunk;
     private long chunkRows;
@@ -61,7 +63,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     /// @param types                  output column dtypes, parallel to `names`
     /// @param exactFilter            a predicate [VortexTable#scan(DataContext, java.util.List, int[])]
     ///                               removed from Calcite's own re-check list, enforced here row-by-row
-    ///                               via [Compute#matches(Chunk, RowFilter, long)] so the result stays
+    ///                               via [Compute#matcher(Chunk, RowFilter)] so the result stays
     ///                               exact — or `null` when every pushed predicate is still Calcite's to
     ///                               re-check
     VortexEnumerator(Path file, AtomicLong chunksScannedLastQuery, ScanOptions options,
@@ -101,7 +103,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     public boolean moveNext() {
         while (true) {
             if (chunk != null && rowInChunk < chunkRows) {
-                if (exactFilter != null && !Compute.matches(chunk, exactFilter, rowInChunk)) {
+                if (exactFilter != null && !rowMatcher.test(rowInChunk)) {
                     rowInChunk++;
                     continue;
                 }
@@ -124,6 +126,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
             chunksScannedLastQuery.incrementAndGet();
             chunkRows = chunk.rowCount();
             rowInChunk = 0;
+            rowMatcher = exactFilter == null ? null : Compute.matcher(chunk, exactFilter);
             columns = new Object[names.length];
             for (int c = 0; c < names.length; c++) {
                 columns[c] = chunk.column(names[c]);
