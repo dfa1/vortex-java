@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - SQL `GROUP BY` on a dictionary-encoded string column is 10 to 30 times faster: rows are counted and summed per dictionary code instead of being built one by one for Calcite. ([#555](https://github.com/dfa1/vortex-java/pull/555))
+- A filtered SQL `COUNT`/`MIN`/`MAX` answered from zone maps decodes the zones its filter cuts once per query instead of up to six times. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - The Calcite adapter pushes `IN` lists, comparisons with the literal on the left and `IS NULL` into the scan, so they prune chunks instead of being re-checked row by row. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter answers a filtered `COUNT`, `MIN` or `MAX` from Rust's `vortex.zoned` zone maps, the default, decoding only the zones the filter cuts. ([#550](https://github.com/dfa1/vortex-java/pull/550))
 - The Calcite adapter reads a table's schema and row count once instead of reopening the file for every planning call. ([#550](https://github.com/dfa1/vortex-java/pull/550))
