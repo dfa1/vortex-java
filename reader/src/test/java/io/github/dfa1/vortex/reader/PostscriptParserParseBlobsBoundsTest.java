@@ -29,6 +29,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// legal value must parse, the first illegal value must throw a [VortexException].
 class PostscriptParserParseBlobsBoundsTest {
 
+    /// Every file must embed a dtype (Rust refuses one without), so layout-only cases pass a minimal one.
+    private static final MemorySegment I64_DTYPE = MemorySegment.ofBuffer(MalformedFiles.buildI64Dtype());
+
     // ── FbsLayout encoding-index bound: encIdx < 0 || encIdx >= layoutSpecs.size() ──
 
     @Test
@@ -38,7 +41,7 @@ class PostscriptParserParseBlobsBoundsTest {
         MemorySegment layout = flatLayout(0);
 
         // When / Then — the top valid index must be accepted (kills `>=` relaxed to `>`)
-        assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, null))
+        assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, I64_DTYPE))
                 .doesNotThrowAnyException();
     }
 
@@ -49,7 +52,7 @@ class PostscriptParserParseBlobsBoundsTest {
         MemorySegment layout = flatLayout(1);
 
         // When / Then
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, null))
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, I64_DTYPE))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("encoding index");
     }
@@ -64,7 +67,7 @@ class PostscriptParserParseBlobsBoundsTest {
         MemorySegment layout = nestedLayout(63);
 
         // When / Then
-        assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, null))
+        assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, I64_DTYPE))
                 .doesNotThrowAnyException();
     }
 
@@ -75,7 +78,7 @@ class PostscriptParserParseBlobsBoundsTest {
         MemorySegment layout = nestedLayout(64);
 
         // When / Then
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, null))
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, I64_DTYPE))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("nest deeper than 64");
     }
@@ -145,7 +148,7 @@ class PostscriptParserParseBlobsBoundsTest {
         MemorySegment layout = flatLayoutWithMetadata((int) PostscriptParser.MAX_LAYOUT_METADATA_BYTES.bytes());
 
         // When / Then
-        assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, null))
+        assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, I64_DTYPE))
                 .doesNotThrowAnyException();
     }
 
@@ -156,7 +159,7 @@ class PostscriptParserParseBlobsBoundsTest {
         MemorySegment layout = flatLayoutWithMetadata((int) PostscriptParser.MAX_LAYOUT_METADATA_BYTES.bytes() + 1);
 
         // When / Then
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, null))
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, I64_DTYPE))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("metadata size");
     }
@@ -188,20 +191,20 @@ class PostscriptParserParseBlobsBoundsTest {
 
     // ── parseBlobs dtype-presence guard: dtypeBuf != null && byteSize() > 0 ──────────
 
-    @Test
-    void parseBlobs_emptyDtypeBlob_yieldsNullDtype() {
-        // Given — a present but zero-length dtype blob. The guard treats an empty blob as "no dtype"
-        // (`byteSize() > 0`); relaxing `> 0` to `>= 0` would instead feed the empty buffer to
-        // getRootAsFbsDType and throw. Pins that an empty blob parses to a null dtype.
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void parseBlobs_noDtypeBlob_throws(boolean emptyBlob) {
+        // Given — no dtype blob, or a present but zero-length one. Rust opens such a file only when
+        // the caller supplies the dtype (VortexOpenOptions::with_dtype); Java has no such option,
+        // and a null dtype failed the scan later with a NullPointerException (a fuzzer finding).
         MemorySegment footer = footerWithLayoutSpecs("vortex.flat");
         MemorySegment layout = flatLayout(0);
-        MemorySegment emptyDtype = MemorySegment.ofArray(new byte[0]);
+        MemorySegment dtype = emptyBlob ? MemorySegment.ofArray(new byte[0]) : null;
 
-        // When
-        DType result = PostscriptParser.parseBlobs(footer, layout, emptyDtype).dtype();
-
-        // Then
-        assertThat(result).isNull();
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("doesn't embed a DType");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────────

@@ -29,6 +29,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 ///   [IllegalArgumentException] that [LayoutId#parse] raises for a blank id.
 class PostscriptParserLayoutIdTest {
 
+    /// Every file must embed a dtype (Rust refuses one without), so layout-only cases pass a minimal one.
+    private static final MemorySegment I64_DTYPE = MemorySegment.ofBuffer(MalformedFiles.buildI64Dtype());
+
     @ParameterizedTest
     @ValueSource(strings = {"vortex.stats", "vortex.zoned"})
     void convertLayout_zonedAlias_parsesToZonedLayoutWithPassthroughChild(String zonedSpec) {
@@ -38,7 +41,7 @@ class PostscriptParserLayoutIdTest {
         MemorySegment layout = zonedOverFlatLayout();
 
         // When
-        Layout result = PostscriptParser.parseBlobs(footer, layout, null).layout();
+        Layout result = PostscriptParser.parseBlobs(footer, layout, I64_DTYPE).layout();
 
         // Then — both aliases resolve to a zoned layout with the same shape: isZoned() is true and
         // the single flat child is preserved for pass-through decoding.
@@ -57,7 +60,7 @@ class PostscriptParserLayoutIdTest {
         MemorySegment layout = flatLayout();
 
         // When / Then
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, null))
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, I64_DTYPE))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("blank layout id");
     }
