@@ -243,6 +243,20 @@ class RunEndEncodingDecoderTest {
                 .hasMessageContaining("expected a VarBin values child");
     }
 
+    @Test
+    void zeroRuns_withZeroRows_decodesEmpty() {
+        // Given — an empty run-end array, which Rust writes and reads; its empty ends buffer was
+        // refused as "empty ends buffer for 0 run(s)"
+        MemorySegment empty = MemorySegment.ofArray(new byte[0]);
+        MemorySegment[] segs = {empty, empty};
+
+        // When
+        Array result = decode(DType.I32, PType.U8, 0, 0, 0, segs, primitiveNode(0), primitiveNode(1));
+
+        // Then
+        assertThat(result.length()).isZero();
+    }
+
     private static Array decode(DType dtype, PType endsPtype, long numRuns, long offset, long n,
             MemorySegment[] segs, ArrayNode endsNode, ArrayNode valuesNode) {
         MemorySegment meta = MemorySegment.ofArray(
