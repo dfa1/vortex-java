@@ -410,13 +410,16 @@ class CalciteInteropIntegrationTest {
     @ParameterizedTest(name = "{0}")
     @CsvSource(delimiter = '|', value = {
             "select g, count(*), sum(id), min(n), max(n) from vtx.t group by g order by g "
-                    + "| select g + 0, count(*), sum(id), min(n), max(n) from vtx.t group by g + 0 order by 1",
+                    + "| select case when id > -1 then g end, count(*), sum(id), min(n), max(n) from vtx.t "
+                    + "group by case when id > -1 then g end order by 1",
             "select g, count(n) from vtx.t where id < 1500 group by g order by g "
-                    + "| select g + 0, count(n) from vtx.t where id + 0 < 1500 group by g + 0 order by 1"})
+                    + "| select case when id > -1 then g end, count(n) from vtx.t where id + 0 < 1500 "
+                    + "group by case when id > -1 then g end order by 1"})
     void jniWriter_groupByInteger_isPushedDownAndEqualsTheScan(String sql, String oracle, @TempDir Path tmp)
             throws Exception {
         // Given — a GROUP BY on an integer column folds per value through a primitive map instead of
-        // building a row per record; "g + 0" keeps the rule out, so Calcite groups the same rows
+        // building a row per record; a CASE around the key keeps the rule out (Calcite simplifies
+        // "g + 0" back to g), so Calcite groups the same rows
         Path file = tmp.resolve("jni_group_int.vortex");
         writeIdsWithJni(file, BATCHES, BATCH_ROWS);
 
@@ -431,6 +434,10 @@ class CalciteInteropIntegrationTest {
 
             // Then
             assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + oracle)) {
+                rs.next();
+                assertThat(rs.getString(1)).contains("TableScan");
+            }
             assertThat(result).isEqualTo(sqlRows(conn, oracle)).hasSize(7);
         }
     }
