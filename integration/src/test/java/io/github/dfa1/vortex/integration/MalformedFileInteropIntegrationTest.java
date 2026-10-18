@@ -41,7 +41,10 @@ class MalformedFileInteropIntegrationTest {
             "bitpacked-struct-dtype",
             // A struct dtype with no names vector, which Rust refuses at open: vortex-java read it
             // as a 0-field struct and failed the scan with ArrayIndexOutOfBoundsException.
-            "struct-dtype-missing-names"})
+            "struct-dtype-missing-names",
+            // A vortex.zstd_buffers whose wrapped encoding id holds a control character: escaped as
+            // IllegalArgumentException from EncodingId.parse.
+            "zstd-buffers-inner-id-control-char"})
     void bothReadersReject(String name) throws URISyntaxException {
         // Given
         Path file = Path.of(Objects.requireNonNull(

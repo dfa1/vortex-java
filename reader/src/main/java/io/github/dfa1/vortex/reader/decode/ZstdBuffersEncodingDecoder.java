@@ -82,9 +82,19 @@ public final class ZstdBuffersEncodingDecoder implements EncodingDecoder {
         // Empty inner metadata stays an empty segment, not null: an all-default proto (e.g. varbin
         // with U8 offsets) encodes to zero bytes, and decoders read null as "missing metadata".
         byte[] innerMetadata = meta.inner_metadata() == null ? new byte[0] : meta.inner_metadata();
-        ArrayNode inner = new ArrayNode(EncodingId.parse(meta.inner_encoding_id()),
+        ArrayNode inner = new ArrayNode(innerEncodingId(meta.inner_encoding_id()),
                 MemorySegment.ofArray(innerMetadata), ctx.node().children(), innerBuffers);
         return new DecodeContext(inner, ctx.dtype(), ctx.rowCount(), segments, ctx.registry(), ctx.arena());
+    }
+
+    /// The wrapped encoding's id comes from the file's metadata, so an id [EncodingId#parse] refuses
+    /// (blank, or holding a control character) is corrupt input, as at the footer.
+    private static EncodingId innerEncodingId(String raw) {
+        try {
+            return EncodingId.parse(raw);
+        } catch (IllegalArgumentException e) {
+            throw new VortexException(EncodingId.VORTEX_ZSTD_BUFFERS, "invalid inner encoding id: " + e.getMessage());
+        }
     }
 
     private static long alignment(int declared) {
