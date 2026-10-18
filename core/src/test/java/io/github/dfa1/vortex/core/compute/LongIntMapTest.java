@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.writer.encode;
+package io.github.dfa1.vortex.core.compute;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

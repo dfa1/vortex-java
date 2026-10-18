@@ -1,11 +1,11 @@
-package io.github.dfa1.vortex.writer.encode;
+package io.github.dfa1.vortex.core.compute;
 
 import java.util.Arrays;
 
 /// Open-addressing map from a 64-bit key to an `int` value, for the write path's per-row scans.
 ///
 /// The encode path kept growing private copies of this — a distinct-value counter in
-/// [ArrayStats], a value-to-code index in `DictEncodingEncoder`, another in
+/// `ArrayStats`, a value-to-code index in `DictEncodingEncoder`, another in
 /// `io.github.dfa1.vortex.writer.DictColumnState`, and a capped distinct set in the same class.
 /// They existed because probing a `HashMap<Object, Integer>` boxes a key per row, which profiled
 /// as the hottest frame of a write more than once. This is that structure, once.
@@ -195,6 +195,8 @@ public final class LongIntMap {
     public record Entry(long key, int value) {
     }
 
+    /// Returns how many distinct keys are stored.
+    ///
     /// @return the number of distinct keys stored
     public int size() {
         return size;

@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.writer.encode.LongIntMap;
+import io.github.dfa1.vortex.core.compute.LongIntMap;
 import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
