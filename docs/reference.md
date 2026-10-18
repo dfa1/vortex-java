@@ -683,6 +683,29 @@ by hand instead of going through `connect`.
 
 ---
 
+## JDBC driver
+
+### `VortexDriver` (`io.github.dfa1.vortex.jdbc.driver.VortexDriver`)
+
+Artifact `vortex-jdbc-driver`: a `java.sql.Driver` registered through
+`META-INF/services/java.sql.Driver`, for SQL tools that take a URL. It parses the URL into a
+[`VortexCalciteOptions`](#vortexcalcite-iogithubdfa1vortexcalcitevortexcalcite) and connects through
+`VortexCalcite.connect(options)`, so it behaves exactly like the Java API.
+
+| URL                                                  | Meaning                                                                         |
+|------------------------------------------------------|---------------------------------------------------------------------------------|
+| `jdbc:vortex:<dir>`                                  | Every `*.vortex` in `<dir>` is a table of schema `vtx`, named after the file     |
+| `...?schema=<name>`                                  | Registers the tables under `<name>` instead of `vtx`                             |
+| `...?table.<name>=<path>`                            | Binds one file; wins over a discovered file of the same name. `<dir>` may be empty if at least one is given |
+
+Values are URL-decoded. An unknown key, a pair without `=`, or a URL exposing no files throws an
+`SQLException` with state `08001`. Driver properties (`user`, `password`) are ignored.
+
+The `-all` classifier is the jar to hand to a tool: it merges `META-INF/services` (ours and
+Calcite's `java.sql.Driver` entries), strips signature files and sets `Enable-Native-Access`.
+`ShadedJarIT` loads it alone in an isolated classloader and runs a query, so a lost service entry or a
+stale signature fails `verify`. Needs JDK 25 or later.
+
 ## CLI
 
 The `-all` uber-jar is self-contained: pure-Java code plus the native `libzstd` for all

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.dfa1.vortex</groupId>
+        <artifactId>vortex-java</artifactId>
+        <version>0.17.3-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vortex-jdbc-driver</artifactId>
+
+    <name>vortex-jdbc-driver</name>
+    <description>JDBC driver (jdbc:vortex:) to query Vortex files with SQL from any JDBC tool, shipped as a self-contained jar.</description>
+
+    <properties>
+        <!-- Calcite pulls in protobuf-java, whose UnsafeUtil calls sun.misc.Unsafe (not ours: we never use Unsafe). -->
+        <test.unsafe.args>--sun-misc-unsafe-memory-access=allow</test.unsafe.args>
+    </properties>
+
+    <dependencies>
+        <!-- production -->
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-calcite</artifactId>
+        </dependency>
+        <dependency>
+            <!-- The driver is an embedded engine run from an IDE, not a library: the shaded jar must
+                 read vortex.zstd files on a machine with no system libzstd, so the all-platform
+                 natives the FFM binding loads are bundled (the library modules keep zstd optional). -->
+            <groupId>io.github.dfa1.zstd</groupId>
+            <artifactId>zstd</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.zstd</groupId>
+            <artifactId>zstd-platform</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- testing -->
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-core</artifactId>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-writer</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- Runs ShadedJarIT against the -all jar, so it must come after package (surefire is too early). -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*IT.java</include>
+                    </includes>
+                    <argLine>@{argLine} --sun-misc-unsafe-memory-access=allow</argLine>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>all</shadedClassifierName>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                                    <projectName>vortex-jdbc-driver</projectName>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer" />
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <!-- Opts the FFM downcalls (zstd natives) in once at build time, so an IDE
+                                             that loads the jar need not enable native access itself (JEP 472). -->
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                    </manifestEntries>
+                                </transformer>
+                                <!-- Keeps every java.sql.Driver entry (ours and Calcite's) in one file. -->
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

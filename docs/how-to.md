@@ -592,6 +592,33 @@ policy.
 
 ---
 
+## Query Vortex files from an SQL tool (IntelliJ, DBeaver)
+
+`vortex-jdbc-driver` is a JDBC driver: one self-contained jar (Calcite and the Vortex modules
+inside), so a tool that only takes a driver jar and a URL can query `.vortex` files. It is an
+embedded engine like DuckDB or SQLite: the query runs inside the tool's JVM, which must be JDK 25 or
+later.
+
+1. Build or download `vortex-jdbc-driver-<version>-all.jar`.
+2. In IntelliJ: *Database* → *+* → *Driver*; add that jar, and set the class to
+   `io.github.dfa1.vortex.jdbc.driver.VortexDriver`. In DBeaver: *Database* → *Driver Manager* →
+   *New*, same jar and class.
+3. Create a data source with the URL:
+
+```
+jdbc:vortex:/data/vortex
+jdbc:vortex:/data/vortex?schema=lake&table.trades=/other/trades.vortex
+```
+
+Every `*.vortex` file in the directory becomes a table named after the file (`ohlc.vortex` is
+`vtx.ohlc`); columns come from the file. `schema` renames `vtx`, and `table.<name>=<path>` adds or
+overrides one file. Any other key is an error, so a typo cannot silently expose no tables. Leave user
+and password empty. The directory is scanned when the connection opens, so a file added later needs a
+reconnect.
+
+On JDK 25 the first query prints a `sun.misc.Unsafe` warning from protobuf, a Calcite dependency;
+it is harmless.
+
 ## Query a Vortex file with DuckDB
 
 [DuckDB](https://duckdb.org) reads Vortex files through its `vortex` extension, which is built from the Rust reference
