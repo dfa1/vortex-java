@@ -22,6 +22,58 @@
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
             <artifactId>vortex-calcite</artifactId>
+            <!-- Calcite loads these only for features this driver never reaches: the Avatica HTTP client,
+                 YAML models (jdbc:vortex: builds the schema itself, no model file), Hilbert-curve functions,
+                 approximate-distinct sketches, and JdbcSchema connection pooling / lattices. Each was removed
+                 from the calcite module's test classpath and its whole SQL suite re-run. Everything else stays:
+                 httpcore5 (Avatica reads Timeout at class init), json-path and JTS (the planner's metadata
+                 provider initializes with them). Re-check this list on every Calcite upgrade. -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents.client5</groupId>
+                    <artifactId>httpclient5</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents.core5</groupId>
+                    <artifactId>httpcore5-h2</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.dataformat</groupId>
+                    <artifactId>jackson-dataformat-yaml</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.yaml</groupId>
+                    <artifactId>snakeyaml</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.uzaygezen</groupId>
+                    <artifactId>uzaygezen-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.yahoo.datasketches</groupId>
+                    <artifactId>sketches-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.yahoo.datasketches</groupId>
+                    <artifactId>memory</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.commons</groupId>
+                    <artifactId>commons-dbcp2</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.commons</groupId>
+                    <artifactId>commons-pool2</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.transaction</groupId>
+                    <artifactId>jakarta.transaction-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>net.hydromatic</groupId>
+                    <artifactId>aggdesigner-algorithm</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <!-- The driver is an embedded engine run from an IDE, not a library: the shaded jar must
