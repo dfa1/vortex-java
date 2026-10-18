@@ -48,7 +48,10 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
 
         int bitWidth = meta.bit_width();
         int offset = meta.offset();
-        PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
+        if (!(ctx.dtype() instanceof DType.Primitive p)) {
+            throw new VortexException(EncodingId.FASTLANES_BITPACKED, "expected primitive dtype, got " + ctx.dtype());
+        }
+        PType ptype = p.ptype();
         if (ptype.isFloating()) {
             throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
         }

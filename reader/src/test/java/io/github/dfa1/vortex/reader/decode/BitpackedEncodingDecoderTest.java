@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -257,6 +258,22 @@ class BitpackedEncodingDecoderTest {
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("too small for 1024 rows at bit width 8");
+        }
+
+        @Test
+        void nonPrimitiveDtype_throws() {
+            // Given a struct column whose segment claims bit-packing (a fuzzer finding: the
+            // decoder cast the dtype blindly and escaped as ClassCastException)
+            ArrayNode node = new ArrayNode(BITPACKED, MemorySegment.ofArray(new ProtoBitPackedMetadata(8, 0, null).encode()),
+                    new ArrayNode[0], new int[]{0});
+            DType struct = new DType.Struct(List.of(), List.of(), false);
+            DecodeContext ctx = new DecodeContext(node, struct, 8, new MemorySegment[]{packedBytes(64)}, REGISTRY,
+                    Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("expected primitive dtype");
         }
 
         private DecodeContext ctxWithMeta(ProtoBitPackedMetadata meta, MemorySegment packed, long rowCount) {

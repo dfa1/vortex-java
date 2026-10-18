@@ -305,6 +305,19 @@ class DeltaEncodingDecoderTest {
     }
 
     @Test
+    void decode_nonPrimitiveDtype_throws() {
+        // Given a Utf8 column whose segment claims delta encoding: a crafted file, which escaped
+        // as a raw ClassCastException before the dtype was checked
+        ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA, null, new ArrayNode[0], new int[0]);
+        DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0, new MemorySegment[0], REGISTRY, Arena.ofAuto());
+
+        // When / Then
+        assertThatThrownBy(() -> SUT.decode(ctx))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("expected primitive dtype");
+    }
+
+    @Test
     void decode_constantBases_nonZeroOffsetAndBase() {
         // Given a constant base of 5 broadcast across all 16 lanes with zero deltas:
         // every row decodes to the base value 5. Reads from an offset into the chunk.
