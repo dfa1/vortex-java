@@ -641,6 +641,10 @@ same kind of `WHERE`, is folded per dictionary code into one row per group inste
 row per record; it falls back to the scan when a chunk of the column is not dictionary-encoded,
 there are more than 10,000 groups, or a group value is outside Latin-1 (Calcite's `VARCHAR`
 charset). `DISTINCT` and `FILTER (WHERE ...)` aggregates are always computed by the scan.
+`ORDER BY ... LIMIT n` (any `OFFSET`, `n + offset` up to 1,000) over plain columns, with the same
+kind of `WHERE`, keeps the first rows in a bounded heap during the scan instead of sorting every
+row; it falls back to Calcite's sort when a returned value has no SQL literal of its type (`NaN`,
+an infinity, a string outside Latin-1, binary, `UUID`, nested).
 `connect` is the
 supported entry point; `VortexSchema`/`VortexTable` (`io.github.dfa1.vortex.calcite`) are the
 underlying schema/table plumbing it assembles, exposed for callers building a Calcite schema tree

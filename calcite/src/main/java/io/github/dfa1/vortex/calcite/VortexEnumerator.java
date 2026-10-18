@@ -52,6 +52,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     private LongPredicate rowMatcher;
     private Object[] columns;
     private long rowInChunk;
+    private long currentRow;
     private long chunkRows;
     private Object[] current;
 
@@ -101,18 +102,25 @@ final class VortexEnumerator implements Enumerator<Object[]> {
 
     @Override
     public boolean moveNext() {
+        if (!advance()) {
+            return false;
+        }
+        current = row();
+        return true;
+    }
+
+    /// Moves to the next row the filter keeps without building it, so a caller that needs only a
+    /// few of its columns ([#column(int)]) does not box the rest.
+    ///
+    /// @return `false` when the scan is exhausted
+    boolean advance() {
         while (true) {
             if (chunk != null && rowInChunk < chunkRows) {
-                if (exactFilter != null && !rowMatcher.test(rowInChunk)) {
-                    rowInChunk++;
+                long row = rowInChunk++;
+                if (exactFilter != null && !rowMatcher.test(row)) {
                     continue;
                 }
-                Object[] row = new Object[names.length];
-                for (int c = 0; c < names.length; c++) {
-                    row[c] = value(columns[c], types[c], rowInChunk);
-                }
-                rowInChunk++;
-                current = row;
+                currentRow = row;
                 return true;
             }
             if (chunk != null) {
@@ -132,6 +140,20 @@ final class VortexEnumerator implements Enumerator<Object[]> {
                 columns[c] = chunk.column(names[c]);
             }
         }
+    }
+
+    /// Column `c` of the row [#advance()] moved to.
+    Object column(int c) {
+        return value(columns[c], types[c], currentRow);
+    }
+
+    /// Every column of the row [#advance()] moved to.
+    Object[] row() {
+        Object[] row = new Object[names.length];
+        for (int c = 0; c < names.length; c++) {
+            row[c] = value(columns[c], types[c], currentRow);
+        }
+        return row;
     }
 
     @Override

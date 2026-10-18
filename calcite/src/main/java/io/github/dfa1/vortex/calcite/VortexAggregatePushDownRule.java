@@ -97,7 +97,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
 
     /// Returns the fold cached under `key` for `planner`'s run, computing it on the first call.
     @SuppressWarnings("unchecked")
-    private static <T> T memo(RelOptPlanner planner, List<Object> key, java.util.function.Supplier<T> compute) {
+    static <T> T memo(RelOptPlanner planner, List<Object> key, java.util.function.Supplier<T> compute) {
         Map<List<Object>, Object> folds = FOLDS.computeIfAbsent(planner, p -> new java.util.concurrent.ConcurrentHashMap<>());
         return (T) folds.computeIfAbsent(key, k -> compute.get());
     }

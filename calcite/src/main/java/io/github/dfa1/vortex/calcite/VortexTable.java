@@ -432,6 +432,87 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return Optional.of(java.util.Collections.unmodifiableMap(result));
     }
 
+    /// One `ORDER BY` key of [#topN(int[], RowFilter, List, int)].
+    ///
+    /// @param field      the key's position in the projected row
+    /// @param descending whether larger values come first
+    /// @param nullsFirst whether nulls come before every value
+    public record SortKey(int field, boolean descending, boolean nullsFirst) {
+    }
+
+    /// The first `count` rows of the projection `cols` over the rows `filter` selects, in the order of
+    /// `keys`, as the scan would emit them (Calcite's internal value forms). Rows stream through a
+    /// bounded heap, so only `count` rows are ever kept, and each value is compared as itself: the
+    /// sort Calcite runs otherwise converts every number to a `BigDecimal` per comparison.
+    ///
+    /// @param cols   the table columns to emit, by position
+    /// @param filter the rows to keep, or `null` for every row
+    /// @param keys   the `ORDER BY` keys, most significant first
+    /// @param count  how many rows to return
+    /// @return the first `count` rows in order (fewer if the table has fewer)
+    public List<Object[]> topN(int[] cols, RowFilter filter, List<SortKey> keys, int count) {
+        DType.Struct struct = struct();
+        ColumnName[] outNames = new ColumnName[cols.length];
+        DType[] outTypes = new DType[cols.length];
+        for (int i = 0; i < cols.length; i++) {
+            outNames[i] = struct.fieldNames().get(cols[i]);
+            outTypes[i] = struct.fieldTypes().get(cols[i]);
+        }
+        java.util.LinkedHashSet<ColumnName> scanColumns = new java.util.LinkedHashSet<>(List.of(outNames));
+        ScanOptions options;
+        if (filter == null) {
+            options = ScanOptions.columns(scanColumns.toArray(ColumnName[]::new));
+        } else {
+            RexFilterTranslator.collectColumns(filter, scanColumns);
+            options = ScanOptions.columns(scanColumns.toArray(ColumnName[]::new)).withFilter(filter);
+        }
+        java.util.Comparator<Object[]> order = rowOrder(keys);
+        // the worst kept row at the head, so a better row evicts it
+        java.util.PriorityQueue<Object[]> heap = new java.util.PriorityQueue<>(count + 1, order.reversed());
+        VortexEnumerator rows = new VortexEnumerator(file, new AtomicLong(), options, outNames, outTypes, filter);
+        // only the key columns are read per row; a row is built once it beats the worst one kept
+        Object[] probe = new Object[cols.length];
+        try {
+            while (rows.advance()) {
+                if (heap.size() == count) {
+                    for (SortKey key : keys) {
+                        probe[key.field()] = rows.column(key.field());
+                    }
+                    if (order.compare(probe, heap.peek()) >= 0) {
+                        continue;
+                    }
+                    heap.poll();
+                }
+                heap.add(rows.row());
+            }
+        } finally {
+            rows.close();
+        }
+        List<Object[]> result = new ArrayList<>(heap);
+        result.sort(order);
+        return result;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static java.util.Comparator<Object[]> rowOrder(List<SortKey> keys) {
+        return (a, b) -> {
+            for (SortKey key : keys) {
+                Comparable x = (Comparable) a[key.field()];
+                Comparable y = (Comparable) b[key.field()];
+                int cmp;
+                if (x == null || y == null) {
+                    cmp = x == y ? 0 : (x == null) == key.nullsFirst() ? -1 : 1;
+                } else {
+                    cmp = key.descending() ? y.compareTo(x) : x.compareTo(y);
+                }
+                if (cmp != 0) {
+                    return cmp;
+                }
+            }
+            return 0;
+        };
+    }
+
     /// Decodes the chunks that hold boundary zones, each once, in row order, and folds a zone's rows
     /// through a [Chunk#slice(long, long)] view. Zones arrive in row order, so only the chunk under
     /// the current zone is kept open.

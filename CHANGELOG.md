@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- SQL `ORDER BY ... LIMIT n` is up to 9 times faster: the first rows are kept in a bounded heap during the scan instead of sorting the whole table. ([#557](https://github.com/dfa1/vortex-java/pull/557))
 - SQL `GROUP BY` on a dictionary-encoded string column is 10 to 30 times faster: rows are counted and summed per dictionary code instead of being built one by one for Calcite. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - A filtered SQL `COUNT`/`MIN`/`MAX` answered from zone maps decodes the zones its filter cuts once per query instead of up to six times. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - The Calcite adapter pushes `IN` lists, comparisons with the literal on the left and `IS NULL` into the scan, so they prune chunks instead of being re-checked row by row. ([#550](https://github.com/dfa1/vortex-java/pull/550))
