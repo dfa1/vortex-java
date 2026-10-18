@@ -7,12 +7,15 @@ import org.apache.calcite.interpreter.Bindables;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptRuleOperand;
+import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.prepare.RelOptTableImpl;
 import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.Sort;
 import org.apache.calcite.rel.core.TableScan;
+import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rel.logical.LogicalValues;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexBuilder;
@@ -49,6 +52,10 @@ public final class VortexSortPushDownRule extends RelOptRule {
     /// Most rows a rewrite emits; each becomes a literal row of the plan.
     private static final int MAX_ROWS = 1000;
 
+    /// Smallest table, in rows, whose `ORDER BY` with no `LIMIT` is rewritten to a lazy scan
+    /// ([VortexOrderedTable]); a smaller one fits in memory and Calcite sorts it faster.
+    static final int LAZY_SORT_MIN_ROWS = 100_000;
+
     /// Most literal cells (rows times columns) a push-down may put in one `VALUES`. Calcite compiles
     /// the whole `VALUES` into a single Java method, which the JVM caps at 64 KB of bytecode: measured
     /// on a mixed-type table, 4,500 cells compile and 6,000 do not ("Code grows beyond 64 KB"). A bigger
@@ -73,13 +80,23 @@ public final class VortexSortPushDownRule extends RelOptRule {
     @Override
     public void onMatch(RelOptRuleCall call) {
         Sort sort = call.rel(0);
-        if (sort.fetch == null || sort.getCollation().getFieldCollations().isEmpty()) {
-            return; // a full ORDER BY must emit every row
-        }
-        int fetch = intLiteral(sort.fetch);
-        int offset = sort.offset == null ? 0 : intLiteral(sort.offset);
-        if (fetch < 0 || offset < 0 || fetch + (long) offset > MAX_ROWS) {
+        if (sort.getCollation().getFieldCollations().isEmpty()) {
             return;
+        }
+        // no LIMIT: every row must come back sorted, which only a big table's lazy scan can do cheaply
+        boolean lazy = sort.fetch == null;
+        int fetch = 0;
+        int offset = 0;
+        if (lazy) {
+            if (sort.offset != null) {
+                return;
+            }
+        } else {
+            fetch = intLiteral(sort.fetch);
+            offset = sort.offset == null ? 0 : intLiteral(sort.offset);
+            if (fetch < 0 || offset < 0 || fetch + (long) offset > MAX_ROWS) {
+                return;
+            }
         }
         Project project = null;
         Filter filter = null;
@@ -98,6 +115,10 @@ public final class VortexSortPushDownRule extends RelOptRule {
         if (table == null) {
             return;
         }
+        Double rowCount = table.getStatistic().getRowCount();
+        if (lazy && (rowCount == null || rowCount <= LAZY_SORT_MIN_ROWS)) {
+            return; // small enough for Calcite to sort in memory
+        }
         List<RexNode> predicates = new ArrayList<>();
         if (filter != null) {
             predicates.add(filter.getCondition());
@@ -115,7 +136,7 @@ public final class VortexSortPushDownRule extends RelOptRule {
         }
         int[] cols = columns(scan, project);
         // only the rows after the offset become literals; the offset rows stay in the heap (MAX_ROWS)
-        if (cols == null || (long) fetch * cols.length > MAX_VALUES_CELLS) {
+        if (cols == null || (!lazy && (long) fetch * cols.length > MAX_VALUES_CELLS)) {
             return;
         }
         List<VortexTable.SortKey> keys = new ArrayList<>();
@@ -125,6 +146,11 @@ public final class VortexSortPushDownRule extends RelOptRule {
                     ? collation.getDirection().defaultNullDirection() : collation.nullDirection;
             keys.add(new VortexTable.SortKey(collation.getFieldIndex(), descending,
                     nulls == RelFieldCollation.NullDirection.FIRST));
+        }
+        if (lazy) {
+            call.transformTo(orderedScan(sort, scan, new VortexOrderedTable(table, cols, rowFilter, keys,
+                    sort.getRowType(), call.getMetadataQuery().getRowCount(sort.getInput()), sort.getCollation())));
+            return;
         }
         int count = offset + fetch;
         RowFilter finalFilter = rowFilter;
@@ -148,6 +174,15 @@ public final class VortexSortPushDownRule extends RelOptRule {
             tuples.add(ImmutableList.copyOf(literals));
         }
         call.transformTo(LogicalValues.create(sort.getCluster(), sort.getRowType(), ImmutableList.copyOf(tuples)));
+    }
+
+    /// A scan of `ordered` that Calcite plans like any table, in place of the sort and everything it
+    /// sorted.
+    private static RelNode orderedScan(Sort sort, TableScan scan, VortexOrderedTable ordered) {
+        RelOptTable base = scan.getTable();
+        RelOptTable derived = RelOptTableImpl.create(base.getRelOptSchema(), sort.getRowType(), ordered,
+                ImmutableList.<String>builder().addAll(base.getQualifiedName()).add("ordered").build());
+        return LogicalTableScan.create(sort.getCluster(), derived, scan.getHints());
     }
 
     /// The table columns the sort's input emits, in order, or `null` when a projected expression is
