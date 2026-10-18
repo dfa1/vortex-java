@@ -44,8 +44,7 @@ public final class VortexCalcite {
     ///
     /// Each map entry binds a SQL table name to the `.vortex` file backing it; the tables are
     /// reachable as `schemaName.tableName`. The returned connection is the caller's to close, which
-    /// releases the schema's readers. If schema registration fails the connection is closed before
-    /// the failure propagates, so no connection leaks.
+    /// releases the schema's readers.
     ///
     /// @param schemaName the schema name the tables are registered under
     /// @param tables     map from SQL table name to the `.vortex` file path
@@ -54,6 +53,30 @@ public final class VortexCalcite {
     public static Connection connect(String schemaName, Map<String, Path> tables) throws SQLException {
         Objects.requireNonNull(schemaName, "schemaName");
         Objects.requireNonNull(tables, "tables");
+        return connect(VortexCalciteOptions.defaults().withSchemaName(schemaName).withTables(tables));
+    }
+
+    /// Opens a Calcite JDBC connection exposing every `*.vortex` file in `directory` as a table of
+    /// the default schema `vtx`, so `ohlc.vortex` is queried as `vtx.ohlc`.
+    ///
+    /// @param directory the directory to scan for `.vortex` files
+    /// @return an open Calcite JDBC connection with the Vortex schema registered
+    /// @throws SQLException if the JDBC connection cannot be opened or the schema cannot be registered
+    public static Connection connect(Path directory) throws SQLException {
+        return connect(VortexCalciteOptions.defaults().withDirectory(directory));
+    }
+
+    /// Opens a Calcite JDBC connection exposing the tables `options` describes.
+    ///
+    /// The returned connection is the caller's to close, which releases the schema's readers. If
+    /// schema registration fails the connection is closed before the failure propagates, so no
+    /// connection leaks.
+    ///
+    /// @param options the schema name and the files to expose
+    /// @return an open Calcite JDBC connection with the Vortex schema registered
+    /// @throws SQLException if the JDBC connection cannot be opened or the schema cannot be registered
+    public static Connection connect(VortexCalciteOptions options) throws SQLException {
+        Objects.requireNonNull(options, "options");
         Properties info = new Properties();
         // JAVA lex: case-sensitive identifiers, back-tick quoting, unquoted case preserved — so an
         // unquoted `ohlc` matches the registered table name exactly.
@@ -64,7 +87,7 @@ public final class VortexCalcite {
         Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
         try {
             SchemaPlus root = connection.unwrap(CalciteConnection.class).getRootSchema();
-            root.add(schemaName, new VortexSchema(tables));
+            root.add(options.schemaName(), new VortexSchema(options));
             return connection;
         } catch (SQLException | RuntimeException e) {
             try {

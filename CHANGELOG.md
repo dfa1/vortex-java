@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `VortexCalcite.connect(Path)` and `VortexCalciteOptions` expose every `.vortex` file in a directory as a SQL table. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `DecimalArray.getUnscaledLong(long)` reads a decimal's unscaled value without building a `BigDecimal`. ([#563](https://github.com/dfa1/vortex-java/pull/563))
 - `Compute.groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)` folds an aggregate per value of a dictionary-encoded string, boolean or integer column. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - `Chunk.slice(offset, length)` gives a zero-copy view of a row range. ([#550](https://github.com/dfa1/vortex-java/pull/550))

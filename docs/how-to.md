@@ -572,6 +572,15 @@ try (Connection conn = VortexCalcite.connect("vtx", tables)) {
 }
 ```
 
+Or point at a directory — every `*.vortex` file in it becomes a table named after the file, and the
+columns come from each file's own schema:
+
+```java
+try (Connection conn = VortexCalcite.connect(Path.of("/data/vortex"))) {
+    // select * from vtx.ohlc   (ohlc.vortex)
+}
+```
+
 Whole-table `min`/`max`/`sum` aggregates are answered straight from zone-map statistics — no data
 segment is decoded — on files with the legacy `vortex.stats` zone map (written with
 `WriteOptions.defaults().withEdition(Editions.CORE_2025_10_0)`). Files with the default
