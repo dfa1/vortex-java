@@ -37,6 +37,12 @@ public final class FbsArray extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `buffers` vector from an empty one, which [#buffersLength()] cannot.
+    /// @return whether the `buffers` vector is present
+    public boolean hasBuffers() {
+        return fieldOffset(6) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `buffers` element
     public FbsBuffer buffers(int j) {

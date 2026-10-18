@@ -38,7 +38,10 @@ class MalformedFileInteropIntegrationTest {
             // escaped as IndexOutOfBoundsException from the FlatBuffer runtime.
             "array-flatbuffer-vector-out-of-bounds",
             // A Struct column whose segment is fastlanes.bitpacked: escaped as ClassCastException.
-            "bitpacked-struct-dtype"})
+            "bitpacked-struct-dtype",
+            // A struct dtype with no names vector, which Rust refuses at open: vortex-java read it
+            // as a 0-field struct and failed the scan with ArrayIndexOutOfBoundsException.
+            "struct-dtype-missing-names"})
     void bothReadersReject(String name) throws URISyntaxException {
         // Given
         Path file = Path.of(Objects.requireNonNull(

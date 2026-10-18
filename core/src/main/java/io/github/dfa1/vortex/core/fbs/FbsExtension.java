@@ -43,6 +43,12 @@ public final class FbsExtension extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `metadata` vector from an empty one, which [#metadataLength()] cannot.
+    /// @return whether the `metadata` vector is present
+    public boolean hasMetadata() {
+        return fieldOffset(8) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `metadata` element
     public int metadata(int j) {

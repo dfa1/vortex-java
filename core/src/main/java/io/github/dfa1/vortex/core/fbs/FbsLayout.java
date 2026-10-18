@@ -43,6 +43,12 @@ public final class FbsLayout extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `metadata` vector from an empty one, which [#metadataLength()] cannot.
+    /// @return whether the `metadata` vector is present
+    public boolean hasMetadata() {
+        return fieldOffset(8) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `metadata` element
     public int metadata(int j) {
@@ -62,6 +68,12 @@ public final class FbsLayout extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `children` vector from an empty one, which [#childrenLength()] cannot.
+    /// @return whether the `children` vector is present
+    public boolean hasChildren() {
+        return fieldOffset(10) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `children` element
     public FbsLayout children(int j) {
@@ -73,6 +85,12 @@ public final class FbsLayout extends FbsTable {
     public int segmentsLength() {
         int o = fieldOffset(12);
         return o != 0 ? vectorLength(o) : 0;
+    }
+
+    /// Tells an absent `segments` vector from an empty one, which [#segmentsLength()] cannot.
+    /// @return whether the `segments` vector is present
+    public boolean hasSegments() {
+        return fieldOffset(12) != 0;
     }
 
     /// @param j element index

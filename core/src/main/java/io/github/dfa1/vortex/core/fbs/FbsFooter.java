@@ -31,6 +31,12 @@ public final class FbsFooter extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `arraySpecs` vector from an empty one, which [#arraySpecsLength()] cannot.
+    /// @return whether the `arraySpecs` vector is present
+    public boolean hasArraySpecs() {
+        return fieldOffset(4) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `arraySpecs` element
     public FbsArraySpec arraySpecs(int j) {
@@ -42,6 +48,12 @@ public final class FbsFooter extends FbsTable {
     public int layoutSpecsLength() {
         int o = fieldOffset(6);
         return o != 0 ? vectorLength(o) : 0;
+    }
+
+    /// Tells an absent `layoutSpecs` vector from an empty one, which [#layoutSpecsLength()] cannot.
+    /// @return whether the `layoutSpecs` vector is present
+    public boolean hasLayoutSpecs() {
+        return fieldOffset(6) != 0;
     }
 
     /// @param j element index
@@ -57,6 +69,12 @@ public final class FbsFooter extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `segmentSpecs` vector from an empty one, which [#segmentSpecsLength()] cannot.
+    /// @return whether the `segmentSpecs` vector is present
+    public boolean hasSegmentSpecs() {
+        return fieldOffset(8) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `segmentSpecs` element
     public FbsSegmentSpec segmentSpecs(int j) {
@@ -70,6 +88,12 @@ public final class FbsFooter extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `compressionSpecs` vector from an empty one, which [#compressionSpecsLength()] cannot.
+    /// @return whether the `compressionSpecs` vector is present
+    public boolean hasCompressionSpecs() {
+        return fieldOffset(10) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `compressionSpecs` element
     public FbsCompressionSpec compressionSpecs(int j) {
@@ -81,6 +105,12 @@ public final class FbsFooter extends FbsTable {
     public int encryptionSpecsLength() {
         int o = fieldOffset(12);
         return o != 0 ? vectorLength(o) : 0;
+    }
+
+    /// Tells an absent `encryptionSpecs` vector from an empty one, which [#encryptionSpecsLength()] cannot.
+    /// @return whether the `encryptionSpecs` vector is present
+    public boolean hasEncryptionSpecs() {
+        return fieldOffset(12) != 0;
     }
 
     /// @param j element index

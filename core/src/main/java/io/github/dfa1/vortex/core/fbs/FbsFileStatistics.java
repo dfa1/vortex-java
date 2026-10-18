@@ -31,6 +31,12 @@ public final class FbsFileStatistics extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `fieldStats` vector from an empty one, which [#fieldStatsLength()] cannot.
+    /// @return whether the `fieldStats` vector is present
+    public boolean hasFieldStats() {
+        return fieldOffset(4) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `fieldStats` element
     public FbsArrayStats fieldStats(int j) {
