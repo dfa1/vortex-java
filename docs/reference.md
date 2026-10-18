@@ -608,6 +608,22 @@ Calcite](https://calcite.apache.org/). `connect(String, Map<String, Path>)` fold
 | `static connect(Path directory)`                               | Every `*.vortex` file in `directory` becomes a table of schema `vtx`, named after the file (`ohlc.vortex` is `vtx.ohlc`); scanned once at connect time |
 | `static connect(VortexCalciteOptions options)`                 | The general form: schema name, a directory to scan, and explicit `withTable(name, path)` bindings that win over a discovered file of the same name |
 
+### `VortexSchemaFactory` (`io.github.dfa1.vortex.calcite.VortexSchemaFactory`)
+
+Builds the schema from a Calcite model, so a `jdbc:calcite:` URL (or an IDE data source) needs no
+Java code. `operand` takes `directory` (every `*.vortex` becomes a table) and `files` (table name to
+path, wins over a discovered file); any other key is rejected. The schema name is the model's
+`name`.
+
+```
+jdbc:calcite:lex=JAVA;model=inline:{version:'1.0',defaultSchema:'vtx',schemas:[{name:'vtx',type:'custom',factory:'io.github.dfa1.vortex.calcite.VortexSchemaFactory',operand:{directory:'/data/vortex'}}]}
+```
+
+A model cannot set connection properties, so put `lex=JAVA` in the URL (without it Calcite
+uppercases unquoted names and `vtx.ohlc` is not found). For reserved-word columns such as `close`
+unquoted, also add `parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY`;
+[`VortexCalcite`] sets both for you.
+
 The connection uses Calcite's `JAVA` lexical policy (case-sensitive identifiers, unquoted case
 preserved) and the **Babel** SQL parser, so a column named after a reserved word — `close`, `open`,
 `value`, `year`, … — is queryable unquoted (`select close, open from vtx.ohlc`). The exception is

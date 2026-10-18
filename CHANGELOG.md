@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `VortexSchemaFactory` builds the Calcite schema from a `jdbc:calcite:model=...` URL, so SQL tools can query a directory of `.vortex` files without Java code. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `VortexCalcite.connect(Path)` and `VortexCalciteOptions` expose every `.vortex` file in a directory as a SQL table. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `DecimalArray.getUnscaledLong(long)` reads a decimal's unscaled value without building a `BigDecimal`. ([#563](https://github.com/dfa1/vortex-java/pull/563))
 - `Compute.groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)` folds an aggregate per value of a dictionary-encoded string, boolean or integer column. ([#555](https://github.com/dfa1/vortex-java/pull/555))
