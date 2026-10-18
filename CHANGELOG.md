@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `vortex-jdbc-driver` is a `jdbc:vortex:<dir>` JDBC driver in one self-contained jar, so IntelliJ, DBeaver and other SQL tools can query a directory of `.vortex` files. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `VortexSchemaFactory` builds the Calcite schema from a `jdbc:calcite:model=...` URL, so SQL tools can query a directory of `.vortex` files without Java code. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `VortexCalcite.connect(Path)` and `VortexCalciteOptions` expose every `.vortex` file in a directory as a SQL table. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `DecimalArray.getUnscaledLong(long)` reads a decimal's unscaled value without building a `BigDecimal`. ([#563](https://github.com/dfa1/vortex-java/pull/563))
