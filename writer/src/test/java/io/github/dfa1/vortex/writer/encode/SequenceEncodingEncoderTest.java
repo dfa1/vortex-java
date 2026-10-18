@@ -174,17 +174,50 @@ class SequenceEncodingEncoderTest {
         }
 
         @Test
-        void encode_emptyArray_roundTripsToZeroLength() {
-            // Given the n==0 branch: base and multiplier default to 0
+        void encode_emptyArray_throws() {
+            // Given — Rust's sequence_encode: "we cannot encode an empty array"
             long[] data = {};
 
+            // When / Then
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx()))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("empty array is not a sequence");
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0} {1}")
+        @org.junit.jupiter.params.provider.MethodSource("notSequencesInRust")
+        void encode_stepRustRejects_throws(PType ptype, Object data, String reason) {
+            // Given — data whose step Rust's checked arithmetic in the column type refuses: these
+            // used to be written, and a sign-extended or out-of-range scalar made the file
+            // unreadable for Rust (found by the differential fuzz target)
+
+            // When / Then
+            assertThatThrownBy(() -> ENCODER.encode(new DType.Primitive(ptype, false), data, EncodeTestHelper.testCtx()))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining(reason);
+        }
+
+        static Stream<Arguments> notSequencesInRust() {
+            return Stream.of(
+                    Arguments.of(PType.I64, new long[]{5, 5, 5}, "zero step"),
+                    Arguments.of(PType.U8, new byte[]{3, 2, 1}, "overflows U8"),
+                    Arguments.of(PType.I8, new byte[]{-128, 127}, "overflows I8"),
+                    Arguments.of(PType.I64, new long[]{Long.MIN_VALUE, Long.MAX_VALUE}, "overflows I64"),
+                    Arguments.of(PType.U64, new long[]{-1L, 0L}, "overflows U64"));
+        }
+
+        @Test
+        void encode_unsignedAboveSignedRange_writesZeroExtendedScalars() {
+            // Given — a sorted u16 sequence past 0x7FFF: its base was sign-extended into a u64 scalar
+            // of 2^64 - 2067, which vortex-jni refuses ("out of range for dtype u16")
+            short[] data = {(short) 63_469, (short) 63_470, (short) 63_471};
+
             // When
-            EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = encodeResultToCtx(resultEncoded, DTypes.I64, 0);
-            Array result = DECODER.decode(ctx);
+            EncodeResult result = ENCODER.encode(DTypes.U16, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(result.length()).isZero();
+            assertThat(result.statsMin().uint64_value()).isEqualTo(63_469L);
+            assertThat(result.statsMax().uint64_value()).isEqualTo(63_471L);
         }
 
         @Test
@@ -425,19 +458,6 @@ class SequenceEncodingEncoderTest {
             // Then
             assertThat(result.statsMin().int64_value()).isEqualTo(10L);
             assertThat(result.statsMax().int64_value()).isEqualTo(40L);
-        }
-
-        @Test
-        void encode_empty_statsAreNull() {
-            // Given
-            long[] data = {};
-
-            // When
-            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-
-            // Then
-            assertThat(result.statsMin()).isNull();
-            assertThat(result.statsMax()).isNull();
         }
 
         private static ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
