@@ -22,7 +22,14 @@ public final class VortexSchema extends AbstractSchema {
     ///
     /// @param files map from table name to the `.vortex` file path
     public VortexSchema(Map<String, Path> files) {
-        this.tables = files.entrySet().stream()
+        this(VortexCalciteOptions.defaults().withTables(files));
+    }
+
+    /// Creates a schema from `options`: the files found in its directory plus its explicit tables.
+    ///
+    /// @param options which files become tables
+    public VortexSchema(VortexCalciteOptions options) {
+        this.tables = options.resolveTables().entrySet().stream()
                 .collect(java.util.stream.Collectors.toUnmodifiableMap(
                         Map.Entry::getKey, e -> new VortexTable(e.getValue())));
     }

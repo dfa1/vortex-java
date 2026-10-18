@@ -605,6 +605,8 @@ Calcite](https://calcite.apache.org/). `connect(String, Map<String, Path>)` fold
 | Method                                                          | Notes                                                              |
 |--------------------------------------------------------------------|------------------------------------------------------------------------|
 | `static connect(String schemaName, Map<String, Path> tables)`  | Opens a Calcite JDBC connection with `tables` registered under `schemaName` (`schemaName.tableName` in SQL); connection is the caller's to close |
+| `static connect(Path directory)`                               | Every `*.vortex` file in `directory` becomes a table of schema `vtx`, named after the file (`ohlc.vortex` is `vtx.ohlc`); scanned once at connect time |
+| `static connect(VortexCalciteOptions options)`                 | The general form: schema name, a directory to scan, and explicit `withTable(name, path)` bindings that win over a discovered file of the same name |
 
 The connection uses Calcite's `JAVA` lexical policy (case-sensitive identifiers, unquoted case
 preserved) and the **Babel** SQL parser, so a column named after a reserved word — `close`, `open`,
