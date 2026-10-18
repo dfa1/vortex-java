@@ -636,6 +636,11 @@ column-vs-literal comparisons, `IN` lists and `IS [NOT] NULL` joined by `AND`: z
 the rows of zones it cuts are decoded. `sum` needs a per-zone sum, which only the legacy
 `vortex.stats` zone map records (writes targeting an edition before `core2026.08.0`); with Rust's
 `vortex.zoned` — the default since #447, and every Rust-written file — `sum` is answered by a scan.
+A `GROUP BY` on one string column, with `count`/`sum`/`min`/`max` of plain numeric columns and the
+same kind of `WHERE`, is folded per dictionary code into one row per group instead of building a
+row per record; it falls back to the scan when a chunk of the column is not dictionary-encoded,
+there are more than 10,000 groups, or a group value is outside Latin-1 (Calcite's `VARCHAR`
+charset). `DISTINCT` and `FILTER (WHERE ...)` aggregates are always computed by the scan.
 `connect` is the
 supported entry point; `VortexSchema`/`VortexTable` (`io.github.dfa1.vortex.calcite`) are the
 underlying schema/table plumbing it assembles, exposed for callers building a Calcite schema tree

@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.util.List;
+import java.util.Map;
 import java.util.function.LongPredicate;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
@@ -173,6 +175,169 @@ class ComputeTest {
             // When / Then
             assertThatNullPointerException().isThrownBy(() -> Compute.matcher(null, RowFilter.eq(SYM, "b")));
             assertThatNullPointerException().isThrownBy(() -> Compute.matcher(chunk, null));
+        }
+    }
+
+    /// [Compute#groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)] folds per dictionary
+    /// code; every expectation below is the plain per-row SQL answer, worked out by hand.
+    @Nested
+    class Grouped {
+
+        private static final ColumnName G = ColumnName.of("g");
+        private static final ColumnName V = ColumnName.of("v");
+
+        /// Groups a, b, a, (null), b, a: row 3's group is null although its code points at "a".
+        private static Array nullableGroups() {
+            Array dict = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"}, new int[]{0, 1, 0, 0, 1, 0});
+            return new MaskedArray(dict, ComputeArrays.boolArray(ARENA, true, true, true, false, true, true));
+        }
+
+        private static Chunk chunk(Array group, Array agg) {
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.rowCount()).willReturn(group.length());
+            given(chunk.<Array>column(G)).willReturn(group);
+            given(chunk.<Array>column(V)).willReturn(agg);
+            return chunk;
+        }
+
+        @Test
+        void countOnly_countsRowsPerGroupWithNullAsItsOwnGroup() {
+            // Given
+            Chunk chunk = chunk(nullableGroups(), null);
+
+            // When
+            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, null, null).orElseThrow();
+
+            // Then
+            assertThat(result).containsOnlyKeys("a", "b", null);
+            assertThat(result.get("a").selectedRows()).isEqualTo(3);
+            assertThat(result.get("b").selectedRows()).isEqualTo(2);
+            assertThat(result.get(null).selectedRows()).isEqualTo(1);
+        }
+
+        @Test
+        void longColumn_foldsSumMinMaxSkippingNullValues() {
+            // Given — v = 5, 7, (null), 2, -1, 9
+            Array v = ComputeArrays.maskedLongArray(ARENA, new long[]{5, 7, 0, 2, -1, 9},
+                    new boolean[]{true, true, false, true, true, true});
+
+            // When
+            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk(nullableGroups(), v), G, null, V)
+                    .orElseThrow();
+
+            // Then — a: rows 0, 2, 5 with row 2 null; b: rows 1, 4; null group: row 3
+            assertThat(result.get("a")).isEqualTo(new FilteredAggregate(3, 2, 14L, 5L, 9L));
+            assertThat(result.get("b")).isEqualTo(new FilteredAggregate(2, 2, 6L, -1L, 7L));
+            assertThat(result.get(null)).isEqualTo(new FilteredAggregate(1, 1, 2L, 2L, 2L));
+        }
+
+        @Test
+        void doubleColumn_ordersMinMaxLikeRust() {
+            // Given — group a holds -0.0, NaN and 0.0: Rust's order puts -0.0 first and NaN last
+            Array group = ComputeArrays.utf8DictArray(ARENA, new String[]{"a"}, new int[]{0, 0, 0});
+            Array v = ComputeArrays.doubleArray(ARENA, -0.0, Double.NaN, 0.0);
+
+            // When
+            FilteredAggregate result = Compute.groupedAggregate(chunk(group, v), G, null, V).orElseThrow().get("a");
+
+            // Then
+            assertThat(result.min()).isEqualTo(-0.0);
+            assertThat(result.max()).isEqualTo(Double.NaN);
+            assertThat(result.aggNonNullCount()).isEqualTo(3);
+        }
+
+        @Test
+        void filter_foldsOnlyTheSelectedRows() {
+            // Given — keep v > 4: rows 0 (a, 5), 1 (b, 7), 5 (a, 9)
+            Array v = ComputeArrays.longArray(ARENA, 5, 7, 1, 2, -1, 9);
+            Chunk chunk = chunk(nullableGroups(), v);
+
+            // When
+            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, RowFilter.gt(V, 4L), V)
+                    .orElseThrow();
+
+            // Then — groups with no selected row do not appear
+            assertThat(result).containsOnlyKeys("a", "b");
+            assertThat(result.get("a")).isEqualTo(new FilteredAggregate(2, 2, 14L, 5L, 9L));
+            assertThat(result.get("b")).isEqualTo(new FilteredAggregate(1, 1, 7L, 7L, 7L));
+        }
+
+        /// A dictionary spanning many chunks reaches the kernel as a slice; codes are read at its offset.
+        @Test
+        void slicedDictionary_readsCodesAtTheSliceOffset() {
+            // Given — rows 2..4 of a, a, b, b, a
+            VarBinArray dict = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"}, new int[]{0, 0, 1, 1, 0});
+            Chunk chunk = chunk(new VarBinSlicedArray(DType.UTF8, 3, dict, 2), null);
+
+            // When
+            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, null, null).orElseThrow();
+
+            // Then
+            assertThat(result.get("b").selectedRows()).isEqualTo(2);
+            assertThat(result.get("a").selectedRows()).isEqualTo(1);
+        }
+
+        /// A group is a value, not a code: two entries holding the same string fold into one group.
+        @Test
+        void duplicateDictionaryValues_foldIntoOneGroup() {
+            // Given — entries 0 and 2 are both "x"
+            Array group = ComputeArrays.utf8DictArray(ARENA, new String[]{"x", "y", "x"}, new int[]{0, 2, 1, 2});
+            Array v = ComputeArrays.longArray(ARENA, 1, 10, 100, 1000);
+
+            // When
+            Map<String, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, null, V).orElseThrow();
+
+            // Then
+            assertThat(result.get("x")).isEqualTo(new FilteredAggregate(3, 3, 1011L, 1L, 1000L));
+        }
+
+        @Test
+        void codeOutsideDictionary_throwsVortexException() {
+            // Given — 2 entries, row 1 carries code 9
+            Array group = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"}, new int[]{0, 9});
+            Chunk chunk = chunk(group, null);
+
+            // When / Then
+            assertThatThrownBy(() -> Compute.groupedAggregate(chunk, G, null, null))
+                    .isInstanceOf(VortexException.class);
+        }
+
+        /// The codes buffer is untrusted: one shorter than the rows it claims must fail as malformed
+        /// input, not as an IndexOutOfBoundsException.
+        @Test
+        void codesBufferShorterThanRows_throwsVortexException() {
+            // Given — a dictionary array claiming 3 rows over a 1-code buffer
+            VarBinDictArray one = (VarBinDictArray) ComputeArrays.utf8DictArray(ARENA, new String[]{"a"}, new int[]{0});
+            Array group = new VarBinDictArray(DType.UTF8, 3, one.bytesSegment(), one.dictValOffsets(),
+                    one.dictValOffPType(), one.dictCodesSegs(), one.dictCodesPType());
+            Chunk chunk = chunk(group, null);
+
+            // When / Then
+            assertThatThrownBy(() -> Compute.groupedAggregate(chunk, G, null, null))
+                    .isInstanceOf(VortexException.class);
+        }
+
+        /// The caller groups the rows itself when the kernel cannot: it must say so, not guess.
+        @Test
+        void groupColumnNotDictionaryEncoded_isEmpty() {
+            // Given
+            Chunk chunk = chunk(ComputeArrays.utf8Array(ARENA, "a", "b"), null);
+
+            // When / Then
+            assertThat(Compute.groupedAggregate(chunk, G, null, null)).isEmpty();
+        }
+
+        /// u64 values past 2^63 have no signed-long home, and a string has no sum.
+        @Test
+        void aggregateColumnWithoutALane_isEmpty() {
+            // Given
+            Array group = ComputeArrays.utf8DictArray(ARENA, new String[]{"a"}, new int[]{0, 0});
+
+            // When / Then
+            assertThat(Compute.groupedAggregate(chunk(group, ComputeArrays.unsignedLongArray(ARENA, 1, 2)), G, null, V))
+                    .isEmpty();
+            assertThat(Compute.groupedAggregate(chunk(group, ComputeArrays.utf8Array(ARENA, "p", "q")), G, null, V))
+                    .isEmpty();
         }
     }
 }
