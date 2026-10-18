@@ -133,7 +133,7 @@ class AggregateRuleBranchTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            // a numeric group key has no dictionary codes to fold by
+            // more distinct volumes than the 10,000 groups a rewrite emits as literal rows
             "select volume, count(*) from ohlc group by volume",
             // only a single group key is folded
             "select symbol, volume, count(*) from ohlc group by symbol, volume",

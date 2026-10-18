@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.compute.LongIntMap;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -14,22 +15,30 @@ import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.LongFunction;
 import java.util.function.LongPredicate;
+import java.util.function.LongUnaryOperator;
 
-/// Grouped aggregation over a dictionary-encoded string column: rows are accumulated per dictionary
-/// code in primitive arrays, and each code is turned into its string once, when the per-group
-/// results are built. No row is materialized and no key is hashed per row.
+/// Grouped aggregation that never builds a row or hashes a boxed key per row. Rows accumulate per
+/// group id in primitive arrays, and each id becomes its key once, when the per-group results are
+/// built. Three group columns qualify:
+/// - a dictionary-encoded string column (or a slice of one): the group id is the dictionary code,
+///   and each code is turned into its string once;
+/// - a boolean column: two ids;
+/// - an integer column (not `u64`, whose values past 2^63 have no signed-long key): ids assigned
+///   through a primitive [LongIntMap], up to [#MAX_GROUPS] distinct values per chunk.
 ///
-/// Only a [VarBinDictArray] group column (or a slice of one) qualifies, and only an aggregate column
-/// the long or double lane can fold; anything else returns empty so the caller falls back to its
-/// row path.
+/// The aggregate column must be one the long or double lane can fold. Anything else returns empty
+/// so the caller falls back to its row path.
 final class GroupedAggregate {
 
-    /// Most dictionary entries accumulated per chunk. The dictionary size comes from an untrusted
-    /// offsets buffer, so a larger one declines rather than size the per-code arrays from it.
+    /// Most groups accumulated per chunk. A dictionary's size comes from an untrusted offsets buffer,
+    /// and an integer column may hold a value per row, so more than this declines rather than size
+    /// the per-group arrays from either.
     private static final int MAX_GROUPS = 1 << 16;
 
     private GroupedAggregate() {
@@ -38,49 +47,52 @@ final class GroupedAggregate {
     /// Folds `aggColumn` per value of `groupColumn` over the rows `filter` selects.
     ///
     /// @param chunk       the decoded chunk holding every referenced column
-    /// @param groupColumn the dictionary-encoded string column to group by
+    /// @param groupColumn the column to group by
     /// @param filter      the rows to fold, or `null` for every row
     /// @param aggColumn   the numeric column to reduce, or `null` to count rows only
-    /// @return the fold per group value (the `null` key is the null group), or empty when the group
-    ///         or aggregate column has a shape this kernel does not fold
-    static Optional<Map<String, FilteredAggregate>> aggregate(Chunk chunk, ColumnName groupColumn,
+    /// @return the fold per group value (`String`, `Boolean` or `Long`; the `null` key is the null
+    ///         group), or empty when the group or aggregate column has a shape this kernel does not fold
+    static Optional<Map<Object, FilteredAggregate>> aggregate(Chunk chunk, ColumnName groupColumn,
                                                               RowFilter filter, ColumnName aggColumn) {
-        Array group = chunk.column(groupColumn);
-        BoolArray groupValidity = NumericColumns.validityOf(group);
-        VarBinDictArray dict;
-        long offset;
-        switch (NumericColumns.unwrap(group)) {
-            case VarBinDictArray d -> {
-                dict = d;
-                offset = 0;
-            }
-            case VarBinSlicedArray(var _, var _, VarBinDictArray d, long sliceOffset) -> {
-                dict = d;
-                offset = sliceOffset;
-            }
-            default -> {
-                return Optional.empty();
-            }
-        }
-        VarBinOffsetArray values = dict.values();
-        if (!(dict.dtype() instanceof DType.Utf8) || values.length() > MAX_GROUPS) {
-            return Optional.empty();
-        }
         Lane lane = Lane.of(aggColumn == null ? null : chunk.column(aggColumn));
         if (lane == null) {
             return Optional.empty();
         }
-        int groups = (int) values.length();
+        Array group = chunk.column(groupColumn);
+        BoolArray validity = NumericColumns.validityOf(group);
         LongPredicate selected = filter == null ? null : FusedFilterAggregate.rowTest(chunk, filter);
+        return switch (NumericColumns.unwrap(group)) {
+            case VarBinDictArray d -> byCode(d, 0, validity, selected, lane, chunk.rowCount());
+            case VarBinSlicedArray(var _, var _, VarBinDictArray d, long offset) ->
+                    byCode(d, offset, validity, selected, lane, chunk.rowCount());
+            case BoolArray b -> byKey(i -> b.getBoolean(i) ? 1 : 0, validity, selected, lane, chunk.rowCount(),
+                    key -> key != 0);
+            case Array data when NumericColumns.isLongDomain(data)
+                    && data.dtype() instanceof DType.Primitive p && p.ptype() != PType.U64 -> {
+                boolean unsigned = p.ptype().isUnsigned();
+                yield byKey(i -> NumericColumns.widenLong(data, unsigned, i), validity, selected, lane,
+                        chunk.rowCount(), key -> key);
+            }
+            default -> Optional.empty();
+        };
+    }
+
+    /// Groups by dictionary code: one slot per entry, plus the null group.
+    private static Optional<Map<Object, FilteredAggregate>> byCode(VarBinDictArray dict, long offset,
+            BoolArray validity, LongPredicate selected, Lane lane, long n) {
+        VarBinOffsetArray values = dict.values();
+        if (!(dict.dtype() instanceof DType.Utf8) || values.length() > MAX_GROUPS) {
+            return Optional.empty();
+        }
+        int groups = (int) values.length();
         // one slot per dictionary entry, plus the null group at index `groups`
         Accumulators acc = new Accumulators(groups + 1, lane);
-        long n = chunk.rowCount();
         for (long i = 0; i < n; i++) {
             if (selected != null && !selected.test(i)) {
                 continue;
             }
             int g;
-            if (groupValidity != null && !groupValidity.getBoolean(i)) {
+            if (validity != null && !validity.getBoolean(i)) {
                 g = groups;
             } else {
                 long code = dict.code(i + offset);
@@ -92,13 +104,65 @@ final class GroupedAggregate {
             }
             acc.add(g, i);
         }
-        Map<String, FilteredAggregate> result = new HashMap<>();
+        Map<Object, FilteredAggregate> result = new HashMap<>();
         for (int g = 0; g <= groups; g++) {
             if (acc.rows[g] > 0) {
                 String key = g == groups ? null : values.getString(g);
                 // two entries may hold the same string; a group is a value, not a code
                 result.merge(key, acc.result(g), GroupedAggregate::combine);
             }
+        }
+        return Optional.of(result);
+    }
+
+    /// Groups by a 64-bit key read per row: ids are assigned in a first pass through a primitive
+    /// map, then the rows fold per id in a second, so no key is boxed per row.
+    private static Optional<Map<Object, FilteredAggregate>> byKey(LongUnaryOperator keyOf, BoolArray validity,
+            LongPredicate selected, Lane lane, long n, LongFunction<Object> boxKey) {
+        int[] ids = new int[Math.toIntExact(n)];
+        LongIntMap idOf = new LongIntMap(64);
+        long[] keys = new long[16];
+        int groups = 0;
+        boolean nulls = false;
+        for (int i = 0; i < n; i++) {
+            if (selected != null && !selected.test(i)) {
+                ids[i] = -1;
+                continue;
+            }
+            if (validity != null && !validity.getBoolean(i)) {
+                ids[i] = Integer.MAX_VALUE; // the null group, renumbered below
+                nulls = true;
+                continue;
+            }
+            long key = keyOf.applyAsLong(i);
+            int id = idOf.get(key);
+            if (id < 0) {
+                if (groups == MAX_GROUPS) {
+                    return Optional.empty();
+                }
+                id = groups++;
+                idOf.put(key, id);
+                if (id == keys.length) {
+                    keys = Arrays.copyOf(keys, keys.length * 2);
+                }
+                keys[id] = key;
+            }
+            ids[i] = id;
+        }
+        // the null group takes the slot after the keyed groups
+        Accumulators acc = new Accumulators(groups + 1, lane);
+        for (int i = 0; i < n; i++) {
+            int id = ids[i];
+            if (id >= 0) {
+                acc.add(id == Integer.MAX_VALUE ? groups : id, i);
+            }
+        }
+        Map<Object, FilteredAggregate> result = new HashMap<>();
+        for (int g = 0; g < groups; g++) {
+            result.put(boxKey.apply(keys[g]), acc.result(g));
+        }
+        if (nulls) {
+            result.put(null, acc.result(groups));
         }
         return Optional.of(result);
     }

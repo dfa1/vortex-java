@@ -186,8 +186,8 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         call.transformTo(values);
     }
 
-    /// Rewrites a `GROUP BY` on one string column into a [LogicalValues] with one row per group,
-    /// folded per dictionary code by [VortexTable#groupedFold(ColumnName, RowFilter, java.util.Set)]
+    /// Rewrites a `GROUP BY` on one string, integer or boolean column into a [LogicalValues] with one
+    /// row per group, folded by [VortexTable#groupedFold(ColumnName, RowFilter, java.util.Set)]
     /// instead of materializing every row for Calcite to hash. Leaves the plan alone when the group
     /// column is not a string, an aggregate is not `COUNT`/`SUM`/`MIN`/`MAX` over a plain column, or
     /// the fold declines (a chunk not dictionary-encoded, an aggregate column it cannot total, too
@@ -197,7 +197,12 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                                        RexBuilder rexBuilder, List<RelDataType> outTypes, RowFilter filter) {
         ColumnName group = resolveColumn(aggregate.getGroupSet().nth(0), scanColumns, project);
         RelDataTypeField groupField = group == null ? null : scanRowType.getField(group.value(), true, false);
-        if (groupField == null || !SqlTypeName.CHAR_TYPES.contains(groupField.getType().getSqlTypeName())) {
+        if (groupField == null) {
+            return;
+        }
+        SqlTypeName groupSqlType = groupField.getType().getSqlTypeName();
+        if (!SqlTypeName.CHAR_TYPES.contains(groupSqlType) && !SqlTypeName.INT_TYPES.contains(groupSqlType)
+                && groupSqlType != SqlTypeName.BOOLEAN) {
             return;
         }
         List<AggregateCall> calls = aggregate.getAggCallList();
@@ -221,16 +226,15 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         }
         // ConcurrentHashMap keys cannot be null, so a missing filter is keyed as an empty list
         List<Object> foldKey = List.of("grouped", table, group, filter == null ? List.of() : filter, aggColumns);
-        Optional<Map<String, VortexTable.GroupFold>> folds =
+        Optional<Map<Object, VortexTable.GroupFold>> folds =
                 memo(call.getPlanner(), foldKey, () -> table.groupedFold(group, filter, aggColumns));
         if (folds.isEmpty()) {
             return;
         }
         RelDataType groupType = aggregate.getRowType().getFieldList().getFirst().getType();
         List<ImmutableList<RexLiteral>> tuples = new ArrayList<>();
-        for (Map.Entry<String, VortexTable.GroupFold> entry : folds.get().entrySet()) {
-            RexLiteral key = entry.getKey() == null ? rexBuilder.makeNullLiteral(groupType)
-                    : minMaxLiteral(rexBuilder, entry.getKey(), groupType);
+        for (Map.Entry<Object, VortexTable.GroupFold> entry : folds.get().entrySet()) {
+            RexLiteral key = VortexSortPushDownRule.literal(rexBuilder, entry.getKey(), groupType);
             if (key == null) {
                 return; // a key the column's charset cannot hold as a literal
             }

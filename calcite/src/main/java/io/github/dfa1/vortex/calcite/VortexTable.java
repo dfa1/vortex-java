@@ -358,20 +358,21 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     public record GroupFold(long rows, Map<ColumnName, FilteredFold> columns) {
     }
 
-    /// Folds aggregates per value of a dictionary-encoded string column over the rows `filter`
-    /// selects, reading the group column's codes instead of building a row per record: each chunk
+    /// Folds aggregates per value of a dictionary-encoded string, boolean or integer column over the
+    /// rows `filter` selects, without building a row per record: each chunk
     /// goes through [Compute#groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)] and the
     /// chunks' results merge per group value.
     ///
-    /// The result is empty, leaving the query to the scan, when any chunk's group column is not
-    /// dictionary-encoded, an aggregate column has no long or double fold, or there are more than
-    /// [#MAX_GROUPS] groups.
+    /// The result is empty, leaving the query to the scan, when the kernel declines a chunk (a string
+    /// column not dictionary-encoded there, too many groups in it, an aggregate column with no long
+    /// or double fold) or there are more than [#MAX_GROUPS] groups in all.
     ///
-    /// @param group      the string column to group by
+    /// @param group      the column to group by
     /// @param filter     the pushed predicate, or `null` for every row
     /// @param aggColumns the columns the aggregates reduce; empty when only rows are counted
-    /// @return the fold per group value (`null` is the null group), or empty
-    public Optional<Map<String, GroupFold>> groupedFold(ColumnName group, RowFilter filter, Set<ColumnName> aggColumns) {
+    /// @return the fold per group value (`String`, `Boolean` or `Long`; `null` is the null group), or
+    ///         empty
+    public Optional<Map<Object, GroupFold>> groupedFold(ColumnName group, RowFilter filter, Set<ColumnName> aggColumns) {
         java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
         columns.add(group);
         if (filter != null) {
@@ -385,20 +386,20 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         // one pass per aggregate column (a null column counts rows only)
         List<ColumnName> passes = aggColumns.isEmpty() ? java.util.Collections.singletonList(null)
                 : List.copyOf(aggColumns);
-        Map<String, long[]> rows = new java.util.HashMap<>();
-        Map<String, Map<ColumnName, Fold>> byGroup = new java.util.HashMap<>();
+        Map<Object, long[]> rows = new java.util.HashMap<>();
+        Map<Object, Map<ColumnName, Fold>> byGroup = new java.util.HashMap<>();
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(options)) {
             while (scan.hasNext()) {
                 try (Chunk chunk = scan.next()) {
                     for (int p = 0; p < passes.size(); p++) {
                         ColumnName aggColumn = passes.get(p);
-                        Optional<Map<String, FilteredAggregate>> part =
+                        Optional<Map<Object, FilteredAggregate>> part =
                                 Compute.groupedAggregate(chunk, group, filter, aggColumn);
                         if (part.isEmpty()) {
                             return Optional.empty();
                         }
-                        for (Map.Entry<String, FilteredAggregate> entry : part.get().entrySet()) {
+                        for (Map.Entry<Object, FilteredAggregate> entry : part.get().entrySet()) {
                             FilteredAggregate aggregate = entry.getValue();
                             if (p == 0) {
                                 rows.computeIfAbsent(entry.getKey(), k -> new long[1])[0] += aggregate.selectedRows();
@@ -423,7 +424,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         } catch (IOException e) {
             throw new UncheckedIOException("cannot fold groups of " + file, e);
         }
-        Map<String, GroupFold> result = new java.util.HashMap<>();
+        Map<Object, GroupFold> result = new java.util.HashMap<>();
         rows.forEach((key, count) -> {
             Map<ColumnName, FilteredFold> columnFolds = new java.util.HashMap<>();
             byGroup.getOrDefault(key, Map.of()).forEach((column, fold) -> columnFolds.put(column, fold.result()));
