@@ -24,6 +24,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.NlsString;
+import org.apache.calcite.util.Util;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -311,7 +312,8 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         return rexBuilder.makeExactLiteral(BigDecimal.valueOf(value), type);
     }
 
-    /// Builds a literal for a non-null `MIN`/`MAX` value: a [String] zone-map stat (a `Utf8` column,
+    /// Builds a literal for a non-null `MIN`/`MAX` value, or `null` (the rule abandons) for a string
+    /// the type's charset cannot encode: a [String] zone-map stat (a `Utf8` column,
     /// whose min/max the writer records as the full string, not a numeric summary) against a
     /// `CHAR`/`VARCHAR` output type, wrapped as an [NlsString] — [RexBuilder#makeLiteral(Object,
     /// RelDataType)] asserts a `CHAR`-family value already comes in that form, populating charset
@@ -320,6 +322,12 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     private static RexLiteral minMaxLiteral(RexBuilder rexBuilder, Object value, RelDataType type) {
         if (value instanceof String s
                 && (type.getSqlTypeName() == SqlTypeName.VARCHAR || type.getSqlTypeName() == SqlTypeName.CHAR)) {
+            // A literal must fit the type's charset, ISO-8859-1 unless declared otherwise; one that
+            // does not fails the whole query, so leave it to the scan, which builds no literal.
+            java.nio.charset.Charset charset = type.getCharset() != null ? type.getCharset() : Util.getDefaultCharset();
+            if (!charset.newEncoder().canEncode(s)) {
+                return null;
+            }
             return rexBuilder.makeLiteral(new NlsString(s, null, null), type);
         }
         return numericLiteral(rexBuilder, value, type);
