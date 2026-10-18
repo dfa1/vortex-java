@@ -36,7 +36,7 @@ import java.util.Optional;
 ///
 /// Fires only when it can answer *every* aggregate from statistics: no `GROUP BY`, and each call
 /// is `COUNT(*)`, `COUNT(col)`, `MIN(col)`, `MAX(col)` (numeric or `VARCHAR`/`CHAR`), or `SUM(col)`
-/// over a numeric column. `SUM` folds the per-zone `SUM` rows via [VortexTable#zoneSum(ColumnName)]; it
+/// over a numeric column, with no `DISTINCT` and no `FILTER (WHERE ...)` clause. `SUM` folds the per-zone `SUM` rows via [VortexTable#zoneSum(ColumnName)]; it
 /// emits the SQL `NULL` of an all-null (or empty) column, and abandons (falling back to the scan)
 /// for a column whose zone-map table cannot answer it — no zone map, an overflowed zone, or a zero
 /// fold whose null count is unknown (a genuine zero is indistinguishable from all-null). Anything
@@ -87,6 +87,14 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         Aggregate aggregate = call.rel(0);
         if (aggregate.getGroupCount() != 0) {
             return;
+        }
+        // Statistics describe every row of a zone, so they cannot answer an aggregate over a subset
+        // of its rows: COUNT(DISTINCT g) is not COUNT(g), and a FILTER (WHERE ...) clause narrows
+        // the rows one call sees. Leave either to the scan.
+        for (AggregateCall aggCall : aggregate.getAggCallList()) {
+            if (aggCall.isDistinct() || aggCall.hasFilter()) {
+                return;
+            }
         }
         // Explicit operands give concrete rels under both Hep and Volcano. Walk the optional
         // Project and Filter nodes between the Aggregate and the TableScan; each rule variant fixes
