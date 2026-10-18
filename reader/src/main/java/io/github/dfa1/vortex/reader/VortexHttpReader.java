@@ -124,23 +124,39 @@ public final class VortexHttpReader implements VortexHandle {
 
         MemorySegment postscriptSeg = IoBounds.slice(tailSeg, psOffInTail, trailer.postscriptLen());
 
-        var ps = FbsPostscript.getRootAsFbsPostscript(postscriptSeg);
-
-        var footerSpec = ps.footer();
-        if (footerSpec == null) {
-            throw new VortexException("postscript missing footer segment");
+        record Blob(long offset, long length) {
         }
-        var layoutSpec = ps.layout();
-        if (layoutSpec == null) {
-            throw new VortexException("postscript missing layout segment");
+        Blob footerBlob;
+        Blob layoutBlob;
+        Blob dtypeBlob;
+        // The FlatBuffer runtime trusts the offsets it follows (see FbsTable): a crafted one fails
+        // inside it as a raw IndexOutOfBoundsException, framed here as PostscriptParser.parse
+        // frames the local-file path.
+        try {
+            var ps = FbsPostscript.getRootAsFbsPostscript(postscriptSeg);
+            var footerSpec = ps.footer();
+            if (footerSpec == null) {
+                throw new VortexException("postscript missing footer segment");
+            }
+            var layoutSpec = ps.layout();
+            if (layoutSpec == null) {
+                throw new VortexException("postscript missing layout segment");
+            }
+            var dtypeSpec = ps.dtype();
+            footerBlob = new Blob(footerSpec.offset(), footerSpec.length());
+            layoutBlob = new Blob(layoutSpec.offset(), layoutSpec.length());
+            dtypeBlob = dtypeSpec != null ? new Blob(dtypeSpec.offset(), dtypeSpec.length()) : new Blob(0, 0);
+        } catch (VortexException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new VortexException("malformed postscript", e);
         }
-        var dtypeSpec = ps.dtype();
 
-        MemorySegment footerBuf = fetchBlob(footerSpec.offset(), footerSpec.length(), tailStart, tail, uri, client);
-        MemorySegment layoutBuf = fetchBlob(layoutSpec.offset(), layoutSpec.length(), tailStart, tail, uri, client);
-        MemorySegment dtypeBuf = (dtypeSpec != null && dtypeSpec.length() > 0)
-                                  ? fetchBlob(dtypeSpec.offset(), dtypeSpec.length(), tailStart, tail, uri, client)
-                                  : null;
+        MemorySegment footerBuf = fetchBlob(footerBlob.offset(), footerBlob.length(), tailStart, tail, uri, client);
+        MemorySegment layoutBuf = fetchBlob(layoutBlob.offset(), layoutBlob.length(), tailStart, tail, uri, client);
+        MemorySegment dtypeBuf = dtypeBlob.length() > 0
+                                 ? fetchBlob(dtypeBlob.offset(), dtypeBlob.length(), tailStart, tail, uri, client)
+                                 : null;
 
         var parsed = PostscriptParser.parseBlobs(footerBuf, layoutBuf, dtypeBuf);
         // Reject footer segmentSpecs that fall outside the file before any rawSegment() builds a
