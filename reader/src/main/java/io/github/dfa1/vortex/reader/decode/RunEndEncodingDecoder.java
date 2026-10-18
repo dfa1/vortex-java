@@ -147,9 +147,9 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         PrimitiveArrays.requireUnsigned(endsPtype, EncodingId.VORTEX_RUNEND);
         int endsBytes = endsPtype.byteSize();
         long endsCap = SegmentBroadcast.capacity(endsSeg, endsBytes, numRuns);
-        if (endsCap <= 0) {
-            throw new VortexException(EncodingId.VORTEX_RUNEND,
-                    "runend: empty ends buffer for " + numRuns + " run(s)");
+        if (numRuns == 0) {
+            // An empty array (decode already refused zero runs for rows): nothing to validate.
+            return;
         }
         long prev = PrimitiveArrays.readLong(endsSeg, 0, endsPtype, EncodingId.VORTEX_RUNEND);
         if (offset != 0 && prev < offset) {
