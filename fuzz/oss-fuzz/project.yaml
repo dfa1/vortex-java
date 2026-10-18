@@ -1,0 +1,8 @@
+homepage: "https://github.com/dfa1/vortex-java"
+language: jvm
+main_repo: "https://github.com/dfa1/vortex-java"
+primary_contact: "TODO: maintainer e-mail (must be a Google-account address)"
+fuzzing_engines:
+  - libfuzzer
+sanitizers:
+  - address

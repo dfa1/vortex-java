@@ -1,0 +1,77 @@
+name: Fuzz
+
+# Weekly coverage-guided fuzzing (ADR 0020, #493). Every @FuzzTest replays its saved inputs in the
+# ordinary build; this job explores new ones, one target per matrix job because Jazzer fuzzes a
+# single target per JVM. Scheduled, not on the PR path: a run is unbounded exploration, so a
+# failure is a finding to triage (the crash input is uploaded; commit it next to the target's
+# saved inputs with the fix), not a broken build.
+
+on:
+  schedule:
+    - cron: '0 3 * * 6'   # Saturdays 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Fuzzing time per target (e.g. 10m, 1h)'
+        default: '30m'
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { module: fuzz, target: 'VortexReaderFuzzTest#openMalformedFile' }
+          - { module: fuzz, target: 'VortexReaderFuzzTest#scanMalformedFile' }
+          - { module: fuzz, target: 'VortexReaderFuzzTest#filterMalformedFile' }
+          - { module: fuzz, target: 'VortexReaderFuzzTest#parseMetadataBlobs' }
+          - { module: fuzz, target: 'FsstFuzzTest#compressDecompressRoundTrip' }
+          - { module: integration, target: 'WriteReadFuzzIntegrationTest#javaRoundTrip' }
+          - { module: integration, target: 'WriteReadFuzzIntegrationTest#jniReadsJavaWrite' }
+    name: ${{ matrix.target }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Azul Zulu JDK 25
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: zulu
+          java-version: '25'
+
+      - name: Cache Maven repository
+        uses: actions/cache@v6
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Fuzz
+        env:
+          JAZZER_FUZZ: '1'
+          JAZZER_MAX_DURATION: ${{ inputs.duration || '30m' }}
+        run: |
+          if [ "${{ matrix.module }}" = integration ]; then
+            ./mvnw -B verify -pl integration -am -Dit.test='${{ matrix.target }}' \
+                -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false
+          else
+            ./mvnw -B test -pl fuzz -am -Dtest='${{ matrix.target }}' \
+                -Dsurefire.failIfNoSpecifiedTests=false
+          fi
+
+      # Jazzer writes a finding next to the target's saved inputs; the committed crash-* inputs
+      # are regressions already fixed, so only the new, untracked ones are collected.
+      - name: Collect the new crash input
+        if: failure()
+        run: |
+          mkdir -p findings
+          git ls-files --others --exclude-standard | grep '/crash-' | xargs -r -I{} cp --parents {} findings/
+
+      - name: Upload the crash input
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: crash-${{ strategy.job-index }}
+          path: findings/
