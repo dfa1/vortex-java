@@ -64,6 +64,78 @@ class PostscriptParserDTypeGuardsTest {
                 .hasMessageContaining("names/dtypes length mismatch");
     }
 
+    @Test
+    void convertDType_structWithoutNamesVector_throwsVortexException() {
+        // Given — a struct with no names vector at all, which Rust refuses (StructFields::from_fb)
+        // while it accepts an empty one; read as 0 fields, it failed the scan as a raw
+        // ArrayIndexOutOfBoundsException (a fuzzer finding)
+        MemorySegment dtype = structDType(false, true);
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("failed to parse struct names");
+    }
+
+    @Test
+    void convertDType_structWithoutDtypesVector_throwsVortexException() {
+        // Given — the same for the dtypes vector
+        MemorySegment dtype = structDType(true, false);
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("failed to parse struct dtypes");
+    }
+
+    @Test
+    void convertDType_structWithEmptyVectors_isAZeroFieldStruct() {
+        // Given — both vectors present but empty: Rust's legal 0-field struct
+        MemorySegment dtype = structDType(true, true);
+
+        // When
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        PostscriptParser.ParsedFile result = PostscriptParser.parseBlobs(footer, layout, dtype);
+
+        // Then
+        assertThat(result.dtype()).isEqualTo(new DType.Struct(List.of(), List.of(), false));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 2})
+    void parseBlobs_structLayoutChildCountNotFieldCount_throwsVortexException(int children) {
+        // Given — a one-field struct dtype over a struct layout with too few or too many children:
+        // Rust refuses it while deserializing the layout tree; the scan used to index the field
+        // list by layout child and throw ArrayIndexOutOfBoundsException (a fuzzer finding)
+        MemorySegment dtype = structDType(new String[]{"a"}, 1);
+
+        // When / Then
+        MemorySegment footer = flatAndStructFooter();
+        MemorySegment layout = structLayout(children);
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("vortex.struct layout has " + children + " children but its struct dtype needs 1");
+    }
+
+    @Test
+    void parseBlobs_structLayoutOneChildPerField_isAccepted() {
+        // Given
+        MemorySegment dtype = structDType(new String[]{"a"}, 1);
+
+        // When
+        MemorySegment footer = flatAndStructFooter();
+        MemorySegment layout = structLayout(1);
+        PostscriptParser.ParsedFile result = PostscriptParser.parseBlobs(footer, layout, dtype);
+
+        // Then
+        assertThat(result.layout().children()).hasSize(1);
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "   "})
     void convertDType_blankFieldName_isAccepted(String name) {
@@ -354,6 +426,18 @@ class PostscriptParserDTypeGuardsTest {
         return fbb.dataSegment();
     }
 
+    /// A 0-field struct dtype whose names/dtypes vectors are written empty or left out entirely
+    /// (a zero offset omits the field).
+    private static MemorySegment structDType(boolean withNames, boolean withDtypes) {
+        var fbb = new FbsBuilder(256);
+        int namesVec = withNames ? FbsStruct.createNamesVector(fbb, new int[0]) : 0;
+        int dtypesVec = withDtypes ? FbsStruct.createDtypesVector(fbb, new int[0]) : 0;
+        int struct = FbsStruct.createFbsStruct(fbb, namesVec, dtypesVec, false);
+        int root = FbsDType.createFbsDType(fbb, FbsType.FbsStruct, struct);
+        fbb.finish(root);
+        return fbb.dataSegment();
+    }
+
     private static MemorySegment minimalFooter() {
         var fbb = new FbsBuilder(256);
         int asv = FbsFooter.createArraySpecsVector(fbb, new int[]{
@@ -364,6 +448,35 @@ class PostscriptParserDTypeGuardsTest {
         int ssv = fbb.endVector();
         int footOff = FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
         fbb.finish(footOff);
+        return fbb.dataSegment();
+    }
+
+    /// A footer declaring layout ids 0 = `vortex.flat`, 1 = `vortex.struct`.
+    private static MemorySegment flatAndStructFooter() {
+        var fbb = new FbsBuilder(256);
+        int asv = FbsFooter.createArraySpecsVector(fbb, new int[]{
+                FbsArraySpec.createFbsArraySpec(fbb, fbb.createString("vortex.primitive"))});
+        int lsv = FbsFooter.createLayoutSpecsVector(fbb, new int[]{
+                FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.flat")),
+                FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.struct"))});
+        FbsFooter.startSegmentSpecsVector(fbb, 0);
+        int ssv = fbb.endVector();
+        int footOff = FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
+        fbb.finish(footOff);
+        return fbb.dataSegment();
+    }
+
+    /// A struct layout (id 1 in [#flatAndStructFooter()]) over `children` flat layouts.
+    private static MemorySegment structLayout(int children) {
+        var fbb = new FbsBuilder(256);
+        int[] flats = new int[children];
+        for (int i = 0; i < children; i++) {
+            int segV = FbsLayout.createSegmentsVector(fbb, new long[]{0});
+            flats[i] = FbsLayout.createFbsLayout(fbb, 0, 1L, 0, 0, segV);
+        }
+        int childV = FbsLayout.createChildrenVector(fbb, flats);
+        int off = FbsLayout.createFbsLayout(fbb, 1, 1L, 0, childV, 0);
+        FbsLayout.finishFbsLayoutBuffer(fbb, off);
         return fbb.dataSegment();
     }
 

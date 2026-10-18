@@ -31,6 +31,12 @@ public final class FbsStruct extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `names` vector from an empty one, which [#namesLength()] cannot.
+    /// @return whether the `names` vector is present
+    public boolean hasNames() {
+        return fieldOffset(4) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `names` string
     public String names(int j) {
@@ -42,6 +48,12 @@ public final class FbsStruct extends FbsTable {
     public int dtypesLength() {
         int o = fieldOffset(6);
         return o != 0 ? vectorLength(o) : 0;
+    }
+
+    /// Tells an absent `dtypes` vector from an empty one, which [#dtypesLength()] cannot.
+    /// @return whether the `dtypes` vector is present
+    public boolean hasDtypes() {
+        return fieldOffset(6) != 0;
     }
 
     /// @param j element index

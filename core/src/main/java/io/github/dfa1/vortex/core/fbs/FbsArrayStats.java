@@ -31,6 +31,12 @@ public final class FbsArrayStats extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `min` vector from an empty one, which [#minLength()] cannot.
+    /// @return whether the `min` vector is present
+    public boolean hasMin() {
+        return fieldOffset(4) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `min` element
     public int min(int j) {
@@ -56,6 +62,12 @@ public final class FbsArrayStats extends FbsTable {
         return o != 0 ? vectorLength(o) : 0;
     }
 
+    /// Tells an absent `max` vector from an empty one, which [#maxLength()] cannot.
+    /// @return whether the `max` vector is present
+    public boolean hasMax() {
+        return fieldOffset(8) != 0;
+    }
+
     /// @param j element index
     /// @return the j-th `max` element
     public int max(int j) {
@@ -79,6 +91,12 @@ public final class FbsArrayStats extends FbsTable {
     public int sumLength() {
         int o = fieldOffset(12);
         return o != 0 ? vectorLength(o) : 0;
+    }
+
+    /// Tells an absent `sum` vector from an empty one, which [#sumLength()] cannot.
+    /// @return whether the `sum` vector is present
+    public boolean hasSum() {
+        return fieldOffset(12) != 0;
     }
 
     /// @param j element index

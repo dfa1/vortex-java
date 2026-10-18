@@ -582,10 +582,18 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return null;
         }
         int idx = struct.fieldNames().indexOf(column);
-        if (idx < 0 || idx >= root.children().size()) {
+        if (idx < 0) {
             return null;
         }
-        return firstZoned(root.children().get(idx));
+        return firstZoned(root.children().get(fieldChildOffset(struct) + idx));
+    }
+
+    /// Index of field 0 among the root struct layout's children: a nullable struct's layout leads
+    /// with its validity child (open checks the count, as Rust's `validate_children` does), so the
+    /// columns start one later. The root validity itself is not applied: [Chunk] has no row-level
+    /// nulls, so a null root row reads as its field values.
+    private static int fieldChildOffset(DType.Struct root) {
+        return root.nullable() ? 1 : 0;
     }
 
     private static Layout firstZoned(Layout layout) {
@@ -711,13 +719,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         if (rootLayout.isStruct() && rootDtype instanceof DType.Struct structDtype) {
             List<ColumnName> projection = options.columns();
-            for (int i = 0; i < rootLayout.children().size(); i++) {
+            int offset = fieldChildOffset(structDtype);
+            for (int i = 0; i < structDtype.fieldNames().size(); i++) {
                 ColumnName colName = structDtype.fieldNames().get(i);
                 DType colDtype = structDtype.fieldTypes().get(i);
                 if (!projection.isEmpty() && !projection.contains(colName)) {
                     continue;
                 }
-                Layout colTop = rootLayout.children().get(i);
+                Layout colTop = rootLayout.children().get(offset + i);
                 var flats = new ArrayList<Layout>();
                 collectFlats(colTop, flats);
                 columnFlats.put(colName, flats);

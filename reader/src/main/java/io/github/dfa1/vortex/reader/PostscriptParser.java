@@ -126,6 +126,7 @@ final class PostscriptParser {
             DType dtype = null;
             if (dtypeBuf != null && dtypeBuf.byteSize() > 0) {
                 dtype = convertDType(io.github.dfa1.vortex.core.fbs.FbsDType.getRootAsFbsDType(dtypeBuf), 0);
+                checkStructLayouts(layout, dtype);
             }
 
             return new ParsedFile(footer, dtype, layout);
@@ -133,6 +134,26 @@ final class PostscriptParser {
             throw e;
         } catch (RuntimeException e) {
             throw new VortexException("malformed footer/layout/dtype blob", e);
+        }
+    }
+
+    /// Rejects at open a struct layout whose children do not match its struct dtype, as Rust does
+    /// while deserializing the layout tree (`Layout::<Struct>::validate_children`): one child per
+    /// field, plus a leading validity child when the struct is nullable. Left to the scan, a
+    /// mismatch indexed the field list by layout child and escaped as a raw JDK exception.
+    /// Recurses only through directly nested struct layouts, whose dtype is the field's own.
+    private static void checkStructLayouts(Layout layout, DType dtype) {
+        if (!layout.isStruct() || !(dtype instanceof DType.Struct struct)) {
+            return;
+        }
+        int validity = struct.nullable() ? 1 : 0;
+        int expected = struct.fieldTypes().size() + validity;
+        if (layout.children().size() != expected) {
+            throw new VortexException("vortex.struct layout has " + layout.children().size()
+                    + " children but its struct dtype needs " + expected);
+        }
+        for (int i = 0; i < struct.fieldTypes().size(); i++) {
+            checkStructLayouts(layout.children().get(validity + i), struct.fieldTypes().get(i));
         }
     }
 
@@ -284,6 +305,13 @@ final class PostscriptParser {
             case FbsType.FbsBinary -> new DType.Binary(fbs.type(new FbsBinary()).nullable());
             case FbsType.FbsStruct -> {
                 var s = fbs.type(new FbsStruct());
+                // Rust (StructFields::from_fb) requires both vectors; only an empty one is a 0-field struct.
+                if (!s.hasNames()) {
+                    throw new VortexException("failed to parse struct names from flatbuffer");
+                }
+                if (!s.hasDtypes()) {
+                    throw new VortexException("failed to parse struct dtypes from flatbuffer");
+                }
                 if (s.namesLength() != s.dtypesLength()) {
                     throw new VortexException("struct names/dtypes length mismatch: "
                             + s.namesLength() + " names, " + s.dtypesLength() + " dtypes");

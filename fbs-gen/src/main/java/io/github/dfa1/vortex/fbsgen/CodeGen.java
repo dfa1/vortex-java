@@ -222,7 +222,13 @@ public final class CodeGen {
                         int o = fieldOffset(%2$d);
                         return o != 0 ? vectorLength(o) : 0;
                     }
-                """.formatted(accessor, vt));
+
+                    /// Tells an absent `%1$s` vector from an empty one, which [#%1$sLength()] cannot.
+                    /// @return whether the `%1$s` vector is present
+                    public boolean has%3$s() {
+                        return fieldOffset(%2$d) != 0;
+                    }
+                """.formatted(accessor, vt, capitalize(accessor)));
 
         if (element instanceof Ast.Scalar scalar) {
             emitScalarVectorElements(sb, accessor, scalar, vt);

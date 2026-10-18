@@ -110,8 +110,7 @@ public record InspectorTree(
         Footer footer = handle.footer();
         Layout layout = handle.layout();
         DType dtype = handle.dtype();
-        List<String> colNames = (dtype instanceof DType.Struct s)
-                ? s.fieldNames().stream().map(ColumnName::value).toList() : List.of();
+        List<String> colNames = rootChildLabels(dtype);
         Node root = shallowNode(layout, Optional.empty());
         if (layout.isStruct()) {
             List<Node> named = new ArrayList<>(root.children().size());
@@ -183,8 +182,7 @@ public record InspectorTree(
         int total = countPeekableSegments(layout, footer);
         int[] counter = {0};
 
-        List<String> colNames = (dtype instanceof DType.Struct s)
-                ? s.fieldNames().stream().map(ColumnName::value).toList() : List.of();
+        List<String> colNames = rootChildLabels(dtype);
         Set<String> overallUsed = new LinkedHashSet<>();
         Map<Integer, String> segmentEncodings = new LinkedHashMap<>();
         Node root = buildNode(layout, Optional.empty(), handle, footer.arraySpecs(),
@@ -382,6 +380,20 @@ public record InspectorTree(
         /// @param current number of segments peeked so far
         /// @param total   total peekable segments in the file
         void update(int current, int total);
+    }
+
+    /// Labels for the root struct layout's children: the column names, after a `<validity>` child
+    /// when the struct is nullable (its layout leads with one, as Rust's `validate_children` requires).
+    private static List<String> rootChildLabels(DType dtype) {
+        if (!(dtype instanceof DType.Struct s)) {
+            return List.of();
+        }
+        List<String> labels = new ArrayList<>();
+        if (s.nullable()) {
+            labels.add("<validity>");
+        }
+        s.fieldNames().forEach(name -> labels.add(name.value()));
+        return labels;
     }
 
     private static Peek peekFlatRoot(MemorySegment seg, List<EncodingId> arraySpecs) {
