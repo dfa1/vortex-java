@@ -86,6 +86,7 @@ scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conforma
 ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test="RaincloudConformanceIntegrationTest"
 ./mvnw test -pl fuzz -am -Dvortex.fuzz.excludedGroups=                # Jazzer regression mode (ADR 0020)
 JAZZER_FUZZ=1 ./mvnw test -pl fuzz -am -Dvortex.fuzz.excludedGroups=  # actually fuzz (unbounded)
+./mvnw test -pl fuzz -am -Dtest=SeedCorpusGenerator -Dsurefire.failIfNoSpecifiedTests=false -Dvortex.fuzz.regenerateSeeds=true  # rewrite per-encoding seeds
 ```
 
 Tag-excluded from a routine local build, even when named with `-Dit.test`/`-Dtest`:
