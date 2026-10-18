@@ -197,34 +197,27 @@ class FsstEncodingDecoderTest {
             byte[] compressed = {};
             long[] uncompLengths = {};
             long[] codeOffsets = {0};
-            VarBinArray sut = decodeFsst(1, symbols, symbolLengths, compressed,
-                    PType.U8, uncompLengths, PType.U8, codeOffsets);
-
-            // When / Then
+            // When / Then — refused when decoded, before any row is read
             assertThatExceptionOfType(VortexException.class)
-                    .isThrownBy(() -> sut.forEachByteLength(len -> { }))
-                    .withMessageContaining("empty");
+                    .isThrownBy(() -> decodeFsst(1, symbols, symbolLengths, compressed,
+                            PType.U8, uncompLengths, PType.U8, codeOffsets))
+                    .withMessageContaining("child holds 0 element(s) for a declared length of 1");
         }
 
         @Test
-        void forEachByteLength_broadcastCapacityBetweenOneAndRowCount_readsWithModulo() {
-            // Given — cap (2) is neither 0 nor >= n (5), so only the per-row modulo path can
-            // produce the result; existing broadcast fixtures elsewhere use capacity 1 or
-            // capacity == n, neither of which reaches this branch.
+        void forEachByteLength_childShorterThanRowCountButNotConstant_throws() {
+            // Given — 2 lengths for 5 rows: neither a full child nor a constant one. It used to wrap
+            // around and read 5, 7, 5, 7, 5; Rust has no such shape, so it is malformed input.
             long[] symbols = {};
             byte[] symbolLengths = {};
             byte[] compressed = {};
             long[] uncompLengths = {5, 7};
             long[] codeOffsets = {0};
-            VarBinArray sut = decodeFsst(5, symbols, symbolLengths, compressed,
-                    PType.U8, uncompLengths, PType.U8, codeOffsets);
-
-            // When
-            List<Integer> lengths = new ArrayList<>();
-            sut.forEachByteLength(lengths::add);
-
-            // Then
-            assertThat(lengths).containsExactly(5, 7, 5, 7, 5);
+            // When / Then — refused when decoded, before any row is read
+            assertThatExceptionOfType(VortexException.class)
+                    .isThrownBy(() -> decodeFsst(5, symbols, symbolLengths, compressed,
+                            PType.U8, uncompLengths, PType.U8, codeOffsets))
+                    .withMessageContaining("child holds 2 element(s) for a declared length of 5");
         }
 
         @ParameterizedTest(name = "{0}")
@@ -260,7 +253,7 @@ class FsstEncodingDecoderTest {
             byte[] symbolLengths = {};
             byte[] compressed = {};
             long[] uncompLengths = {};
-            long[] codeOffsets = {};
+            long[] codeOffsets = {0};                         // n + 1 offsets, as Rust writes them
 
             // When
             VarBinArray result = decodeFsst(0, symbols, symbolLengths, compressed,
@@ -463,13 +456,12 @@ class FsstEncodingDecoderTest {
             byte[] compressed = {0x00};
             long[] uncompLengths = {};                        // empty length child with n == 1
             long[] codeOffsets = {0, 1};
-            VarBinArray result = decodeFsst(1, symbols, symbolLengths, compressed,
-                    PType.U8, uncompLengths, PType.U8, codeOffsets);
 
-            // When / Then — decode() succeeded; reading row 0's length is where this surfaces.
+            // When / Then — refused when decoded: the child is neither full nor one broadcast value
             assertThatExceptionOfType(VortexException.class)
-                    .isThrownBy(() -> result.getByteLength(0))
-                    .withMessageContaining("empty");
+                    .isThrownBy(() -> decodeFsst(1, symbols, symbolLengths, compressed,
+                            PType.U8, uncompLengths, PType.U8, codeOffsets))
+                    .withMessageContaining("child holds 0 element(s)");
         }
 
         @Test
@@ -480,13 +472,12 @@ class FsstEncodingDecoderTest {
             byte[] compressed = {0x00};
             long[] uncompLengths = {2};
             long[] codeOffsets = {};                          // empty offsets child with n == 1
-            VarBinArray result = decodeFsst(1, symbols, symbolLengths, compressed,
-                    PType.U8, uncompLengths, PType.U8, codeOffsets);
 
-            // When / Then
+            // When / Then — refused when decoded: the child is neither full nor one broadcast value
             assertThatExceptionOfType(VortexException.class)
-                    .isThrownBy(() -> result.getByteLength(0))
-                    .withMessageContaining("empty");
+                    .isThrownBy(() -> decodeFsst(1, symbols, symbolLengths, compressed,
+                            PType.U8, uncompLengths, PType.U8, codeOffsets))
+                    .withMessageContaining("child holds 0 element(s)");
         }
 
         @Test

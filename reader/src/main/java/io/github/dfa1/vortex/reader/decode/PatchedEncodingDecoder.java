@@ -95,25 +95,25 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
     private static MemorySegment patchedOutput(DecodeContext ctx, MemorySegment innerSeg, long n, int elemBytes,
             long nPatches, long nChunks, long nLanes, long offset,
             MemorySegment laneOffsetsSeg, MemorySegment patchIndicesSeg, MemorySegment patchValuesSeg) {
-        if (nPatches == 0 && SegmentBroadcast.capacity(innerSeg, elemBytes) >= n) {
+        if (nPatches == 0 && SegmentBroadcast.capacity(innerSeg, elemBytes, n) >= n) {
             return innerSeg.asSlice(0, n * elemBytes).asReadOnly();
         }
         MemorySegment out = ctx.arena().allocate(n * elemBytes);
         SegmentBroadcast.broadcastCopy(innerSeg, out, n, elemBytes);
         if (nPatches > 0) {
-            applyPatches(out, n, nChunks, nLanes, offset, elemBytes,
+            applyPatches(out, n, nPatches, nChunks, nLanes, offset, elemBytes,
                     laneOffsetsSeg, patchIndicesSeg, patchValuesSeg);
         }
         return out;
     }
 
     private static void applyPatches(
-            MemorySegment out, long n, long nChunks, long nLanes, long offset, int elemBytes,
+            MemorySegment out, long n, long nPatches, long nChunks, long nLanes, long offset, int elemBytes,
             MemorySegment laneOffsets, MemorySegment patchIndices, MemorySegment patchValues
     ) {
-        long laneCap = SegmentBroadcast.capacity(laneOffsets, 4);
-        long idxCap = SegmentBroadcast.capacity(patchIndices, 2);
-        long valCap = SegmentBroadcast.capacity(patchValues, elemBytes);
+        long laneCap = SegmentBroadcast.capacity(laneOffsets, 4, nChunks * nLanes + 1);
+        long idxCap = SegmentBroadcast.capacity(patchIndices, 2, nPatches);
+        long valCap = SegmentBroadcast.capacity(patchValues, elemBytes, nPatches);
         for (long chunk = 0; chunk < nChunks; chunk++) {
             long start = Integer.toUnsignedLong(
                     laneOffsets.getAtIndex(VortexFormat.LE_INT, (chunk * nLanes) % laneCap));

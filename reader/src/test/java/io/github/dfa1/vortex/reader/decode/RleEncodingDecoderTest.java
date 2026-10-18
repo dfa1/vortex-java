@@ -383,7 +383,11 @@ class RleEncodingDecoderTest {
     private static Array decodeRle(DType dtype, long valuesLen, long rowCount,
             MemorySegment indices, ProtoPType indicesPtype, MemorySegment offsets,
             MemorySegment values, int offset) {
-        long indicesLen = indices.byteSize() / (indicesPtype == ProtoPType.U8 ? 1 : 2);
+        long indicesLen = indices.byteSize() / switch (indicesPtype) {
+            case U8 -> 1;
+            case U32 -> 4;
+            default -> 2;
+        };
         long offsetsLen = offsets.byteSize() / 8;             // U64 offsets
         byte[] metaBytes = new ProtoRLEMetadata(
                 valuesLen, indicesLen, indicesPtype, offsetsLen, ProtoPType.U64, offset).encode();

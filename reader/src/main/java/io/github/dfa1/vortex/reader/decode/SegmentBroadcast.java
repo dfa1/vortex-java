@@ -38,16 +38,25 @@ public final class SegmentBroadcast {
         return (i % cap) * elemBytes;
     }
 
-    /// Returns the number of elements physically present in `seg` (≥ 1 for non-empty).
+    /// Returns the number of elements physically present in `seg`, a child declared `count`
+    /// elements long, after checking it has one of the two legal shapes: at least `count`
+    /// elements, or exactly one (a constant child, broadcast across every row).
     ///
-    /// Used by callers that want to detect the constant case explicitly — e.g. to hoist
-    /// a single read out of a hot loop.
+    /// Any other shape is malformed input: an empty child for a non-empty array made the
+    /// callers' `i % capacity` broadcast divide by zero, and a truncated one silently repeated
+    /// its values. Checked here, once, for every caller.
     ///
     /// @param seg       segment returned by DecodeContext#decodeChildSegment
     /// @param elemBytes element width in bytes (>= 1)
-    /// @return physical element count
-    public static long capacity(MemorySegment seg, int elemBytes) {
-        return seg.byteSize() / elemBytes;
+    /// @param count     the child's declared element count
+    /// @return physical element count: `>= count`, or 1
+    /// @throws VortexException if `seg` holds neither `count` elements nor exactly one
+    public static long capacity(MemorySegment seg, int elemBytes, long count) {
+        long capacity = seg.byteSize() / elemBytes;
+        if (capacity >= count || capacity == 1) {
+            return capacity;
+        }
+        throw new VortexException("child holds " + capacity + " element(s) for a declared length of " + count);
     }
 
     /// Copies `count` elements from `src` to `dst`, broadcasting the lone
@@ -59,13 +68,9 @@ public final class SegmentBroadcast {
     /// @param dst       destination segment (must hold ≥ `count * elemBytes` bytes)
     /// @param count     number of elements to materialize
     /// @param elemBytes element width in bytes (>= 1)
-    /// @throws VortexException if `src` is empty
+    /// @throws VortexException if `src` holds neither `count` elements nor exactly one
     public static void broadcastCopy(MemorySegment src, MemorySegment dst, long count, int elemBytes) {
-        long cap = src.byteSize() / elemBytes;
-        if (cap == 0) {
-            throw new VortexException("source segment is empty (byteSize=" + src.byteSize()
-                    + ", elemBytes=" + elemBytes + ")");
-        }
+        long cap = capacity(src, elemBytes, count);
         if (cap >= count) {
             MemorySegment.copy(src, 0, dst, 0, count * elemBytes);
             return;

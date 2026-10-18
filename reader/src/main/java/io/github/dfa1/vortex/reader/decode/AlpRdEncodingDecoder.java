@@ -101,7 +101,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         // Pull the small left-values table into a short[] so lookups don't pay an
         // Array-dispatch per patch hit. Patches are typically <1% of rows.
         MemorySegment valSeg = ctx.decodeChildSegment(3, DType.U16, numPatches);
-        long valCap = SegmentBroadcast.capacity(valSeg, 2);
+        long valCap = SegmentBroadcast.capacity(valSeg, 2, numPatches);
         short[] leftValues = new short[(int) numPatches];
         for (int j = 0; j < numPatches; j++) {
             leftValues[j] = valSeg.getAtIndex(VortexFormat.LE_SHORT, j % valCap);

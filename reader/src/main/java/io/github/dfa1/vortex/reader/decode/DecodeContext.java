@@ -59,19 +59,27 @@ public record DecodeContext(
     /// @param i zero-based child index within this node's children array
     /// @return the primary [MemorySegment] of the decoded child
     public MemorySegment decodeChildSegment(int i) {
-        var childCtx = new DecodeContext(child(i), dtype, rowCount, segmentBuffers, registry, arena);
-        return registry.decodeAsSegment(childCtx);
+        return decodeChildSegment(i, dtype, rowCount);
     }
 
     /// Recursively decode child `i` with an explicit dtype and row count, returning its primary segment.
+    ///
+    /// A primitive child's segment has one of the two legal shapes, checked here once for every
+    /// decoder ([SegmentBroadcast#capacity(MemorySegment, int, long)]): at least `rowCount`
+    /// elements, or exactly one (a constant child broadcast across every row).
     ///
     /// @param i        zero-based child index within this node's children array
     /// @param dtype    logical type to assign to the child context
     /// @param rowCount number of logical rows for the child
     /// @return the primary [MemorySegment] of the decoded child
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if the segment has neither shape
     public MemorySegment decodeChildSegment(int i, DType dtype, long rowCount) {
         var childCtx = new DecodeContext(child(i), dtype, rowCount, segmentBuffers, registry, arena);
-        return registry.decodeAsSegment(childCtx);
+        MemorySegment segment = registry.decodeAsSegment(childCtx);
+        if (dtype instanceof DType.Primitive p) {
+            SegmentBroadcast.capacity(segment, p.ptype().byteSize(), rowCount);
+        }
+        return segment;
     }
 
     /// Returns buffer `bufferPosition` of child `i` without decoding that child.

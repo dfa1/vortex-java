@@ -40,7 +40,7 @@ public final class VarBinEncodingDecoder implements EncodingDecoder {
         MemorySegment offsets = ctx.decodeChildSegment(0, offsetsDtype, n + 1);
 
         int offBytes = offsetsPtype.byteSize();
-        long offCap = SegmentBroadcast.capacity(offsets, offBytes);
+        long offCap = SegmentBroadcast.capacity(offsets, offBytes, n + 1);
         if (offCap < n + 1) {
             MemorySegment materialized = ctx.arena().allocate((n + 1) * offBytes, offBytes);
             SegmentBroadcast.broadcastCopy(offsets, materialized, n + 1, offBytes);

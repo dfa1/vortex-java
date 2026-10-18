@@ -368,7 +368,8 @@ class SparseEncodingDecoderTest {
         /// error and used to blow up at the unchecked `(LongArray)` cast.
         @Test
         void patchValuesChildWrongType_throws() {
-            // Given — an i64 sparse array whose values child is `vortex.bool`, not primitive i64
+            // Given — an i64 sparse array whose values child is `vortex.bool`, not primitive i64: its
+            // one-byte bitmap holds no i64, so it is refused as soon as the child is built
             ArrayNode boolValuesNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{2});
             MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(1), boolBitmap(true)};
             ArrayNode indicesNode = primitiveNode(1);
@@ -377,7 +378,7 @@ class SparseEncodingDecoderTest {
             assertThatThrownBy(() -> decode(DType.I64, 1, 0, PType.U32, 5, segs,
                     indicesNode, boolValuesNode))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("patch values child decoded to unexpected type");
+                    .hasMessageContaining("child holds 0 element(s)");
         }
 
         /// `ArithmeticException: / by zero` — the `Materialized*` accessors broadcast an
@@ -394,7 +395,7 @@ class SparseEncodingDecoderTest {
             assertThatThrownBy(() -> decode(DType.F64, 2, 0, PType.U32, 5, segs,
                     indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("empty patch indices child");
+                    .hasMessageContaining("child holds 0 element(s)");
         }
 
         /// Same divide-by-zero, reached through the values child instead of the indices child.
@@ -409,7 +410,7 @@ class SparseEncodingDecoderTest {
             assertThatThrownBy(() -> decode(DType.F64, 2, 0, PType.U32, 5, segs,
                     indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("empty patch values child");
+                    .hasMessageContaining("child holds 0 element(s)");
         }
 
         /// `OutOfMemoryError` — a null fill makes the decoder build a per-patch validity bitmap
@@ -460,7 +461,7 @@ class SparseEncodingDecoderTest {
         /// child broadcasts instead of failing; the contract this test can hold the sparse
         /// decoder to is ADR 0003's: no raw JDK exception, no read outside the value buffer.
         @Test
-        void varBinPatchCountBeyondValueOffsets_broadcastsWithoutRawException() {
+        void varBinPatchCountBeyondValueOffsets_throws() {
             // Given — 4 declared patches but only 3 offsets, covering 2 values ("b", "d")
             MemorySegment[] segs = {
                     nullFill(),
@@ -469,12 +470,12 @@ class SparseEncodingDecoderTest {
                     TestSegments.leInts(0, 1, 2)         // only 3 offsets = 2 values
             };
 
-            // When — row 3 resolves to patch 3, past what the offsets child covers
-            VarBinArray result = assertVarBin(decode(nullableUtf8(), 4, 0, PType.U32, 5, segs,
-                    primitiveNode(1), varBinNode(2, 3)));
-
-            // Then — the broadcast wraps to offsets [0, 1), still inside the 2-byte payload
-            assertThat(result.getString(3)).isEqualTo("b");
+            // When / Then — 3 offsets for 4 values is neither a full nor a constant child: it used
+            // to wrap around and read patch 3 as "b"
+            assertThatThrownBy(() -> decode(nullableUtf8(), 4, 0, PType.U32, 5, segs,
+                    primitiveNode(1), varBinNode(2, 3)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("child holds 3 element(s) for a declared length of 5");
         }
 
         /// `IndexOutOfBoundsException` from `MemorySegment.copy` under the eager merge —

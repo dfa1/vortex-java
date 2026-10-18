@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.decode.SegmentBroadcast;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -32,8 +33,10 @@ abstract class AbstractMaterializedArray {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
+        // Only a full buffer or a single broadcast element: an empty one for a non-empty array made
+        // the leaves' `i % elementCount` divide by zero (a fuzzer finding), so it is refused here.
         this.elementCount = switch (dtype) {
-            case DType.Primitive p -> buffer.byteSize() / p.ptype().byteSize();
+            case DType.Primitive p -> SegmentBroadcast.capacity(buffer, p.ptype().byteSize(), length);
             default -> length;
         };
     }

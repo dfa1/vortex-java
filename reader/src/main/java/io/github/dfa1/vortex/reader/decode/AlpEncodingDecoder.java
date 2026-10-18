@@ -83,8 +83,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         // the encoder's verify step.
         double df = F10_F64[expF];
         double de = IF10_F64[expE];
-        long srcCap = SegmentBroadcast.capacity(src, 8);
-        checkSource(srcCap, n);
+        long srcCap = SegmentBroadcast.capacity(src, 8, n);
 
         if (meta.patches() == null) {
             if (srcCap >= n) {
@@ -115,8 +114,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         checkExponents(expE, expF, F10_F32.length);
         float df = F10_F32[expF];
         float de = IF10_F32[expE];
-        long srcCap = SegmentBroadcast.capacity(src, 4);
-        checkSource(srcCap, n);
+        long srcCap = SegmentBroadcast.capacity(src, 4, n);
 
         if (meta.patches() == null) {
             if (srcCap >= n) {
@@ -167,13 +165,6 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     ///
     /// @param srcCap number of elements physically present in the encoded child
     /// @param n      logical row count
-    private static void checkSource(long srcCap, long n) {
-        if (srcCap == 0 && n > 0) {
-            throw new VortexException(EncodingId.VORTEX_ALP,
-                    "empty encoded child for " + n + " rows");
-        }
-    }
-
     private static void applyPatches(DecodeContext ctx, ProtoPatchesMetadata pm, MemorySegment out, int elemBytes) {
         long numPatches = pm.len();
         if (numPatches == 0) {
@@ -188,13 +179,8 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         MemorySegment idxSeg = ctx.decodeChildSegment(1, new DType.Primitive(idxPtype, false), numPatches);
         MemorySegment valSeg = ctx.decodeChildSegment(2, ctx.dtype(), numPatches);
 
-        long idxCap = SegmentBroadcast.capacity(idxSeg, idxBytes);
-        long valCap = SegmentBroadcast.capacity(valSeg, elemBytes);
-        if (idxCap == 0 || valCap == 0) {
-            throw new VortexException(EncodingId.VORTEX_ALP,
-                    "empty patch child for " + numPatches + " declared patches (indices="
-                            + idxSeg.byteSize() + " bytes, values=" + valSeg.byteSize() + " bytes)");
-        }
+        long idxCap = SegmentBroadcast.capacity(idxSeg, idxBytes, numPatches);
+        long valCap = SegmentBroadcast.capacity(valSeg, elemBytes, numPatches);
         if (idxCap >= numPatches && valCap >= numPatches) {
             for (long i = 0; i < numPatches; i++) {
                 long absIdx = PrimitiveArrays.readLong(idxSeg, i * idxBytes, idxPtype, EncodingId.VORTEX_ALP) - offset;

@@ -43,7 +43,7 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
         MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(encoded);
         MemorySegment src = ctx.materialize(unwrapped.inner());
         int elemBytes = signed.byteSize();
-        long srcCap = SegmentBroadcast.capacity(src, elemBytes);
+        long srcCap = SegmentBroadcast.capacity(src, elemBytes, n);
 
         Array result = decodeUnwrapped(ctx, signed, n, src, srcCap);
         return MaskedArray.wrapIfPresent(result, unwrapped.validity());
