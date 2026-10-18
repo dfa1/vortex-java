@@ -194,21 +194,56 @@ class CalciteInteropIntegrationTest {
         }
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            // g = id % 7 has 7 distinct values over 3000 rows
+            "select count(distinct g) from vtx.t                     | 7",
+            "select count(distinct g) from vtx.t where id < 3        | 3",
+            "select count(*) filter (where id < 10) from vtx.t       | 10",
+            "select count(n) filter (where id < 1001) from vtx.t     | 999",
+            "select min(id) filter (where id > 2000) from vtx.t      | 2001",
+            "select max(id) filter (where id < 5) from vtx.t         | 4",
+            "select sum(id) filter (where id < 4) from vtx.t         | 6"})
+    void jniWriter_distinctAndFilteredAggregates_answerOverTheSelectedRows(String sql, long expected,
+            @TempDir Path tmp) throws Exception {
+        // Given — the statistics push-down answered COUNT/MIN/MAX/SUM from whole zones without
+        // looking at DISTINCT or an aggregate's FILTER clause, so COUNT(DISTINCT g) returned the
+        // row count and a FILTERed aggregate ignored its filter
+        Path file = tmp.resolve("jni_distinct.vortex");
+        writeIdsWithJni(file, BATCHES, BATCH_ROWS);
+
+        // When
+        long result;
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            rs.next();
+            result = rs.getLong(1);
+        }
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
     private static void writeIdsWithJni(Path file, int batches, int batchRows) throws Exception {
         Schema schema = new Schema(List.of(
                 Field.notNullable("id", new ArrowType.Int(64, true)),
-                Field.nullable("n", new ArrowType.Int(64, true))));
+                Field.nullable("n", new ArrowType.Int(64, true)),
+                Field.notNullable("g", new ArrowType.Int(64, true))));
         try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
                 ALLOCATOR).build()) {
             for (int batch = 0; batch < batches; batch++) {
                 try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
                     BigIntVector ids = (BigIntVector) root.getVector("id");
                     BigIntVector n = (BigIntVector) root.getVector("n");
+                    BigIntVector g = (BigIntVector) root.getVector("g");
                     ids.allocateNew(batchRows);
                     n.allocateNew(batchRows);
+                    g.allocateNew(batchRows);
                     for (int i = 0; i < batchRows; i++) {
                         long id = (long) batch * batchRows + i;
                         ids.set(i, id);
+                        g.set(i, id % 7);
                         if (id % 1000 == 0) {
                             n.setNull(i);
                         } else {

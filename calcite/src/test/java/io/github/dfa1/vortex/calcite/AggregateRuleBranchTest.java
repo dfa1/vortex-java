@@ -21,6 +21,8 @@ import org.apache.calcite.tools.Planner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -126,6 +128,19 @@ class AggregateRuleBranchTest {
         // Given a GROUP BY — group count != 0, the rule returns immediately
         // When / Then — Aggregate stays
         assertThat(optimize("select symbol, max(high) from ohlc group by symbol")).contains("Aggregate");
+    }
+
+    /// Zone statistics cover every row, so they cannot answer an aggregate over a subset of rows:
+    /// answering these from stats returned the row count for `COUNT(DISTINCT)` and ignored `FILTER`.
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "select count(distinct volume) from ohlc",
+            "select count(*) filter (where volume > 0) from ohlc",
+            "select min(low) filter (where high > 0), count(*) from ohlc"})
+    void distinctOrFilteredAggregate_isLeftUntouched(String sql) {
+        // Given an aggregate call the stats cannot answer
+        // When / Then — Aggregate stays
+        assertThat(optimize(sql)).contains("Aggregate");
     }
 
     private static String optimize(String sql) {
