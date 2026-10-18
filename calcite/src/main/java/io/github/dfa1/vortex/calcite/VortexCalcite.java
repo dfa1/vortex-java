@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.calcite;
 
 import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.jdbc.Driver;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.parser.babel.SqlBabelParserImpl;
 
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.Objects;
@@ -84,7 +84,9 @@ public final class VortexCalcite {
         // Babel parser: accept SQL reserved words (date, close, open, value, …) as identifiers, so
         // columnar files whose column names collide with keywords are queryable unquoted.
         info.setProperty("parserFactory", SqlBabelParserImpl.class.getName() + "#FACTORY");
-        Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
+        // Not DriverManager: it only sees drivers already registered, and a jar loaded by its own
+        // classloader (an IDE data source, an application server) has not had Calcite's registered.
+        Connection connection = new Driver().connect("jdbc:calcite:", info);
         try {
             SchemaPlus root = connection.unwrap(CalciteConnection.class).getRootSchema();
             root.add(options.schemaName(), new VortexSchema(options));
