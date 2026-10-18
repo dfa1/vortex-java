@@ -44,7 +44,10 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
             }
         }
 
-        PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
+        if (!(ctx.dtype() instanceof DType.Primitive p)) {
+            throw new VortexException(EncodingId.FASTLANES_DELTA, "expected primitive dtype, got " + ctx.dtype());
+        }
+        PType ptype = p.ptype();
         if (ptype.isFloating()) {
             throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
         }

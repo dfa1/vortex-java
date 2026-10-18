@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantFloat16Array;
@@ -149,8 +150,13 @@ public final class RleEncodingDecoder implements EncodingDecoder {
 
     private static Array emptyArray(DecodeContext ctx) {
         DType dt = ctx.dtype();
-        PType ptype = ((DType.Primitive) dt).ptype();
-        return switch (ptype) {
+        if (dt instanceof DType.Bool) {
+            return new LazyConstantBoolArray(dt, 0L, false);
+        }
+        if (!(dt instanceof DType.Primitive p)) {
+            throw new VortexException(EncodingId.FASTLANES_RLE, "expected Primitive dtype, got " + dt);
+        }
+        return switch (p.ptype()) {
             case I64, U64 -> new LazyConstantLongArray(dt, 0L, 0L);
             case I32, U32 -> new LazyConstantIntArray(dt, 0L, 0);
             case I16, U16 -> new LazyConstantShortArray(dt, 0L, (short) 0);

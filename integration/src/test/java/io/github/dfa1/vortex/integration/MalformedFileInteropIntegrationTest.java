@@ -36,7 +36,9 @@ class MalformedFileInteropIntegrationTest {
     @ValueSource(strings = {
             // A child-node vector offset in a segment's array FlatBuffer points past its end:
             // escaped as IndexOutOfBoundsException from the FlatBuffer runtime.
-            "array-flatbuffer-vector-out-of-bounds"})
+            "array-flatbuffer-vector-out-of-bounds",
+            // A Struct column whose segment is fastlanes.bitpacked: escaped as ClassCastException.
+            "bitpacked-struct-dtype"})
     void bothReadersReject(String name) throws URISyntaxException {
         // Given
         Path file = Path.of(Objects.requireNonNull(

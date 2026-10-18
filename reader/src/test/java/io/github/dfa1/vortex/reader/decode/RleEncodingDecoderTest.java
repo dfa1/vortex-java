@@ -341,6 +341,34 @@ class RleEncodingDecoderTest {
         }
     }
 
+    @Nested
+    class EmptyChunk {
+
+        @Test
+        void boolDtype_decodesEmpty() {
+            // Given a zero-row bool chunk: RLE covers bools too, but the empty-array shortcut
+            // cast every dtype to Primitive and threw ClassCastException
+            MemorySegment empty = MemorySegment.ofArray(new byte[0]);
+
+            // When
+            Array result = decodeRle(DType.BOOL, 0, 0, empty, empty, empty, 0);
+
+            // Then
+            assertThat(result.length()).isZero();
+        }
+
+        @Test
+        void nonPrimitiveDtype_isRejected() {
+            // Given a zero-row chunk of a Utf8 column whose segment claims RLE (a crafted file)
+            MemorySegment empty = MemorySegment.ofArray(new byte[0]);
+
+            // When / Then
+            assertThatThrownBy(() -> decodeRle(DType.UTF8, 0, 0, empty, empty, empty, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("expected Primitive dtype");
+        }
+    }
+
     // ── decode harness ─────────────────────────────────────────────────────────
 
     /// Builds an RLE node with a `u8` index table: child[0] = values, child[1] = indices,
