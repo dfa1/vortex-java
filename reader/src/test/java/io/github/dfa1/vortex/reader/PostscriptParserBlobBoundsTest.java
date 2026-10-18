@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -135,17 +134,16 @@ class PostscriptParserBlobBoundsTest {
     void parse_dtypeBlobLengthZero_skipsDtypeCheckEvenWithBadOffset() {
         // Given — dtype length 0 with a wildly out-of-range offset. The `length > 0` gate must
         // skip both the bounds check and the slice, so a zero-length dtype never trips on its
-        // offset and the file still parses (dtype absent). Kills the `length > 0` boundary/negate
-        // mutants that would otherwise run the check on an empty dtype.
+        // offset: the file fails as one with no dtype, not on the offset. Kills the `length > 0`
+        // boundary/negate mutants that would otherwise run the check on an empty dtype.
         Fixture f = validFile();
         MemorySegment ps = buildPostscript(f.footerOff, f.footerLen, f.fileSize + 999, 0,
                 f.layoutOff, f.layoutLen);
 
-        // When
-        PostscriptParser.ParsedFile result = PostscriptParser.parse(ps, f.segment, f.fileSize);
-
-        // Then — parsed, with no dtype
-        assertThat(result.dtype()).isNull();
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parse(ps, f.segment, f.fileSize))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("doesn't embed a DType");
     }
 
     // ── FlatBuffer blob builders (minimal, just enough to parse) ────────────────

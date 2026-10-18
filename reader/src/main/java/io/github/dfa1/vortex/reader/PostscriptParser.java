@@ -109,11 +109,13 @@ final class PostscriptParser {
             Footer footer = convertFooter(fbsFooter);
             Layout layout = convertLayout(fbsLayout, footer.layoutSpecs());
 
-            DType dtype = null;
-            if (dtypeBuf != null && dtypeBuf.byteSize() > 0) {
-                dtype = convertDType(io.github.dfa1.vortex.core.fbs.FbsDType.getRootAsFbsDType(dtypeBuf));
-                checkStructLayouts(layout, dtype);
+            // Rust opens a file without an embedded dtype only when the caller supplies one
+            // (VortexOpenOptions::with_dtype); Java has no such option, so such a file is unreadable.
+            if (dtypeBuf == null || dtypeBuf.byteSize() == 0) {
+                throw new VortexException("Vortex file doesn't embed a DType");
             }
+            DType dtype = convertDType(io.github.dfa1.vortex.core.fbs.FbsDType.getRootAsFbsDType(dtypeBuf));
+            checkStructLayouts(layout, dtype);
 
             return new ParsedFile(footer, dtype, layout);
         } catch (VortexException e) {

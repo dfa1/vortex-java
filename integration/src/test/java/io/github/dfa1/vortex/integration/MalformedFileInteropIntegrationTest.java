@@ -44,7 +44,10 @@ class MalformedFileInteropIntegrationTest {
             "struct-dtype-missing-names",
             // A vortex.zstd_buffers whose wrapped encoding id holds a control character: escaped as
             // IllegalArgumentException from EncodingId.parse.
-            "zstd-buffers-inner-id-control-char"})
+            "zstd-buffers-inner-id-control-char",
+            // A file with no dtype blob, which Rust opens only when the caller supplies the dtype:
+            // vortex-java opened it with a null dtype and the scan threw NullPointerException.
+            "no-dtype"})
     void bothReadersReject(String name) throws URISyntaxException {
         // Given
         Path file = Path.of(Objects.requireNonNull(
