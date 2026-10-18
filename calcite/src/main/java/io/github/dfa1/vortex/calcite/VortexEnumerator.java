@@ -45,6 +45,8 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     private final AtomicLong chunksScannedLastQuery;
     private final ColumnName[] names;
     private final DType[] types;
+    /// Per output column, its temporal conversion or `null`: resolved once, not per row.
+    private final Temporal[] temporals;
     private final RowFilter exactFilter;
     private final VortexReader reader;
     private final ScanIterator scan;
@@ -73,6 +75,10 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         this.chunksScannedLastQuery = chunksScannedLastQuery;
         this.names = names;
         this.types = types;
+        this.temporals = new Temporal[types.length];
+        for (int c = 0; c < types.length; c++) {
+            temporals[c] = Temporal.of(types[c]);
+        }
         this.exactFilter = exactFilter;
         chunksScannedLastQuery.set(0);
         VortexReader openedReader = null;
@@ -144,14 +150,15 @@ final class VortexEnumerator implements Enumerator<Object[]> {
 
     /// Column `c` of the row [#advance()] moved to.
     Object column(int c) {
-        return value(columns[c], types[c], currentRow);
+        Temporal temporal = temporals[c];
+        return temporal == null ? value(columns[c], types[c], currentRow) : temporal.read(columns[c], currentRow);
     }
 
     /// Every column of the row [#advance()] moved to.
     Object[] row() {
         Object[] row = new Object[names.length];
         for (int c = 0; c < names.length; c++) {
-            row[c] = value(columns[c], types[c], currentRow);
+            row[c] = column(c);
         }
         return row;
     }

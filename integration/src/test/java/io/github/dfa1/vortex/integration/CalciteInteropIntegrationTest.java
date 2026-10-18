@@ -328,6 +328,27 @@ class CalciteInteropIntegrationTest {
         }
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "min(`day`), max(`day`)         | min(`day` + interval '0' day), max(`day` + interval '0' day)",
+            "min(at), max(at)               | min(at + interval '0' second), max(at + interval '0' second)",
+            "min(wall), max(`instant`)      | min(wall + interval '0' second), max(`instant` + interval '0' second)"})
+    void jniWriter_temporalMinMax_answeredFromStatsEqualsTheScan(String aggregates, String oracle, @TempDir Path tmp)
+            throws Exception {
+        // Given — Rust's zone statistics hold the raw storage integer (days, millis, micros before
+        // the epoch); converted as the scan converts each row, the answers must agree
+        Path file = tmp.resolve("jni_temporal.vortex");
+        writeTypesWithJni(file);
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            List<String> result = sqlRows(conn, "select " + aggregates + " from vtx.t");
+
+            // Then
+            assertThat(result).isEqualTo(sqlRows(conn, "select " + oracle + " from vtx.t"));
+        }
+    }
+
     private static List<String> sqlRows(Connection conn, String sql) throws Exception {
         List<String> out = new java.util.ArrayList<>();
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {

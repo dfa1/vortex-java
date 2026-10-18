@@ -628,10 +628,10 @@ and fails on values past 2^63); `F16` reads as `REAL`.
 | other extensions                            | their storage type                                |
 | list, struct, map, union, variant           | `ANY`; selecting the column fails                 |
 
-`DATE`, `TIME` and `TIMESTAMP` values carry millisecond precision. A zoned timestamp is not
+`DATE`, `TIME` and `TIMESTAMP` values carry millisecond precision; `TIME` and `TIMESTAMP` are declared as `TIME(3)` and `TIMESTAMP(3)`. A zoned timestamp is not
 `TIMESTAMP WITH LOCAL TIME ZONE` because Avatica's JDBC getters shift that type by the JVM's zone.
 
-`count`/`min`/`max`/`sum` (and `avg`, reduced to `sum`/`count`) are answered from zone-map
+`count`/`min`/`max`/`sum` (and `avg`, reduced to `sum`/`count`; `min`/`max` of dates, times and timestamps too) are answered from zone-map
 statistics via `VortexAggregatePushDownRule` where possible, with or without a `WHERE` of
 column-vs-literal comparisons, `IN` lists, `IS [NOT] NULL` and prefix `LIKE` joined by `AND`: zones the filter selects entirely fold from their statistics, and only
 the rows of zones it cuts are decoded. `sum` needs a per-zone sum, which only the legacy
