@@ -112,6 +112,23 @@ class VortexWriterTest {
     }
 
     @Test
+    void create_nullableRootStruct_isRejected(@TempDir Path tmp) throws IOException {
+        // Given — a nullable root: Rust reads a nullable struct layout only with a leading validity
+        // child, which this writer never writes, so vortex-jni refused every such file
+        // ("nchildren == expected") and the reader now refuses it at open, as Rust does
+        var schema = new DType.Struct(List.of(ColumnName.of("c")), List.of(new DType.Primitive(PType.I64, false)), true);
+        Path file = tmp.resolve("nullable-root.vtx");
+
+        // When / Then
+        WriteOptions opts = WriteOptions.defaults();
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            assertThatThrownBy(() -> VortexWriter.create(ch, schema, opts))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("root struct cannot be nullable");
+        }
+    }
+
+    @Test
     void schema_fieldNameWithNulByte_isUnbuildable() {
         // Given a NUL byte inside a field name: legal in our pure-Java stack, but it aborts the
         // reference toolchain's Arrow FFI export (panic-cannot-unwind in arrow-rs, SIGABRT,

@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- **Breaking:** `VortexWriter.create` refuses a nullable root struct: Rust reads a nullable struct only with a validity child the writer never wrote, so such files were unreadable outside vortex-java. ([#493](https://github.com/dfa1/vortex-java/issues/493))
 - **Breaking:** a file that does not embed its dtype is refused when it opens, as Rust refuses it unless the caller supplies the dtype, instead of failing the scan with `NullPointerException`. ([#493](https://github.com/dfa1/vortex-java/issues/493))
 - **Breaking:** every FlatBuffer in a file is verified before it is read, as Rust verifies it, so corrupt file metadata fails with `VortexException`, and like Rust the reader now refuses tables nested more than 64 deep. ([#493](https://github.com/dfa1/vortex-java/issues/493))
 - SQL `SUM` and `AVG` of a decimal column, grouped or not, are 4 to 6 times faster: they are totalled exactly as unscaled longs in the scan instead of by Calcite with a `BigDecimal` per row. ([#563](https://github.com/dfa1/vortex-java/pull/563))
