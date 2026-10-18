@@ -130,12 +130,9 @@ class ColumnTypesSqlTest {
         try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
              Statement st = conn.createStatement()) {
 
-            // When / Then
-            assertThatThrownBy(() -> {
-                try (ResultSet rs = st.executeQuery("select tags from vtx.t")) {
-                    rs.next();
-                }
-            }).isInstanceOf(SQLException.class).hasStackTraceContaining("cannot read a List");
+            // When / Then — Calcite fetches the first row while executing, so the query itself fails
+            assertThatThrownBy(() -> st.executeQuery("select tags from vtx.t"))
+                    .isInstanceOf(SQLException.class).hasStackTraceContaining("cannot read a List");
         }
     }
 }
