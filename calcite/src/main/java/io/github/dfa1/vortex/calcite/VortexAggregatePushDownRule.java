@@ -194,7 +194,8 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     /// instead of materializing every row for Calcite to hash. Leaves the plan alone when the group
     /// column is not a string, an aggregate is not `COUNT`/`SUM`/`MIN`/`MAX` over a plain column, or
     /// the fold declines (a chunk not dictionary-encoded, an aggregate column it cannot total, too
-    /// many groups).
+    /// many groups) or the groups would not fit one compiled `VALUES`
+    /// (`VortexSortPushDownRule.MAX_VALUES_CELLS`).
     private static void rewriteGrouped(RelOptRuleCall call, Aggregate aggregate, VortexTable table,
                                        List<ColumnName> scanColumns, RelDataType scanRowType, Project project,
                                        RexBuilder rexBuilder, List<RelDataType> outTypes, RowFilter filter) {
@@ -233,6 +234,9 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 memo(call.getPlanner(), foldKey, () -> table.groupedFold(group, filter, aggColumns));
         if (folds.isEmpty()) {
             return;
+        }
+        if ((long) folds.get().size() * (1 + calls.size()) > VortexSortPushDownRule.MAX_VALUES_CELLS) {
+            return; // too many literals for one compiled VALUES; let Calcite hash the groups
         }
         RelDataType groupType = aggregate.getRowType().getFieldList().getFirst().getType();
         List<ImmutableList<RexLiteral>> tuples = new ArrayList<>();

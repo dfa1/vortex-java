@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- SQL `ORDER BY ... LIMIT` and `GROUP BY` with a few thousand result cells no longer fail with "Code grows beyond 64 KB"; past the limit Calcite scans instead. ([#569](https://github.com/dfa1/vortex-java/pull/569))
 - A file whose array FlatBuffer holds a corrupt offset fails the read with `VortexException` instead of `IndexOutOfBoundsException`. ([#493](https://github.com/dfa1/vortex-java/issues/493))
 - A column whose dtype does not fit its bit-packed, delta or RLE encoding fails with `VortexException` instead of `ClassCastException`, and an empty RLE boolean chunk reads. ([#493](https://github.com/dfa1/vortex-java/issues/493))
 - A struct dtype missing its field names or types, or a struct layout whose children do not match its fields, is rejected when the file opens, as Rust does, instead of failing the scan with `ArrayIndexOutOfBoundsException`. ([#493](https://github.com/dfa1/vortex-java/issues/493))
