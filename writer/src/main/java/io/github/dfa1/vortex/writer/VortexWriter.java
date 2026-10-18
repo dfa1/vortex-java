@@ -196,6 +196,12 @@ public final class VortexWriter implements Closeable {
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings,
             WriteRegistry extensionRegistry
     ) {
+        // A nullable struct layout carries a leading validity child (Rust's validate_children:
+        // nfields + 1 children); the root layout written here has one child per column and no way
+        // to mark a row null, so Rust refused every such file ("nchildren == expected").
+        if (schema.nullable()) {
+            throw new IllegalArgumentException("the root struct cannot be nullable: rows cannot be null");
+        }
         // Wire contract, enforced by the reference writer ("StructLayout must have unique field
         // names"): duplicate-name schemas are constructible via the DType.Struct record (only
         // StructBuilder validates), so guard here — colChunks below is name-keyed and would
