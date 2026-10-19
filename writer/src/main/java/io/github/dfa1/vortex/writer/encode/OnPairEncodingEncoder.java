@@ -50,7 +50,8 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        OnPair c = Encoder.compress(data);
+        VarBinBytes.Rows rows = Encoder.rows(data);
+        OnPair c = Encoder.compress(rows);
         Arena arena = ctx.arena();
         PType[] ptypes = c.childPTypes();
         long[][] values = c.childValues();
@@ -67,7 +68,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(c.metadata()),
                 children, new int[]{0});
-        MinMax stats = zoneMapStats(data);
+        MinMax stats = zoneMapStats(data, rows);
         return new EncodeResult(root, buffers, stats != null ? stats.min() : null, stats != null ? stats.max() : null);
     }
 
@@ -78,7 +79,8 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         if (ctx.allowedCascading() == 0) {
             return CascadeStep.terminal(encode(dtype, data, ctx));
         }
-        OnPair c = Encoder.compress(data);
+        VarBinBytes.Rows rows = Encoder.rows(data);
+        OnPair c = Encoder.compress(rows);
         PType[] ptypes = c.childPTypes();
         long[][] values = c.childValues();
         List<ChildSlot> slots = new ArrayList<>();
@@ -88,12 +90,12 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(c.metadata()),
                 new EncodeNode[4], new int[]{0});
-        MinMax stats = zoneMapStats(data);
+        MinMax stats = zoneMapStats(data, rows);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(c.dictBytes(ctx.arena()))), slots,
                 stats != null ? stats.min() : null, stats != null ? stats.max() : null, true);
     }
-    private static MinMax zoneMapStats(Object data) {
-        return data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
+    private static MinMax zoneMapStats(Object data, VarBinBytes.Rows rows) {
+        return data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings, rows) : null;
     }
 
     /// The compressed column: read-padded dictionary bytes plus the four integer children in slot
@@ -143,11 +145,15 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         static final double SAMPLE_FRACTION = 0.15;
         static final long SEED = 42;
 
-        static OnPair compress(Object data) {
+        static VarBinBytes.Rows rows(Object data) {
             VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
             if (rows == null) {
                 throw new UnsupportedOperationException("vortex.onpair: chunk exceeds 2 GB of row bytes");
             }
+            return rows;
+        }
+
+        static OnPair compress(VarBinBytes.Rows rows) {
             Trie trained = train(rows);
             byte[][] tokens = trained.sortedTokens();
             Trie dict = new Trie();
