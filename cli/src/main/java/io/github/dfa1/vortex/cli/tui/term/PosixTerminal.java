@@ -71,8 +71,8 @@ public final class PosixTerminal implements Terminal {
     public static PosixTerminal open() throws IOException {
         Arena arena = Arena.ofShared();
         try {
-            MemorySegment saved = arena.allocate(TERMIOS_SIZE);
-            MemorySegment raw = arena.allocate(TERMIOS_SIZE);
+            MemorySegment saved = arena.allocate(TERMIOS_SIZE, 8);
+            MemorySegment raw = arena.allocate(TERMIOS_SIZE, 8);
             int rc = (int) TCGETATTR.invokeExact(STDIN_FD, saved);
             if (rc != 0) {
                 throw new IOException("tcgetattr failed: rc=" + rc);
@@ -100,7 +100,7 @@ public final class PosixTerminal implements Terminal {
 
     @Override
     public Size size() {
-        MemorySegment ws = arena.allocate(8);
+        MemorySegment ws = arena.allocate(8, 2);
         try {
             int rc = (int) IOCTL.invokeExact(STDOUT_FD, TIOCGWINSZ, ws);
             if (rc != 0) {

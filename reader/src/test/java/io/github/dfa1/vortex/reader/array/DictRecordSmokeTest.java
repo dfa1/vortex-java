@@ -788,7 +788,7 @@ class DictRecordSmokeTest {
     }
 
     private static LongArray longArray(Arena arena, DType dtype, long... values) {
-        MemorySegment seg = arena.allocate(Math.max(values.length * 8L, 1L));
+        MemorySegment seg = arena.allocate(Math.max(values.length * 8L, 1L), 8);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_LONG, i, values[i]);
         }
@@ -796,7 +796,7 @@ class DictRecordSmokeTest {
     }
 
     private static IntArray intArray(Arena arena, DType dtype, int... values) {
-        MemorySegment seg = arena.allocate(values.length * 4L);
+        MemorySegment seg = arena.allocate(values.length * 4L, 4);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_INT, i, values[i]);
         }
@@ -804,7 +804,7 @@ class DictRecordSmokeTest {
     }
 
     private static DoubleArray doubleArray(Arena arena, double... values) {
-        MemorySegment seg = arena.allocate(values.length * 8L);
+        MemorySegment seg = arena.allocate(values.length * 8L, 8);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_DOUBLE, i, values[i]);
         }
@@ -812,7 +812,7 @@ class DictRecordSmokeTest {
     }
 
     private static FloatArray floatArray(Arena arena, float... values) {
-        MemorySegment seg = arena.allocate(values.length * 4L);
+        MemorySegment seg = arena.allocate(values.length * 4L, 4);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_FLOAT, i, values[i]);
         }
@@ -828,7 +828,7 @@ class DictRecordSmokeTest {
     }
 
     private static ShortArray shortArray(Arena arena, DType dtype, short... values) {
-        MemorySegment seg = arena.allocate(values.length * 2L);
+        MemorySegment seg = arena.allocate(values.length * 2L, 2);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_SHORT, i, values[i]);
         }

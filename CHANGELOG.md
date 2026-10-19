@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A negative code in a nullable dictionary-encoded column fails with `VortexException` instead of a raw `IndexOutOfBoundsException`. ([#576](https://github.com/dfa1/vortex-java/pull/576))
+- The CLI's terminal UI runs on JDK 28, whose arenas no longer over-align `allocate(size)`. ([8858286](https://github.com/dfa1/vortex-java/commit/8858286a1addb5ffca289c42e6106c7395564a57))
 - vortex-jni no longer aborts the JVM when it filters a string column vortex-java compressed with FSST, whose symbol table could hold two symbols Rust hashes to one slot, and FSST columns are about 5% smaller. ([#573](https://github.com/dfa1/vortex-java/pull/573))
 - Frame-of-reference encoding takes the unsigned minimum of a `u64` column whose values span 2^63 as its reference, as Rust does, instead of a reference that left those values at full width. ([#571](https://github.com/dfa1/vortex-java/pull/571))
 - **Breaking:** `DType.Decimal` refuses a precision outside 1 to 76 or a scale above the precision, as Rust does, so the writer no longer writes decimal columns that Rust and vortex-java cannot read, and a variant's decimal is checked as it is read. ([#571](https://github.com/dfa1/vortex-java/pull/571))

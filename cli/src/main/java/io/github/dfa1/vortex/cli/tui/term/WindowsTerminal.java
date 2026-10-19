@@ -132,7 +132,7 @@ public final class WindowsTerminal implements Terminal {
     public Size size() {
         // CONSOLE_SCREEN_BUFFER_INFO is 22 bytes: COORD(4) size, COORD(4) cursor,
         // WORD(2) attrs, SMALL_RECT(8) window, COORD(4) max. We only need window.
-        MemorySegment info = arena.allocate(22);
+        MemorySegment info = arena.allocate(22, 2);
         try {
             int rc = (int) GET_CONSOLE_SCREEN_BUFFER_INFO.invokeExact(stdoutHandle, info);
             if (rc == 0) {
@@ -237,7 +237,7 @@ public final class WindowsTerminal implements Terminal {
     }
 
     private static int readMode(Arena arena, MemorySegment handle) throws Throwable {
-        MemorySegment slot = arena.allocate(4);
+        MemorySegment slot = arena.allocate(ValueLayout.JAVA_INT);
         if ((int) GET_CONSOLE_MODE.invokeExact(handle, slot) == 0) {
             // Under Git Bash / MSYS / MinTTY stdio is piped from the terminal
             // emulator rather than attached to a real Windows console, so
