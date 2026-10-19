@@ -62,6 +62,12 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- DocsConsistencyTest resolves the class names the living docs mention, VortexDriver among them. -->
+            <groupId>io.github.dfa1.vortex</groupId>
+            <artifactId>vortex-jdbc-driver</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>dev.hardwood</groupId>
             <artifactId>hardwood-core</artifactId>
             <scope>test</scope>
