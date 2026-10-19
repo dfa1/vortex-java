@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.fsst;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
-import java.util.PriorityQueue;
 
 /// One generation of FSST bottom-up training (the FSST paper's Algorithm 3): compress-count the
 /// sample with the current symbol table, then build the next table from the top-gain candidates.
@@ -209,8 +208,8 @@ final class TrainingGeneration {
     }
 
     /// Ranks candidates by gain-descending (length-descending on ties) and keeps the top
-    /// [#MAX_SYMBOLS], applying the final cost prune on the last generation. Uses a bounded min-heap
-    /// so a large candidate set is not fully sorted — only the surviving 255 are.
+    /// [#MAX_SYMBOLS], applying the final cost prune on the last generation and skipping a 3-8 byte
+    /// candidate whose [LossyPerfectHashTable] slot a better one already holds.
     private static List<Symbol> selectTop(List<Candidate> candidates, boolean finalGeneration) {
         // Refinement 4 — final cost-based prune, applied BEFORE top-K selection. Only on the last
         // generation, a symbol earns its code slot only if its real (un-boosted) gain exceeds
@@ -230,25 +229,24 @@ final class TrainingGeneration {
             }
         }
 
-        // A bounded min-heap of size MAX_SYMBOLS: the weakest survivor sits at the head, so a new
-        // candidate either loses to it (discarded) or evicts it. This is top-K in O(n log K) rather
-        // than an O(n log n) full sort of every candidate.
-        PriorityQueue<Candidate> heap = new PriorityQueue<>(TrainingGeneration::compareGain);
+        // Best first, as Rust's `optimize` pops its heap: a 3-8 byte candidate whose hash slot a
+        // better one holds is skipped, and the next candidate takes its code. Rust asserts that no
+        // two stored symbols share a slot when it rebuilds a compressor from a file's symbol table
+        // (vortex-jni does, to compress a filter literal), so a table breaking it aborted the JVM.
+        eligible.sort((a, b) -> compareGain(b, a));
+        BitSet takenSlots = new BitSet();
+        List<Symbol> result = new ArrayList<>(MAX_SYMBOLS);
         for (Candidate candidate : eligible) {
-            if (heap.size() < MAX_SYMBOLS) {
-                heap.add(candidate);
-            } else if (compareGain(candidate, heap.peek()) > 0) {
-                heap.poll();
-                heap.add(candidate);
+            if (result.size() == MAX_SYMBOLS) {
+                break;
             }
-        }
-
-        List<Candidate> survivors = new ArrayList<>(heap);
-        // Restore gain-descending order (the heap only guarantees the head is weakest).
-        survivors.sort((a, b) -> compareGain(b, a));
-
-        List<Symbol> result = new ArrayList<>(survivors.size());
-        for (Candidate candidate : survivors) {
+            if (candidate.length() >= 3) {
+                int slot = LossyPerfectHashTable.slotFor(candidate.packed());
+                if (takenSlots.get(slot)) {
+                    continue;
+                }
+                takenSlots.set(slot);
+            }
             result.add(new Symbol(candidate.packed(), candidate.length()));
         }
         return result;

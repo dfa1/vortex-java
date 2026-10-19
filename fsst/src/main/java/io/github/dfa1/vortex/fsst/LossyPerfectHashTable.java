@@ -27,11 +27,10 @@ final class LossyPerfectHashTable {
     /// Mask selecting a slot index from a hash; valid because [#SLOTS] is a power of two.
     private static final int SLOT_MASK = SLOTS - 1;
 
-    /// Multiply-xor mixing constant, the same shape as the old encoder's `SymbolTable.indexHash`
-    /// (the golden-ratio 64-bit odd constant `2^64 / phi`). Multiplying by a large odd constant and
-    /// folding the high bits down spreads the low three input bytes across the whole word so the
-    /// slot mask sees well-mixed bits, avoiding clustering when many symbols share a low byte.
-    private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
+    /// Multiplier of Rust's `fsst_hash`. The hash must be Rust's own: a reader rebuilding the
+    /// compressor from a file's symbol table (vortex-jni does, to compress a filter literal) panics
+    /// when two of its 3-8 byte symbols share a slot, and it computes the slots with this hash.
+    private static final long HASH_MULTIPLIER = 2971215073L;
 
     /// Low three bytes of the input word — the only bytes the hash keys on.
     private static final long PREFIX_MASK = 0x00FF_FFFFL;
@@ -140,8 +139,8 @@ final class LossyPerfectHashTable {
     /// @param word an input word; only its low three bytes are hashed
     /// @return the slot index in `0 .. SLOTS - 1`
     static int slotFor(long word) {
-        long mixed = (word & PREFIX_MASK) * HASH_MULTIPLIER;
-        return (int) (mixed >>> 32) & SLOT_MASK;
+        long prefix = word & PREFIX_MASK;
+        return (int) (prefix * HASH_MULTIPLIER ^ prefix >>> 15) & SLOT_MASK;
     }
 
 }
