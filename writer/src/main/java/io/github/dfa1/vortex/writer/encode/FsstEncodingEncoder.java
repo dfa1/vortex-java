@@ -58,7 +58,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         Arena arena = ctx.arena();
-        return toEncodeResult(compress(data, arena), arena, zoneMapStats(data));
+        VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
+        return toEncodeResult(compress(data, rows, arena), arena, zoneMapStats(data, rows));
     }
 
     /// Zone-map min/max for the rows being encoded, or `null` when there is nothing useful to
@@ -69,9 +70,13 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// skips them: a zone map over arbitrary blobs prunes nothing.
     ///
     /// @param data the Utf8 (`String[]`) or Binary (`byte[][]`) values being encoded
+    /// @param rows `data` as [VarBinBytes#toContiguous(Object)] lays it out, or `null` above 2 GB
     /// @return the [MinMax] of encoded scalars, or `null`
-    private static MinMax zoneMapStats(Object data) {
-        return data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
+    private static MinMax zoneMapStats(Object data, VarBinBytes.Rows rows) {
+        if (!(data instanceof String[] strings)) {
+            return null;
+        }
+        return rows == null ? VarBinEncodingEncoder.minMaxStats(strings) : VarBinEncodingEncoder.minMaxStats(strings, rows);
     }
 
     /// Lays out a compression product in the terminal `vortex.fsst` wire format: the per-row
@@ -85,7 +90,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     ///
     /// @param c     the compression product to lay out
     /// @param arena arena backing the length/offset buffers
-    /// @param stats the `{min, max}` zone-map scalars from [#zoneMapStats(Object)], or `null`
+    /// @param stats the `{min, max}` zone-map scalars from [#zoneMapStats(Object, VarBinBytes.Rows)], or `null`
     /// @return the terminal `vortex.fsst` encode result
     static EncodeResult toEncodeResult(Fsst c, Arena arena, MinMax stats) {
         long uncompLenBytes = c.uncompLenPType().byteSize();
@@ -131,8 +136,9 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         if (ctx.allowedCascading() == 0) {
             return CascadeStep.terminal(encode(dtype, data, ctx));
         }
-        Fsst c = compress(data, ctx.arena());
-        MinMax stats = zoneMapStats(data);
+        VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
+        Fsst c = compress(data, rows, ctx.arena());
+        MinMax stats = zoneMapStats(data, rows);
         Object uncompLens = PrimitiveArrays.fromIntsArray(c.uncompLens(), c.uncompLenPType(), EncodingId.VORTEX_FSST);
         Object codesOffsets = PrimitiveArrays.fromIntsArray(c.codesOffsets(), c.codesOffPType(), EncodingId.VORTEX_FSST);
         EncodeNode partialRoot = new EncodeNode(
@@ -158,13 +164,12 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             PType uncompLenPType, PType codesOffPType, int n) {
     }
 
-    private static Fsst compress(Object data, Arena arena) {
+    private static Fsst compress(Object data, VarBinBytes.Rows rows, Arena arena) {
         // Contiguous rows (one shared byte[] plus offsets) rather than one byte[] per row: a 50k-row
         // chunk otherwise holds 50k live objects for the whole encode, which the collector must
         // trace, and that was profiled as this write path's single largest allocation source. Above
         // 2 GB of row bytes the rows cannot share one array, and toContiguous returns null — fall
         // back to the per-row shape, which has no such ceiling.
-        VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
         if (rows == null) {
             return compressPerRow(VarBinBytes.toByteArrays(data), arena);
         }

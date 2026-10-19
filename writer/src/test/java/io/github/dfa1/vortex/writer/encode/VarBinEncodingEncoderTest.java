@@ -15,10 +15,13 @@ import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.VarBinEncodingDecoder;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -223,6 +226,49 @@ class VarBinEncodingEncoderTest {
             ProtoVarBinMetadata meta = ProtoVarBinMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.offsets_ptype().value()).isEqualTo(7);
+        }
+    }
+    @Nested
+    class Stats {
+
+        @ParameterizedTest
+        @ValueSource(longs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+        void minMaxStats_overRowBytes_matchesUtf8OrderOverStrings(long seed) {
+            // Given — the byte compare (#565) must pick the same min/max as Utf8Order on the
+            // strings. Mixed ASCII, U+E000.. and surrogate pairs, where UTF-16 order disagrees with
+            // UTF-8, plus shared prefixes and nulls (an empty row in the bytes, but not a value).
+            Random random = new Random(seed);
+            String[] alphabet = {"a", "b", "\u00e9", "\uE000", "\uFFFD", "\uD83D\uDE00", "\uD800\uDC00"};
+            String[] strings = new String[50];
+            for (int i = 0; i < strings.length; i++) {
+                if (random.nextInt(10) == 0) {
+                    continue;
+                }
+                StringBuilder sb = new StringBuilder("prefix");
+                for (int c = random.nextInt(4); c > 0; c--) {
+                    sb.append(alphabet[random.nextInt(alphabet.length)]);
+                }
+                strings[i] = sb.toString();
+            }
+            MinMax expected = VarBinEncodingEncoder.minMaxStats(strings);
+
+            // When
+            MinMax result = VarBinEncodingEncoder.minMaxStats(strings, VarBinBytes.toContiguous(strings));
+
+            // Then
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        void minMaxStats_overRowBytes_allNull_isNull() {
+            // Given — every null is an empty row in the bytes, which must not become a "" min
+            String[] strings = {null, null};
+
+            // When
+            MinMax result = VarBinEncodingEncoder.minMaxStats(strings, VarBinBytes.toContiguous(strings));
+
+            // Then
+            assertThat(result).isNull();
         }
     }
 }
