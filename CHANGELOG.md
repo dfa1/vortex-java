@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- **Breaking:** `DType.Decimal` refuses a precision outside 1 to 76 or a scale above the precision, as Rust does, so the writer no longer writes decimal columns that Rust and vortex-java cannot read, and a variant's decimal is checked as it is read. ([#571](https://github.com/dfa1/vortex-java/pull/571))
 - SQL `ORDER BY ... LIMIT` and `GROUP BY` with a few thousand result cells no longer fail with "Code grows beyond 64 KB"; past the limit Calcite scans instead. ([#569](https://github.com/dfa1/vortex-java/pull/569))
 - A file whose array FlatBuffer holds a corrupt offset fails the read with `VortexException` instead of `IndexOutOfBoundsException`. ([#493](https://github.com/dfa1/vortex-java/issues/493))
 - A column whose dtype does not fit its bit-packed, delta or RLE encoding fails with `VortexException` instead of `ClassCastException`, and an empty RLE boolean chunk reads. ([#493](https://github.com/dfa1/vortex-java/issues/493))

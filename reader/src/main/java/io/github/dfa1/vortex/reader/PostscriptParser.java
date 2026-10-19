@@ -265,21 +265,8 @@ final class PostscriptParser {
             }
             case FbsType.FbsDecimal -> {
                 var d = fbs.type(new FbsDecimal());
-                int precision = d.precision();
-                int scale = d.scale();
-                // Rust's DecimalDType::try_new bounds: precision 1..76 (i256), and a positive scale no
-                // greater than the precision; a negative scale (e.g. -2 for hundreds) is legal. Reject
-                // crafted values up front rather than letting a downstream BigDecimal/byte-width
-                // calculation fail with an unrelated exception.
-                if (precision < 1 || precision > 76) {
-                    throw new VortexException(
-                            "decimal precision " + precision + " out of range (expected 1..76)");
-                }
-                if (scale > precision) {
-                    throw new VortexException(
-                            "decimal scale " + scale + " exceeds precision " + precision);
-                }
-                yield new DType.Decimal((byte) precision, (byte) scale, d.nullable());
+                // DType.Decimal.of enforces Rust's DecimalDType::try_new bounds as VortexException
+                yield DType.Decimal.of(d.precision(), d.scale(), d.nullable());
             }
             case FbsType.FbsUtf8 -> new DType.Utf8(fbs.type(new FbsUtf8()).nullable());
             case FbsType.FbsBinary -> new DType.Binary(fbs.type(new FbsBinary()).nullable());
