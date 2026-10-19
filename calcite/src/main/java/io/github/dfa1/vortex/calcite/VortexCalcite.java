@@ -37,6 +37,9 @@ import java.util.Properties;
 /// A column with one of those names must still be back-tick quoted: `select \`date\` from vtx.ohlc`.
 public final class VortexCalcite {
 
+    // One instance: building a driver loads a resource and sets up Avatica's factory by reflection.
+    private static final Driver CALCITE_DRIVER = new Driver();
+
     private VortexCalcite() {
     }
 
@@ -86,7 +89,7 @@ public final class VortexCalcite {
         info.setProperty("parserFactory", SqlBabelParserImpl.class.getName() + "#FACTORY");
         // Not DriverManager: it only sees drivers already registered, and a jar loaded by its own
         // classloader (an IDE data source, an application server) has not had Calcite's registered.
-        Connection connection = new Driver().connect("jdbc:calcite:", info);
+        Connection connection = CALCITE_DRIVER.connect("jdbc:calcite:", info);
         try {
             SchemaPlus root = connection.unwrap(CalciteConnection.class).getRootSchema();
             root.add(options.schemaName(), new VortexSchema(options));

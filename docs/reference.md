@@ -702,7 +702,8 @@ Values are URL-decoded. An unknown key, a pair without `=`, or a URL exposing no
 `SQLException` with state `08001`. Driver properties (`user`, `password`) are ignored.
 
 The `-all` classifier is the jar to hand to a tool: it merges `META-INF/services` (ours and
-Calcite's `java.sql.Driver` entries), strips signature files and sets `Enable-Native-Access`.
+Calcite's `java.sql.Driver` entries), and strips signature files. Reading `vortex.zstd` files calls the zstd natives through FFM, so a host
+that runs with `--illegal-native-access=deny` needs `--enable-native-access=ALL-UNNAMED`; by default the JDK only warns.
 `ShadedJarIT` loads it alone in an isolated classloader and runs a query, so a lost service entry or a
 stale signature fails `verify`. Needs JDK 25 or later. The jar leaves out the Calcite dependencies the driver never reaches
 (the Avatica HTTP client, YAML, sketches, connection pooling), so Calcite model URLs

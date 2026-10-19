@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.jdbc.driver;
 import io.github.dfa1.vortex.calcite.VortexCalcite;
 import io.github.dfa1.vortex.calcite.VortexCalciteOptions;
 
+import java.io.UncheckedIOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -25,7 +26,7 @@ import java.util.logging.Logger;
 /// The path is a directory whose `*.vortex` files become tables named after the file (`ohlc.vortex`
 /// is `vtx.ohlc`); columns come from each file, never declared. The query string takes `schema`
 /// (default `vtx`) and `table.<name>=<path>` (an explicit file, which wins over a discovered one).
-/// Any other key is rejected, so a typo cannot silently expose no tables. Values are URL-decoded.
+/// Any other key is rejected, so a typo cannot silently expose no tables. Values are percent-decoded (a `+` is a plus).
 ///
 /// The URL maps one-to-one onto [VortexCalciteOptions]; the connection is
 /// [VortexCalcite#connect(VortexCalciteOptions)], so identifiers are case-sensitive and reserved
@@ -54,10 +55,10 @@ public final class VortexDriver implements Driver {
         if (!acceptsURL(url)) {
             return null;
         }
-        VortexCalciteOptions options = options(url);
         try {
-            return VortexCalcite.connect(options);
-        } catch (IllegalArgumentException e) {
+            return VortexCalcite.connect(options(url));
+        } catch (IllegalArgumentException | UncheckedIOException e) {
+            // a bad escape, an invalid path, a directory that is not one or cannot be listed
             throw new SQLException(e.getMessage(), "08001", e);
         }
     }
@@ -93,8 +94,14 @@ public final class VortexDriver implements Driver {
                 String key = decode(pair.substring(0, eq));
                 String value = decode(pair.substring(eq + 1));
                 if (key.equals(SCHEMA)) {
+                    if (value.isEmpty()) {
+                        throw invalid(url, "schema is empty");
+                    }
                     options = options.withSchemaName(value);
                 } else if (key.startsWith(TABLE_PREFIX) && key.length() > TABLE_PREFIX.length()) {
+                    if (value.isEmpty()) {
+                        throw invalid(url, key + " has no file");
+                    }
                     options = options.withTable(key.substring(TABLE_PREFIX.length()), Path.of(value));
                     hasFiles = true;
                 } else {
@@ -108,8 +115,10 @@ public final class VortexDriver implements Driver {
         return options;
     }
 
+    /// Percent-decodes `value`. A `+` stays a plus: `URLDecoder` follows form encoding and would turn it
+    /// into a space, so `/data/c++/x` would name a directory that does not exist.
     private static String decode(String value) {
-        return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        return URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8);
     }
 
     private static SQLException invalid(String url, String reason) {

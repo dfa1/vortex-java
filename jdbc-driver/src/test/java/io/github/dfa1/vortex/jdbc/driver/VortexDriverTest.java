@@ -87,12 +87,37 @@ class VortexDriverTest {
             "jdbc:vortex:/d?schema",                 // no '='
             "jdbc:vortex:/d?=v",                     // empty key
             "jdbc:vortex:/d?table.=/x",              // empty table name
+            "jdbc:vortex:/d?schema=",                // would register the tables under a name SQL cannot write
+            "jdbc:vortex:/d?table.t=",               // would bind t to the working directory
     })
     void options_rejectsMalformedUrls(String url) {
         // Given / When / Then
         assertThatThrownBy(() -> VortexDriver.options(url))
                 .isInstanceOf(SQLException.class)
                 .hasMessageContaining("invalid Vortex URL")
+                .extracting(e -> ((SQLException) e).getSQLState()).isEqualTo("08001");
+    }
+
+    @Test
+    void options_aPlusInAPathStaysAPlus() throws Exception {
+        // Given a directory whose name has a '+', pasted raw as the docs show
+        Path plus = Files.createDirectory(tmp.resolve("c++ data"));
+
+        // When
+        VortexCalciteOptions result = VortexDriver.options("jdbc:vortex:" + plus.toString().replace(" ", "%20"));
+
+        // Then URLDecoder alone would have turned the '+' into a space and named a directory that is not there
+        assertThat(result.directory()).contains(plus);
+    }
+
+    @Test
+    void connect_aBadEscapeIsAnSqlExceptionNotAnUncheckedOne() {
+        // Given
+        VortexDriver sut = new VortexDriver();
+
+        // When / Then
+        assertThatThrownBy(() -> sut.connect("jdbc:vortex:/data/100%", new Properties()))
+                .isInstanceOf(SQLException.class)
                 .extracting(e -> ((SQLException) e).getSQLState()).isEqualTo("08001");
     }
 

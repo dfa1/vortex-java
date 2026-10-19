@@ -4,6 +4,7 @@ import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -22,8 +23,9 @@ import java.util.Set;
 ///
 /// The schema name is the model's `name`. `operand` takes the same two settings as
 /// [VortexCalciteOptions]: `directory` (every `*.vortex` in it becomes a table) and `files` (a
-/// table name to path map that wins over a discovered file); any other key is rejected, so a typo does not
-/// silently expose no tables.
+/// table name to path map that wins over a discovered file); at least one is required, and any other key is
+/// rejected, so a typo does not silently expose no tables. A relative path is resolved against the
+/// model file's directory.
 ///
 /// A model cannot set connection properties. To query reserved-word columns such as `close`
 /// unquoted, add `lex=JAVA;parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY`
@@ -53,9 +55,18 @@ public final class VortexSchemaFactory implements SchemaFactory {
             throw new IllegalArgumentException(
                     "unknown VortexSchemaFactory operand " + unknown + "; expected " + DIRECTORY + ", " + FILES);
         }
+        if (operand.get("tables") instanceof Map<?, ?>) {
+            // Calcite fills "tables" with the model's own list, so a map there is the user's, written by
+            // analogy with VortexCalciteOptions#tables; silently dropping it would expose no tables
+            throw new IllegalArgumentException("operand 'tables' is not supported; name the files in '" + FILES + "'");
+        }
+        // relative paths in a model file are relative to the file, as in Calcite's own file adapters
+        Path base = baseDirectory(operand.get("baseDirectory"));
         VortexCalciteOptions options = VortexCalciteOptions.defaults().withSchemaName(name);
+        boolean hasFiles = false;
         if (operand.get(DIRECTORY) instanceof String directory) {
-            options = options.withDirectory(Path.of(directory));
+            options = options.withDirectory(resolve(base, directory));
+            hasFiles = true;
         } else if (operand.containsKey(DIRECTORY)) {
             throw new IllegalArgumentException("operand '" + DIRECTORY + "' must be a string");
         }
@@ -64,11 +75,28 @@ public final class VortexSchemaFactory implements SchemaFactory {
                 if (!(entry.getKey() instanceof String table) || !(entry.getValue() instanceof String file)) {
                     throw new IllegalArgumentException("operand '" + FILES + "' must map table names to path strings");
                 }
-                options = options.withTable(table, Path.of(file));
+                options = options.withTable(table, resolve(base, file));
+                hasFiles = true;
             }
         } else if (operand.containsKey(FILES)) {
             throw new IllegalArgumentException("operand '" + FILES + "' must be an object");
         }
+        if (!hasFiles) {
+            throw new IllegalArgumentException("operand needs '" + DIRECTORY + "' or '" + FILES + "'");
+        }
         return options;
+    }
+
+    private static Path baseDirectory(Object value) {
+        return switch (value) {
+            case null -> null;
+            case File file -> file.toPath();
+            default -> Path.of(value.toString());
+        };
+    }
+
+    private static Path resolve(Path base, String path) {
+        Path result = Path.of(path);
+        return base == null ? result : base.resolve(result);
     }
 }

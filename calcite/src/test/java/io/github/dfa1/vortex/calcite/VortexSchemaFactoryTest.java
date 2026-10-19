@@ -68,6 +68,41 @@ class VortexSchemaFactoryTest {
     }
 
     @Test
+    void options_rejectsATablesMapInsteadOfSilentlyDroppingIt() {
+        // Given the key a user guesses from VortexCalciteOptions#tables; Calcite fills 'tables' itself
+        // with a list, so the factory only sees the user's by its type
+        Map<String, Object> operand = Map.of("tables", Map.of("trades", other.toString()));
+
+        // When / Then
+        assertThatIllegalArgumentException().isThrownBy(() -> VortexSchemaFactory.options("vtx", operand))
+                .withMessageContaining("files");
+    }
+
+    @Test
+    void options_rejectsAnOperandThatNamesNoFiles() {
+        // Given Calcite's own keys only, as for a schema with no operand at all
+        Map<String, Object> operand = Map.of("tables", java.util.List.of(), "modelUri", "inline:{}");
+
+        // When / Then
+        assertThatIllegalArgumentException().isThrownBy(() -> VortexSchemaFactory.options("vtx", operand))
+                .withMessageContaining("directory");
+    }
+
+    @Test
+    void options_resolvesRelativePathsAgainstTheModelFile() {
+        // Given a model in tmp with a relative directory and file, run from some other working directory
+        Map<String, Object> operand = Map.of("directory", "data", "files", Map.of("t", "other.vortex"),
+                "baseDirectory", tmp.toFile());
+
+        // When
+        VortexCalciteOptions result = VortexSchemaFactory.options("vtx", operand);
+
+        // Then
+        assertThat(result.directory()).contains(tmp.resolve("data"));
+        assertThat(result.tables()).containsExactly(Map.entry("t", tmp.resolve("other.vortex")));
+    }
+
+    @Test
     void inlineModelUrl_queriesTheDirectory() throws Exception {
         // Given a URL carrying the whole configuration, as pasted into an IDE data source. A model
         // cannot set connection properties, so lex=JAVA must be in the URL: without it Calcite

@@ -98,6 +98,53 @@ class VortexCalciteOptionsTest {
     }
 
     @Test
+    void resolveTables_skipsHiddenFilesSoOneStrayFileCannotBreakIntrospection() throws Exception {
+        // Given a macOS AppleDouble sidecar next to a real table, as an exFAT or SMB volume gets
+        Path withSidecar = Files.createDirectory(tmp.resolve("sidecar"));
+        OhlcGenerator.write(withSidecar.resolve("ohlc.vortex"), 100, 100);
+        Files.writeString(withSidecar.resolve("._ohlc.vortex"), "resource fork, not a Vortex file");
+
+        // When
+        Map<String, Path> tables = VortexCalciteOptions.defaults().withDirectory(withSidecar).resolveTables();
+        long columns = 0;
+        try (Connection conn = VortexCalcite.connect(withSidecar);
+             ResultSet rs = conn.getMetaData().getColumns(null, "vtx", "%", "%")) {
+            while (rs.next()) {
+                columns++;
+            }
+        }
+
+        // Then the sidecar is no table, and listing every table's columns still works
+        assertThat(tables).containsOnlyKeys("ohlc");
+        assertThat(columns).isPositive();
+    }
+
+    @Test
+    void withTables_keepsTheOrderTheEntriesWereAdded() {
+        // Given
+        Map<String, Path> ordered = new java.util.LinkedHashMap<>();
+        ordered.put("z", other);
+        ordered.put("a", other);
+        ordered.put("m", other);
+
+        // When
+        VortexCalciteOptions result = VortexCalciteOptions.defaults().withTables(ordered);
+
+        // Then
+        assertThat(result.tables().keySet()).containsExactly("z", "a", "m");
+    }
+
+    @Test
+    void withMethods_rejectEmptyNames() {
+        // Given
+        VortexCalciteOptions sut = VortexCalciteOptions.defaults();
+
+        // When / Then
+        assertThatIllegalArgumentException().isThrownBy(() -> sut.withSchemaName(""));
+        assertThatIllegalArgumentException().isThrownBy(() -> sut.withTable("", other));
+    }
+
+    @Test
     void withMethods_rejectNulls() {
         // Given
         VortexCalciteOptions sut = VortexCalciteOptions.defaults();
