@@ -159,10 +159,9 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         chunkRows = chunk.rowCount();
         rowInChunk = 0;
         rowMatcher = exactFilter == null ? null : Compute.matcher(chunk, exactFilter);
+        // read on first use: a top-N reads only its sort keys for most rows, and the chunk then
+        // decodes only those columns
         columns = new Object[names.length];
-        for (int c = 0; c < names.length; c++) {
-            columns[c] = chunk.column(names[c]);
-        }
         return true;
     }
 
@@ -178,8 +177,13 @@ final class VortexEnumerator implements Enumerator<Object[]> {
 
     /// Column `c` of row `r` of the current chunk.
     Object column(int c, long r) {
+        Object array = columns[c];
+        if (array == null) {
+            array = chunk.column(names[c]);
+            columns[c] = array;
+        }
         Temporal temporal = temporals[c];
-        return temporal == null ? value(columns[c], types[c], r) : temporal.read(columns[c], r);
+        return temporal == null ? value(array, types[c], r) : temporal.read(array, r);
     }
 
     /// Every column of the row [#advance()] moved to.

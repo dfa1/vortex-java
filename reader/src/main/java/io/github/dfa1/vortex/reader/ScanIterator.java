@@ -92,6 +92,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private List<ChunkSpec> chunks;
     private List<ColumnName> projectedNames;
     private List<DType> projectedDtypes;
+    private Map<ColumnName, Integer> projectedPositions;
     // True only when the file's root layout isn't itself a Struct layout (no per-column layout
     // children — e.g. a single flat/chunked segment covering the whole file, as produced by some
     // older writers), so #initialize() fell back to one synthetic "_col" placeholder covering the
@@ -344,19 +345,36 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         long chunkRows = Math.min(spec.rowCount(), remaining);
 
         Arena arena = Arena.ofConfined();
-        try {
-            SequencedMap<ColumnName, Chunk.Column> columns = buildColumnMap(spec, arena);
-            if (chunkRows < spec.rowCount()) {
-                columns = limitedColumns(columns, chunkRows);
+        Chunk chunk;
+        if (singleColumnIsSyntheticWrapper) {
+            try {
+                SequencedMap<ColumnName, Chunk.Column> columns = buildColumnMap(spec, arena);
+                if (chunkRows < spec.rowCount()) {
+                    columns = limitedColumns(columns, chunkRows);
+                }
+                chunk = new Chunk(chunkRows, columns, arena, file.registry(), this::onChunkClosed);
+            } catch (RuntimeException e) {
+                arena.close();
+                throw e;
             }
-            rowsReturned += chunkRows;
-            Chunk chunk = new Chunk(chunkRows, columns, arena, file.registry(), this::onChunkClosed);
-            openChunk = chunk;
-            return chunk;
-        } catch (RuntimeException e) {
-            arena.close();
-            throw e;
+        } else {
+            // Each column is decoded when first read, so a caller reading a few of the projected
+            // columns (a sort key, a filter column) skips decoding the rest of the chunk. The decode
+            // runs while the chunk is open, before next() can evict the flats it slices.
+            chunk = new Chunk(chunkRows, projectedNames, projectedPositions,
+                    i -> decodeColumn(spec, i, chunkRows, arena), arena, file.registry(), this::onChunkClosed);
         }
+        rowsReturned += chunkRows;
+        openChunk = chunk;
+        return chunk;
+    }
+
+    private Chunk.Column decodeColumn(ChunkSpec spec, int i, long chunkRows, Arena arena) {
+        Array array = decodeOrSlice(i, spec.columnLayouts()[i], spec.sliceOffsets()[i], spec.rowCount(), arena);
+        if (chunkRows < spec.rowCount()) {
+            array = Array.limited(array, chunkRows);
+        }
+        return new Chunk.Column(array, projectedDtypes.get(i));
     }
 
     /// Returns the number of chunks in the file's layout, ignoring filter pruning and
@@ -743,33 +761,22 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         projectedNames = List.copyOf(columnDtypes.keySet());
         projectedDtypes = List.copyOf(columnDtypes.values());
+        projectedPositions = Chunk.positions(projectedNames);
         lastCoveringFlats = new Layout[projectedNames.size()];
         chunks = buildChunks(columnFlats);
     }
 
-    // A LinkedHashMap preserves schema/projection order (the public columns() contract is a
-    // SequencedMap). Direct array index into ChunkSpec.columnLayouts avoids HashMap.get() per column.
+    /// The columns of a file without per-column layouts: its one synthetic column, unpacked by
+    /// field when it decodes to a struct.
     private SequencedMap<ColumnName, Chunk.Column> buildColumnMap(ChunkSpec chunk, Arena arena) {
-        Layout[] layouts = chunk.columnLayouts();
-        long[] sliceOffsets = chunk.sliceOffsets();
-        int n = projectedNames.size();
-        if (n == 1) {
-            Array arr = decodeOrSlice(0, layouts[0], sliceOffsets[0], chunk.rowCount(), arena);
-            if (singleColumnIsSyntheticWrapper && arr instanceof StructArray sa) {
-                return expandStruct(sa);
-            }
-            return singleColumn(arr);
+        Array arr = decodeOrSlice(0, chunk.columnLayouts()[0], chunk.sliceOffsets()[0], chunk.rowCount(), arena);
+        if (arr instanceof StructArray sa) {
+            return expandStruct(sa);
         }
-        var scratch = LinkedHashMap.<ColumnName, Chunk.Column>newLinkedHashMap(n);
-        for (int i = 0; i < n; i++) {
-            scratch.put(projectedNames.get(i), new Chunk.Column(
-                    decodeOrSlice(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena),
-                    projectedDtypes.get(i)));
-        }
-        return unmodifiable(scratch);
+        return singleColumn(arr);
     }
 
-    /// Builds the column map for [#decodeChunkAt(int)]. Identical decode to [#buildColumnMap]
+    /// Builds the column map for [#decodeChunkAt(int)]. Identical decode to [#decodeColumn]
     /// except that a covering chunk spanning several windows is decoded into `arena` and sliced
     /// there, so the resulting [Chunk] owns every buffer and survives this iterator's close.
     private SequencedMap<ColumnName, Chunk.Column> buildSelfContainedColumnMap(ChunkSpec chunk, Arena arena) {

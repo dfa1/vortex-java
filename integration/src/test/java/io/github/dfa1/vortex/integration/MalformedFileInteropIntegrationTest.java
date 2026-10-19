@@ -68,8 +68,9 @@ class MalformedFileInteropIntegrationTest {
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             while (scan.hasNext()) {
-                try (Chunk _ = scan.next()) {
-                    // decoding the chunk is enough: every file here fails before a value is read
+                try (Chunk chunk = scan.next()) {
+                    // decoding the columns is enough: every file here fails before a value is read
+                    chunk.columns();
                 }
             }
         }
