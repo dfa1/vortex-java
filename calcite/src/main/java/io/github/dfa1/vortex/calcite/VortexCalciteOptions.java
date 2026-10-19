@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -21,7 +22,8 @@ import java.util.stream.Stream;
 ///         .withTable("trades", Path.of("/other/t.vortex"));
 /// ```
 ///
-/// A table is named after its file without the `.vortex` extension (`ohlc.vortex` is `ohlc`); an
+/// A table is named after its file without the `.vortex` extension (`ohlc.vortex` is `ohlc`; hidden
+/// files, whose name starts with a dot, are skipped); an
 /// explicit [#withTable(String, Path)] entry wins over a discovered file of the same name. Columns
 /// are never declared: they come from each file's embedded dtype.
 public final class VortexCalciteOptions {
@@ -52,6 +54,9 @@ public final class VortexCalciteOptions {
     /// @return the updated options
     public VortexCalciteOptions withSchemaName(String schemaName) {
         Objects.requireNonNull(schemaName, "schemaName");
+        if (schemaName.isEmpty()) {
+            throw new IllegalArgumentException("schemaName is empty");
+        }
         return new VortexCalciteOptions(schemaName, directory, tables);
     }
 
@@ -75,22 +80,26 @@ public final class VortexCalciteOptions {
     public VortexCalciteOptions withTable(String name, Path file) {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(file, "file");
-        Map<String, Path> copy = new LinkedHashMap<>(tables);
-        copy.put(name, file);
-        return new VortexCalciteOptions(schemaName, directory, Map.copyOf(copy));
+        return withTables(Map.of(name, file));
     }
 
     /// Returns a copy that also binds every entry of `tables`, as [#withTable(String, Path)] would.
+    /// Entries keep the order they were added in.
     ///
     /// @param tables map from SQL table name to the `.vortex` file path
     /// @return the updated options
     public VortexCalciteOptions withTables(Map<String, Path> tables) {
         Objects.requireNonNull(tables, "tables");
-        VortexCalciteOptions result = this;
-        for (Map.Entry<String, Path> entry : tables.entrySet()) {
-            result = result.withTable(entry.getKey(), entry.getValue());
-        }
-        return result;
+        Map<String, Path> copy = new LinkedHashMap<>(this.tables);
+        tables.forEach((name, file) -> {
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(file, "file");
+            if (name.isEmpty()) {
+                throw new IllegalArgumentException("table name is empty");
+            }
+            copy.put(name, file);
+        });
+        return new VortexCalciteOptions(schemaName, directory, Collections.unmodifiableMap(copy));
     }
 
     /// Returns the schema name the tables are registered under.
@@ -127,7 +136,11 @@ public final class VortexCalciteOptions {
             }
             try (Stream<Path> entries = Files.list(directory)) {
                 entries.filter(Files::isRegularFile)
-                        .filter(p -> p.getFileName().toString().endsWith(EXTENSION))
+                        // a dot-prefixed name is not a table: macOS leaves ._x.vortex sidecars on exFAT/SMB
+                        // volumes, and a writer may keep its unfinished file hidden. Such a file has no
+                        // footer, and one table that cannot be read breaks introspection of all of them
+                        .filter(p -> p.getFileName().toString().endsWith(EXTENSION)
+                                && !p.getFileName().toString().startsWith("."))
                         .sorted()
                         .forEach(p -> {
                             String name = p.getFileName().toString();
