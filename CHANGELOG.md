@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-10-19
+
 ### Added
 - `Compute.matcher(RowFilter)` gives the row test of each chunk of one scan, evaluating a dictionary the chunks share once. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - `vortex-jdbc-driver` is a `jdbc:vortex:<dir>` JDBC driver in one self-contained jar, so IntelliJ, DBeaver and other SQL tools can query a directory of `.vortex` files. ([#566](https://github.com/dfa1/vortex-java/issues/566))
