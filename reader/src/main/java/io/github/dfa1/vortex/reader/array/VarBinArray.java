@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.function.IntConsumer;
 
@@ -64,6 +65,18 @@ public non-sealed interface VarBinArray extends Array {
     /// @param i zero-based logical index (must be in `[0, length)`)
     /// @return the UTF-8 string at position `i`
     String getString(long i);
+
+    /// Compares the raw bytes of element `i` with `other` as `Arrays.compareUnsigned`
+    /// does, without building a `String`: ranking many rows against one bound, as a top-N does, then
+    /// allocates nothing for the rows that lose.
+    ///
+    /// @param i     zero-based logical index (must be in `[0, length)`)
+    /// @param other the bytes to compare with
+    /// @return a negative, zero, or positive integer as element `i` sorts before, equal to, or after
+    ///         `other`
+    default int compareUnsigned(long i, byte[] other) {
+        return Arrays.compareUnsigned(getBytes(i), other);
+    }
 
     /// Returns the byte length of element `i` without copying the data.
     ///

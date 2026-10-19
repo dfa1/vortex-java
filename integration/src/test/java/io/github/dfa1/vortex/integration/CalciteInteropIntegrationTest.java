@@ -6,6 +6,9 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.calcite.VortexCalcite;
 import io.github.dfa1.vortex.calcite.VortexTable;
+import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.reader.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexReader;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -17,6 +20,7 @@ import org.apache.arrow.vector.TimeMilliVector;
 import org.apache.arrow.vector.TimeStampMicroTZVector;
 import org.apache.arrow.vector.TimeStampMicroVector;
 import org.apache.arrow.vector.VarBinaryVector;
+import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.TimeUnit;
@@ -29,6 +33,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -52,6 +57,8 @@ class CalciteInteropIntegrationTest {
     // several batches, so the row count is a sum over chunks, not a single chunk's length
     private static final int BATCHES = 3;
     private static final int BATCH_ROWS = 1_000;
+    // over 1 MiB a batch, the least Rust writes as a chunk of its own
+    private static final int EVENT_BATCH_ROWS = 20_000;
     private static final LocalDate DATE = LocalDate.of(2024, 2, 29);
     private static final LocalTime TIME = LocalTime.of(13, 45, 30);
     // pre-epoch on purpose: millisecond truncation must floor, not round toward zero
@@ -240,7 +247,7 @@ class CalciteInteropIntegrationTest {
             org.apache.arrow.vector.VarCharVector s = (org.apache.arrow.vector.VarCharVector) root.getVector("s");
             s.allocateNew(values.length);
             for (int i = 0; i < values.length; i++) {
-                s.setSafe(i, values[i].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                s.setSafe(i, values[i].getBytes(StandardCharsets.UTF_8));
             }
             root.setRowCount(values.length);
             try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
@@ -313,6 +320,43 @@ class CalciteInteropIntegrationTest {
                  ResultSet rs = st.executeQuery("explain plan for " + select + oracleTail)) {
                 rs.next();
                 assertThat(rs.getString(1)).contains("TableScan");
+            }
+            assertThat(result).isEqualTo(sqlRows(conn, select + oracleTail)).isNotEmpty();
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            // e ascends with the rows, so a descending sort walks each chunk backward and rejects by bytes
+            "order by e desc limit 10                   | order by case when id > -1 then e end desc limit 10",
+            "order by e limit 7 offset 3                | order by case when id > -1 then e end limit 7 offset 3",
+            "order by e desc nulls first limit 5        | order by case when id > -1 then e end desc nulls first limit 5",
+            // t repeats each value ten times, so the rows tied at the bound must keep their scan order
+            // when walked backward
+            "order by t desc limit 15                   | order by case when id > -1 then t end desc limit 15",
+            "where id > 500 order by r desc, id limit 20 | where id > 500 order by case when id > -1 then r end desc, id limit 20",
+            "order by r limit 12                        | order by case when id > -1 then r end limit 12"})
+    void jniWriter_orderByStringLimit_returnsTheRowsCalciteSortReturns(String tail, String oracleTail,
+            @TempDir Path tmp) throws Exception {
+        // Given — Rust-written high-cardinality strings, some ending in "é" so a row's first differing
+        // byte can be above 0x7F; the top-N ranks rows by their bytes against an ASCII bound and must
+        // agree with the String order Calcite sorts the oracle by
+        Path file = tmp.resolve("jni_sort_strings.vortex");
+        writeEventsWithJni(file);
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(ScanOptions.all())) {
+            assertThat(scan.chunkRowCounts()).as("Rust wrote several chunks, so ties cross chunk edges").hasSizeGreaterThan(1);
+        }
+        String select = "select id, e, t, r from vtx.t ";
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            List<String> result = sqlRows(conn, select + tail);
+
+            // Then
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + select + tail)) {
+                rs.next();
+                assertThat(rs.getString(1)).containsIgnoringCase("Values").doesNotContain("TableScan");
             }
             assertThat(result).isEqualTo(sqlRows(conn, select + oracleTail)).isNotEmpty();
         }
@@ -414,7 +458,7 @@ class CalciteInteropIntegrationTest {
             s.allocateNew(BATCH_ROWS);
             i16.allocateNew(BATCH_ROWS);
             for (int i = 0; i < BATCH_ROWS; i++) {
-                s.setSafe(i, symbols[i % symbols.length].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                s.setSafe(i, symbols[i % symbols.length].getBytes(StandardCharsets.UTF_8));
                 i16.set(i, (short) (i % 20 - 10));
             }
             root.setRowCount(BATCH_ROWS);
@@ -510,7 +554,7 @@ class CalciteInteropIntegrationTest {
                     for (int i = 0; i < BATCH_ROWS; i++) {
                         long id = (long) batch * BATCH_ROWS + i;
                         ids.set(i, id);
-                        s.setSafe(i, symbols[(int) (id % symbols.length)].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        s.setSafe(i, symbols[(int) (id % symbols.length)].getBytes(StandardCharsets.UTF_8));
                         if (id % 13 == 0) {
                             amount.setNull(i);
                         } else {
@@ -637,7 +681,7 @@ class CalciteInteropIntegrationTest {
                         if (symbol == null) {
                             s.setNull(i);
                         } else {
-                            s.setSafe(i, symbol.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                            s.setSafe(i, symbol.getBytes(StandardCharsets.UTF_8));
                         }
                         ids.set(i, id);
                         if (nValue == null) {
@@ -712,6 +756,55 @@ class CalciteInteropIntegrationTest {
 
         // Then
         assertThat(result).isEqualTo(expected);
+    }
+
+    /// Writes `id`, `e` (an ascending event id, "é"-suffixed every 13th row, null every 97th), `t`
+    /// (an ascending value repeated ten times) and `r` (a scrambled value with repeats) in [#BATCHES]
+    /// batches of [#EVENT_BATCH_ROWS], over 1 MiB each, so Rust writes several chunks: Rust coalesces
+    /// smaller batches into one. Its chunks hold a multiple of 8,192 rows, not of ten, so a run of
+    /// equal `t` straddles each chunk edge.
+    private static void writeEventsWithJni(Path file) throws Exception {
+        Schema schema = new Schema(List.of(
+                Field.notNullable("id", new ArrowType.Int(64, true)),
+                Field.nullable("e", new ArrowType.Utf8()),
+                Field.notNullable("t", new ArrowType.Utf8()),
+                Field.notNullable("r", new ArrowType.Utf8())));
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build()) {
+            for (int batch = 0; batch < BATCHES; batch++) {
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+                    BigIntVector ids = (BigIntVector) root.getVector("id");
+                    VarCharVector e = (VarCharVector) root.getVector("e");
+                    VarCharVector t = (VarCharVector) root.getVector("t");
+                    VarCharVector r = (VarCharVector) root.getVector("r");
+                    ids.allocateNew(EVENT_BATCH_ROWS);
+                    e.allocateNew(EVENT_BATCH_ROWS);
+                    t.allocateNew(EVENT_BATCH_ROWS);
+                    r.allocateNew(EVENT_BATCH_ROWS);
+                    for (int i = 0; i < EVENT_BATCH_ROWS; i++) {
+                        long id = (long) batch * EVENT_BATCH_ROWS + i;
+                        ids.set(i, id);
+                        if (id % 97 == 50) {
+                            e.setNull(i);
+                        } else {
+                            e.setSafe(i, utf8("EVT%08d%s".formatted(id, id % 13 == 0 ? "é" : "")));
+                        }
+                        t.setSafe(i, utf8("T%06d".formatted(id / 10)));
+                        r.setSafe(i, utf8("K%05d".formatted(id * 7919 % 1009)));
+                    }
+                    root.setRowCount(EVENT_BATCH_ROWS);
+                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                         ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
+                        writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
+                    }
+                }
+            }
+        }
+    }
+
+    private static byte[] utf8(String s) {
+        return s.getBytes(StandardCharsets.UTF_8);
     }
 
     private static void writeIdsWithJni(Path file, int batches, int batchRows) throws Exception {

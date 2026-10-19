@@ -48,8 +48,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     private final DType[] types;
     /// Per output column, its temporal conversion or `null`: resolved once, not per row.
     private final Temporal[] temporals;
-    private final RowFilter exactFilter;
-    /// The row test per chunk of `exactFilter`, or `null`: one per scan, so a shared dictionary is
+    /// The row test per chunk of the exact filter, or `null`: one per scan, so a shared dictionary is
     /// evaluated once.
     private final Function<Chunk, RowSelection> matcher;
     private final VortexReader reader;
@@ -83,7 +82,6 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         for (int c = 0; c < types.length; c++) {
             temporals[c] = Temporal.of(types[c]);
         }
-        this.exactFilter = exactFilter;
         this.matcher = exactFilter == null ? null : Compute.matcher(exactFilter);
         chunksScannedLastQuery.set(0);
         VortexReader openedReader = null;
@@ -133,11 +131,10 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         return true;
     }
 
-    /// Moves to the next row the filter keeps in the current chunk, leaving the chunk open at its end
-    /// so a caller can still read rows of it by index ([#column(int, long)]).
+    /// Moves to the next row the filter keeps in the current chunk.
     ///
     /// @return `false` at the end of the chunk, or before the first [#nextChunk()]
-    boolean advanceInChunk() {
+    private boolean advanceInChunk() {
         if (chunk == null || rowInChunk >= chunkRows) {
             return false;
         }
@@ -174,9 +171,15 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         return true;
     }
 
-    /// The index in its chunk of the row [#advance()] moved to.
-    long rowInChunk() {
-        return currentRow;
+    /// The number of rows of the current chunk, before the filter.
+    long chunkRowCount() {
+        return chunkRows;
+    }
+
+    /// The rows of the current chunk the filter keeps, or `null` when there is no filter and every
+    /// row is kept.
+    RowSelection selection() {
+        return rowMatcher;
     }
 
     /// Column `c` of the row [#advance()] moved to.
@@ -184,13 +187,19 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         return column(c, currentRow);
     }
 
-    /// Column `c` of row `r` of the current chunk.
-    Object column(int c, long r) {
+    /// Column `c` of the current chunk as decoded, read on first use.
+    Object array(int c) {
         Object array = columns[c];
         if (array == null) {
             array = chunk.column(names[c]);
             columns[c] = array;
         }
+        return array;
+    }
+
+    /// Column `c` of row `r` of the current chunk.
+    Object column(int c, long r) {
+        Object array = array(c);
         Temporal temporal = temporals[c];
         return temporal == null ? value(array, types[c], r) : temporal.read(array, r);
     }

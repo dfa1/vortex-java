@@ -34,6 +34,11 @@ public record VarBinOffsetArray(DType dtype, long length, MemorySegment bytesSeg
     }
 
     @Override
+    public int compareUnsigned(long i, byte[] other) {
+        return VarBinArrays.compareUnsigned(bytesSegment, readOffset(i), readOffset(i + 1), other);
+    }
+
+    @Override
     public String getString(long i) {
         return new String(getBytes(i), StandardCharsets.UTF_8);
     }

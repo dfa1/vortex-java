@@ -44,6 +44,11 @@ public record VarBinSlicedArray(DType dtype, long length, VarBinArray inner, lon
     }
 
     @Override
+    public int compareUnsigned(long i, byte[] other) {
+        return inner.compareUnsigned(i + offset, other);
+    }
+
+    @Override
     public int getByteLength(long i) {
         return inner.getByteLength(i + offset);
     }
