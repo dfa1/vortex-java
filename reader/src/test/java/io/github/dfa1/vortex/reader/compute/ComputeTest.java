@@ -209,7 +209,7 @@ class ComputeTest {
             Chunk third = mock(Chunk.class);
             given(third.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA, new String[]{"b", "a"},
                     new int[]{1, 0}, PType.U16));
-            Function<Chunk, LongPredicate> sut = Compute.matcher(RowFilter.eq(SYM, "b"));
+            Function<Chunk, RowSelection> sut = Compute.matcher(RowFilter.eq(SYM, "b"));
 
             // When
             List<List<Long>> result = Stream.of(first, second, third)
@@ -277,6 +277,84 @@ class ComputeTest {
             assertThatNullPointerException().isThrownBy(() -> Compute.matcher(chunk, null));
             assertThatNullPointerException().isThrownBy(() -> Compute.matcher((RowFilter) null));
             assertThatNullPointerException().isThrownBy(() -> Compute.matcher(RowFilter.eq(SYM, "b")).apply(null));
+        }
+
+        /// [RowSelection#nextSelected(long)] jumps between selected rows, a 64-row word at a time over
+        /// a bitmap; walking it must visit exactly the rows the row test accepts, in order.
+        @Nested
+        class NextSelected {
+
+            private static final ColumnName OTHER = ColumnName.of("other");
+            private static final ColumnName N = ColumnName.of("n");
+            private static final int ROWS = 200;
+
+            /// 200 rows over three 64-row words and a partial fourth: "b" sits on rows 3, 70, 199 and
+            /// on every row of 130..135, so the second word ends empty and the third starts empty;
+            /// `other` is "x" on even rows, `n` is the row number.
+            private static Chunk chunk(PType codesPType) {
+                int[] sym = new int[ROWS];
+                int[] other = new int[ROWS];
+                long[] n = new long[ROWS];
+                for (int r = 0; r < ROWS; r++) {
+                    boolean b = r == 3 || r == 70 || r == 199 || r >= 130 && r <= 135;
+                    sym[r] = b ? 1 : 0;
+                    other[r] = r % 2;
+                    n[r] = r;
+                }
+                Chunk chunk = mock(Chunk.class);
+                given(chunk.rowCount()).willReturn((long) ROWS);
+                given(chunk.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"},
+                        sym, codesPType));
+                given(chunk.<Array>column(OTHER)).willReturn(ComputeArrays.utf8DictArray(ARENA, new String[]{"x", "y"},
+                        other, codesPType));
+                given(chunk.<Array>column(N)).willReturn(ComputeArrays.longArray(ARENA, n));
+                return chunk;
+            }
+
+            static Stream<Arguments> filters() {
+                return Stream.of(PType.U8, PType.U16, PType.I32).flatMap(codes -> Stream.of(
+                        Arguments.of(named("one bitmap leaf", RowFilter.eq(SYM, "b")), codes),
+                        Arguments.of(named("no row", RowFilter.eq(SYM, "z")), codes),
+                        // two bitmaps ANDed into one: "b" on even rows only
+                        Arguments.of(named("two bitmap leaves", RowFilter.and(RowFilter.eq(SYM, "b"),
+                                RowFilter.eq(OTHER, "x"))), codes),
+                        // a numeric leaf tested only on the bitmap's rows
+                        Arguments.of(named("bitmap and residual", RowFilter.and(RowFilter.eq(SYM, "b"),
+                                RowFilter.gt(N, 100L))), codes),
+                        Arguments.of(named("no bitmap", RowFilter.gt(N, 190L)), codes)));
+            }
+
+            @ParameterizedTest(name = "{0} over {1} codes")
+            @MethodSource("filters")
+            void walk_visitsExactlyTheRowsTheTestAccepts(RowFilter filter, PType codesPType) {
+                // Given
+                Chunk chunk = chunk(codesPType);
+                RowSelection sut = Compute.matcher(chunk, filter);
+                List<Long> expected = LongStream.range(0, ROWS).filter(i -> Compute.matches(chunk, filter, i))
+                        .boxed().toList();
+
+                // When
+                List<Long> result = new java.util.ArrayList<>();
+                for (long row = sut.nextSelected(0); row >= 0; row = sut.nextSelected(row + 1)) {
+                    result.add(row);
+                }
+
+                // Then
+                assertThat(result).isEqualTo(expected)
+                        .isEqualTo(LongStream.range(0, ROWS).filter(sut).boxed().toList());
+            }
+
+            @Test
+            void fromPastTheLastRow_selectsNothing() {
+                // Given
+                RowSelection sut = Compute.matcher(chunk(PType.U16), RowFilter.eq(SYM, "b"));
+
+                // When
+                long result = sut.nextSelected(ROWS);
+
+                // Then
+                assertThat(result).isEqualTo(-1);
+            }
         }
     }
 

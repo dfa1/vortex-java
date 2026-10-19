@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.compute.Compute;
+import io.github.dfa1.vortex.reader.compute.RowSelection;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -35,7 +36,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
-import java.util.function.LongPredicate;
 
 /// Streaming [Enumerator] over a Vortex scan: advances chunk by chunk, decoding each requested
 /// column once per chunk and materializing one `Object[]` row per [#moveNext()]. Rows are not
@@ -51,11 +51,11 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     private final RowFilter exactFilter;
     /// The row test per chunk of `exactFilter`, or `null`: one per scan, so a shared dictionary is
     /// evaluated once.
-    private final Function<Chunk, LongPredicate> matcher;
+    private final Function<Chunk, RowSelection> matcher;
     private final VortexReader reader;
     private final ScanIterator scan;
     private Chunk chunk;
-    private LongPredicate rowMatcher;
+    private RowSelection rowMatcher;
     private Object[] columns;
     private long rowInChunk;
     private long currentRow;
@@ -138,14 +138,18 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     ///
     /// @return `false` at the end of the chunk, or before the first [#nextChunk()]
     boolean advanceInChunk() {
-        while (chunk != null && rowInChunk < chunkRows) {
-            long row = rowInChunk++;
-            if (exactFilter == null || rowMatcher.test(row)) {
-                currentRow = row;
-                return true;
-            }
+        if (chunk == null || rowInChunk >= chunkRows) {
+            return false;
         }
-        return false;
+        // the selection jumps to its next row, past whole words of rows a filter bitmap rejects
+        long row = rowMatcher == null ? rowInChunk : rowMatcher.nextSelected(rowInChunk);
+        if (row < 0) {
+            rowInChunk = chunkRows;
+            return false;
+        }
+        currentRow = row;
+        rowInChunk = row + 1;
+        return true;
     }
 
     /// Closes the current chunk and decodes the next one the scan keeps.

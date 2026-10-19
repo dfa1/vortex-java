@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.function.LongPredicate;
 
 /// The minimal, low-level entry point to the compute primitives of ADR 0013 — the fused, single-pass
 /// filter-and-aggregate kernels.
@@ -105,13 +104,14 @@ public final class Compute {
     ///
     /// The per-leaf work that does not depend on the row is done here rather than per row: a
     /// numeric comparison resolves its bounds once, and a comparison over a dictionary-encoded
-    /// string column is evaluated once per dictionary entry, so each row costs a code lookup instead
-    /// of a string comparison. The selected rows are the same as [#matches(Chunk, RowFilter, long)].
+    /// string column is evaluated once per dictionary entry and its codes are mapped to a bitmap of
+    /// the selected rows, which [RowSelection#nextSelected(long)] walks 64 rows at a time. The
+    /// selected rows are the same as [#matches(Chunk, RowFilter, long)].
     ///
     /// @param chunk  the decoded chunk holding every column `filter` references
     /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
-    /// @return a test of a zero-based row of `chunk`, valid while `chunk` is open
-    public static LongPredicate matcher(Chunk chunk, RowFilter filter) {
+    /// @return the rows of `chunk` that `filter` selects, valid while `chunk` is open
+    public static RowSelection matcher(Chunk chunk, RowFilter filter) {
         Objects.requireNonNull(chunk, "chunk");
         return matcher(filter).apply(chunk);
     }
@@ -121,8 +121,8 @@ public final class Compute {
     /// instead of once per chunk. Not for concurrent use.
     ///
     /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
-    /// @return a function from a chunk to its row test, each test valid while its chunk is open
-    public static Function<Chunk, LongPredicate> matcher(RowFilter filter) {
+    /// @return a function from a chunk to the rows it selects, each valid while its chunk is open
+    public static Function<Chunk, RowSelection> matcher(RowFilter filter) {
         Objects.requireNonNull(filter, "filter");
         FusedFilterAggregate.DictMemo memo = new FusedFilterAggregate.DictMemo();
         return chunk -> FusedFilterAggregate.rowTest(Objects.requireNonNull(chunk, "chunk"), filter, memo);
