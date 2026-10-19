@@ -139,7 +139,7 @@ public sealed interface DType
     /// @param scale     number of digits to the right of the decimal point
     /// @return non-nullable [Decimal]
     static Decimal decimal(int precision, int scale) {
-        return new Decimal((byte) precision, (byte) scale, false);
+        return Decimal.of(precision, scale, false);
     }
 
     /// Returns a fresh [StructBuilder] for assembling a [Struct] dtype with
@@ -227,6 +227,43 @@ public sealed interface DType
     /// @param scale     number of digits to the right of the decimal point
     /// @param nullable  whether null values are permitted
     record Decimal(byte precision, byte scale, boolean nullable) implements DType {
+
+        /// Rust's `DecimalDType::try_new` bounds. Runs both on programmatic construction, so the
+        /// writer never emits a dtype Rust refuses, and while parsing an untrusted file's DType
+        /// blob, so it raises [VortexException] rather than [IllegalArgumentException] — same
+        /// reasoning as [Map].
+        ///
+        /// @throws VortexException if `precision` is outside `1..76` or `scale` exceeds it
+        public Decimal {
+            requireValid(precision, scale);
+        }
+
+        /// Creates a decimal from wide values, rejecting rather than truncating one that does not
+        /// fit the record's `byte` components (Rust's `try_into` on the proto's `u32`/`i32`).
+        ///
+        /// @param precision total number of significant decimal digits, `1..76`
+        /// @param scale     number of digits to the right of the decimal point, at most `precision`
+        /// @param nullable  whether null values are permitted
+        /// @return the decimal dtype
+        /// @throws VortexException if `precision` is outside `1..76`, `scale` exceeds it or does
+        ///                         not fit in a byte
+        public static Decimal of(int precision, int scale, boolean nullable) {
+            requireValid(precision, scale);
+            if (scale < Byte.MIN_VALUE) {
+                throw new VortexException("decimal scale " + scale + " does not fit in i8");
+            }
+            return new Decimal((byte) precision, (byte) scale, nullable);
+        }
+
+        // A negative scale (e.g. -2 for hundreds) is legal.
+        private static void requireValid(int precision, int scale) {
+            if (precision < 1 || precision > 76) {
+                throw new VortexException("decimal precision " + precision + " out of range (expected 1..76)");
+            }
+            if (scale > precision) {
+                throw new VortexException("decimal scale " + scale + " exceeds precision " + precision);
+            }
+        }
     }
 
     /// Variable-length UTF-8 string logical type.

@@ -85,9 +85,9 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
                     proto.primitive().nullable());
         }
         if (proto.decimal() != null) {
-            return new DType.Decimal(
-                    (byte) proto.decimal().precision(),
-                    (byte) proto.decimal().scale(),
+            return DType.Decimal.of(
+                    proto.decimal().precision(),
+                    proto.decimal().scale(),
                     proto.decimal().nullable());
         }
         if (proto.utf8() != null) {
