@@ -514,6 +514,16 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             }
             return true;
         }
+        return distinctStrings(data, validity, selected, n, strings::add);
+    }
+
+    /// Passes each distinct non-null value of the selected rows of a string chunk to `sink`. A
+    /// dictionary-encoded chunk marks the codes its rows use and decodes each once, instead of a
+    /// `String` per row; any other string chunk passes every row's value.
+    ///
+    /// @return `false` when `data` is not a string array
+    private static boolean distinctStrings(Array data, BoolArray validity, java.util.function.LongPredicate selected,
+                                           long n, java.util.function.Consumer<String> sink) {
         VarBinDictArray dict = data instanceof VarBinDictArray d ? d
                 : data instanceof VarBinSlicedArray(var _, var _, VarBinDictArray d, var _) ? d : null;
         if (dict != null && data.dtype() instanceof DType.Utf8) {
@@ -530,13 +540,13 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                     used.set((int) code);
                 }
             }
-            used.stream().forEach(code -> strings.add(values.getString(code)));
+            used.stream().forEach(code -> sink.accept(values.getString(code)));
             return true;
         }
         if (data instanceof VarBinArray varBin && data.dtype() instanceof DType.Utf8) {
             for (long i = 0; i < n; i++) {
                 if ((selected == null || selected.test(i)) && (validity == null || validity.getBoolean(i))) {
-                    strings.add(varBin.getString(i));
+                    sink.accept(varBin.getString(i));
                 }
             }
             return true;
@@ -726,6 +736,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             }
         }
         java.util.Comparator<Object[]> order = rowOrder(all);
+        if (cols.length == 1 && struct().fieldTypes().get(cols[0]) instanceof DType.Utf8) {
+            List<Object[]> strings = distinctTopNStrings(cols[0], filter, order, count);
+            if (strings != null) {
+                return strings;
+            }
+        }
         java.util.TreeSet<Object[]> kept = new java.util.TreeSet<>(order);
         Object[] probe = new Object[cols.length];
         try (VortexEnumerator rows = enumerator(cols, filter)) {
@@ -733,18 +749,80 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 for (int i = 0; i < cols.length; i++) {
                     probe[i] = rows.column(i);
                 }
-                if (kept.size() == count && order.compare(probe, kept.last()) >= 0) {
-                    continue;
-                }
-                if (kept.add(probe)) {
+                if (offer(kept, order, probe, count)) {
                     probe = new Object[cols.length];
-                    if (kept.size() > count) {
-                        kept.pollLast();
-                    }
                 }
             }
         }
         return List.copyOf(kept);
+    }
+
+    /// [#distinctTopN(int[], RowFilter, List, int)] of one string column, comparing each chunk's
+    /// distinct values ([#distinctStrings]) instead of every row: `SELECT DISTINCT isin ... LIMIT 1`
+    /// over 100M rows otherwise built and compared 100M strings to find 5000 values.
+    ///
+    /// @return the rows, or `null` when a chunk of the column is not a string array
+    private List<Object[]> distinctTopNStrings(int col, RowFilter filter, java.util.Comparator<Object[]> order,
+                                               int count) {
+        ColumnName column = struct().fieldNames().get(col);
+        java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
+        columns.add(column);
+        ScanOptions options = ScanOptions.columns(column);
+        if (filter != null) {
+            RexFilterTranslator.collectColumns(filter, columns);
+            options = ScanOptions.columns(columns.toArray(ColumnName[]::new)).withFilter(filter);
+        }
+        java.util.TreeSet<Object[]> kept = new java.util.TreeSet<>(order);
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(options)) {
+            chunksScannedLastQuery.set(0);
+            while (scan.hasNext()) {
+                try (Chunk chunk = scan.next()) {
+                    chunksScannedLastQuery.incrementAndGet();
+                    java.util.function.LongPredicate selected = filter == null ? null : Compute.matcher(chunk, filter);
+                    Array array = chunk.column(column);
+                    BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
+                    Array data = array instanceof MaskedArray masked ? masked.inner() : array;
+                    long n = chunk.rowCount();
+                    if (!distinctStrings(data, validity, selected, n, value -> offer(kept, order, new Object[]{value}, count))) {
+                        return null;
+                    }
+                    if (validity != null && hasSelectedNull(validity, selected, n)) {
+                        offer(kept, order, new Object[]{null}, count);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot scan " + file, e);
+        }
+        return List.copyOf(kept);
+    }
+
+    private static boolean hasSelectedNull(BoolArray validity, java.util.function.LongPredicate selected, long n) {
+        for (long i = 0; i < n; i++) {
+            if (!validity.getBoolean(i) && (selected == null || selected.test(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// Adds `row` to `kept` unless it is a duplicate or ranks past the first `count`, then trims
+    /// `kept` back to `count`.
+    ///
+    /// @return whether `kept` now holds `row`, so the caller must not reuse it
+    private static boolean offer(java.util.TreeSet<Object[]> kept, java.util.Comparator<Object[]> order,
+                                 Object[] row, int count) {
+        if (kept.size() == count && order.compare(row, kept.last()) >= 0) {
+            return false;
+        }
+        if (!kept.add(row)) {
+            return false;
+        }
+        if (kept.size() > count) {
+            kept.pollLast();
+        }
+        return true;
     }
 
     /// A scan of the projection `cols` over the rows `filter` selects, also decoding the columns the
