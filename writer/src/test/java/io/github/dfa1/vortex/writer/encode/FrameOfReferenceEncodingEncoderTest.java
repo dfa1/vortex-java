@@ -266,6 +266,22 @@ class FrameOfReferenceEncodingEncoderTest {
         }
 
         @Test
+        void encode_u64StraddlingTwoToThe63_referenceIsUnsignedMin() throws IOException {
+            // Given values just below and above 2^63: a signed min picks 2^63 (Long.MIN_VALUE),
+            // leaving 2^63 - 10 a full-width residual, where Rust's Stat::Min picks 2^63 - 10
+            long below = Long.MAX_VALUE - 9;
+            long[] data = {Long.MIN_VALUE + 5, below, Long.MIN_VALUE};
+
+            // When
+            EncodeResult result = ENCODER.encode(new DType.Primitive(PType.U64, false), data, EncodeTestHelper.testCtx());
+
+            // Then
+            MemorySegment meta = result.rootNode().metadata();
+            ProtoScalarValue reference = ProtoScalarValue.decode(meta, 0, meta.byteSize());
+            assertThat(reference.uint64_value()).isEqualTo(below);
+        }
+
+        @Test
         void encodeCascade_signedI64_statsCarryMinAndMax() throws IOException {
             // Given — same #379 regression as encode_signedI64_statsCarryMinAndMax, but for the
             // cascade entry point (CascadingCompressor), the one the "better compression" option
