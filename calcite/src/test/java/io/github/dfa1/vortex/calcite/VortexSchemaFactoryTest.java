@@ -104,12 +104,13 @@ class VortexSchemaFactoryTest {
 
     @Test
     void inlineModelUrl_queriesTheDirectory() throws Exception {
-        // Given a URL carrying the whole configuration, as pasted into an IDE data source. A model
+        // Given a URL carrying the whole configuration, as pasted into an IDE data source. The path uses
+        // forward slashes: in a JSON model a Windows backslash starts an escape sequence ('\\U'). A model
         // cannot set connection properties, so lex=JAVA must be in the URL: without it Calcite
         // uppercases the unquoted table name and finds nothing.
         String url = "jdbc:calcite:lex=JAVA;model=inline:{version:'1.0',defaultSchema:'vtx',schemas:[{name:'vtx',"
                 + "type:'custom',factory:'" + VortexSchemaFactory.class.getName() + "',"
-                + "operand:{directory:'" + dir + "'}}]}";
+                + "operand:{directory:'" + dir.toString().replace('\\', '/') + "'}}]}";
 
         // When
         long result;

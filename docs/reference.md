@@ -619,7 +619,8 @@ path, wins over a discovered file); any other key is rejected. The schema name i
 jdbc:calcite:lex=JAVA;model=inline:{version:'1.0',defaultSchema:'vtx',schemas:[{name:'vtx',type:'custom',factory:'io.github.dfa1.vortex.calcite.VortexSchemaFactory',operand:{directory:'/data/vortex'}}]}
 ```
 
-A model cannot set connection properties, so put `lex=JAVA` in the URL (without it Calcite
+In a model, write a Windows path with forward slashes (`C:/data`) or doubled backslashes: a single backslash
+starts a JSON escape sequence. A model cannot set connection properties, so put `lex=JAVA` in the URL (without it Calcite
 uppercases unquoted names and `vtx.ohlc` is not found). For reserved-word columns such as `close`
 unquoted, also add `parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY`;
 [`VortexCalcite`] sets both for you.
