@@ -645,7 +645,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 .thenComparingLong(Ranked::position);
         // the worst kept row at the head, so a better row evicts it
         java.util.PriorityQueue<Ranked> heap = new java.util.PriorityQueue<>(count + 1, ranking.reversed());
-        VortexEnumerator rows = new VortexEnumerator(file, new AtomicLong(), options, outNames, outTypes, filter);
+        VortexEnumerator rows = new VortexEnumerator(file, chunksScannedLastQuery, options, outNames, outTypes, filter);
         // only the key columns are read per row; a row is built once it beats the worst one kept. A
         // later row never beats an equal key, so the first rows of a tie are the ones kept
         Object[] probe = new Object[cols.length];

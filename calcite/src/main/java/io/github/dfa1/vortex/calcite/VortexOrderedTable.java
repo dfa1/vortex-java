@@ -21,14 +21,21 @@ import java.util.List;
 /// the table before it returns the first (a 100M-row table ran an IDE's JDBC process out of memory).
 ///
 /// The first rows come from a bounded top-N pass, [VortexTable#topN]. When the client reads past
-/// them, the pass runs again for twice as many rows and the rows already returned are skipped: a
-/// client that stops after a grid page costs one pass and holds only that page, one that reads
-/// everything costs about two full passes and holds what Calcite's own sort would. Ties rank by scan
-/// position, so a longer pass always starts with the rows of the shorter one.
+/// them, the pass runs again for eight times as many rows and the rows already returned are skipped.
+/// Ties rank by scan position, so a longer pass always starts with the rows of the shorter one.
+///
+/// Each pass reads the whole table: the heap bounds memory, not I/O. A client that stops after a grid
+/// page costs one pass and holds only that page, which is the case this exists for. One that reads on
+/// pays another full pass each time it outgrows the last (a 100M-row table read to the end is seven), and holds what Calcite's own sort would at the end. A file replaced while a result is being
+/// read is not detected: each pass reopens it by path.
 final class VortexOrderedTable extends AbstractTable implements ScannableTable {
 
     /// Rows the first pass keeps: a few IDE grid pages.
     private static final int FIRST_BATCH = 1024;
+
+    /// How much longer each later pass is. Every pass is a full scan, so growing fast bounds how many a
+    /// client that reads far pays for.
+    private static final int GROWTH = 8;
 
     private final VortexTable table;
     private final int[] cols;
@@ -87,29 +94,33 @@ final class VortexOrderedTable extends AbstractTable implements ScannableTable {
         public boolean moveNext() {
             index++;
             if (index < batch.size()) {
+                returned = index + 1L;
                 return true;
             }
             if (exhausted) {
                 return false;
             }
-            // the first pass keeps FIRST_BATCH rows, every later one twice the last; a pass cannot
-            // keep more rows than the table has
+            // the old batch is dead weight while the next pass runs
+            batch = List.of();
+            // the first pass keeps FIRST_BATCH rows, every later one GROWTH times the last; a pass
+            // cannot keep more rows than the table has
             long tableRows = (long) table.getStatistic().getRowCount().doubleValue();
-            long want = requested == 0 ? FIRST_BATCH : 2L * requested;
+            long want = requested == 0 ? FIRST_BATCH : (long) GROWTH * requested;
             requested = (int) Math.min(want, Math.min(Integer.MAX_VALUE - 8L, Math.max(1, tableRows)));
             batch = table.topN(cols, filter, keys, requested);
             exhausted = batch.size() < requested || requested >= tableRows;
-            // skip the rows an earlier, shorter pass already returned
+            // skip the rows an earlier, shorter pass already returned; counted when advanced over, not
+            // when read, since a client may step through rows without reading a column
             index = (int) returned;
-            if (index >= batch.size()) {
-                return false;
+            boolean more = index < batch.size();
+            if (more) {
+                returned = index + 1L;
             }
-            return true;
+            return more;
         }
 
         @Override
         public Object[] current() {
-            returned = index + 1L;
             return batch.get(index);
         }
 

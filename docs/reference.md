@@ -653,10 +653,11 @@ row; it falls back to Calcite's sort when a returned value has no SQL literal of
 an infinity, a string outside Latin-1, binary, `UUID`, nested), and is also capped by the 4,000
 literal cells (rows times columns) one compiled `VALUES` can hold, past which Calcite sorts. An
 `ORDER BY` with no `LIMIT` over a table of more than 100,000 rows is read lazily: the first 1,024 rows
-come from a bounded heap, and a client that reads further triggers a pass for twice as many, skipping
-the rows already returned. A grid that shows one page costs one pass and holds one page (Calcite's own
-sort buffers every row before it returns the first), and a client that reads everything holds what
-Calcite's sort would. Ties come out in scan order, as in Calcite's stable sort.
+come from a bounded heap, and a client that reads further triggers another pass for eight times as
+many, skipping the rows already returned. Every pass reads the whole table (the heap bounds memory,
+not I/O), so a grid that shows one page costs one pass and holds one page, while a client that reads
+a 100M-row table to the end pays seven passes and holds what Calcite's own sort would (which buffers
+every row before it returns the first). Ties come out in scan order, as in Calcite's stable sort.
 `connect` is the
 supported entry point; `VortexSchema`/`VortexTable` (`io.github.dfa1.vortex.calcite`) are the
 underlying schema/table plumbing it assembles, exposed for callers building a Calcite schema tree
