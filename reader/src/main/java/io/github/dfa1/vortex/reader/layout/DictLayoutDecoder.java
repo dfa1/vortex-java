@@ -148,15 +148,21 @@ final class DictLayoutDecoder implements LayoutDecoder {
             return VarBinArray.ofDict(dtype, n, flat.bytesSegment(), flat.offsetsSegment(),
                     flat.offsetsPtype(), codesSeg, codesPType);
         }
-        long poolExtent = checkedPoolExtent(codesSeg, codesPType, n, values.length());
         if (values instanceof VarBinConstantArray constant) {
             // A `vortex.constant` pool holds one distinct value broadcast across its entries,
             // so every in-range code resolves to the same bytes and the dict collapses to that
-            // constant — O(1), no pool walk, no allocation whatever length the pool claims.
+            // constant — O(1), no pool walk, no allocation whatever length the pool claims. No
+            // carrier is left to catch a code past the pool on access, so every code is checked.
+            checkedPoolExtent(codesSeg, codesPType, n, values.length());
             return new VarBinConstantArray(dtype, n, constant.bytes());
         }
-        // Remaining shapes (StringView, chunked, run-end, sparse, sliced pools) are walked, but
-        // only up to the highest entry a code actually reaches.
+        // Remaining shapes (FSST, StringView, chunked, run-end, sparse, sliced pools) are walked.
+        // A pool no longer than the codes is walked whole, which the codes bound as well as reading
+        // every code would; a longer one only up to the highest entry a code reaches. A code past
+        // the walked pool is caught by the carrier on access, as for a flat pool.
+        long poolExtent = values.length() <= n
+                ? values.length()
+                : checkedPoolExtent(codesSeg, codesPType, n, values.length());
         VarBinOffsetArray pool = VarBinArray.toOffsetMode(values.limited(poolExtent), arena);
         return VarBinArray.ofDict(dtype, n, pool.bytesSegment(), pool.offsetsSegment(),
                 pool.offsetsPtype(), codesSeg, codesPType);
@@ -168,9 +174,10 @@ final class DictLayoutDecoder implements LayoutDecoder {
     /// The codes-side guard in [#decode(LayoutDecodeContext, Layout, DType)] has no values-side
     /// analogue, because a pool's `length()` is a claim rather than a measurement for the shapes
     /// with no per-entry storage. Reading the codes bounds the pool by something the file must
-    /// physically contain. Runs only when the pool is not already flat, so the common dict path
-    /// pays nothing; the ptype dispatch is hoisted out of the loop (CLAUDE.md hot-loop rule) and
-    /// the range test is a single check on the reduced min/max rather than one per row.
+    /// physically contain. Runs only for a constant pool or one longer than the codes, so the
+    /// common dict path pays nothing; the ptype dispatch is hoisted out of the loop (CLAUDE.md
+    /// hot-loop rule) and the range test is a single check on the reduced min/max rather than one
+    /// per row.
     ///
     /// @param codesSeg   per-row codes, already checked to hold at least `n` entries
     /// @param codesPType physical type of the codes
@@ -301,8 +308,8 @@ final class DictLayoutDecoder implements LayoutDecoder {
                         "layout: invalid codes type: " + codes.getClass().getSimpleName());
             };
             // Untrusted-input guard: codes outside the pool must fail as VortexException,
-            // never as a raw JDK IndexOutOfBoundsException.
-            if (code >= poolValidity.length()) {
+            // never as a raw JDK IndexOutOfBoundsException. A signed 64-bit code can be negative.
+            if (code < 0 || code >= poolValidity.length()) {
                 throw new VortexException(EncodingId.VORTEX_DICT,
                         "layout: code " + code + " out of range for pool validity of length "
                                 + poolValidity.length());

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `Compute.matcher(RowFilter)` gives the row test of each chunk of one scan, evaluating a dictionary the chunks share once. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - `vortex-jdbc-driver` is a `jdbc:vortex:<dir>` JDBC driver in one self-contained jar, so IntelliJ, DBeaver and other SQL tools can query a directory of `.vortex` files. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `VortexSchemaFactory` builds the Calcite schema from a `jdbc:calcite:model=...` URL, so SQL tools can query a directory of `.vortex` files without Java code. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `VortexCalcite.connect(Path)` and `VortexCalciteOptions` expose every `.vortex` file in a directory as a SQL table. ([#566](https://github.com/dfa1/vortex-java/issues/566))
@@ -21,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- SQL `WHERE col = 'x'` on a dictionary-encoded string column is about twice as fast, and skips the column's rows entirely when `x` is not in the dictionary. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - SQL `SELECT DISTINCT` of one dictionary-encoded string column with `ORDER BY ... LIMIT` is about a third faster: it ranks the dictionary values the rows use instead of every row. ([#574](https://github.com/dfa1/vortex-java/pull/574))
 - A scanned `Chunk` decodes each column the first time it is read, so SQL `ORDER BY ... LIMIT` over a wide table is about 13% faster. ([#574](https://github.com/dfa1/vortex-java/pull/574))
 - SQL `SELECT DISTINCT ... ORDER BY ... LIMIT n` keeps only the first distinct rows during the scan instead of hashing every row, and `ORDER BY` on a column stored in the opposite order is up to 3.5 times faster. ([#572](https://github.com/dfa1/vortex-java/pull/572))
@@ -52,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- A negative code in a nullable dictionary-encoded column fails with `VortexException` instead of a raw `IndexOutOfBoundsException`. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - vortex-jni no longer aborts the JVM when it filters a string column vortex-java compressed with FSST, whose symbol table could hold two symbols Rust hashes to one slot, and FSST columns are about 5% smaller. ([#573](https://github.com/dfa1/vortex-java/pull/573))
 - Frame-of-reference encoding takes the unsigned minimum of a `u64` column whose values span 2^63 as its reference, as Rust does, instead of a reference that left those values at full width. ([#571](https://github.com/dfa1/vortex-java/pull/571))
 - **Breaking:** `DType.Decimal` refuses a precision outside 1 to 76 or a scale above the precision, as Rust does, so the writer no longer writes decimal columns that Rust and vortex-java cannot read, and a variant's decimal is checked as it is read. ([#571](https://github.com/dfa1/vortex-java/pull/571))

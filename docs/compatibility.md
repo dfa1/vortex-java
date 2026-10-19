@@ -180,7 +180,7 @@ decoder falls into one of three shapes:
 | `vortex.varbinview`         | Lazy          | Lazy          | `VarBinViewArray` — keeps views + data buffers as mmap slices            |
 | `vortex.alp`                | Lazy          | Lazy          | `LazyAlpXxxArray`; broadcast → `LazyConstantXxxArray`; patched stays Materialized, ADR 0010 + 0015 |
 | `vortex.alprd`              | Lazy          | Lazy          | `LazyAlpRdDoubleArray`/`LazyAlpRdFloatArray` — left/right + patches on access |
-| `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinDictArray` (string), ADR 0012. The `vortex.dict` **layout** resolves the same way for any VarBin-shaped values pool — a StringView pool, or any VarBin-backed extension dtype — normalizing only the pool entries the codes reach, never the rows; a `vortex.constant` pool collapses to `VarBinConstantArray` |
+| `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinDictArray` (string), ADR 0012. The `vortex.dict` **layout** resolves the same way for any VarBin-shaped values pool — a StringView pool, or any VarBin-backed extension dtype — normalizing a pool no longer than its codes whole and a longer one only up to the entries the codes reach, never the rows; a `vortex.constant` pool collapses to `VarBinConstantArray` |
 | `vortex.sparse`             | Lazy          | Lazy          | `LazySparseXxxArray` (primitive + bool) + `VarBinSparseArray` (Utf8/Binary); fill broadcast, patch resolved per access; patch-free range → `VarBinConstantArray`, ADR 0015 |
 | `vortex.sequence`           | Lazy          | Lazy          | `LazySequenceXxxArray`; `base + i * multiplier` per access, no buffer, ADR 0015 |
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
@@ -210,6 +210,15 @@ element-at-`i` requires decoding a window, so they must allocate output (ADR 001
 can itself be wrapped in a 1:1 lazy transform (e.g. ALP over Bitpacked produces
 `LazyAlp(MaterializedXxx)`). Fsst is the one exception: its per-row code range is independent of
 every other row, so it stays Lazy instead (ADR 0026).
+
+A scan filtered on a `vortex.dict` layout column skips the chunks of a dictionary none of whose
+values satisfies the filter, when a null row cannot satisfy it either, deciding from the values
+without reading a code. Rust evaluates a dictionary filter over the values too, but always reads the
+codes: results are the same, but a corrupt codes buffer under such a filter goes unreported where
+Rust fails the scan. This is a deliberate divergence, for `WHERE col = 'x'` with `x` absent from the
+dictionary. The row test `Compute.matcher(RowFilter)` builds for a string dictionary follows Rust:
+the filter is evaluated once per dictionary value per scan, and `u8`/`u16` codes are mapped to the
+selected rows in one pass, Rust's `values.take(codes)`.
 
 ### Unknown encodings
 

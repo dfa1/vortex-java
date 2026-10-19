@@ -155,13 +155,30 @@ final class ComputeArrays {
     /// @param codes the per-row codes into `pool`
     /// @return a [VarBinArray] of [DType#UTF8] with `codes.length` rows
     static VarBinArray utf8DictArray(Arena arena, String[] pool, int[] codes) {
+        return utf8DictArray(arena, pool, codes, PType.I32);
+    }
+
+    /// [#utf8DictArray(Arena, String[], int[])] with the codes stored as `codesPType`: `U8`, `U16`
+    /// or `I32`.
+    ///
+    /// @param arena      the allocator for the buffers
+    /// @param pool       the dictionary values
+    /// @param codes      the per-row codes into `pool`
+    /// @param codesPType the physical type of the stored codes
+    /// @return a [VarBinArray] of [DType#UTF8] with `codes.length` rows
+    static VarBinArray utf8DictArray(Arena arena, String[] pool, int[] codes, PType codesPType) {
         VarBinOffsetArray values = (VarBinOffsetArray) utf8Array(arena, pool);
-        MemorySegment codeSegment = arena.allocate((long) Math.max(1, codes.length) * Integer.BYTES, Integer.BYTES);
+        int width = codesPType.byteSize();
+        MemorySegment codeSegment = arena.allocate((long) Math.max(1, codes.length) * width, width);
         for (int i = 0; i < codes.length; i++) {
-            codeSegment.setAtIndex(VortexFormat.LE_INT, i, codes[i]);
+            switch (codesPType) {
+                case U8 -> codeSegment.set(ValueLayout.JAVA_BYTE, i, (byte) codes[i]);
+                case U16 -> codeSegment.setAtIndex(VortexFormat.LE_SHORT, i, (short) codes[i]);
+                default -> codeSegment.setAtIndex(VortexFormat.LE_INT, i, codes[i]);
+            }
         }
         return VarBinArray.ofDict(DType.UTF8, codes.length, values.bytesSegment(), values.offsetsSegment(),
-                values.offsetsPtype(), codeSegment, PType.I32);
+                values.offsetsPtype(), codeSegment, codesPType);
     }
 
     private static MemorySegment longSegment(Arena arena, long... values) {

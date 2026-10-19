@@ -473,11 +473,13 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
         LongIntMap bits = new LongIntMap(1024);
         java.util.Set<String> strings = new java.util.HashSet<>();
+        java.util.function.Function<Chunk, java.util.function.LongPredicate> matcher =
+                filter == null ? null : Compute.matcher(filter);
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(options)) {
             while (scan.hasNext()) {
                 try (Chunk chunk = scan.next()) {
-                    java.util.function.LongPredicate selected = filter == null ? null : Compute.matcher(chunk, filter);
+                    java.util.function.LongPredicate selected = matcher == null ? null : matcher.apply(chunk);
                     Array array = chunk.column(column);
                     BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
                     Array data = array instanceof MaskedArray masked ? masked.inner() : array;
@@ -579,11 +581,13 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         long max = Long.MIN_VALUE;
         long rows = 0;
         long nonNull = 0;
+        java.util.function.Function<Chunk, java.util.function.LongPredicate> matcher =
+                filter == null ? null : Compute.matcher(filter);
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(options)) {
             while (scan.hasNext()) {
                 try (Chunk chunk = scan.next()) {
-                    java.util.function.LongPredicate selected = filter == null ? null : Compute.matcher(chunk, filter);
+                    java.util.function.LongPredicate selected = matcher == null ? null : matcher.apply(chunk);
                     Array array = chunk.column(column);
                     BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
                     DecimalArray data = (DecimalArray) (array instanceof MaskedArray masked ? masked.inner() : array);
@@ -773,13 +777,15 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             options = ScanOptions.columns(columns.toArray(ColumnName[]::new)).withFilter(filter);
         }
         java.util.TreeSet<Object[]> kept = new java.util.TreeSet<>(order);
+        java.util.function.Function<Chunk, java.util.function.LongPredicate> matcher =
+                filter == null ? null : Compute.matcher(filter);
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(options)) {
             chunksScannedLastQuery.set(0);
             while (scan.hasNext()) {
                 try (Chunk chunk = scan.next()) {
                     chunksScannedLastQuery.incrementAndGet();
-                    java.util.function.LongPredicate selected = filter == null ? null : Compute.matcher(chunk, filter);
+                    java.util.function.LongPredicate selected = matcher == null ? null : matcher.apply(chunk);
                     Array array = chunk.column(column);
                     BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
                     Array data = array instanceof MaskedArray masked ? masked.inner() : array;

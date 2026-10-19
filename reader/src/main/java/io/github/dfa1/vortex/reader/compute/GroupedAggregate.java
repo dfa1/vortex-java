@@ -62,7 +62,7 @@ final class GroupedAggregate {
         }
         Array group = chunk.column(groupColumn);
         BoolArray validity = NumericColumns.validityOf(group);
-        LongPredicate selected = filter == null ? null : FusedFilterAggregate.rowTest(chunk, filter);
+        LongPredicate selected = filter == null ? null : FusedFilterAggregate.rowTest(chunk, filter, new FusedFilterAggregate.DictMemo());
         try {
             return group(group, validity, selected, lane, chunk.rowCount());
         } catch (ArithmeticException overflow) {

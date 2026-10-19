@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.function.LongPredicate;
 
 /// Streaming [Enumerator] over a Vortex scan: advances chunk by chunk, decoding each requested
@@ -48,6 +49,9 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     /// Per output column, its temporal conversion or `null`: resolved once, not per row.
     private final Temporal[] temporals;
     private final RowFilter exactFilter;
+    /// The row test per chunk of `exactFilter`, or `null`: one per scan, so a shared dictionary is
+    /// evaluated once.
+    private final Function<Chunk, LongPredicate> matcher;
     private final VortexReader reader;
     private final ScanIterator scan;
     private Chunk chunk;
@@ -66,7 +70,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     /// @param types                  output column dtypes, parallel to `names`
     /// @param exactFilter            a predicate [VortexTable#scan(DataContext, java.util.List, int[])]
     ///                               removed from Calcite's own re-check list, enforced here row-by-row
-    ///                               via [Compute#matcher(Chunk, RowFilter)] so the result stays
+    ///                               via [Compute#matcher(RowFilter)] so the result stays
     ///                               exact — or `null` when every pushed predicate is still Calcite's to
     ///                               re-check
     VortexEnumerator(Path file, AtomicLong chunksScannedLastQuery, ScanOptions options,
@@ -80,6 +84,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
             temporals[c] = Temporal.of(types[c]);
         }
         this.exactFilter = exactFilter;
+        this.matcher = exactFilter == null ? null : Compute.matcher(exactFilter);
         chunksScannedLastQuery.set(0);
         VortexReader openedReader = null;
         try {
@@ -158,7 +163,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         chunksScannedLastQuery.incrementAndGet();
         chunkRows = chunk.rowCount();
         rowInChunk = 0;
-        rowMatcher = exactFilter == null ? null : Compute.matcher(chunk, exactFilter);
+        rowMatcher = matcher == null ? null : matcher.apply(chunk);
         // read on first use: a top-N reads only its sort keys for most rows, and the chunk then
         // decodes only those columns
         columns = new Object[names.length];

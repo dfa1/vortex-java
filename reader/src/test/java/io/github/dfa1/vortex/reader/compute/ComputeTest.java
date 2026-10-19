@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.compute;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -15,12 +16,14 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.LongPredicate;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
@@ -85,30 +88,32 @@ class ComputeTest {
 
         /// An unsorted pool with a null row (row 3) whose code points at "café", so a lowering that
         /// ignored validity would select row 3 for `eq` and miss it for `is null`.
-        private static Array nullableDict() {
+        private static Array nullableDict(PType codesPType) {
             Array dict = ComputeArrays.utf8DictArray(ARENA, new String[]{"café", "AAPL", "MSFT"},
-                    new int[]{0, 1, 2, 0, 1, 0});
+                    new int[]{0, 1, 2, 0, 1, 0}, codesPType);
             return new MaskedArray(dict, ComputeArrays.boolArray(ARENA, true, true, true, false, true, true));
         }
 
+        // u8 and u16 codes are mapped to a row bitmap in one pass over the codes; i32 codes are read
+        // per row: every predicate must select the same rows either way
         static Stream<Arguments> predicates() {
-            return Stream.of(
-                    Arguments.of(named("eq", new Predicate.Eq("café")), List.of(0L, 5L)),
-                    Arguments.of(named("neq", new Predicate.Neq("café")), List.of(1L, 2L, 4L)),
-                    Arguments.of(named("lt in UTF-8 order", new Predicate.Lt("café")), List.of(1L, 2L, 4L)),
-                    Arguments.of(named("between", new Predicate.Between("AAPL", "MSFT")), List.of(1L, 2L, 4L)),
-                    Arguments.of(named("no entry matches", new Predicate.Eq("TSLA")), List.of()),
-                    Arguments.of(named("is null", new Predicate.IsNull()), List.of(3L)),
+            return Stream.of(PType.U8, PType.U16, PType.I32).flatMap(codes -> Stream.of(
+                    Arguments.of(named("eq", new Predicate.Eq("café")), codes, List.of(0L, 5L)),
+                    Arguments.of(named("neq", new Predicate.Neq("café")), codes, List.of(1L, 2L, 4L)),
+                    Arguments.of(named("lt in UTF-8 order", new Predicate.Lt("café")), codes, List.of(1L, 2L, 4L)),
+                    Arguments.of(named("between", new Predicate.Between("AAPL", "MSFT")), codes, List.of(1L, 2L, 4L)),
+                    Arguments.of(named("no entry matches", new Predicate.Eq("TSLA")), codes, List.of()),
+                    Arguments.of(named("is null", new Predicate.IsNull()), codes, List.of(3L)),
                     Arguments.of(named("is null or eq", new Predicate.Or(new Predicate.IsNull(),
-                            new Predicate.Eq("AAPL"))), List.of(1L, 3L, 4L)));
+                            new Predicate.Eq("AAPL"))), codes, List.of(1L, 3L, 4L))));
         }
 
-        @ParameterizedTest
+        @ParameterizedTest(name = "{0} over {1} codes")
         @MethodSource("predicates")
-        void selectsTheRowsMatchesSelects(Predicate predicate, List<Long> expected) {
+        void selectsTheRowsMatchesSelects(Predicate predicate, PType codesPType, List<Long> expected) {
             // Given
             Chunk chunk = mock(Chunk.class);
-            given(chunk.<Array>column(SYM)).willReturn(nullableDict());
+            given(chunk.<Array>column(SYM)).willReturn(nullableDict(codesPType));
             RowFilter filter = new RowFilter.Column(SYM, predicate);
 
             // When
@@ -122,10 +127,12 @@ class ComputeTest {
 
         /// A dictionary spanning many scan chunks reaches the filter as a slice (Rust's global dict
         /// layout, e.g. TPC-H `c_mktsegment`). The slice's rows must read the codes at its offset.
-        @Test
-        void slicedDictionary_testsCodesAtTheSliceOffset() {
+        @ParameterizedTest
+        @EnumSource(value = PType.class, names = {"U8", "U16", "I32"})
+        void slicedDictionary_testsCodesAtTheSliceOffset(PType codesPType) {
             // Given — rows 2..4 of the dictionary column: "b", "a", "b"
-            VarBinArray dict = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"}, new int[]{0, 0, 1, 0, 1});
+            VarBinArray dict = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"}, new int[]{0, 0, 1, 0, 1},
+                    codesPType);
             Chunk chunk = mock(Chunk.class);
             given(chunk.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DType.UTF8, 3, dict, 2));
             RowFilter filter = RowFilter.eq(SYM, "b");
@@ -156,17 +163,108 @@ class ComputeTest {
         }
 
         /// A code past the dictionary is malformed input: it must fail as [VortexException], never as
-        /// an `ArrayIndexOutOfBoundsException` from the per-entry table (ADR 0003).
-        @Test
-        void codeOutsideDictionary_throwsVortexException() {
+        /// an `ArrayIndexOutOfBoundsException` from the per-entry table (ADR 0003), and only on the
+        /// row that carries it, as the bitmap of u8/u16 codes gives way to the per-row reads.
+        @ParameterizedTest
+        @EnumSource(value = PType.class, names = {"U8", "U16", "I32"})
+        void codeOutsideDictionary_throwsVortexException(PType codesPType) {
             // Given — 2 entries, row 1 carries code 7
             Chunk chunk = mock(Chunk.class);
             given(chunk.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA,
-                    new String[]{"a", "b"}, new int[]{0, 7, 1}));
+                    new String[]{"a", "b"}, new int[]{0, 7, 1}, codesPType));
             LongPredicate sut = Compute.matcher(chunk, RowFilter.eq(SYM, "b"));
 
             // When / Then
+            assertThat(sut.test(2)).isTrue();
             assertThatThrownBy(() -> sut.test(1)).isInstanceOf(VortexException.class);
+        }
+
+        /// With no entry matching, the codes are only range-checked by their maximum, which must still
+        /// hand a code past the dictionary to the per-row path that reports it.
+        @ParameterizedTest
+        @EnumSource(value = PType.class, names = {"U8", "U16"})
+        void codeOutsideDictionary_noEntryMatching_throwsVortexException(PType codesPType) {
+            // Given — 2 entries, row 1 carries code 7, and no entry is "z"
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA,
+                    new String[]{"a", "b"}, new int[]{0, 7, 1}, codesPType));
+            LongPredicate sut = Compute.matcher(chunk, RowFilter.eq(SYM, "z"));
+
+            // When / Then
+            assertThat(sut.test(2)).isFalse();
+            assertThatThrownBy(() -> sut.test(1)).isInstanceOf(VortexException.class);
+        }
+
+        /// One matcher per scan evaluates a dictionary its chunks share once, and must notice when a
+        /// later chunk brings a dictionary of its own.
+        @Test
+        void scanMatcher_reusesASharedDictionaryAndNoticesANewOne() {
+            // Given — two slices of one dictionary, then a chunk with a different pool where code 0 is "b"
+            VarBinArray shared = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"},
+                    new int[]{1, 0, 0, 1}, PType.U16);
+            Chunk first = mock(Chunk.class);
+            given(first.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DType.UTF8, 2, shared, 0));
+            Chunk second = mock(Chunk.class);
+            given(second.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DType.UTF8, 2, shared, 2));
+            Chunk third = mock(Chunk.class);
+            given(third.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA, new String[]{"b", "a"},
+                    new int[]{1, 0}, PType.U16));
+            Function<Chunk, LongPredicate> sut = Compute.matcher(RowFilter.eq(SYM, "b"));
+
+            // When
+            List<List<Long>> result = Stream.of(first, second, third)
+                    .map(chunk -> LongStream.range(0, 2).filter(sut.apply(chunk)).boxed().toList())
+                    .toList();
+
+            // Then
+            assertThat(result).containsExactly(List.of(0L), List.of(1L), List.of(1L));
+        }
+
+        /// The memo hands back the very results it computed while the dictionary is the same, so a
+        /// shared dictionary's values are evaluated once, and recomputes for another dictionary.
+        @Test
+        void dictMemo_evaluatesADictionaryOncePerPredicate() {
+            // Given
+            VarBinDictArray shared = (VarBinDictArray) ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"},
+                    new int[]{1, 0}, PType.U8);
+            VarBinDictArray other = (VarBinDictArray) ComputeArrays.utf8DictArray(ARENA, new String[]{"b", "a"},
+                    new int[]{1, 0}, PType.U8);
+            Predicate predicate = new Predicate.Eq("b");
+            FusedFilterAggregate.DictMemo sut = new FusedFilterAggregate.DictMemo();
+            FusedFilterAggregate.DictMemo.Entry first = sut.entry(shared, predicate);
+
+            // When
+            FusedFilterAggregate.DictMemo.Entry again = sut.entry(shared, predicate);
+            FusedFilterAggregate.DictMemo.Entry result = sut.entry(other, predicate);
+
+            // Then
+            assertThat(again).isSameAs(first);
+            assertThat(result.matches()).containsExactly(true, false);
+            assertThat(first.matches()).containsExactly(false, true);
+        }
+
+        /// A u8 code addresses 256 entries, so a longer dictionary has entries no code can reach; the
+        /// code table must cover exactly the reachable ones and still select by code.
+        @Test
+        void u8CodesOverADictionaryLongerThan256_selectByCode() {
+            // Given — 300 entries, 300 rows coding entry r % 256
+            String[] pool = new String[300];
+            int[] codes = new int[300];
+            for (int i = 0; i < pool.length; i++) {
+                pool[i] = "v" + i;
+                codes[i] = i % 256;
+            }
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA, pool, codes, PType.U8));
+            LongPredicate sut = Compute.matcher(chunk, RowFilter.eq(SYM, "v7"));
+
+            // When
+            List<Long> result = LongStream.range(0, 300).filter(sut).boxed().toList();
+
+            // Then — rows 7 and 263 code entry 7; entry 299, past what a u8 code reaches, matches no row
+            assertThat(result).containsExactly(7L, 263L);
+            assertThat(LongStream.range(0, 300).filter(Compute.matcher(chunk, RowFilter.eq(SYM, "v299"))).count())
+                    .isZero();
         }
 
         @Test
@@ -177,6 +275,8 @@ class ComputeTest {
             // When / Then
             assertThatNullPointerException().isThrownBy(() -> Compute.matcher(null, RowFilter.eq(SYM, "b")));
             assertThatNullPointerException().isThrownBy(() -> Compute.matcher(chunk, null));
+            assertThatNullPointerException().isThrownBy(() -> Compute.matcher((RowFilter) null));
+            assertThatNullPointerException().isThrownBy(() -> Compute.matcher(RowFilter.eq(SYM, "b")).apply(null));
         }
     }
 
