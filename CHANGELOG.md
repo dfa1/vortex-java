@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.18.0] — 2026-10-19
 
 ### Added
+- `Compute.matcher` returns a `RowSelection`, whose `nextSelected(long)` jumps to the next selected row instead of testing each one. ([#580](https://github.com/dfa1/vortex-java/pull/580))
 - `Compute.matcher(RowFilter)` gives the row test of each chunk of one scan, evaluating a dictionary the chunks share once. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - `vortex-jdbc-driver` is a `jdbc:vortex:<dir>` JDBC driver in one self-contained jar, so IntelliJ, DBeaver and other SQL tools can query a directory of `.vortex` files. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `VortexSchemaFactory` builds the Calcite schema from a `jdbc:calcite:model=...` URL, so SQL tools can query a directory of `.vortex` files without Java code. ([#566](https://github.com/dfa1/vortex-java/issues/566))
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- SQL `WHERE` on a dictionary-encoded string column visits only the matching rows, up to a third faster for a selective `=` or `IN`. ([#580](https://github.com/dfa1/vortex-java/pull/580))
 - SQL `WHERE col = 'x'` on a dictionary-encoded string column is about twice as fast, and skips the column's rows entirely when `x` is not in the dictionary. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - SQL `SELECT DISTINCT` of one dictionary-encoded string column with `ORDER BY ... LIMIT` is about a third faster: it ranks the dictionary values the rows use instead of every row. ([#574](https://github.com/dfa1/vortex-java/pull/574))
 - A scanned `Chunk` decodes each column the first time it is read, so SQL `ORDER BY ... LIMIT` over a wide table is about 13% faster. ([#574](https://github.com/dfa1/vortex-java/pull/574))

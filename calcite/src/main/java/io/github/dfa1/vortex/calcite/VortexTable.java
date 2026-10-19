@@ -31,6 +31,7 @@ import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.compute.FilteredAggregate;
 import io.github.dfa1.vortex.reader.compute.Predicate;
+import io.github.dfa1.vortex.reader.compute.RowSelection;
 import io.github.dfa1.vortex.reader.compute.ZoneReducer;
 
 import org.apache.calcite.DataContext;
@@ -473,7 +474,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
         LongIntMap bits = new LongIntMap(1024);
         java.util.Set<String> strings = new java.util.HashSet<>();
-        java.util.function.Function<Chunk, java.util.function.LongPredicate> matcher =
+        java.util.function.Function<Chunk, RowSelection> matcher =
                 filter == null ? null : Compute.matcher(filter);
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(options)) {
@@ -581,7 +582,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         long max = Long.MIN_VALUE;
         long rows = 0;
         long nonNull = 0;
-        java.util.function.Function<Chunk, java.util.function.LongPredicate> matcher =
+        java.util.function.Function<Chunk, RowSelection> matcher =
                 filter == null ? null : Compute.matcher(filter);
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(options)) {
@@ -777,7 +778,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             options = ScanOptions.columns(columns.toArray(ColumnName[]::new)).withFilter(filter);
         }
         java.util.TreeSet<Object[]> kept = new java.util.TreeSet<>(order);
-        java.util.function.Function<Chunk, java.util.function.LongPredicate> matcher =
+        java.util.function.Function<Chunk, RowSelection> matcher =
                 filter == null ? null : Compute.matcher(filter);
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(options)) {

@@ -19,6 +19,7 @@ import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.compute.Predicate;
+import io.github.dfa1.vortex.reader.compute.RowSelection;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -48,7 +49,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.function.LongPredicate;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -186,17 +186,16 @@ class DictFilterInteropIntegrationTest {
 
     private static List<Long> scanIds(Path file, RowFilter filter) throws Exception {
         List<Long> ids = new ArrayList<>();
-        Function<Chunk, LongPredicate> matcher = Compute.matcher(filter);
+        Function<Chunk, RowSelection> matcher = Compute.matcher(filter);
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(ScanOptions.columns(S, ID).withFilter(filter))) {
             while (scan.hasNext()) {
                 try (Chunk chunk = scan.next()) {
-                    LongPredicate selected = matcher.apply(chunk);
+                    RowSelection selected = matcher.apply(chunk);
                     LongArray idColumn = chunk.column(ID);
-                    for (long r = 0; r < chunk.rowCount(); r++) {
-                        if (selected.test(r)) {
-                            ids.add(idColumn.getLong(r));
-                        }
+                    // walked as the SQL scan walks it, jumping to each selected row
+                    for (long r = selected.nextSelected(0); r >= 0; r = selected.nextSelected(r + 1)) {
+                        ids.add(idColumn.getLong(r));
                     }
                 }
             }

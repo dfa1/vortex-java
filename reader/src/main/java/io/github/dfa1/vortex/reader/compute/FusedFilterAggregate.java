@@ -491,9 +491,23 @@ final class FusedFilterAggregate {
             };
         }
         if (validity == null) {
-            return i -> (bits[(int) (i >>> 6)] & 1L << i) != 0;
+            return new BitmapLeaf(bits);
         }
+        // ponytail: a nullable column tests its null rows through `generic`, so its rows are walked
+        // one by one; folding the validity into the bitmap would need the predicate's null answer
         return i -> validity.getBoolean(i) ? (bits[(int) (i >>> 6)] & 1L << i) != 0 : generic.test(i);
+    }
+
+    /// A leaf whose selected rows are a bitmap, bit `i` for row `i`, which [#rowTest(Chunk, RowFilter,
+    /// DictMemo)] walks a word at a time.
+    ///
+    /// @param bits the bitmap
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
+    private record BitmapLeaf(long[] bits) implements LongPredicate {
+        @Override
+        public boolean test(long row) {
+            return (bits[(int) (row >>> 6)] & 1L << row) != 0;
+        }
     }
 
     /// Marks rows `[offset, offset + rows)` of `dict` whose entry matches, reading its `u8` or `u16`
@@ -640,14 +654,92 @@ final class FusedFilterAggregate {
     /// @param filter the whole predicate
     /// @param memo   the dictionary entry results of earlier chunks of the same scan
     /// @return a row predicate valid for `chunk`'s rows
-    static LongPredicate rowTest(Chunk chunk, RowFilter filter, DictMemo memo) {
+    static RowSelection rowTest(Chunk chunk, RowFilter filter, DictMemo memo) {
         List<LongPredicate> leafList = new ArrayList<>();
         collectLeaves(chunk, filter, leafList, memo);
-        if (leafList.size() == 1) {
-            return leafList.getFirst();
+        // the bitmap leaves are ANDed into one, which then drives the walk; the other leaves are
+        // tested only on the rows it selects
+        long[] bits = null;
+        List<LongPredicate> rest = new ArrayList<>();
+        for (LongPredicate leaf : leafList) {
+            if (leaf instanceof BitmapLeaf(long[] leafBits)) {
+                if (bits == null) {
+                    bits = leafBits;
+                } else {
+                    for (int w = 0; w < bits.length; w++) {
+                        bits[w] &= leafBits[w];
+                    }
+                }
+            } else {
+                rest.add(leaf);
+            }
         }
-        LongPredicate[] leaves = leafList.toArray(LongPredicate[]::new);
-        return i -> allMatch(leaves, i);
+        LongPredicate residual = switch (rest.size()) {
+            case 0 -> null;
+            case 1 -> rest.getFirst();
+            default -> {
+                LongPredicate[] leaves = rest.toArray(LongPredicate[]::new);
+                yield i -> allMatch(leaves, i);
+            }
+        };
+        long rows = chunk.rowCount();
+        return bits == null ? new TestedRows(rows, residual) : new BitmapRows(bits, rows, residual);
+    }
+
+    /// A selection that tests every row.
+    ///
+    /// @param rows the chunk's row count
+    /// @param test the row test
+    private record TestedRows(long rows, LongPredicate test) implements RowSelection {
+        @Override
+        public boolean test(long row) {
+            return test.test(row);
+        }
+
+        @Override
+        public long nextSelected(long from) {
+            for (long row = from; row < rows; row++) {
+                if (test.test(row)) {
+                    return row;
+                }
+            }
+            return -1;
+        }
+    }
+
+    /// A selection held as a bitmap, walked a word of 64 rows at a time, with the leaves the bitmap
+    /// does not cover tested on its rows only.
+    ///
+    /// @param bits     the bitmap, bit `i` for row `i`
+    /// @param rows     the chunk's row count
+    /// @param residual the other leaves' test, or `null` when the bitmap is the whole filter
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
+    private record BitmapRows(long[] bits, long rows, LongPredicate residual) implements RowSelection {
+        @Override
+        public boolean test(long row) {
+            return (bits[(int) (row >>> 6)] & 1L << row) != 0 && (residual == null || residual.test(row));
+        }
+
+        @Override
+        public long nextSelected(long from) {
+            long row = from;
+            while (row < rows) {
+                int w = (int) (row >>> 6);
+                long word = bits[w] & -1L << row;
+                while (word == 0) {
+                    if (++w == bits.length) {
+                        return -1;
+                    }
+                    word = bits[w];
+                }
+                row = ((long) w << 6) + Long.numberOfTrailingZeros(word);
+                if (residual == null || residual.test(row)) {
+                    return row;
+                }
+                row++;
+            }
+            return -1;
+        }
     }
 
     /// Builds a hoisted long-domain comparison leaf: the predicate lowers once to an inclusive range
