@@ -3,10 +3,13 @@ package io.github.dfa1.vortex.integration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +33,7 @@ import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -67,13 +71,17 @@ import org.junit.jupiter.api.io.TempDir;
 @Tag("fuzz")
 class WriteReadFuzzIntegrationTest {
 
+    private static final HexFormat HEX = HexFormat.of();
+
     static {
         NativeLoader.loadJni();
     }
 
     private static final List<DType> TYPES = List.of(
             DType.I8, DType.I16, DType.I32, DType.I64, DType.U8, DType.U16, DType.U32, DType.U64,
-            DType.F32, DType.F64, DType.BOOL, DType.UTF8);
+            DType.F32, DType.F64, DType.BOOL, DType.UTF8, DType.BINARY,
+            // One per decimal physical width Rust picks: i32, i64, i128
+            DType.decimal(9, 2), DType.decimal(18, 4), DType.decimal(38, 0));
 
     @TempDir
     Path tempDir;
@@ -169,6 +177,10 @@ class WriteReadFuzzIntegrationTest {
             return switch (dtype) {
                 case DType.Bool _ -> (raw & 1) != 0;
                 case DType.Utf8 _ -> raw % 97 == 0 ? "" : "row-" + Long.toUnsignedString(raw, 36);
+                // Arbitrary bytes, not UTF-8, of length 0..7: the raw's low bytes
+                case DType.Binary _ -> HEX.formatHex(ByteBuffer.allocate(8).putLong(raw).array(), 0, (int) (raw & 7));
+                // The raw's low digits, so the shapes (runs, small ranges, constants) carry over
+                case DType.Decimal d -> BigDecimal.valueOf(raw % (long) Math.pow(10, Math.min(d.precision(), 18)), d.scale());
                 case DType.Primitive p -> switch (p.ptype()) {
                     case I8 -> (long) (byte) raw;
                     case I16 -> (long) (short) raw;
@@ -199,6 +211,12 @@ class WriteReadFuzzIntegrationTest {
             int n = canonical.size();
             if (dtype instanceof DType.Utf8) {
                 return canonical.toArray(new String[0]);
+            }
+            if (dtype instanceof DType.Decimal) {
+                return canonical.toArray(new BigDecimal[0]);
+            }
+            if (dtype instanceof DType.Binary) {
+                return canonical.stream().map(v -> v == null ? null : HEX.parseHex((String) v)).toArray(byte[][]::new);
             }
             boolean[] valid = new boolean[n];
             long[] bits = new long[n];
@@ -316,6 +334,8 @@ class WriteReadFuzzIntegrationTest {
 
     private static Object javaValue(Array values, long i, DType dtype) {
         Object raw = switch (values) {
+            case DecimalArray a -> a.getDecimal(i);
+            case VarBinArray a when dtype instanceof DType.Binary -> HEX.formatHex(a.getBytes(i));
             case LongArray a -> a.getLong(i);
             case IntArray a -> (long) a.getInt(i);
             case ShortArray a -> (long) a.getShort(i);
@@ -357,6 +377,8 @@ class WriteReadFuzzIntegrationTest {
             case Float f -> Float.floatToIntBits(f);
             case Boolean b -> b;
             case Character c -> (long) c;
+            case BigDecimal d -> d;
+            case byte[] b -> HEX.formatHex(b);
             case Number n -> zeroExtend(dtype, n.longValue());
             case org.apache.arrow.vector.util.Text text -> text.toString();
             default -> value.toString();
