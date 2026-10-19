@@ -23,7 +23,9 @@ import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ListViewData;
 import io.github.dfa1.vortex.writer.encode.ListViewEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.OnPairEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
@@ -51,6 +53,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -906,6 +909,50 @@ class JavaWritesRustReadsIntegrationTest {
         // Then — prices run 50.00 .. 349.99 in 0.01 steps, so 340.00 .. 349.99 (1000 rows) match
         assertThat(all).containsExactly(prices);
         assertThat(filtered).hasSize(1000);
+    }
+
+    static Stream<Arguments> stringEncoders() {
+        return Stream.of(
+                Arguments.of(Named.of("varbin", new VarBinEncodingEncoder())),
+                Arguments.of(Named.of("fsst", new FsstEncodingEncoder())),
+                Arguments.of(Named.of("onpair", new OnPairEncodingEncoder())));
+    }
+
+    @ParameterizedTest
+    @MethodSource("stringEncoders")
+    void javaWriter_jniReader_utf8ChunkStats_inUtf8ByteOrder(EncodingEncoder encoder, @TempDir Path tmp)
+            throws IOException {
+        // Given — each string encoder writes the chunk's min/max, and with zone maps off those are
+        // the only bounds in the file. The emoji is a surrogate pair: below U+E000 in UTF-16, above
+        // it in UTF-8, the order Rust compares in, so a UTF-16 max (U+E000) would let a reader prune
+        // the chunk holding it. The shared-prefix ids made the FSST table keep two symbols in one of
+        // Rust's hash slots, and vortex-jni aborted the JVM rebuilding it to filter.
+        String emoji = "\uD83D\uDE00";
+        String[] keys = new String[1_000];
+        for (int i = 0; i < keys.length; i++) {
+            keys[i] = String.format("EVT%010d", i);
+        }
+        keys[10] = emoji;
+        keys[500] = "\uE000";
+        Path file = tmp.resolve("java_utf8_chunk_stats.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults().withZoneMaps(false),
+                     List.of(encoder))) {
+            sut.writeChunk(Map.of(ColumnName.of("s"), keys));
+        }
+
+        // When
+        List<Object> result = readColumnFiltered(file, "s", Expression.binary(Expression.BinaryOp.EQ,
+                Expression.column("s"), Expression.literal(emoji)));
+        io.github.dfa1.vortex.reader.ArrayStats stats;
+        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file)) {
+            stats = reader.columnStats().get(ColumnName.of("s"));
+        }
+
+        // Then
+        assertThat(result).map(Object::toString).containsExactly(emoji);
+        assertThat(stats.min()).isEqualTo("EVT0000000000");
+        assertThat(stats.max()).isEqualTo(emoji);
     }
 
     @Test

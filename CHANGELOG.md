@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- vortex-jni no longer aborts the JVM when it filters a string column vortex-java compressed with FSST, whose symbol table could hold two symbols Rust hashes to one slot, and FSST columns are about 5% smaller. ([#573](https://github.com/dfa1/vortex-java/pull/573))
 - Frame-of-reference encoding takes the unsigned minimum of a `u64` column whose values span 2^63 as its reference, as Rust does, instead of a reference that left those values at full width. ([#571](https://github.com/dfa1/vortex-java/pull/571))
 - **Breaking:** `DType.Decimal` refuses a precision outside 1 to 76 or a scale above the precision, as Rust does, so the writer no longer writes decimal columns that Rust and vortex-java cannot read, and a variant's decimal is checked as it is read. ([#571](https://github.com/dfa1/vortex-java/pull/571))
 - SQL `ORDER BY ... LIMIT` and `GROUP BY` with a few thousand result cells no longer fail with "Code grows beyond 64 KB"; past the limit Calcite scans instead. ([#569](https://github.com/dfa1/vortex-java/pull/569))

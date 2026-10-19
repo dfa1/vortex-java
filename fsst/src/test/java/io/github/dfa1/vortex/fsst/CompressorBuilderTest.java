@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.fsst;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -68,6 +70,31 @@ class CompressorBuilderTest {
         assertThat(decompressedLength).isEqualTo(input.length);
         assertThat(decompressed).isEqualTo(input);
         assertThat(compressedLength).isLessThan(input.length);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ids", "logs", "random"})
+    void train_noTwoLongSymbolsShareARustHashSlot(String corpus) {
+        // Given — Rust rebuilds a compressor from a file's symbol table to compress a filter
+        // literal, and panics ("rebuild symbol insertion into PHT must succeed") when two 3-8 byte
+        // symbols hash to the same slot, aborting the JVM in vortex-jni. Java's table broke this on
+        // shared-prefix ids, since it hashed differently and kept colliding symbols.
+        byte[][] rows = switch (corpus) {
+            case "ids" -> idRows(20_000);
+            case "logs" -> logLikeRows(2_000);
+            default -> randomRows(2_000);
+        };
+
+        // When
+        Compressor result = new CompressorBuilder().train(rows);
+
+        // Then
+        java.util.Set<Integer> slots = new java.util.HashSet<>();
+        for (int code = 0; code < result.symbolCount(); code++) {
+            if (result.symbolLength(code) >= 3) {
+                assertThat(slots.add(rustSlot(result.packedSymbol(code)))).as("code %d", code).isTrue();
+            }
+        }
     }
 
     @Nested
@@ -400,6 +427,32 @@ class CompressorBuilderTest {
             }
         }
         return false;
+    }
+
+    /// fsst-rs 0.6.0 `fsst_hash` of the first three bytes, masked to its 2048-slot table: written
+    /// out here rather than calling [LossyPerfectHashTable#slotFor(long)], so the test checks Rust's
+    /// slots and not whatever hash Java uses.
+    private static int rustSlot(long packed) {
+        long prefix = packed & 0xFF_FFFFL;
+        return (int) ((prefix * 2971215073L ^ prefix >>> 15) & 2047);
+    }
+
+    private static byte[][] idRows(int n) {
+        byte[][] rows = new byte[n][];
+        for (int i = 0; i < n; i++) {
+            rows[i] = utf8(i % 100 == 0 ? "\uD83D\uDE00" : String.format("EVT%010d", i));
+        }
+        return rows;
+    }
+
+    private static byte[][] randomRows(int n) {
+        Random random = new Random(42);
+        byte[][] rows = new byte[n][];
+        for (int i = 0; i < n; i++) {
+            rows[i] = new byte[random.nextInt(40)];
+            random.nextBytes(rows[i]);
+        }
+        return rows;
     }
 
     private static byte[] utf8(String s) {
