@@ -58,7 +58,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_FOR);
         int n = longs.length;
 
-        long ref = computeRef(longs, n);
+        long ref = computeRef(longs, n, ptype);
         MemorySegment residuals = toResidualBuffer(longs, ref, ptype, ctx);
         MemorySegment meta = buildForMeta(ref, ptype);
 
@@ -78,7 +78,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_FOR);
         int n = longs.length;
 
-        long ref = computeRef(longs, n);
+        long ref = computeRef(longs, n, ptype);
         // Skip when ref == 0 and ptype is unsigned: residuals == input, so FOR adds metadata
         // overhead (ref scalar + extra node) for zero compression benefit over plain bitpack.
         // Matches Rust IntFoRScheme's skip estimate for this case.
@@ -95,8 +95,11 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
     }
 
-    private static long computeRef(long[] longs, int n) {
-        return n > 0 ? SimdOperationsSupport.preferred().minMax(longs, PType.I64)[0] : 0L;
+    // Rust takes the reference from Stat::Min, an unsigned min for unsigned ptypes: a signed one
+    // picks a u64 above 2^63 over a smaller value below it, so a column straddling 2^63 got full-width
+    // residuals. Widened U8..U32 values are zero-extended, so the U64 order serves every unsigned width.
+    private static long computeRef(long[] longs, int n, PType ptype) {
+        return n > 0 ? SimdOperationsSupport.preferred().minMax(longs, ptype.isUnsigned() ? PType.U64 : PType.I64)[0] : 0L;
     }
 
     private static MemorySegment buildForMeta(long ref, PType ptype) {
