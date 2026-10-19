@@ -5,6 +5,11 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
+import org.apache.calcite.linq4j.Enumerator;
+import org.apache.calcite.rel.RelCollations;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeSystem;
+import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -103,6 +108,50 @@ class LazySortScanTest {
 
             // Then
             assertThat(result).isEqualTo(expected("k desc").subList(0, 500));
+        }
+    }
+
+    @Test
+    void advancingWithoutReadingARow_neverRepeatsOrDropsOne() {
+        // Given the enumerator driven by moveNext() alone, as a cursor that skips rows or only counts
+        // them does; JDBC cannot show this, Calcite's cursor reads every row it passes
+        VortexTable table = new VortexTable(big);
+        RelDataType rowType = table.getRowType(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT));
+        int[] allColumns = IntStream.range(0, rowType.getFieldCount()).toArray();
+        VortexOrderedTable sut = new VortexOrderedTable(table, allColumns, null,
+                List.of(new VortexTable.SortKey(1, false, false)), rowType, ROWS, RelCollations.of(1));
+
+        // When it is stepped through every batch, reading a row only now and then
+        List<Long> sampled = new ArrayList<>();
+        long count = 0;
+        try (Enumerator<Object[]> rows = sut.scan(null).enumerator()) {
+            while (rows.moveNext()) {
+                if (count % 5_000 == 0) {
+                    sampled.add((Long) rows.current()[0]);
+                }
+                count++;
+            }
+        }
+
+        // Then each pass resumed exactly after the last row it handed out
+        List<Long> expected = expected("k");
+        assertThat(count).isEqualTo(ROWS);
+        assertThat(sampled).isEqualTo(IntStream.range(0, (ROWS + 4_999) / 5_000)
+                .mapToObj(i -> expected.get(i * 5_000)).toList());
+    }
+
+    @Test
+    void orderedScan_reportsItsChunksThroughTheTablesInstrumentation() throws Exception {
+        // Given
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", big))) {
+            VortexTable table = conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class).getRootSchema()
+                    .subSchemas().get("vtx").unwrap(VortexSchema.class).table("t");
+
+            // When
+            ids(conn, "select id from vtx.t order by k");
+
+            // Then the counter is the sorted scan's, not whatever an earlier query left
+            assertThat(table.chunksScannedLastQuery()).isPositive();
         }
     }
 
