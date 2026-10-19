@@ -1,7 +1,10 @@
 package io.github.dfa1.vortex.reader.compute;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -12,7 +15,10 @@ import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.function.LongPredicate;
 
@@ -73,7 +79,7 @@ final class FusedFilterAggregate {
             return dictResult;
         }
         List<LongPredicate> leafList = new ArrayList<>();
-        collectLeaves(chunk, filter, leafList);
+        collectLeaves(chunk, filter, leafList, new DictMemo());
         LongPredicate[] leaves = leafList.toArray(LongPredicate[]::new);
 
         if (aggColumn == null) {
@@ -91,7 +97,7 @@ final class FusedFilterAggregate {
     /// Attempts the [DictFilter] code-scan lane: when the filter's flattened `AND` holds at least
     /// one comparison leaf over a dict-encoded column, that leaf DRIVES the scan — raw `u8` codes
     /// are compared instead of decoding every row — and the remaining leaves are lowered once (the
-    /// same [#leafTest(Array, Predicate)] lowering as the row loop) and tested only on the rows the
+    /// same [#leafTest(Array, Predicate, DictMemo)] lowering as the row loop) and tested only on the rows the
     /// code scan matches. With ≈ 1/pool-size selectivity, the residual leaves' accessor reads run
     /// on a small fraction of the rows instead of all of them. Returns `null` — leaving the generic
     /// row loop to run — when no leaf qualifies as a driver, or for an aggregate without a
@@ -149,7 +155,7 @@ final class FusedFilterAggregate {
         for (int i = 0; i < leaves.size(); i++) {
             if (i != driver) {
                 RowFilter.Column leaf = leaves.get(i);
-                lowered.add(leafTest(chunk.column(leaf.column()), leaf.predicate()));
+                lowered.add(leafTest(chunk.column(leaf.column()), leaf.predicate(), new DictMemo()));
             }
         }
         if (lowered.isEmpty()) {
@@ -397,15 +403,15 @@ final class FusedFilterAggregate {
     /// @param chunk  the chunk supplying each leaf's column
     /// @param filter the (sub-)filter to walk
     /// @param out    the collected per-leaf row predicates
-    private static void collectLeaves(Chunk chunk, RowFilter filter, List<LongPredicate> out) {
+    private static void collectLeaves(Chunk chunk, RowFilter filter, List<LongPredicate> out, DictMemo memo) {
         switch (filter) {
             case RowFilter.And(var parts) -> {
                 for (RowFilter part : parts) {
-                    collectLeaves(chunk, part, out);
+                    collectLeaves(chunk, part, out, memo);
                 }
             }
             case RowFilter.Column(var column, var predicate) ->
-                    out.add(leafTest(chunk.column(column), predicate));
+                    out.add(leafTest(chunk.column(column), predicate, memo));
         }
     }
 
@@ -417,7 +423,7 @@ final class FusedFilterAggregate {
     /// @param column    the decoded filter column (possibly masked)
     /// @param predicate the column-bound predicate
     /// @return a row predicate that tests `predicate` against `column` at a given row
-    private static LongPredicate leafTest(Array column, Predicate predicate) {
+    private static LongPredicate leafTest(Array column, Predicate predicate, DictMemo memo) {
         Array data = NumericColumns.unwrap(column);
         BoolArray validity = NumericColumns.validityOf(column);
         if (predicate instanceof Predicate.IsNull) {
@@ -437,19 +443,21 @@ final class FusedFilterAggregate {
         }
         LongPredicate generic = i -> PredicateEvaluator.evaluate(column, i, predicate);
         if (data instanceof VarBinDictArray dict) {
-            return dictLeaf(dict, 0, dict.length(), validity, predicate, generic);
+            return dictLeaf(dict, 0, dict.length(), validity, predicate, generic, memo);
         }
         // A dictionary spanning many scan chunks (Rust's global dict layout) is decoded once and
         // sliced per chunk, so real files mostly reach here as a slice.
         if (data instanceof VarBinSlicedArray(var _, long rows, VarBinDictArray dict, long offset)) {
-            return dictLeaf(dict, offset, rows, validity, predicate, generic);
+            return dictLeaf(dict, offset, rows, validity, predicate, generic, memo);
         }
         return generic;
     }
 
     /// Builds a string dictionary leaf the way Rust's dict compare kernel does: the predicate is
-    /// evaluated once per dictionary entry, and a row tests its entry's result by code (#552). A
-    /// low-cardinality column then costs one code read per row instead of a string comparison.
+    /// evaluated once per dictionary entry (#552), and the rows' codes are then mapped through those
+    /// results in one pass over the codes segment, Rust's `values.take(codes)`, into a bitmap the row
+    /// test reads. A dictionary the chunks share is evaluated once per `memo`, as Rust's dict reader
+    /// caches its values evaluation.
     ///
     /// A null row still goes through `generic`, so a null-aware predicate (`IS NULL` under an `OR`)
     /// answers exactly as before, and so does a code outside the dictionary, which `generic` reports
@@ -462,36 +470,179 @@ final class FusedFilterAggregate {
     /// @param validity  the filter validity bitmap, or `null` when every row is valid
     /// @param predicate the column-bound predicate
     /// @param generic   the per-row evaluator over the original (possibly masked) column
+    /// @param memo      the entry results already computed in this scan
     /// @return the lowered row predicate
     private static LongPredicate dictLeaf(VarBinDictArray dict, long offset, long rows, BoolArray validity,
-                                          Predicate predicate, LongPredicate generic) {
-        VarBinOffsetArray values = dict.values();
-        long size = values.length();
+                                          Predicate predicate, LongPredicate generic, DictMemo memo) {
+        long size = dict.values().length();
         if (size > rows || size > Integer.MAX_VALUE) {
             return generic;
         }
-        boolean[] entryMatches = new boolean[(int) size];
-        for (int c = 0; c < size; c++) {
-            entryMatches[c] = PredicateEvaluator.evaluate(values, c, predicate);
+        DictMemo.Entry entry = memo.entry(dict, predicate);
+        boolean[] entryMatches = entry.matches();
+        long[] bits = matchBits(dict, offset, rows, entry);
+        if (bits == null) {
+            return i -> {
+                if (validity != null && !validity.getBoolean(i)) {
+                    return generic.test(i);
+                }
+                long code = dict.code(i + offset);
+                return code >= 0 && code < size ? entryMatches[(int) code] : generic.test(i);
+            };
         }
-        return i -> {
-            if (validity != null && !validity.getBoolean(i)) {
-                return generic.test(i);
+        if (validity == null) {
+            return i -> (bits[(int) (i >>> 6)] & 1L << i) != 0;
+        }
+        return i -> validity.getBoolean(i) ? (bits[(int) (i >>> 6)] & 1L << i) != 0 : generic.test(i);
+    }
+
+    /// Marks rows `[offset, offset + rows)` of `dict` whose entry matches, reading its `u8` or `u16`
+    /// codes straight from their segment, in the cheapest of three shapes chosen once:
+    /// - no entry matches (`= 'x'` with `x` absent): nothing to mark, only the codes' range is
+    ///   checked, by the vectorized maximum;
+    /// - one entry matches (`= 'x'`): a compare against its code, taken on the few matching rows;
+    /// - several match: a lookup through [DictMemo.Entry#codeTable()], free of branches.
+    ///
+    /// @return the bitmap, bit `i` for row `offset + i`, or `null` for wider codes, a codes buffer
+    ///         too short or a code outside the dictionary, which the per-row path then reports
+    private static long[] matchBits(VarBinDictArray dict, long offset, long rows, DictMemo.Entry entry) {
+        PType ptype = dict.dictCodesPType();
+        MemorySegment codes = dict.dictCodesSegs();
+        if (entry.codeTable() == null || rows > Integer.MAX_VALUE
+                || codes.byteSize() / ptype.byteSize() < offset + rows) {
+            return null;
+        }
+        int n = (int) rows;
+        long[] bits = new long[(n + 63) >>> 6];
+        if (n == 0) {
+            return bits;
+        }
+        int size = entry.matches().length;
+        int only = entry.onlyMatch();
+        if (only == DictMemo.NO_MATCH) {
+            long width = ptype.byteSize();
+            long max = SimdOperationsSupport.preferred().maxUnsigned(codes.asSlice(offset * width, n * width), n, ptype);
+            return max < size ? bits : null;
+        }
+        if (only >= 0) {
+            return markCode(codes, ptype, offset, n, only, bits) < size ? bits : null;
+        }
+        return (markTable(codes, ptype, offset, n, entry.codeTable(), bits) & 2) == 0 ? bits : null;
+    }
+
+    /// Sets the bit of every row among `n` from `offset` whose code's slot in `table` is `1`.
+    ///
+    /// @return every slot read, ORed: bit `2` is set when a code is past the dictionary
+    private static int markTable(MemorySegment codes, PType ptype, long offset, int n, byte[] table, long[] bits) {
+        int seen = 0;
+        if (ptype == PType.U8) {
+            for (int i = 0; i < n; i++) {
+                int slot = table[Byte.toUnsignedInt(codes.get(ValueLayout.JAVA_BYTE, offset + i))];
+                bits[i >>> 6] |= (long) (slot & 1) << i;
+                seen |= slot;
             }
-            long code = dict.code(i + offset);
-            return code >= 0 && code < size ? entryMatches[(int) code] : generic.test(i);
-        };
+        } else {
+            for (int i = 0; i < n; i++) {
+                int slot = table[Short.toUnsignedInt(codes.getAtIndex(VortexFormat.LE_SHORT, offset + i))];
+                bits[i >>> 6] |= (long) (slot & 1) << i;
+                seen |= slot;
+            }
+        }
+        return seen;
+    }
+
+    /// Sets the bit of every row among `n` from `offset` whose code is `only`.
+    ///
+    /// @return the largest code read, for the caller's range check
+    private static int markCode(MemorySegment codes, PType ptype, long offset, int n, int only, long[] bits) {
+        int max = 0;
+        // the compare is taken on the matching rows only, as rare as the entry is, so it predicts well
+        if (ptype == PType.U8) {
+            for (int i = 0; i < n; i++) {
+                int code = Byte.toUnsignedInt(codes.get(ValueLayout.JAVA_BYTE, offset + i));
+                max = Math.max(max, code);
+                if (code == only) {
+                    bits[i >>> 6] |= 1L << i;
+                }
+            }
+        } else {
+            for (int i = 0; i < n; i++) {
+                int code = Short.toUnsignedInt(codes.getAtIndex(VortexFormat.LE_SHORT, offset + i));
+                max = Math.max(max, code);
+                if (code == only) {
+                    bits[i >>> 6] |= 1L << i;
+                }
+            }
+        }
+        return max;
+    }
+
+    /// The per-entry results of each dictionary leaf, kept across the chunks of one scan: chunks
+    /// sliced from one shared dictionary then evaluate its entries once. Not for concurrent use.
+    static final class DictMemo {
+        /// [Entry#onlyMatch()] when no entry matches.
+        static final int NO_MATCH = -1;
+        /// [Entry#onlyMatch()] when several entries match.
+        static final int SEVERAL = -2;
+
+        private final IdentityHashMap<Predicate, Entry> byLeaf = new IdentityHashMap<>();
+
+        /// One leaf's results over one dictionary.
+        ///
+        /// @param dict      the dictionary they were computed for
+        /// @param matches   whether each entry satisfies the leaf's predicate
+        /// @param onlyMatch the one matching entry, or [#NO_MATCH] or [#SEVERAL]
+        /// @param codeTable for `u8` or `u16` codes, one slot per possible code: `1` for a matching
+        ///                  entry, `0` for another, `2` for a code past the dictionary; else `null`
+        @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
+        record Entry(VarBinDictArray dict, boolean[] matches, int onlyMatch, byte[] codeTable) {
+        }
+
+        /// The results of `predicate` over `dict`, computed on the first call for this dictionary.
+        Entry entry(VarBinDictArray dict, Predicate predicate) {
+            Entry entry = byLeaf.get(predicate);
+            if (entry != null && entry.dict() == dict) {
+                return entry;
+            }
+            VarBinOffsetArray values = dict.values();
+            boolean[] matches = new boolean[(int) values.length()];
+            int only = NO_MATCH;
+            for (int c = 0; c < matches.length; c++) {
+                matches[c] = PredicateEvaluator.evaluate(values, c, predicate);
+                if (matches[c]) {
+                    only = only == NO_MATCH ? c : SEVERAL;
+                }
+            }
+            entry = new Entry(dict, matches, only, codeTable(dict.dictCodesPType(), matches));
+            byLeaf.put(predicate, entry);
+            return entry;
+        }
+
+        private static byte[] codeTable(PType codes, boolean[] matches) {
+            if (codes != PType.U8 && codes != PType.U16) {
+                return null;
+            }
+            byte[] table = new byte[codes == PType.U8 ? 1 << 8 : 1 << 16];
+            // a dictionary longer than the codes can address has entries no code reaches
+            int reachable = Math.min(matches.length, table.length);
+            java.util.Arrays.fill(table, reachable, table.length, (byte) 2);
+            for (int c = 0; c < reachable; c++) {
+                table[c] = matches[c] ? (byte) 1 : 0;
+            }
+            return table;
+        }
     }
 
     /// Lowers a whole [RowFilter] over `chunk` into one row predicate: each leaf is lowered once by
-    /// [#leafTest(Array, Predicate)], and a row matches when every leaf accepts it.
+    /// [#leafTest(Array, Predicate, DictMemo)], and a row matches when every leaf accepts it.
     ///
     /// @param chunk  the decoded chunk holding every column `filter` references
     /// @param filter the whole predicate
+    /// @param memo   the dictionary entry results of earlier chunks of the same scan
     /// @return a row predicate valid for `chunk`'s rows
-    static LongPredicate rowTest(Chunk chunk, RowFilter filter) {
+    static LongPredicate rowTest(Chunk chunk, RowFilter filter, DictMemo memo) {
         List<LongPredicate> leafList = new ArrayList<>();
-        collectLeaves(chunk, filter, leafList);
+        collectLeaves(chunk, filter, leafList, memo);
         if (leafList.size() == 1) {
             return leafList.getFirst();
         }

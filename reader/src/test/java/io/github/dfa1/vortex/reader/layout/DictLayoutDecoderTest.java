@@ -290,6 +290,33 @@ class DictLayoutDecoderTest {
                 .hasMessageContaining("dict code 9 out of range for a values pool of 3 entries");
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nullableStringPools")
+    void negativeCodeIntoNullablePool_throwsVortexException(String name, Array values) {
+        // Given — 64-bit codes are read signed, so -5 reaches the pool-validity gather as a negative
+        // index; it must fail as VortexException, not as a raw IndexOutOfBoundsException (ADR 0003)
+        Array codes = longCodes(0, -5, 1);
+
+        // When / Then
+        assertThatThrownBy(() -> decode(3, DType.UTF8, values, codes, PType.I64))
+                .as(name)
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("code -5 out of range");
+    }
+
+    @Test
+    void viewPoolNoLongerThanTheCodes_codePastItThrowsOnAccess() {
+        // Given — a pool no longer than the codes is walked whole without reading every code
+        // first, so a code past it is left to the carrier, which must still reject it as malformed
+        Array values = viewPool(DType.UTF8, "a", "bb");
+        Array codes = byteCodes(0, 5, 1);
+        VarBinArray result = (VarBinArray) decode(3, DType.UTF8, values, codes);
+
+        // When / Then
+        assertThat(result.getString(2)).isEqualTo("bb");
+        assertThatThrownBy(() -> result.getString(1)).isInstanceOf(VortexException.class);
+    }
+
     @Test
     void fixedSizeListPool_throwsVortexException() {
         // Given — a dict-encoded vortex.uuid-shaped column: the pool is a FixedSizeList(U8, 16),
@@ -369,11 +396,25 @@ class DictLayoutDecoderTest {
         }
     }
 
+    private static Stream<Arguments> nullableStringPools() {
+        return Stream.of(
+                Arguments.of("offsets pool", new MaskedArray(offsetPool(DType.UTF8, "a", "bb"), boolArray(true, false))),
+                Arguments.of("view pool", new MaskedArray(viewPool(DType.UTF8, "a", "bb"), boolArray(true, false))));
+    }
+
     private static Array decode(long n, DType dtype, Array values, Array codes) {
         // metadata null -> codesPType defaults to U8, matching the byte codes built below
+        return decode(n, dtype, values, codes, null);
+    }
+
+    /// [#decode(long, DType, Array, Array)] with the layout metadata naming `codesPType`, or none
+    /// when it is `null`.
+    private static Array decode(long n, DType dtype, Array values, Array codes, PType codesPType) {
+        MemorySegment metadata = codesPType == null ? null
+                : MemorySegment.ofArray(new byte[]{0x08, (byte) codesPType.ordinal()});
         Layout valuesLayout = new Layout(LayoutId.FLAT, values.length(), null, List.of(), List.of());
         Layout codesLayout = new Layout(LayoutId.FLAT, n, null, List.of(), List.of());
-        Layout dictLayout = new Layout(LayoutId.DICT, n, null,
+        Layout dictLayout = new Layout(LayoutId.DICT, n, metadata,
                 List.of(valuesLayout, codesLayout), List.of());
         LayoutDecodeContext ctx = new StubContext(valuesLayout, values, codesLayout, codes);
         return new DictLayoutDecoder().decode(ctx, dictLayout, dtype);

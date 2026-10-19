@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.LongPredicate;
 
 /// The minimal, low-level entry point to the compute primitives of ADR 0013 — the fused, single-pass
@@ -112,8 +113,19 @@ public final class Compute {
     /// @return a test of a zero-based row of `chunk`, valid while `chunk` is open
     public static LongPredicate matcher(Chunk chunk, RowFilter filter) {
         Objects.requireNonNull(chunk, "chunk");
+        return matcher(filter).apply(chunk);
+    }
+
+    /// [#matcher(Chunk, RowFilter)] for the chunks of one scan, in order: work that depends only on a
+    /// dictionary the chunks share, as the chunks of Rust's dict layout do, is done once for the scan
+    /// instead of once per chunk. Not for concurrent use.
+    ///
+    /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
+    /// @return a function from a chunk to its row test, each test valid while its chunk is open
+    public static Function<Chunk, LongPredicate> matcher(RowFilter filter) {
         Objects.requireNonNull(filter, "filter");
-        return FusedFilterAggregate.rowTest(chunk, filter);
+        FusedFilterAggregate.DictMemo memo = new FusedFilterAggregate.DictMemo();
+        return chunk -> FusedFilterAggregate.rowTest(Objects.requireNonNull(chunk, "chunk"), filter, memo);
     }
 
     /// Folds `aggColumn` per value of `groupColumn` over the rows `filter` selects: the per-group

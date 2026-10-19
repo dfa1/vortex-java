@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.compute.Compare;
+import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -58,6 +59,7 @@ import java.util.NoSuchElementException;
 import java.util.SequencedMap;
 import java.util.TreeSet;
 import java.util.function.Consumer;
+import java.util.function.LongPredicate;
 
 /// Iterates over decoded chunks from a [io.github.dfa1.vortex.reader.VortexReader].
 ///
@@ -109,6 +111,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private Map<ColumnName, List<Zone>> zoneCache;
     // Same zones with Rust's bounded string min/max filled in: pruning only, never surfaced.
     private Map<ColumnName, List<Zone>> pruningZoneCache;
+    // Per dictionary layout and predicate, whether none of its values matches: decided once per scan.
+    private Map<Layout, Map<Predicate, Boolean>> dictPruneCache;
+    // Per column, the decoded values of the latest dictionary the pruning checks read.
+    private Map<ColumnName, DictValues> dictValuesByColumn;
     private int chunkIndex;
     private int peekedChunkIdx = -1;
     private long rowsReturned;
@@ -720,6 +726,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
             sharedFlats = null;
         }
+        if (dictValuesByColumn != null) {
+            dictValuesByColumn.values().forEach(cached -> cached.values().close());
+            dictValuesByColumn = null;
+        }
     }
 
     private void onChunkClosed(Chunk chunk) {
@@ -977,16 +987,101 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 // zones in a larger chunk), and the IS NOT NULL test compares nullCount against it.
                 List<Zone> zones = zonesOverlapping(chunk, col);
                 if (zones == null) {
-                    yield canPrune(predicate, readFlatStats(flat), flat.rowCount(), columnDType(col));
+                    yield canPrune(predicate, readFlatStats(flat), flat.rowCount(), columnDType(col))
+                            || dictMatchesNothing(flat, col, predicate);
                 }
                 // The window has no matching row iff none of the zones covering it has one.
                 for (Zone zone : zones) {
                     if (!canPrune(predicate, zone.stats(), zone.rowCount(), columnDType(col))) {
-                        yield false;
+                        yield dictMatchesNothing(flat, col, predicate);
                     }
                 }
                 yield true;
             }
+        };
+    }
+
+    /// Whether no row of the dictionary `layout` can satisfy `predicate` because none of its values
+    /// does, decided from the values alone, once per dictionary and predicate: no code is read, so a
+    /// literal missing from a shared dictionary skips every chunk. Rust evaluates a dict filter over
+    /// the values too, but always reads the codes (see `docs/compatibility.md`).
+    ///
+    /// @return `false` when `layout` is not a dictionary, when a null row could satisfy `predicate`,
+    ///         or when the dictionary holds more values than rows
+    private boolean dictMatchesNothing(Layout layout, ColumnName col, Predicate predicate) {
+        if (!layout.isDict() || layout.children().size() < 2 || !rejectsNull(predicate)) {
+            return false;
+        }
+        if (dictPruneCache == null) {
+            dictPruneCache = new IdentityHashMap<>();
+        }
+        return dictPruneCache.computeIfAbsent(layout, l -> new IdentityHashMap<>())
+                .computeIfAbsent(predicate, p -> noValueMatches(layout, col, p));
+    }
+
+    private boolean noValueMatches(Layout dict, ColumnName col, Predicate predicate) {
+        Chunk pool = dictValues(dict, col);
+        // Every value a code can reach is tested: the decoded pool's length, not the layout's claim,
+        // which a malformed file can set shorter or longer. Testing more values than there are rows
+        // could cost more than the scan it saves, as the row-level dictionary leaf declines too.
+        long size = pool.rowCount();
+        if (size > dict.rowCount()) {
+            return false;
+        }
+        LongPredicate matches = Compute.matcher(pool, new RowFilter.Column(col, predicate));
+        for (long v = 0; v < size; v++) {
+            if (matches.test(v)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// The values of dictionary `dict` as a one-column chunk, decoded once for every predicate on
+    /// `col` tested against them. Only the latest dictionary of each column is kept: the scan never
+    /// returns to an earlier one, and a chunk-per-dictionary column would otherwise pile up pools.
+    private Chunk dictValues(Layout dict, ColumnName col) {
+        if (dictValuesByColumn == null) {
+            dictValuesByColumn = new HashMap<>();
+        }
+        DictValues cached = dictValuesByColumn.get(col);
+        if (cached != null && cached.dict() == dict) {
+            return cached.values();
+        }
+        if (cached != null) {
+            cached.values().close();
+        }
+        DType dtype = columnDType(col);
+        Arena arena = Arena.ofConfined();
+        Chunk pool;
+        try {
+            Array decoded = decodeLayout(dict.children().getFirst(), dtype, arena);
+            var columns = new LinkedHashMap<ColumnName, Chunk.Column>();
+            columns.put(col, new Chunk.Column(decoded, dtype));
+            pool = new Chunk(decoded.length(), columns, arena, file.registry(), c -> { });
+        } catch (RuntimeException e) {
+            dictValuesByColumn.remove(col);
+            arena.close();
+            throw e;
+        }
+        dictValuesByColumn.put(col, new DictValues(dict, pool));
+        return pool;
+    }
+
+    /// A dictionary layout's decoded values, kept for the pruning checks of one column.
+    ///
+    /// @param dict   the dictionary layout
+    /// @param values its values as a one-column chunk owning their arena
+    private record DictValues(Layout dict, Chunk values) {
+    }
+
+    /// Whether `predicate` is false on a null value, as a row with a null dictionary code has.
+    private static boolean rejectsNull(Predicate predicate) {
+        return switch (predicate) {
+            case Predicate.IsNull _ -> false;
+            case Predicate.And(var left, var right) -> rejectsNull(left) || rejectsNull(right);
+            case Predicate.Or(var left, var right) -> rejectsNull(left) && rejectsNull(right);
+            default -> true;
         };
     }
 
