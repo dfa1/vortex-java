@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- SQL `SELECT DISTINCT ... ORDER BY ... LIMIT n` keeps only the first distinct rows during the scan instead of hashing every row, and `ORDER BY` on a column stored in the opposite order is up to 3.5 times faster. ([#572](https://github.com/dfa1/vortex-java/pull/572))
 - SQL `ORDER BY` with no `LIMIT` over a large table returns its first rows without sorting the whole table first. ([#570](https://github.com/dfa1/vortex-java/pull/570))
 - **Breaking:** `VortexWriter.create` refuses a nullable root struct: Rust reads a nullable struct only with a validity child the writer never wrote, so such files were unreadable outside vortex-java. ([#493](https://github.com/dfa1/vortex-java/issues/493))
 - **Breaking:** a file that does not embed its dtype is refused when it opens, as Rust refuses it unless the caller supplies the dtype, instead of failing the scan with `NullPointerException`. ([#493](https://github.com/dfa1/vortex-java/issues/493))

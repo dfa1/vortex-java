@@ -76,7 +76,12 @@ class SortPushDownTest {
             "order by x nulls first limit 10                  | order by case when id > -1 then x end nulls first limit 10",
             "order by s, id desc limit 12 offset 3            | order by case when id > -1 then s end, id desc limit 12 offset 3",
             "where s = 'echo' order by x desc limit 7         | where s = 'echo' order by case when id > -1 then x end desc limit 7",
-            "where id < 50 order by id desc limit 100         | where id < 50 order by case when id > -1 then id end desc limit 100"})
+            "where id < 50 order by id desc limit 100         | where id < 50 order by case when id > -1 then id end desc limit 100",
+            // id ascends, so every row beats the worst kept one: the kept rows are cut back many times
+            // and each chunk's survivors are read in full before the chunk closes
+            "order by id desc limit 10                        | order by case when id > -1 then id end desc limit 10",
+            // 5 values over 5,000 rows: ties must keep scan order across every cut, as Calcite's stable sort
+            "order by s desc limit 600                        | order by case when id > -1 then s end desc limit 600"})
     void orderByLimit_returnsTheRowsCalciteSortReturns(String tail, String oracleTail) throws Exception {
         // Given
         String sql = "select id, x, s from vtx.t " + tail;
@@ -91,6 +96,32 @@ class SortPushDownTest {
         assertThat(result).isEqualTo(rows(oracle)).isNotEmpty();
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            // a double group column: only the sort rule answers it, the aggregate rule folds strings,
+            // integers and booleans
+            "select distinct x from vtx.t order by x desc limit 5 "
+                    + "| select distinct case when id > -1 then x end from vtx.t order by 1 desc limit 5",
+            // every column is a key, so the order is fully determined and ties cannot differ
+            "select distinct s, x from vtx.t where id < 300 order by s desc, x limit 6 offset 2 "
+                    + "| select distinct case when id > -1 then s end, x from vtx.t where id < 300 order by 1 desc, 2 limit 6 offset 2",
+            // the null group sorts last ascending, and duplicates of it count once
+            "select distinct s from vtx.t order by s limit 6 "
+                    + "| select distinct case when id > -1 then s end from vtx.t order by 1 limit 6",
+            "select s from vtx.t group by s order by s desc limit 2 "
+                    + "| select case when id > -1 then s end from vtx.t group by case when id > -1 then s end order by 1 desc limit 2"})
+    void distinctOrderByLimit_returnsTheRowsCalciteReturns(String sql, String oracle) throws Exception {
+        // Given — the CASE keeps both rules out, so Calcite hashes and sorts the oracle itself
+
+        // When
+        List<String> result = rows(sql);
+
+        // Then
+        assertThat(plan(sql)).contains("Values").doesNotContain("TableScan");
+        assertThat(plan(oracle)).contains("TableScan");
+        assertThat(result).isEqualTo(rows(oracle)).isNotEmpty();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             // a full sort must emit every row
@@ -98,7 +129,9 @@ class SortPushDownTest {
             // past the literal-row cap
             "select id from vtx.t order by x desc limit 5000",
             // a computed sort key
-            "select id from vtx.t order by x + 1 desc limit 5"})
+            "select id from vtx.t order by x + 1 desc limit 5",
+            // an aggregate is not a distinct: its values are not rows of the table
+            "select x, count(*) from vtx.t group by x order by x desc limit 5"})
     void sortTheRuleCannotAnswer_isLeftToCalcite(String sql) throws Exception {
         // Given / When / Then
         assertThat(plan(sql)).contains("TableScan");

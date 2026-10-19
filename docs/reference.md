@@ -667,13 +667,16 @@ without boxing one per row: integers, temporals, doubles and booleans by their b
 strings by the codes a chunk uses; other `DISTINCT` and `FILTER (WHERE ...)` aggregates are computed
 by the scan.
 `ORDER BY ... LIMIT n` (any `OFFSET`, `n + offset` up to 1,000) over plain columns, with the same
-kind of `WHERE`, keeps the first rows in a bounded heap during the scan instead of sorting every
-row; it falls back to Calcite's sort when a returned value has no SQL literal of its type (`NaN`,
+kind of `WHERE`, keeps the first rows in a bounded buffer during the scan instead of sorting every
+row, reading only the sort keys of a row until it is still among the first `n` at the end of its
+chunk. `SELECT DISTINCT` (or a `GROUP BY` with no aggregate) under such a sort keeps the first `n`
+distinct rows the same way instead of hashing every row; rows equal on the sort keys come out in
+the order of their other columns. Both fall back to Calcite's sort when a returned value has no SQL literal of its type (`NaN`,
 an infinity, a string outside Latin-1, binary, `UUID`, nested), and is also capped by the 4,000
 literal cells (rows times columns) one compiled `VALUES` can hold, past which Calcite sorts. An
 `ORDER BY` with no `LIMIT` over a table of more than 100,000 rows is read lazily: the first 1,024 rows
-come from a bounded heap, and a client that reads further triggers another pass for eight times as
-many, skipping the rows already returned. Every pass reads the whole table (the heap bounds memory,
+come from a bounded buffer, and a client that reads further triggers another pass for eight times as
+many, skipping the rows already returned. Every pass reads the whole table (the buffer bounds memory,
 not I/O), so a grid that shows one page costs one pass and holds one page, while a client that reads
 a 100M-row table to the end pays seven passes and holds what Calcite's own sort would (which buffers
 every row before it returns the first). Ties come out in scan order, as in Calcite's stable sort.
