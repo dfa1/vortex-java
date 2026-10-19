@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- SQL `SELECT DISTINCT` of one dictionary-encoded string column with `ORDER BY ... LIMIT` is about a third faster: it ranks the dictionary values the rows use instead of every row. ([#574](https://github.com/dfa1/vortex-java/pull/574))
 - A scanned `Chunk` decodes each column the first time it is read, so SQL `ORDER BY ... LIMIT` over a wide table is about 13% faster. ([#574](https://github.com/dfa1/vortex-java/pull/574))
 - SQL `SELECT DISTINCT ... ORDER BY ... LIMIT n` keeps only the first distinct rows during the scan instead of hashing every row, and `ORDER BY` on a column stored in the opposite order is up to 3.5 times faster. ([#572](https://github.com/dfa1/vortex-java/pull/572))
 - SQL `ORDER BY` with no `LIMIT` over a large table returns its first rows without sorting the whole table first. ([#570](https://github.com/dfa1/vortex-java/pull/570))

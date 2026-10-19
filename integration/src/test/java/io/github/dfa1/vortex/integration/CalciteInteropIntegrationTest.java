@@ -326,7 +326,13 @@ class CalciteInteropIntegrationTest {
             "select distinct s, n from vtx.t order by s nulls first, n desc nulls first limit 9 offset 1 "
                     + "| select distinct case when id > -1 then s end, n from vtx.t order by 1 nulls first, 2 desc nulls first limit 9 offset 1",
             "select distinct s from vtx.t where n > 3000 order by s desc limit 2 "
-                    + "| select distinct case when id > -1 then s end from vtx.t where n > 3000 order by 1 desc limit 2"})
+                    + "| select distinct case when id > -1 then s end from vtx.t where n > 3000 order by 1 desc limit 2",
+            // one dictionary-encoded string column ranks the dictionary values its rows use, and its
+            // nulls through the row validity, so null must still come out once, at either end
+            "select distinct s from vtx.t order by s nulls first limit 2 "
+                    + "| select distinct case when id > -1 then s end from vtx.t order by 1 nulls first limit 2",
+            "select distinct s from vtx.t order by s desc nulls last limit 10 "
+                    + "| select distinct case when id > -1 then s end from vtx.t order by 1 desc nulls last limit 10"})
     void jniWriter_distinctOrderByLimit_returnsTheRowsCalciteReturns(String sql, String oracle, @TempDir Path tmp)
             throws Exception {
         // Given — SELECT DISTINCT ... ORDER BY ... LIMIT keeps the first distinct rows over the scan of
