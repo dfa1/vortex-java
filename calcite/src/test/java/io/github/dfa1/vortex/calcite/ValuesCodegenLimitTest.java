@@ -18,7 +18,11 @@ import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -138,6 +142,45 @@ class ValuesCodegenLimitTest {
             // Then
             assertThat(plan).contains("Values");
         }
+    }
+
+    @Test
+    void pagedSortWithALargeOffset_isStillPushedDownWhenItsLiteralsFit() throws Exception {
+        // Given 100 rows x 6 columns = 600 literal cells; only the rows after the offset become
+        // literals, so the 900 skipped rows (6,000 cells counted naively) must not block the push-down
+        String sql = "select * from vtx.t order by v limit 100 offset 900";
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+
+            // When
+            String plan = plan(conn, sql);
+            List<Long> result = new ArrayList<>();
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+                while (rs.next()) {
+                    result.add(rs.getLong("v"));
+                }
+            }
+
+            // Then
+            assertThat(plan).contains("Values");
+            assertThat(result).isEqualTo(LongStream.range(900, 1000).boxed().toList());
+        }
+    }
+
+    @Test
+    void groupedFold_givesUpAsSoonAsTheGroupsExceedTheLimit() {
+        // Given 3,000 groups
+        VortexTable sut = new VortexTable(file);
+        ColumnName key = ColumnName.of("k");
+        Set<ColumnName> aggregates = Set.of(ColumnName.of("v"));
+
+        // When
+        var tooMany = sut.groupedFold(key, null, aggregates, 2_000);
+        var enough = sut.groupedFold(key, null, aggregates, 3_000);
+
+        // Then
+        assertThat(tooMany).isEmpty();
+        assertThat(enough).isPresent();
+        assertThat(enough.get()).hasSize(GROUPS);
     }
 
     private static String plan(Connection conn, String sql) throws Exception {
