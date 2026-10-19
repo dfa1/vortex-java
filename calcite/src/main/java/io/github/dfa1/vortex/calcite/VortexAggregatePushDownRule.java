@@ -190,7 +190,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     }
 
     /// Rewrites a `GROUP BY` on one string, integer or boolean column into a [LogicalValues] with one
-    /// row per group, folded by [VortexTable#groupedFold(ColumnName, RowFilter, java.util.Set)]
+    /// row per group, folded by [VortexTable#groupedFold(ColumnName, RowFilter, java.util.Set, int)]
     /// instead of materializing every row for Calcite to hash. Leaves the plan alone when the group
     /// column is not a string, an aggregate is not `COUNT`/`SUM`/`MIN`/`MAX` over a plain column, or
     /// the fold declines (a chunk not dictionary-encoded, an aggregate column it cannot total, too
@@ -228,15 +228,16 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
             callColumns.add(column);
             aggColumns.add(column);
         }
+        // every group is one literal row of a single compiled VALUES, so the fold gives up as soon as the
+        // groups would not fit, instead of scanning the whole file to find that out
+        int maxGroups = VortexSortPushDownRule.MAX_VALUES_CELLS / (1 + calls.size());
         // ConcurrentHashMap keys cannot be null, so a missing filter is keyed as an empty list
-        List<Object> foldKey = List.of("grouped", table, group, filter == null ? List.of() : filter, aggColumns);
+        List<Object> foldKey = List.of("grouped", table, group, filter == null ? List.of() : filter, aggColumns,
+                maxGroups);
         Optional<Map<Object, VortexTable.GroupFold>> folds =
-                memo(call.getPlanner(), foldKey, () -> table.groupedFold(group, filter, aggColumns));
+                memo(call.getPlanner(), foldKey, () -> table.groupedFold(group, filter, aggColumns, maxGroups));
         if (folds.isEmpty()) {
             return;
-        }
-        if ((long) folds.get().size() * (1 + calls.size()) > VortexSortPushDownRule.MAX_VALUES_CELLS) {
-            return; // too many literals for one compiled VALUES; let Calcite hash the groups
         }
         RelDataType groupType = aggregate.getRowType().getFieldList().getFirst().getType();
         List<ImmutableList<RexLiteral>> tuples = new ArrayList<>();

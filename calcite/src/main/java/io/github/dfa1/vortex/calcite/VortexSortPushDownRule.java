@@ -114,7 +114,8 @@ public final class VortexSortPushDownRule extends RelOptRule {
             rowFilter = translated.get();
         }
         int[] cols = columns(scan, project);
-        if (cols == null || (fetch + (long) offset) * cols.length > MAX_VALUES_CELLS) {
+        // only the rows after the offset become literals; the offset rows stay in the heap (MAX_ROWS)
+        if (cols == null || (long) fetch * cols.length > MAX_VALUES_CELLS) {
             return;
         }
         List<VortexTable.SortKey> keys = new ArrayList<>();

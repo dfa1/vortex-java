@@ -362,11 +362,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
     }
 
-    /// Most groups [#groupedFold(ColumnName, RowFilter, Set)] answers. Each group becomes one literal
-    /// row of the plan, so a high-cardinality column is left to the scan.
-    private static final int MAX_GROUPS = 10_000;
-
-    /// One group's fold, returned by [#groupedFold(ColumnName, RowFilter, Set)].
+    /// One group's fold, returned by [#groupedFold(ColumnName, RowFilter, Set, int)].
     ///
     /// @param rows    the rows of the group the filter selects
     /// @param columns per aggregate column, its fold over those rows
@@ -380,14 +376,16 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     ///
     /// The result is empty, leaving the query to the scan, when the kernel declines a chunk (a string
     /// column not dictionary-encoded there, too many groups in it, an aggregate column with no long
-    /// or double fold) or there are more than [#MAX_GROUPS] groups in all.
+    /// or double fold) or there are more than `maxGroups` groups in all.
     ///
     /// @param group      the column to group by
     /// @param filter     the pushed predicate, or `null` for every row
     /// @param aggColumns the columns the aggregates reduce; empty when only rows are counted
+    /// @param maxGroups  most groups to answer; the scan stops as soon as it sees more
     /// @return the fold per group value (`String`, `Boolean` or `Long`; `null` is the null group), or
     ///         empty
-    public Optional<Map<Object, GroupFold>> groupedFold(ColumnName group, RowFilter filter, Set<ColumnName> aggColumns) {
+    public Optional<Map<Object, GroupFold>> groupedFold(ColumnName group, RowFilter filter, Set<ColumnName> aggColumns,
+                                                        int maxGroups) {
         java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
         columns.add(group);
         if (filter != null) {
@@ -431,7 +429,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                             }
                         }
                     }
-                    if (rows.size() > MAX_GROUPS) {
+                    if (rows.size() > maxGroups) {
                         return Optional.empty();
                     }
                 }
