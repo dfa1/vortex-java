@@ -9,11 +9,14 @@ import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 
 import java.lang.foreign.Arena;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.SequencedMap;
 import java.util.function.Consumer;
+import java.util.function.IntFunction;
 
 /// One decoded row group returned by [ScanIterator#next()].
 ///
@@ -24,6 +27,10 @@ import java.util.function.Consumer;
 ///
 /// Columns are keyed by [ColumnName] — the validated name domain the file parser
 /// certifies at the read boundary, so every key here is policy-valid and unique.
+///
+/// A column is decoded the first time it is read, by [#column(ColumnName)], [#as(ColumnName, Class)]
+/// or [#columns()], so a caller that reads only some of the projected columns of a chunk never pays
+/// for the others. A malformed column therefore fails when it is read, not when the chunk is returned.
 ///
 /// **Lifecycle.** `Chunk` is [AutoCloseable]. Always wrap consumption in
 /// try-with-resources:
@@ -42,7 +49,12 @@ import java.util.function.Consumer;
 public final class Chunk implements AutoCloseable {
 
     private final long rowCount;
-    private final SequencedMap<ColumnName, Column> columns;
+    private final List<ColumnName> names;
+    private final Map<ColumnName, Integer> positions;
+    private final IntFunction<Column> decoder;
+    /// Per column, its decoded value once read, else `null`.
+    private final Column[] decoded;
+    private SequencedMap<ColumnName, Column> columns;
     private final Arena arena;
     private final ReadRegistry registry;
     private final Consumer<Chunk> onClose;
@@ -52,17 +64,38 @@ public final class Chunk implements AutoCloseable {
 
     Chunk(long rowCount, SequencedMap<ColumnName, Column> columns,
             Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
-        this(rowCount, columns, arena, registry, onClose, true);
+        this(rowCount, List.copyOf(columns.keySet()), positions(List.copyOf(columns.keySet())),
+                List.copyOf(columns.values())::get, arena, registry, onClose, true);
     }
 
-    private Chunk(long rowCount, SequencedMap<ColumnName, Column> columns,
-                  Arena arena, ReadRegistry registry, Consumer<Chunk> onClose, boolean ownsArena) {
+    /// A chunk whose column `i`, of `names`, is decoded by `decoder` the first time it is read.
+    ///
+    /// @param positions each of `names` to its index, shared by the chunks of one scan
+    Chunk(long rowCount, List<ColumnName> names, Map<ColumnName, Integer> positions, IntFunction<Column> decoder,
+          Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
+        this(rowCount, names, positions, decoder, arena, registry, onClose, true);
+    }
+
+    private Chunk(long rowCount, List<ColumnName> names, Map<ColumnName, Integer> positions,
+                  IntFunction<Column> decoder, Arena arena, ReadRegistry registry, Consumer<Chunk> onClose,
+                  boolean ownsArena) {
         this.rowCount = rowCount;
-        this.columns = Objects.requireNonNull(columns);
+        this.names = names;
+        this.positions = positions;
+        this.decoder = Objects.requireNonNull(decoder);
+        this.decoded = new Column[names.size()];
         this.arena = Objects.requireNonNull(arena);
         this.registry = Objects.requireNonNull(registry);
         this.onClose = Objects.requireNonNull(onClose);
         this.ownsArena = ownsArena;
+    }
+
+    static Map<ColumnName, Integer> positions(List<ColumnName> names) {
+        Map<ColumnName, Integer> positions = HashMap.newHashMap(names.size());
+        for (int i = 0; i < names.size(); i++) {
+            positions.put(names.get(i), i);
+        }
+        return positions;
     }
 
     /// A view of rows `[offset, offset + length)` of every column, sharing this chunk's memory
@@ -75,10 +108,11 @@ public final class Chunk implements AutoCloseable {
     /// @throws VortexException if a column's array type cannot be sliced
     public Chunk slice(long offset, long length) {
         Objects.checkFromIndexSize(offset, length, rowCount);
-        SequencedMap<ColumnName, Column> sliced = new LinkedHashMap<>();
-        columns.forEach((name, column) -> sliced.put(name, new Column(
-                ScanIterator.sliceArray(column.array(), offset, length, column.dtype()), column.dtype())));
-        return new Chunk(length, Collections.unmodifiableSequencedMap(sliced), arena, registry, _ -> { }, false);
+        IntFunction<Column> sliced = i -> {
+            Column column = column(i);
+            return new Column(ScanIterator.sliceArray(column.array(), offset, length, column.dtype()), column.dtype());
+        };
+        return new Chunk(length, names, positions, sliced, arena, registry, _ -> { }, false);
     }
 
     /// One decoded column: its zero-copy [Array] view and the [DType] it was declared with in the
@@ -111,6 +145,13 @@ public final class Chunk implements AutoCloseable {
     ///
     /// @return projected columns keyed by [ColumnName], in schema order
     public SequencedMap<ColumnName, Column> columns() {
+        if (columns == null) {
+            var all = LinkedHashMap.<ColumnName, Column>newLinkedHashMap(names.size());
+            for (int i = 0; i < names.size(); i++) {
+                all.put(names.get(i), column(i));
+            }
+            columns = Collections.unmodifiableSequencedMap(all);
+        }
         return columns;
     }
 
@@ -123,11 +164,27 @@ public final class Chunk implements AutoCloseable {
     /// @throws VortexException if no column with the given name is present in this chunk
     @SuppressWarnings("unchecked")
     public <T extends Array> T column(ColumnName name) {
-        Column col = columns.get(name);
-        if (col == null) {
+        return (T) column(position(name)).array();
+    }
+
+    private int position(ColumnName name) {
+        Integer position = positions.get(name);
+        if (position == null) {
             throw new VortexException("unknown column: " + name);
         }
-        return (T) col.array();
+        return position;
+    }
+
+    private Column column(int i) {
+        Column column = decoded[i];
+        if (column == null) {
+            if (closed) {
+                throw new IllegalStateException("chunk is closed");
+            }
+            column = decoder.apply(i);
+            decoded[i] = column;
+        }
+        return column;
     }
 
     /// Decodes an extension column into a typed `List<T>` of domain values, through the
@@ -147,10 +204,7 @@ public final class Chunk implements AutoCloseable {
     ///         registered decoder, or the decoder's domain type isn't `domainType`
     @SuppressWarnings("unchecked")
     public <T> List<T> as(ColumnName name, Class<T> domainType) {
-        Column col = columns.get(name);
-        if (col == null) {
-            throw new VortexException("unknown column: " + name);
-        }
+        Column col = column(position(name));
         if (!(col.dtype() instanceof DType.Extension ext)) {
             throw new VortexException("not an extension column: " + name);
         }

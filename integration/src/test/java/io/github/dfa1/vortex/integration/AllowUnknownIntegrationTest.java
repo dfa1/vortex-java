@@ -75,7 +75,8 @@ class AllowUnknownIntegrationTest {
     private static void scanAll(Path file, ReadRegistry registry) throws IOException {
         try (VortexReader vf = VortexReader.open(file, registry);
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
-            iter.forEachRemaining(_ -> {});
+            // a chunk decodes a column when it is read, so read them all
+            iter.forEachRemaining(Chunk::columns);
         }
     }
 
