@@ -120,38 +120,66 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     ///
     /// @return `false` when the scan is exhausted
     boolean advance() {
-        while (true) {
-            if (chunk != null && rowInChunk < chunkRows) {
-                long row = rowInChunk++;
-                if (exactFilter != null && !rowMatcher.test(row)) {
-                    continue;
-                }
+        while (!advanceInChunk()) {
+            if (!nextChunk()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// Moves to the next row the filter keeps in the current chunk, leaving the chunk open at its end
+    /// so a caller can still read rows of it by index ([#column(int, long)]).
+    ///
+    /// @return `false` at the end of the chunk, or before the first [#nextChunk()]
+    boolean advanceInChunk() {
+        while (chunk != null && rowInChunk < chunkRows) {
+            long row = rowInChunk++;
+            if (exactFilter == null || rowMatcher.test(row)) {
                 currentRow = row;
                 return true;
             }
-            if (chunk != null) {
-                chunk.close();
-                chunk = null;
-            }
-            if (!scan.hasNext()) {
-                return false;
-            }
-            chunk = scan.next();
-            chunksScannedLastQuery.incrementAndGet();
-            chunkRows = chunk.rowCount();
-            rowInChunk = 0;
-            rowMatcher = exactFilter == null ? null : Compute.matcher(chunk, exactFilter);
-            columns = new Object[names.length];
-            for (int c = 0; c < names.length; c++) {
-                columns[c] = chunk.column(names[c]);
-            }
         }
+        return false;
+    }
+
+    /// Closes the current chunk and decodes the next one the scan keeps.
+    ///
+    /// @return `false` when the scan is exhausted
+    boolean nextChunk() {
+        if (chunk != null) {
+            chunk.close();
+            chunk = null;
+        }
+        if (!scan.hasNext()) {
+            return false;
+        }
+        chunk = scan.next();
+        chunksScannedLastQuery.incrementAndGet();
+        chunkRows = chunk.rowCount();
+        rowInChunk = 0;
+        rowMatcher = exactFilter == null ? null : Compute.matcher(chunk, exactFilter);
+        columns = new Object[names.length];
+        for (int c = 0; c < names.length; c++) {
+            columns[c] = chunk.column(names[c]);
+        }
+        return true;
+    }
+
+    /// The index in its chunk of the row [#advance()] moved to.
+    long rowInChunk() {
+        return currentRow;
     }
 
     /// Column `c` of the row [#advance()] moved to.
     Object column(int c) {
+        return column(c, currentRow);
+    }
+
+    /// Column `c` of row `r` of the current chunk.
+    Object column(int c, long r) {
         Temporal temporal = temporals[c];
-        return temporal == null ? value(columns[c], types[c], currentRow) : temporal.read(columns[c], currentRow);
+        return temporal == null ? value(columns[c], types[c], r) : temporal.read(columns[c], r);
     }
 
     /// Every column of the row [#advance()] moved to.

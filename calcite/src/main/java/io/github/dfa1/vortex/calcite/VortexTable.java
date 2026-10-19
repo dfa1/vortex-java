@@ -614,9 +614,11 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// The first `count` rows of the projection `cols` over the rows `filter` selects, in the order of
-    /// `keys`, as the scan would emit them (Calcite's internal value forms). Rows stream through a
-    /// bounded heap, so only `count` rows are ever kept, and each value is compared as itself: the
-    /// sort Calcite runs otherwise converts every number to a `BigDecimal` per comparison.
+    /// `keys`, as the scan would emit them (Calcite's internal value forms). Only the key columns are
+    /// read per row, and each value is compared as itself: the sort Calcite runs otherwise converts
+    /// every number to a `BigDecimal` per comparison. A row is read in full only if it is still among
+    /// the first `count` when its chunk ends, so a column sorted against the query, where every row
+    /// beats the last, costs `count` full rows per chunk instead of one per row.
     ///
     /// @param cols   the table columns to emit, by position
     /// @param filter the rows to keep, or `null` for every row
@@ -624,6 +626,130 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param count  how many rows to return
     /// @return the first `count` rows in order (fewer if the table has fewer)
     public List<Object[]> topN(int[] cols, RowFilter filter, List<SortKey> keys, int count) {
+        if (count <= 0) {
+            return List.of();
+        }
+        java.util.Comparator<Object[]> order = rowOrder(keys);
+        // equal keys rank by scan position: Calcite's sort is stable, so ties come out in scan order
+        java.util.Comparator<Candidate> ranking = java.util.Comparator.<Candidate, Object[]>comparing(c -> c.row, order)
+                .thenComparingLong(c -> c.position);
+        // ponytail: rows are cut back to count whenever this slack fills, by a sort that TimSort makes
+        // linear on the ordered runs a sorted column gives; capped so a huge count does not double memory
+        int capacity = count + Math.max(1024, Math.min(count, 1 << 20));
+        List<Candidate> kept = new ArrayList<>();
+        List<Candidate> fromChunk = new ArrayList<>();
+        // the worst row kept once there are count of them: a row equal to it or worse cannot enter, as a
+        // later row never beats an equal key
+        Object[] worst = null;
+        Object[] probe = new Object[cols.length];
+        long position = 0;
+        try (VortexEnumerator rows = enumerator(cols, filter)) {
+            while (rows.nextChunk()) {
+                while (rows.advanceInChunk()) {
+                    for (SortKey key : keys) {
+                        probe[key.field()] = rows.column(key.field());
+                    }
+                    if (worst != null && order.compare(probe, worst) >= 0) {
+                        position++;
+                        continue;
+                    }
+                    Candidate candidate = new Candidate(probe.clone(), position++, rows.rowInChunk());
+                    kept.add(candidate);
+                    fromChunk.add(candidate);
+                    if (kept.size() == capacity) {
+                        worst = cut(kept, ranking, count);
+                        fromChunk.removeIf(c -> c.rowInChunk < 0);
+                    }
+                }
+                worst = cut(kept, ranking, count);
+                // the survivors are read in full while their chunk is still open
+                for (Candidate c : fromChunk) {
+                    if (c.rowInChunk >= 0) {
+                        for (int i = 0; i < cols.length; i++) {
+                            c.row[i] = rows.column(i, c.rowInChunk);
+                        }
+                        c.rowInChunk = -1;
+                    }
+                }
+                fromChunk.clear();
+            }
+        }
+        return kept.stream().map(c -> c.row).toList();
+    }
+
+    /// Sorts `kept` and drops all but the first `count`, marking the dropped ones so they are never read.
+    ///
+    /// @return the worst row kept when there are `count` of them, else `null`
+    private static Object[] cut(List<Candidate> kept, java.util.Comparator<Candidate> ranking, int count) {
+        kept.sort(ranking);
+        if (kept.size() > count) {
+            List<Candidate> dropped = kept.subList(count, kept.size());
+            dropped.forEach(c -> c.rowInChunk = -1);
+            dropped.clear();
+        }
+        return kept.size() == count ? kept.getLast().row : null;
+    }
+
+    /// A row [#topN(int[], RowFilter, List, int)] keeps: its key columns until it is read in full.
+    private static final class Candidate {
+        private final Object[] row;
+        private final long position;
+        /// Its row in the open chunk while only its keys are read, `-1` once read in full or dropped.
+        private long rowInChunk;
+
+        Candidate(Object[] row, long position, long rowInChunk) {
+            this.row = row;
+            this.position = position;
+            this.rowInChunk = rowInChunk;
+        }
+    }
+
+    /// The first `count` distinct rows of the projection `cols` over the rows `filter` selects, in the
+    /// order of `keys`: `SELECT DISTINCT ... ORDER BY ... LIMIT`, without hashing every row of the table.
+    /// Rows equal on `keys` come out in the order of their other columns, one of the orders SQL allows.
+    ///
+    /// @param cols   the table columns to emit, by position
+    /// @param filter the rows to keep, or `null` for every row
+    /// @param keys   the `ORDER BY` keys, most significant first
+    /// @param count  how many distinct rows to return
+    /// @return the first `count` distinct rows in order (fewer if the table has fewer)
+    public List<Object[]> distinctTopN(int[] cols, RowFilter filter, List<SortKey> keys, int count) {
+        if (count <= 0) {
+            return List.of();
+        }
+        // every column takes part, so two rows compare equal exactly when they are duplicates
+        List<SortKey> all = new ArrayList<>(keys);
+        for (int i = 0; i < cols.length; i++) {
+            int field = i;
+            if (keys.stream().noneMatch(k -> k.field() == field)) {
+                all.add(new SortKey(i, false, false));
+            }
+        }
+        java.util.Comparator<Object[]> order = rowOrder(all);
+        java.util.TreeSet<Object[]> kept = new java.util.TreeSet<>(order);
+        Object[] probe = new Object[cols.length];
+        try (VortexEnumerator rows = enumerator(cols, filter)) {
+            while (rows.advance()) {
+                for (int i = 0; i < cols.length; i++) {
+                    probe[i] = rows.column(i);
+                }
+                if (kept.size() == count && order.compare(probe, kept.last()) >= 0) {
+                    continue;
+                }
+                if (kept.add(probe)) {
+                    probe = new Object[cols.length];
+                    if (kept.size() > count) {
+                        kept.pollLast();
+                    }
+                }
+            }
+        }
+        return List.copyOf(kept);
+    }
+
+    /// A scan of the projection `cols` over the rows `filter` selects, also decoding the columns the
+    /// filter reads.
+    private VortexEnumerator enumerator(int[] cols, RowFilter filter) {
         DType.Struct struct = struct();
         ColumnName[] outNames = new ColumnName[cols.length];
         DType[] outTypes = new DType[cols.length];
@@ -639,40 +765,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             RexFilterTranslator.collectColumns(filter, scanColumns);
             options = ScanOptions.columns(scanColumns.toArray(ColumnName[]::new)).withFilter(filter);
         }
-        java.util.Comparator<Object[]> order = rowOrder(keys);
-        // equal keys rank by scan position: Calcite's sort is stable, so ties come out in scan order
-        java.util.Comparator<Ranked> ranking = java.util.Comparator.<Ranked, Object[]>comparing(Ranked::row, order)
-                .thenComparingLong(Ranked::position);
-        // the worst kept row at the head, so a better row evicts it
-        java.util.PriorityQueue<Ranked> heap = new java.util.PriorityQueue<>(count + 1, ranking.reversed());
-        VortexEnumerator rows = new VortexEnumerator(file, chunksScannedLastQuery, options, outNames, outTypes, filter);
-        // only the key columns are read per row; a row is built once it beats the worst one kept. A
-        // later row never beats an equal key, so the first rows of a tie are the ones kept
-        Object[] probe = new Object[cols.length];
-        long position = 0;
-        try {
-            while (rows.advance()) {
-                if (heap.size() == count) {
-                    for (SortKey key : keys) {
-                        probe[key.field()] = rows.column(key.field());
-                    }
-                    if (order.compare(probe, heap.peek().row()) >= 0) {
-                        position++;
-                        continue;
-                    }
-                    heap.poll();
-                }
-                heap.add(new Ranked(rows.row(), position++));
-            }
-        } finally {
-            rows.close();
-        }
-        return heap.stream().sorted(ranking).map(Ranked::row).toList();
-    }
-
-    /// A row kept by [#topN(int[], RowFilter, List, int)] with its position in the scan.
-    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-    private record Ranked(Object[] row, long position) {
+        return new VortexEnumerator(file, chunksScannedLastQuery, options, outNames, outTypes, filter);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

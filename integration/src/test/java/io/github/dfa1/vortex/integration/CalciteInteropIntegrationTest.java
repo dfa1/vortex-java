@@ -318,6 +318,35 @@ class CalciteInteropIntegrationTest {
         }
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "select distinct x from vtx.t order by x desc limit 5 "
+                    + "| select distinct case when id > -1 then x end from vtx.t order by 1 desc limit 5",
+            // two group columns, which only the sort rule answers; nulls of both are values here
+            "select distinct s, n from vtx.t order by s nulls first, n desc nulls first limit 9 offset 1 "
+                    + "| select distinct case when id > -1 then s end, n from vtx.t order by 1 nulls first, 2 desc nulls first limit 9 offset 1",
+            "select distinct s from vtx.t where n > 3000 order by s desc limit 2 "
+                    + "| select distinct case when id > -1 then s end from vtx.t where n > 3000 order by 1 desc limit 2"})
+    void jniWriter_distinctOrderByLimit_returnsTheRowsCalciteReturns(String sql, String oracle, @TempDir Path tmp)
+            throws Exception {
+        // Given — SELECT DISTINCT ... ORDER BY ... LIMIT keeps the first distinct rows over the scan of
+        // Rust-written rows; the CASE keeps the rules out, so Calcite hashes and sorts the oracle itself
+        Path file = tmp.resolve("jni_distinct.vortex");
+        writeGroupsWithJni(file, new String[]{"AAPL", "MSFT", "NVDA", null});
+
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
+            // When
+            List<String> result = sqlRows(conn, sql);
+
+            // Then
+            try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery("explain plan for " + sql)) {
+                rs.next();
+                assertThat(rs.getString(1)).containsIgnoringCase("Values").doesNotContain("TableScan");
+            }
+            assertThat(result).isEqualTo(sqlRows(conn, oracle)).isNotEmpty();
+        }
+    }
+
     @ParameterizedTest(name = "like {0}")
     @org.junit.jupiter.params.provider.ValueSource(strings = {"A%", "caf%", "MS%", "NVDB%", "%", "_APL%"})
     void jniWriter_likePrefix_returnsTheRowsCalciteReturns(String pattern, @TempDir Path tmp) throws Exception {

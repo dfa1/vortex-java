@@ -11,6 +11,7 @@ import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.prepare.RelOptTableImpl;
 import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.Sort;
@@ -35,10 +36,12 @@ import java.util.List;
 import java.util.Optional;
 
 /// Rewrites `ORDER BY ... LIMIT n` over a [VortexTable] into a [LogicalValues] holding the first
-/// `n` rows, found by streaming the table through a bounded heap
+/// `n` rows, found by streaming the table through a bounded buffer
 /// ([VortexTable#topN(int[], RowFilter, List, int)]) instead of letting Calcite sort every row:
 /// Calcite's sort compares numbers by converting both to `BigDecimal`, which dominated a 4M-row
-/// `ORDER BY ... DESC LIMIT 10`.
+/// `ORDER BY ... DESC LIMIT 10`. A `SELECT DISTINCT` (a `GROUP BY` with no aggregate) under the sort
+/// is answered the same way, keeping only the first `n` distinct rows
+/// ([VortexTable#distinctTopN(int[], RowFilter, List, int)]) instead of hashing every row.
 ///
 /// Fires for a `LIMIT` of at most [#MAX_ROWS] (with any `OFFSET`) over the table, optionally
 /// through a projection of plain columns and a `WHERE` the filter translation captures in full.
@@ -64,17 +67,27 @@ public final class VortexSortPushDownRule extends RelOptRule {
 
     /// Every rule variant, for registering with a planner in one call.
     public static final List<RelOptRule> RULES = List.of(
-            new VortexSortPushDownRule(operand(Sort.class, operand(Project.class,
-                    operand(Filter.class, operand(TableScan.class, none())))), "VortexSortPushDownRule:project-filter"),
-            new VortexSortPushDownRule(operand(Sort.class, operand(Project.class,
-                    operand(TableScan.class, none()))), "VortexSortPushDownRule:project"),
-            new VortexSortPushDownRule(operand(Sort.class, operand(Filter.class,
-                    operand(TableScan.class, none()))), "VortexSortPushDownRule:filter"),
-            new VortexSortPushDownRule(operand(Sort.class, operand(TableScan.class, none())),
-                    "VortexSortPushDownRule:scan"));
+            rule("project-filter", Project.class, Filter.class),
+            rule("project", Project.class),
+            rule("filter", Filter.class),
+            rule("scan"),
+            rule("distinct-project-filter", Aggregate.class, Project.class, Filter.class),
+            rule("distinct-project", Aggregate.class, Project.class),
+            rule("distinct-filter", Aggregate.class, Filter.class),
+            rule("distinct-scan", Aggregate.class));
 
     private VortexSortPushDownRule(RelOptRuleOperand operand, String description) {
         super(operand, description);
+    }
+
+    /// The rule matching a sort over `between`, outermost first, over a table scan.
+    @SafeVarargs
+    private static VortexSortPushDownRule rule(String name, Class<? extends RelNode>... between) {
+        RelOptRuleOperand operand = operand(TableScan.class, none());
+        for (int i = between.length - 1; i >= 0; i--) {
+            operand = operand(between[i], operand);
+        }
+        return new VortexSortPushDownRule(operand(Sort.class, operand), "VortexSortPushDownRule:" + name);
     }
 
     @Override
@@ -98,10 +111,19 @@ public final class VortexSortPushDownRule extends RelOptRule {
                 return;
             }
         }
+        Aggregate distinct = null;
         Project project = null;
         Filter filter = null;
         RelNode current = call.rel(1);
         int index = 1;
+        if (current instanceof Aggregate a) {
+            // SELECT DISTINCT, or a GROUP BY with no aggregate: rows come out once each
+            if (lazy || !a.getAggCallList().isEmpty() || a.getGroupType() != Aggregate.Group.SIMPLE) {
+                return;
+            }
+            distinct = a;
+            current = call.rel(++index);
+        }
         if (current instanceof Project p) {
             project = p;
             current = call.rel(++index);
@@ -135,6 +157,11 @@ public final class VortexSortPushDownRule extends RelOptRule {
             rowFilter = translated.get();
         }
         int[] cols = columns(scan, project);
+        if (cols != null && distinct != null) {
+            // the aggregate emits its group columns, in order
+            int[] input = cols;
+            cols = distinct.getGroupSet().asList().stream().mapToInt(i -> input[i]).toArray();
+        }
         // only the rows after the offset become literals; the offset rows stay in the heap (MAX_ROWS)
         if (cols == null || (!lazy && (long) fetch * cols.length > MAX_VALUES_CELLS)) {
             return;
@@ -154,10 +181,13 @@ public final class VortexSortPushDownRule extends RelOptRule {
         }
         int count = offset + fetch;
         RowFilter finalFilter = rowFilter;
-        List<Object> foldKey = List.of("topN", table, java.util.Arrays.toString(cols),
+        int[] emitted = cols;
+        boolean once = distinct != null;
+        List<Object> foldKey = List.of(once ? "distinctTopN" : "topN", table, java.util.Arrays.toString(cols),
                 rowFilter == null ? List.of() : rowFilter, keys, count);
         List<Object[]> rows = VortexAggregatePushDownRule.memo(call.getPlanner(), foldKey,
-                () -> table.topN(cols, finalFilter, keys, count));
+                () -> once ? table.distinctTopN(emitted, finalFilter, keys, count)
+                        : table.topN(emitted, finalFilter, keys, count));
 
         RexBuilder rexBuilder = sort.getCluster().getRexBuilder();
         List<RelDataType> types = sort.getRowType().getFieldList().stream().map(f -> f.getType()).toList();
