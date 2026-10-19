@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -14,6 +15,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -364,6 +366,51 @@ class VarBinArrayTest {
             return MemorySegment.ofArray(bb.array());
         }
 
+    }
+
+    @Nested
+    class CompareUnsigned {
+
+        // "é" is 0xC3 0xA9 in UTF-8: negative as a Java byte, so a signed comparison ranks it below 'z'
+        private static final String[] VALUES = {"abc", "ab", "abcd", "abé", "", "b"};
+
+        static List<VarBinArray> arrays() {
+            int[] codes = {0, 1, 2, 3, 4, 5};
+            return List.of(of(VALUES), Dict.ofDict(VALUES, codes),
+                    new VarBinSlicedArray(UTF8, VALUES.length, of("x", "abc", "ab", "abcd", "abé", "", "b"), 1));
+        }
+
+        @ParameterizedTest
+        @MethodSource("arrays")
+        void compareUnsigned_agreesWithArraysCompareUnsignedOfGetBytes(VarBinArray sut) {
+            // Given — every row against every value: equal, prefix, extension, and a first difference at
+            // a byte above 0x7F
+            List<Integer> expected = new ArrayList<>();
+            List<Integer> result = new ArrayList<>();
+
+            // When
+            for (long i = 0; i < sut.length(); i++) {
+                for (String other : VALUES) {
+                    byte[] otherBytes = other.getBytes(StandardCharsets.UTF_8);
+                    result.add(Integer.signum(sut.compareUnsigned(i, otherBytes)));
+                    expected.add(Integer.signum(Arrays.compareUnsigned(sut.getBytes(i), otherBytes)));
+                }
+            }
+
+            // Then
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        void compareUnsigned_offsetsPastTheData_throwVortexException() {
+            // Given — row 0 claims bytes [0, 99) of a 3-byte buffer
+            VarBinArray sut = new VarBinOffsetArray(UTF8, 1, MemorySegment.ofArray("abc".getBytes(StandardCharsets.UTF_8)),
+                    MemorySegment.ofArray(new byte[]{0, 0, 0, 0, 99, 0, 0, 0}), PType.I32);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.compareUnsigned(0, new byte[]{'a'}))
+                    .isInstanceOf(VortexException.class);
+        }
     }
 
     @Nested

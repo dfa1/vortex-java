@@ -418,6 +418,65 @@ class FsstEncodingDecoderTest {
             assertThatExceptionOfType(VortexException.class)
                     .isThrownBy(() -> result.getBytes(0));
         }
+
+        @Test
+        void compareUnsigned_agreesWithTheDecodedRow() {
+            // Given — "ab" then "abX" (an escaped literal after the symbol), each compared with a value
+            // it equals, one it extends, and one it differs from inside the symbol
+            long[] symbols = {packSymbol("ab")};
+            byte[] symbolLengths = {2};
+            byte[] compressed = {0x00, 0x00, (byte) ESCAPE, 'X'};
+            long[] uncompLengths = {2, 3};
+            long[] codeOffsets = {0, 1, 4};
+            VarBinArray sut = decodeFsst(2, symbols, symbolLengths, compressed,
+                    PType.U8, uncompLengths, PType.U8, codeOffsets);
+
+            // When
+            int[] result = {
+                    sut.compareUnsigned(0, "ab".getBytes(StandardCharsets.UTF_8)),
+                    sut.compareUnsigned(1, "ab".getBytes(StandardCharsets.UTF_8)),
+                    sut.compareUnsigned(1, "abXY".getBytes(StandardCharsets.UTF_8)),
+                    sut.compareUnsigned(0, "aa".getBytes(StandardCharsets.UTF_8))};
+
+            // Then
+            assertThat(result[0]).isZero();
+            assertThat(result[1]).isPositive();
+            assertThat(result[2]).isNegative();
+            assertThat(result[3]).isPositive();
+        }
+
+        @Test
+        void compareUnsigned_codeReferencesUnknownSymbol_throwsVortexExceptionNotRaw() {
+            // Given — the comparison decodes the row's first code, which names no trained symbol
+            long[] symbols = {packSymbol("ab")};
+            byte[] symbolLengths = {2};
+            byte[] compressed = {0x05};
+            long[] uncompLengths = {2};
+            long[] codeOffsets = {0, 1};
+            VarBinArray sut = decodeFsst(1, symbols, symbolLengths, compressed,
+                    PType.U8, uncompLengths, PType.U8, codeOffsets);
+
+            // When / Then
+            assertThatExceptionOfType(VortexException.class)
+                    .isThrownBy(() -> sut.compareUnsigned(0, new byte[]{'a'}));
+        }
+
+        @Test
+        void compareUnsigned_truncatedEscapeAtBufferEnd_throwsVortexExceptionNotRaw() {
+            // Given — the row's only code is the escape marker with no literal after it, and the buffer
+            // ends there, so reading the literal falls off the segment
+            long[] symbols = {};
+            byte[] symbolLengths = {};
+            byte[] compressed = {(byte) 0xFF};
+            long[] uncompLengths = {1};
+            long[] codeOffsets = {0, 1};
+            VarBinArray sut = decodeFsst(1, symbols, symbolLengths, compressed,
+                    PType.U8, uncompLengths, PType.U8, codeOffsets);
+
+            // When / Then
+            assertThatExceptionOfType(VortexException.class)
+                    .isThrownBy(() -> sut.compareUnsigned(0, new byte[]{'a'}));
+        }
     }
 
     @Nested

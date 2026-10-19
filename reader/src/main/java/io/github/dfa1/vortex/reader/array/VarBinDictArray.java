@@ -134,6 +134,12 @@ public final class VarBinDictArray implements VarBinArray {
     }
 
     @Override
+    public int compareUnsigned(long i, byte[] other) {
+        long code = dictReadCode(i);
+        return VarBinArrays.compareUnsigned(bytesSegment, dictReadOff(code), dictReadOff(code + 1), other);
+    }
+
+    @Override
     public String getString(long i) {
         long code = dictReadCode(i);
         if (code < 0 || code >= cacheSize) {

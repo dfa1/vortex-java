@@ -120,6 +120,24 @@ public record LazyFsstVarBinArray(
         return new String(getBytes(i), StandardCharsets.UTF_8);
     }
 
+    /// Decodes row `i` only up to its first byte that differs from `other`, so the claimed length
+    /// is not cross-checked as in [#getBytes(long)]: a row that never needs reading in full is
+    /// trusted the way Rust's compressed-domain compare trusts it.
+    @Override
+    public int compareUnsigned(long i, byte[] other) {
+        Objects.checkIndex(i, length);
+        CodeRange range = codeRange(i);
+        try {
+            return decompressor.compareUnsigned(compressedBytes, range.start(), range.end(), other);
+        } catch (IndexOutOfBoundsException e) {
+            // an escape at the very end of the code buffer, or a code past the trained table; an
+            // escape ending a row mid-buffer reads the next row's first code, as getBytes does
+            throw new VortexException(EncodingId.VORTEX_FSST,
+                    "row " + i + " code range [" + range.start() + ", " + range.end()
+                            + ") decodes past its bounds or references an unknown symbol code", e);
+        }
+    }
+
     @Override
     public int getByteLength(long i) {
         Objects.checkIndex(i, length);

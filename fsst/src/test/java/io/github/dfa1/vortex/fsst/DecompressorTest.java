@@ -2,7 +2,10 @@ package io.github.dfa1.vortex.fsst;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -114,6 +117,43 @@ class DecompressorTest {
             assertThat(afterRow1).isEqualTo(3);
             assertThat(Arrays.copyOfRange(out, 0, 2)).isEqualTo("ab".getBytes(StandardCharsets.UTF_8));
             assertThat(Arrays.copyOfRange(out, 2, 3)).isEqualTo("c".getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    @Nested
+    class CompareUnsigned {
+
+        // "ab" as one symbol, an escaped 0xC3, then "c": the escaped byte is negative as a Java
+        // byte, so a signed comparison would rank it below 'z' instead of above
+        private static final byte[] DECODED = {'a', 'b', (byte) 0xC3, 'c'};
+
+        @ParameterizedTest
+        @ValueSource(strings = {"abÃc", "ab", "abÃcd", "a", "ac", "abz", "abÄ", "", "b"})
+        void compareUnsigned_agreesWithArraysCompareUnsignedOfTheDecodedBytes(String other) {
+            // Given — "Ã" is the single byte 0xC3 and "Ä" 0xC4 in ISO-8859-1, so each case is a
+            // prefix, an extension, or a first difference inside the symbol, at the escape, or after
+            Symbol ab = Symbol.of("ab".getBytes(StandardCharsets.UTF_8), 0, 2);
+            Decompressor sut = Decompressor.of(new long[]{ab.packedBytes(), 'c'}, new int[]{2, 1});
+            MemorySegment compressed = MemorySegment.ofArray(new byte[]{0x00, (byte) Decompressor.ESCAPE, (byte) 0xC3, 0x01});
+            byte[] otherBytes = other.getBytes(StandardCharsets.ISO_8859_1);
+
+            // When
+            int result = sut.compareUnsigned(compressed, 0, compressed.byteSize(), otherBytes);
+
+            // Then
+            assertThat(Integer.signum(result)).isEqualTo(Integer.signum(Arrays.compareUnsigned(DECODED, otherBytes)));
+        }
+
+        @Test
+        void compareUnsigned_emptyRange_sortsBeforeAnyNonEmptyBytes() {
+            // Given — an empty string compresses to no codes at all
+            Decompressor sut = Decompressor.of(new long[0], new int[0]);
+
+            // When
+            int result = sut.compareUnsigned(MemorySegment.ofArray(new byte[0]), 0, 0, new byte[]{0});
+
+            // Then
+            assertThat(result).isNegative();
         }
     }
 }

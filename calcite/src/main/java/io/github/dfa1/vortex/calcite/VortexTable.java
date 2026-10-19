@@ -52,6 +52,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -633,7 +634,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// read per row, and each value is compared as itself: the sort Calcite runs otherwise converts
     /// every number to a `BigDecimal` per comparison. A row is read in full only if it is still among
     /// the first `count` when its chunk ends, so a column sorted against the query, where every row
-    /// beats the last, costs `count` full rows per chunk instead of one per row.
+    /// beats the last, costs `count` full rows per chunk instead of one per row. Such a chunk is also
+    /// walked backward, best rows first, so the rest lose to the worst row kept; a string row that
+    /// loses on its first key is told by its bytes, without building its `String`.
     ///
     /// @param cols   the table columns to emit, by position
     /// @param filter the rows to keep, or `null` for every row
@@ -653,30 +656,52 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         int capacity = count + Math.max(1024, Math.min(count, 1 << 20));
         List<Candidate> kept = new ArrayList<>();
         List<Candidate> fromChunk = new ArrayList<>();
-        // the worst row kept once there are count of them: a row equal to it or worse cannot enter, as a
-        // later row never beats an equal key
+        SortKey first = keys.getFirst();
+        boolean stringFirst = struct().fieldTypes().get(cols[first.field()]) instanceof DType.Utf8;
+        // the worst row kept once there are count of them, and its first key as bytes to reject a
+        // string row by without building it
         Object[] worst = null;
+        byte[] bound = null;
         Object[] probe = new Object[cols.length];
-        long position = 0;
+        Object[] sample = new Object[cols.length];
+        long chunkStart = 0;
         try (VortexEnumerator rows = enumerator(cols, filter)) {
             while (rows.nextChunk()) {
-                while (rows.advanceInChunk()) {
-                    for (SortKey key : keys) {
-                        probe[key.field()] = rows.column(key.field());
-                    }
-                    if (worst != null && order.compare(probe, worst) >= 0) {
-                        position++;
+                long n = rows.chunkRowCount();
+                RowSelection selection = rows.selection();
+                // a chunk sorted against the query is walked backward: its best rows come first, and
+                // every row after them loses to the bound; forward, the selection skips the rows the
+                // filter rejects a word at a time
+                boolean backward = sortedAgainst(rows, selection, keys, order, n, probe, sample);
+                for (long r = backward ? n - 1 : nextSelected(selection, 0, n); r >= 0;
+                        r = backward ? r - 1 : nextSelected(selection, r + 1, n)) {
+                    if (backward && selection != null && !selection.test(r)
+                            || bound != null && firstKeyAfter(rows, first, r, bound)) {
                         continue;
                     }
-                    Candidate candidate = new Candidate(probe.clone(), position++, rows.rowInChunk());
+                    for (SortKey key : keys) {
+                        probe[key.field()] = rows.column(key.field(), r);
+                    }
+                    // a row equal to the worst cannot enter when it comes later, but can when walking
+                    // backward: equal keys rank by position
+                    if (worst != null) {
+                        int cmp = order.compare(probe, worst);
+                        if (cmp > 0 || cmp == 0 && !backward) {
+                            continue;
+                        }
+                    }
+                    Candidate candidate = new Candidate(probe.clone(), chunkStart + r, r);
                     kept.add(candidate);
                     fromChunk.add(candidate);
                     if (kept.size() == capacity) {
                         worst = cut(kept, ranking, count);
+                        bound = stringFirst ? asciiBound(worst, first) : null;
                         fromChunk.removeIf(c -> c.rowInChunk < 0);
                     }
                 }
+                chunkStart += n;
                 worst = cut(kept, ranking, count);
+                bound = stringFirst ? asciiBound(worst, first) : null;
                 // the survivors are read in full while their chunk is still open
                 for (Candidate c : fromChunk) {
                     if (c.rowInChunk >= 0) {
@@ -690,6 +715,80 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             }
         }
         return kept.stream().map(c -> c.row).toList();
+    }
+
+    /// The first row of `selection` at or after `from` among `n`, every row when it is `null`.
+    ///
+    /// @return the row, or `-1` past the last
+    private static long nextSelected(RowSelection selection, long from, long n) {
+        if (selection != null) {
+            return selection.nextSelected(from);
+        }
+        return from < n ? from : -1;
+    }
+
+    /// Whether the current chunk looks sorted against `order`: five evenly spaced rows each rank
+    /// strictly before the one above them. Walking a chunk backward gains nothing on rows in no
+    /// order, so those must almost never pass (one chunk in 120). A sample row the filter rejects
+    /// is never read, as reading it may fail (a `u64` past `BIGINT`), so the chunk is walked forward.
+    ///
+    /// @param selection the rows the filter keeps, or `null` for every row
+    /// @param a         scratch row for the sampled keys
+    /// @param b         another scratch row
+    private static boolean sortedAgainst(VortexEnumerator rows, RowSelection selection, List<SortKey> keys,
+            java.util.Comparator<Object[]> order, long n, Object[] a, Object[] b) {
+        // ponytail: a sample, not a scan; a chunk sorted only in parts, or whose sample the filter
+        // cuts, is walked forward
+        if (n < 5) {
+            return false;
+        }
+        Object[] above = a;
+        Object[] below = b;
+        for (int s = 0; s <= 4; s++) {
+            long r = s * (n - 1) / 4;
+            if (selection != null && !selection.test(r)) {
+                return false;
+            }
+            for (SortKey key : keys) {
+                below[key.field()] = rows.column(key.field(), r);
+            }
+            if (s > 0 && order.compare(below, above) >= 0) {
+                return false;
+            }
+            Object[] swap = above;
+            above = below;
+            below = swap;
+        }
+        return true;
+    }
+
+    /// The first key of `worst` as bytes, when it is an ASCII string. Comparing a row's UTF-8 bytes
+    /// with ASCII bytes gives [String#compareTo]'s answer: they agree up to the first differing byte,
+    /// where a non-ASCII byte of the row, valid or not, decodes to a character above every ASCII one.
+    ///
+    /// @return the bytes, or `null` when there is no worst row or its key is null or not ASCII
+    private static byte[] asciiBound(Object[] worst, SortKey first) {
+        // ponytail: a non-ASCII bound falls back to building every row; beyond ASCII, byte order and
+        // String order disagree on supplementary characters, which a fix-up at the first differing
+        // byte would handle
+        if (worst != null && worst[first.field()] instanceof String s && s.chars().allMatch(c -> c < 0x80)) {
+            return s.getBytes(StandardCharsets.US_ASCII);
+        }
+        return null;
+    }
+
+    /// Whether row `r`'s first key, a string, ranks strictly after `bound`, read from its bytes. A null
+    /// key answers `false`, leaving the row to the full comparison.
+    private static boolean firstKeyAfter(VortexEnumerator rows, SortKey first, long r, byte[] bound) {
+        Object array = rows.array(first.field());
+        if (array instanceof MaskedArray masked) {
+            if (!masked.isValid(r)) {
+                return false;
+            }
+            array = masked.inner();
+        }
+        int cmp = ((VarBinArray) array).compareUnsigned(r, bound);
+        return first.descending() ? cmp < 0 : cmp > 0;
     }
 
     /// Sorts `kept` and drops all but the first `count`, marking the dropped ones so they are never read.

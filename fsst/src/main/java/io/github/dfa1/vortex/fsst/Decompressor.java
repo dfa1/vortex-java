@@ -149,4 +149,45 @@ public final class Decompressor {
         }
         return outIndex;
     }
+
+    /// Compares the decoded bytes of the compressed range `[start, end)` with `other`, as
+    /// `Arrays.compareUnsigned` would compare the two arrays, decoding
+    /// only up to the first byte that differs: two strings usually differ within their first symbols,
+    /// so ranking a row against a bound costs a symbol or two instead of the whole row.
+    ///
+    /// Like [#decompress(MemorySegment, long, long, MemorySegment, long)] this trusts the code
+    /// stream: a trailing escape reads past `end`, and a code outside the table indexes past it.
+    ///
+    /// @param compressed the compressed code stream
+    /// @param start the index of the first code to decode, inclusive
+    /// @param end the index one past the last code to decode, exclusive
+    /// @param other the bytes to compare with
+    /// @return a negative, zero, or positive integer as the decoded bytes sort before, equal to, or
+    ///         after `other`
+    public int compareUnsigned(MemorySegment compressed, long start, long end, byte[] other) {
+        long pos = start;
+        int at = 0;
+        while (pos < end) {
+            int code = Byte.toUnsignedInt(compressed.get(ValueLayout.JAVA_BYTE, pos++));
+            long packed;
+            int length;
+            if (code == ESCAPE) {
+                packed = Byte.toUnsignedLong(compressed.get(ValueLayout.JAVA_BYTE, pos++));
+                length = 1;
+            } else {
+                packed = packedSymbols[code];
+                length = lengths[code];
+            }
+            for (int k = 0; k < length; k++, at++) {
+                if (at == other.length) {
+                    return 1;
+                }
+                int cmp = Integer.compare((int) (packed >>> (k * 8)) & 0xFF, Byte.toUnsignedInt(other[at]));
+                if (cmp != 0) {
+                    return cmp;
+                }
+            }
+        }
+        return at == other.length ? 0 : -1;
+    }
 }

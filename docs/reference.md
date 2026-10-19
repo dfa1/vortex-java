@@ -440,6 +440,7 @@ Decodes an FSST code stream against a trained table (parallel arrays indexed by 
 | `static final int ESCAPE`                                 | The escape code (`0xFF`)                                              |
 | `decompress(byte[] in, int start, int end, byte[] out, long outPos)`           | Decode; size `out` ≥ `8 * (end - start)`                         |
 | `decompress(MemorySegment in, long start, long end, MemorySegment out, long outPos)` | Unconditional-8-byte-store decode; caller MUST allocate `out` with ≥ 7 bytes of trailing slack |
+| `compareUnsigned(MemorySegment in, long start, long end, byte[] other)`        | Compare the decoded bytes with `other` (unsigned), decoding only up to the first difference |
 
 ### `Symbol`
 
