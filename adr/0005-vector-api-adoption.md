@@ -5,6 +5,15 @@
 - **Deciders:** project maintainer
 - **Related:** [CLAUDE.md §Memory model — Hot-loop rule](../CLAUDE.md)
 
+> **Update (2026-10-20):** the Vector API was adopted regardless of condition 1 (PR #524). The
+> kernels shared by reader and writer sit behind `SimdOperations` in `core.simd`, with
+> `AutoVectorizedSimdOperations` (C2-shaped loops, the default) and `VectorApiSimdOperations`
+> (opt-in via `--add-modules jdk.incubator.vector`); `SimdOperationsSupport#preferred()` picks one.
+> Both give Rust-parity results, `scripts/simd-benchmark.sh` (also a CI job) measures the
+> speedups, and the module's incubating status is the only reason it is opt-in. This is
+> Strategy A by module detection, not the rejected Strategy B (`DecodeContext` flag). The
+> decision text below is kept as written for the record.
+
 ## Context
 
 Two TODO items describe Vector API adoption:

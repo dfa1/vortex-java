@@ -1,12 +1,12 @@
 # ADR 0020: Jazzer fuzz testing infrastructure
 
-- **Status:** Accepted — fuzz mode landed as a dedicated `fuzz` module with one target
-  (`VortexReader` full-file open), seeded with a handful of existing small reader fixtures so the
-  mutator starts past the trailer magic instead of having to guess it; direct
-  `PostscriptParser.parseBlobs` fuzzing is deferred (it is package-private, so a separate module
-  needs a cross-module access seam); automated per-encoding corpus extraction, per-encoding
-  targets, differential fuzzing, regression-corpus wiring, nightly CI, and OSS-Fuzz submission
-  still pending
+- **Status:** Accepted — implemented in a dedicated `fuzz` module (reader `open`, `scan`,
+  `filter` and metadata-blob targets, plus an FSST round-trip) and in `integration`
+  (`WriteReadFuzzIntegrationTest`: write→read round-trip and the vortex-jni differential). Each
+  target replays its saved inputs (seeds plus every past finding) in the routine build, and the
+  weekly `Fuzz` workflow explores new ones. Still pending: automated per-encoding corpus
+  extraction, per-encoding targets, and OSS-Fuzz submission. The detail below describes the first
+  cut (one target, five hand-picked seeds) and is kept as written.
 - **Date:** 2026-07-12
 - **Deciders:** project maintainer
 - **Related:** [ADR 0003 — VortexException sanitization](0003-vortex-exception-sanitization.md),
