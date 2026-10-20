@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.fsst;
 
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.List;
 
 /// One generation of FSST bottom-up training (the FSST paper's Algorithm 3): compress-count the
@@ -233,23 +234,28 @@ final class TrainingGeneration {
         // better one holds is skipped, and the next candidate takes its code. Rust asserts that no
         // two stored symbols share a slot when it rebuilds a compressor from a file's symbol table
         // (vortex-jni does, to compress a filter literal), so a table breaking it aborted the JVM.
-        eligible.sort((a, b) -> compareGain(b, a));
+        eligible.sort(Collections.reverseOrder(TrainingGeneration::compareGain));
         BitSet takenSlots = new BitSet();
         List<Symbol> result = new ArrayList<>(MAX_SYMBOLS);
-        for (Candidate candidate : eligible) {
-            if (result.size() == MAX_SYMBOLS) {
-                break;
+        for (int i = 0; i < eligible.size() && result.size() < MAX_SYMBOLS; i++) {
+            Candidate candidate = eligible.get(i);
+            if (candidate.length() < 3 || claimSlot(takenSlots, candidate.packed())) {
+                result.add(new Symbol(candidate.packed(), candidate.length()));
             }
-            if (candidate.length() >= 3) {
-                int slot = LossyPerfectHashTable.slotFor(candidate.packed());
-                if (takenSlots.get(slot)) {
-                    continue;
-                }
-                takenSlots.set(slot);
-            }
-            result.add(new Symbol(candidate.packed(), candidate.length()));
         }
         return result;
+    }
+
+    /// Takes the [LossyPerfectHashTable] slot of a 3-8 byte symbol.
+    ///
+    /// @return `false` when a better symbol already holds it
+    private static boolean claimSlot(BitSet takenSlots, long packed) {
+        int slot = LossyPerfectHashTable.slotFor(packed);
+        if (takenSlots.get(slot)) {
+            return false;
+        }
+        takenSlots.set(slot);
+        return true;
     }
 
     /// Gain used for ranking: `count * length`, with the single-byte boost applied to length-1
