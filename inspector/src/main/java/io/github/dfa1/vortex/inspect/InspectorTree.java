@@ -289,7 +289,7 @@ public record InspectorTree(
         if (min == null && max == null) {
             return ArrayStats.empty();
         }
-        return new ArrayStats(min, max, null, null, null, null, null);
+        return new ArrayStats(min, max, null, null, null, null, null, null, null);
     }
 
     /// The chunks of a column: the children of the first chunked node on its data path, or the

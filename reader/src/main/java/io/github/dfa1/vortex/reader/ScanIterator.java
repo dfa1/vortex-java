@@ -455,8 +455,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// table — min/max/sum/null count per zone — decoded once from the small stats segment
     /// without touching any data segment. This is the source Rust populates for `SUM`, so the
     /// values match files written by either implementation. When no zone map is present the
-    /// list falls back to each chunk's embedded `ArrayStats` (min/max/null count; `sum` is
-    /// `null`, since the flat writer does not retain it). Either way a column that is absent
+    /// list falls back to each chunk's embedded `ArrayStats` (whatever the flat writer retained;
+    /// `sum` is `null`, since it does not retain it). Either way a column that is absent
     /// or carries no stats yields [ArrayStats#empty()] per zone.
     ///
     /// Zone granularity is the layout's, not the scan's. The fallback path is one entry per scan
@@ -590,9 +590,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                         minA != null ? boxedScalar(minA, i) : boxedScalar(boundedMinA, i),
                         maxA != null ? boxedScalar(maxA, i) : boundedMaxScalar(boundedMaxA, i),
                         boxedScalar(sumA, i),
-                        null,
+                        null, null, null,
                         nullCount == null ? null : ((Number) nullCount).longValue(),
-                        null, null,
+                        null,
                         nanCount == null ? null : ((Number) nanCount).longValue()));
             }
             return out;

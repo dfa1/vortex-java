@@ -103,7 +103,7 @@ public final class VortexInspector {
         if (min == null && max == null) {
             return ArrayStats.empty();
         }
-        return new ArrayStats(min, max, null, null, null, null, null);
+        return new ArrayStats(min, max, null, null, null, null, null, null, null);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

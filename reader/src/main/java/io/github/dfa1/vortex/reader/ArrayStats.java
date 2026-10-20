@@ -7,41 +7,34 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 
-/// Per-array statistics embedded in the encoding tree.
+/// Per-array statistics embedded in the encoding tree: one component per statistic of the wire
+/// `ArrayStats` table (Rust's `Stat` enum). A bool column's true count is its `sum`, as in Rust.
+/// The table's `min_precision`/`max_precision` are not read, so `min`/`max` may be inexact
+/// bounds: Rust's flat writer truncates a string bound longer than 64 bytes.
 ///
-/// @param min            minimum value in the array, or `null` if unknown
-/// @param max            maximum value in the array, or `null` if unknown
-/// @param sum            sum of values (`Long` for integer columns, `Double` for floats), or `null` if unknown
-/// @param trueCount      number of `true` values for bool columns, or `null` if unknown
-/// @param nullCount      number of null values, or `null` if unknown
-/// @param isSorted       `true` if the array is sorted in ascending order, or `null` if unknown
-/// @param isStrictSorted `true` if the array is strictly sorted (no duplicates), or `null` if unknown
-/// @param nanCount       number of `NaN` values in a float column (`min` and `max` skip them), or `null` if unknown
+/// The counts are `u64` on the wire, read as a signed `Long`.
+///
+/// @param min                     minimum value in the array, or `null` if unknown
+/// @param max                     maximum value in the array, or `null` if unknown
+/// @param sum                     sum of values (`Long` for integer and bool columns, `Double` for floats), or `null` if unknown
+/// @param isSorted                `true` if the values are sorted ascending with nulls first (Rust orders null lowest), or `null` if unknown
+/// @param isStrictSorted          `true` if also no two neighbors are equal, two nulls included, or `null` if unknown
+/// @param isConstant              `true` if every value is null, or none is and all are equal, or `null` if unknown
+/// @param nullCount               number of null values, or `null` if unknown
+/// @param uncompressedSizeInBytes the array's uncompressed size in bytes, or `null` if unknown
+/// @param nanCount                number of `NaN` values in a float column (`min` and `max` skip them), or `null` if unknown
 public record ArrayStats(
         Object min,
         Object max,
         Object sum,
-        Long trueCount,
-        Long nullCount,
         Boolean isSorted,
         Boolean isStrictSorted,
+        Boolean isConstant,
+        Long nullCount,
+        Long uncompressedSizeInBytes,
         Long nanCount
 ) {
-    private static final ArrayStats EMPTY = new ArrayStats(null, null, null, null, null, null, null, null);
-
-    /// Creates stats with no `NaN` count.
-    ///
-    /// @param min            minimum value in the array, or `null` if unknown
-    /// @param max            maximum value in the array, or `null` if unknown
-    /// @param sum            sum of values, or `null` if unknown
-    /// @param trueCount      number of `true` values for bool columns, or `null` if unknown
-    /// @param nullCount      number of null values, or `null` if unknown
-    /// @param isSorted       `true` if the array is sorted in ascending order, or `null` if unknown
-    /// @param isStrictSorted `true` if the array is strictly sorted, or `null` if unknown
-    public ArrayStats(Object min, Object max, Object sum, Long trueCount, Long nullCount,
-                      Boolean isSorted, Boolean isStrictSorted) {
-        this(min, max, sum, trueCount, nullCount, isSorted, isStrictSorted, null);
-    }
+    private static final ArrayStats EMPTY = new ArrayStats(null, null, null, null, null, null, null, null, null);
 
     /// Returns an empty stats instance with all fields set to `null`.
     ///
@@ -51,7 +44,7 @@ public record ArrayStats(
     }
 
     /// Parses stats from a FlatBuffers [io.github.dfa1.vortex.core.fbs.FbsArrayStats] table.
-    /// Returns an empty instance when `fbs` is `null` or carries no min/max and no null count.
+    /// Returns an empty instance when `fbs` is `null` or carries no statistic.
     ///
     /// @param fbs the FlatBuffers stats table, or `null`
     /// @return parsed stats, or an empty instance if no usable data is present
@@ -59,14 +52,17 @@ public record ArrayStats(
         if (fbs == null) {
             return EMPTY;
         }
-        Object min = decodeScalar(fbs.minAsSegment());
-        Object max = decodeScalar(fbs.maxAsSegment());
-        Object sum = decodeScalar(fbs.sumAsSegment());
-        Long nullCount = fbs.hasNullCount() ? fbs.nullCount() : null;
-        if (min == null && max == null && sum == null && nullCount == null) {
-            return EMPTY;
-        }
-        return new ArrayStats(min, max, sum, null, nullCount, null, null);
+        ArrayStats stats = new ArrayStats(
+                decodeScalar(fbs.minAsSegment()),
+                decodeScalar(fbs.maxAsSegment()),
+                decodeScalar(fbs.sumAsSegment()),
+                fbs.hasIsSorted() ? fbs.isSorted() : null,
+                fbs.hasIsStrictSorted() ? fbs.isStrictSorted() : null,
+                fbs.hasIsConstant() ? fbs.isConstant() : null,
+                fbs.hasNullCount() ? fbs.nullCount() : null,
+                fbs.hasUncompressedSizeInBytes() ? fbs.uncompressedSizeInBytes() : null,
+                fbs.hasNanCount() ? fbs.nanCount() : null);
+        return stats.equals(EMPTY) ? EMPTY : stats;
     }
 
     private static Object decodeScalar(MemorySegment seg) {
