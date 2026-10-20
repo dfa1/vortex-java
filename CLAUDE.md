@@ -55,6 +55,17 @@ writer  — VortexWriter, WriteRegistry, WriteOptions, ColumnEncoding, Extension
           writer.encode — EncodingEncoder, EncodeContext, EncodeResult, EncodedBuffer, NullableData
           + *EncodingEncoder impls,
           extension encoders
+csv, parquet, jdbc — import/export between Vortex files and CSV, Parquet, and JDBC sources
+          (`jdbc` is the JDBC *import*; it is not the `jdbc:vortex:` driver)
+calcite — Apache Calcite SQL adapter over `.vortex` files (`VortexCalcite`, `VortexSchemaFactory`)
+          with projection, filter, aggregate, sort and group push-down
+jdbc-driver — `jdbc:vortex:<dir>` JDBC driver (`VortexDriver`) over `calcite`, shipped as one
+          self-contained `-all` jar for SQL tools
+cli, inspector — command-line tool and the structural file-tree model it renders
+bom     — Bill of Materials for consistent versions
+fbs-gen, proto-gen — build-time generators for `core.fbs` / `core.proto` (not published)
+integration, fuzz, performance, demo/* — vortex-jni interop tests, Jazzer targets, JMH
+          benchmarks, examples (not published)
 ```
 
 Dependency rule: `writer → core`, `reader → core`. **Writer never depends on reader.**
