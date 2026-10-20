@@ -228,9 +228,7 @@ class DictFilterInteropIntegrationTest {
     private static boolean matches(RowFilter filter, String s, long id) {
         return switch (filter) {
             case RowFilter.And(var parts) -> parts.stream().allMatch(part -> matches(part, s, id));
-            case RowFilter.Column(var column, var predicate) -> column.equals(ID)
-                    ? holds(predicate, id)
-                    : holds(predicate, s);
+            case RowFilter.Column(var column, var predicate) -> holds(predicate, column.equals(ID) ? id : s);
         };
     }
 
