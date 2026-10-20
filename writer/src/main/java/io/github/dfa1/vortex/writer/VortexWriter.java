@@ -1058,8 +1058,12 @@ public final class VortexWriter implements Closeable {
         fbb.forceDefaults(true);
         io.github.dfa1.vortex.core.fbs.FbsArrayStats.startFbsArrayStats(fbb);
         if (result.hasStats()) {
+            // The encoder's min/max are the exact extremes, never truncated. An absent precision
+            // is the FlatBuffer default Inexact, which is what Rust read every Java bound as.
             io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMin(fbb, minVec);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMinPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
             io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMax(fbb, maxVec);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMaxPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
         }
         io.github.dfa1.vortex.core.fbs.FbsArrayStats.addNullCount(fbb, nullCount);
         int statsOff = io.github.dfa1.vortex.core.fbs.FbsArrayStats.endFbsArrayStats(fbb);
