@@ -14,6 +14,10 @@ import java.util.List;
 /// Read-only decoder for `vortex.struct`.
 public final class StructEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public StructEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_STRUCT;

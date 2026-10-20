@@ -19,6 +19,9 @@ public final class TimeExtensionDecoder implements ExtensionDecoder<LocalTime> {
     /// Singleton instance.
     public static final TimeExtensionDecoder INSTANCE = new TimeExtensionDecoder();
 
+    private TimeExtensionDecoder() {
+    }
+
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_TIME;

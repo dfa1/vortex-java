@@ -42,10 +42,21 @@ public final class CsvExporter {
     private CsvExporter() {
     }
 
+    /// Exports a Vortex file to a CSV file with the default options.
+    ///
+    /// @param vortexPath the Vortex file to read
+    /// @param csvPath    the CSV file to write
+    /// @throws IOException if either file cannot be read or written
     public static void exportCsv(Path vortexPath, Path csvPath) throws IOException {
         exportCsv(vortexPath, csvPath, ExportOptions.defaults());
     }
 
+    /// Exports a Vortex file to a CSV file.
+    ///
+    /// @param vortexPath the Vortex file to read
+    /// @param csvPath    the CSV file to write
+    /// @param options    delimiter, read registry and other export settings
+    /// @throws IOException if either file cannot be read or written
     public static void exportCsv(Path vortexPath, Path csvPath, ExportOptions options) throws IOException {
         try (VortexReader reader = VortexReader.open(vortexPath, options.readRegistry());
              CsvWriter csvWriter = CsvWriter.builder()
@@ -56,12 +67,24 @@ public final class CsvExporter {
     }
 
     /// Export to a caller-owned [Writer]; the writer is flushed but not closed.
+    ///
+    /// @param vortexPath the Vortex file to read
+    /// @param out        where the CSV text goes
+    /// @param options    delimiter, read registry and other export settings
+    /// @throws IOException if the file cannot be read or `out` cannot be written
     public static void exportCsv(Path vortexPath, Writer out, ExportOptions options) throws IOException {
         exportCsvFiltered(vortexPath, out, options, ScanOptions.all(), RowPredicate.all());
     }
 
     /// Like [#exportCsv(Path, Writer, ExportOptions)] but with zone-map chunk pruning
     /// ([ScanOptions#rowFilter()]) and a row-level predicate applied after decoding.
+    ///
+    /// @param vortexPath  the Vortex file to read
+    /// @param out         where the CSV text goes
+    /// @param options     delimiter, read registry and other export settings
+    /// @param scanOptions column projection, zone-map filter and row limit
+    /// @param predicate   the rows to keep, tested after decoding
+    /// @throws IOException if the file cannot be read or `out` cannot be written
     public static void exportCsvFiltered(Path vortexPath, Writer out, ExportOptions options,
             ScanOptions scanOptions, RowPredicate predicate) throws IOException {
         Writer shielded = new FilterWriter(out) {

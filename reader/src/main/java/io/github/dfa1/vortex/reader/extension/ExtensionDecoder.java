@@ -19,13 +19,19 @@ import java.util.List;
 /// @param <T> the domain type one row decodes to (e.g. [java.time.LocalDate] for `vortex.date`)
 public interface ExtensionDecoder<T> {
 
+    /// Returns the identity of this extension.
+    ///
     /// @return the identity of this extension
     ExtensionId extensionId();
 
+    /// Returns the extension dtype this decoder reads, with the given nullability.
+    ///
     /// @param nullable whether the column allows nulls
     /// @return matching [DType.Extension] (storage dtype + default metadata)
     DType.Extension dtype(boolean nullable);
 
+    /// Returns the Java type one row decodes to.
+    ///
     /// @return the domain type one row decodes to
     Class<T> domainType();
 

@@ -46,6 +46,10 @@ public final class ImportOptions {
         return writeOptions;
     }
 
+    /// Returns the default options: every column, 65536 rows per chunk, no progress listener,
+    /// cascading compression.
+    ///
+    /// @return the default options
     public static ImportOptions defaults() {
         // 65536 physical rows per chunk, matching WriteOptions' default and the Rust reference's
         // 32k-64k granularity. This was briefly raised to 131072 for a size win (962520ac), but the
@@ -57,22 +61,40 @@ public final class ImportOptions {
     }
 
     /// Restrict import to specific columns. Empty list = all columns.
+    ///
+    /// @param cols the columns to import
+    /// @return a copy importing only `cols`
     public ImportOptions withColumns(List<String> cols) {
         return new ImportOptions(chunkSize, List.copyOf(cols), progressListener, writeOptions);
     }
 
+    /// Reports whether the import reads a subset of the columns.
+    ///
+    /// @return `true` if a column projection is set
     public boolean hasProjection() {
         return !columns.isEmpty();
     }
 
+    /// Returns a copy that reports progress to the given listener.
+    ///
+    /// @param listener called after each chunk is written
+    /// @return a copy with the given listener
     public ImportOptions withProgressListener(ProgressListener listener) {
         return new ImportOptions(chunkSize, columns, listener, writeOptions);
     }
 
+    /// Returns a copy that writes the Vortex file with the given options.
+    ///
+    /// @param options the Vortex write options
+    /// @return a copy with the given write options
     public ImportOptions withWriteOptions(WriteOptions options) {
         return new ImportOptions(chunkSize, columns, progressListener, options);
     }
 
+    /// Returns a copy that writes chunks of the given number of rows.
+    ///
+    /// @param size rows per chunk
+    /// @return a copy with the given chunk size
     public ImportOptions withChunkSize(int size) {
         return new ImportOptions(size, columns, progressListener, writeOptions);
     }

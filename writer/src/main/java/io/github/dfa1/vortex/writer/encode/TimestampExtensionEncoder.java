@@ -18,6 +18,9 @@ public final class TimestampExtensionEncoder implements ExtensionEncoder {
     /// Singleton instance.
     public static final TimestampExtensionEncoder INSTANCE = new TimestampExtensionEncoder();
 
+    private TimestampExtensionEncoder() {
+    }
+
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_TIMESTAMP;

@@ -14,6 +14,10 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
     private static final int MAX_INLINED_SIZE = 12;
     private static final int VIEW_SIZE = 16;
 
+    /// Creates the encoder.
+    public VarBinViewEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_VARBINVIEW;

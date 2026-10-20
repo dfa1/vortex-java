@@ -13,9 +13,13 @@ import io.github.dfa1.vortex.core.model.DType;
 /// or [io.github.dfa1.vortex.writer.WriteRegistry.Builder#register(EncodingEncoder)].
 public interface EncodingEncoder {
 
+    /// Returns the encoding this encoder writes.
+    ///
     /// @return the wire identifier of this encoding
     EncodingId encodingId();
 
+    /// Reports whether this encoder can write arrays of the given dtype.
+    ///
     /// @param dtype the dtype to test
     /// @return `true` if this encoding can encode arrays of `dtype`
     boolean accepts(DType dtype);

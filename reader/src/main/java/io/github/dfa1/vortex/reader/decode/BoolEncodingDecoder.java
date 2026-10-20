@@ -24,6 +24,10 @@ import java.lang.foreign.ValueLayout;
 /// a [MaskedArray] so callers see nulls as invalid rows.
 public final class BoolEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public BoolEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_BOOL;

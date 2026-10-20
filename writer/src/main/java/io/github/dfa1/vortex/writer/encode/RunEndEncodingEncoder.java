@@ -22,6 +22,10 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
     /// Rust's `RUN_END_THRESHOLD` (`vortex-btrblocks` `schemes/integer/runend.rs`).
     private static final long RUN_END_THRESHOLD = 4;
 
+    /// Creates the encoder.
+    public RunEndEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_RUNEND;

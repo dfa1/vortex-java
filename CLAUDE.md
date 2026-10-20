@@ -366,17 +366,14 @@ procedure):
 ### Javadoc
 
 Run by `javadoc-no-fork` bound to `verify` (~3s across the reactor), so `./mvnw test` skips it
-and `./mvnw verify` enforces it. Two enforcement levels:
+and `./mvnw verify` enforces it. **Errors and warnings both fail the build** (`failOnError` +
+`failOnWarnings`, parent POM): a dangling `[Type#member]` reference, a missing `@param`, an
+undocumented public member or default constructor. Unpublished modules (`performance`, `demo/*`,
+`fbs-gen`, `proto-gen`) set `<javadoc.doclint>all,-missing</javadoc.doclint>`: undocumented
+members are fine there, broken references still fail. The plugin skips a module whose sources are
+unchanged, so check after `clean` when hunting warnings.
 
-- **Everywhere: `failOnError`.** A dangling `[Type#member]` reference fails the build. This is
-  the class of rot that actually accumulates — a refactor renames something and the docs keep
-  pointing at the old name.
-- **`core` and `fsst` only: `failOnWarnings`.** Both are warning-free; their POMs raise the bar
-  to keep them there. The other modules carry pre-existing warnings (missing `@param`,
-  undocumented default constructors), so warnings stay non-fatal there until someone clears a
-  module and adds the same override to its POM.
-
-Style rules (aspirational in the un-ratcheted modules, enforced in `core`/`fsst`):
+Style rules (enforced in every published module):
 
 - Every public method: main prose description, `@param` per parameter, `@return` (unless `void`).
   Every public record: `@param` per component on the class doc. `@see`-only counts as no description.

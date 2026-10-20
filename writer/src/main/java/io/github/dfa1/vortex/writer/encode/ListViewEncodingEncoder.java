@@ -23,6 +23,10 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
             new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(), new BoolEncodingEncoder(),
             new NullEncodingEncoder(), new ByteBoolEncodingEncoder(), new StructEncodingEncoder());
 
+    /// Creates the encoder.
+    public ListViewEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_LISTVIEW;

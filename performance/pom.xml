@@ -19,6 +19,7 @@
              needed to actually keep this benchmark-only module off Maven Central. -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <skipPublishing>true</skipPublishing>
+        <javadoc.doclint>all,-missing</javadoc.doclint>
         <skipShade>true</skipShade>
         <!-- This module is diagnostic CLI tooling (JMH benchmarks + ad-hoc taxi-data inspectors),
              not shipped library code. By-design uses of {@code System.out}, {@code System.err},

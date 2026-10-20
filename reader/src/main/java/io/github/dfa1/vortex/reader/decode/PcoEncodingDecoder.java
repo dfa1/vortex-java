@@ -32,6 +32,10 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
     static final int BITS_TO_ENCODE_OFFSET_BITS_32 = 6;
     static final int BITS_TO_ENCODE_OFFSET_BITS_16 = 5;
 
+    /// Creates the decoder.
+    public PcoEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_PCO;

@@ -14,14 +14,29 @@ import java.lang.foreign.SegmentAllocator;
 /// Implementations: [VortexReader] (memory-mapped local file), [VortexHttpReader] (HTTP Range reads).
 public interface VortexHandle extends Closeable {
 
+    /// Returns the file's root dtype.
+    ///
+    /// @return the root dtype, a [DType.Struct] for files written by a `VortexWriter`
     DType dtype();
 
+    /// Returns the root of the file's layout tree.
+    ///
+    /// @return the root layout
     Layout layout();
 
+    /// Returns the parsed file footer: segment map, array specs and layout specs.
+    ///
+    /// @return the footer
     Footer footer();
 
+    /// Returns the format version from the file's trailer.
+    ///
+    /// @return the trailer version
     int version();
 
+    /// Returns the size of the file.
+    ///
+    /// @return the file size in bytes
     long fileSize();
 
     /// Typed accessor for the common pattern "read a flat segment by its [SegmentSpec]
@@ -45,6 +60,10 @@ public interface VortexHandle extends Closeable {
     ///         `spec.offset() + spec.length()`
     MemorySegment rawSegment(SegmentSpec spec);
 
+    /// Starts a scan of the file, yielding one [Chunk] at a time. Close the iterator when done.
+    ///
+    /// @param options column projection, zone-map filter and row limit
+    /// @return an iterator over the file's chunks
     ScanIterator scan(ScanOptions options);
 
     /// Returns the [ReadRegistry] this handle was opened with.

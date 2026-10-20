@@ -15,6 +15,10 @@ import java.util.List;
 /// Write-only encoder for `vortex.decimal`.
 public final class DecimalEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public DecimalEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DECIMAL;

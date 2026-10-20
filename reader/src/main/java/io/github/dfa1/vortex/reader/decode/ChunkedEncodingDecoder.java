@@ -17,6 +17,10 @@ import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 /// Read-only decoder for `vortex.chunked`.
 public final class ChunkedEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public ChunkedEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_CHUNKED;

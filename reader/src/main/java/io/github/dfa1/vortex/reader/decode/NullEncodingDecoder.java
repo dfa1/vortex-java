@@ -7,6 +7,10 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 /// Read-only decoder for `vortex.null` (all-null arrays).
 public final class NullEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public NullEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_NULL;

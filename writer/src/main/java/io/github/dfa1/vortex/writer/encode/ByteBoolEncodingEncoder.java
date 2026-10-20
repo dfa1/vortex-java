@@ -9,6 +9,10 @@ import java.lang.foreign.ValueLayout;
 /// Write-only encoder for `vortex.bytebool` — one byte per boolean element.
 public final class ByteBoolEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public ByteBoolEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_BYTEBOOL;

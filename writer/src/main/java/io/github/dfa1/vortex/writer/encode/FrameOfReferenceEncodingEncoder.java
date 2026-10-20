@@ -16,6 +16,10 @@ import java.util.List;
 /// Write-only encoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public FrameOfReferenceEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_FOR;

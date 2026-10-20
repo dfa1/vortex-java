@@ -38,6 +38,10 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
 
     private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_ONPAIR);
 
+    /// Creates the encoder.
+    public OnPairEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ONPAIR;

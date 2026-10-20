@@ -13,6 +13,10 @@ import io.github.dfa1.vortex.reader.array.MapArray;
 /// decode call) the Rust reference applies in its own `validate_entries`.
 public final class MapEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public MapEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_MAP;

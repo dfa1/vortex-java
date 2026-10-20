@@ -12,6 +12,10 @@ import io.github.dfa1.vortex.core.proto.ProtoDecimalBytePartsMetadata;
 /// Write-only encoder for `vortex.decimal_byte_parts`.
 public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public DecimalBytePartsEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DECIMAL_BYTE_PARTS;

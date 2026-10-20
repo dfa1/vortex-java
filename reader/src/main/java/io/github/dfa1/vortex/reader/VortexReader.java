@@ -54,10 +54,22 @@ public final class VortexReader implements VortexHandle {
 
     /// Open a Vortex file. Memory-maps the entire file; all subsequent reads
     /// are zero-copy slices. Call [#close()] when done.
+    ///
+    /// @param path the file to open
+    /// @return a reader over the memory-mapped file
+    /// @throws IOException if the file cannot be read or is not a valid Vortex file
     public static VortexReader open(Path path) throws IOException {
         return open(path, ReadRegistry.loadAll());
     }
 
+    /// Opens a Vortex file with the given encoding registry and the default layouts.
+    /// Memory-maps the entire file; all subsequent reads are zero-copy slices. Call [#close()]
+    /// when done.
+    ///
+    /// @param path     the file to open
+    /// @param registry decoders for the encodings in the file
+    /// @return a reader over the memory-mapped file
+    /// @throws IOException if the file cannot be read or is not a valid Vortex file
     public static VortexReader open(Path path, ReadRegistry registry) throws IOException {
         return open(path, registry, LayoutRegistry.defaults());
     }
@@ -233,6 +245,8 @@ public final class VortexReader implements VortexHandle {
     /// Folds the column's per-zone statistics ([ScanIterator#columnZoneStats(ColumnName)]), which for a
     /// global-dictionary column is the only place its values' min/max live — the flat nodes under
     /// the zone map hold dictionary codes, whose own min/max describe the codes, not the values.
+    ///
+    /// @return the statistics of each top-level column, keyed by column name
     public Map<ColumnName, ArrayStats> columnStats() {
         if (!layout.isStruct() || !(dtype instanceof DType.Struct schema)) {
             return Map.of();

@@ -26,6 +26,10 @@ public final class ParquetVariantEncodingDecoder implements EncodingDecoder {
 
     private static final DType BINARY = new DType.Binary(false);
 
+    /// Creates the decoder.
+    public ParquetVariantEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_PARQUET_VARIANT;

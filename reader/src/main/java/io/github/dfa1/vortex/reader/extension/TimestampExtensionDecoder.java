@@ -23,6 +23,9 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder<Instant
     /// Singleton instance.
     public static final TimestampExtensionDecoder INSTANCE = new TimestampExtensionDecoder();
 
+    private TimestampExtensionDecoder() {
+    }
+
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_TIMESTAMP;

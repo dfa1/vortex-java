@@ -17,6 +17,10 @@ import java.util.List;
 /// Read-only decoder for `vortex.variant`.
 public final class VariantEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public VariantEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_VARIANT;

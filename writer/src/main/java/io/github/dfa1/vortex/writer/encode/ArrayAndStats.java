@@ -32,6 +32,8 @@ public final class ArrayAndStats {
         this.options = options;
     }
 
+    /// Returns the array the statistics describe.
+    ///
     /// @return the input array
     public Object data() {
         return data;

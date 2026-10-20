@@ -15,6 +15,10 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.varbin`.
 public final class VarBinEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public VarBinEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_VARBIN;

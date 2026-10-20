@@ -20,6 +20,10 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
     private static final int WIDEN_BLOCK = 1024;
 
 
+    /// Creates the encoder.
+    public SequenceEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_SEQUENCE;

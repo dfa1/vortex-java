@@ -27,6 +27,10 @@ import java.util.List;
 /// array of constant variant scalars under the canonical variant array.
 public final class VariantEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public VariantEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_VARIANT;

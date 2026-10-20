@@ -25,6 +25,10 @@ import java.lang.foreign.ValueLayout;
 /// ([FastLanes#CHUNK] elements, cache-resident) and reused across chunks.
 public final class DeltaEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public DeltaEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_DELTA;

@@ -34,6 +34,10 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             new BitpackedEncodingEncoder(),
             new PrimitiveEncodingEncoder());
 
+    /// Creates the encoder.
+    public SparseEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_SPARSE;

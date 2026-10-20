@@ -11,6 +11,10 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 /// Read-only decoder for `vortex.fixed_size_list`.
 public final class FixedSizeListEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public FixedSizeListEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_FIXED_SIZE_LIST;

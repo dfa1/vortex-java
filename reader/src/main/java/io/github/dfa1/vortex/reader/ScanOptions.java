@@ -97,16 +97,22 @@ public final class ScanOptions {
         return new ScanOptions(columns, filter, limit);
     }
 
+    /// Reports whether the scan reads a subset of the columns.
+    ///
     /// @return `true` if a column projection is set
     public boolean hasProjection() {
         return !columns.isEmpty();
     }
 
+    /// Reports whether the scan prunes chunks with a zone-map filter.
+    ///
     /// @return `true` if a zone-map filter is set
     public boolean hasFilter() {
         return rowFilter != null;
     }
 
+    /// Reports whether the scan stops after a number of rows.
+    ///
     /// @return `true` if a row limit is set
     public boolean hasLimit() {
         return limit != NO_LIMIT;

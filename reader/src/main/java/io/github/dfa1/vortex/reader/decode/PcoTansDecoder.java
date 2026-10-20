@@ -11,7 +11,7 @@ import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 ///
 /// Build via [#build(int, PcoBin[])]; then call [#decodePage] once per page.
 /// Port of `pco/src/ans/spec.rs` (spread) and `pco/src/ans/decoding.rs` (nodes).
-public final class PcoTansDecoder {
+final class PcoTansDecoder {
 
     public static final int BATCH_N = 256;
     public static final int ANS_INTERLEAVING = 4;

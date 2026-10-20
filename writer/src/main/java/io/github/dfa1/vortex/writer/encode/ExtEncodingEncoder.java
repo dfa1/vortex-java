@@ -15,6 +15,10 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
             new PrimitiveEncodingEncoder(),
             new FixedSizeListEncodingEncoder());
 
+    /// Creates the encoder.
+    public ExtEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_EXT;

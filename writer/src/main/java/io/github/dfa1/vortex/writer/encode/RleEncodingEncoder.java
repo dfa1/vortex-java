@@ -25,6 +25,10 @@ public final class RleEncodingEncoder implements EncodingEncoder {
     /// integer and float RLE schemes.
     private static final long RUN_LENGTH_THRESHOLD = 4;
 
+    /// Creates the encoder.
+    public RleEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_RLE;

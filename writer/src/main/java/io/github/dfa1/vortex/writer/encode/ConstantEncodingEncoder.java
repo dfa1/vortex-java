@@ -14,6 +14,10 @@ import java.util.OptionalLong;
 /// Write-only encoder for `vortex.constant`.
 public final class ConstantEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public ConstantEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_CONSTANT;

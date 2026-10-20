@@ -30,6 +30,10 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     static final boolean ZSTD_BINDING_PRESENT =
             bindingPresent("io.github.dfa1.zstd.ZstdDecompressContext");
 
+    /// Creates the decoder.
+    public ZstdEncodingDecoder() {
+    }
+
     /// Reports whether the named binding class is loadable — package-private and
     /// class-name-parameterized so both branches are unit-testable without the binding
     /// having to actually be absent from the classpath.

@@ -37,6 +37,10 @@ public final class OnPairEncodingDecoder implements EncodingDecoder {
     private static final int MAX_TOKEN_SIZE = 16;
     private static final VarHandle LE_LONG = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
 
+    /// Creates the decoder.
+    public OnPairEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return ID;

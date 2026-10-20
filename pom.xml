@@ -61,6 +61,9 @@
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Javadoc lint groups. Unpublished modules (benchmarks, demos, code generators) override
+             this with all,-missing: undocumented members are fine there, broken references are not. -->
+        <javadoc.doclint>all</javadoc.doclint>
         <!-- production -->
         <zstd.version>0.15</zstd.version>
 
@@ -451,16 +454,14 @@
                     <version>${maven-javadoc-plugin.version}</version>
                     <configuration>
                         <excludePackageNames>io.github.dfa1.vortex.core.fbs:io.github.dfa1.vortex.core.proto</excludePackageNames>
-                        <!-- A dangling [Type#member] reference is a build failure: it means a
-                             refactor renamed or moved something and left the docs pointing at a
-                             type that no longer exists. Four such phantoms accumulated before
-                             this was enforced. Warnings (missing @param, undocumented default
-                             constructors) stay non-fatal for now — 313 of them predate this,
-                             concentrated in performance/reader/writer/fbs-gen/csv. Modules that
-                             are already warning-free raise failOnWarnings in their own POM to
-                             stop the count creeping back up. -->
+                        <!-- Errors and warnings both fail the build. A dangling [Type#member]
+                             reference means a refactor left the docs pointing at a type that no
+                             longer exists; a warning (missing @param, undocumented default
+                             constructor) is undocumented public API. Note the plugin skips a
+                             module whose sources are unchanged, so a stale build may not print them. -->
                         <failOnError>true</failOnError>
-                        <failOnWarnings>false</failOnWarnings>
+                        <failOnWarnings>true</failOnWarnings>
+                        <doclint>${javadoc.doclint}</doclint>
                     </configuration>
                     <executions>
                         <execution>

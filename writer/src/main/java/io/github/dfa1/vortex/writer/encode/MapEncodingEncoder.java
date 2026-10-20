@@ -13,6 +13,10 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 /// wrapper — the Rust reference rejects any entries child that is not a bare `vortex.listview`.
 public final class MapEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public MapEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_MAP;

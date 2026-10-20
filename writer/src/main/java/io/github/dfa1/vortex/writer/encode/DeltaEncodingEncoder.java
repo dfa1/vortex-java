@@ -16,6 +16,10 @@ import java.util.Set;
 /// Write-only encoder for `fastlanes.delta`.
 public final class DeltaEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public DeltaEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_DELTA;

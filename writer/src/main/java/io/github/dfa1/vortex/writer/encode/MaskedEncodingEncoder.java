@@ -30,6 +30,10 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
             new ListEncodingEncoder(),
             new DecimalEncodingEncoder());
 
+    /// Creates the encoder.
+    public MaskedEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_MASKED;

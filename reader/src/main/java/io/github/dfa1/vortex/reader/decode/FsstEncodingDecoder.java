@@ -26,6 +26,10 @@ import java.lang.foreign.ValueLayout;
 /// read (ADR 0026). No decompression happens here.
 public final class FsstEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public FsstEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_FSST;

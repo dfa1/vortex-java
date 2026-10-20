@@ -23,6 +23,7 @@
              release profile and runs regardless, with its own skip switch (see 74780aa3). -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <skipPublishing>true</skipPublishing>
+        <javadoc.doclint>all,-missing</javadoc.doclint>
         <!-- Demo/presentation tooling: main(String[] args) and a CLI argument parser dominate
              the Sonar findings here with no library-quality signal, same rationale as
              vortex-performance. -->

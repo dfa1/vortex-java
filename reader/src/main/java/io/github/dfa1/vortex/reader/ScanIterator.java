@@ -135,7 +135,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private record CachedFlat(Arena arena, Array array) {
     }
 
-    public ScanIterator(VortexHandle file, ScanOptions options) {
+    ScanIterator(VortexHandle file, ScanOptions options) {
         this.file = file;
         this.options = options;
     }

@@ -27,6 +27,10 @@ public final class ZstdBuffersEncodingDecoder implements EncodingDecoder {
     // value from turning a small buffer into a huge aligned allocation. Raise it if Rust ever does.
     private static final long MAX_ALIGNMENT = 1L << 16;
 
+    /// Creates the decoder.
+    public ZstdBuffersEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ZSTD_BUFFERS;

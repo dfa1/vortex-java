@@ -12,6 +12,10 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.bytebool` — one byte per boolean, read in place.
 public final class ByteBoolEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public ByteBoolEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_BYTEBOOL;

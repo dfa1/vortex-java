@@ -8,6 +8,10 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 /// Read-only decoder for `vortex.ext` — unwraps the storage-array child.
 public final class ExtEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public ExtEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_EXT;

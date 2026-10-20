@@ -17,6 +17,10 @@ import java.util.List;
 /// `vortex.union` is in no edition, so the writer never emits it; this is the read side only.
 public final class UnionEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public UnionEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_UNION;

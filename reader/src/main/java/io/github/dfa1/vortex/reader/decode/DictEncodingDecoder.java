@@ -48,6 +48,10 @@ import java.util.Optional;
 /// zero-element child would make that wrap divide by zero, so it is still rejected up front.
 public final class DictEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public DictEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DICT;

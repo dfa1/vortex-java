@@ -30,6 +30,10 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
     /// input dtype, so without this the cascade could patch the patches.
     private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_PATCHED);
 
+    /// Creates the encoder.
+    public PatchedEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_PATCHED;

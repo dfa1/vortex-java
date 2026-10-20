@@ -16,6 +16,10 @@ public final class ChunkedEncodingEncoder implements EncodingEncoder {
             new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(), new BoolEncodingEncoder(),
             new NullEncodingEncoder(), new ByteBoolEncodingEncoder(), new StructEncodingEncoder());
 
+    /// Creates the encoder.
+    public ChunkedEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_CHUNKED;

@@ -27,6 +27,10 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.runend`.
 public final class RunEndEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public RunEndEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_RUNEND;

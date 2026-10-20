@@ -15,6 +15,10 @@ public final class StructEncodingEncoder implements EncodingEncoder {
             new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(), new BoolEncodingEncoder(),
             new NullEncodingEncoder(), new ByteBoolEncodingEncoder());
 
+    /// Creates the encoder.
+    public StructEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_STRUCT;

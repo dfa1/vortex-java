@@ -16,6 +16,10 @@ public final class FixedSizeListEncodingEncoder implements EncodingEncoder {
             new NullEncodingEncoder(), new ByteBoolEncodingEncoder(), new StructEncodingEncoder(),
             new FixedSizeListEncodingEncoder(), new ListEncodingEncoder());
 
+    /// Creates the encoder.
+    public FixedSizeListEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_FIXED_SIZE_LIST;

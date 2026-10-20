@@ -26,6 +26,10 @@ import java.nio.charset.StandardCharsets;
 /// Read-only decoder for `vortex.constant`.
 public final class ConstantEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public ConstantEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_CONSTANT;

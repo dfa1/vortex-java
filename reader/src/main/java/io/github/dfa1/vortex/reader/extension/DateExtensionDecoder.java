@@ -22,6 +22,9 @@ public final class DateExtensionDecoder implements ExtensionDecoder<LocalDate> {
 
     private static final long MILLIS_PER_DAY = 86_400_000L;
 
+    private DateExtensionDecoder() {
+    }
+
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_DATE;

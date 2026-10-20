@@ -16,6 +16,9 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
     /// Singleton instance.
     public static final UuidExtensionEncoder INSTANCE = new UuidExtensionEncoder();
 
+    private UuidExtensionEncoder() {
+    }
+
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_UUID;

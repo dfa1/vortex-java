@@ -57,10 +57,21 @@ public final class ParquetImporter {
     private ParquetImporter() {
     }
 
+    /// Imports a Parquet file into a Vortex file with the default options.
+    ///
+    /// @param parquetPath the Parquet file to read
+    /// @param vortexPath  the Vortex file to write
+    /// @throws IOException if either file cannot be read or written
     public static void importParquet(Path parquetPath, Path vortexPath) throws IOException {
         importParquet(parquetPath, vortexPath, ImportOptions.defaults());
     }
 
+    /// Imports a Parquet file into a Vortex file.
+    ///
+    /// @param parquetPath the Parquet file to read
+    /// @param vortexPath  the Vortex file to write
+    /// @param options     column projection, chunk size, progress listener and write options
+    /// @throws IOException if either file cannot be read or written
     public static void importParquet(Path parquetPath, Path vortexPath, ImportOptions options) throws IOException {
         importParquet(InputFile.of(parquetPath), parquetPath.toString(), vortexPath, options);
     }

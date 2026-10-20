@@ -18,6 +18,10 @@ import java.util.List;
 /// Write-only encoder for `vortex.varbin`.
 public final class VarBinEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public VarBinEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_VARBIN;

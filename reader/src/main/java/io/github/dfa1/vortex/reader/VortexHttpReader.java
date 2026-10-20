@@ -68,10 +68,21 @@ public final class VortexHttpReader implements VortexHandle {
         this.layoutRegistry = layoutRegistry;
     }
 
+    /// Opens a remote Vortex file with the default encoding registry and HTTP client.
+    ///
+    /// @param uri the file's URL; the server must honor HTTP `Range` requests
+    /// @return a handle reading the file through HTTP range requests
+    /// @throws IOException if the request fails or the file is not a valid Vortex file
     public static VortexHttpReader open(URI uri) throws IOException {
         return open(uri, ReadRegistry.loadAll());
     }
 
+    /// Opens a remote Vortex file with the given encoding registry and the default HTTP client.
+    ///
+    /// @param uri      the file's URL; the server must honor HTTP `Range` requests
+    /// @param registry decoders for the encodings in the file
+    /// @return a handle reading the file through HTTP range requests
+    /// @throws IOException if the request fails or the file is not a valid Vortex file
     public static VortexHttpReader open(URI uri, ReadRegistry registry) throws IOException {
         return open(uri, registry, defaultHttpClient);
     }

@@ -23,6 +23,10 @@ import java.util.List;
 /// Write-only encoder for `fastlanes.bitpacked`.
 public final class BitpackedEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public BitpackedEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_BITPACKED;

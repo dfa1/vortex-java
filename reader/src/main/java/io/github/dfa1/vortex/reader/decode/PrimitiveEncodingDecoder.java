@@ -13,6 +13,10 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.primitive` — raw little-endian primitive arrays.
 public final class PrimitiveEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public PrimitiveEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_PRIMITIVE;

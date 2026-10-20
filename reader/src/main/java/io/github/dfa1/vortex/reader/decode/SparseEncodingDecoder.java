@@ -43,6 +43,10 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
     /// `role` argument naming the patch values child, for error messages.
     private static final String ROLE_VALUES = "values";
 
+    /// Creates the decoder.
+    public SparseEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_SPARSE;

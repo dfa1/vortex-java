@@ -342,6 +342,8 @@ public record ArrayStats(
         return 63 - Long.numberOfLeadingZeros(unsigned);
     }
 
+    /// Reports whether the distinct count is available.
+    ///
     /// @return whether [#distinctCount()] was computed during this scan
     public boolean hasDistinctCount() {
         return distinctCount >= 0;

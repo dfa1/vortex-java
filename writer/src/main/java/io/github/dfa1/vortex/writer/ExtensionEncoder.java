@@ -15,9 +15,13 @@ import java.util.Collection;
 /// An extension id with no registered encoder can still be written from its storage array.
 public interface ExtensionEncoder {
 
+    /// Returns the identity of this extension.
+    ///
     /// @return the spec identity of this extension
     ExtensionId extensionId();
 
+    /// Returns the extension dtype this encoder writes, with the given nullability.
+    ///
     /// @param nullable whether the column allows nulls
     /// @return matching [DType.Extension] (storage dtype + default metadata)
     DType.Extension dtype(boolean nullable);

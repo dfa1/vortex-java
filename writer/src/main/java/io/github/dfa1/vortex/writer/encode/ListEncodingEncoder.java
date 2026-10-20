@@ -22,6 +22,10 @@ public final class ListEncodingEncoder implements EncodingEncoder {
             new NullEncodingEncoder(), new ByteBoolEncodingEncoder(), new StructEncodingEncoder(),
             new FixedSizeListEncodingEncoder(), new ListEncodingEncoder());
 
+    /// Creates the encoder.
+    public ListEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_LIST;

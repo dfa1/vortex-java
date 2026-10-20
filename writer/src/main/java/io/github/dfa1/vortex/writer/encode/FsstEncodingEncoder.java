@@ -45,6 +45,10 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// always trains the same symbol table and produces byte-identical output.
     private static final long TRAINING_SAMPLE_SEED = 0x5EEDL;
 
+    /// Creates the encoder.
+    public FsstEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_FSST;

@@ -23,6 +23,10 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
     /// `offset` carried in the metadata.
     private static final int FL_BLOCK_SIZE = 1024;
 
+    /// Creates the decoder.
+    public BitpackedEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_BITPACKED;

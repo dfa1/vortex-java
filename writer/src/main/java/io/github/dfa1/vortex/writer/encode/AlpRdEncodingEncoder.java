@@ -25,6 +25,10 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     private static final int MAX_CUT = 16;
     private static final int MAX_DICT_SIZE = 8;
 
+    /// Creates the encoder.
+    public AlpRdEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ALPRD;

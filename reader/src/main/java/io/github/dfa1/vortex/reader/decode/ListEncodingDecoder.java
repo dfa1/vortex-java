@@ -16,6 +16,10 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.list`.
 public final class ListEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public ListEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_LIST;

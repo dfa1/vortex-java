@@ -14,6 +14,10 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.decimal`.
 public final class DecimalEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public DecimalEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DECIMAL;

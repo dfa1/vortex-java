@@ -22,6 +22,10 @@ import java.lang.foreign.ValueLayout;
 /// Read-only decoder for `vortex.zigzag` — zigzag-decoded signed integers.
 public final class ZigZagEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public ZigZagEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ZIGZAG;

@@ -18,6 +18,9 @@ public final class DateExtensionEncoder implements ExtensionEncoder {
     /// Singleton instance.
     public static final DateExtensionEncoder INSTANCE = new DateExtensionEncoder();
 
+    private DateExtensionEncoder() {
+    }
+
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_DATE;

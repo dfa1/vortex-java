@@ -15,6 +15,10 @@ import java.util.OptionalLong;
 /// Write-only encoder for `vortex.primitive` — raw little-endian primitive arrays.
 public final class PrimitiveEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public PrimitiveEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_PRIMITIVE;

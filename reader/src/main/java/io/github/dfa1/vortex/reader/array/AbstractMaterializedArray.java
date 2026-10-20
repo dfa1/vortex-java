@@ -41,10 +41,16 @@ abstract class AbstractMaterializedArray {
         };
     }
 
+    /// Returns the logical type of the elements.
+    ///
+    /// @return the element dtype
     public final DType dtype() {
         return dtype;
     }
 
+    /// Returns the number of logical rows.
+    ///
+    /// @return the row count
     public final long length() {
         return length;
     }
@@ -59,6 +65,9 @@ abstract class AbstractMaterializedArray {
         return buffer;
     }
 
+    /// Returns the backing buffer, which is always present for a materialized array.
+    ///
+    /// @return the backing segment
     public final Optional<MemorySegment> segmentIfPresent() {
         return Optional.of(buffer);
     }

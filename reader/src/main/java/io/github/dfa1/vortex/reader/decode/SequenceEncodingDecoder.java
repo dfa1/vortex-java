@@ -25,6 +25,10 @@ import java.lang.foreign.MemorySegment;
 /// Nothing is allocated, whatever the row count.
 public final class SequenceEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public SequenceEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_SEQUENCE;

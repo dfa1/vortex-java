@@ -10,6 +10,10 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 /// Read-only decoder for `vortex.masked` — payload child + optional validity bitmap child.
 public final class MaskedEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public MaskedEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_MASKED;

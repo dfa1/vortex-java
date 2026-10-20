@@ -26,6 +26,9 @@ public final class VortexCli {
     /// decoder, reading those columns as their storage (`ReadRegistry.Builder#allowUnknown()`).
     private static final String ALLOW_UNKNOWN_FLAG = "--allow-unknown";
 
+    /// Runs the command named by `args` and exits the JVM with its [ExitStatus].
+    ///
+    /// @param args the command and its arguments
     public static void main(String[] args) {
         System.exit(execute(args));
     }

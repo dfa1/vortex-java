@@ -8,6 +8,10 @@ import java.util.List;
 /// Write-only encoder for `vortex.null` (all-null arrays).
 public final class NullEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public NullEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_NULL;

@@ -15,6 +15,10 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.decimal_byte_parts`.
 public final class DecimalBytePartsEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public DecimalBytePartsEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DECIMAL_BYTE_PARTS;

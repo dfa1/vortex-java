@@ -9,7 +9,7 @@ import java.lang.foreign.ValueLayout;
 ///
 /// Bits are packed LSB-first within each byte (pcodec wire format convention).
 /// Bit 0 of the stream is the LSB of byte 0; bit 8 is the LSB of byte 1.
-public final class LeBitReader {
+final class LeBitReader {
 
     private static final ValueLayout.OfByte BYTE = ValueLayout.JAVA_BYTE;
 

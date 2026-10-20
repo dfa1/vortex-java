@@ -17,6 +17,10 @@ import java.util.Set;
 /// Write-only encoder for `vortex.zigzag` — signed integers as zigzag-encoded unsigned values.
 public final class ZigZagEncodingEncoder implements EncodingEncoder {
 
+    /// Creates the encoder.
+    public ZigZagEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ZIGZAG;

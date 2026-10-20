@@ -42,6 +42,10 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     private static final int PATCH_BYTES_F64 = Double.BYTES + Short.BYTES;
     private static final int PATCH_BYTES_F32 = Float.BYTES + Short.BYTES;
 
+    /// Creates the encoder.
+    public AlpEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ALP;

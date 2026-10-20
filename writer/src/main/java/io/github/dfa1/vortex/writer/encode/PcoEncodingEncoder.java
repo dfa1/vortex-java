@@ -43,6 +43,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
     private static final int CLASSIC_MODE_MAX_BITS = 4;
     private static final int DELTA_ENCODING_MAX_BITS = 4 + 5 + 5 + 64 + 32 * 32;
 
+    /// Creates the encoder.
+    public PcoEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_PCO;

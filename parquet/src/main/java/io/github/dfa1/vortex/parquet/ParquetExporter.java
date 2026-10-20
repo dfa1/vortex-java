@@ -62,10 +62,21 @@ public final class ParquetExporter {
     private ParquetExporter() {
     }
 
+    /// Exports a Vortex file to a Parquet file with the default options.
+    ///
+    /// @param vortexPath  the Vortex file to read
+    /// @param parquetPath the Parquet file to write
+    /// @throws IOException if either file cannot be read or written
     public static void exportParquet(Path vortexPath, Path parquetPath) throws IOException {
         exportParquet(vortexPath, parquetPath, ExportOptions.defaults());
     }
 
+    /// Exports a Vortex file to a Parquet file.
+    ///
+    /// @param vortexPath  the Vortex file to read
+    /// @param parquetPath the Parquet file to write
+    /// @param options     column projection, progress listener and Parquet writer settings
+    /// @throws IOException if either file cannot be read or written
     public static void exportParquet(Path vortexPath, Path parquetPath, ExportOptions options) throws IOException {
         try (VortexReader reader = VortexReader.open(vortexPath)) {
             exportParquet(reader, parquetPath, options);

@@ -24,6 +24,10 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     private static final io.github.dfa1.vortex.core.proto.ProtoPType I64_PROTO =
             io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal());
 
+    /// Creates the encoder.
+    public DateTimePartsEncodingEncoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DATETIMEPARTS;

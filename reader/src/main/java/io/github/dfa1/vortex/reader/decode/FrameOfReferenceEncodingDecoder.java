@@ -21,6 +21,10 @@ import java.lang.foreign.ValueLayout;
 /// Read-only decoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
+    /// Creates the decoder.
+    public FrameOfReferenceEncodingDecoder() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_FOR;
