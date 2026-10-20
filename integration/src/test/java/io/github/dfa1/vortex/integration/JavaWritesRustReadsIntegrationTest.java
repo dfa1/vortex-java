@@ -979,9 +979,16 @@ class JavaWritesRustReadsIntegrationTest {
         // When
         List<Object> result = readColumnFiltered(file, "k", Expression.binary(Expression.BinaryOp.EQ,
                 Expression.column("k"), Expression.literal(target)));
+        io.github.dfa1.vortex.reader.ArrayStats stats;
+        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file)) {
+            stats = reader.columnStats().get(ColumnName.of("k"));
+        }
 
-        // Then
+        // Then — vortex-jni accepts the flat stats' precision fields, and the column's min/max are
+        // the full keys: only the zone map truncates, so SQL MIN/MAX may answer from these stats.
         assertThat(result).extracting(Object::toString).containsExactly(target);
+        assertThat(stats.min()).isEqualTo(prefix + String.format("%08d", 0));
+        assertThat(stats.max()).isEqualTo(prefix + String.format("%08d", 3 * batch - 1));
     }
 
     @Test

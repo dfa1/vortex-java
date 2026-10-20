@@ -347,12 +347,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                     fold.keptRows += zone.rowCount();
                     if (aggColumn != null) {
                         ArrayStats stats = zoneStats.get(aggColumn).get(z);
-                        // a zone with values but no min/max stat (a string zone holds only bounds)
-                        // leaves the extreme unknown, rather than silently ignored
+                        // a zone with values but no exact min/max stat (a string zone holds only
+                        // bounds) leaves the extreme unknown, rather than silently ignored
                         boolean hasValues = stats.nullCount() == null || stats.nullCount() < zone.rowCount();
                         fold.addSum(stats.sum());
-                        fold.addMin(stats.min(), hasValues);
-                        fold.addMax(stats.max(), hasValues);
+                        fold.addMin(stats.minExact() ? stats.min() : null, hasValues);
+                        fold.addMax(stats.maxExact() ? stats.max() : null, hasValues);
                         fold.addNulls(stats.nullCount());
                     }
                 }
@@ -1170,7 +1170,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 if (compareStat(value, s.min()) < 0 || compareStat(value, s.max()) > 0) {
                     yield Match.OUT; // the value lies outside the zone's range
                 }
-                if (compareStat(s.min(), s.max()) == 0 && compareStat(s.min(), value) == 0 && noNulls(s)) {
+                if (exactBounds(s) && compareStat(s.min(), s.max()) == 0 && compareStat(s.min(), value) == 0
+                        && noNulls(s)) {
                     yield Match.IN; // every row equals the value
                 }
                 yield Match.BOUNDARY;
@@ -1179,7 +1180,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 if (uncomparable(s, value)) {
                     yield Match.BOUNDARY;
                 }
-                if (compareStat(s.min(), s.max()) == 0 && compareStat(s.min(), value) == 0) {
+                if (exactBounds(s) && compareStat(s.min(), s.max()) == 0 && compareStat(s.min(), value) == 0) {
                     yield Match.OUT; // every row equals the value, so none differ
                 }
                 if ((compareStat(value, s.min()) < 0 || compareStat(value, s.max()) > 0) && noNulls(s)) {
@@ -1279,6 +1280,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     private static boolean uncomparable(ArrayStats s, Object value) {
         return s.min() == null || s.max() == null || value == null
                 || value instanceof Number != s.min() instanceof Number;
+    }
+
+    /// Whether the zone's min and max are its exact extremes: an inexact bound only brackets the
+    /// values, which is enough to rule a range in or out but not to prove `min == max`.
+    private static boolean exactBounds(ArrayStats s) {
+        return s.minExact() && s.maxExact();
     }
 
     /// Whether the zone provably carries no nulls (its null count is recorded and zero).

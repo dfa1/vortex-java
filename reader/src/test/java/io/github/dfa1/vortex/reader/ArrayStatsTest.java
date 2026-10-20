@@ -220,7 +220,56 @@ class ArrayStatsTest {
             ArrayStats result = ArrayStats.fromFbs(fbs);
 
             // Then
-            assertThat(result).isEqualTo(new ArrayStats(null, null, 12L, true, false, false, 0L, 800L, 0L));
+            assertThat(result).isEqualTo(
+                    new ArrayStats(null, false, null, false, 12L, true, false, false, 0L, 800L, 0L));
+        }
+
+        @Test
+        void exactPrecision_marksBoundsExact() {
+            // Given
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs = buildFbs(
+                    ProtoScalarValue.ofStringValue("alpha").encode(),
+                    ProtoScalarValue.ofStringValue("omega").encode(),
+                    (int) io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
+
+            // When
+            ArrayStats result = ArrayStats.fromFbs(fbs);
+
+            // Then
+            assertThat(result.minExact()).isTrue();
+            assertThat(result.maxExact()).isTrue();
+        }
+
+        @Test
+        void absentPrecision_readsInexact() {
+            // Given — no precision written: the FlatBuffer default is Inexact, as Rust reads it. A
+            // truncated 64-byte string bound must not be reported as the column's real MAX.
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs = buildFbs(
+                    ProtoScalarValue.ofStringValue("alpha").encode(),
+                    ProtoScalarValue.ofStringValue("omega").encode());
+
+            // When
+            ArrayStats result = ArrayStats.fromFbs(fbs);
+
+            // Then
+            assertThat(result.min()).isEqualTo("alpha");
+            assertThat(result.minExact()).isFalse();
+            assertThat(result.max()).isEqualTo("omega");
+            assertThat(result.maxExact()).isFalse();
+        }
+
+        @Test
+        void corruptedPrecision_throwsVortexException() {
+            // Given — only Inexact (0) and Exact (1) exist; Rust bails on anything else
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs = buildFbs(
+                    ProtoScalarValue.ofInt64Value(1L).encode(),
+                    ProtoScalarValue.ofInt64Value(2L).encode(),
+                    2);
+
+            // When / Then
+            assertThatThrownBy(() -> ArrayStats.fromFbs(fbs))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("corrupted min_precision");
         }
 
         @Test
@@ -236,6 +285,12 @@ class ArrayStatsTest {
     }
 
     private static io.github.dfa1.vortex.core.fbs.FbsArrayStats buildFbs(byte[] minBytes, byte[] maxBytes) {
+        return buildFbs(minBytes, maxBytes, null);
+    }
+
+    /// `precision` is written to both `min_precision` and `max_precision`, or left absent when `null`.
+    private static io.github.dfa1.vortex.core.fbs.FbsArrayStats buildFbs(byte[] minBytes, byte[] maxBytes,
+                                                                         Integer precision) {
         FbsBuilder b = new FbsBuilder(64);
         int minOff = minBytes == null ? 0 : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(b, minBytes);
         int maxOff = maxBytes == null ? 0 : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMaxVector(b, maxBytes);
@@ -245,6 +300,10 @@ class ArrayStatsTest {
         }
         if (maxBytes != null) {
             io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMax(b, maxOff);
+        }
+        if (precision != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMinPrecision(b, precision);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMaxPrecision(b, precision);
         }
         int root = io.github.dfa1.vortex.core.fbs.FbsArrayStats.endFbsArrayStats(b);
         b.finish(root);

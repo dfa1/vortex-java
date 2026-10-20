@@ -227,6 +227,9 @@ public final class VortexReader implements VortexHandle {
     /// Returns an empty map if the root layout is not a struct.
     /// Columns with no embedded stats return [ArrayStats#empty()].
     ///
+    /// Min/max are the exact extremes or `null`: a column whose stats only bound its values (an
+    /// inexact `min`/`max`) reports no min/max rather than a bound.
+    ///
     /// Folds the column's per-zone statistics ([ScanIterator#columnZoneStats(ColumnName)]), which for a
     /// global-dictionary column is the only place its values' min/max live — the flat nodes under
     /// the zone map hold dictionary codes, whose own min/max describe the codes, not the values.
@@ -239,12 +242,15 @@ public final class VortexReader implements VortexHandle {
             for (ColumnName name : schema.fieldNames()) {
                 DType column = schema.fieldTypes().get(schema.fieldNames().indexOf(name));
                 ArrayStats stats = aggregateStats(iter.columnZoneStats(name), column);
-                if (stats.min() == null && stats.max() == null) {
-                    // A string zone map holds only bounds (Rust's bounded_max/bounded_min), which
-                    // are not exact: take min/max from the chunks' own array stats instead.
-                    ArrayStats exact = aggregateStats(iter.chunkStats(name), column);
+                if (!stats.minExact() || !stats.maxExact()) {
+                    // A zone map may hold only bounds (a string's bounded_max/bounded_min, or a
+                    // legacy truncated min/max): take the extreme from the chunks' own array stats
+                    // instead, and report none when those are not exact either.
+                    ArrayStats chunks = aggregateStats(iter.chunkStats(name), column);
+                    Object min = stats.minExact() ? stats.min() : chunks.minExact() ? chunks.min() : null;
+                    Object max = stats.maxExact() ? stats.max() : chunks.maxExact() ? chunks.max() : null;
                     // aggregateStats folds only min/max/null count, the rest is always null.
-                    stats = new ArrayStats(exact.min(), exact.max(), null, null, null, null,
+                    stats = new ArrayStats(min, min != null, max, max != null, null, null, null, null,
                             stats.nullCount(), null, null);
                 }
                 result.put(name, stats);
@@ -256,6 +262,10 @@ public final class VortexReader implements VortexHandle {
     private ArrayStats aggregateStats(List<ArrayStats> zones, DType column) {
         Object globalMin = null;
         Object globalMax = null;
+        // The fold is exact only when every bound it took is: one inexact zone may hide its true
+        // extreme past the others'.
+        boolean minExact = true;
+        boolean maxExact = true;
         // Null count is meaningful only when every chunk carries it; one missing makes the column
         // total unknown (null), so don't report a partial count.
         long totalNullCount = 0L;
@@ -263,9 +273,11 @@ public final class VortexReader implements VortexHandle {
         for (ArrayStats s : zones) {
             if (s.min() != null) {
                 globalMin = globalMin == null ? s.min() : minOf(globalMin, s.min(), column);
+                minExact &= s.minExact();
             }
             if (s.max() != null) {
                 globalMax = globalMax == null ? s.max() : maxOf(globalMax, s.max(), column);
+                maxExact &= s.maxExact();
             }
             if (s.nullCount() != null) {
                 totalNullCount += s.nullCount();
@@ -279,7 +291,8 @@ public final class VortexReader implements VortexHandle {
         }
         // Sum is left null at the file level: it lives in the per-zone stats table, surfaced by
         // ScanIterator.columnZoneStats rather than folded here.
-        return new ArrayStats(globalMin, globalMax, null, null, null, null, nullCount, null, null);
+        return new ArrayStats(globalMin, globalMin != null && minExact, globalMax, globalMax != null && maxExact,
+                null, null, null, null, nullCount, null, null);
     }
 
     @Override

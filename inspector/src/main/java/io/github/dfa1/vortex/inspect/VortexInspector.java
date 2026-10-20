@@ -103,7 +103,8 @@ public final class VortexInspector {
         if (min == null && max == null) {
             return ArrayStats.empty();
         }
-        return new ArrayStats(min, max, null, null, null, null, null, null, null);
+        // display-only fold: precision is not tracked, so the bounds are not claimed exact
+        return new ArrayStats(min, false, max, false, null, null, null, null, null, null, null);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

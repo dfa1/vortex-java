@@ -578,6 +578,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             Array sumA = fieldOrNull(table, ZonedStatsSchema.Stat.SUM.fieldName());
             Array nullCountA = fieldOrNull(table, ZonedStatsSchema.Stat.NULL_COUNT.fieldName());
             Array nanCountA = fieldOrNull(table, ZonedStatsSchema.Stat.NAN_COUNT.fieldName());
+            // A legacy vortex.stats MIN/MAX is truncated (inexact) where its flag says so; a
+            // vortex.zoned MIN/MAX is exact, and a bounded_min/bounded_max only ever a bound.
+            Array minTruncatedA = fieldOrNull(table, ZonedStatsSchema.Stat.MIN_IS_TRUNCATED);
+            Array maxTruncatedA = fieldOrNull(table, ZonedStatsSchema.Stat.MAX_IS_TRUNCATED);
             // Not pre-sized from nZones: it is bounded above only by Integer.MAX_VALUE (see the
             // guard above), and a single ArrayList allocation at that scale is itself an
             // OutOfMemoryError vector the security contract forbids. Growing incrementally keeps
@@ -586,9 +590,13 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             for (long i = 0; i < nZones; i++) {
                 Object nullCount = boxedScalar(nullCountA, i);
                 Object nanCount = boxedScalar(nanCountA, i);
+                Object min = minA != null ? boxedScalar(minA, i) : boxedScalar(boundedMinA, i);
+                Object max = maxA != null ? boxedScalar(maxA, i) : boundedMaxScalar(boundedMaxA, i);
                 out.add(new ArrayStats(
-                        minA != null ? boxedScalar(minA, i) : boxedScalar(boundedMinA, i),
-                        maxA != null ? boxedScalar(maxA, i) : boundedMaxScalar(boundedMaxA, i),
+                        min,
+                        min != null && minA != null && !Boolean.TRUE.equals(boxedScalar(minTruncatedA, i)),
+                        max,
+                        max != null && maxA != null && !Boolean.TRUE.equals(boxedScalar(maxTruncatedA, i)),
                         boxedScalar(sumA, i),
                         null, null, null,
                         nullCount == null ? null : ((Number) nullCount).longValue(),
@@ -1267,7 +1275,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     && (Compare.values(v, min, ct) < 0 || Compare.values(v, max, ct) > 0);
             // Every row equals val (min == max == val) and no nulls → no row differs. A null row is
             // neither = nor != val under three-valued logic, so require a provably null-free chunk.
-            case Predicate.Neq(var v) -> min != null && max != null
+            // Inexact bounds only bracket the values, so min == max proves nothing without both exact.
+            case Predicate.Neq(var v) -> min != null && max != null && stats.minExact() && stats.maxExact()
                     && nullCount != null && nullCount == 0
                     && Compare.values(v, min, ct) == 0 && Compare.values(v, max, ct) == 0;
             // max <= val → no row is > val.

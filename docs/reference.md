@@ -105,7 +105,7 @@ all `Array` buffers obtained during scans become invalid.
 | `version()`                           | `int`                     | File format version                           |
 | `fileSize()`                          | `long`                    | File size in bytes                            |
 | `scan(ScanOptions)`                   | `ScanIterator`            | Open a scan                                   |
-| `columnStats()`                       | `Map<ColumnName, ArrayStats>` | Aggregated min/max per column             |
+| `columnStats()`                       | `Map<ColumnName, ArrayStats>` | Exact min/max per column (`null` when only a bound is known) |
 | `slice(offset, length)`               | `MemorySegment`           | Zero-copy slice of mmap region                |
 | `close()`                             | —                         | Releases mmap                                 |
 
