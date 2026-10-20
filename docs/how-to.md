@@ -643,6 +643,11 @@ select close, open from vtx.ohlc where `date` > 20000 limit 100;
   other reserved words such as `close`, `open` and `value` work unquoted.
 - **Filters and `LIMIT` are cheap.** A `WHERE` on a clustered column skips whole chunks using the
   files' zone maps, and the data grid only reads the page it shows.
+- **Low-cardinality string columns filter fastest.** A `WHERE symbol = 'AAPL'` (or `IN`, `<>`, a
+  range) on a dictionary-encoded column is decided once per distinct value, then only the matching
+  rows are read; a value missing from the dictionary returns at once, without reading the rows.
+- **`ORDER BY ... LIMIT` does not sort the table.** The first rows are kept while scanning, so a
+  top-10 over millions of rows costs about one pass over the sort column.
 - **A sort or grouping that returns thousands of values is handed to Calcite's own engine** instead
   of being answered from the file's statistics. The result is the same, only slower. A huge result in
   the grid is still paged.

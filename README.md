@@ -17,6 +17,7 @@ and against 172 real-world [Raincloud](docs/compatibility.md#real-world-conforma
 
 - JVM analytics engines and OLAP systems
 - Anyone who wants mmap-backed, zero-copy columnar reads without native-library management
+- Anyone who wants to query `.vortex` files with SQL from IntelliJ, DBeaver or another JDBC tool
 - **Small footprint.** The Rust reference's JNI bindings (`vortex-jni`) are a 75 MB jar
   (native binaries for four platforms) that pulls in Arrow, Netty, Guava and RoaringBitmap.
   vortex-java's reader is ~800 KB of plain Java (`vortex-reader` + `vortex-core` +
@@ -89,6 +90,27 @@ try (var ch = FileChannel.open(Path.of("data/example.vortex"),
 > array types, and boxed arrays for non-nullable columns throw
 > `IllegalArgumentException` immediately. Missing columns surface as
 > `IllegalStateException` when the lambda returns.
+
+### Query with SQL from IntelliJ or DBeaver
+
+`vortex-jdbc-driver` is a read-only JDBC driver in one self-contained jar, so SQL tools can browse and
+query `.vortex` files with no code. Download `vortex-jdbc-driver-0.18.0-all.jar` from
+[Maven Central](https://central.sonatype.com/artifact/io.github.dfa1.vortex/vortex-jdbc-driver), add
+it as a driver with class `io.github.dfa1.vortex.jdbc.driver.VortexDriver`, and connect to a directory:
+
+```
+jdbc:vortex:/data/vortex
+```
+
+Every `*.vortex` file in it is a table of schema `vtx`, named after the file:
+
+```sql
+select symbol, count(*), max(high) from vtx.ohlc group by symbol order by 2 desc;
+```
+
+The tool must run on JDK 25 or later. Setup steps for IntelliJ and DBeaver, URL options and
+troubleshooting are in the
+[how-to](docs/how-to.md#query-vortex-files-from-an-sql-tool-intellij-dbeaver).
 
 For more examples — projection, filtering, custom encodings, and the CLI — see
 the [tutorial](docs/tutorial.md).

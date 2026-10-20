@@ -7,21 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Breaking:** `ArrayStats` has one component per field of Rust's array stats, so `minExact`, `maxExact`, `isSorted`, `isStrictSorted`, `isConstant`, `uncompressedSizeInBytes` and `nanCount` are read from the file and `trueCount` is gone (a bool column's true count is its `sum`). ([#581](https://github.com/dfa1/vortex-java/pull/581))
-
-### Fixed
-- Files written by vortex-java mark their array min/max as exact, which Rust read as inexact bounds. ([#581](https://github.com/dfa1/vortex-java/pull/581))
-- `VortexReader.columnStats()` and SQL `MIN`/`MAX` no longer report a truncated (inexact) bound as a column's minimum or maximum. ([#581](https://github.com/dfa1/vortex-java/pull/581))
-
-## [0.18.0] — 2026-10-19
+## [0.18.0] — 2026-10-20
 
 ### Added
-- `Compute.matcher` returns a `RowSelection`, whose `nextSelected(long)` jumps to the next selected row instead of testing each one. ([#580](https://github.com/dfa1/vortex-java/pull/580))
-- `Compute.matcher(RowFilter)` gives the row test of each chunk of one scan, evaluating a dictionary the chunks share once. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - `vortex-jdbc-driver` is a `jdbc:vortex:<dir>` JDBC driver in one self-contained jar, so IntelliJ, DBeaver and other SQL tools can query a directory of `.vortex` files. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `VortexSchemaFactory` builds the Calcite schema from a `jdbc:calcite:model=...` URL, so SQL tools can query a directory of `.vortex` files without Java code. ([#566](https://github.com/dfa1/vortex-java/issues/566))
 - `VortexCalcite.connect(Path)` and `VortexCalciteOptions` expose every `.vortex` file in a directory as a SQL table. ([#566](https://github.com/dfa1/vortex-java/issues/566))
+- `Compute.matcher` returns a `RowSelection`, whose `nextSelected(long)` jumps to the next selected row instead of testing each one. ([#580](https://github.com/dfa1/vortex-java/pull/580))
+- `Compute.matcher(RowFilter)` gives the row test of each chunk of one scan, evaluating a dictionary the chunks share once. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - `DecimalArray.getUnscaledLong(long)` reads a decimal's unscaled value without building a `BigDecimal`. ([#563](https://github.com/dfa1/vortex-java/pull/563))
 - `Compute.groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)` folds an aggregate per value of a dictionary-encoded string, boolean or integer column. ([#555](https://github.com/dfa1/vortex-java/pull/555))
 - `Chunk.slice(offset, length)` gives a zero-copy view of a row range. ([#550](https://github.com/dfa1/vortex-java/pull/550))
@@ -32,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom extension types: register an `ExtensionDecoder` on `ReadRegistry` and an `ExtensionEncoder` on `WriteRegistry`, with a `validate` hook on both sides, and `Chunk.as` decodes any registered type. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Changed
+- **Breaking:** `ArrayStats` has one component per field of Rust's array stats, so `minExact`, `maxExact`, `isSorted`, `isStrictSorted`, `isConstant`, `uncompressedSizeInBytes` and `nanCount` are read from the file and `trueCount` is gone (a bool column's true count is its `sum`). ([#581](https://github.com/dfa1/vortex-java/pull/581))
 - SQL `WHERE` on a dictionary-encoded string column visits only the matching rows, up to a third faster for a selective `=` or `IN`. ([#580](https://github.com/dfa1/vortex-java/pull/580))
 - SQL `WHERE col = 'x'` on a dictionary-encoded string column is about twice as fast, and skips the column's rows entirely when `x` is not in the dictionary. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - SQL `SELECT DISTINCT` of one dictionary-encoded string column with `ORDER BY ... LIMIT` is about a third faster: it ranks the dictionary values the rows use instead of every row. ([#574](https://github.com/dfa1/vortex-java/pull/574))
@@ -65,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`, so third-party extension ids can be named, and `ExtensionId.parse` returns the id instead of an `Optional`. ([#530](https://github.com/dfa1/vortex-java/issues/530))
 
 ### Fixed
+- Files written by vortex-java mark their array min/max as exact, which Rust read as inexact bounds. ([#581](https://github.com/dfa1/vortex-java/pull/581))
+- `VortexReader.columnStats()` and SQL `MIN`/`MAX` no longer report a truncated (inexact) bound as a column's minimum or maximum. ([#581](https://github.com/dfa1/vortex-java/pull/581))
 - A negative code in a nullable dictionary-encoded column fails with `VortexException` instead of a raw `IndexOutOfBoundsException`. ([#576](https://github.com/dfa1/vortex-java/pull/576))
 - The CLI's terminal UI runs on JDK 28, whose arenas no longer over-align `allocate(size)`. ([8858286](https://github.com/dfa1/vortex-java/commit/8858286a1addb5ffca289c42e6106c7395564a57))
 - vortex-jni no longer aborts the JVM when it filters a string column vortex-java compressed with FSST, whose symbol table could hold two symbols Rust hashes to one slot, and FSST columns are about 5% smaller. ([#573](https://github.com/dfa1/vortex-java/pull/573))
