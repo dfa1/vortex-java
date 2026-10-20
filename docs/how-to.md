@@ -586,7 +586,7 @@ segment is decoded — on files with the legacy `vortex.stats` zone map (written
 `WriteOptions.defaults().withEdition(Editions.CORE_2025_10_0)`). Files with the default
 `vortex.zoned` zone map answer them through a scan. Column names that collide with SQL reserved words (`close`, `open`, `value`,
 `year`, …) work unquoted; the handful that open a typed literal (`date`, `time`, `timestamp`,
-`interval`) still need back-ticks: `` select `date` from vtx.ohlc ``. See
+`interval`) still need double quotes: `select "date" from vtx.ohlc`. See
 [reference.md#calcite-sql-adapter](reference.md#calcite-sql-adapter) for the full lexical/parser
 policy.
 
@@ -635,12 +635,13 @@ The directory is scanned when the connection opens, so a file added later needs 
 
 ```sql
 select symbol, count(*), max(high) from vtx.ohlc group by symbol order by 2 desc;
-select close, open from vtx.ohlc where `date` > 20000 limit 100;
+select close, open from vtx.ohlc where "date" > 20000 limit 100;
 ```
 
-- **Quote with back-ticks, not double quotes.** Identifiers are case-sensitive, and `"x"` is not an
-  identifier. `date`, `time`, `timestamp` and `interval` still need back-ticks even as column names;
-  other reserved words such as `close`, `open` and `value` work unquoted.
+- **Quote with double quotes, not back-ticks.** Identifiers are case-sensitive, and `` `x` `` is not
+  an identifier. `date`, `time`, `timestamp` and `interval` still need double quotes even as column
+  names; other reserved words such as `close`, `open` and `value` work unquoted. IntelliJ and
+  DBeaver generate `"name"` themselves, so opening a table or sorting its grid works as is.
 - **Filters and `LIMIT` are cheap.** A `WHERE` on a clustered column skips whole chunks using the
   files' zone maps, and the data grid only reads the page it shows.
 - **Low-cardinality string columns filter fastest.** A `WHERE symbol = 'AAPL'` (or `IN`, `<>`, a
@@ -659,7 +660,7 @@ select close, open from vtx.ohlc where `date` > 20000 limit 100;
 | `class file has wrong version` or `UnsupportedClassVersionError` | The JDBC process runs on a JDK older than 25. Set the project or IDE SDK to 25+. |
 | `invalid Vortex URL ... unknown key` | A misspelled option; the message lists the keys that exist. |
 | `Object 'OHLC' not found ... did you mean 'ohlc'?` | Names are case-sensitive; write `ohlc` as the file is named. |
-| `parse failed: Encountered ". \""` | A double-quoted identifier; use back-ticks. |
+| ``Lexical error ... Encountered: "`"`` | A back-ticked identifier, accepted before 0.19; use double quotes. |
 
 On JDK 25 the first query prints a `sun.misc.Unsafe` warning from protobuf, a Calcite dependency;
 it is harmless.

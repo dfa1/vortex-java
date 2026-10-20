@@ -70,13 +70,13 @@ class VortexCalciteTest {
     @Test
     void connect_typeKeywordColumnStillNeedsQuoting() throws Exception {
         // Given the `date` column: even Babel keeps DATE reserved (it begins a date literal,
-        // DATE '2020-01-01'), so it is the residual case that still needs back-ticks
+        // DATE '2020-01-01'), so it is the residual case that still needs quoting
         try (Connection conn = VortexCalcite.connect("vtx", Map.of("ohlc", file))) {
 
-            // When `date` is back-tick quoted
+            // When `date` is double-quoted
             long rows = 0;
             try (Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery("select `date` from vtx.ohlc")) {
+                 ResultSet rs = st.executeQuery("select \"date\" from vtx.ohlc")) {
                 while (rs.next()) {
                     rows++;
                 }
@@ -84,6 +84,40 @@ class VortexCalciteTest {
 
             // Then it resolves to the column and returns every row
             assertThat(rows).isEqualTo(20_000);
+        }
+    }
+
+    @Test
+    void connect_sqlToolSortOnTypeKeywordColumn_runs() throws Exception {
+        // Given the query IntelliJ's table editor sends when a table is opened sorted by `date`:
+        // it quotes with the standard double quote, whatever the driver's own quoting is, so a
+        // connection that only understood back-ticks failed to parse it
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("ohlc", file))) {
+
+            // When it runs
+            long rows = 0;
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT t.*\nFROM vtx.ohlc t\nORDER BY \"date\" DESC")) {
+                while (rs.next()) {
+                    rows++;
+                }
+            }
+
+            // Then it parses and returns every row
+            assertThat(rows).isEqualTo(20_000);
+        }
+    }
+
+    @Test
+    void connect_identifierQuoteString_isTheDoubleQuoteTheParserAccepts() throws Exception {
+        // Given a connection
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("ohlc", file))) {
+
+            // When a tool asks which quote to wrap identifiers in
+            String result = conn.getMetaData().getIdentifierQuoteString();
+
+            // Then it is the one the parser accepts
+            assertThat(result).isEqualTo("\"");
         }
     }
 

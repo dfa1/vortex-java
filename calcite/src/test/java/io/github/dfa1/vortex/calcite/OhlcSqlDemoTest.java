@@ -107,7 +107,7 @@ class OhlcSqlDemoTest {
             long upDays;
             try (Statement st = conn.createStatement();
                  // `close` and `open` are SQL reserved words (CLOSE/OPEN cursor) — must be quoted.
-                 ResultSet rs = st.executeQuery("select count(*) c from vtx.ohlc where `close` > `open`")) {
+                 ResultSet rs = st.executeQuery("select count(*) c from vtx.ohlc where \"close\" > \"open\"")) {
                 rs.next();
                 upDays = rs.getLong("c");
             }
