@@ -55,39 +55,32 @@ public final class Chunk implements AutoCloseable {
     /// Per column, its decoded value once read, else `null`.
     private final Column[] decoded;
     private SequencedMap<ColumnName, Column> columns;
+    /// The arena this chunk releases on close, or `null` for a slice, which shares its parent's.
     private final Arena arena;
     private final ReadRegistry registry;
     private final Consumer<Chunk> onClose;
-    // a slice shares its parent's arena, which only the parent releases
-    private final boolean ownsArena;
     private boolean closed;
 
     Chunk(long rowCount, SequencedMap<ColumnName, Column> columns,
             Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
         this(rowCount, List.copyOf(columns.keySet()), positions(List.copyOf(columns.keySet())),
-                List.copyOf(columns.values())::get, arena, registry, onClose, true);
+                List.copyOf(columns.values())::get, arena, registry, onClose);
     }
 
     /// A chunk whose column `i`, of `names`, is decoded by `decoder` the first time it is read.
     ///
     /// @param positions each of `names` to its index, shared by the chunks of one scan
+    /// @param arena     the arena to release on close, or `null` for a slice of another chunk
     Chunk(long rowCount, List<ColumnName> names, Map<ColumnName, Integer> positions, IntFunction<Column> decoder,
           Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
-        this(rowCount, names, positions, decoder, arena, registry, onClose, true);
-    }
-
-    private Chunk(long rowCount, List<ColumnName> names, Map<ColumnName, Integer> positions,
-                  IntFunction<Column> decoder, Arena arena, ReadRegistry registry, Consumer<Chunk> onClose,
-                  boolean ownsArena) {
         this.rowCount = rowCount;
         this.names = names;
         this.positions = positions;
         this.decoder = Objects.requireNonNull(decoder);
         this.decoded = new Column[names.size()];
-        this.arena = Objects.requireNonNull(arena);
+        this.arena = arena;
         this.registry = Objects.requireNonNull(registry);
         this.onClose = Objects.requireNonNull(onClose);
-        this.ownsArena = ownsArena;
     }
 
     static Map<ColumnName, Integer> positions(List<ColumnName> names) {
@@ -112,7 +105,7 @@ public final class Chunk implements AutoCloseable {
             Column column = column(i);
             return new Column(ScanIterator.sliceArray(column.array(), offset, length, column.dtype()), column.dtype());
         };
-        return new Chunk(length, names, positions, sliced, arena, registry, _ -> { }, false);
+        return new Chunk(length, names, positions, sliced, null, registry, _ -> { });
     }
 
     /// One decoded column: its zero-copy [Array] view and the [DType] it was declared with in the
@@ -235,7 +228,7 @@ public final class Chunk implements AutoCloseable {
             return;
         }
         closed = true;
-        if (!ownsArena) {
+        if (arena == null) {
             return;
         }
         try {
