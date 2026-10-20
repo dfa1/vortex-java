@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** the `ScanIterator` constructor and the reader's Pco helpers (`PcoTansDecoder`, `PcoBin`, `LeBitReader`) are no longer public, and the built-in extension codecs are reached only through their `INSTANCE`. ([4ba6ea12](https://github.com/dfa1/vortex-java/commit/4ba6ea12))
+
 ## [0.18.0] — 2026-10-20
 
 ### Added
