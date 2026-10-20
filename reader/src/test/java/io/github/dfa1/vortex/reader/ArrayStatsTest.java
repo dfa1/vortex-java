@@ -29,10 +29,13 @@ class ArrayStatsTest {
             // Then
             assertThat(sut.min()).isNull();
             assertThat(sut.max()).isNull();
-            assertThat(sut.trueCount()).isNull();
-            assertThat(sut.nullCount()).isNull();
+            assertThat(sut.sum()).isNull();
             assertThat(sut.isSorted()).isNull();
             assertThat(sut.isStrictSorted()).isNull();
+            assertThat(sut.isConstant()).isNull();
+            assertThat(sut.nullCount()).isNull();
+            assertThat(sut.uncompressedSizeInBytes()).isNull();
+            assertThat(sut.nanCount()).isNull();
         }
     }
 
@@ -190,6 +193,34 @@ class ArrayStatsTest {
 
             // Then
             assertThat(sut).isSameAs(ArrayStats.empty());
+        }
+
+        @Test
+        void everyNonScalarStat_decodes() {
+            // Given — every stat besides min/max (covered above), with false/0 values on purpose:
+            // they equal the FlatBuffer scalar defaults, so a reader that skips a field or tests the
+            // value instead of its presence reads them as unknown. A lost nan_count = 0 reads as
+            // "may hold NaN", which caps a float chunk's max at NaN so it never prunes.
+            FbsBuilder builder = new FbsBuilder(128);
+            int sumOff = io.github.dfa1.vortex.core.fbs.FbsArrayStats.createSumVector(
+                    builder, ProtoScalarValue.ofInt64Value(12L).encode());
+            builder.forceDefaults(true);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.startFbsArrayStats(builder);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addSum(builder, sumOff);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsSorted(builder, true);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsStrictSorted(builder, false);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsConstant(builder, false);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addNullCount(builder, 0L);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addUncompressedSizeInBytes(builder, 800L);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addNanCount(builder, 0L);
+            builder.finish(io.github.dfa1.vortex.core.fbs.FbsArrayStats.endFbsArrayStats(builder));
+            var fbs = io.github.dfa1.vortex.core.fbs.FbsArrayStats.getRootAsFbsArrayStats(builder.dataSegment());
+
+            // When
+            ArrayStats result = ArrayStats.fromFbs(fbs);
+
+            // Then
+            assertThat(result).isEqualTo(new ArrayStats(null, null, 12L, true, false, false, 0L, 800L, 0L));
         }
 
         @Test

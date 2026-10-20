@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `ArrayStats` has one component per field of Rust's array stats, so `isSorted`, `isStrictSorted`, `isConstant`, `uncompressedSizeInBytes` and `nanCount` are read from the file and `trueCount` is gone (a bool column's true count is its `sum`). ([#581](https://github.com/dfa1/vortex-java/pull/581))
+
 ## [0.18.0] — 2026-10-19
 
 ### Added

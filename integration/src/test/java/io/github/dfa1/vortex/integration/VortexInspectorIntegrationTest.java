@@ -6,6 +6,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.inspect.HtmlReport;
@@ -31,7 +32,9 @@ import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -160,6 +163,44 @@ class VortexInspectorIntegrationTest {
         assertThat(result)
                 .contains("<td><code>apple</code></td><td><code>banana</code></td>")
                 .contains("<td><code>cherry</code></td><td><code>date</code></td>");
+    }
+
+    @Test
+    void peek_readsSortednessRustRecordsInFlatArrayStats(@TempDir Path tmp) throws IOException {
+        // Given — Rust records is_sorted/is_strict_sorted in a flat segment's array stats for an
+        // ascending integer column. Java's ArrayStats used to drop both (and carried a trueCount
+        // the wire has no field for), so these read as unknown.
+        Path file = tmp.resolve("sorted.vtx");
+        writeJni(file, 50_000);
+
+        // When
+        List<ArrayStats> result = new ArrayList<>();
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            InspectorTree tree = InspectorTree.buildShallow(vf);
+            InspectorTree.Node id = tree.root().children().stream()
+                    .filter(c -> c.fieldName().equals(Optional.of("id"))).findFirst().orElseThrow();
+            for (InspectorTree.Node flat : dataFlats(id)) {
+                result.add(InspectorTree.peek(flat, vf).stats());
+            }
+        }
+
+        // Then
+        assertThat(result).isNotEmpty().allSatisfy(stats -> {
+            assertThat(stats.isSorted()).isTrue();
+            assertThat(stats.isStrictSorted()).isTrue();
+        });
+    }
+
+    /// The flat segments holding a column's values: every chunk of a chunked node, else the first
+    /// child (a zoned node's second child is its zone-map table, not data).
+    private static List<InspectorTree.Node> dataFlats(InspectorTree.Node node) {
+        if (node.layout().isFlat()) {
+            return List.of(node);
+        }
+        if (node.layout().isChunked()) {
+            return node.children().stream().flatMap(c -> dataFlats(c).stream()).toList();
+        }
+        return dataFlats(node.children().getFirst());
     }
 
     private static String[] repeat(int rows, String a, String b) {

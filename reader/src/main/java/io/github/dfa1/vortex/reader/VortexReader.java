@@ -243,8 +243,9 @@ public final class VortexReader implements VortexHandle {
                     // A string zone map holds only bounds (Rust's bounded_max/bounded_min), which
                     // are not exact: take min/max from the chunks' own array stats instead.
                     ArrayStats exact = aggregateStats(iter.chunkStats(name), column);
-                    stats = new ArrayStats(exact.min(), exact.max(), stats.sum(), stats.trueCount(),
-                            stats.nullCount(), stats.isSorted(), stats.isStrictSorted());
+                    // aggregateStats folds only min/max/null count, the rest is always null.
+                    stats = new ArrayStats(exact.min(), exact.max(), null, null, null, null,
+                            stats.nullCount(), null, null);
                 }
                 result.put(name, stats);
             }
@@ -278,7 +279,7 @@ public final class VortexReader implements VortexHandle {
         }
         // Sum is left null at the file level: it lives in the per-zone stats table, surfaced by
         // ScanIterator.columnZoneStats rather than folded here.
-        return new ArrayStats(globalMin, globalMax, null, null, nullCount, null, null);
+        return new ArrayStats(globalMin, globalMax, null, null, null, null, nullCount, null, null);
     }
 
     @Override
