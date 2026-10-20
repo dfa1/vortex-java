@@ -73,10 +73,17 @@ class SeedCorpusGenerator {
                 seed(DType.UTF8, i -> "row " + i % 40 + " of the zstd seed", EncodingId.VORTEX_ZSTD));
     }
 
+    /// Derives the other targets' corpora from the scan seeds once they are all written, in one
+    /// method because JUnit does not order several `@AfterAll` methods.
+    @AfterAll
+    static void writeDerivedSeeds() throws IOException {
+        writeFilterSeeds();
+        writeBlobSeeds();
+    }
+
     /// Mirrors every scan seed (not the crash inputs) into the filter target's corpus behind a
     /// header choosing column 0 and a predicate kind that cycles across seeds, against 3.
-    @AfterAll
-    static void writeFilterSeeds() throws IOException {
+    private static void writeFilterSeeds() throws IOException {
         Files.createDirectories(FILTER_OUT);
         List<Path> seeds = scanSeeds();
         for (int i = 0; i < seeds.size(); i++) {
@@ -91,8 +98,7 @@ class SeedCorpusGenerator {
 
     /// Mirrors every scan seed's footer, layout and dtype blobs into the metadata-blob target's
     /// corpus, in the flat form it fuzzes.
-    @AfterAll
-    static void writeBlobSeeds() throws IOException {
+    private static void writeBlobSeeds() throws IOException {
         Files.createDirectories(BLOBS_OUT);
         for (Path seed : scanSeeds()) {
             Files.write(BLOBS_OUT.resolve(seed.getFileName()), MetadataBlobs.extract(Files.readAllBytes(seed)));
