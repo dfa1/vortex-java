@@ -1255,9 +1255,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Object max = stats.max();
         Long nullCount = stats.nullCount();
         if (ct instanceof DType.Primitive p && p.ptype().isFloating()
-                && (stats.nanCount() == null || stats.nanCount() > 0)) {
+                && (stats.nanCount() == null || stats.nanCount() != 0)) {
             // Float min/max skip NaN, but filters order floats totally (Rust), where NaN is the
-            // maximum: a chunk that may hold one (nan_count absent or positive) has a NaN upper bound.
+            // maximum: a chunk that may hold one (nan_count absent or nonzero) has a NaN upper bound.
+            // nan_count is u64: a count past 2^63 reads as a negative Long, still not zero.
             max = Double.NaN;
         }
         return switch (predicate) {
