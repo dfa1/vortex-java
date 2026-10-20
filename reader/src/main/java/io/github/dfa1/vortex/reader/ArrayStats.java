@@ -7,15 +7,20 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 
-/// Per-array statistics embedded in the encoding tree: one component per statistic of the wire
+/// Per-array statistics embedded in the encoding tree: one component per field of the wire
 /// `ArrayStats` table (Rust's `Stat` enum). A bool column's true count is its `sum`, as in Rust.
-/// The table's `min_precision`/`max_precision` are not read, so `min`/`max` may be inexact
-/// bounds: Rust's flat writer truncates a string bound longer than 64 bytes.
+///
+/// `min`/`max` may be inexact (Rust's `Precision::Inexact`): still a valid bound, so pruning on a
+/// range may use it, but not the true extreme (Rust's flat writer truncates a string bound longer
+/// than 64 bytes). Anything that reports the value, or needs `min == max`, requires
+/// `minExact`/`maxExact`.
 ///
 /// The counts are `u64` on the wire, read as a signed `Long`.
 ///
 /// @param min                     minimum value in the array, or `null` if unknown
+/// @param minExact                `true` if `min` is the exact minimum, not only a lower bound
 /// @param max                     maximum value in the array, or `null` if unknown
+/// @param maxExact                `true` if `max` is the exact maximum, not only an upper bound
 /// @param sum                     sum of values (`Long` for integer and bool columns, `Double` for floats), or `null` if unknown
 /// @param isSorted                `true` if the values are sorted ascending with nulls first (Rust orders null lowest), or `null` if unknown
 /// @param isStrictSorted          `true` if also no two neighbors are equal, two nulls included, or `null` if unknown
@@ -25,7 +30,9 @@ import java.nio.charset.StandardCharsets;
 /// @param nanCount                number of `NaN` values in a float column (`min` and `max` skip them), or `null` if unknown
 public record ArrayStats(
         Object min,
+        boolean minExact,
         Object max,
+        boolean maxExact,
         Object sum,
         Boolean isSorted,
         Boolean isStrictSorted,
@@ -34,7 +41,8 @@ public record ArrayStats(
         Long uncompressedSizeInBytes,
         Long nanCount
 ) {
-    private static final ArrayStats EMPTY = new ArrayStats(null, null, null, null, null, null, null, null, null);
+    private static final ArrayStats EMPTY =
+            new ArrayStats(null, false, null, false, null, null, null, null, null, null, null);
 
     /// Returns an empty stats instance with all fields set to `null`.
     ///
@@ -52,9 +60,13 @@ public record ArrayStats(
         if (fbs == null) {
             return EMPTY;
         }
+        Object min = decodeScalar(fbs.minAsSegment());
+        Object max = decodeScalar(fbs.maxAsSegment());
         ArrayStats stats = new ArrayStats(
-                decodeScalar(fbs.minAsSegment()),
-                decodeScalar(fbs.maxAsSegment()),
+                min,
+                min != null && isExact(fbs.minPrecision(), "min_precision"),
+                max,
+                max != null && isExact(fbs.maxPrecision(), "max_precision"),
                 decodeScalar(fbs.sumAsSegment()),
                 fbs.hasIsSorted() ? fbs.isSorted() : null,
                 fbs.hasIsStrictSorted() ? fbs.isStrictSorted() : null,
@@ -63,6 +75,16 @@ public record ArrayStats(
                 fbs.hasUncompressedSizeInBytes() ? fbs.uncompressedSizeInBytes() : null,
                 fbs.hasNanCount() ? fbs.nanCount() : null);
         return stats.equals(EMPTY) ? EMPTY : stats;
+    }
+
+    /// Rust's `from_flatbuffer`: an absent precision is the FlatBuffer default `Inexact`, and any
+    /// value other than `Inexact`/`Exact` is a corrupted field. Read only when its bound is present.
+    private static boolean isExact(int precision, String field) {
+        return switch (precision) {
+            case io.github.dfa1.vortex.core.fbs.FbsPrecision.Inexact -> false;
+            case io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact -> true;
+            default -> throw new VortexException("corrupted " + field + " in array stats: " + precision);
+        };
     }
 
     private static Object decodeScalar(MemorySegment seg) {

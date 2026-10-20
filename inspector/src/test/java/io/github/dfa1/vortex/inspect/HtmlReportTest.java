@@ -101,7 +101,7 @@ class HtmlReportTest {
     @Test
     void render_escapesUntrustedStatValues() {
         // Given — min/max are decoded scalars from the file, so a string column can carry markup
-        InspectorTree sut = singleColumnWithStats(new ArrayStats("<b>", "\"&\"", null, null, null, null, 3L, null, null));
+        InspectorTree sut = singleColumnWithStats(new ArrayStats("<b>", true, "\"&\"", true, null, null, null, null, 3L, null, null));
 
         // When
         String result = HtmlReport.render(sut, "evil.vortex");
@@ -540,7 +540,7 @@ class HtmlReportTest {
         Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 2, null, List.of(), List.of(0));
         Layout root = new Layout(LayoutId.parse("vortex.struct"), 2, null, List.of(leaf), List.of());
         InspectorTree.Node leafNode = new InspectorTree.Node(leaf, Optional.of("ts"), Set.of(),
-                new ArrayStats(1_704_067_200_000L, 1_706_867_193_000L, null, null, null, null, null, null, null),
+                new ArrayStats(1_704_067_200_000L, true, 1_706_867_193_000L, true, null, null, null, null, null, null, null),
                 List.of());
         InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
                 ArrayStats.empty(), List.of(leafNode));
@@ -590,7 +590,7 @@ class HtmlReportTest {
         Layout root = new Layout(LayoutId.parse("vortex.struct"), 1000, null, List.of(idLeaf, valLeaf), List.of());
 
         InspectorTree.Node idNode = new InspectorTree.Node(idLeaf, Optional.of("id"),
-                Set.of("fastlanes.bitpacked"), new ArrayStats(1L, 999L, null, null, null, null, 0L, null, null), List.of());
+                Set.of("fastlanes.bitpacked"), new ArrayStats(1L, true, 999L, true, null, null, null, null, 0L, null, null), List.of());
         InspectorTree.Node valNode = new InspectorTree.Node(valLeaf, Optional.of("value"),
                 Set.of("vortex.constant"), ArrayStats.empty(), List.of());
         InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(),
@@ -612,9 +612,9 @@ class HtmlReportTest {
         Layout root = new Layout(LayoutId.parse("vortex.struct"), 1000, null, List.of(chunked), List.of());
 
         InspectorTree.Node n0 = new InspectorTree.Node(c0, Optional.empty(), Set.of(),
-                new ArrayStats(0L, 499L, null, null, null, null, null, null, null), List.of());
+                new ArrayStats(0L, true, 499L, true, null, null, null, null, null, null, null), List.of());
         InspectorTree.Node n1 = new InspectorTree.Node(c1, Optional.empty(), Set.of(),
-                new ArrayStats(500L, 999L, null, null, null, null, null, null, null), List.of());
+                new ArrayStats(500L, true, 999L, true, null, null, null, null, null, null, null), List.of());
         InspectorTree.Node col = new InspectorTree.Node(chunked, Optional.of("id"), Set.of(),
                 ArrayStats.empty(), List.of(n0, n1));
         InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
