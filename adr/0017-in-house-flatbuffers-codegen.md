@@ -5,8 +5,16 @@
 - **Deciders:** project maintainer
 - **Supersedes:** —
 - **Superseded by:** —
-- **Related:** ADR 0001 (split read/write runtimes), ADR 0011 (writer zero-copy
-  MemorySegment overload). Mirrors the existing in-house `proto-gen`.
+- **Related:** ADR 0001 (split read/write runtimes), ADR 0003 (exception
+  sanitization), ADR 0011 (writer zero-copy MemorySegment overload), ADR 0024 (JPMS
+  adoption), ADR 0020 (fuzz infrastructure). Mirrors the existing in-house `proto-gen`.
+
+> **Update (2026-10-20):** the rollout below is complete and `flatc` and
+> `flatbuffers-java` are gone. Since then the runtime grew a whole-buffer `FbsVerifier`
+> (see [Known limitations](#known-limitations)), its inline-struct base class is named
+> `FbsMemorySegment` (not `FbsStruct`, which is now the generated reader of the schema's
+> `Struct_` table), and the builder is `FbsBuilder`. The text below is kept as written
+> where it records the original decision.
 
 ## Context
 
@@ -59,10 +67,10 @@ toolchain, mirroring `proto-gen`:
 - **`fbs-gen` module** — a build-time `.fbs` lexer/parser/AST + code generator
   (`Lexer`, `Token`, `Ast`, `Parser`, `TypeRegistry`, `CodeGen`, `Main`), not
   published. Covers only the schema subset vortex uses.
-- **MemorySegment-native runtime in `core`** — `FbsTable` / `FbsStruct` provide
+- **MemorySegment-native runtime in `core`** — `FbsTable` / `FbsMemorySegment` provide
   the read primitives (vtable lookup, indirect uoffsets, vectors, unions, inline
-  structs, UTF-8 strings, zero-copy byte slices) over a `MemorySegment`; an
-  in-house builder provides the write path (vtable dedup, back-to-front layout,
+  structs, UTF-8 strings, zero-copy byte slices) over a `MemorySegment`; the
+  in-house `FbsBuilder` provides the write path (vtable dedup, back-to-front layout,
   alignment) emitting straight into a `MemorySegment`.
 - **Generated classes** extend that runtime and are emitted with the `Fbs`
   name prefix applied **in the generator**, so the `.fbs` schemas revert to
@@ -73,13 +81,13 @@ toolchain, mirroring `proto-gen`:
 The wire format does not change: FlatBuffers binary layout is fixed, and the
 emitted bytes must be identical so the Rust reference reads them.
 
-### Rollout (spike order)
+### Rollout (spike order, all done)
 
 1. **Parser** — `.fbs` lexer + parser, validated against all four real schemas.
-2. **Read runtime** — `FbsTable`/`FbsStruct`, validated against the flatc reader
+2. **Read runtime** — `FbsTable`/`FbsMemorySegment`, validated against the flatc reader
    on bytes produced by the flatc writer (byte-exact cross-check).
 3. **CodeGen (read side)** — emit the reader accessors from the AST.
-4. **Write builder** — in-house `FlatBufferBuilder` over `MemorySegment`.
+4. **Write builder** — in-house `FbsBuilder` over `MemorySegment`.
 5. **Cutover** — switch `core` to the generated MemorySegment classes, drop
    `com.google.flatbuffers`, remove `flatc` (and the version-guard strip) from
    the `regenerate-sources` profile.
@@ -98,9 +106,9 @@ the in-house path matches byte-for-byte on the full integration suite.
   `brew install flatbuffers`, no version-guard strip hack) and the
   `flatbuffers-java` runtime jar.
 - **JPMS unblocked.** With both wire formats self-hosted, no upstream automatic
-  module remains; `module-info.java` becomes viable, which in turn lets the
-  generated `fbs`/`proto` packages be encapsulated at the root instead of merely
-  prefixed.
+  module remains; `module-info.java` became viable (taken up in ADR 0024), which in
+  turn lets the generated `fbs`/`proto` packages be encapsulated at the root instead
+  of merely prefixed.
 - **One codegen pattern.** `fbs-gen` and `proto-gen` share structure; the
   prefix lives in the generator for both.
 - **Pristine schemas.** `.fbs` no longer diverges from upstream.
@@ -117,8 +125,8 @@ the in-house path matches byte-for-byte on the full integration suite.
 ### Risks to manage
 
 - **Byte-exact correctness.** Mitigation: the Rust interop suite
-  (`JavaWritesRustReadsIntegrationTest`, `RustJavaReaderComparisonIntegrationTest`,
-  275 tests) is the gate; do not cut over until green. Validate read and write
+  (`JavaWritesRustReadsIntegrationTest`, `RustJavaReaderComparisonIntegrationTest`
+  and the rest of the `integration` module) is the gate; do not cut over until green. Validate read and write
   independently against the flatc path before removing it.
 - **Schema features we don't yet emit.** The parser/codegen cover only the used
   subset; an added schema feature (nested vectors, fixed arrays, key/sorting
@@ -131,11 +139,14 @@ the in-house path matches byte-for-byte on the full integration suite.
 
 ## Known limitations
 
-- **No intra-FlatBuffer bounds checks** in the `FbsTable`/`FbsStruct` read path (e.g.
-  `FbsTable.readStringAt` allocates `new byte[len]` with `len` from the blob).
-  Same posture as the previous `com.google.flatbuffers` runtime; file-level framing
-  is range-checked upstream by `IoBounds`, intra-FlatBuffer fields are not. Trusted-blob
-  assumption.
+- **Intra-FlatBuffer bounds are verified once, up front.** The first cut had none (the
+  same posture as the `com.google.flatbuffers` runtime, a trusted-blob assumption).
+  Every generated `getRootAsX` now runs `FbsVerifier` over the whole buffer first, as
+  Rust's `flatbuffers::root` does: bounds, vtables, required fields, at most 64 nested
+  tables and at most 1M tables. The `FbsTable`/`FbsMemorySegment` accessors themselves
+  stay unchecked (e.g. `FbsTable.readStringAt` allocates `new byte[len]` with `len` from
+  the blob) because a reader is only ever positioned by a verified root. File-level
+  framing is range-checked by `IoBounds`.
 - **Inline struct *table* fields are not exercised.** `createX` adds fields by
   descending alignment; `FbsBuilder.addStruct` requires the struct be the most
   recently written object. Vortex structs (Buffer, SegmentSpec) only appear as vector
@@ -145,8 +156,8 @@ the in-house path matches byte-for-byte on the full integration suite.
 - **`FbsBuilder` grows on the heap** (`MemorySegment.ofArray(new byte[])`). Fine: it is
   write scaffolding, not the decode hot path the CLAUDE allocation rule targets.
 - **Generator unit coverage is light** relative to the surface; the real safety net is
-  the 275-test Rust-interop suite plus idempotent regeneration and the byte-identical-vs-flatc
-  builder check in `CodeGenTest`.
+  the Rust-interop suite, the Jazzer reader fuzz targets (ADR 0020) and idempotent
+  regeneration. `CodeGenTest` checks the builder was byte-identical to `flatc` at cutover.
 
 ## Alternatives considered
 
