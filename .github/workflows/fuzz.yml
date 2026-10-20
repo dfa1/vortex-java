@@ -1,8 +1,9 @@
 name: Fuzz
 
-# Weekly coverage-guided fuzzing (ADR 0020, #493). Every @FuzzTest replays its saved inputs in the
-# ordinary build; this job explores new ones, one target per matrix job because Jazzer fuzzes a
-# single target per JVM. Scheduled, not on the PR path: a run is unbounded exploration, so a
+# Weekly coverage-guided fuzzing (ADR 0020, #493). The fuzz-module targets replay their saved inputs
+# in the ordinary build (the integration ones are tag-excluded there); this job explores new ones,
+# one target per matrix job because Jazzer fuzzes a single target per JVM. Scheduled, not on the
+# PR path: a run is unbounded exploration, so a
 # failure is a finding to triage (the crash input is uploaded; commit it next to the target's
 # saved inputs with the fix), not a broken build.
 
@@ -55,7 +56,8 @@ jobs:
         run: |
           if [ "${{ matrix.module }}" = integration ]; then
             ./mvnw -B verify -pl integration -am -Dit.test='${{ matrix.target }}' \
-                -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false
+                -Dvortex.it.excludedGroups= -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false \
+                -Dfailsafe.failIfNoSpecifiedTests=false
           else
             ./mvnw -B test -pl fuzz -am -Dtest='${{ matrix.target }}' \
                 -Dsurefire.failIfNoSpecifiedTests=false

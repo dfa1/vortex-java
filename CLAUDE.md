@@ -85,7 +85,7 @@ scripts/simd-benchmark.sh                  # auto-vectorized vs Vector API kerne
 scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conformance corpus (#205), then:
 ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test="RaincloudConformanceIntegrationTest"
 JAZZER_FUZZ=1 JAZZER_MAX_DURATION=5m ./mvnw test -pl fuzz -am -Dtest='VortexReaderFuzzTest#scanMalformedFile' -Dsurefire.failIfNoSpecifiedTests=false  # fuzz one target (ADR 0020)
-JAZZER_FUZZ=1 JAZZER_MAX_DURATION=5m ./mvnw verify -pl integration -am -Dit.test='WriteReadFuzzIntegrationTest#jniReadsJavaWrite' -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false
+JAZZER_FUZZ=1 JAZZER_MAX_DURATION=5m ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test='WriteReadFuzzIntegrationTest#jniReadsJavaWrite' -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false
 ./mvnw test -pl fuzz -am -Dtest=SeedCorpusGenerator -Dsurefire.failIfNoSpecifiedTests=false -Dvortex.fuzz.regenerateSeeds=true  # rewrite per-encoding seeds
 ```
 
@@ -96,10 +96,13 @@ Tag-excluded from a routine local build, even when named with `-Dit.test`/`-Dtes
   integration test taking over ~1 s.
 - **Raincloud corpus** (`@Tag("raincloud")`, failsafe): clear the exclusion with
   `-Dvortex.it.excludedGroups=` as shown above. Not run by the `ci` profile.
+- **Integration fuzz targets** (`@Tag("fuzz")` in `integration`, failsafe): replaying them floods
+  the log with Jazzer instrumentation output. Clear the exclusion with
+  `-Dvortex.it.excludedGroups=`. Not run by the `ci` profile; the weekly `Fuzz` workflow runs them.
 
-Jazzer fuzz targets (`@FuzzTest`, ADR 0020) are **not** excluded: without `JAZZER_FUZZ=1` each
-replays its saved inputs (`*Inputs/<method>/`: seeds plus every past finding) in about a second,
-as part of the routine build. `JAZZER_FUZZ=1` explores new inputs, one target per run, bounded by
+Jazzer fuzz targets in the `fuzz` module (`@FuzzTest`, ADR 0020) are **not** excluded: without
+`JAZZER_FUZZ=1` each replays its saved inputs (`*Inputs/<method>/`: seeds plus every past finding)
+in about a second, as part of the routine build. `JAZZER_FUZZ=1` explores new inputs, one target per run, bounded by
 `JAZZER_MAX_DURATION`; the weekly `Fuzz` workflow does that for every target. Targets: reader
 `open`/`scan`/`filter`/metadata-blob and FSST round-trip in `fuzz`; write→read round-trip and the
 vortex-jni differential in `integration` (`WriteReadFuzzIntegrationTest`). A finding is written

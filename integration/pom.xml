@@ -18,9 +18,12 @@
              - `raincloud`: the real-world Raincloud corpus, see the failsafe plugin config below.
              - `slow`: tests that take seconds each (big fixtures, S3 downloads). The `ci`
                profile below runs them on CI.
+             - `fuzz`: the Jazzer write->read targets (WriteReadFuzzIntegrationTest). Replaying
+               their saved inputs floods the log with Jazzer instrumentation output, so they run
+               only when asked for, and in the weekly Fuzz workflow.
              Override on the CLI, e.g. `-Dvortex.it.excludedGroups=` (empty) runs every tag;
              a literal pom value could not be cleared this way. -->
-        <vortex.it.excludedGroups>raincloud,slow</vortex.it.excludedGroups>
+        <vortex.it.excludedGroups>raincloud,slow,fuzz</vortex.it.excludedGroups>
     </properties>
 
     <dependencies>
@@ -140,7 +143,7 @@
                 </property>
             </activation>
             <properties>
-                <vortex.it.excludedGroups>raincloud</vortex.it.excludedGroups>
+                <vortex.it.excludedGroups>raincloud,fuzz</vortex.it.excludedGroups>
             </properties>
         </profile>
         <profile>
