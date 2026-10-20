@@ -20,6 +20,7 @@ import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.LongPredicate;
 
 /// The fused, one-pass multi-column filter-and-aggregate kernel: it evaluates a whole [RowFilter]
@@ -480,8 +481,8 @@ final class FusedFilterAggregate {
         }
         DictMemo.Entry entry = memo.entry(dict, predicate);
         boolean[] entryMatches = entry.matches();
-        long[] bits = matchBits(dict, offset, rows, entry);
-        if (bits == null) {
+        Optional<long[]> matched = matchBits(dict, offset, rows, entry);
+        if (matched.isEmpty()) {
             return i -> {
                 if (validity != null && !validity.getBoolean(i)) {
                     return generic.test(i);
@@ -490,6 +491,7 @@ final class FusedFilterAggregate {
                 return code >= 0 && code < size ? entryMatches[(int) code] : generic.test(i);
             };
         }
+        long[] bits = matched.get();
         if (validity == null) {
             return new BitmapLeaf(bits);
         }
@@ -517,31 +519,33 @@ final class FusedFilterAggregate {
     /// - one entry matches (`= 'x'`): a compare against its code, taken on the few matching rows;
     /// - several match: a lookup through [DictMemo.Entry#codeTable()], free of branches.
     ///
-    /// @return the bitmap, bit `i` for row `offset + i`, or `null` for wider codes, a codes buffer
-    ///         too short or a code outside the dictionary, which the per-row path then reports
-    private static long[] matchBits(VarBinDictArray dict, long offset, long rows, DictMemo.Entry entry) {
+    /// @return the bitmap, bit `i` for row `offset + i`, or empty for wider codes, a codes buffer too
+    ///         short or a code outside the dictionary, which the per-row path then reports
+    private static Optional<long[]> matchBits(VarBinDictArray dict, long offset, long rows, DictMemo.Entry entry) {
         PType ptype = dict.dictCodesPType();
         MemorySegment codes = dict.dictCodesSegs();
-        if (entry.codeTable() == null || rows > Integer.MAX_VALUE
+        if (entry.codeTable().length == 0 || rows > Integer.MAX_VALUE
                 || codes.byteSize() / ptype.byteSize() < offset + rows) {
-            return null;
+            return Optional.empty();
         }
         int n = (int) rows;
         long[] bits = new long[(n + 63) >>> 6];
         if (n == 0) {
-            return bits;
+            return Optional.of(bits);
         }
         int size = entry.matches().length;
         int only = entry.onlyMatch();
+        boolean inDictionary;
         if (only == DictMemo.NO_MATCH) {
             long width = ptype.byteSize();
-            long max = SimdOperationsSupport.preferred().maxUnsigned(codes.asSlice(offset * width, n * width), n, ptype);
-            return max < size ? bits : null;
+            inDictionary = SimdOperationsSupport.preferred()
+                    .maxUnsigned(codes.asSlice(offset * width, n * width), n, ptype) < size;
+        } else if (only >= 0) {
+            inDictionary = markCode(codes, ptype, offset, n, only, bits) < size;
+        } else {
+            inDictionary = (markTable(codes, ptype, offset, n, entry.codeTable(), bits) & 2) == 0;
         }
-        if (only >= 0) {
-            return markCode(codes, ptype, offset, n, only, bits) < size ? bits : null;
-        }
-        return (markTable(codes, ptype, offset, n, entry.codeTable(), bits) & 2) == 0 ? bits : null;
+        return inDictionary ? Optional.of(bits) : Optional.empty();
     }
 
     /// Sets the bit of every row among `n` from `offset` whose code's slot in `table` is `1`.
@@ -607,7 +611,7 @@ final class FusedFilterAggregate {
         /// @param matches   whether each entry satisfies the leaf's predicate
         /// @param onlyMatch the one matching entry, or [#NO_MATCH] or [#SEVERAL]
         /// @param codeTable for `u8` or `u16` codes, one slot per possible code: `1` for a matching
-        ///                  entry, `0` for another, `2` for a code past the dictionary; else `null`
+        ///                  entry, `0` for another, `2` for a code past the dictionary; else empty
         @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
         record Entry(VarBinDictArray dict, boolean[] matches, int onlyMatch, byte[] codeTable) {
         }
@@ -634,7 +638,7 @@ final class FusedFilterAggregate {
 
         private static byte[] codeTable(PType codes, boolean[] matches) {
             if (codes != PType.U8 && codes != PType.U16) {
-                return null;
+                return new byte[0];
             }
             byte[] table = new byte[codes == PType.U8 ? 1 << 8 : 1 << 16];
             // a dictionary longer than the codes can address has entries no code reaches

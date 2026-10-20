@@ -58,7 +58,7 @@ class ScanIteratorDictPruningTest {
     @ParameterizedTest
     @MethodSource("predicates")
     void dictionaryValues_decideWhetherTheChunkIsSkipped(Predicate predicate, boolean skipped) {
-        // Given — values {"a", "b"}
+        // Given — a dictionary holding the values a and b
         ScanIterator sut = scan(strings("a", "b"), 2, predicate);
 
         // When
@@ -70,7 +70,7 @@ class ScanIteratorDictPruningTest {
 
     @Test
     void nullDictionaryValues_satisfyNoValuePredicate() {
-        // Given — values {"a", null}: rows coding the null value are null, so only "a" can match
+        // Given — the values a and a null: rows coding the null value are null, so only a can match
         Array values = new MaskedArray(strings("a", "b"), new MaterializedBoolArray(DType.BOOL, 2,
                 MemorySegment.ofArray(new byte[]{0b01})));
 
