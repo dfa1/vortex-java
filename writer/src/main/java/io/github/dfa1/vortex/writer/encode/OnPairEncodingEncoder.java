@@ -227,12 +227,12 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
                 }
                 long prev = trie.longestMatch(bytes, start, end);
                 int pos = start + Trie.length(prev);
-                if (threshold.scanned(Trie.length(prev))) {
+                if (threshold.scan(Trie.length(prev))) {
                     break;
                 }
                 while (pos < end) {
                     long curr = trie.longestMatch(bytes, pos, end);
-                    if (threshold.scanned(Trie.length(curr))) {
+                    if (threshold.scan(Trie.length(curr))) {
                         return trie;
                     }
                     int prevLen = Trie.length(prev);
@@ -279,8 +279,10 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
             this.nextCheck = checkInterval;
         }
 
+        /// Counts `n` more bytes scanned.
+        ///
         /// @return `true` once the scan budget is exhausted
-        boolean scanned(int n) {
+        boolean scan(int n) {
             scanned += n;
             return scanned > budget;
         }
