@@ -88,9 +88,10 @@ class ChunkLazyDecodeTest {
     void column_unknownName_throwsWithoutDecoding() {
         // Given
         Chunk sut = chunk();
+        ColumnName unknown = ColumnName.of("c");
 
         // When / Then
-        assertThatThrownBy(() -> sut.column(ColumnName.of("c")))
+        assertThatThrownBy(() -> sut.column(unknown))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("unknown column");
         assertThat(decodes).isEmpty();
