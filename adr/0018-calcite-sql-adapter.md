@@ -11,6 +11,15 @@
   [ADR 0016 — vortex-arrow bridge](0016-vortex-arrow-bridge.md),
   [ADR 0005 — Vector API adoption](0005-vector-api-adoption.md)
 
+> **Update (2026-10-20):** the adapter has grown past the phases recorded here, so treat
+> "not yet" and "still scans for now" below as dated. It now also pushes down `ORDER BY` and
+> `ORDER BY ... LIMIT` (`VortexSortPushDownRule`), `GROUP BY` on dictionary-encoded string,
+> boolean and integer columns (`Compute.groupedAggregate`), `COUNT(DISTINCT)`, `SELECT DISTINCT`
+> and `LIKE 'prefix%'`, reports table row counts to the planner, and exposes a directory of
+> `.vortex` files as tables (`VortexCalcite.connect(Path)`, `VortexSchemaFactory`). The
+> `jdbc-driver` module wraps that as a `jdbc:vortex:<dir>` JDBC driver. See `CHANGELOG.md` for
+> the per-release detail.
+
 ## Context
 
 The reader exposes typed zero-copy columns and (ADR 0013) a path to filter/aggregate

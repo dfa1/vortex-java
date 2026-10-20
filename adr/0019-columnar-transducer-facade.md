@@ -6,6 +6,13 @@
 - **Supersedes:** —
 - **Superseded by:** —
 
+> **Update (2026-10-20):** the façade is still unbuilt, but the bespoke-static-method path this
+> ADR warns about kept growing, and some of the blockers named below are gone. `Compute` now has
+> `matches`, `matcher(Chunk, RowFilter)` and `matcher(RowFilter)` (a per-scan row test returning a
+> `RowSelection` with `nextSelected(long)`) and `groupedAggregate`, and `GROUP BY` push-down
+> (ADR 0018's Phase 3) shipped through it. Status stays Proposed: nothing composes a chunk-level
+> computation yet, and each new capability is still another static entry point.
+
 ## Context
 
 ADR 0013 shipped the compute primitives as two fused kernels behind `reader.compute.Compute`:

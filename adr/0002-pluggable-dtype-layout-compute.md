@@ -5,6 +5,15 @@
 - **Deciders:** project maintainer
 - **Related:** [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md)
 
+> **Update (2026-10-20):** the "Java status today" table below predates several changes.
+> Encodings are registered on the builder-only `ReadRegistry`/`WriteRegistry`, with no
+> `ServiceLoader` and no auto-discovery (as in Rust). Layout decoding is pluggable through
+> `LayoutRegistry` (unknown layouts always fail, no allow-unknown). `DType` is still sealed and
+> extensible only through `DType.Extension` with a registered `ExtensionDecoder`/`ExtensionEncoder`
+> (the Rust `ExtVTable` model). A compute layer now exists in `reader.compute`
+> (ADR 0013, ADR 0019) but has no registration SPI. Of this ADR's decision, "keep `DType` sealed"
+> and "no compute SPI" still hold; "keep `Layout` sealed" no longer does.
+
 ## Context
 
 The Rust reference implementation
