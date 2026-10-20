@@ -152,7 +152,7 @@ class CalciteInteropIntegrationTest {
         // Given — a file with a timestamp could not be queried at all: the row type threw
         Path file = tmp.resolve("jni_types.vortex");
         writeTypesWithJni(file);
-        String sql = "select `day`, at, wall, `instant`, amount, blob from vtx.t";
+        String sql = "select \"day\", at, wall, \"instant\", amount, blob from vtx.t";
 
         // When
         try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
@@ -417,9 +417,9 @@ class CalciteInteropIntegrationTest {
 
     @ParameterizedTest(name = "{0}")
     @CsvSource(delimiter = '|', value = {
-            "min(`day`), max(`day`)         | min(`day` + interval '0' day), max(`day` + interval '0' day)",
+            "min(\"day\"), max(\"day\")         | min(\"day\" + interval '0' day), max(\"day\" + interval '0' day)",
             "min(at), max(at)               | min(at + interval '0' second), max(at + interval '0' second)",
-            "min(wall), max(`instant`)      | min(wall + interval '0' second), max(`instant` + interval '0' second)"})
+            "min(wall), max(\"instant\")      | min(wall + interval '0' second), max(\"instant\" + interval '0' second)"})
     void jniWriter_temporalMinMax_answeredFromStatsEqualsTheScan(String aggregates, String oracle, @TempDir Path tmp)
             throws Exception {
         // Given — Rust's zone statistics hold the raw storage integer (days, millis, micros before

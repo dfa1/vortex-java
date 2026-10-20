@@ -627,10 +627,11 @@ unquoted, also add `parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelPa
 [`VortexCalcite`] sets both for you.
 
 The connection uses Calcite's `JAVA` lexical policy (case-sensitive identifiers, unquoted case
-preserved) and the **Babel** SQL parser, so a column named after a reserved word — `close`, `open`,
+preserved) with standard double-quote identifiers, and the **Babel** SQL parser, so a column named after a reserved word — `close`, `open`,
 `value`, `year`, … — is queryable unquoted (`select close, open from vtx.ohlc`). The exception is
 keywords that open a typed literal (`date`, `time`, `timestamp`, `interval`), which stay reserved
-even under Babel and need back-ticks: `` select `date` from vtx.ohlc ``.
+even under Babel and need double quotes: `select "date" from vtx.ohlc`. Back-ticks, which the
+connection accepted before, are no longer identifier quotes.
 
 A `WHERE` of column-vs-literal comparisons, `IN` lists, `IS [NOT] NULL` and prefix `LIKE 'abc%'`
 patterns, joined by `AND` (an `OR` only within one column), prunes chunks from zone maps and is

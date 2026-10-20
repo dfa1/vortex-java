@@ -26,15 +26,15 @@ import java.util.Properties;
 /// }
 /// ```
 ///
-/// The connection uses Calcite's `JAVA` lexical policy (case-sensitive identifiers, back-tick
-/// quoting, unquoted case preserved) together with the **Babel** SQL parser, which accepts most SQL
+/// The connection uses Calcite's `JAVA` lexical policy (case-sensitive identifiers, unquoted case
+/// preserved) with standard double-quote identifier quoting, together with the **Babel** SQL parser, which accepts most SQL
 /// reserved words as identifiers. A column whose name is a reserved word — `close`, `open`, `value`,
 /// `year`, … — can therefore be queried **unquoted**: `select close, open from vtx.ohlc`, which
 /// columnar files routinely need.
 ///
 /// The exception is the handful of keywords that begin a typed literal — `date`, `time`,
 /// `timestamp`, `interval` — which stay reserved even under Babel (`date` opens `DATE '2020-01-01'`).
-/// A column with one of those names must still be back-tick quoted: `select \`date\` from vtx.ohlc`.
+/// A column with one of those names must still be double-quoted: `select "date" from vtx.ohlc`.
 public final class VortexCalcite {
 
     // One instance: building a driver loads a resource and sets up Avatica's factory by reflection.
@@ -81,9 +81,13 @@ public final class VortexCalcite {
     public static Connection connect(VortexCalciteOptions options) throws SQLException {
         Objects.requireNonNull(options, "options");
         Properties info = new Properties();
-        // JAVA lex: case-sensitive identifiers, back-tick quoting, unquoted case preserved — so an
-        // unquoted `ohlc` matches the registered table name exactly.
+        // JAVA lex: case-sensitive identifiers, unquoted case preserved — so an unquoted `ohlc`
+        // matches the registered table name exactly.
         info.setProperty("lex", "JAVA");
+        // Standard double-quote identifiers, not JAVA's back-ticks: SQL tools (IntelliJ, DBeaver)
+        // generate "name" for a reserved-word column such as "date" in their own statements, e.g.
+        // a table opened sorted, whatever quote the driver reports.
+        info.setProperty("quoting", "DOUBLE_QUOTE");
         // Babel parser: accept SQL reserved words (date, close, open, value, …) as identifiers, so
         // columnar files whose column names collide with keywords are queryable unquoted.
         info.setProperty("parserFactory", SqlBabelParserImpl.class.getName() + "#FACTORY");

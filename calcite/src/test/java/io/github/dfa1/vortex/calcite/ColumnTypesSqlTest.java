@@ -83,7 +83,7 @@ class ColumnTypesSqlTest {
     @Test
     void everyScalarType_readsThroughSql() throws Exception {
         // Given
-        String sql = "select amount, blob, `day`, at, wall, `instant`, `uuid` from vtx.t";
+        String sql = "select amount, blob, \"day\", at, wall, \"instant\", \"uuid\" from vtx.t";
 
         // When
         try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
