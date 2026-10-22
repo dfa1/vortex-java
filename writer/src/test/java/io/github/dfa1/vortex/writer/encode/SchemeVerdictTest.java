@@ -21,9 +21,10 @@ class SchemeVerdictTest {
     private static final EncodeContext REAL = EncodeContext.ofDepth(3, Arena.ofAuto(), REGISTRY);
     private static final EncodeContext SAMPLE = REAL.withSampling();
     private static final EncodeContext FINISHED = EncodeContext.ofDepth(0, Arena.ofAuto(), REGISTRY);
+    private static final StatsOptions ALL_STATS = StatsOptions.defaults().withCountDistinct(true).withTrackMostFrequent(true);
 
     private static ArrayAndStats longs(long... values) {
-        return new ArrayAndStats(DType.I64, values, StatsOptions.distinctAndTop());
+        return new ArrayAndStats(DType.I64, values, ALL_STATS);
     }
 
     @Nested
@@ -295,7 +296,7 @@ class SchemeVerdictTest {
         @Test
         void floatsDeferToTheSample() {
             // Given: Rust's FloatDictScheme samples rather than estimating
-            ArrayAndStats data = new ArrayAndStats(DType.F64, new double[]{1.5, 1.5, 2.5, 2.5}, StatsOptions.distinctAndTop());
+            ArrayAndStats data = new ArrayAndStats(DType.F64, new double[]{1.5, 1.5, 2.5, 2.5}, ALL_STATS);
 
             // When
             Estimate result = sut.expectedRatio(DType.F64, data, REAL);
@@ -322,7 +323,7 @@ class SchemeVerdictTest {
         @Test
         void estimatesANonZeroDominantValue() {
             // Given: 95 of 100 values are 42 — Java used to require the fill to be 0
-            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 5), StatsOptions.distinctAndTop());
+            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 5), ALL_STATS);
 
             // When
             Estimate result = sut.expectedRatio(DType.I64, data, REAL);
@@ -334,7 +335,7 @@ class SchemeVerdictTest {
         @Test
         void skipsBelowNinetyPercent() {
             // Given: 89 of 100
-            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 11), StatsOptions.distinctAndTop());
+            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 11), ALL_STATS);
 
             // When
             Estimate result = sut.expectedRatio(DType.I64, data, REAL);
@@ -348,7 +349,7 @@ class SchemeVerdictTest {
             // Given: Rust's float sparse scheme only takes null-dominated arrays
             double[] values = new double[100];
             values[3] = 1.5;
-            ArrayAndStats data = new ArrayAndStats(DType.F64, values, StatsOptions.distinctAndTop());
+            ArrayAndStats data = new ArrayAndStats(DType.F64, values, ALL_STATS);
 
             // When
             Estimate result = sut.expectedRatio(DType.F64, data, REAL);

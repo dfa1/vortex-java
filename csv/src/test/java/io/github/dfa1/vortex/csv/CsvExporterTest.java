@@ -551,6 +551,36 @@ class CsvExporterTest {
     }
 
     @Test
+    void rendersListOfListsAsNestedJsonArrays(@TempDir Path tmp) throws Exception {
+        // Given a List[List[I64]] column: the inner lists are rendered by jsonValue, not cellValue,
+        // so this pins that a list nested inside JSON renders the same as a top-level list cell.
+        Path vortex = tmp.resolve("listoflists.vortex");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("ids")),
+                List.of(new DType.List(new DType.List(DType.I64, false), false)),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("ids"), new ListData(
+                            new ListData(new long[]{1L, 2L, 3L}, new long[]{0, 2, 3, 3}, 3), // [1,2] [3] []
+                            new long[]{0, 2, 3},   // row 0 → [[1,2],[3]], row 1 → [[]]
+                            2)));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+        List<String> result = Files.readAllLines(csv);
+
+        // Then
+        assertThat(result).containsExactly(
+                "ids",
+                "\"[[1,2],[3]]\"",
+                "[[]]");
+    }
+
+    @Test
     void rendersListOfStructsAsJsonArrayOfObjects(@TempDir Path tmp) throws Exception {
         // Given a List[Struct] column — the osm-germany `members` shape (issue #257);
         // struct elements inside the list must recurse through jsonValue → jsonObject.

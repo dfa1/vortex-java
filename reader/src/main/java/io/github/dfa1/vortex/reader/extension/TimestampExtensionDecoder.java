@@ -11,8 +11,6 @@ import io.github.dfa1.vortex.core.model.TimestampDtype;
 
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -74,17 +72,6 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder<Instant
             throw new VortexException("Timestamp.instant: Days unit not valid");
         }
         return ExtensionStorage.instantFromRaw(ExtensionStorage.epochInteger(storage, i), unit);
-    }
-
-    /// Decodes the timestamp cell at row `i` to a [ZonedDateTime]
-    /// using the timezone from the metadata, defaulting to UTC when absent.
-    ///
-    /// @param ext     declared extension dtype
-    /// @param storage signed-integer storage array
-    /// @param i       row index, `0 <= i < storage.length()`
-    /// @return decoded zoned date-time
-    public ZonedDateTime zonedDateTime(DType.Extension ext, Array storage, long i) {
-        return instant(ext, storage, i).atZone(timezone(ext).orElse(ZoneOffset.UTC));
     }
 
     /// Returns the IANA timezone recorded in the extension metadata.

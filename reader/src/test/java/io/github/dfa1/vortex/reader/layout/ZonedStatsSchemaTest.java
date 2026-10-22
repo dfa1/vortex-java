@@ -20,43 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ZonedStatsSchemaTest {
 
     @Nested
-    class ZoneLength {
-        @Test
-        void readsLittleEndianU32() {
-            // Given — 8192 = 0x2000 stored as LE u32
-            MemorySegment meta = MemorySegment.ofArray(new byte[4]);
-            meta.set(io.github.dfa1.vortex.core.io.VortexFormat.LE_INT, 0, 8192);
-
-            // When
-            long result = ZonedStatsSchema.zoneLength(meta);
-
-            // Then
-            assertThat(result).isEqualTo(8192L);
-        }
-
-        @Test
-        void returnsZeroForNullMetadata() {
-            // Given / When
-            long result = ZonedStatsSchema.zoneLength(null);
-
-            // Then — nothing to decode; caller treats as "no zones"
-            assertThat(result).isZero();
-        }
-
-        @Test
-        void returnsZeroForShortMetadata() {
-            // Given — only 2 bytes (insufficient for a u32)
-            MemorySegment meta = MemorySegment.ofArray(new byte[2]);
-
-            // When
-            long result = ZonedStatsSchema.zoneLength(meta);
-
-            // Then — defensively zero rather than throwing
-            assertThat(result).isZero();
-        }
-    }
-
-    @Nested
     class StatLookup {
         @ParameterizedTest
         @EnumSource(ZonedStatsSchema.Stat.class)

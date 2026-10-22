@@ -295,18 +295,6 @@ public final class CsvExporter {
         return switch (arr) {
             case StructArray sa -> isNullStructRow(sa, rowIdx) ? "null" : jsonObject(sa, rowIdx);
             case MaskedArray ma -> ma.isValid(rowIdx) ? jsonValue(ma.inner(), rowIdx) : "null";
-            case FixedSizeListArray fla -> jsonArray(fla.elements(), rowIdx * fla.fixedSize(), (rowIdx + 1L) * fla.fixedSize());
-            case ListArray la -> {
-                long start = offsetAt(la.offsets(), rowIdx);
-                long end = offsetAt(la.offsets(), rowIdx + 1);
-                yield jsonArray(la.elements(), start, end);
-            }
-            // A list view addresses each row by its own (offset, size) pair: rows may overlap or
-            // appear out of order in `elements`, so the next row's offset is not this row's end.
-            case ListViewArray lv -> {
-                long start = offsetAt(lv.offsets(), rowIdx);
-                yield jsonArray(lv.elements(), start, start + offsetAt(lv.sizes(), rowIdx));
-            }
             case NullArray _ -> "null";
             case UnionArray ua -> ua.isValid(rowIdx) ? jsonValue(ua.variant(ua.variantIndex(rowIdx)), rowIdx) : "null";
             case VarBinArray va -> {
@@ -314,7 +302,8 @@ public final class CsvExporter {
                 jsonString(sb, va.getString(rowIdx));
                 yield sb.toString();
             }
-            // Numeric and boolean leaves render identically to a top-level cell, unquoted.
+            // Numeric and boolean leaves, and lists (already a JSON array), render identically to a
+            // top-level cell.
             default -> cellValue(arr, rowIdx);
         };
     }

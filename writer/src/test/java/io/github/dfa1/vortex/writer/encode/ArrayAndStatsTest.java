@@ -10,10 +10,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// input never reaches `ArrayStats.compute` (which has no ptype for it).
 class ArrayAndStatsTest {
 
+    private static final StatsOptions ALL_STATS = StatsOptions.defaults().withCountDistinct(true).withTrackMostFrequent(true);
+
     @Test
     void stats_computedOnce_andSharedByEveryCaller() {
         // Given
-        ArrayAndStats sut = new ArrayAndStats(DType.I64, new long[]{7, 7, 9}, StatsOptions.distinctAndTop());
+        ArrayAndStats sut = new ArrayAndStats(DType.I64, new long[]{7, 7, 9}, ALL_STATS);
 
         // When
         ArrayStats result = sut.stats();
@@ -28,7 +30,7 @@ class ArrayAndStatsTest {
     @Test
     void stats_nonPrimitive_isEmpty() {
         // Given: strings go through the same competition, but no stats consumer reads them
-        ArrayAndStats sut = new ArrayAndStats(DType.UTF8, new String[]{"a", "b"}, StatsOptions.distinctAndTop());
+        ArrayAndStats sut = new ArrayAndStats(DType.UTF8, new String[]{"a", "b"}, ALL_STATS);
 
         // When
         ArrayStats result = sut.stats();

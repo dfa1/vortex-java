@@ -23,13 +23,6 @@ public final class StatsOptions {
         return new StatsOptions(false, false);
     }
 
-    /// Track both distinct counts and most-frequent value.
-    ///
-    /// @return options requesting distinct counts and the most-frequent value
-    public static StatsOptions distinctAndTop() {
-        return new StatsOptions(true, true);
-    }
-
     /// Whether the scan must count distinct value occurrences.
     ///
     /// @return `true` if distinct counts are requested

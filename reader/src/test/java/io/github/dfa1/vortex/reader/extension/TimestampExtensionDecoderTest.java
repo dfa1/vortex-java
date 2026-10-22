@@ -19,7 +19,6 @@ import java.lang.foreign.ValueLayout;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.util.List;
 
 import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.I64;
@@ -92,35 +91,6 @@ class TimestampExtensionDecoderTest {
             // Then
             assertThat(got.getEpochSecond()).isEqualTo(-2L);
             assertThat(got.getNano()).isEqualTo(499_999_000);
-        }
-    }
-
-    @Test
-    void zonedDateTime_withTimezone_appliesIt() {
-        // Given — ms since epoch + Europe/Paris tz in metadata
-        try (Arena arena = Arena.ofConfined()) {
-            DType.Extension dtype = ext("vortex.timestamp", I64, tzMeta((byte) 2, "Europe/Paris"));
-
-            // When
-            ZonedDateTime got = sut.zonedDateTime(dtype, i64(arena, 1_000L), 0);
-
-            // Then
-            assertThat(got.getZone()).isEqualTo(ZoneId.of("Europe/Paris"));
-            assertThat(got.toInstant()).isEqualTo(Instant.ofEpochMilli(1_000L));
-        }
-    }
-
-    @Test
-    void zonedDateTime_noTimezone_defaultsToUtc() {
-        // Given — tz_len = 0 should fall back to UTC for unambiguity
-        try (Arena arena = Arena.ofConfined()) {
-            DType.Extension dtype = ext("vortex.timestamp", I64, tzMeta((byte) 2, null));
-
-            // When
-            ZonedDateTime got = sut.zonedDateTime(dtype, i64(arena, 0L), 0);
-
-            // Then
-            assertThat(got.getZone()).isEqualTo(ZoneOffset.UTC);
         }
     }
 

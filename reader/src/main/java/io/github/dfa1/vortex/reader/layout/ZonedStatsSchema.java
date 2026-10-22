@@ -4,8 +4,6 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.LayoutId;
 
-import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
-
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
@@ -103,18 +101,6 @@ public final class ZonedStatsSchema {
     }
 
     private ZonedStatsSchema() {
-    }
-
-    /// Returns the zone length declared in the layout metadata (logical rows per zone),
-    /// or `0` if the metadata is too short to carry one.
-    ///
-    /// @param metadata raw `vortex.stats` layout metadata, possibly `null`
-    /// @return decoded zone length, or `0` when absent
-    public static long zoneLength(MemorySegment metadata) {
-        if (metadata == null || metadata.byteSize() < 4) {
-            return 0L;
-        }
-        return Integer.toUnsignedLong(metadata.get(LE_INT, 0));
     }
 
     /// Returns the zone length declared in a newer `vortex.zoned` layout's aggregate-spec metadata
