@@ -366,6 +366,9 @@ procedure):
   `forEachChunk`; use `Optional`, records, sealed types, pattern switches, virtual threads, FFM).
   New APIs should feel like JDK APIs.
 - Always braces for `if`/`else`/`for`/`while`, even one-liners (`if (c) { return a; }`).
+- **No ternary that wraps or binds.** A `?:` that spans lines, or whose condition binds a pattern
+  (`x instanceof Foo f && … ? f.a() : x`), is an `if`: assign the default, then override it.
+  A short one-line ternary (`n == 0 ? 1 : n`) is fine.
 - **Enums: never call `values()` on a call path.** `values()` allocates a fresh array on every call (64 B for
   `PType`), which the JIT does not remove. Look a constant up by wire tag, ordinal or number with a `switch`
   expression: no allocation, and about 4x faster than `values()[i]` when the ordinals repeat, as in real files
