@@ -276,25 +276,38 @@ final class ZoneAccumulator {
         Object min = null;
         Object max = null;
         boolean unknown = false;
+        // INT, FLOAT and BOOL track their bounds as primitives and box once per zone: boxing on every
+        // new bound allocated a Long per row of an ascending column such as a row id.
         switch (kind) {
             case INT -> {
                 long[] longs = PrimitiveArrays.toLongs(slice(values, null, off, len), ptype, EncodingId.VORTEX_PRIMITIVE);
                 boolean unsigned = ptype.isUnsigned();
+                boolean seen = false;
+                long lo = 0;
+                long hi = 0;
                 for (int i = 0; i < len; i++) {
                     if (validity != null && !validity[off + i]) {
                         nulls++;
                         continue;
                     }
                     long v = longs[i];
-                    if (min == null || compare(v, (Long) min, unsigned) < 0) {
-                        min = v;
+                    if (!seen || compare(v, lo, unsigned) < 0) {
+                        lo = v;
                     }
-                    if (max == null || compare(v, (Long) max, unsigned) > 0) {
-                        max = v;
+                    if (!seen || compare(v, hi, unsigned) > 0) {
+                        hi = v;
                     }
+                    seen = true;
+                }
+                if (seen) {
+                    min = lo;
+                    max = hi;
                 }
             }
             case F16, FLOAT -> {
+                boolean seen = false;
+                double lo = 0;
+                double hi = 0;
                 for (int i = 0; i < len; i++) {
                     if (validity != null && !validity[off + i]) {
                         nulls++;
@@ -309,29 +322,40 @@ final class ZoneAccumulator {
                         nans++;
                         continue;
                     }
-                    if (min == null || v < (Double) min) {
-                        min = v;
+                    if (!seen || v < lo) {
+                        lo = v;
                     }
-                    if (max == null || v > (Double) max) {
-                        max = v;
+                    if (!seen || v > hi) {
+                        hi = v;
                     }
+                    seen = true;
                 }
-                if (kind == Kind.F16) {
+                if (seen && kind == Kind.F16) {
                     // The F16 table column is stored as raw half-float bits like the data.
-                    min = min == null ? null : (long) Float.floatToFloat16(((Double) min).floatValue());
-                    max = max == null ? null : (long) Float.floatToFloat16(((Double) max).floatValue());
+                    min = (long) Float.floatToFloat16((float) lo);
+                    max = (long) Float.floatToFloat16((float) hi);
+                } else if (seen) {
+                    min = lo;
+                    max = hi;
                 }
             }
             case BOOL -> {
                 boolean[] a = (boolean[]) values;
+                boolean seen = false;
+                boolean lo = true;
+                boolean hi = false;
                 for (int i = 0; i < len; i++) {
                     if (validity != null && !validity[off + i]) {
                         nulls++;
                         continue;
                     }
-                    boolean v = a[off + i];
-                    min = min == null ? v : (Boolean) min && v;
-                    max = max == null ? v : (Boolean) max || v;
+                    lo &= a[off + i];
+                    hi |= a[off + i];
+                    seen = true;
+                }
+                if (seen) {
+                    min = lo;
+                    max = hi;
                 }
             }
             case DECIMAL -> {

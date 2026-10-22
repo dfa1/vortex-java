@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Breaking:** SQL identifiers are quoted with double quotes, as IntelliJ and DBeaver generate them, instead of back-ticks, so opening a table or sorting its grid works; write `"date"` where you wrote `` `date` ``. ([#588](https://github.com/dfa1/vortex-java/pull/588))
 - **Breaking:** the `ScanIterator` constructor and the reader's Pco helpers (`PcoTansDecoder`, `PcoBin`, `LeBitReader`) are no longer public, and the built-in extension codecs are reached only through their `INSTANCE`. ([4ba6ea12](https://github.com/dfa1/vortex-java/commit/4ba6ea12))
+- CSV import is about 40% faster: it parses bytes instead of `String`s and overlaps parsing with writing; the delimiter must be an ASCII character. ([#590](https://github.com/dfa1/vortex-java/pull/590))
 - SQL `ORDER BY ... LIMIT` on a string column is up to 3 times faster: rows that cannot make the top are ranked by their bytes without building a `String`, and a chunk stored in the opposite order is read backward. ([#575](https://github.com/dfa1/vortex-java/pull/575))
 
 ## [0.18.0] — 2026-10-20

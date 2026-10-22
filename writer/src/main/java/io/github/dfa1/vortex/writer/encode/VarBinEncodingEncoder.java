@@ -184,6 +184,29 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
                 new String(utf8[max], StandardCharsets.UTF_8));
     }
 
+    /// [#minMaxStats(String[])] over each string's UTF-8 bytes, for an encoder that already holds
+    /// them one array per row; see [#minMaxStats(String[], VarBinBytes.Rows)] for why bytes.
+    ///
+    /// @param strings the string values (may contain `null`)
+    /// @param utf8    `strings` encoded row for row, `null` where `strings` is
+    /// @return the [MinMax] of encoded scalars, or `null` if all entries are `null`
+    static MinMax minMaxStats(String[] strings, byte[][] utf8) {
+        int min = -1;
+        int max = -1;
+        for (int i = 0; i < utf8.length; i++) {
+            if (utf8[i] == null) {
+                continue;
+            }
+            if (min < 0 || Arrays.compareUnsigned(utf8[i], utf8[min]) < 0) {
+                min = i;
+            }
+            if (max < 0 || Arrays.compareUnsigned(utf8[i], utf8[max]) > 0) {
+                max = i;
+            }
+        }
+        return min < 0 ? null : encodeMinMax(strings[min], strings[max]);
+    }
+
     /// Encodes an already-computed string min/max as [#minMaxStats(String[])] would.
     ///
     /// @param minStr the minimum in UTF-8 order, or `null` when there is no non-null value

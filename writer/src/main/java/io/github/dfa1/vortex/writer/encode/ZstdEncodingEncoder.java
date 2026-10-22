@@ -112,20 +112,19 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         requireBinding(ZSTD_BINDING_PRESENT);
         // Compression does not reorder anything, so the column's bounds are the input's bounds.
-        // Computed once here rather than in each of the four shape-specific paths below.
-        MinMax stats = ZoneMapStats.of(dtype, data);
         if (data instanceof NullableData nd) {
             if (dtype instanceof DType.Primitive dt) {
-                return encodeNullablePrimitive(dt, nd, ctx).withStats(stats);
+                return encodeNullablePrimitive(dt, nd, ctx).withStats(ZoneMapStats.of(dtype, data));
             }
             if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-                return encodeNullableVarBin(nd, ctx).withStats(stats);
+                byte[][] encoded = VarBinBytes.toRawByteArrays(nd.values());
+                return encodeNullableVarBin(encoded, nd.validity(), ctx).withStats(textStats(dtype, nd.values(), encoded));
             }
             throw new VortexException(EncodingId.VORTEX_ZSTD,
                     "NullableData is unsupported for dtype: " + dtype);
         }
         if (dtype instanceof DType.Primitive dt) {
-            return encodePrimitive(dt, data, ctx.arena()).withStats(stats);
+            return encodePrimitive(dt, data, ctx.arena()).withStats(ZoneMapStats.of(dtype, data));
         }
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
             byte[][] encoded = VarBinBytes.toRawByteArrays(data);
@@ -133,7 +132,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
                 throw new VortexException(EncodingId.VORTEX_ZSTD,
                         "non-nullable " + dtype + " contains null");
             }
-            return encodeVarBin(encoded, ctx.arena()).withStats(stats);
+            return encodeVarBin(encoded, ctx.arena()).withStats(textStats(dtype, data, encoded));
         }
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
     }
@@ -170,12 +169,23 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         return buildNullableResult(packed, uniformLayout(countValid(validity), byteWidth), validity, ctx);
     }
 
-    private EncodeResult encodeNullableVarBin(NullableData nd, EncodeContext ctx) {
+    private EncodeResult encodeNullableVarBin(byte[][] encoded, boolean[] validity, EncodeContext ctx) {
         // Strip null positions: only valid rows reach the compressed payload (mirrors the Rust
         // reference). The decoder scatters them back over the validity mask carried by child[0].
-        byte[][] valid = stripNulls(VarBinBytes.toRawByteArrays(nd.values()));
+        byte[][] valid = stripNulls(encoded);
         MemorySegment packed = buildLengthPrefixed(valid, ctx.arena());
-        return buildNullableResult(packed, varBinLayout(packed, valid.length), nd.validity(), ctx);
+        return buildNullableResult(packed, varBinLayout(packed, valid.length), validity, ctx);
+    }
+
+    /// The zone-map bounds of a string column, ordered by the UTF-8 bytes already encoded for the
+    /// payload rather than by comparing the `String`s again: the vectorized byte compare is several
+    /// times faster on values sharing a prefix (timestamps, ids), where the `String` compare was the
+    /// largest single cost of a compact CSV import. Binary has no useful ordering, as in [ZoneMapStats].
+    private static MinMax textStats(DType dtype, Object values, byte[][] encoded) {
+        if (values instanceof String[] strings) {
+            return VarBinEncodingEncoder.minMaxStats(strings, encoded);
+        }
+        return VarBinEncodingEncoder.textMinMax(dtype, values);
     }
 
     private EncodeResult buildNullableResult(
