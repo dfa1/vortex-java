@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -34,12 +35,10 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        // Binary (DType.Binary) arrives as raw byte[][] and must round-trip byte-for-byte —
-        // routing it through the Utf8 String[] path would corrupt any byte sequence that isn't
-        // valid UTF-8 (e.g. an embedded audio/image blob). Utf8 arrives as String[] and is UTF-8
-        // encoded. Either way a null entry (this encoder is the values child of a masked/nullable
-        // layout, where validity carries nullity) contributes a zero-length slot.
-        String[] strings = data instanceof String[] s ? s : null;
+        // Binary arrives as raw byte[][] and round-trips byte-for-byte; Utf8 arrives as String[]
+        // (UTF-8 encoded here) or as its UTF-8 bytes. Either way a null entry (this encoder is the
+        // values child of a masked/nullable layout, where validity carries nullity) contributes a
+        // zero-length slot.
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
         if (rows == null) {
             throw new VortexException(EncodingId.VORTEX_VARBIN, "chunk exceeds 2 GB of row bytes");
@@ -57,9 +56,7 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
 
         byte[] metaBytes = new ProtoVarBinMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal())).encode();
 
-        // Zone-map min/max stats are lexicographic-string-only (minMaxStats(String[])); binary
-        // blobs (e.g. audio bytes) aren't usefully zone-mapped, so skip stats for that path.
-        MinMax stats = strings != null ? minMaxStats(strings, rows) : null;
+        MinMax stats = textMinMax(dtype, data, rows);
         ProtoScalarValue statsMin = stats != null ? stats.min() : null;
         ProtoScalarValue statsMax = stats != null ? stats.max() : null;
 
@@ -122,6 +119,69 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
             }
         }
         return min < 0 ? null : encodeMinMax(strings[min], strings[max]);
+    }
+
+    /// The zone-map min/max of a string column, or `null` for binary values or when every value is
+    /// `null`. A `String[]` is always text; a `byte[][]` is text (UTF-8) when `dtype`, or an
+    /// extension's storage, is Utf8. Binary has no useful ordering: a zone map over arbitrary blobs
+    /// prunes nothing.
+    ///
+    /// @param dtype  the values' dtype
+    /// @param values a `String[]` or `byte[][]`, `null` at a null row
+    /// @return the [MinMax] of encoded string scalars, or `null`
+    public static MinMax textMinMax(DType dtype, Object values) {
+        if (values instanceof String[] strings) {
+            return minMaxStats(strings);
+        }
+        if (values instanceof byte[][] utf8 && isUtf8(dtype)) {
+            return minMaxStats(utf8);
+        }
+        return null;
+    }
+
+    /// [#textMinMax(DType, Object)] reusing the contiguous rows an encoder already built.
+    ///
+    /// @param dtype  the values' dtype
+    /// @param values a `String[]` or `byte[][]`, `null` at a null row
+    /// @param rows   `values` as [VarBinBytes#toContiguous(Object)] lays them out, or `null`
+    /// @return the [MinMax] of encoded string scalars, or `null`
+    static MinMax textMinMax(DType dtype, Object values, VarBinBytes.Rows rows) {
+        if (values instanceof String[] strings && rows != null) {
+            return minMaxStats(strings, rows);
+        }
+        return textMinMax(dtype, values);
+    }
+
+    /// Whether `dtype` holds UTF-8 text, directly or as an extension's storage.
+    ///
+    /// @param dtype the dtype, or `null`
+    /// @return `true` for Utf8 and Utf8-backed extensions
+    static boolean isUtf8(DType dtype) {
+        return dtype instanceof DType.Utf8
+                || (dtype instanceof DType.Extension ext && ext.storageDType() instanceof DType.Utf8);
+    }
+
+    /// [#minMaxStats(String[])] over UTF-8 rows, comparing their bytes: [Arrays#compareUnsigned]
+    /// orders UTF-8 exactly as [Utf8Order] orders the strings. Only the two winners are decoded.
+    ///
+    /// @param utf8 the rows' UTF-8 bytes, `null` at a null row
+    /// @return the [MinMax] of encoded scalars, or `null` if all entries are `null`
+    static MinMax minMaxStats(byte[][] utf8) {
+        int min = -1;
+        int max = -1;
+        for (int i = 0; i < utf8.length; i++) {
+            if (utf8[i] == null) {
+                continue;
+            }
+            if (min < 0 || Arrays.compareUnsigned(utf8[i], utf8[min]) < 0) {
+                min = i;
+            }
+            if (max < 0 || Arrays.compareUnsigned(utf8[i], utf8[max]) > 0) {
+                max = i;
+            }
+        }
+        return min < 0 ? null : encodeMinMax(new String(utf8[min], StandardCharsets.UTF_8),
+                new String(utf8[max], StandardCharsets.UTF_8));
     }
 
     /// Encodes an already-computed string min/max as [#minMaxStats(String[])] would.

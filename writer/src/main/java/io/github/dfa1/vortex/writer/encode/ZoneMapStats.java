@@ -25,7 +25,7 @@ import java.util.Objects;
 ///   values are compacted against the validity mask first. Taking the raw array's minimum here
 ///   would report `0` for a column of positive values, which is worse than reporting nothing.
 /// - a primitive array (`long[]`, `double[]`, …) matching the dtype's [io.github.dfa1.vortex.core.model.PType]
-/// - `String[]`, compared lexicographically, skipping nulls
+/// - `String[]`, or a Utf8 column's UTF-8 `byte[][]`, compared in UTF-8 byte order, skipping nulls
 ///
 /// Anything else - binary blobs, nested types - has no useful ordering and yields `null`.
 final class ZoneMapStats {
@@ -48,12 +48,12 @@ final class ZoneMapStats {
             if (nonNullable instanceof DType.Decimal d && values instanceof BigDecimal[] decimals) {
                 return ofDecimal(d, decimals);
             }
-            // A String[] carries a real null at its invalid positions, so the lexicographic
-            // null-skip is already correct and needs no compaction.
-            return values instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
+            // A String[]/byte[][] carries a real null at its invalid positions, so the
+            // lexicographic null-skip is already correct and needs no compaction.
+            return VarBinEncodingEncoder.textMinMax(nonNullable, values);
         }
-        if (data instanceof String[] strings) {
-            return VarBinEncodingEncoder.minMaxStats(strings);
+        if (data instanceof String[] || data instanceof byte[][]) {
+            return VarBinEncodingEncoder.textMinMax(dtype, data);
         }
         DType effective = dtype instanceof DType.Extension ext ? ext.storageDType() : dtype;
         if (effective instanceof DType.Primitive p && data != null && data.getClass().isArray()) {

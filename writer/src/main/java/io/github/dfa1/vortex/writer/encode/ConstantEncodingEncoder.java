@@ -9,6 +9,8 @@ import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.OptionalLong;
 
 /// Write-only encoder for `vortex.constant`.
@@ -42,8 +44,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         }
         if (dtype instanceof DType.Utf8) {
             // Strings carry no stats; Rust's constant check is one pass over the array
-            String[] strings = (String[]) data.data();
-            return strings.length > 0 && isConstantStrings(strings) ? Estimate.ALWAYS_USE : Estimate.SKIP;
+            return isConstantText(data.data()) ? Estimate.ALWAYS_USE : Estimate.SKIP;
         }
         ArrayStats stats = data.stats();
         if (stats.valueCount() == 0) {
@@ -64,7 +65,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
             return encodeBool((boolean[]) data);
         }
         if (dtype instanceof DType.Utf8) {
-            return encodeUtf8((String[]) data);
+            return encodeUtf8(data);
         }
         if (!(dtype instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive or Bool dtype, got " + dtype);
@@ -84,8 +85,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
         if (dtype instanceof DType.Utf8) {
-            String[] strings = (String[]) data;
-            if (strings.length == 0 || !isConstantStrings(strings)) {
+            if (!isConstantText(data)) {
                 return CascadeStep.notApplicable();
             }
             return CascadeStep.terminal(encode(dtype, data, encodeCtx));
@@ -102,24 +102,41 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         return CascadeStep.terminal(encode(dtype, data, encodeCtx));
     }
 
-    private static EncodeResult encodeUtf8(String[] data) {
-        if (data.length == 0 || !isConstantStrings(data)) {
+    /// @param data a `String[]` or the column's UTF-8 `byte[][]`
+    private static EncodeResult encodeUtf8(Object data) {
+        if (!isConstantText(data)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
         }
-        ProtoScalarValue scalar = ProtoScalarValue.ofStringValue(data[0]);
+        String value;
+        if (data instanceof byte[][] utf8) {
+            value = new String(utf8[0], StandardCharsets.UTF_8);
+        } else {
+            value = ((String[]) data)[0];
+        }
+        ProtoScalarValue scalar = ProtoScalarValue.ofStringValue(value);
         byte[] scalarBytes = scalar.encode();
         // Both extremes are the one repeated value, by construction
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)),
                 scalar, scalar);
     }
 
-    private static boolean isConstantStrings(String[] data) {
-        for (int i = 1; i < data.length; i++) {
-            if (!data[i].equals(data[0])) {
+    /// Whether a non-empty `String[]` or UTF-8 `byte[][]` repeats one value.
+    private static boolean isConstantText(Object data) {
+        if (data instanceof byte[][] utf8) {
+            for (int i = 1; i < utf8.length; i++) {
+                if (!Arrays.equals(utf8[i], utf8[0])) {
+                    return false;
+                }
+            }
+            return utf8.length > 0;
+        }
+        String[] strings = (String[]) data;
+        for (int i = 1; i < strings.length; i++) {
+            if (!strings[i].equals(strings[0])) {
                 return false;
             }
         }
-        return true;
+        return strings.length > 0;
     }
 
     private static EncodeResult encodeBool(boolean[] data) {

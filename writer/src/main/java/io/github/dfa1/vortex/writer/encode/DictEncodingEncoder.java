@@ -16,10 +16,13 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Array;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /// Write-only encoder for `vortex.dict`.
 public final class DictEncodingEncoder implements EncodingEncoder {
@@ -112,7 +115,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (dtype instanceof DType.Utf8) {
-            return encodeUtf8((String[]) data, ctx);
+            return encodeUtf8(data, ctx);
         }
         DictData d = buildDictData(dtype, data);
         PType codePType = d.codePType();
@@ -145,7 +148,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         if (dtype instanceof DType.Utf8) {
-            return encodeUtf8Cascade((String[]) data, ctx);
+            return encodeUtf8Cascade(data, ctx);
         }
         DictData d = buildDictData(dtype, data);
         PType codePType = d.codePType();
@@ -173,14 +176,16 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     /// varbin. [CascadingCompressor] excludes the winning `vortex.dict` from that child's
     /// competition, so the pool is never wrapped in a second dict the reader cannot unwrap.
     ///
-    /// @param strings the column's string values
-    /// @param ctx     encoding context supplying the arena
+    /// @param data the column's values, a `String[]` or UTF-8 `byte[][]`
+    /// @param ctx  encoding context supplying the arena
     /// @return a cascade step whose values child (index 1) is left open for compression
-    private static CascadeStep encodeUtf8Cascade(String[] strings, EncodeContext ctx) {
-        int n = strings.length;
-        var valueMap = new LinkedHashMap<String, Integer>();
-        for (String s : strings) {
-            valueMap.computeIfAbsent(s, _ -> valueMap.size());
+    private static CascadeStep encodeUtf8Cascade(Object data, EncodeContext ctx) {
+        int n = Array.getLength(data);
+        Object[] keys = new Object[n];
+        var valueMap = new LinkedHashMap<Object, Integer>();
+        for (int i = 0; i < n; i++) {
+            keys[i] = textKey(data, i);
+            valueMap.computeIfAbsent(keys[i], _ -> valueMap.size());
             // Distinct count only grows as the scan proceeds, so once it alone already exceeds
             // n/2 the final count is guaranteed to too — the same "dict can't win" rule
             // DictEncodingEncoder#expectedRatio applies to Primitive via stats, mirrored here
@@ -199,7 +204,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         // Codes as a typed array (U8->byte[], U16->short[], U32->int[]) so the cascade can bitpack
         // them, rather than emitting a raw vortex.primitive leaf that pays the full U8/U16/U32 width
         // per row (#303). The primitive dict path already exposes its codes this way.
-        Object codesArr = buildCodesArray(strings, valueMap, codePType);
+        Object codesArr = buildCodesArray(keys, valueMap, codePType);
 
         byte[] metaBytes = new ProtoDictMetadata(
                 dictSize,
@@ -215,10 +220,10 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{null, null},
                 new int[0]);
 
-        String[] distinct = valueMap.keySet().toArray(new String[0]);
+        Object distinct = textPool(valueMap.keySet(), data instanceof byte[][]);
 
         // UTF-8 byte order like every other string bound (Rust compares bytes), not String's UTF-16 order
-        MinMax stats = VarBinEncodingEncoder.minMaxStats(valueMap.keySet().toArray(new String[0]));
+        MinMax stats = VarBinEncodingEncoder.textMinMax(DType.UTF8, distinct);
         ProtoScalarValue statsMin = stats != null ? stats.min() : null;
         ProtoScalarValue statsMax = stats != null ? stats.max() : null;
 
@@ -239,16 +244,17 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     ///
     /// @param dtype    the column's nullable Utf8 dtype; also the values pool's dtype, as Rust
     ///                 requires
-    /// @param strings  the row values (any element at an invalid row is ignored)
+    /// @param rows     the row values, a `String[]` or UTF-8 `byte[][]` (any element at an invalid
+    ///                 row is ignored)
     /// @param validity per-row validity
     /// @param ctx      the encode context of the enclosing masked column
     /// @return the encoded dict, or `null` when more than half the rows are distinct (Dict cannot win)
-    static EncodeResult encodeNullableUtf8(DType dtype, String[] strings, boolean[] validity, EncodeContext ctx) {
-        int n = strings.length;
-        String[] keys = new String[n];
-        var valueMap = new LinkedHashMap<String, Integer>();
+    static EncodeResult encodeNullableUtf8(DType dtype, Object rows, boolean[] validity, EncodeContext ctx) {
+        int n = validity.length;
+        Object[] keys = new Object[n];
+        var valueMap = new LinkedHashMap<Object, Integer>();
         for (int i = 0; i < n; i++) {
-            keys[i] = validity[i] ? strings[i] : null;
+            keys[i] = validity[i] ? textKey(rows, i) : null;
             valueMap.computeIfAbsent(keys[i], _ -> valueMap.size());
             // Same "dict can't win" bail-out as encodeUtf8Cascade.
             if (valueMap.size() * 2 > n) {
@@ -257,10 +263,11 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         }
         int dictSize = valueMap.size();
         PType codePType = codePType(dictSize);
-        String[] pool = valueMap.keySet().toArray(new String[0]);
+        Object pool = textPool(valueMap.keySet(), rows instanceof byte[][]);
         boolean[] poolValidity = new boolean[dictSize];
-        for (int i = 0; i < dictSize; i++) {
-            poolValidity[i] = pool[i] != null;
+        int p = 0;
+        for (Object key : valueMap.keySet()) {
+            poolValidity[p++] = key != null;
         }
 
         EncodeContext childCtx = ctx.withDecrementedDepth();
@@ -288,20 +295,63 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root, buffers, null, null);
     }
 
-    private static Object buildCodesArray(String[] strings, java.util.Map<String, Integer> valueMap, PType codePType) {
-        int[] codes = new int[strings.length];
+    private static Object buildCodesArray(Object[] keys, Map<Object, Integer> valueMap, PType codePType) {
+        int[] codes = new int[keys.length];
         for (int i = 0; i < codes.length; i++) {
-            codes[i] = valueMap.get(strings[i]);
+            codes[i] = valueMap.get(keys[i]);
         }
         return PrimitiveArrays.fromIntsArray(codes, codePType, EncodingId.VORTEX_DICT);
     }
 
-    private static EncodeResult encodeUtf8(String[] strings, EncodeContext ctx) {
-        int n = strings.length;
+    /// The hash key of a Utf8 row: the string itself, or the row's UTF-8 bytes wrapped so they hash
+    /// and compare by content. A `null` row is a `null` key.
+    ///
+    /// @param data a `String[]` or the column's UTF-8 `byte[][]`
+    /// @param i    the row
+    /// @return the row's key
+    private static Object textKey(Object data, int i) {
+        if (data instanceof byte[][] utf8) {
+            return utf8[i] == null ? null : ByteBuffer.wrap(utf8[i]);
+        }
+        return ((String[]) data)[i];
+    }
 
-        var valueMap = new LinkedHashMap<String, Integer>();
-        for (String s : strings) {
-            valueMap.computeIfAbsent(s, _ -> valueMap.size());
+    /// The distinct values in code order, in the shape the rows came in: `String[]`, or `byte[][]`
+    /// when `bytes`.
+    ///
+    /// @param keys  the dictionary keys in first-seen order, from [#textKey(Object, int)]
+    /// @param bytes whether the keys wrap UTF-8 bytes
+    /// @return the pool, `null` where a key is `null`
+    private static Object textPool(Collection<Object> keys, boolean bytes) {
+        if (!bytes) {
+            return keys.toArray(new String[0]);
+        }
+        byte[][] pool = new byte[keys.size()][];
+        int i = 0;
+        for (Object key : keys) {
+            if (key != null) {
+                pool[i] = ((ByteBuffer) key).array();
+            }
+            i++;
+        }
+        return pool;
+    }
+
+    /// One pool entry's UTF-8 bytes.
+    private static byte[] utf8Of(Object key) {
+        if (key instanceof ByteBuffer bytes) {
+            return bytes.array();
+        }
+        return ((String) key).getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static EncodeResult encodeUtf8(Object data, EncodeContext ctx) {
+        int n = Array.getLength(data);
+        Object[] keys = new Object[n];
+        var valueMap = new LinkedHashMap<Object, Integer>();
+        for (int i = 0; i < n; i++) {
+            keys[i] = textKey(data, i);
+            valueMap.computeIfAbsent(keys[i], _ -> valueMap.size());
         }
 
         int dictSize = valueMap.size();
@@ -311,8 +361,8 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         byte[][] dictByteArrays = new byte[dictSize][];
         int j = 0;
         long totalDictBytes = 0;
-        for (String s : valueMap.keySet()) {
-            dictByteArrays[j] = s.getBytes(StandardCharsets.UTF_8);
+        for (Object key : valueMap.keySet()) {
+            dictByteArrays[j] = utf8Of(key);
             totalDictBytes += dictByteArrays[j].length;
             j++;
         }
@@ -331,7 +381,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
         MemorySegment codesBuf = arena.allocate((long) n * codeBytes);
         for (int i = 0; i < n; i++) {
-            writeCodeToSeg(codesBuf, codePType, i, valueMap.get(strings[i]));
+            writeCodeToSeg(codesBuf, codePType, i, valueMap.get(keys[i]));
         }
 
         byte[] metaBytes = new ProtoDictMetadata(
@@ -357,7 +407,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 new int[0]);
 
         // UTF-8 byte order like every other string bound (Rust compares bytes), not String's UTF-16 order
-        MinMax stats = VarBinEncodingEncoder.minMaxStats(valueMap.keySet().toArray(new String[0]));
+        MinMax stats = VarBinEncodingEncoder.textMinMax(DType.UTF8, textPool(valueMap.keySet(), data instanceof byte[][]));
         ProtoScalarValue statsMin = stats != null ? stats.min() : null;
         ProtoScalarValue statsMax = stats != null ? stats.max() : null;
         return new EncodeResult(root, List.of(EncodedBuffer.bytes(dictBytesBuf), EncodedBuffer.of(dictOffsetsBuf, PType.I64),

@@ -63,24 +63,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         Arena arena = ctx.arena();
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
-        return toEncodeResult(compress(data, rows, arena), arena, zoneMapStats(data, rows));
-    }
-
-    /// Zone-map min/max for the rows being encoded, or `null` when there is nothing useful to
-    /// record. Utf8 rows go through [VarBinEncodingEncoder#minMaxStats(String[])] so an
-    /// FSST-compressed column reports the same lexicographic bounds a plain `vortex.varbin` one
-    /// would - without this, choosing FSST for a column silently costs it zone-map pruning and
-    /// `MIN`/`MAX` push-down. Binary rows are skipped for the same reason [VarBinEncodingEncoder]
-    /// skips them: a zone map over arbitrary blobs prunes nothing.
-    ///
-    /// @param data the Utf8 (`String[]`) or Binary (`byte[][]`) values being encoded
-    /// @param rows `data` as [VarBinBytes#toContiguous(Object)] lays it out, or `null` above 2 GB
-    /// @return the [MinMax] of encoded scalars, or `null`
-    private static MinMax zoneMapStats(Object data, VarBinBytes.Rows rows) {
-        if (!(data instanceof String[] strings)) {
-            return null;
-        }
-        return rows == null ? VarBinEncodingEncoder.minMaxStats(strings) : VarBinEncodingEncoder.minMaxStats(strings, rows);
+        return toEncodeResult(compress(data, rows, arena), arena, VarBinEncodingEncoder.textMinMax(dtype, data, rows));
     }
 
     /// Lays out a compression product in the terminal `vortex.fsst` wire format: the per-row
@@ -94,7 +77,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     ///
     /// @param c     the compression product to lay out
     /// @param arena arena backing the length/offset buffers
-    /// @param stats the `{min, max}` zone-map scalars from [#zoneMapStats(Object, VarBinBytes.Rows)], or `null`
+    /// @param stats the `{min, max}` zone-map scalars (the same bounds a plain `vortex.varbin` would
+    ///              report, so choosing FSST costs no pruning), or `null`
     /// @return the terminal `vortex.fsst` encode result
     static EncodeResult toEncodeResult(Fsst c, Arena arena, MinMax stats) {
         long uncompLenBytes = c.uncompLenPType().byteSize();
@@ -142,7 +126,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         }
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
         Fsst c = compress(data, rows, ctx.arena());
-        MinMax stats = zoneMapStats(data, rows);
+        MinMax stats = VarBinEncodingEncoder.textMinMax(dtype, data, rows);
         Object uncompLens = PrimitiveArrays.fromIntsArray(c.uncompLens(), c.uncompLenPType(), EncodingId.VORTEX_FSST);
         Object codesOffsets = PrimitiveArrays.fromIntsArray(c.codesOffsets(), c.codesOffPType(), EncodingId.VORTEX_FSST);
         EncodeNode partialRoot = new EncodeNode(
