@@ -42,7 +42,7 @@ class SequenceCascadeTest {
         // Then
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
             assertThat(reader.footer().arraySpecs()).contains(EncodingId.VORTEX_SEQUENCE);
-            assertThat(readLongs(reader)).containsExactly(times);
+            assertThat(readLongs(reader)).isEqualTo(times);
         }
     }
 
@@ -61,7 +61,7 @@ class SequenceCascadeTest {
         // Then
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
             assertThat(reader.footer().arraySpecs()).doesNotContain(EncodingId.VORTEX_SEQUENCE);
-            assertThat(readLongs(reader)).containsExactly(times);
+            assertThat(readLongs(reader)).isEqualTo(times);
         }
     }
 
