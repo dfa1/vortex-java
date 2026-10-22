@@ -153,7 +153,12 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         return new VarBinConstantArray(dtype, n, strBytes);
     }
 
-    private static long scalarToRawBits(ProtoScalarValue scalar) {
+    /// Raw bits of a primitive scalar as a `long`: floats by their IEEE bit pattern, `0` when the
+    /// scalar carries no primitive value. Shared with [SparseEncodingDecoder]'s fill value.
+    ///
+    /// @param scalar the scalar to read
+    /// @return the value's raw bits
+    static long scalarToRawBits(ProtoScalarValue scalar) {
         if (scalar.int64_value() != null) {
             return scalar.int64_value();
         }

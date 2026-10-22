@@ -140,7 +140,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_SPARSE, "expected primitive dtype, got " + ctx.dtype());
         }
         PType valuePtype = ((DType.Primitive) ctx.dtype()).ptype();
-        long fillBits = scalarToLong(fillScalar);
+        long fillBits = ConstantEncodingDecoder.scalarToRawBits(fillScalar);
 
         // Lazy path: keep fill bits + decoded patches; no n-sized buffer allocated.
         // When numPatches == 0 we still decode zero-length children so the record's
@@ -328,26 +328,6 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                     "utf8/binary fill scalar carries no string or bytes value");
         }
         return new byte[0];
-    }
-
-    private static long scalarToLong(ProtoScalarValue scalar) {
-        if (scalar.int64_value() != null) {
-            return scalar.int64_value();
-        }
-        if (scalar.uint64_value() != null) {
-            return scalar.uint64_value();
-        }
-        if (scalar.f16_value() != null) {
-            // Rust writes an f16 as its 16 bits in a u64; the legacy uint64_value form is read above
-            return scalar.f16_value();
-        }
-        if (scalar.f32_value() != null) {
-            return Float.floatToRawIntBits(scalar.f32_value());
-        }
-        if (scalar.f64_value() != null) {
-            return Double.doubleToRawLongBits(scalar.f64_value());
-        }
-        return 0L;
     }
 
 }

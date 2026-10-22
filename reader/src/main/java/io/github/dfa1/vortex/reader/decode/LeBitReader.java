@@ -68,9 +68,4 @@ final class LeBitReader {
     public long byteOffset() {
         return bitPos >>> 3;
     }
-
-    /// @return total bits consumed since construction
-    public long bitsConsumed() {
-        return bitPos;
-    }
 }

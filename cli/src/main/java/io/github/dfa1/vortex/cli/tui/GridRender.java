@@ -59,34 +59,40 @@ final class GridRender {
                 }
             }
             return switch (inner) {
-                // Long/IntArray have no dtype-aware getter, so gate the unsigned rendering on the
-                // ptype; a U64/U32 high-half value would otherwise show as a negative decimal
-                // (e.g. a U8 magnesium column widened to U64 with the sign bit set).
-                case LongArray a -> isUnsigned(a)
-                        ? Long.toUnsignedString(a.getLong(i))
-                        : Long.toString(a.getLong(i));
-                case IntArray a -> isUnsigned(a)
-                        ? Integer.toUnsignedString(a.getInt(i))
-                        : Integer.toString(a.getInt(i));
-                // Short/ByteArray.getInt already zero-extends U16/U8, so widening to int and
-                // printing signed decimal yields the correct unsigned value.
-                case ShortArray a -> Integer.toString(a.getInt(i));
-                case ByteArray a -> Integer.toString(a.getInt(i));
-                case DoubleArray a -> Double.toString(a.getDouble(i));
-                case FloatArray a -> Float.toString(a.getFloat(i));
-                case Float16Array a -> Float.toString(a.getFloat(i));
-                case BoolArray a -> Boolean.toString(a.getBoolean(i));
-                case VarBinArray a -> a.dtype() instanceof DType.Utf8
-                        ? a.getString(i)
-                        : bytesToHex(a.getBytes(i));
+                case VarBinArray a -> a.dtype() instanceof DType.Utf8 ? a.getString(i) : bytesToHex(a.getBytes(i));
                 case DecimalArray a -> a.getDecimal(i).toPlainString();
-                default -> "<" + inner.getClass().getSimpleName() + ">";
+                default -> formatPrimitive(inner, i).orElse("<" + inner.getClass().getSimpleName() + ">");
             };
         } catch (RuntimeException e) {
             String msg = e.getMessage();
             return "<" + e.getClass().getSimpleName()
                     + (msg != null ? ": " + msg.split("\n", 2)[0] : "") + ">";
         }
+    }
+
+    /// Formats the element at `i` of a numeric or boolean leaf array, shared by the grid and the
+    /// inspector, which differ only in how they render strings, bytes and decimals.
+    ///
+    /// @param array the leaf value array (never a [MaskedArray]; the caller unwraps first)
+    /// @param i     element index
+    /// @return the formatted value, or empty for any other array shape
+    static Optional<String> formatPrimitive(Array array, long i) {
+        return switch (array) {
+            // Long/IntArray have no dtype-aware getter, so gate the unsigned rendering on the
+            // ptype; a U64/U32 high-half value would otherwise show as a negative decimal
+            // (e.g. a U8 magnesium column widened to U64 with the sign bit set).
+            case LongArray a -> Optional.of(isUnsigned(a) ? Long.toUnsignedString(a.getLong(i)) : Long.toString(a.getLong(i)));
+            case IntArray a -> Optional.of(isUnsigned(a) ? Integer.toUnsignedString(a.getInt(i)) : Integer.toString(a.getInt(i)));
+            // Short/ByteArray.getInt already zero-extends U16/U8, so widening to int and
+            // printing signed decimal yields the correct unsigned value.
+            case ShortArray a -> Optional.of(Integer.toString(a.getInt(i)));
+            case ByteArray a -> Optional.of(Integer.toString(a.getInt(i)));
+            case DoubleArray a -> Optional.of(Double.toString(a.getDouble(i)));
+            case FloatArray a -> Optional.of(Float.toString(a.getFloat(i)));
+            case Float16Array a -> Optional.of(Float.toString(a.getFloat(i)));
+            case BoolArray a -> Optional.of(Boolean.toString(a.getBoolean(i)));
+            default -> Optional.empty();
+        };
     }
 
     /// Whether the array's dtype is an unsigned integer, so high-half values must render as
@@ -112,7 +118,11 @@ final class GridRender {
         };
     }
 
-    private static String bytesToHex(byte[] bytes) {
+    /// Renders up to the first 16 bytes as `0x`-prefixed hex, with `...` when there are more.
+    ///
+    /// @param bytes the bytes to render
+    /// @return the hex preview
+    static String bytesToHex(byte[] bytes) {
         int n = Math.min(bytes.length, 16);
         StringBuilder sb = new StringBuilder(n * 2 + 2);
         sb.append("0x");

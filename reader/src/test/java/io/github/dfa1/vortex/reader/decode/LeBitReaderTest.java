@@ -41,7 +41,8 @@ class LeBitReaderTest {
 
             // Then
             assertThat(result).isZero();
-            assertThat(sut.bitsConsumed()).isZero();
+            // a zero-width read must not advance: the whole byte is still there
+            assertThat(sut.readBits(8)).isEqualTo(0xFFL);
         }
 
         @Test
@@ -54,7 +55,8 @@ class LeBitReaderTest {
 
             // Then — LSB first: bits [3:0] = 0b0011 = 3
             assertThat(result).isEqualTo(3L);
-            assertThat(sut.bitsConsumed()).isEqualTo(4);
+            // advanced exactly 4 bits: the high nibble 0b1011 comes next
+            assertThat(sut.readBits(4)).isEqualTo(0xBL);
         }
 
         @Test
@@ -148,7 +150,8 @@ class LeBitReaderTest {
             assertThat(b1).isEqualTo(1);
             assertThat(b2).isZero();
             assertThat(b3).isEqualTo(1);
-            assertThat(sut.bitsConsumed()).isEqualTo(4);
+            // advanced exactly 4 bits: the high nibble 0b1010 comes next
+            assertThat(sut.readBits(4)).isEqualTo(0xAL);
         }
 
         @Test
@@ -190,7 +193,6 @@ class LeBitReaderTest {
 
             // Then — byte offset unchanged
             assertThat(sut.byteOffset()).isEqualTo(1);
-            assertThat(sut.bitsConsumed()).isEqualTo(8);
         }
 
         @Test
@@ -204,7 +206,6 @@ class LeBitReaderTest {
 
             // Then — aligned to byte 1
             assertThat(sut.byteOffset()).isEqualTo(1);
-            assertThat(sut.bitsConsumed()).isEqualTo(8);
         }
 
         @Test

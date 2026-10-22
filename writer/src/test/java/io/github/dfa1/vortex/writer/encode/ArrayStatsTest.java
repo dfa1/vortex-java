@@ -21,13 +21,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// grow past its initial capacity.
 class ArrayStatsTest {
 
+    private static final StatsOptions ALL_STATS = StatsOptions.defaults().withCountDistinct(true).withTrackMostFrequent(true);
+
     @Test
     void compute_emptyArray_returnsEmptySentinel() {
         // Given
         int[] data = {};
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.distinctAndTop());
+        ArrayStats result = ArrayStats.compute(PType.I32, data, ALL_STATS);
 
         // Then
         assertThat(result).isEqualTo(ArrayStats.EMPTY);
@@ -52,7 +54,7 @@ class ArrayStatsTest {
         int[] data = {5, 5, 5, 7, 7, 9};
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I32, data, StatsOptions.distinctAndTop());
+        ArrayStats result = ArrayStats.compute(PType.I32, data, ALL_STATS);
 
         // Then
         assertThat(result.distinctCount()).isEqualTo(3);
@@ -74,7 +76,7 @@ class ArrayStatsTest {
         }
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.distinctAndTop());
+        ArrayStats result = ArrayStats.compute(PType.I64, data, ALL_STATS);
 
         // Then — the count is a lower bound past the cap, never the exact n
         assertThat(result.distinctCapped()).isTrue();
@@ -95,7 +97,7 @@ class ArrayStatsTest {
         }
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.distinctAndTop());
+        ArrayStats result = ArrayStats.compute(PType.I64, data, ALL_STATS);
 
         // Then
         assertThat(result.distinctCapped()).isFalse();
@@ -110,7 +112,7 @@ class ArrayStatsTest {
         long[] data = new long[1000];
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.distinctAndTop());
+        ArrayStats result = ArrayStats.compute(PType.I64, data, ALL_STATS);
 
         // Then
         assertThat(result.distinctCount()).isEqualTo(1);
@@ -141,7 +143,7 @@ class ArrayStatsTest {
         }
 
         // When
-        ArrayStats result = ArrayStats.compute(PType.I64, data, StatsOptions.distinctAndTop());
+        ArrayStats result = ArrayStats.compute(PType.I64, data, ALL_STATS);
 
         // Then
         assertThat(result.distinctCount()).isEqualTo(reference.size());
@@ -230,7 +232,7 @@ class ArrayStatsTest {
                 .mapToLong(Map.Entry::getKey).min().orElseThrow();
 
         // When
-        ArrayStats result = ArrayStats.compute(ptype, data, StatsOptions.distinctAndTop());
+        ArrayStats result = ArrayStats.compute(ptype, data, ALL_STATS);
 
         // Then
         assertThat(result.distinctCapped()).isFalse();
@@ -283,7 +285,7 @@ class ArrayStatsTest {
         int expectedTopFreq = reference.values().stream().max(Integer::compare).orElseThrow();
 
         // When
-        ArrayStats result = ArrayStats.compute(ptype, data, StatsOptions.distinctAndTop());
+        ArrayStats result = ArrayStats.compute(ptype, data, ALL_STATS);
 
         // Then
         assertThat(result.distinctCapped()).isFalse();

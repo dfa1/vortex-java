@@ -3,17 +3,9 @@ package io.github.dfa1.vortex.cli.tui;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
-import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DecimalArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.Float16Array;
-import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.GenericArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
@@ -47,29 +39,12 @@ final class InspectorRender {
             }
         }
         return switch (array) {
-            // Long/IntArray have no dtype-aware getter, so gate the unsigned rendering on the
-            // ptype; a U64/U32 high-half value would otherwise show as a negative decimal.
-            case LongArray a -> isUnsigned(a)
-                    ? Long.toUnsignedString(a.getLong(i))
-                    : Long.toString(a.getLong(i));
-            case IntArray a -> isUnsigned(a)
-                    ? Integer.toUnsignedString(a.getInt(i))
-                    : Integer.toString(a.getInt(i));
-            // Short/ByteArray.getInt already zero-extends U16/U8, so a signed-decimal print of the
-            // widened int is the correct unsigned value.
-            case ShortArray a -> Integer.toString(a.getInt(i));
-            case ByteArray a -> Integer.toString(a.getInt(i));
-            case DoubleArray a -> Double.toString(a.getDouble(i));
-            case FloatArray a -> Float.toString(a.getFloat(i));
-            case Float16Array a -> Float.toString(a.getFloat(i));
-            case BoolArray a -> Boolean.toString(a.getBoolean(i));
-            case VarBinArray a -> a.dtype() instanceof DType.Utf8
-                    ? "\"" + a.getString(i) + "\""
-                    : bytesToShortHex(a.getBytes(i));
+            case VarBinArray a -> a.dtype() instanceof DType.Utf8 ? "\"" + a.getString(i) + "\"" : GridRender.bytesToHex(a.getBytes(i));
             case GenericArray a when a.dtype() instanceof DType.Decimal ->
                     tryDecimal(a::getDecimal, a, i);
             case DecimalArray a -> tryDecimal(a::getDecimal, a, i);
-            default -> "<" + array.getClass().getSimpleName() + " " + array.dtype() + ">";
+            default -> GridRender.formatPrimitive(array, i)
+                    .orElse("<" + array.getClass().getSimpleName() + " " + array.dtype() + ">");
         };
     }
 
@@ -124,15 +99,6 @@ final class InspectorRender {
         return formatValue(field, row, declared);
     }
 
-    /// Whether the array's dtype is an unsigned integer, so high-half values must render as
-    /// unsigned decimal rather than the two's-complement negative the raw signed getter returns.
-    ///
-    /// @param arr the value array under inspection
-    /// @return `true` when the dtype is a `U8`–`U64` primitive
-    private static boolean isUnsigned(Array arr) {
-        return arr.dtype() instanceof DType.Primitive p && p.ptype().isUnsigned();
-    }
-
     private static String tryDecimal(LongFunction<BigDecimal> reader, Array a, int i) {
         try {
             return reader.apply(i).toPlainString();
@@ -143,19 +109,6 @@ final class InspectorRender {
             }
             return "<" + a.getClass().getSimpleName() + " " + a.dtype() + ">";
         }
-    }
-
-    private static String bytesToShortHex(byte[] bytes) {
-        int n = Math.min(bytes.length, 16);
-        StringBuilder sb = new StringBuilder(n * 3 + 2);
-        sb.append("0x");
-        for (int i = 0; i < n; i++) {
-            sb.append(String.format("%02x", bytes[i] & 0xff));
-        }
-        if (bytes.length > n) {
-            sb.append("...");
-        }
-        return sb.toString();
     }
 
     /// Formats one 16-byte row of a hex dump: offset, hex columns, ASCII gutter.
