@@ -217,10 +217,10 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
         String[] distinct = valueMap.keySet().toArray(new String[0]);
 
-        String minStr = valueMap.keySet().stream().min(String::compareTo).orElse(null);
-        String maxStr = valueMap.keySet().stream().max(String::compareTo).orElse(null);
-        ProtoScalarValue statsMin = minStr != null ? ProtoScalarValue.ofStringValue(minStr) : null;
-        ProtoScalarValue statsMax = maxStr != null ? ProtoScalarValue.ofStringValue(maxStr) : null;
+        // UTF-8 byte order like every other string bound (Rust compares bytes), not String's UTF-16 order
+        MinMax stats = VarBinEncodingEncoder.minMaxStats(valueMap.keySet().toArray(new String[0]));
+        ProtoScalarValue statsMin = stats != null ? stats.min() : null;
+        ProtoScalarValue statsMax = stats != null ? stats.max() : null;
 
         return new CascadeStep(partialRoot, List.of(),
                 List.of(new ChildSlot(new DType.Primitive(codePType, false), codesArr, 0, CODES_EXCLUDED),
@@ -356,10 +356,10 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{codesNode, valuesNode},
                 new int[0]);
 
-        String minStr = valueMap.keySet().stream().min(String::compareTo).orElse(null);
-        String maxStr = valueMap.keySet().stream().max(String::compareTo).orElse(null);
-        ProtoScalarValue statsMin = minStr != null ? ProtoScalarValue.ofStringValue(minStr) : null;
-        ProtoScalarValue statsMax = maxStr != null ? ProtoScalarValue.ofStringValue(maxStr) : null;
+        // UTF-8 byte order like every other string bound (Rust compares bytes), not String's UTF-16 order
+        MinMax stats = VarBinEncodingEncoder.minMaxStats(valueMap.keySet().toArray(new String[0]));
+        ProtoScalarValue statsMin = stats != null ? stats.min() : null;
+        ProtoScalarValue statsMax = stats != null ? stats.max() : null;
         return new EncodeResult(root, List.of(EncodedBuffer.bytes(dictBytesBuf), EncodedBuffer.of(dictOffsetsBuf, PType.I64),
                 EncodedBuffer.of(codesBuf, codePType)), statsMin, statsMax);
     }
