@@ -33,7 +33,7 @@ class RepartitionerTest {
 
         // Then — 2 full chunks, then the odd batch left over at the end, rows in order
         assertThat(chunks).extracting(c -> ((long[]) c).length).containsExactly(131_072, 131_072, 65_536);
-        assertThat(concat(chunks)).containsExactly(sequence(0, 5 * 65_536));
+        assertThat(concat(chunks)).isEqualTo(sequence(0, 5 * 65_536));
     }
 
     @Test
@@ -48,7 +48,7 @@ class RepartitionerTest {
 
         // Then
         assertThat(chunks).extracting(c -> ((long[]) c).length).containsExactly(131_072, 131_072, 37_856);
-        assertThat(concat(chunks)).containsExactly(sequence(0, 300_000));
+        assertThat(concat(chunks)).isEqualTo(sequence(0, 300_000));
     }
 
     @Test
@@ -68,7 +68,7 @@ class RepartitionerTest {
         assertThat(chunks).extracting(c -> ((long[]) c).length)
                 .allSatisfy(n -> assertThat(n).isPositive())
                 .satisfies(ns -> assertThat(ns.subList(0, ns.size() - 1)).allSatisfy(n -> assertThat(n % 8192).isZero()));
-        assertThat(concat(chunks)).containsExactly(sequence(0, 300_000));
+        assertThat(concat(chunks)).isEqualTo(sequence(0, 300_000));
     }
 
     @Test
