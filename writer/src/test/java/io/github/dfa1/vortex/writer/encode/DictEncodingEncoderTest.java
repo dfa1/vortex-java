@@ -207,6 +207,21 @@ class DictEncodingEncoderTest {
     }
 
     @Test
+    void encodeCascade_utf8_statsUseUtf8ByteOrder() {
+        // Given — U+FF61 (UTF-8 EF BD A1) and U+1F600 (F0 9F 98 80, a surrogate pair in UTF-16):
+        // UTF-16 order puts the emoji first, UTF-8 order (Rust's, and every other string bound's)
+        // puts it last. Dict used String::compareTo, so its bounds disagreed with VarBin's.
+        String[] data = repeat(new String[]{"😀", "｡"}, 100);
+
+        // When
+        CascadeStep result = ENCODER.encodeCascade(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.statsMin().string_value()).isEqualTo("｡");
+        assertThat(result.statsMax().string_value()).isEqualTo("😀");
+    }
+
+    @Test
     void encode_primitive_statsCarryMinAndMaxOfLogicalValues() throws IOException {
         // Given — low-cardinality so dict encoding is a plausible pick; unordered so a broken
         // scan (e.g. reading dict-code range instead of logical values) would surface a wrong
