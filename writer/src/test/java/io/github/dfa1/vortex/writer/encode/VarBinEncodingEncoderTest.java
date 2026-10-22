@@ -234,9 +234,34 @@ class VarBinEncodingEncoderTest {
         @ParameterizedTest
         @ValueSource(longs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
         void minMaxStats_overRowBytes_matchesUtf8OrderOverStrings(long seed) {
-            // Given — the byte compare (#565) must pick the same min/max as Utf8Order on the
-            // strings. Mixed ASCII, U+E000.. and surrogate pairs, where UTF-16 order disagrees with
-            // UTF-8, plus shared prefixes and nulls (an empty row in the bytes, but not a value).
+            // Given — the byte compare (#565) must pick the same min/max as Utf8Order on the strings
+            String[] strings = mixedOrderStrings(seed);
+            MinMax expected = VarBinEncodingEncoder.minMaxStats(strings);
+
+            // When
+            MinMax result = VarBinEncodingEncoder.minMaxStats(strings, VarBinBytes.toContiguous(strings));
+
+            // Then
+            assertThat(result).isEqualTo(expected);
+        }
+
+        @ParameterizedTest
+        @ValueSource(longs = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+        void minMaxStats_overPerRowBytes_matchesUtf8OrderOverStrings(long seed) {
+            // Given — Zstd's per-row arrays, where a null row stays a null array
+            String[] strings = mixedOrderStrings(seed);
+            MinMax expected = VarBinEncodingEncoder.minMaxStats(strings);
+
+            // When
+            MinMax result = VarBinEncodingEncoder.minMaxStats(strings, VarBinBytes.toRawByteArrays(strings));
+
+            // Then
+            assertThat(result).isEqualTo(expected);
+        }
+
+        /// Mixed ASCII, U+E000.. and surrogate pairs, where UTF-16 order disagrees with UTF-8, plus
+        /// shared prefixes and nulls (an empty or null row in the bytes, but not a value).
+        private static String[] mixedOrderStrings(long seed) {
             Random random = new Random(seed);
             String[] alphabet = {"a", "b", "\u00e9", "\uE000", "\uFFFD", "\uD83D\uDE00", "\uD800\uDC00"};
             String[] strings = new String[50];
@@ -250,13 +275,7 @@ class VarBinEncodingEncoderTest {
                 }
                 strings[i] = sb.toString();
             }
-            MinMax expected = VarBinEncodingEncoder.minMaxStats(strings);
-
-            // When
-            MinMax result = VarBinEncodingEncoder.minMaxStats(strings, VarBinBytes.toContiguous(strings));
-
-            // Then
-            assertThat(result).isEqualTo(expected);
+            return strings;
         }
 
         @Test

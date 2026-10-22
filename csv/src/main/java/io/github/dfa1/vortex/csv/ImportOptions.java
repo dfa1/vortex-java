@@ -85,7 +85,8 @@ public final class ImportOptions {
 
     /// Override the field delimiter.
     ///
-    /// @param separator the delimiter character
+    /// @param separator the delimiter character: ASCII, and not a quote or line break (the import
+    ///                  reads bytes, where a non-ASCII character spans several)
     /// @return a copy of this options with the delimiter applied
     public ImportOptions withDelimiter(char separator) {
         return new ImportOptions(separator, chunkSize, header, schema, progressListener, writeOptions);

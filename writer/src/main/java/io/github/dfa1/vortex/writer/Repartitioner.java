@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 
 import java.lang.reflect.Array;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -174,7 +175,9 @@ final class Repartitioner {
             case String[] a -> {
                 long n = 16L * rows;
                 for (int i = offset; i < offset + rows; i++) {
-                    n += a[i] == null ? 0 : utf8Length(a[i]);
+                    // Encoding to count beats a char-by-char count by 2x: the JDK encodes ASCII
+                    // with a vectorized copy, and the throwaway array dies young.
+                    n += a[i] == null ? 0 : a[i].getBytes(StandardCharsets.UTF_8).length;
                 }
                 yield n;
             }
@@ -188,30 +191,6 @@ final class Repartitioner {
             case boolean[] _ -> (rows + 7L) / 8;
             default -> (long) rows * elementBytes();
         };
-    }
-
-    /// The length of `s` in UTF-8, counted without encoding it: sizing a batch must not cost a copy
-    /// of every string, as it runs on the caller's thread, ahead of the parallel compression.
-    /// An unpaired surrogate is one byte, as `getBytes` encodes it (`?`).
-    static int utf8Length(String s) {
-        int n = s.length();
-        int bytes = n;
-        for (int i = 0; i < n; i++) {
-            char c = s.charAt(i);
-            if (c >= 0x800) {
-                if (Character.isHighSurrogate(c) && i + 1 < n && Character.isLowSurrogate(s.charAt(i + 1))) {
-                    bytes += 2;
-                    i++;
-                } else if (Character.isSurrogate(c)) {
-                    continue;
-                } else {
-                    bytes += 2;
-                }
-            } else if (c >= 0x80) {
-                bytes++;
-            }
-        }
-        return bytes;
     }
 
     private long elementBytes() {

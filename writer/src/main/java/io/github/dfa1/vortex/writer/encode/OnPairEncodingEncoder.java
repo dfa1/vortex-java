@@ -308,10 +308,16 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         }
     }
 
-    /// Byte trie over the dictionary tokens for greedy longest-prefix match. Edges live in one
-    /// [LongIntMap] keyed by `(node << 8) | byte`; node 0 is the root.
+    /// Byte trie over the dictionary tokens for greedy longest-prefix match; node 0 is the root.
+    ///
+    /// Every match steps through the root's child and nearly every one through a grandchild, so
+    /// those edges are direct-indexed by the first byte and by the first two (`node + 1`, so `0`
+    /// is absent); deeper edges live in an open-addressing table keyed by `(node << 8) | byte`.
+    /// Hashing every step was 30% of a default-options CSV import, most of it cache misses.
     private static final class Trie {
-        private final LongIntMap edges = new LongIntMap(8192);
+        private final int[] depth1 = new int[1 << 8];
+        private final int[] depth2 = new int[1 << 16];
+        private final EdgeTable edges = new EdgeTable();
         private int[] nodeToken = {-1};
         private int nodes = 1;
         private final List<byte[]> tokens = new ArrayList<>();
@@ -322,15 +328,14 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         int insert(byte[] src, int from, int to) {
             int node = 0;
             for (int i = from; i < to; i++) {
-                long key = ((long) node << 8) | (src[i] & 0xFF);
-                int child = edges.get(key);
+                int child = child(node, src, from, i);
                 if (child < 0) {
                     child = nodes++;
                     if (child == nodeToken.length) {
                         nodeToken = Arrays.copyOf(nodeToken, 2 * child);
                         Arrays.fill(nodeToken, child, nodeToken.length, -1);
                     }
-                    edges.put(key, child);
+                    setChild(node, src, from, i, child);
                 }
                 node = child;
             }
@@ -349,10 +354,28 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         /// byte is a token, so the match is at least one byte long.
         long longestMatch(byte[] src, int from, int to) {
             int limit = Math.min(to, from + Encoder.MAX_TOKEN_SIZE);
-            int node = 0;
             long best = 0;
-            for (int i = from; i < limit; i++) {
-                node = edges.get(((long) node << 8) | (src[i] & 0xFF));
+            // the first two steps peeled off the loop: direct-indexed, and no per-step branch on depth
+            int first = src[from] & 0xFF;
+            int node = depth1[first] - 1;
+            if (node < 0) {
+                return best;
+            }
+            if (nodeToken[node] >= 0) {
+                best = match(nodeToken[node], 1);
+            }
+            if (from + 1 >= limit) {
+                return best;
+            }
+            node = depth2[(first << 8) | (src[from + 1] & 0xFF)] - 1;
+            if (node < 0) {
+                return best;
+            }
+            if (nodeToken[node] >= 0) {
+                best = match(nodeToken[node], 2);
+            }
+            for (int i = from + 2; i < limit; i++) {
+                node = edges.get((node << 8) | (src[i] & 0xFF));
                 if (node < 0) {
                     break;
                 }
@@ -361,6 +384,23 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
                 }
             }
             return best;
+        }
+
+        /// The child of `node`, reached by `src[i]` from a path that started at `src[from]`, or -1.
+        private int child(int node, byte[] src, int from, int i) {
+            return switch (i - from) {
+                case 0 -> depth1[src[i] & 0xFF] - 1;
+                case 1 -> depth2[((src[from] & 0xFF) << 8) | (src[i] & 0xFF)] - 1;
+                default -> edges.get((node << 8) | (src[i] & 0xFF));
+            };
+        }
+
+        private void setChild(int node, byte[] src, int from, int i, int child) {
+            switch (i - from) {
+                case 0 -> depth1[src[i] & 0xFF] = child + 1;
+                case 1 -> depth2[((src[from] & 0xFF) << 8) | (src[i] & 0xFF)] = child + 1;
+                default -> edges.put((node << 8) | (src[i] & 0xFF), child);
+            }
         }
 
         /// The tokens in ascending unsigned-lexicographic order.
@@ -380,6 +420,67 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
 
         static int length(long match) {
             return (int) (match & 0xFF);
+        }
+    }
+
+    /// The trie's deep edges: open addressing over one `long[]` of `(key << 32) | (child + 1)`, so a
+    /// lookup reads one slot where [io.github.dfa1.vortex.core.compute.LongIntMap]'s parallel key
+    /// and value arrays read two, and these lookups are cache misses. A key is `(node << 8) | byte`
+    /// with node below 2^23 (at most 4096 tokens of 16 bytes), so it fits the upper half.
+    private static final class EdgeTable {
+        private static final long HASH_MULTIPLIER = 0x9E3779B97F4A7C15L;
+
+        private long[] slots = new long[1 << 14];
+        private int shift = Long.numberOfLeadingZeros(slots.length - 1L);
+        private int size;
+
+        /// The child for `key`, or -1.
+        int get(int key) {
+            int mask = slots.length - 1;
+            int slot = slotOf(key);
+            while (true) {
+                long entry = slots[slot];
+                if (entry == 0) {
+                    return -1;
+                }
+                if ((int) (entry >>> 32) == key) {
+                    return (int) entry - 1;
+                }
+                slot = (slot + 1) & mask;
+            }
+        }
+
+        /// Adds the edge `key` -> `child`, which is not present yet.
+        void put(int key, int child) {
+            if (2 * (size + 1) > slots.length) {
+                grow();
+            }
+            insert((long) key << 32 | (child + 1L));
+            size++;
+        }
+
+        private void insert(long entry) {
+            int mask = slots.length - 1;
+            int slot = slotOf((int) (entry >>> 32));
+            while (slots[slot] != 0) {
+                slot = (slot + 1) & mask;
+            }
+            slots[slot] = entry;
+        }
+
+        private void grow() {
+            long[] old = slots;
+            slots = new long[old.length * 4];
+            shift = Long.numberOfLeadingZeros(slots.length - 1L);
+            for (long entry : old) {
+                if (entry != 0) {
+                    insert(entry);
+                }
+            }
+        }
+
+        private int slotOf(int key) {
+            return (int) ((key * HASH_MULTIPLIER) >>> shift);
         }
     }
 }
