@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -251,7 +252,7 @@ final class DictColumnState {
                     codes[i] = (short) nullCode;
                     continue;
                 }
-                Object v = varBinKey(strings[i]);
+                Object v = dictKey(strings[i]);
                 Integer code = valueToCode.get(v);
                 if (code == null) {
                     if (valueToCode.size() == cap) {
@@ -273,7 +274,7 @@ final class DictColumnState {
                 }
                 if (statsStrings && seenInChunk[code] != chunkStamp) {
                     seenInChunk[code] = chunkStamp;
-                    String s = (String) strings[i];
+                    String s = (String) v;
                     if (minString == null || Utf8Order.compare(s, minString) < 0) {
                         minString = s;
                     }
@@ -606,6 +607,15 @@ final class DictColumnState {
     // The global-dict cardinality cap for a column, by whether it is Utf8/Binary (see the constants above).
     private static int dictMaxCardinality(boolean varBin) {
         return varBin ? GLOBAL_DICT_MAX_CARDINALITY_UTF8 : GLOBAL_DICT_MAX_CARDINALITY;
+    }
+
+    // The dictionary key of one Utf8/Binary row. Utf8 keys are always Strings, a UTF-8 row decoded,
+    // so a column written partly as String[] and partly as byte[][] still codes each value once.
+    private Object dictKey(Object value) {
+        if (!binary && value instanceof byte[] utf8) {
+            return new String(utf8, StandardCharsets.UTF_8);
+        }
+        return varBinKey(value);
     }
 
     // A byte[] compares by identity, so Binary values are keyed by a ByteBuffer view, whose

@@ -147,7 +147,7 @@ final class ZoneMapStatCodec {
                     PrimitiveEncodingEncoder.minMaxStats(p.ptype(), compactIfNullable(p.ptype(), data));
             case DType.Utf8 _ -> {
                 Object values = data instanceof NullableData nd ? nd.values() : data;
-                yield values instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings) : null;
+                yield VarBinEncodingEncoder.textMinMax(dtype, values);
             }
             default -> null;
         };

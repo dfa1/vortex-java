@@ -22,7 +22,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 /// | Primitive(I64/U64) | `long[]` | `Long[]` |
 /// | Primitive(F32) | `float[]` | `Float[]` |
 /// | Primitive(F64) | `double[]` | `Double[]` |
-/// | Utf8 | `String[]` | `String[]` (nulls allowed) |
+/// | Utf8 | `String[]`, or the UTF-8 bytes as `byte[][]` | either, nulls allowed |
 /// | Bool | `boolean[]` | `Boolean[]` |
 public interface Chunk {
 

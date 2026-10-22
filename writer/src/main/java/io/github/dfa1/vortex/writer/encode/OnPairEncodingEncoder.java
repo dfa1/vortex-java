@@ -72,7 +72,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(c.metadata()),
                 children, new int[]{0});
-        MinMax stats = zoneMapStats(data, rows);
+        MinMax stats = VarBinEncodingEncoder.textMinMax(dtype, data, rows);
         return new EncodeResult(root, buffers, stats != null ? stats.min() : null, stats != null ? stats.max() : null);
     }
 
@@ -94,12 +94,9 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(c.metadata()),
                 new EncodeNode[4], new int[]{0});
-        MinMax stats = zoneMapStats(data, rows);
+        MinMax stats = VarBinEncodingEncoder.textMinMax(dtype, data, rows);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(c.dictBytes(ctx.arena()))), slots,
                 stats != null ? stats.min() : null, stats != null ? stats.max() : null, true);
-    }
-    private static MinMax zoneMapStats(Object data, VarBinBytes.Rows rows) {
-        return data instanceof String[] strings ? VarBinEncodingEncoder.minMaxStats(strings, rows) : null;
     }
 
     /// The compressed column: read-padded dictionary bytes plus the four integer children in slot

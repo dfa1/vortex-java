@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.compute.Utf8Validation;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
@@ -120,15 +121,24 @@ final class ChunkImpl implements Chunk {
         };
     }
 
+    /// Utf8 takes `String[]`, or the strings' UTF-8 bytes as `byte[][]`, which skips encoding each
+    /// string and is checked to be well-formed UTF-8, as Rust checks a Utf8 array's bytes.
     private static Object adaptUtf8(String column, DType.Utf8 dtype, Object value) {
-        if (!(value instanceof String[] arr)) {
-            throw new IllegalArgumentException(
-                    "column '" + column + "' expects String[] for Utf8; got " + value.getClass().getSimpleName());
+        if (value instanceof byte[][] utf8) {
+            for (int i = 0; i < utf8.length; i++) {
+                if (utf8[i] != null && !Utf8Validation.isWellFormed(utf8[i], 0, utf8[i].length)) {
+                    throw new IllegalArgumentException(
+                            "column '" + column + "' row " + i + " is not well-formed UTF-8");
+                }
+            }
+        } else if (!(value instanceof String[])) {
+            throw new IllegalArgumentException("column '" + column + "' expects String[] or UTF-8 byte[][] for Utf8; got "
+                    + value.getClass().getSimpleName());
         }
-        return adaptVarBin(column, dtype.nullable(), arr);
+        return adaptVarBin(column, dtype.nullable(), (Object[]) value);
     }
 
-    /// Shared by Utf8 (`String[]`) and Binary (`byte[][]`): a non-nullable column rejects any
+    /// Shared by Utf8 (`String[]` or UTF-8 `byte[][]`) and Binary (`byte[][]`): a non-nullable column rejects any
     /// `null` element. A nullable one unifies on the NullableData carrier like the primitive
     /// paths: the raw array (null elements preserved) plus a derived validity bitmap. The writer
     /// then routes it through MaskedEncoding (or a nullable-capable encoder such as vortex.zstd).

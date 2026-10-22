@@ -38,7 +38,7 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
                         EditionId, Edition, EditionFamily, Editions, MemorySize
           core.io       IoBounds, PTypeIO, VortexFormat
           core.error    VortexException
-          core.compute  FastLanes, PrimitiveArrays, Utf8Order
+          core.compute  FastLanes, PrimitiveArrays, Utf8Order, Utf8Validation
           core.simd     SimdOperations (kernels shared by reader+writer, all eleven ptypes),
                         AutoVectorizedSimdOperations (C2-shaped loops, the Rust-parity default),
                         VectorApiSimdOperations (opt-in via --add-modules jdk.incubator.vector; Rust-parity results,

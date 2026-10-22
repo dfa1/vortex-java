@@ -170,9 +170,12 @@ Accepted array types per column `DType`:
 | `Primitive(I64/U64)`          | `long[]`           | `Long[]`           |
 | `Primitive(F32)`              | `float[]`          | `Float[]`          |
 | `Primitive(F64)`              | `double[]`         | `Double[]`         |
-| `Utf8`                        | `String[]`         | `String[]` (nulls allowed) |
+| `Utf8`                        | `String[]` or UTF-8 `byte[][]` | either (nulls allowed) |
 | `Bool`                        | `boolean[]`        | `Boolean[]`        |
 | `Decimal(precision, scale)`   | `BigDecimal[]`     | `BigDecimal[]` (nulls allowed) |
+
+A `Utf8` column given as UTF-8 `byte[][]` skips encoding each string and writes the same file as the
+`String[]` would; each row must be well-formed UTF-8 (as Rust requires), or `IllegalArgumentException`.
 
 Decimal values are rescaled to the column scale exactly: a value with more fractional digits than
 the scale, or more digits than the precision, is rejected with `IllegalArgumentException` rather

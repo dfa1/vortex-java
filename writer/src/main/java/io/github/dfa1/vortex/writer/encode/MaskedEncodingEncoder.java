@@ -75,7 +75,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         // makes null one more (invalid) pool entry. Offer that shape too and keep the smaller.
         if (ctx.allowedCascading() > 0 && nonNullable instanceof DType.Utf8
                 && !ctx.excluded().contains(EncodingId.VORTEX_DICT)) {
-            EncodeResult dict = DictEncodingEncoder.encodeNullableUtf8(dtype, (String[]) values, validity, ctx);
+            EncodeResult dict = DictEncodingEncoder.encodeNullableUtf8(dtype, values, validity, ctx);
             if (dict != null && totalBytes(dict) < totalBytes(masked)) {
                 return new EncodeResult(dict.rootNode(), dict.encodedBuffers(), statsMin, statsMax);
             }
