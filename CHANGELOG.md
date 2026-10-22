@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] — 2026-10-22
+
 ### Added
 - `VortexWriter` accepts a `Utf8` column as its UTF-8 bytes (`byte[][]`), skipping the per-string encoding; malformed UTF-8 is rejected. ([#590](https://github.com/dfa1/vortex-java/pull/590))
 
@@ -15,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** the `ScanIterator` constructor and the reader's Pco helpers (`PcoTansDecoder`, `PcoBin`, `LeBitReader`) are no longer public, and the built-in extension codecs are reached only through their `INSTANCE`. ([4ba6ea12](https://github.com/dfa1/vortex-java/commit/4ba6ea12))
 - CSV import is about 40% faster: it parses bytes instead of `String`s and overlaps parsing with writing; the delimiter must be an ASCII character. ([#590](https://github.com/dfa1/vortex-java/pull/590))
 - SQL `ORDER BY ... LIMIT` on a string column is up to 3 times faster: rows that cannot make the top are ranked by their bytes without building a `String`, and a chunk stored in the opposite order is read backward. ([#575](https://github.com/dfa1/vortex-java/pull/575))
+
+### Fixed
+- A dictionary-encoded string column written for a target before `core2026.08.0` orders its min/max by UTF-8 bytes, as Rust does, not UTF-16. ([#590](https://github.com/dfa1/vortex-java/pull/590))
 
 ## [0.18.0] — 2026-10-20
 
