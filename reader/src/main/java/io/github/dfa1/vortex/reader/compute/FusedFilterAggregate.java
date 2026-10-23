@@ -28,9 +28,8 @@ import java.util.function.LongPredicate;
 /// selects, folds an optional aggregate column's `SUM` / `MIN` / `MAX` / non-null count — all in a
 /// single scan of the chunk's rows, with no intermediate selection bitmap and no second pass.
 ///
-/// This generalizes [FusedFilterSum] from one filter + one aggregate to many filters + one
-/// aggregate, and adds the `MIN` / `MAX` / count folds the Calcite boundary aggregate push-down
-/// (ADR 0013 §6 tier 2) needs. The kernel resolves every leaf's column and lowers every leaf's
+/// It covers many filters + one aggregate, with the `MIN` / `MAX` / count folds the Calcite
+/// boundary aggregate push-down (ADR 0013 §6 tier 2) needs. The kernel resolves every leaf's column and lowers every leaf's
 /// [Predicate] once, then runs a single row loop: for each row it evaluates the leaves
 /// (short-circuiting on the first that rejects the row) and, when the whole filter accepts the row and
 /// the aggregate value is non-null, folds that value straight into the running totals. Nothing is
@@ -41,8 +40,8 @@ import java.util.function.LongPredicate;
 /// - `SUM` covers numeric primitives only — a [Long] for an integer aggregate, a [Double] for a
 ///   floating one (an `f16` column without a specialized lane folds a boxing `doubleValue()` total
 ///   into a [Double]), the additive identity (`0`) over zero selected non-null rows — and is reported
-///   as `null` for a non-numeric aggregate column (the caller treats that as an unanswerable sum,
-///   mirroring where [NumericColumns#requireNumeric(DType)] would reject it);
+///   as `null` for a non-numeric aggregate column, including a decimal, whose fraction a long fold
+///   would truncate (the caller treats that as an unanswerable sum);
 /// - `MIN` / `MAX` use the column's dtype-aware order ([NumericColumns#widenLong(Array, boolean,
 ///   long)] with unsigned-aware [Long#compareUnsigned(long, long)], [Double#compare(double, double)]
 ///   for floats, [Compare#values(Object, Object, DType)] otherwise) and are `null` when no selected
@@ -131,17 +130,16 @@ final class FusedFilterAggregate {
         RowFilter.Column driverLeaf = leaves.get(driver);
         BoolArray driverValidity = NumericColumns.validityOf(chunk.column(driverLeaf.column()));
         LongPredicate residual = residualOf(chunk, leaves, driver);
-        if (aggColumn == null) {
-            Long selected = DictFilter.tryFilteredCount(driverData, driverValidity,
-                    driverLeaf.predicate(), residual, n);
-            if (selected == null) {
-                return null;
-            }
-            return new FilteredAggregate(selected.longValue(), 0L, null, null, null);
+        // no aggregate column (COUNT(*)): the lane counts the selected rows only
+        Array aggData = null;
+        BoolArray aggValidity = null;
+        if (aggColumn != null) {
+            Array agg = chunk.column(aggColumn);
+            aggData = NumericColumns.unwrap(agg);
+            aggValidity = NumericColumns.validityOf(agg);
         }
-        Array agg = chunk.column(aggColumn);
         return DictFilter.tryFilteredAggregate(driverData, driverValidity, driverLeaf.predicate(), residual,
-                NumericColumns.unwrap(agg), NumericColumns.validityOf(agg), n);
+                aggData, aggValidity, n);
     }
 
     /// Lowers every non-driver leaf into one hoisted residual test, evaluated only on the rows the

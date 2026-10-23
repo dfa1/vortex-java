@@ -6,9 +6,9 @@ import io.github.dfa1.vortex.reader.array.Array;
 /// The generic, per-element [Predicate] evaluator: it tests one [Predicate] against a single position
 /// of any [Array] through the boxing value accessor, with no encoded-domain specialization.
 ///
-/// This is the boxing fallback the fused filter-and-aggregate kernels ([FusedFilterSum] /
-/// [FusedFilterAggregate]) drop to for any leaf they do not specialize on the primitive fast lane (a
-/// non-primitive column, or a boolean composite). It mirrors the Rust three-valued-logic filter
+/// This is the boxing fallback the fused filter-and-aggregate kernel ([FusedFilterAggregate]) drops
+/// to for any leaf it does not specialize on the primitive fast lane (a non-primitive column, or a
+/// boolean composite). It mirrors the Rust three-valued-logic filter
 /// semantics exactly: a null value makes every value predicate false, so the row is excluded; the
 /// dedicated null tests read validity directly.
 final class PredicateEvaluator {
