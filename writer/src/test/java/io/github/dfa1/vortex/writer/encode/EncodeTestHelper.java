@@ -19,4 +19,12 @@ public final class EncodeTestHelper {
     public static EncodeContext testCtx() {
         return EncodeContext.of(Arena.ofAuto(), WriteRegistry.loadAll());
     }
+
+    /// Creates an [EncodeContext] at the default write's cascade depth (3), where the compressor
+    /// picks encodings as a [io.github.dfa1.vortex.writer.WriteOptions#defaults()] write does.
+    ///
+    /// @return a cascading [EncodeContext]
+    public static EncodeContext cascadingCtx() {
+        return EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.loadAll());
+    }
 }

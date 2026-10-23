@@ -13,11 +13,20 @@ import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.decode.ExtEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -205,6 +214,86 @@ class ExtEncodingEncoderTest {
             for (int i = 0; i < values.length; i++) {
                 assertThat(longArray.getLong(i)).isEqualTo(values[i]);
             }
+        }
+    }
+
+    /// Rust checks for all-null before the extension's own scheme, so an all-null extension
+    /// column is one null constant carrying the extension dtype, with no `vortex.ext` around it.
+    @Nested
+    class AllNull {
+
+        private static final int ROWS = 2_000;
+        private static final ReadRegistry READ = ReadRegistry.loadAll();
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("everyWellKnownExtension")
+        void isOneNullConstantWithoutTheExtWrapper(DType.Extension dtype, Object data) {
+            // When
+            EncodeResult result = ENCODER.encode(dtype, data, EncodeTestHelper.cascadingCtx());
+            CascadeStep step = ENCODER.encodeCascade(dtype, data, EncodeTestHelper.cascadingCtx());
+
+            // Then: the default write's cascade step gives the same constant, and every row reads null
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+            assertThat(result.rootNode().children()).isEmpty();
+            assertThat(result.statsMin()).isNull();
+            assertThat(step.isTerminal()).isTrue();
+            assertThat(step.partialRoot().encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+            Array decoded = READ.decode(DecodeTestHelper.toDecodeContext(result, ROWS, dtype, READ));
+            assertThat(decoded.length()).isEqualTo(ROWS);
+            if (decoded instanceof MaskedArray masked) {
+                for (int i = 0; i < ROWS; i++) {
+                    assertThat(masked.isValid(i)).as("row %d", i).isFalse();
+                }
+            } else {
+                // a uuid's fixed-size-list storage has no placeholder value to mask
+                assertThat(decoded).isInstanceOf(NullArray.class);
+            }
+        }
+
+        static Stream<Arguments> everyWellKnownExtension() {
+            List<Object> nulls = Collections.nCopies(ROWS, null);
+            return Stream.of(
+                    Arguments.of(DateExtensionEncoder.INSTANCE.dtype(true),
+                            DateExtensionEncoder.INSTANCE.encodeAll(DateExtensionEncoder.INSTANCE.dtype(true), nulls)),
+                    Arguments.of(TimeExtensionEncoder.INSTANCE.dtype(true),
+                            TimeExtensionEncoder.INSTANCE.encodeAll(TimeExtensionEncoder.INSTANCE.dtype(true), nulls)),
+                    Arguments.of(TimestampExtensionEncoder.INSTANCE.dtype(true),
+                            TimestampExtensionEncoder.INSTANCE.encodeAll(TimestampExtensionEncoder.INSTANCE.dtype(true),
+                                    nulls)),
+                    Arguments.of(UuidExtensionEncoder.INSTANCE.dtype(true),
+                            UuidExtensionEncoder.INSTANCE.encodeAll(UuidExtensionEncoder.INSTANCE.dtype(true), nulls)),
+                    Arguments.of(new DType.Extension("acme.custom", DType.U16, null, true),
+                            new NullableData(new short[ROWS], new boolean[ROWS])));
+        }
+
+        @Test
+        void anUncompressedWriteKeepsTheExtWrapper() {
+            // Given: depth 0 writes without the compressor
+            NullableData data = new NullableData(new long[ROWS], new boolean[ROWS]);
+            DType.Extension timestamp = TimestampExtensionEncoder.INSTANCE.dtype(true);
+
+            // When
+            EncodeResult result = ENCODER.encode(timestamp, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
+        }
+
+        @Test
+        void oneValidRowKeepsTheExtWrapper() {
+            // Given
+            long[] values = new long[ROWS];
+            values[ROWS - 1] = 1_700_000_000_000L;
+            boolean[] validity = new boolean[ROWS];
+            validity[ROWS - 1] = true;
+            DType.Extension timestamp = TimestampExtensionEncoder.INSTANCE.dtype(true);
+
+            // When
+            EncodeResult result = ENCODER.encode(timestamp, new NullableData(values, validity), EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
+            assertThat(result.statsMin().int64_value()).isEqualTo(1_700_000_000_000L);
         }
     }
 }

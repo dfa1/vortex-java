@@ -51,10 +51,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.VORTEX_MASKED,
                     "expected NullableData, got " + (data == null ? "null" : data.getClass().getName()));
         }
-        // Rust's compressor turns an all-invalid array into one null-scalar constant before trying
-        // any scheme (compressor/cascade.rs); masking a values child would store nothing useful
-        if (ctx.allowedCascading() > 0 && validity.length > 0 && !validity[0]
-                && SimdOperationsSupport.preferred().allEqual(validity)) {
+        if (isNullConstant(validity, ctx)) {
             return nullConstant();
         }
         DType nonNullable = dtype.withNullable(false);
@@ -171,8 +168,22 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         return best;
     }
 
+    /// Whether a chunk with `validity` is written as [#nullConstant()]: Rust's compressor turns
+    /// an all-invalid array into one null-scalar constant before trying any scheme
+    /// (`compressor/cascade.rs`), where masking a values child would store nothing useful.
+    ///
+    /// @param validity per-row validity
+    /// @param ctx      the encode context; an uncompressed write (no cascade depth) keeps the mask
+    /// @return `true` when every row is null and the write compresses
+    static boolean isNullConstant(boolean[] validity, EncodeContext ctx) {
+        return ctx.allowedCascading() > 0 && validity.length > 0 && !validity[0]
+                && SimdOperationsSupport.preferred().allEqual(validity);
+    }
+
     /// A `vortex.constant` whose scalar is null: every row null, and no min/max.
-    private static EncodeResult nullConstant() {
+    ///
+    /// @return the encoded constant
+    static EncodeResult nullConstant() {
         byte[] scalar = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE).encode();
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalar)));
     }
