@@ -127,8 +127,9 @@ class CustomExtensionIntegrationTest {
             SequencedMap<Long, float[]> result =
                     readVectors(file, ScanOptions.all().withFilter(RowFilter.gte(ID, threshold)));
 
-            // Then
-            assertThat(result.keySet()).containsAll(ids(threshold, ROWS));
+            // Then — a hash lookup per id: AssertJ's containsAll scans the whole key set for each of
+            // the 15 000 ids, which took 2 s
+            assertThat(ids(threshold, ROWS)).allMatch(result::containsKey);
             assertEachVectorMatchesItsId(result);
         }
 
