@@ -255,6 +255,26 @@ public sealed interface DType
             return new Decimal((byte) precision, (byte) scale, nullable);
         }
 
+        /// The bytes of one value: the smallest of 1, 2, 4, 8, 16 or 32 whose integer holds every
+        /// unscaled value of this precision, as Rust's `DecimalType::smallest_decimal_value_type`.
+        ///
+        /// @return the value width in bytes
+        public int byteWidth() {
+            if (precision <= 2) {
+                return 1;
+            }
+            if (precision <= 4) {
+                return 2;
+            }
+            if (precision <= 9) {
+                return 4;
+            }
+            if (precision <= 18) {
+                return 8;
+            }
+            return precision <= 38 ? 16 : 32;
+        }
+
         // A negative scale (e.g. -2 for hundreds) is legal.
         private static void requireValid(int precision, int scale) {
             if (precision < 1 || precision > 76) {

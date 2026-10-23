@@ -50,6 +50,20 @@ class DTypeDecimalTest {
                 .hasMessageContaining("out of range");
     }
 
+    @ParameterizedTest(name = "precision {0} -> {1} bytes")
+    @CsvSource({"1, 1", "2, 1", "3, 2", "4, 2", "5, 4", "9, 4", "10, 8", "18, 8", "19, 16", "38, 16", "39, 32", "76, 32"})
+    void byteWidth_matchesRustPrecisionBoundaries(int precision, int expectedBytes) {
+        // Given: Rust stores a decimal in the smallest integer its precision fits; the writer packs
+        // and the reader sizes placeholders by this, so a wrong edge misreads every value
+        DType.Decimal sut = DType.Decimal.of(precision, 0, false);
+
+        // When
+        int result = sut.byteWidth();
+
+        // Then
+        assertThat(result).isEqualTo(expectedBytes);
+    }
+
     @Test
     void factory_enforcesTheSameBounds() {
         // Given / When / Then: the public decimal(int, int) shortcut the writer's users call

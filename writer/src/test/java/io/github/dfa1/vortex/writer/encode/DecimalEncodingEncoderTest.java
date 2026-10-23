@@ -129,14 +129,4 @@ class DecimalEncodingEncoderTest {
             assertThat(new java.math.BigInteger(be)).as("row %d", i).isEqualTo(expected);
         }
     }
-
-    @ParameterizedTest(name = "precision {0} -> {1} bytes")
-    @CsvSource({"1, 1", "2, 1", "3, 2", "4, 2", "5, 4", "9, 4", "10, 8", "18, 8", "19, 16", "38, 16", "39, 32", "76, 32"})
-    void storageWidth_matchesRustPrecisionBoundaries(int precision, int expectedBytes) {
-        // When
-        int result = DecimalEncodingEncoder.storageWidth((byte) precision);
-
-        // Then
-        assertThat(result).isEqualTo(expectedBytes);
-    }
 }

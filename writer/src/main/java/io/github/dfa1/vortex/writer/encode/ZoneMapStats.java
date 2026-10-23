@@ -70,7 +70,7 @@ final class ZoneMapStats {
     /// @return the [MinMax] of encoded scalars, or `null` when none is valid
     static MinMax ofDecimal(DType.Decimal dtype, BigDecimal[] values) {
         BigDecimal[] valid = Arrays.stream(values).filter(Objects::nonNull).toArray(BigDecimal[]::new);
-        int width = DecimalEncodingEncoder.storageWidth(dtype.precision());
+        int width = dtype.byteWidth();
         return ofDecimal(DecimalEncodingEncoder.pack(valid, width, Arena.ofAuto()), width);
     }
 
