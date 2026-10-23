@@ -111,9 +111,15 @@ class ListViewInteropIntegrationTest {
                 ListInteropIntegrationTest.expected(element, nulls, elementNulls, 333, 1_777));
         assertThat(filtered).containsExactlyInAnyOrderElementsOf(
                 ListInteropIntegrationTest.expected(element, nulls, elementNulls, (int) THRESHOLD, ROWS));
+        // an all-null column is one null constant before any encoding is tried, as Rust's compressor
+        // makes it, so only the other shapes hold the list view
+        String encoding = "vortex.listview";
+        if (nulls == Nulls.ALL_NULL) {
+            encoding = "vortex.constant";
+        }
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
             assertThat(VortexInspector.inspect(reader)).as("the file must hold the encoding under test")
-                    .contains("vortex.listview");
+                    .contains(encoding);
         }
     }
 
