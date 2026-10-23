@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.IntPredicate;
 
 @SuppressWarnings("java:S106") // CLI command: stdout is the intended output channel
 final class FilterCommand {
@@ -188,14 +189,12 @@ final class FilterCommand {
     /// the CLI grammar never reaches — can be exercised directly.
     static RowPredicate columnPredicate(ColumnName col, Predicate predicate) {
         return switch (predicate) {
-            case Predicate.Gt(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) > 0;
-            case Predicate.Gte(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) >= 0;
-            case Predicate.Lt(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) < 0;
-            case Predicate.Lte(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) <= 0;
-            case Predicate.Eq(var val) ->
-                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) == 0;
-            case Predicate.Neq(var val) ->
-                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) != 0;
+            case Predicate.Gt(var val) -> comparison(col, val, order -> order > 0);
+            case Predicate.Gte(var val) -> comparison(col, val, order -> order >= 0);
+            case Predicate.Lt(var val) -> comparison(col, val, order -> order < 0);
+            case Predicate.Lte(var val) -> comparison(col, val, order -> order <= 0);
+            case Predicate.Eq(var val) -> comparison(col, (Comparable<?>) val, order -> order == 0);
+            case Predicate.Neq(var val) -> comparison(col, (Comparable<?>) val, order -> order != 0);
             case Predicate.IsNull _ -> (chunk, rowIdx) -> isRowNull(chunk.column(col), rowIdx);
             case Predicate.IsNotNull _ -> (chunk, rowIdx) -> !isRowNull(chunk.column(col), rowIdx);
             case Predicate.Between _ ->
@@ -204,6 +203,20 @@ final class FilterCommand {
                     throw new IllegalArgumentException("nested predicate AND is not supported on the command line");
             case Predicate.Or _ ->
                     throw new IllegalArgumentException("nested predicate OR is not supported on the command line");
+        };
+    }
+
+    /// A comparison against `value`, true when `test` accepts the row's order against it. A null row
+    /// never matches, as in SQL, where comparing with null is not true; a nullable column's other
+    /// rows compare through its unmasked values (a nullable column reached here as a `MaskedArray`
+    /// and failed with "filter not supported for column type").
+    private static RowPredicate comparison(ColumnName col, Comparable<?> value, IntPredicate test) {
+        return (chunk, rowIdx) -> {
+            Array arr = chunk.column(col);
+            if (isRowNull(arr, rowIdx)) {
+                return false;
+            }
+            return test.test(compareValue(MaskedArray.innerOrSelf(arr), rowIdx, value));
         };
     }
 
