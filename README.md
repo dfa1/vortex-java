@@ -30,7 +30,7 @@ and against 172 real-world [Raincloud](docs/compatibility.md#real-world-conforma
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.18.0</version>
+  <version>0.18.1</version>
 </dependency>
 ```
 
@@ -63,7 +63,7 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-writer</artifactId>
-  <version>0.18.0</version>
+  <version>0.18.1</version>
 </dependency>
 ```
 
@@ -94,7 +94,7 @@ try (var ch = FileChannel.open(Path.of("data/example.vortex"),
 ### Query with SQL from IntelliJ or DBeaver
 
 `vortex-jdbc-driver` is a read-only JDBC driver in one self-contained jar, so SQL tools can browse and
-query `.vortex` files with no code. Download `vortex-jdbc-driver-0.18.0-all.jar` from
+query `.vortex` files with no code. Download `vortex-jdbc-driver-0.18.1-all.jar` from
 [Maven Central](https://central.sonatype.com/artifact/io.github.dfa1.vortex/vortex-jdbc-driver), add
 it as a driver with class `io.github.dfa1.vortex.jdbc.driver.VortexDriver`, and connect to a directory:
 
@@ -114,6 +114,33 @@ troubleshooting are in the
 
 For more examples — projection, filtering, custom encodings, and the CLI — see
 the [tutorial](docs/tutorial.md).
+
+## For AI agents
+
+If you are an AI agent asked to convert data to Vortex with this library, these are the facts you
+would otherwise guess. Working *on* this repository instead? Read [AGENTS.md](AGENTS.md).
+
+- **Java 25+.** The library uses FFM, not JNI: run with `--enable-native-access=ALL-UNNAMED`
+  (the CLI jar's manifest already sets it).
+- **No code needed for a one-off conversion.** Download `vortex-cli-0.18.1-all.jar` from
+  [Maven Central](https://central.sonatype.com/artifact/io.github.dfa1.vortex/vortex-cli) and run
+  `java -jar vortex-cli-0.18.1-all.jar import data.csv data.vortex`. Add `--delimiter ';'` for
+  other separators and `--compact` for smaller files. Check the result with `schema`, `count`,
+  `stats` or `select <file> <col> --where <expr>`, which print to stdout. Exit codes: `0` ok,
+  `1` usage, `2` file not found, `3` error.
+- **In code**, depend on `vortex-csv` (versions from `vortex-bom`) and call
+  `CsvImporter.importCsv(csv, vortex, ImportOptions.defaults())`. It streams any file size in
+  bounded memory; `ParquetImporter` and `JdbcImporter` do the same for Parquet and JDBC sources.
+- **Column types are inferred from the first 65 536 rows** (long, then double, then boolean, else
+  text). A later value that does not fit fails the import, so for a column that mixes types pass
+  an explicit schema: `ImportOptions.defaults().withSchema(DType.structBuilder()...build())`.
+  Empty cells become `0`, `false` or `""`; the first row is a header unless
+  `withHeader(false)`; the delimiter must be an ASCII character.
+- **Compact files from code**: start from the import's own write options, which keep the global
+  dictionary off for streaming (`options.withWriteOptions(options.writeOptions().withCompact(true))`),
+  and add the optional `io.github.dfa1.zstd:zstd` and `zstd-platform` dependencies.
+- Full API and CLI reference: [docs/reference.md](docs/reference.md); recipes:
+  [docs/how-to.md](docs/how-to.md).
 
 ## Documentation
 
