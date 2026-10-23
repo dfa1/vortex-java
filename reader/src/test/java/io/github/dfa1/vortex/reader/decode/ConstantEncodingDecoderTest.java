@@ -3,16 +3,25 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoNullValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +49,34 @@ class ConstantEncodingDecoderTest {
         LongArray longs = (LongArray) result;
         assertThat(longs.getLong(0)).isZero();
         assertThat(longs.getLong(2)).isZero();
+    }
+
+    @ParameterizedTest
+    @MethodSource("nullableTypes")
+    void nullScalar_decodesAsAMaskedArrayWithEveryRowInvalid(DType dtype, Class<?> payload) {
+        // Given: a null constant, which Rust and our writer emit for an all-null chunk; it read as
+        // a NullArray, which every consumer that unwraps a MaskedArray and casts failed on
+        ProtoScalarValue scalar = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE);
+
+        // When
+        Array result = decode(scalar, dtype, 3);
+
+        // Then
+        assertThat(result).isInstanceOf(MaskedArray.class);
+        assertThat(result.dtype()).isEqualTo(dtype);
+        MaskedArray masked = (MaskedArray) result;
+        assertThat(masked.inner()).isInstanceOf(payload);
+        assertThat(masked.isValid(0)).isFalse();
+        assertThat(masked.isValid(2)).isFalse();
+    }
+
+    static Stream<Arguments> nullableTypes() {
+        return Stream.of(
+                Arguments.of(DType.I64.asNullable(), LongArray.class),
+                Arguments.of(DType.I16.asNullable(), ShortArray.class),
+                Arguments.of(DType.F64.asNullable(), DoubleArray.class),
+                Arguments.of(DType.BOOL.asNullable(), BoolArray.class),
+                Arguments.of(DType.UTF8.asNullable(), VarBinArray.class));
     }
 
     /// A scalar whose oneof tag doesn't match the declared Decimal dtype (e.g. only

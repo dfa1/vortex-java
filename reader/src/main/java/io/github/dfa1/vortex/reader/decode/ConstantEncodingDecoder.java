@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 
@@ -25,6 +26,10 @@ import java.nio.charset.StandardCharsets;
 
 /// Read-only decoder for `vortex.constant`.
 public final class ConstantEncodingDecoder implements EncodingDecoder {
+
+    /// A scalar with no value set: decodes as `0`, `false` or empty bytes, the placeholder under
+    /// a null constant's all-invalid validity.
+    private static final ProtoScalarValue NO_VALUE = ProtoScalarValue.ofNullValue(null);
 
     /// Creates the decoder.
     public ConstantEncodingDecoder() {
@@ -54,9 +59,16 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         if (dtype instanceof DType.Null) {
             return new NullArray(dtype, n);
         }
-        // Null scalar (proto null_value tag present) means every row is null (#246).
+        // Null scalar (proto null_value tag present) means every row is null (#246). Rust
+        // canonicalizes it to the dtype's own array with every row invalid, so a reader sees an
+        // all-null I64? chunk as any other masked I64? chunk, not as a NullArray it cannot cast.
         if (scalar.null_value() != null) {
-            return new NullArray(dtype, n);
+            if (dtype instanceof DType.Decimal || dtype instanceof DType.Variant) {
+                // ponytail: no placeholder value built for these yet, they stay a NullArray
+                return new NullArray(dtype, n);
+            }
+            Array placeholder = arrayFromScalar(ctx, NO_VALUE, dtype.withNullable(false), n);
+            return new MaskedArray(placeholder, new LazyConstantBoolArray(DType.BOOL, n, false));
         }
         if (dtype instanceof DType.Variant) {
             // A constant variant wraps a typed inner scalar (Scalar::variant(inner)); the
