@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.proto.ProtoNullValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -49,6 +50,12 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         if (!(data instanceof NullableData(var values, var validity))) {
             throw new VortexException(EncodingId.VORTEX_MASKED,
                     "expected NullableData, got " + (data == null ? "null" : data.getClass().getName()));
+        }
+        // Rust's compressor turns an all-invalid array into one null-scalar constant before trying
+        // any scheme (compressor/cascade.rs); masking a values child would store nothing useful
+        if (ctx.allowedCascading() > 0 && validity.length > 0 && !validity[0]
+                && SimdOperationsSupport.preferred().allEqual(validity)) {
+            return nullConstant();
         }
         DType nonNullable = dtype.withNullable(false);
         EncodeResult valuesResult = encodeValues(nonNullable, values, ctx);
@@ -162,6 +169,12 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
             best = rle;
         }
         return best;
+    }
+
+    /// A `vortex.constant` whose scalar is null: every row null, and no min/max.
+    private static EncodeResult nullConstant() {
+        byte[] scalar = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE).encode();
+        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalar)));
     }
 
     private static long totalBytes(EncodeResult result) {

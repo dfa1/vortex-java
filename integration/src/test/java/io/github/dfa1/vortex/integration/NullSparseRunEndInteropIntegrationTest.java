@@ -1,10 +1,16 @@
 package io.github.dfa1.vortex.integration;
 
+import dev.vortex.api.DataSource;
+import dev.vortex.api.Expression;
+import dev.vortex.api.Partition;
+import dev.vortex.api.Scan;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -25,20 +31,27 @@ import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.SmallIntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.function.ObjIntConsumer;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -251,6 +264,39 @@ class NullSparseRunEndInteropIntegrationTest {
         assertThat(usedEncodings(file)).contains("vortex.constant");
     }
 
+    @ParameterizedTest
+    @MethodSource("allNullColumns")
+    void javaAllNullColumn_isANullConstantAsJniWritesIt(ArrowType arrowType, DType dtype, Object nulls,
+                                                        @TempDir Path tmp) throws IOException {
+        // Given: the same all-null column written by both writers. Rust's compressor turns an
+        // all-invalid array into one null-scalar vortex.constant (compressor/cascade.rs); Java
+        // wrote vortex.masked(constant 0, constant false), a values child that carries nothing
+        Path jniFile = tmp.resolve("jni.vtx");
+        writeJni(jniFile, new Schema(List.of(Field.nullable("v", arrowType))), (root, i) -> { });
+        Path javaFile = tmp.resolve("java.vtx");
+
+        // When
+        try (FileChannel channel = FileChannel.open(javaFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = io.github.dfa1.vortex.writer.VortexWriter.create(channel,
+                     DType.structBuilder().field(ColumnName.of("v"), dtype).build(), WriteOptions.defaults())) {
+            writer.writeChunk(chunk -> chunk.put(ColumnName.of("v"), nulls));
+        }
+
+        // Then: the data array is what Rust writes, and vortex-jni reads every row back as null
+        assertThat(dataEncodings(javaFile)).isEqualTo(dataEncodings(jniFile)).isEqualTo(List.of("vortex.constant"));
+        assertThat(jniNullCount(javaFile)).isEqualTo(ROWS);
+    }
+
+    static Stream<Arguments> allNullColumns() {
+        return Stream.of(
+                Arguments.of(new ArrowType.Int(64, true), DType.I64.asNullable(), new Long[ROWS]),
+                Arguments.of(new ArrowType.Int(16, true), DType.I16.asNullable(), new Short[ROWS]),
+                Arguments.of(new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE), DType.F64.asNullable(),
+                        new Double[ROWS]),
+                Arguments.of(ArrowType.Bool.INSTANCE, DType.BOOL.asNullable(), new Boolean[ROWS]),
+                Arguments.of(ArrowType.Utf8.INSTANCE, DType.UTF8.asNullable(), new String[ROWS]));
+    }
+
     // ── JNI write helper ──────────────────────────────────────────────────────
 
     private static void writeJni(Path file, Schema schema, ObjIntConsumer<VectorSchemaRoot> fill) throws IOException {
@@ -279,6 +325,36 @@ class NullSparseRunEndInteropIntegrationTest {
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
             return new ArrayList<>(InspectorTree.build(reader).usedEncodings());
         }
+    }
+
+    /// The encodings of column `v`'s data, without its zone-map table: the zoned layout's first
+    /// child, or the column itself when it is not zoned.
+    private static List<String> dataEncodings(Path file) throws IOException {
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
+            InspectorTree.Node column = InspectorTree.build(reader).root().children().getFirst();
+            InspectorTree.Node data = column;
+            if (column.layout().isZoned()) {
+                data = column.children().getFirst();
+            }
+            return data.usedEncodings().stream().sorted().toList();
+        }
+    }
+
+    /// The null rows vortex-jni reads in column `v`.
+    private static long jniNullCount(Path file) throws IOException {
+        var options = dev.vortex.api.ScanOptions.builder()
+                .projection(Expression.select(new String[]{"v"}, Expression.root()));
+        long nulls = 0;
+        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(options.build());
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    nulls += reader.getVectorSchemaRoot().getVector("v").getNullCount();
+                }
+            }
+        }
+        return nulls;
     }
 
     private static List<Double> readF64(Path file) throws IOException {
