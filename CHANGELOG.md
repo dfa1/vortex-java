@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `filter` and `select --where` on the command line work on a nullable column, where they failed; a null row matches no comparison, as in SQL. ([#593](https://github.com/dfa1/vortex-java/pull/593))
+
 ## [0.18.1] — 2026-10-22
 
 ### Added

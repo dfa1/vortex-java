@@ -27,6 +27,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -212,6 +213,29 @@ class FilterCommandTest {
         // Then
         assertThat(result.status()).isEqualTo(ExitStatus.OK);
         assertThat(result.stdout().lines().toList()).containsExactly("h", "2.5", "3.5");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"'>', 0, '1,3'", "'!=', 1, '3'", "'=', 3, '3'"})
+    void filtersNullableColumn_skipsNullRows(String op, String value, String expected) throws IOException {
+        // Given a nullable I64 column [1, null, 3], as a CSV import with an empty cell writes it:
+        // filtering one threw "filter not supported for column type: MaskedArray"
+        Path nullable = tmp.resolve("nullable.vortex");
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64.asNullable()), false);
+        try (FileChannel ch = FileChannel.open(nullable, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("v"), new Long[]{1L, null, 3L}));
+        }
+
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", nullable.toString(), "v", op, value}));
+
+        // Then: as in SQL, a comparison with null is never true, so the null row never matches
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        List<String> rows = new ArrayList<>(List.of("v"));
+        rows.addAll(List.of(expected.split(",")));
+        assertThat(result.stdout().lines().toList()).isEqualTo(rows);
     }
 
     @Test
