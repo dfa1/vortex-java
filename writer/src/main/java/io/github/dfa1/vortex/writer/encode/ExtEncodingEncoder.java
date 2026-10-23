@@ -35,6 +35,11 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.VORTEX_EXT, "expected extension dtype, got " + dtype);
         }
         DType storage = ext.storageDType();
+        if (data instanceof NullableData(var _, var validity) && MaskedEncodingEncoder.isNullConstant(validity, ctx)) {
+            // Rust checks for all-null before the extension's own scheme, so the null constant
+            // carries the extension dtype itself, with no vortex.ext around it
+            return MaskedEncodingEncoder.nullConstant();
+        }
         EncodeResult childResult;
         if (data instanceof NullableData) {
             childResult = new MaskedEncodingEncoder().encode(storage, data, ctx);

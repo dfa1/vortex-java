@@ -11,6 +11,9 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -282,19 +285,56 @@ class NullSparseRunEndInteropIntegrationTest {
             writer.writeChunk(chunk -> chunk.put(ColumnName.of("v"), nulls));
         }
 
-        // Then: the data array is what Rust writes, and vortex-jni reads every row back as null
+        // Then: the data array is what Rust writes, vortex-jni reads every row back as null, and
+        // our reader reads every row of both files as null, masked like any nullable chunk
         assertThat(dataEncodings(javaFile)).isEqualTo(dataEncodings(jniFile)).isEqualTo(List.of("vortex.constant"));
         assertThat(jniNullCount(javaFile)).isEqualTo(ROWS);
+        assertThat(javaNullCount(javaFile)).isEqualTo(ROWS);
+        assertThat(javaNullCount(jniFile)).isEqualTo(ROWS);
     }
 
     static Stream<Arguments> allNullColumns() {
+        List<Object> noValues = java.util.Collections.nCopies(ROWS, null);
         return Stream.of(
-                Arguments.of(new ArrowType.Int(64, true), DType.I64.asNullable(), new Long[ROWS]),
+                Arguments.of(new ArrowType.Int(8, true), DType.I8.asNullable(), new Byte[ROWS]),
                 Arguments.of(new ArrowType.Int(16, true), DType.I16.asNullable(), new Short[ROWS]),
+                Arguments.of(new ArrowType.Int(32, true), DType.I32.asNullable(), new Integer[ROWS]),
+                Arguments.of(new ArrowType.Int(64, true), DType.I64.asNullable(), new Long[ROWS]),
+                Arguments.of(new ArrowType.Int(8, false), DType.U8.asNullable(), new Byte[ROWS]),
+                Arguments.of(new ArrowType.Int(32, false), DType.U32.asNullable(), new Integer[ROWS]),
+                Arguments.of(new ArrowType.Int(64, false), DType.U64.asNullable(), new Long[ROWS]),
+                Arguments.of(new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE), DType.F32.asNullable(),
+                        new Float[ROWS]),
                 Arguments.of(new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE), DType.F64.asNullable(),
                         new Double[ROWS]),
                 Arguments.of(ArrowType.Bool.INSTANCE, DType.BOOL.asNullable(), new Boolean[ROWS]),
-                Arguments.of(ArrowType.Utf8.INSTANCE, DType.UTF8.asNullable(), new String[ROWS]));
+                Arguments.of(ArrowType.Utf8.INSTANCE, DType.UTF8.asNullable(), new String[ROWS]),
+                Arguments.of(ArrowType.Binary.INSTANCE, DType.BINARY.asNullable(), new byte[ROWS][]),
+                Arguments.of(new ArrowType.Decimal(10, 2, 128), new DType.Decimal((byte) 10, (byte) 2, true),
+                        new java.math.BigDecimal[ROWS]),
+                Arguments.of(new ArrowType.Date(org.apache.arrow.vector.types.DateUnit.DAY),
+                        DateExtensionEncoder.INSTANCE.dtype(true), noValues),
+                Arguments.of(new ArrowType.Time(org.apache.arrow.vector.types.TimeUnit.MILLISECOND, 32),
+                        TimeExtensionEncoder.INSTANCE.dtype(true), noValues),
+                Arguments.of(new ArrowType.Timestamp(org.apache.arrow.vector.types.TimeUnit.MILLISECOND, null),
+                        TimestampExtensionEncoder.INSTANCE.dtype(true), noValues));
+    }
+
+    /// The rows of column `v` our reader reads as null.
+    private static long javaNullCount(Path file) throws IOException {
+        long[] nulls = {0};
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = reader.scan(ScanOptions.all())) {
+            iter.forEachRemaining(chunk -> {
+                MaskedArray column = chunk.column(ColumnName.of("v"));
+                for (long i = 0; i < column.length(); i++) {
+                    if (!column.isValid(i)) {
+                        nulls[0]++;
+                    }
+                }
+            });
+        }
+        return nulls[0];
     }
 
     // ── JNI write helper ──────────────────────────────────────────────────────
