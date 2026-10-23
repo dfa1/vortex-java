@@ -133,7 +133,8 @@ would otherwise guess. Working *on* this repository instead? Read [AGENTS.md](AG
   bounded memory; `ParquetImporter` and `JdbcImporter` do the same for Parquet and JDBC sources.
 - **Column types are inferred from the first 65 536 rows** (long, then double, then boolean, else
   text). A later value that does not fit fails the import, so for a column that mixes types pass
-  an explicit schema: `ImportOptions.defaults().withSchema(DType.structBuilder()...build())`.
+  an explicit schema: `ImportOptions.defaults().withSchema(DType.structBuilder()...build())`. A
+  schema can also pick a narrower type: any integer from `I8` to `U64` (range-checked) or `F32`.
   Inferred number and boolean columns are nullable: an empty cell is null there, and `""` in a text
   column. The first row is a header unless
   `withHeader(false)`; the delimiter must be an ASCII character.

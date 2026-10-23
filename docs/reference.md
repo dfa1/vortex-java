@@ -549,6 +549,9 @@ own, so it is only ever an `import` *source*: never a destination (there is no C
 `import`), and never a source for the other subcommands, which all expect a Vortex or Parquet
 file.
 
+A schema column may be any integer type (`I8` to `U64`; a value out of the type's range fails the
+import), `F32`, `F64`, `Bool` or `Utf8`. `withSchema` rejects any other type.
+
 An empty cell is a missing value. Inferred number and boolean columns are nullable and store it
 as null; an inferred text column stores `""`. With a schema, a nullable column stores null (text
 too), and a non-nullable number or boolean column fails the import with

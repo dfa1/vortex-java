@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.csv;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
 /// Options controlling CSV → Vortex import.
@@ -75,11 +76,21 @@ public final class ImportOptions {
     }
 
     /// Override the inferred schema. The struct's field names become column names;
-    /// types control how each CSV column is parsed (positionally).
+    /// types control how each CSV column is parsed (positionally). A column may be any integer
+    /// type (`I8` to `U64`, range-checked per value), `F32`, `F64`, `Bool` or `Utf8`, nullable or
+    /// not.
     ///
     /// @param overrideSchema the schema to use instead of inference
     /// @return a copy of this options with the schema applied
+    /// @throws IllegalArgumentException if a column has a type CSV import cannot produce
     public ImportOptions withSchema(DType.Struct overrideSchema) {
+        for (int c = 0; c < overrideSchema.fieldTypes().size(); c++) {
+            DType type = overrideSchema.fieldTypes().get(c);
+            if (!isSupported(type)) {
+                throw new IllegalArgumentException("column '" + overrideSchema.fieldNames().get(c).value()
+                        + "' has type " + type + ", which CSV import does not support");
+            }
+        }
         return new ImportOptions(delimiter, chunkSize, header, overrideSchema, progressListener, writeOptions);
     }
 
@@ -114,5 +125,14 @@ public final class ImportOptions {
     /// @return a copy of this options with the header flag applied
     public ImportOptions withHeader(boolean header) {
         return new ImportOptions(delimiter, chunkSize, header, schema, progressListener, writeOptions);
+    }
+
+    /// The types `CsvImporter` parses text into: every primitive but `F16`, booleans and text.
+    private static boolean isSupported(DType type) {
+        return switch (type) {
+            case DType.Primitive p -> p.ptype() != PType.F16;
+            case DType.Bool _, DType.Utf8 _ -> true;
+            default -> false;
+        };
     }
 }

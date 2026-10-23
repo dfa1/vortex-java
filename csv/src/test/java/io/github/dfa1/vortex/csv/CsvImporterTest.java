@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.csv;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -13,6 +14,7 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -313,6 +315,97 @@ class CsvImporterTest {
 
         // Then: the conversion's own exception, not the executor's wrapper around it
         assertThat(result).isInstanceOf(NumberFormatException.class).hasMessageContaining("N/A");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "I8, -128, -128", "I8, 127, 127", "U8, 255, 255", "I16, -32768, -32768", "U16, 65535, 65535",
+            "I32, -2147483648, -2147483648", "U32, 4294967295, 4294967295",
+            "U64, 18446744073709551615, -1", "U64, 9223372036854775808, -9223372036854775808",
+            "U64, 123, 123", "I64, -9223372036854775808, -9223372036854775808"})
+    void parseInteger_acceptsEachTypesBounds(PType ptype, String text, long expected) {
+        // Given: the extremes of each type; a U64 above Long.MAX_VALUE comes back as its bits
+        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+
+        // When
+        long result = CsvImporter.parseInteger(ptype, "c", bytes, 0, bytes.length);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"I8, -129", "I8, 128", "U8, -1", "U8, 256", "I16, 32768", "U16, 65536", "U16, -1",
+            "I32, 2147483648", "U32, 4294967296", "U32, -1", "U64, -1"})
+    void parseInteger_rejectsAValueOutOfRange(PType ptype, String text) {
+        // Given: one past each bound, which a cast would silently wrap
+        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+
+        // When
+        Throwable result = catchThrowable(() -> CsvImporter.parseInteger(ptype, "c", bytes, 0, bytes.length));
+
+        // Then
+        assertThat(result).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("column 'c' has " + text + ", which is out of range for " + ptype);
+    }
+
+    @Test
+    void parseInteger_rejectsANegativeLongU64() {
+        // Given: 19+ bytes take Long.parseUnsignedLong, which refuses a sign
+        byte[] bytes = "-9223372036854775808".getBytes(StandardCharsets.UTF_8);
+
+        // When
+        Throwable result = catchThrowable(() -> CsvImporter.parseInteger(PType.U64, "c", bytes, 0, bytes.length));
+
+        // Then
+        assertThat(result).isInstanceOf(NumberFormatException.class);
+    }
+
+    @Test
+    void aSchemaWithNarrowTypesStoresThem(@TempDir Path tmp) throws Exception {
+        // Given: every integer width, signed and not, and F32, with an empty cell in a nullable one
+        Path csv = tmp.resolve("narrow.csv");
+        Files.writeString(csv, "a,b,c,d,e,f,g,h,i\n-1,255,-2,65535,-3,4294967295,-4,18446744073709551615,1.5\n"
+                + "1,,2,0,3,0,4,0,-0.25\n");
+        Path vortex = tmp.resolve("narrow.vortex");
+        DType.Struct schema = DType.structBuilder()
+                .field(ColumnName.of("a"), DType.I8)
+                .field(ColumnName.of("b"), DType.U8.asNullable())
+                .field(ColumnName.of("c"), DType.I16)
+                .field(ColumnName.of("d"), DType.U16)
+                .field(ColumnName.of("e"), DType.I32)
+                .field(ColumnName.of("f"), DType.U32)
+                .field(ColumnName.of("g"), DType.I64)
+                .field(ColumnName.of("h"), DType.U64)
+                .field(ColumnName.of("i"), DType.F32)
+                .build();
+        Path exported = tmp.resolve("narrow-exported.csv");
+
+        // When
+        CsvImporter.importCsv(csv, vortex, ImportOptions.defaults().withSchema(schema));
+        CsvExporter.exportCsv(vortex, exported, ExportOptions.defaults());
+
+        // Then: the file keeps the schema's types, and every value, unsigned ones included, reads back
+        try (VortexReader reader = VortexReader.open(vortex)) {
+            assertThat(reader.dtype()).isEqualTo(schema);
+        }
+        assertThat(Files.readAllLines(exported)).isEqualTo(Files.readAllLines(csv));
+    }
+
+    @Test
+    void withSchemaRejectsATypeCsvCannotProduce() {
+        // Given: a type no CSV text parses into, refused when the schema is set, not at the first chunk
+        DType.Struct schema = DType.structBuilder()
+                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("half"), DType.F16)
+                .build();
+
+        // When
+        Throwable result = catchThrowable(() -> ImportOptions.defaults().withSchema(schema));
+
+        // Then
+        assertThat(result).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("column 'half'");
     }
 
     @ParameterizedTest
