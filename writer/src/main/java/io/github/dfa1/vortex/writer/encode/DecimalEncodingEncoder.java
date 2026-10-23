@@ -32,8 +32,9 @@ public final class DecimalEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         DType.Decimal d = (DType.Decimal) dtype;
-        int valuesType = valuesType(d.precision());
-        int bw = byteWidth(valuesType);
+        int bw = d.byteWidth();
+        // the metadata's values type is the width's log2: 1 byte is 0, 32 bytes is 5
+        int valuesType = Integer.numberOfTrailingZeros(bw);
         MemorySegment seg = switch (data) {
             case MemorySegment s -> s;
             case BigDecimal[] values -> pack(values, bw, ctx.arena());
@@ -48,14 +49,6 @@ public final class DecimalEncodingEncoder implements EncodingEncoder {
         EncodeNode node = new EncodeNode(EncodingId.VORTEX_DECIMAL, metaBuf, new EncodeNode[0], new int[]{0});
         // Rust's i256 is two 128-bit halves, so no decimal width aligns past 16 bytes.
         return new EncodeResult(node, List.of(new EncodedBuffer(seg, Math.min(bw, 16))), null, null).withStats(ZoneMapStats.ofDecimal(seg, bw));
-    }
-
-    /// Storage width in bytes of an unscaled value at `precision` (1, 2, 4, 8, 16 or 32), as in Rust.
-    ///
-    /// @param precision the decimal precision
-    /// @return bytes per value
-    static int storageWidth(byte precision) {
-        return byteWidth(valuesType(precision));
     }
 
     /// Packs the unscaled values little-endian, two's complement, `width` bytes each. A `null`
@@ -89,37 +82,5 @@ public final class DecimalEncodingEncoder implements EncodingEncoder {
             }
         }
         return out;
-    }
-
-    private static int valuesType(byte precision) {
-        if (precision <= 2) {
-            return 0;
-        }
-        if (precision <= 4) {
-            return 1;
-        }
-        if (precision <= 9) {
-            return 2;
-        }
-        if (precision <= 18) {
-            return 3;
-        }
-        if (precision <= 38) {
-            return 4;
-        }
-        return 5;
-    }
-
-    private static int byteWidth(int valuesType) {
-        return switch (valuesType) {
-            case 0 -> 1;
-            case 1 -> 2;
-            case 2 -> 4;
-            case 3 -> 8;
-            case 4 -> 16;
-            case 5 -> 32;
-            default -> throw new VortexException(EncodingId.VORTEX_DECIMAL,
-                    "unknown valuesType: " + valuesType);
-        };
     }
 }

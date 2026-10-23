@@ -197,25 +197,9 @@ final class Repartitioner {
         DType storage = dtype instanceof DType.Extension ext ? ext.storageDType() : dtype;
         return switch (storage) {
             case DType.Primitive p -> p.ptype().byteSize();
-            case DType.Decimal d -> decimalBytes(d.precision());
+            case DType.Decimal d -> d.byteWidth();
             default -> 8;
         };
-    }
-
-    private static int decimalBytes(int precision) {
-        if (precision <= 2) {
-            return 1;
-        }
-        if (precision <= 4) {
-            return 2;
-        }
-        if (precision <= 9) {
-            return 4;
-        }
-        if (precision <= 18) {
-            return 8;
-        }
-        return precision <= 38 ? 16 : 32;
     }
 
     // ── carriers ───────────────────────────────────────────────────────────

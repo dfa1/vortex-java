@@ -138,29 +138,11 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         return switch (dtype) {
             case DType.Bool _, DType.Primitive _, DType.Utf8 _, DType.Binary _ -> arrayFromScalar(ctx, NO_VALUE, dtype, n);
             case DType.Decimal decimal -> new LazyConstantDecimalArray(dtype, n,
-                    BigDecimal.ZERO.setScale(decimal.scale()), decimalByteWidth(decimal.precision()));
+                    BigDecimal.ZERO.setScale(decimal.scale()), decimal.byteWidth());
             case DType.Extension ext when ext.storageDType() instanceof DType.Primitive ->
                     arrayFromScalar(ctx, NO_VALUE, dtype, n);
             default -> null;
         };
-    }
-
-    /// The bytes of Rust's smallest decimal value type holding `precision` digits
-    /// (`DecimalType::smallest_decimal_value_type`).
-    private static int decimalByteWidth(int precision) {
-        if (precision <= 2) {
-            return 1;
-        }
-        if (precision <= 4) {
-            return 2;
-        }
-        if (precision <= 9) {
-            return 4;
-        }
-        if (precision <= 18) {
-            return 8;
-        }
-        return precision <= 38 ? 16 : 32;
     }
 
     private static Array decodeDecimal(DType dtype, ProtoScalarValue scalar, long n) {

@@ -113,18 +113,18 @@ class ConstantEncodingDecoderTest {
         }
 
         @ParameterizedTest
-        @CsvSource({"1, 0, 1", "2, 1, 1", "3, 0, 2", "4, 2, 2", "5, 0, 4", "9, 3, 4", "10, 2, 8", "18, 0, 8",
-                "19, 5, 16", "38, 10, 16", "39, 0, 32", "76, 38, 32"})
-        void aNullDecimalPlaceholderHasRustsWidthForThePrecision(int precision, int scale, int width) {
-            // Given: Rust stores a decimal in the smallest value type its precision fits
-            DType dtype = new DType.Decimal((byte) precision, (byte) scale, true);
+        @CsvSource({"2, 1", "18, 0", "38, 10", "76, 38"})
+        void aNullDecimalPlaceholderHasTheColumnsWidthAndScale(int precision, int scale) {
+            // Given: chunks of one column are combined by width, so the placeholder must match
+            // the width a valued chunk of the same column has
+            DType.Decimal dtype = new DType.Decimal((byte) precision, (byte) scale, true);
 
             // When
             Array result = decode(NULL, dtype, ROWS);
 
             // Then
             LazyConstantDecimalArray placeholder = (LazyConstantDecimalArray) ((MaskedArray) result).inner();
-            assertThat(placeholder.byteWidth()).isEqualTo(width);
+            assertThat(placeholder.byteWidth()).isEqualTo(dtype.byteWidth());
             assertThat(placeholder.value().scale()).isEqualTo(scale);
         }
 
