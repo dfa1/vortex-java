@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,7 +69,8 @@ class CsvImporterHttpTest {
                     assertThat(iter.hasNext()).isTrue();
                     try (Chunk chunk = iter.next()) {
                         assertThat(chunk.rowCount()).isEqualTo(2);
-                        LongArray ids = chunk.column(ColumnName.of("id"));
+                        // inferred numbers are nullable (#592), so the ids come back masked
+                        LongArray ids = (LongArray) MaskedArray.unwrap(chunk.column(ColumnName.of("id"))).inner();
                         assertThat(ids.getLong(0)).isEqualTo(1L);
                         VarBinArray names = chunk.column(ColumnName.of("name"));
                         assertThat(names.getString(0)).isEqualTo("Alice");

@@ -134,7 +134,8 @@ would otherwise guess. Working *on* this repository instead? Read [AGENTS.md](AG
 - **Column types are inferred from the first 65 536 rows** (long, then double, then boolean, else
   text). A later value that does not fit fails the import, so for a column that mixes types pass
   an explicit schema: `ImportOptions.defaults().withSchema(DType.structBuilder()...build())`.
-  Empty cells become `0`, `false` or `""`; the first row is a header unless
+  Inferred number and boolean columns are nullable: an empty cell is null there, and `""` in a text
+  column. The first row is a header unless
   `withHeader(false)`; the delimiter must be an ASCII character.
 - **Compact files from code**: start from the import's own write options, which keep the global
   dictionary off for streaming (`options.withWriteOptions(options.writeOptions().withCompact(true))`),
