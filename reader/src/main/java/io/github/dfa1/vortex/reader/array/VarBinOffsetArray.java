@@ -52,7 +52,7 @@ public record VarBinOffsetArray(DType dtype, long length, MemorySegment bytesSeg
     public void forEachByteLength(IntConsumer c) {
         long n = length;
         // The loop reads offsets[0..n] at a fixed stride and must stay uniform to
-        // vectorize (CLAUDE.md hot-loop rule), so the untrusted offsets segment is
+        // vectorize (AGENTS.md hot-loop rule), so the untrusted offsets segment is
         // sized once here rather than bounds-checked per row. A non-monotonic pair
         // still yields a negative length to the consumer; the typed accessors
         // ([#getBytes(long)], [#getByteLength(long)]) reject it when the row is read.

@@ -624,7 +624,7 @@ class DictEncodingDecoderTest {
         }
     }
 
-    /// Adversarial codes and dictionary offsets from an untrusted file (CLAUDE.md §Security contract,
+    /// Adversarial codes and dictionary offsets from an untrusted file (AGENTS.md §Security contract,
     /// per-encoding adversarial tests). `poolValid` already guarded codes against the
     /// row-validity pool, but the value **expansion** loops indexed the values pool with no
     /// bounds check at all: a code pointing past the pool escaped as a raw

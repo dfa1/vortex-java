@@ -103,7 +103,7 @@ public final class PrimitiveArrays {
     /// Widens `count` contiguous integer elements starting at element index `fromElement` in `seg`
     /// into caller-supplied `out`, so a per-chunk hot loop can reuse one scratch array across calls
     /// instead of allocating on every chunk. The `ptype` switch is hoisted out of the loop — one
-    /// specialized body per width rather than a per-element switch (CLAUDE.md hot-loop rule).
+    /// specialized body per width rather than a per-element switch (AGENTS.md hot-loop rule).
     ///
     /// @param seg         the source segment
     /// @param fromElement starting element index (not byte offset) within `seg`

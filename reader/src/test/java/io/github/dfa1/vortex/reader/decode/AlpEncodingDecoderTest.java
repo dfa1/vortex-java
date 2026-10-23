@@ -168,7 +168,7 @@ class AlpEncodingDecoderTest {
         assertThatThrownBy(() -> SUT.decode(ctx)).hasMessageContaining("expected an unsigned ptype");
     }
 
-    /// Adversarial metadata from an untrusted file (CLAUDE.md §Security contract, per-encoding
+    /// Adversarial metadata from an untrusted file (AGENTS.md §Security contract, per-encoding
     /// adversarial tests). `exp_e`/`exp_f` were read verbatim and used to index the
     /// power-of-ten tables, so an out-of-range exponent escaped as an
     /// `ArrayIndexOutOfBoundsException`; patch indices were scatter-written with no range

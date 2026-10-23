@@ -164,10 +164,10 @@ class EncodingTableFitnessTest {
 
     private static Path repoRoot() {
         Path dir = Path.of("").toAbsolutePath();
-        while (dir != null && !Files.exists(dir.resolve("CLAUDE.md"))) {
+        while (dir != null && !Files.exists(dir.resolve("AGENTS.md"))) {
             dir = dir.getParent();
         }
-        assertThat(dir).as("repo root (directory with CLAUDE.md)").isNotNull();
+        assertThat(dir).as("repo root (directory with AGENTS.md)").isNotNull();
         return dir;
     }
 }

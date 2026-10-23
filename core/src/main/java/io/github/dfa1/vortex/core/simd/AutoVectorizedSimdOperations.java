@@ -10,7 +10,7 @@ import java.lang.reflect.Array;
 import java.util.OptionalLong;
 
 /// The auto-vectorized [SimdOperations]: plain Java loops that rely on C2 auto-vectorization, with one
-/// specialized loop per width and the `ptype` switch hoisted out (CLAUDE.md hot-loop rule), so each
+/// specialized loop per width and the `ptype` switch hoisted out (AGENTS.md hot-loop rule), so each
 /// body is uniform.
 final class AutoVectorizedSimdOperations implements SimdOperations {
 
@@ -634,7 +634,7 @@ final class AutoVectorizedSimdOperations implements SimdOperations {
         return s;
     }
 
-    // Branch-free body per carrier, so C2 vectorizes it (CLAUDE.md hot-loop rule).
+    // Branch-free body per carrier, so C2 vectorizes it (AGENTS.md hot-loop rule).
     @Override
     public long runs(Object values, PType ptype) {
         int n = Array.getLength(values);

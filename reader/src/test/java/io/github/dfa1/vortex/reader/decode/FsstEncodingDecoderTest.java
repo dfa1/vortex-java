@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 /// Unit tests for [FsstEncodingDecoder], focused on the untrusted-input guards that turn a
 /// malformed `vortex.fsst` node into a [VortexException] rather than an
 /// `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`, or a wrapped/oversized
-/// allocation (the reader parses untrusted binary input; see the security contract in CLAUDE.md).
+/// allocation (the reader parses untrusted binary input; see the security contract in AGENTS.md).
 ///
 /// The wire node shape mirrors [io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder]: 3 buffers
 /// (symbols — one LE long per symbol; symbol lengths — one byte per symbol; compressed code stream)
@@ -386,7 +386,7 @@ class FsstEncodingDecoderTest {
             // literal byte, and the buffer ends exactly there. Decompressor reads one byte past the
             // declared range to fetch the (nonexistent) literal; that read falls off the segment
             // entirely and must surface as a VortexException, not a raw IndexOutOfBoundsException
-            // (the reader parses untrusted binary input; CLAUDE.md security contract).
+            // (the reader parses untrusted binary input; AGENTS.md security contract).
             long[] symbols = {};
             byte[] symbolLengths = {};
             byte[] compressed = {(byte) 0xFF};                // ESCAPE, no literal follows

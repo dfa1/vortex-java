@@ -175,7 +175,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
     /// analogue, because a pool's `length()` is a claim rather than a measurement for the shapes
     /// with no per-entry storage. Reading the codes bounds the pool by something the file must
     /// physically contain. Runs only for a constant pool or one longer than the codes, so the
-    /// common dict path pays nothing; the ptype dispatch is hoisted out of the loop (CLAUDE.md
+    /// common dict path pays nothing; the ptype dispatch is hoisted out of the loop (AGENTS.md
     /// hot-loop rule) and the range test is a single check on the reduced min/max rather than one
     /// per row.
     ///

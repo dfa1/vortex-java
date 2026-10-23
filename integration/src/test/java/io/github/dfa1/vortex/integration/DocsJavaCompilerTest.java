@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// union of imports declared anywhere in the file, plus [#HOW_TO_PRELUDE_IMPORTS] for the handful
 /// of types no recipe ever imports explicitly.
 ///
-/// Other living docs (`CLAUDE.md`, `README.md`, `compatibility.md`, `explanation.md`) are exempt:
+/// Other living docs (`AGENTS.md`, `README.md`, `compatibility.md`, `explanation.md`) are exempt:
 /// their snippets are deliberately illustrative fragments (undeclared context variables, `...`
 /// elisions) that were never meant to compile standalone. [DocsConsistencyTest] already checks
 /// their code-shaped claims (FQNs, method names, links) without requiring full compilation.
@@ -237,10 +237,10 @@ class DocsJavaCompilerTest {
 
     private static Path repoRoot() {
         Path dir = Path.of("").toAbsolutePath();
-        while (dir != null && !Files.exists(dir.resolve("CLAUDE.md"))) {
+        while (dir != null && !Files.exists(dir.resolve("AGENTS.md"))) {
             dir = dir.getParent();
         }
-        assertThat(dir).as("repo root (directory with CLAUDE.md)").isNotNull();
+        assertThat(dir).as("repo root (directory with AGENTS.md)").isNotNull();
         return dir;
     }
 }

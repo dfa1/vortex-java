@@ -210,7 +210,7 @@ Two [architectural fitness functions](https://www.thoughtworks.com/insights/book
 ## Docs consistency gate
 
 `DocsConsistencyTest` (integration module, plain surefire) machine-checks the living docs
-(`CLAUDE.md`, `README.md`, `docs/*.md`) against the codebase: project FQNs must resolve,
+(`AGENTS.md`, `README.md`, `docs/*.md`) against the codebase: project FQNs must resolve,
 `META-INF/services` mentions must name real files, relative links must not dangle, and
 backticked `Class.method(...)` claims must name real methods (external receivers live on a
 conscious allowlist in the test). Historical records (`adr/`, released CHANGELOG sections)

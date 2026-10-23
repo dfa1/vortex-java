@@ -266,7 +266,7 @@ class RleEncodingDecoderTest {
 
     /// Guards on the lengths and offsets a malformed file can declare. Every one must fail as
     /// [VortexException] — never an `OutOfMemoryError`, `NegativeArraySizeException`, or a raw
-    /// `IndexOutOfBoundsException` from a later per-row read (CLAUDE.md security contract).
+    /// `IndexOutOfBoundsException` from a later per-row read (AGENTS.md security contract).
     @Nested
     class MalformedMetadata {
 

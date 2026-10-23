@@ -139,7 +139,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
     /// reads as a huge unsigned value and fails the same test as an overrun. The stores are a
     /// permutation scatter, so they never vectorize regardless, and the compare costs nothing
     /// the untranspose was not already paying. The ptype switch is hoisted out of the loop so
-    /// each body stays uniform (CLAUDE.md hot-loop rule).
+    /// each body stays uniform (AGENTS.md hot-loop rule).
     ///
     /// @param out      output segment of `rowCount` elements
     /// @param ptype    output element type
@@ -187,7 +187,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
     /// Reads `count` consecutive elements starting at logical index `firstIdx`, widened to
     /// `long`.
     ///
-    /// Branch-split on whether the segment physically holds the range (CLAUDE.md hot-loop
+    /// Branch-split on whether the segment physically holds the range (AGENTS.md hot-loop
     /// rule): the fast path is a uniform, modulo-free loop per ptype, and the wrap-around
     /// arithmetic stays on the cold path, where it is only ever reached by a
     /// `vortex.constant` child that stores one element for the whole array.

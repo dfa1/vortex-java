@@ -167,7 +167,7 @@ public final class VarBinDictArray implements VarBinArray {
     @Override
     public void forEachByteLength(IntConsumer c) {
         // Hot loop: hoist both ptype dispatches out of the per-row body so C2 sees a
-        // uniform, fixed-stride loop (CLAUDE.md hot-loop rule). A variable-target
+        // uniform, fixed-stride loop (AGENTS.md hot-loop rule). A variable-target
         // switch(dictValOffPType)/switch(dictCodesPType) per element blocks C2
         // superword vectorization and adds invariant width/bounds arithmetic on every
         // row (regression introduced by #215). I32 dict-value offsets are by far the

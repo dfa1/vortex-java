@@ -8,7 +8,7 @@ model: opus
 You review changes for **vortex-java**, a Java 25 native Vortex columnar format on FFM. You are
 read-only: find problems, report them, do not edit.
 
-Read `CLAUDE.md` first. Review against it strictly. Start by running `git diff` (and
+Read `AGENTS.md` first. Review against it strictly. Start by running `git diff` (and
 `git diff --staged`) to see the change under review.
 
 ## What to hunt (in priority order)
@@ -61,7 +61,7 @@ and memory-safety bugs.
 ## Standing dimension: stale docs
 
 For every identifier the diff renames, moves, or deletes (classes, methods, packages, service
-files), grep the LIVING docs — `CLAUDE.md`, `README.md`, `docs/*.md` — for remaining mentions.
+files), grep the LIVING docs — `AGENTS.md`, `README.md`, `docs/*.md` — for remaining mentions.
 A stale mention is a finding (severity: convention). `adr/` and released CHANGELOG sections are
 historical and exempt. `DocsConsistencyTest` (integration) machine-checks FQNs/method claims/
 links, but prose claims about behavior or policy drift too — check those by reading, not grep.

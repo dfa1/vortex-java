@@ -30,7 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 /// point — exactly the path a malformed file on disk would hit.
 ///
 /// Every target replays its saved inputs in a routine `./mvnw test`; run with `JAZZER_FUZZ=1` to
-/// explore new inputs instead (see CLAUDE.md).
+/// explore new inputs instead (see AGENTS.md).
 @Tag("fuzz")
 class VortexReaderFuzzTest {
 

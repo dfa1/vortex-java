@@ -47,7 +47,7 @@ class StructEncodingDecoderTest {
         assertThat(((LongArray) struct.field(1)).getLong(1)).isEqualTo(40);
     }
 
-    /// Malformed-input cases for `vortex.struct` (CLAUDE.md §Security contract, ADR 0003).
+    /// Malformed-input cases for `vortex.struct` (AGENTS.md §Security contract, ADR 0003).
     ///
     /// The TODO's two Struct gotchas — `fieldNames.size() != children.size()` and an invalid
     /// field name — are both a *dtype* concern rather than an encoding one, and are guarded and

@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-Guidance for Claude Code working in this repository.
+Guidance for AI coding agents (Claude Code, Codex, Cursor, …) working in this repository.
 
 ## What it is
 
@@ -333,7 +333,7 @@ When stuck on encode/decode behavior, consult **in this order**:
 
 Living docs ship in the same commit/PR as the change they describe — never as a follow-up
 sweep. A change touching public API, module structure, wire behavior, or policy updates
-whichever apply: `docs/reference.md`, `docs/compatibility.md`, the CLAUDE.md module map /
+whichever apply: `docs/reference.md`, `docs/compatibility.md`, the AGENTS.md module map /
 design decisions, and the CHANGELOG entry for the change. This includes the CHANGELOG itself —
 add the `## [Unreleased]` entry (terse, per the `changelog` skill's style) in the same commit as
 the fix/feature, not a separate trailing `docs:` commit. Historical records (`adr/`) are exempt —

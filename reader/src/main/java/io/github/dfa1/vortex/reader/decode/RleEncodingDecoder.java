@@ -177,7 +177,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
     /// Normally that is a zero-copy slice of the mmapped child segment. A `ConstantEncoding`
     /// child deliberately stores one element regardless of the length it declares (zip-bomb
     /// defense), and that lone element is broadcast once into a fresh arena segment here — so the
-    /// per-row loops in the records need no `i % cap` at all (CLAUDE.md hot-loop rule).
+    /// per-row loops in the records need no `i % cap` at all (AGENTS.md hot-loop rule).
     ///
     /// Any other short child is a shape mismatch — a malformed file declaring more elements than
     /// it stores — and is rejected rather than silently wrapped around. `count` is expected to

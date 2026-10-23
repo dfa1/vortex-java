@@ -248,7 +248,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
         // Compress every row back-to-back directly into an arena-allocated scratch segment: a heap
         // scratch plus a copy into the arena costs a full extra allocation and copy of the whole
-        // stream, the CLAUDE.md allocation rule this violated. Worst case each input byte escapes
+        // stream, the AGENTS.md allocation rule this violated. Worst case each input byte escapes
         // to 2 output bytes, so 2 * totalInput bounds the entire stream.
         MemorySegment scratch = arena.allocate(Math.max(2 * totalInput, 1));
         // Written directly at wire position: codesOffsets[0] stays its default 0, and each row's

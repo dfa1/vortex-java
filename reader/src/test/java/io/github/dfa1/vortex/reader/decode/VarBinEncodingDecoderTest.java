@@ -97,7 +97,7 @@ class VarBinEncodingDecoderTest {
                 .hasMessageContaining("expected 1 or 2 children, got 3");
     }
 
-    /// Adversarial offsets from an untrusted file (CLAUDE.md §Security contract, per-encoding
+    /// Adversarial offsets from an untrusted file (AGENTS.md §Security contract, per-encoding
     /// adversarial tests). `decode()` deliberately never scans the offsets — VarBin decode
     /// is zero-copy and lazy — so every malformed offset has to be caught by the accessors,
     /// and always as a [VortexException]: a non-monotonic pair used to reach

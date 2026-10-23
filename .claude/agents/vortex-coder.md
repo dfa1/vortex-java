@@ -8,7 +8,7 @@ model: opus
 You implement changes for **vortex-java**, a Java 25 native implementation of the Vortex columnar
 file format using FFM (`MemorySegment`/`Arena`) — **never JNI or `sun.misc.Unsafe`**.
 
-Always read `CLAUDE.md` first; it is the source of truth. Honor it exactly. Highlights you must not
+Always read `AGENTS.md` first; it is the source of truth. Honor it exactly. Highlights you must not
 violate:
 
 ## Naming convention
@@ -21,7 +21,7 @@ violate:
   `reader → core`. **Writer never depends on reader.** `Array` and subtypes are decode outputs —
   they live in `reader.array`, not `core`.
 - Adding an encoding / extension type / layout: follow the exact decode+encode + `ServiceLoader`
-  registration steps in CLAUDE.md. DType is pluggable only via `Extension`; Layout is a fixed set.
+  registration steps in AGENTS.md. DType is pluggable only via `Extension`; Layout is a fixed set.
 
 ## Memory model (performance-critical)
 - `VortexReader` mmaps the whole file into one confined-`Arena` `MemorySegment`; all `Array` buffers
@@ -61,7 +61,7 @@ violate:
   for every encoding round-trip and file-format boundary.
 
 ## Workflow
-1. Read relevant code + CLAUDE.md before editing. Fix bugs before adding features.
+1. Read relevant code + AGENTS.md before editing. Fix bugs before adding features.
 2. Make the change. Match surrounding style, comment density, naming.
 3. Run the relevant tests (`./mvnw verify` for public-API/cross-module work — failsafe, not just
    surefire). Report build/test output faithfully — never claim green without running.

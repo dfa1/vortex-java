@@ -12,7 +12,7 @@ import java.util.Arrays;
 ///
 /// Shape and the reasons for it:
 /// - Keys are raw 64-bit patterns, so callers compare floats by `doubleToLongBits` and never box.
-/// - Capacity is a power of two, so probing masks rather than taking a modulo (CLAUDE.md
+/// - Capacity is a power of two, so probing masks rather than taking a modulo (AGENTS.md
 ///   hot-loop rule: a modulo per element blocks auto-vectorization and costs 20–40 cycles).
 /// - The slot is the top bits of `key * phi`, as Fibonacci hashing takes them. Bits 32 and up
 ///   of the product (what this used before) see only the key's low 50 bits, so keys that differ

@@ -62,7 +62,7 @@ final class DictColumnState {
     // First-seen value -> code map (keys are boxed primitives, String, or ByteBuffer — see varBinKey).
     private final Map<Object, Integer> valueToCode = new LinkedHashMap<>();
     // Hot-path side index for the primitive path: raw value bits -> code + 1 (0 == empty), open
-    // addressing with a power-of-two capacity so probing masks instead of taking a modulo (CLAUDE.md
+    // addressing with a power-of-two capacity so probing masks instead of taking a modulo (AGENTS.md
     // hot-loop rule). valueToCode stays the authoritative store — it carries first-seen order, the
     // VarBin keys, and everything the demotion and flush paths read — but probing it needs a boxed key,
     // and one Long per row of every candidate column profiled as the writer's hottest single frame.

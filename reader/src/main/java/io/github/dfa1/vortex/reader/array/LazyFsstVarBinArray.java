@@ -154,7 +154,7 @@ public record LazyFsstVarBinArray(
     /// per-row bounds cross-check (matching [VarBinOffsetArray#forEachByteLength(IntConsumer)]'s
     /// "bulk walk trusts the data, typed accessors validate it" convention). Branch-split per ptype
     /// and on the broadcast case so the per-row body stays a uniform, fixed-stride read
-    /// (CLAUDE.md hot-loop rule).
+    /// (AGENTS.md hot-loop rule).
     ///
     /// @param c consumer called once per row with the claimed byte length at that index
     @Override

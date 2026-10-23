@@ -210,7 +210,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     ///
     /// One pass, no allocation: strictly cheaper than the `n * elemSize` allocate-and-scatter
     /// it replaces. The maximum is accumulated branchlessly so the loop body stays uniform
-    /// (CLAUDE.md hot-loop rule) and only the single comparison afterwards can fail. Only the
+    /// (AGENTS.md hot-loop rule) and only the single comparison afterwards can fail. Only the
     /// three legal codes widths appear ([#requireUnsignedCodePType(PType)] runs first), so
     /// zero-extending each read covers the whole unsigned range.
     ///

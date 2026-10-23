@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// phantom APIs, dead service-file paths, and pre-refactor package FQNs — each one a claim this
 /// test would have failed).
 ///
-/// Living docs: `CLAUDE.md`, `README.md`, `docs/*.md`. Historical records are exempt by policy:
+/// Living docs: `AGENTS.md`, `README.md`, `docs/*.md`. Historical records are exempt by policy:
 /// `adr/` and `CHANGELOG.md` describe the past and must not be rewritten to match the present.
 ///
 /// Checks:
@@ -69,14 +69,14 @@ class DocsConsistencyTest {
     @BeforeAll
     static void locateRepo() throws IOException {
         Path dir = Path.of("").toAbsolutePath();
-        while (dir != null && !Files.exists(dir.resolve("CLAUDE.md"))) {
+        while (dir != null && !Files.exists(dir.resolve("AGENTS.md"))) {
             dir = dir.getParent();
         }
-        assertThat(dir).as("repo root (directory containing CLAUDE.md)").isNotNull();
+        assertThat(dir).as("repo root (directory containing AGENTS.md)").isNotNull();
         repoRoot = dir;
 
         livingDocs = new ArrayList<>();
-        livingDocs.add(repoRoot.resolve("CLAUDE.md"));
+        livingDocs.add(repoRoot.resolve("AGENTS.md"));
         Path readme = repoRoot.resolve("README.md");
         if (Files.exists(readme)) {
             livingDocs.add(readme);

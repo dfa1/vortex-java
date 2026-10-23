@@ -121,7 +121,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
             valuesBuf = ctx.arena().allocate(0, elemBytes);
         } else {
             // A per-element ptype switch and the signedness ternary used to sit inside the scan,
-            // making the body non-uniform for every row (CLAUDE.md hot-loop rule). Widen once,
+            // making the body non-uniform for every row (AGENTS.md hot-loop rule). Widen once,
             // then run uniform loops over `long`s.
             //
             // Two passes — count the runs, then fill — rather than one pass appending to

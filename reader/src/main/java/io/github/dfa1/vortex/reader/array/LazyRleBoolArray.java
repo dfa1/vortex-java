@@ -52,7 +52,7 @@ public record LazyRleBoolArray(
     }
 
     /// Emits one chunk's rows. The `u8`/`u16` index width is hoisted into its own loop
-    /// (rather than tested per row) so each body stays uniform — see the CLAUDE.md hot-loop rule.
+    /// (rather than tested per row) so each body stays uniform — see the AGENTS.md hot-loop rule.
     private void processChunk(int chunkIdx, int rowInChunk, int end, BooleanConsumer c) {
         long chunkBase = (long) chunkIdx * RleArrays.FL_CHUNK_SIZE;
         long valueIdxOffset = valuesIdxOffsets[chunkIdx] - firstOffset;

@@ -118,7 +118,7 @@ the [tutorial](docs/tutorial.md).
 ## For AI agents
 
 If you are an AI agent asked to convert data to Vortex with this library, these are the facts you
-would otherwise guess. Working *on* this repository instead? Read [CLAUDE.md](CLAUDE.md).
+would otherwise guess. Working *on* this repository instead? Read [AGENTS.md](AGENTS.md).
 
 - **Java 25+.** The library uses FFM, not JNI: run with `--enable-native-access=ALL-UNNAMED`
   (the CLI jar's manifest already sets it).

@@ -11,7 +11,7 @@
 
     <name>vortex-fuzz</name>
     <description>Coverage-guided fuzz testing (ADR 0020) for the Vortex columnar file format Java implementation.
-        Saved inputs replay in every build; JAZZER_FUZZ=1 explores new ones — see CLAUDE.md.
+        Saved inputs replay in every build; JAZZER_FUZZ=1 explores new ones — see AGENTS.md.
     </description>
 
     <properties>

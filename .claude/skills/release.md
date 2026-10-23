@@ -31,7 +31,7 @@ Refuse to proceed unless **all** of the following hold. Report any failure and s
 - Current branch is `main`.
 - Working tree is clean: `git status --short` is empty.
 - `main` is up to date with `origin/main`: `git fetch origin && git rev-list --count main..origin/main` is 0 and the reverse direction is 0.
-- The full build is green: `./mvnw verify`. **Never `mvn install`** per CLAUDE.md.
+- The full build is green: `./mvnw verify`. **Never `mvn install`** per AGENTS.md.
 - `gh auth status` succeeds (the GitHub release step needs auth).
 - The release version is not already a tag: `git tag -l "v<releaseVersion>"` is empty.
 
@@ -57,7 +57,7 @@ Commit the changelog edits as `docs(changelog): finalize <releaseVersion> sectio
 
 ### 3. Tag via `mvn release:prepare`
 
-Use the exact command from CLAUDE.md:
+Use the exact command from AGENTS.md:
 
 ```bash
 ./mvnw --batch-mode release:clean release:prepare \
