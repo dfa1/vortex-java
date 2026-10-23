@@ -12,9 +12,7 @@ import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
-import io.github.dfa1.vortex.reader.array.LazyForLongArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.OffsetDoubleArray;
 import io.github.dfa1.vortex.reader.array.OffsetLongArray;
 import io.github.dfa1.vortex.reader.compute.Compute;
@@ -61,11 +59,11 @@ import org.openjdk.jmh.annotations.Warmup;
 /// to:
 /// - `price` — `f64` rounded to two decimals, chosen for ALP, decodes to [LazyAlpDoubleArray].
 /// - `measure` — `i64` with a large base and a bounded spread, chosen for Frame-of-Reference,
-///   decodes to [LazyForLongArray].
+///   decoded to a `MaterializedLongArray` (2026-10-23; it once decoded to `LazyForLongArray`).
 /// - `category` — `i64` with sixteen distinct values, chosen for dictionary encoding, decodes to
 ///   [DictLongArray].
 /// - `plain` — `i64` full-range random, with no encoding savings, decodes to
-///   [MaterializedLongArray] as an apples baseline for the non-encoded cost.
+///   `MaterializedLongArray` as an apples baseline for the non-encoded cost.
 ///
 /// At one hundred million rows each column spans ≈ 800 MB of values, far larger than any L3 cache,
 /// so the kernel measurements are memory-bound. The write side refills and reuses one set of
@@ -115,7 +113,8 @@ public class ComputeKernelBenchmark {
     private static final int TOTAL_ROWS = 100_000_000;
     /// Rows per written/decoded chunk; the write side reuses one set of arrays this large.
     private static final int CHUNK_ROWS = 1_000_000;
-    /// Number of chunks written and decoded (`TOTAL_ROWS / CHUNK_ROWS`).
+    /// Number of batches written (`TOTAL_ROWS / CHUNK_ROWS`); the writer repartitions them into
+    /// its own chunks.
     private static final int CHUNK_COUNT = TOTAL_ROWS / CHUNK_ROWS;
     private static final long SEED = 42L;
 
@@ -155,17 +154,26 @@ public class ComputeKernelBenchmark {
     public void setup() throws IOException {
         registry = ReadRegistry.loadAll();
         file = Files.createTempFile("compute-kernel-bench", ".vtx");
+        try {
+            load();
+        } catch (IOException | RuntimeException e) {
+            // JMH skips the teardown of a failed setup, which left a 1.2 GB file per failed fork
+            tearDown();
+            throw e;
+        }
+    }
+
+    private void load() throws IOException {
         write(file);
 
         reader = VortexReader.open(file, registry);
-        if (reader.chunkCount() != CHUNK_COUNT) {
-            throw new IllegalStateException(
-                    "expected " + CHUNK_COUNT + " chunks, got " + reader.chunkCount());
-        }
-
+        // the writer repartitions into Rust-sized chunks, not one per writeChunk batch, so only the
+        // total is fixed
+        long rows = 0;
         for (int k = 0; k < reader.chunkCount(); k++) {
             Chunk decoded = reader.decodeChunk(k, COLUMNS.stream().map(ColumnName::of).toList());
             chunks.add(decoded);
+            rows += decoded.rowCount();
 
             Array priceArr = decoded.column(ColumnName.of("price"));
             Array measureArr = decoded.column(ColumnName.of("measure"));
@@ -179,17 +187,21 @@ public class ComputeKernelBenchmark {
                 System.out.printf("  category -> %s%n", categoryArr.getClass().getName());
                 System.out.printf("  plain    -> %s%n", plainArr.getClass().getName());
 
+                // the filter columns pick the kernel's lane, so they must stay encoded; the aggregate
+                // columns are read through whatever array the reader gives (measure decoded to a
+                // MaterializedLongArray on 2026-10-23, not the LazyForLongArray it once did)
                 requireType(priceArr, LazyAlpDoubleArray.class, "price");
-                requireType(measureArr, LazyForLongArray.class, "measure");
                 requireType(categoryArr, DictLongArray.class, "category");
-                requireType(plainArr, MaterializedLongArray.class, "plain");
-                System.out.printf("[ComputeKernelBenchmark] all four columns assert OK%n");
+                System.out.printf("[ComputeKernelBenchmark] filter columns assert OK%n");
             }
 
             priceChunks.add((DoubleArray) priceArr);
             measureChunks.add((LongArray) measureArr);
             categoryChunks.add((LongArray) categoryArr);
             plainChunks.add((LongArray) plainArr);
+        }
+        if (rows != TOTAL_ROWS) {
+            throw new IllegalStateException("expected " + TOTAL_ROWS + " rows, got " + rows);
         }
     }
 
