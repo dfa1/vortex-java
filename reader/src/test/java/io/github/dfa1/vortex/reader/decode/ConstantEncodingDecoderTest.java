@@ -1,26 +1,39 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoNullValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
+import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,32 +64,127 @@ class ConstantEncodingDecoderTest {
         assertThat(longs.getLong(2)).isZero();
     }
 
-    @ParameterizedTest
-    @MethodSource("nullableTypes")
-    void nullScalar_decodesAsAMaskedArrayWithEveryRowInvalid(DType dtype, Class<?> payload) {
-        // Given: a null constant, which Rust and our writer emit for an all-null chunk; it read as
-        // a NullArray, which every consumer that unwraps a MaskedArray and casts failed on
-        ProtoScalarValue scalar = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE);
+    /// A null constant, which Rust and our writer emit for an all-null chunk.
+    @Nested
+    class NullScalar {
 
-        // When
-        Array result = decode(scalar, dtype, 3);
+        private static final ProtoScalarValue NULL = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE);
+        private static final long ROWS = 1_000;
 
-        // Then
-        assertThat(result).isInstanceOf(MaskedArray.class);
-        assertThat(result.dtype()).isEqualTo(dtype);
-        MaskedArray masked = (MaskedArray) result;
-        assertThat(masked.inner()).isInstanceOf(payload);
-        assertThat(masked.isValid(0)).isFalse();
-        assertThat(masked.isValid(2)).isFalse();
-    }
+        @ParameterizedTest
+        @MethodSource("maskableTypes")
+        void decodesAsAMaskedArrayWithEveryRowInvalid(DType dtype, Class<?> payload) {
+            // Given: a type with a placeholder value; it read as a NullArray, which every consumer
+            // that unwraps a MaskedArray and casts its payload failed on
 
-    static Stream<Arguments> nullableTypes() {
-        return Stream.of(
-                Arguments.of(DType.I64.asNullable(), LongArray.class),
-                Arguments.of(DType.I16.asNullable(), ShortArray.class),
-                Arguments.of(DType.F64.asNullable(), DoubleArray.class),
-                Arguments.of(DType.BOOL.asNullable(), BoolArray.class),
-                Arguments.of(DType.UTF8.asNullable(), VarBinArray.class));
+            // When
+            Array result = decode(NULL, dtype, ROWS);
+
+            // Then: the column's own type, masked like any nullable chunk, with no valid row
+            assertThat(result).isInstanceOf(MaskedArray.class);
+            assertThat(result.dtype()).isEqualTo(dtype);
+            assertThat(result.length()).isEqualTo(ROWS);
+            MaskedArray masked = (MaskedArray) result;
+            assertThat(masked.inner()).isInstanceOf(payload);
+            assertThat(masked.inner().dtype()).isEqualTo(dtype.withNullable(false));
+            assertThat(masked.inner().length()).isEqualTo(ROWS);
+            for (long i = 0; i < ROWS; i++) {
+                assertThat(masked.isValid(i)).isFalse();
+            }
+        }
+
+        static Stream<Arguments> maskableTypes() {
+            List<Arguments> cases = new ArrayList<>();
+            for (PType ptype : PType.values()) {
+                cases.add(Arguments.of(new DType.Primitive(ptype, true), payloadOf(ptype)));
+            }
+            cases.add(Arguments.of(DType.BOOL.asNullable(), BoolArray.class));
+            cases.add(Arguments.of(DType.UTF8.asNullable(), VarBinArray.class));
+            cases.add(Arguments.of(DType.BINARY.asNullable(), VarBinArray.class));
+            cases.add(Arguments.of(new DType.Decimal((byte) 10, (byte) 2, true), DecimalArray.class));
+            cases.add(Arguments.of(new DType.Extension("vortex.date", DType.I32, MemorySegment.ofArray(new byte[]{0}), true),
+                    IntArray.class));
+            cases.add(Arguments.of(new DType.Extension("vortex.time", DType.I32, MemorySegment.ofArray(new byte[]{1}), true),
+                    IntArray.class));
+            cases.add(Arguments.of(new DType.Extension("vortex.timestamp", DType.I64,
+                    MemorySegment.ofArray(new byte[]{1, 0, 0}), true), LongArray.class));
+            cases.add(Arguments.of(new DType.Extension("acme.custom", DType.U16, null, true), ShortArray.class));
+            return cases.stream();
+        }
+
+        @ParameterizedTest
+        @CsvSource({"1, 0, 1", "2, 1, 1", "3, 0, 2", "4, 2, 2", "5, 0, 4", "9, 3, 4", "10, 2, 8", "18, 0, 8",
+                "19, 5, 16", "38, 10, 16", "39, 0, 32", "76, 38, 32"})
+        void aNullDecimalPlaceholderHasRustsWidthForThePrecision(int precision, int scale, int width) {
+            // Given: Rust stores a decimal in the smallest value type its precision fits
+            DType dtype = new DType.Decimal((byte) precision, (byte) scale, true);
+
+            // When
+            Array result = decode(NULL, dtype, ROWS);
+
+            // Then
+            LazyConstantDecimalArray placeholder = (LazyConstantDecimalArray) ((MaskedArray) result).inner();
+            assertThat(placeholder.byteWidth()).isEqualTo(width);
+            assertThat(placeholder.value().scale()).isEqualTo(scale);
+        }
+
+        @ParameterizedTest
+        @MethodSource("unmaskableTypes")
+        void staysANullArrayForATypeWithoutAPlaceholder(DType dtype) {
+            // Given: no scalar can stand under the mask here; it must still decode, not throw
+
+            // When
+            Array result = decode(NULL, dtype, ROWS);
+
+            // Then
+            assertThat(result).isInstanceOf(NullArray.class);
+            assertThat(result.length()).isEqualTo(ROWS);
+        }
+
+        static Stream<DType> unmaskableTypes() {
+            return Stream.of(
+                    new DType.Null(true),
+                    new DType.List(DType.I64, true),
+                    new DType.FixedSizeList(DType.I32, 3, true),
+                    new DType.Struct(List.of(ColumnName.of("a")), List.of(DType.I64), true),
+                    new DType.Map(DType.I64, DType.I64, false, true),
+                    new DType.Variant(true),
+                    new DType.Extension("vortex.uuid", new DType.FixedSizeList(DType.U8, 16, false), null, true));
+        }
+
+        @Test
+        void aZeroRowNullConstantIsAnEmptyMaskedArray() {
+            // When
+            Array result = decode(NULL, DType.I64.asNullable(), 0);
+
+            // Then
+            assertThat(result).isInstanceOf(MaskedArray.class);
+            assertThat(result.length()).isZero();
+        }
+
+        @Test
+        void aNullScalarWinsOverANonNullableDtype() {
+            // Given: a crafted file declaring a non-nullable column but storing a null constant;
+            // every row is still null, as the scalar says
+            // When
+            Array result = decode(NULL, DType.I64, ROWS);
+
+            // Then
+            assertThat(result).isInstanceOf(MaskedArray.class);
+            assertThat(((MaskedArray) result).isValid(0)).isFalse();
+        }
+
+        private static Class<?> payloadOf(PType ptype) {
+            return switch (ptype) {
+                case I8, U8 -> ByteArray.class;
+                case I16, U16 -> ShortArray.class;
+                case F16 -> Float16Array.class;
+                case I32, U32 -> IntArray.class;
+                case I64, U64 -> LongArray.class;
+                case F32 -> FloatArray.class;
+                case F64 -> DoubleArray.class;
+            };
+        }
     }
 
     /// A scalar whose oneof tag doesn't match the declared Decimal dtype (e.g. only

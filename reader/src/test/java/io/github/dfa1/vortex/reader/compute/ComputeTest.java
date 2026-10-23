@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
@@ -76,6 +77,43 @@ class ComputeTest {
                 .isThrownBy(() -> Compute.filteredAggregate(null, RowFilter.gt(ColumnName.of("f"), 0L), ColumnName.of("v")));
         assertThatNullPointerException()
                 .isThrownBy(() -> Compute.filteredAggregate(chunk, null, ColumnName.of("v")));
+    }
+
+    /// An all-null chunk of a type with no masked form (a uuid, a list) reads as a [NullArray]; the
+    /// filter tested it as a non-nullable array, so IS NULL selected none of its null rows.
+    @Nested
+    class AllNullChunk {
+
+        private static final ColumnName COL = ColumnName.of("c");
+        private static final long ROWS = 5;
+
+        static Stream<Arguments> predicates() {
+            return Stream.of(
+                    Arguments.of(named("is null", new Predicate.IsNull()), true),
+                    Arguments.of(named("is not null", new Predicate.IsNotNull()), false),
+                    Arguments.of(named("eq", new Predicate.Eq(1L)), false),
+                    Arguments.of(named("neq", new Predicate.Neq(1L)), false),
+                    Arguments.of(named("gt", new Predicate.Gt(1L)), false),
+                    Arguments.of(named("lte", new Predicate.Lte(1L)), false));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("predicates")
+        void onlyIsNullSelectsItsRows(Predicate predicate, boolean selected) {
+            // Given
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.<Array>column(COL)).willReturn(new NullArray(DType.I64.asNullable(), ROWS));
+            RowFilter filter = new RowFilter.Column(COL, predicate);
+
+            // When
+            LongPredicate result = Compute.matcher(chunk, filter);
+
+            // Then: the lowered matcher and the per-row oracle agree on every row
+            for (long i = 0; i < ROWS; i++) {
+                assertThat(result.test(i)).as("row %d", i).isEqualTo(selected);
+                assertThat(Compute.matches(chunk, filter, i)).as("row %d", i).isEqualTo(selected);
+            }
+        }
     }
 
     /// [Compute#matcher(Chunk, RowFilter)] lowers a filter once per chunk; over a string dictionary

@@ -29,14 +29,15 @@ final class Values {
 
     /// Reports whether the value at position `i` is null.
     ///
-    /// Only a [MaskedArray] carries nulls; any other array is non-nullable, so every position is
-    /// present. A masked array delegates to [MaskedArray#isValid(long)].
+    /// Only an array with a validity ([NumericColumns#validityOf(Array)]) carries nulls; any other
+    /// array is non-nullable, so every position is present.
     ///
     /// @param array the array to test
     /// @param i     the zero-based position
     /// @return `true` if the value at `i` is null
     static boolean isNullAt(Array array, long i) {
-        return array instanceof MaskedArray masked && !masked.isValid(i);
+        BoolArray validity = NumericColumns.validityOf(array);
+        return validity != null && !validity.getBoolean(i);
     }
 
     /// Reads the value at position `i` as a boxed scalar through the array's typed accessor.
