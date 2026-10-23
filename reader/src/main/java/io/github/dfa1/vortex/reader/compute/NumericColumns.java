@@ -6,8 +6,10 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 
 /// Value-access helpers for numeric primitive columns, shared by the fused filter-and-aggregate
@@ -30,12 +32,18 @@ final class NumericColumns {
         return array instanceof MaskedArray masked ? masked.inner() : array;
     }
 
-    /// Returns the validity bitmap of a [MaskedArray], or `null` when the array carries no nulls.
+    /// Returns the validity bitmap of a [MaskedArray], an all-false one for a [NullArray] (an
+    /// all-null chunk of a type with no masked form, such as a uuid or a list), or `null` when the
+    /// array carries no nulls.
     ///
     /// @param array the array to inspect
     /// @return the validity bitmap, or `null`
     static BoolArray validityOf(Array array) {
-        return array instanceof MaskedArray masked ? masked.validity() : null;
+        return switch (array) {
+            case MaskedArray masked -> masked.validity();
+            case NullArray nulls -> new LazyConstantBoolArray(DType.BOOL, nulls.length(), false);
+            default -> null;
+        };
     }
 
     /// Reports whether the unwrapped array is a specialized long-domain primitive.

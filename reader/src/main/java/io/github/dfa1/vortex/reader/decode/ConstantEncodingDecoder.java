@@ -22,6 +22,7 @@ import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 
 /// Read-only decoder for `vortex.constant`.
@@ -63,11 +64,10 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         // canonicalizes it to the dtype's own array with every row invalid, so a reader sees an
         // all-null I64? chunk as any other masked I64? chunk, not as a NullArray it cannot cast.
         if (scalar.null_value() != null) {
-            if (dtype instanceof DType.Decimal || dtype instanceof DType.Variant) {
-                // ponytail: no placeholder value built for these yet, they stay a NullArray
+            Array placeholder = placeholder(ctx, dtype.withNullable(false), n);
+            if (placeholder == null) {
                 return new NullArray(dtype, n);
             }
-            Array placeholder = arrayFromScalar(ctx, NO_VALUE, dtype.withNullable(false), n);
             return new MaskedArray(placeholder, new LazyConstantBoolArray(DType.BOOL, n, false));
         }
         if (dtype instanceof DType.Variant) {
@@ -127,6 +127,40 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             case I8, U8 -> new LazyConstantByteArray(outDtype, n, (byte) rawBits);
             default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
         };
+    }
+
+    /// The value under a null constant's all-invalid validity: a constant `0`, `false`, `""` or
+    /// zero decimal of `dtype`, or `null` for a dtype with no such scalar.
+    ///
+    /// ponytail: lists, structs, variants and extensions over non-primitive storage (uuid) have
+    /// no placeholder yet and stay a NullArray; add one when a consumer needs them masked.
+    private static Array placeholder(DecodeContext ctx, DType dtype, long n) {
+        return switch (dtype) {
+            case DType.Bool _, DType.Primitive _, DType.Utf8 _, DType.Binary _ -> arrayFromScalar(ctx, NO_VALUE, dtype, n);
+            case DType.Decimal decimal -> new LazyConstantDecimalArray(dtype, n,
+                    BigDecimal.ZERO.setScale(decimal.scale()), decimalByteWidth(decimal.precision()));
+            case DType.Extension ext when ext.storageDType() instanceof DType.Primitive ->
+                    arrayFromScalar(ctx, NO_VALUE, dtype, n);
+            default -> null;
+        };
+    }
+
+    /// The bytes of Rust's smallest decimal value type holding `precision` digits
+    /// (`DecimalType::smallest_decimal_value_type`).
+    private static int decimalByteWidth(int precision) {
+        if (precision <= 2) {
+            return 1;
+        }
+        if (precision <= 4) {
+            return 2;
+        }
+        if (precision <= 9) {
+            return 4;
+        }
+        if (precision <= 18) {
+            return 8;
+        }
+        return precision <= 38 ? 16 : 32;
     }
 
     private static Array decodeDecimal(DType dtype, ProtoScalarValue scalar, long n) {

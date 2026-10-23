@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
@@ -117,6 +118,16 @@ class ValuesTest {
         assertThat(result).isEqualTo(42L);
         assertThat(Values.isNullAt(masked, 0)).isFalse();
         assertThat(Values.isNullAt(masked, 1)).isTrue();
+    }
+
+    @Test
+    void aNullArrayIsNullAtEveryRow() {
+        // Given an all-null chunk of a type with no masked form (a uuid, a list)
+        Array nulls = new NullArray(DType.I64.asNullable(), 3);
+
+        // When / Then
+        assertThat(Values.isNullAt(nulls, 0)).isTrue();
+        assertThat(Values.isNullAt(nulls, 2)).isTrue();
     }
 
     private static Array byteArray(DType dtype, byte... values) {
