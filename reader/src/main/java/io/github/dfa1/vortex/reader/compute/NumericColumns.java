@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader.compute;
 
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -12,8 +11,8 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 
-/// Value-access helpers for numeric primitive columns, shared by the fused filter-and-aggregate
-/// kernels ([FusedFilterSum] / [FusedFilterAggregate]).
+/// Value-access helpers for numeric primitive columns, shared by the compute kernels
+/// ([FusedFilterAggregate], [DictFilter], [GroupedAggregate]).
 ///
 /// These unwrap a [MaskedArray] into its payload and validity, classify a column's value domain
 /// (long-domain integer, floating, numeric primitive), and read a long-domain element widened to a
@@ -74,29 +73,5 @@ final class NumericColumns {
         }
         ByteArray ba = (ByteArray) data;
         return unsigned ? (ba.getByte(i) & 0xFFL) : ba.getByte(i);
-    }
-
-    /// Guards that `dtype` is a numeric primitive a `SUM` can fold — a [DType.Primitive] (integer or
-    /// floating). Any other column boxes to a value the long/double fold cannot total correctly: a
-    /// non-numeric column (Utf8, Binary, Bool, …) boxes to a non-[Number], and a [DType.Decimal]
-    /// boxes to a [java.math.BigDecimal] whose fraction the `longValue()` fold would silently
-    /// truncate. Decimal `SUM` is deferred (matching the writer's zone-map `SUM`, which covers plain
-    /// numeric primitives only); rejecting it here is correct, not a stop-gap.
-    ///
-    /// @param dtype the column dtype to validate
-    /// @throws VortexException if `dtype` is not a numeric primitive column
-    static void requireNumeric(DType dtype) {
-        if (!(dtype instanceof DType.Primitive)) {
-            throw new VortexException("compute: SUM is not supported on a non-numeric column of dtype "
-                    + dtype);
-        }
-    }
-
-    /// Reports whether the array's column dtype is a floating-point primitive.
-    ///
-    /// @param array the array to inspect
-    /// @return `true` if the column is a floating-point primitive
-    static boolean isFloating(Array array) {
-        return array.dtype() instanceof DType.Primitive prim && prim.ptype().isFloating();
     }
 }

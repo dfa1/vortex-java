@@ -19,7 +19,6 @@ import io.github.dfa1.vortex.reader.array.OffsetDoubleArray;
 import io.github.dfa1.vortex.reader.array.OffsetLongArray;
 import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.compute.FilteredAggregate;
-import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import java.io.IOException;
@@ -49,7 +48,7 @@ import org.openjdk.jmh.annotations.Warmup;
 
 /// Baseline for the encoded-domain compute-kernel specialization of ADR 0013.
 ///
-/// The fused compute kernel ([Compute#filteredSum(Array, Predicate, Array)]) today decodes every
+/// The fused compute kernel ([Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]) today decodes every
 /// element through the typed accessor: it reads `getLong(i)` / `getDouble(i)` per row, so an ALP or
 /// Frame-of-Reference column is fully reconstructed into the value domain before a single comparison
 /// or addition runs. The future work compares and reduces directly in the encoded integer domain
@@ -81,20 +80,20 @@ import org.openjdk.jmh.annotations.Warmup;
 /// `@Setup` asserts each decoded column (on the first chunk) is the expected encoded type and fails
 /// loudly otherwise, so the baseline can never silently measure a plain column.
 ///
-/// The fused kernel method `fusedFilteredSumAlp` is paired with a `forLoopFilteredSum` control: the
+/// The fused kernel method `fusedFilteredAggregateAlp` is paired with a `forLoopFilteredSum` control: the
 /// obvious hand-written accessor loop a developer writes WITHOUT the compute layer — no off-heap
 /// bitmap, just `getDouble(i)` / `getLong(i)` and an accumulator. The standalone `forLoopX` baselines
 /// measure the naive decode-per-element scan of each encoded column on its own. The paired methods
 /// share the exact predicate and threshold constant so they cannot drift, giving the reference
 /// points:
 /// - `forLoopX` — the naive decode-per-element loop, the developer's baseline.
-/// - `fusedFilteredSumAlp` — the current fused kernel, which still decodes through the accessor; the
-///   `forLoopFilteredSum`→`fusedFilteredSumAlp` gap is the kernel's overhead (or benefit) today.
+/// - `fusedFilteredAggregateAlp` — the current fused kernel, which still decodes through the accessor;
+///   the `forLoopFilteredSum`→`fusedFilteredAggregateAlp` gap is the kernel's overhead (or benefit) today.
 /// - the future encoded-domain specialization — measured against `forLoopFilteredSum`, which it must
 ///   beat by comparing and reducing in the integer domain instead of decoding every element.
 ///
 /// Measurement discipline: single-fork numbers on the dict lanes swing ±20–50% across JVM
-/// launches (C2 inlining luck — `fusedFilteredSumDict` measured 25–57 ms/op on identical code).
+/// launches (C2 inlining luck — the dict filtered sum measured 25–57 ms/op on identical code).
 /// Numbers recorded in ADRs / javadoc must come from multi-fork runs (`-f 3`); treat any
 /// single-fork delta under ≈ 1.5× as noise until an A/B on the same session confirms it.
 ///
@@ -212,44 +211,21 @@ public class ComputeKernelBenchmark {
         }
     }
 
-    /// Fused one-pass pipeline: per chunk, [Compute#filteredSum(Array, Predicate, Array)] filters the
-    /// ALP-encoded `price` column with `price > 500` and totals the FoR-encoded `measure` column over
-    /// the selected rows in a single scan, with no intermediate selection bitmap. Decodes each price
-    /// and (when selected) each measure through the accessor. Price and measure chunks are indexed in
-    /// lockstep.
+    /// Fused one-pass pipeline: per chunk, [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]
+    /// filters the ALP-encoded `price` column with `price > 500` and folds the FoR-encoded `measure`
+    /// column over the selected rows in a single scan, with no intermediate selection bitmap. Decodes
+    /// each price and (when selected) each measure through the accessor; [#forLoopFilteredSum()] is
+    /// the hand-written loop it must match.
     ///
-    /// @return the sum of `measure` over the rows where `price > 500` across the whole dataset
+    /// @return the selected row count plus the sum of `measure` where `price > 500`, folded across
+    ///         the whole dataset
     @Benchmark
-    public long fusedFilteredSumAlp() {
+    public long fusedFilteredAggregateAlp() {
         long acc = 0;
-        for (int k = 0; k < priceChunks.size(); k++) {
-            DoubleArray priceArr = priceChunks.get(k);
-            LongArray measureArr = measureChunks.get(k);
-            acc += Compute.filteredSum(priceArr, new Predicate.Gt(PRICE_THRESHOLD), measureArr).longValue();
-        }
-        return acc;
-    }
-
-    /// Fused dict-filtered sum: per chunk, [Compute#filteredSum(Array, Predicate, Array)] filters the
-    /// dict-encoded `category` column with `category == 7` and totals the FoR-encoded `measure`
-    /// column over the selected rows (≈ 1/16 selectivity). This is the target workload of the dict
-    /// code-scan fast lane: the filter side reads 100% of the rows, so its cost is the per-element
-    /// dict accessor (chunk lookup + code read + value gather) unless the kernel scans the raw codes
-    /// segment instead. Category and measure chunks are indexed in lockstep.
-    ///
-    /// Result: 762 ± 7 ms/op through the accessor chain (2026-07-02); 38.1 ± 9.2 ms/op with the
-    /// `DictFilter` code-scan lane (2026-07-04, 3 forks — per-fork means span 28–57 ms/op, heavy
-    /// C2 inlining luck; the best forks match the raw [#forLoopDictSegment()] ceiling). ≈ 20×
-    /// typical, ≈ 30× on a good fork.
-    ///
-    /// @return the sum of `measure` over the rows where `category == 7` across the whole dataset
-    @Benchmark
-    public long fusedFilteredSumDict() {
-        long acc = 0;
-        for (int k = 0; k < categoryChunks.size(); k++) {
-            LongArray categoryArr = categoryChunks.get(k);
-            LongArray measureArr = measureChunks.get(k);
-            acc += Compute.filteredSum(categoryArr, new Predicate.Eq(CATEGORY_VALUE), measureArr).longValue();
+        for (Chunk chunk : chunks) {
+            FilteredAggregate aggregate = Compute.filteredAggregate(
+                    chunk, RowFilter.gt(ColumnName.of("price"), PRICE_THRESHOLD), ColumnName.of("measure"));
+            acc += aggregate.selectedRows() + aggregate.sum().longValue();
         }
         return acc;
     }
@@ -258,7 +234,7 @@ public class ComputeKernelBenchmark {
     /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)] evaluates `category == 7` as a whole
     /// [RowFilter] and folds `measure`'s `SUM` / `MIN` / `MAX` / non-null count over the selected
     /// rows — the kernel behind the Calcite boundary-chunk aggregate push-down, on the same
-    /// dict-filtered workload as [#fusedFilteredSumDict()]. Folds the selected count and sum into
+    /// dict-filtered workload as [#forLoopDictSegment()]. Folds the selected count and sum into
     /// the return value so JMH cannot eliminate the loop.
     ///
     /// Result (100M rows): 982.5 ± 30.2 ms/op through the per-leaf accessor path; 178.3 ± 4.1
@@ -266,7 +242,7 @@ public class ComputeKernelBenchmark {
     /// async-profiler + PrintInlining exposed the fold's aggregate read as bimorphic —
     /// `NumericColumns.widenLong` was shared with the match-table pool reads, polluting its
     /// receiver profile — and the fold got its own monomorphic read. The residual gap to
-    /// [#fusedFilteredSumDict()] is the genuine per-match fold work (min, max, two counters).
+    /// the removed sum-only lane (38.1 ± 9.2 ms/op) is the per-match fold work (min, max, two counters).
     ///
     /// @return the selected row count plus the sum of `measure` where `category == 7`, folded
     ///         across the whole dataset
@@ -277,6 +253,21 @@ public class ComputeKernelBenchmark {
             FilteredAggregate aggregate = Compute.filteredAggregate(
                     chunk, RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE), ColumnName.of("measure"));
             acc += aggregate.selectedRows() + aggregate.sum().longValue();
+        }
+        return acc;
+    }
+
+    /// Fused dict-filtered `COUNT(*)`: [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)] with
+    /// no aggregate column, so the `DictFilter` lane counts the rows matching `category == 7` and
+    /// reads no other column — the scan's pure code-compare cost.
+    ///
+    /// @return the selected row count across the whole dataset
+    @Benchmark
+    public long fusedFilteredCountDict() {
+        long acc = 0;
+        for (Chunk chunk : chunks) {
+            acc += Compute.filteredAggregate(
+                    chunk, RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE), null).selectedRows();
         }
         return acc;
     }
@@ -331,7 +322,7 @@ public class ComputeKernelBenchmark {
         return acc;
     }
 
-    /// Hand-fused control for [#fusedFilteredSumAlp()]: the obvious developer loop a fused kernel must
+    /// Hand-fused control for [#fusedFilteredAggregateAlp()]: the obvious developer loop a fused kernel must
     /// match — `for i: if (price.getDouble(i) > 500) acc += measure.getLong(i)` per chunk, with no
     /// off-heap bitmap. Decodes each price and (when selected) each measure through the accessor.
     /// Price and measure chunks are indexed in lockstep.

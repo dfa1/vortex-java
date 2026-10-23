@@ -1,7 +1,10 @@
 package io.github.dfa1.vortex.reader.compute;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
@@ -28,14 +31,18 @@ import java.lang.foreign.ValueLayout;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
-/// Oracle test for the [DictFilter] code-scan lane of [Compute#filteredSum(Array, Predicate,
-/// Array)]: the lane result must be bit-identical to the independent boxing reference — a plain
-/// per-element `if (predicate) acc += value` loop over the same columns — which shares no code with
-/// the code-scan (the reference decodes every row through the dict accessor; the lane never does).
+/// Oracle test for the [DictFilter] code-scan lane of
+/// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]: the lane's sum must be bit-identical to
+/// the independent boxing reference — a plain per-element `if (predicate) acc += value` loop over
+/// the same columns — which shares no code with the code-scan (the reference decodes every row
+/// through the dict accessor; the lane never does).
 ///
 /// The randomized cases sweep every dict value domain (`i64` / `u64` / `i32` / `f64` / `f32`),
 /// every codes structure the lane specializes (flat, chunked, chunked behind an offset slice — the
@@ -78,7 +85,7 @@ class DictFilterTest {
         Array agg = longAgg(1, 2, 4, 8, 16, 32);
 
         // When the fused kernel sums over `value == 40` (code 3) in the sliced view
-        Number result = Compute.filteredSum(filter, new Predicate.Eq(40L), agg);
+        Number result = filteredSum(filter, new Predicate.Eq(40L), agg);
 
         // Then rows 0, 1, 3 and 5 of the slice contribute
         assertThat(result).isEqualTo(1L + 2L + 8L + 32L);
@@ -92,7 +99,7 @@ class DictFilterTest {
         Array agg = longAgg(10, 20, 30, 40, 50);
 
         // When the fused kernel filters with a never-true predicate
-        Number result = Compute.filteredSum(filter, new Predicate.Gt(100L), agg);
+        Number result = filteredSum(filter, new Predicate.Gt(100L), agg);
 
         // Then the sum is the additive identity
         assertThat(result).isEqualTo(0L);
@@ -106,7 +113,7 @@ class DictFilterTest {
         Array agg = longAgg(10, 20, 30, 40, 50);
 
         // When the fused kernel filters with an always-true predicate
-        Number result = Compute.filteredSum(filter, new Predicate.Gt(0L), agg);
+        Number result = filteredSum(filter, new Predicate.Gt(0L), agg);
 
         // Then it totals every aggregate value
         assertThat(result).isEqualTo(150L);
@@ -125,7 +132,7 @@ class DictFilterTest {
         Array agg = longAgg(1, 2, 4, 8, 16, 32, 64);
 
         // When the fused kernel sums over `value == 7` (code 2)
-        Number result = Compute.filteredSum(filter, new Predicate.Eq(7L), agg);
+        Number result = filteredSum(filter, new Predicate.Eq(7L), agg);
 
         // Then code-2 rows from both the segment run and the accessor run contribute
         assertThat(result).isEqualTo(4L + 16L + 64L);
@@ -144,7 +151,7 @@ class DictFilterTest {
         Array agg = longAgg(1, 2, 4, 8, 16);
 
         // When the fused kernel sums over `value == 20` (the broadcast code 1)
-        Number result = Compute.filteredSum(filter, new Predicate.Eq(20L), agg);
+        Number result = filteredSum(filter, new Predicate.Eq(20L), agg);
 
         // Then every row matches through the wrapped accessor reads
         assertThat(result).isEqualTo(31L);
@@ -159,7 +166,7 @@ class DictFilterTest {
         Array agg = longAgg(1, 2, 4, 8, 16);
 
         // When the fused kernel sums over `value == 2` under three-valued logic
-        Number result = Compute.filteredSum(filter, new Predicate.Eq(2L), agg);
+        Number result = filteredSum(filter, new Predicate.Eq(2L), agg);
 
         // Then only the valid matching rows 0 and 3 contribute
         assertThat(result).isEqualTo(9L);
@@ -174,7 +181,7 @@ class DictFilterTest {
                 ComputeArrays.boolArray(ARENA, false, true, true, true, false));
 
         // When the fused kernel sums over `value == 2`
-        Number result = Compute.filteredSum(filter, new Predicate.Eq(2L), agg);
+        Number result = filteredSum(filter, new Predicate.Eq(2L), agg);
 
         // Then only the non-null selected rows 1 and 3 contribute
         assertThat(result).isEqualTo(10L);
@@ -194,7 +201,7 @@ class DictFilterTest {
         Array agg = longAgg(1, 2, 4, 8, 16);
 
         // When the fused kernel sums over `value == 8` (code 1)
-        Number result = Compute.filteredSum(filter, new Predicate.Eq(8L), agg);
+        Number result = filteredSum(filter, new Predicate.Eq(8L), agg);
 
         // Then the generic path still selects rows 1 and 3
         assertThat(result).isEqualTo(10L);
@@ -233,7 +240,7 @@ class DictFilterTest {
         Array agg = longAgg();
 
         // When the fused kernel filters and sums nothing
-        Number result = Compute.filteredSum(filter, new Predicate.Gt(0L), agg);
+        Number result = filteredSum(filter, new Predicate.Gt(0L), agg);
 
         // Then it is the additive identity
         assertThat(result).isEqualTo(0L);
@@ -242,10 +249,36 @@ class DictFilterTest {
 
     private static void assertFusedMatchesReference(Array filter, Predicate predicate, Array agg) {
         Number reference = referenceFilteredSum(filter, predicate, agg);
-        Number fused = Compute.filteredSum(filter, predicate, agg);
+        Number fused = filteredSum(filter, predicate, agg);
         assertThat(fused)
                 .as("fused %s on filter %s, agg %s", predicate, filter.dtype(), agg.dtype())
                 .isEqualTo(reference);
+        // COUNT(*) folds the same scan with no aggregate column
+        long referenceCount = LongStream.range(0, filter.length())
+                .filter(i -> PredicateEvaluator.evaluate(filter, i, predicate)).count();
+        assertThat(aggregate(filter, predicate, null).selectedRows())
+                .as("count %s on filter %s", predicate, filter.dtype())
+                .isEqualTo(referenceCount);
+    }
+
+    /// The fused kernel's sum of `agg` over the rows `predicate` selects in `filter`, through the
+    /// public entry point, which takes the code-scan lane when `filter` is dict-encoded.
+    private static Number filteredSum(Array filter, Predicate predicate, Array agg) {
+        return aggregate(filter, predicate, agg).sum();
+    }
+
+    /// The fused kernel's fold of `agg` (`null` for `COUNT(*)`) over the rows `predicate` selects.
+    private static FilteredAggregate aggregate(Array filter, Predicate predicate, Array agg) {
+        ColumnName filterColumn = ColumnName.of("f");
+        ColumnName aggColumn = null;
+        Chunk chunk = mock(Chunk.class);
+        given(chunk.rowCount()).willReturn(filter.length());
+        given(chunk.<Array>column(filterColumn)).willReturn(filter);
+        if (agg != null) {
+            aggColumn = ColumnName.of("v");
+            given(chunk.<Array>column(aggColumn)).willReturn(agg);
+        }
+        return Compute.filteredAggregate(chunk, new RowFilter.Column(filterColumn, predicate), aggColumn);
     }
 
     /// Independent boxing oracle: a plain per-element filter-then-sum over the same columns, with

@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.compute;
 
 /// Predicate-lowering helpers for primitive numeric filter columns, shared by the fused
-/// filter-and-aggregate kernels ([FusedFilterSum] / [FusedFilterAggregate]).
+/// filter-and-aggregate kernel ([FusedFilterAggregate]) and its dict lane ([DictFilter]).
 ///
 /// A comparison leaf over a primitive column lowers, once and outside the per-row loop (the hot-loop
 /// rule's branch-split idiom), to a form the kernel tests with no boxing:
