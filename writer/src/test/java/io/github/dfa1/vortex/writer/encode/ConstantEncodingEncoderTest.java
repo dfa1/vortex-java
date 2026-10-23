@@ -17,7 +17,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantFloat16Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.NullArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -467,7 +467,7 @@ class ConstantEncodingEncoderTest {
     }
 
     /// Rust can write a constant array whose scalar is null (proto null_value tag).
-    /// The decoder must return a [NullArray] — not 0 / false (#246).
+    /// The decoder must return every row null — not 0 / false (#246).
     @Nested
     class NullScalar {
 
@@ -477,7 +477,7 @@ class ConstantEncodingEncoderTest {
 
         @ParameterizedTest
         @MethodSource("nullableDtypes")
-        void decode_nullScalar_returnsNullArray(DType dtype) {
+        void decode_nullScalar_returnsEveryRowInvalid(DType dtype) {
             // Given — scalar proto with only null_value tag set (Rust-written null constant)
             ProtoScalarValue nullScalar = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE);
             EncodeResult encoded = EncodeResult.simple(
@@ -488,9 +488,12 @@ class ConstantEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, dtype, REGISTRY);
             Array result = DECODER.decode(ctx);
 
-            // Then — must be NullArray, not LazyConstant*(value=0) or LazyConstantBool(false)
-            assertThat(result).isInstanceOf(NullArray.class);
+            // Then — every row null, not LazyConstant*(value=0) or LazyConstantBool(false); masked
+            // like any nullable chunk, as Rust canonicalizes a null constant
+            assertThat(result).isInstanceOf(MaskedArray.class);
             assertThat(result.length()).isEqualTo(rowCount);
+            assertThat(((MaskedArray) result).isValid(0)).isFalse();
+            assertThat(((MaskedArray) result).isValid(rowCount - 1)).isFalse();
         }
     }
 

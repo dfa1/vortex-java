@@ -13,7 +13,6 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinSparseArray;
@@ -231,9 +230,9 @@ class NullSparseRunEndInteropIntegrationTest {
             iter.forEachRemaining(chunk -> {
                 Array col = chunk.column(ColumnName.of("v"));
                 rowCount[0] += col.length();
-                if (col instanceof NullArray) {
-                    nullCount[0] += col.length();
-                } else if (col instanceof MaskedArray m) {
+                // masked like any nullable chunk: a NullArray here failed every consumer that
+                // unwraps a MaskedArray and casts its payload
+                if (col instanceof MaskedArray m) {
                     for (long i = 0; i < m.length(); i++) {
                         if (!m.isValid(i)) {
                             nullCount[0]++;

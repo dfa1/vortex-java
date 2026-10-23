@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** CSV import stores an empty cell in a number or boolean column as null instead of `0` or `false`, so inferred number and boolean columns are now nullable (read through `MaskedArray`), and an empty cell or a missing column fails the import where the schema declares the column non-nullable. ([#592](https://github.com/dfa1/vortex-java/issues/592))
 
 ### Fixed
+- An all-null chunk stored as a null constant (as vortex-jni writes it) reads as a masked array with every row null, like any nullable chunk, instead of a `NullArray` that the CLI, SQL and Parquet export failed on. ([#594](https://github.com/dfa1/vortex-java/pull/594))
 - `filter` and `select --where` on the command line work on a nullable column, where they failed; a null row matches no comparison, as in SQL. ([#593](https://github.com/dfa1/vortex-java/pull/593))
 
 ## [0.18.1] — 2026-10-22
