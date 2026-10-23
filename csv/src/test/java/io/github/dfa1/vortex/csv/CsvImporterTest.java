@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.csv;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -12,6 +13,7 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
@@ -22,6 +24,7 @@ import java.nio.file.Path;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.DoubleSupplier;
 import java.util.function.LongSupplier;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -43,16 +46,17 @@ class CsvImporterTest {
             assertThat(reader.dtype()).isInstanceOf(DType.Struct.class);
             DType.Struct schema = (DType.Struct) reader.dtype();
             assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("id", "price", "active", "name");
-            assertThat(schema.fieldTypes().get(0)).isEqualTo(DType.I64);
-            assertThat(schema.fieldTypes().get(1)).isEqualTo(DType.F64);
-            assertThat(schema.fieldTypes().get(2)).isEqualTo(DType.BOOL);
+            // inferred numbers and booleans are nullable, text is not (#592)
+            assertThat(schema.fieldTypes().get(0)).isEqualTo(DType.I64.asNullable());
+            assertThat(schema.fieldTypes().get(1)).isEqualTo(DType.F64.asNullable());
+            assertThat(schema.fieldTypes().get(2)).isEqualTo(DType.BOOL.asNullable());
             assertThat(schema.fieldTypes().get(3)).isEqualTo(DType.UTF8);
 
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk chunk = iter.next()) {
                     assertThat(chunk.rowCount()).isEqualTo(2);
-                    LongArray ids = chunk.column(ColumnName.of("id"));
+                    LongArray ids = (LongArray) MaskedArray.unwrap(chunk.column(ColumnName.of("id"))).inner();
                     assertThat(ids.getLong(0)).isEqualTo(1L);
                     assertThat(ids.getLong(1)).isEqualTo(2L);
                     VarBinArray names = chunk.column(ColumnName.of("name"));
@@ -126,6 +130,141 @@ class CsvImporterTest {
     }
 
     @Test
+    void emptyCellsInNumberAndBooleanColumnsAreNull(@TempDir Path tmp) throws Exception {
+        // Given: qty and active have one empty cell, bc is empty everywhere, name has an empty
+        // text cell (#592: the numbers and booleans were stored as 0 and false)
+        String text = "id,qty,active,name,bc\n1,5,true,a,\n2,,,,\n3,0,false,c,\n";
+        Path csv = tmp.resolve("empties.csv");
+        Files.writeString(csv, text);
+        Path vortex = tmp.resolve("empties.vortex");
+        Path exported = tmp.resolve("exported.csv");
+
+        // When
+        CsvImporter.importCsv(csv, vortex);
+        CsvExporter.exportCsv(vortex, exported, ExportOptions.defaults());
+
+        // Then: numbers and booleans nullable, text keeps "", and a null exports as an empty cell
+        // again, so the file round-trips where zeros would have read back as "0"
+        try (VortexReader reader = VortexReader.open(vortex)) {
+            DType.Struct schema = (DType.Struct) reader.dtype();
+            assertThat(schema.fieldTypes()).containsExactly(DType.I64.asNullable(), DType.I64.asNullable(),
+                    DType.BOOL.asNullable(), DType.UTF8, DType.I64.asNullable());
+        }
+        assertThat(Files.readAllLines(exported)).isEqualTo(text.lines().toList());
+    }
+
+    @Test
+    void anEmptyCellAfterTheInferredRowsIsNull(@TempDir Path tmp) throws Exception {
+        // Given: qty has no empty cell in the rows types are inferred from, then one in the last
+        // row; it must still be a null, not a 0 and not a failed import
+        int rows = ImportOptions.defaults().chunkSize() + 10;
+        StringBuilder text = new StringBuilder("id,qty\n");
+        for (int i = 0; i < rows; i++) {
+            text.append(i).append(',').append(i == rows - 1 ? "" : String.valueOf(i % 9)).append('\n');
+        }
+        Path csv = tmp.resolve("late-empty.csv");
+        Files.writeString(csv, text);
+        Path vortex = tmp.resolve("late-empty.vortex");
+        Path exported = tmp.resolve("late-empty-exported.csv");
+
+        // When
+        CsvImporter.importCsv(csv, vortex);
+        CsvExporter.exportCsv(vortex, exported, ExportOptions.defaults());
+
+        // Then
+        assertThat(Files.readAllLines(exported)).isEqualTo(text.toString().lines().toList());
+    }
+
+    @ParameterizedTest
+    @MethodSource("numberAndBooleanTypes")
+    void anEmptyCellInANonNullableSchemaColumnFails(DType type, @TempDir Path tmp) throws Exception {
+        // Given: a quoted "" is an empty cell (a bare empty line in a one-column file is skipped);
+        // a non-nullable number or boolean has no value to store for it (#592: it stored 0 or false)
+        Path csv = tmp.resolve("schema.csv");
+        Files.writeString(csv, "qty\n1\n\"\"\n");
+        ImportOptions options = ImportOptions.defaults().withSchema(DType.structBuilder()
+                .field(ColumnName.of("qty"), type)
+                .build());
+
+        // When
+        Throwable result = catchThrowable(() -> CsvImporter.importCsv(csv, tmp.resolve("schema.vortex"), options));
+
+        // Then
+        assertThat(result).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("column 'qty' has an empty cell");
+    }
+
+    @ParameterizedTest
+    @MethodSource("numberAndBooleanTypes")
+    void aSchemaColumnTheFileLacksIsNullWhenNullable(DType type, @TempDir Path tmp) throws Exception {
+        // Given: the schema has one more column than the file, which is empty in every row
+        Path csv = tmp.resolve("short.csv");
+        Files.writeString(csv, "id\n1\n2\n");
+        Path vortex = tmp.resolve("short.vortex");
+        ImportOptions options = ImportOptions.defaults().withSchema(DType.structBuilder()
+                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("extra"), type.asNullable())
+                .build());
+
+        // When
+        CsvImporter.importCsv(csv, vortex, options);
+
+        // Then: every row of the extra column is null
+        try (VortexReader reader = VortexReader.open(vortex);
+             ScanIterator iter = reader.scan(ScanOptions.all());
+             Chunk chunk = iter.next()) {
+            MaskedArray.Unwrapped result = MaskedArray.unwrap(chunk.column(ColumnName.of("extra")));
+            assertThat(result.validity()).isNotNull();
+            assertThat(result.validity().getBoolean(0)).isFalse();
+            assertThat(result.validity().getBoolean(1)).isFalse();
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("numberAndBooleanTypes")
+    void aSchemaColumnTheFileLacksFailsWhenNotNullable(DType type, @TempDir Path tmp) throws Exception {
+        // Given: before #592 the missing column was written as zeros or false
+        Path csv = tmp.resolve("short.csv");
+        Files.writeString(csv, "id\n1\n2\n");
+        ImportOptions options = ImportOptions.defaults().withSchema(DType.structBuilder()
+                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("extra"), type)
+                .build());
+
+        // When
+        Throwable result = catchThrowable(() -> CsvImporter.importCsv(csv, tmp.resolve("short.vortex"), options));
+
+        // Then
+        assertThat(result).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("the CSV has no column for 'extra'");
+    }
+
+    @Test
+    void aNullableTextSchemaStoresEmptyCellsAsNull(@TempDir Path tmp) throws Exception {
+        // Given: inferred text keeps "", but a schema asking for nullable text gets null
+        Path csv = tmp.resolve("text.csv");
+        Files.writeString(csv, "id,name\n1,a\n2,\n");
+        Path vortex = tmp.resolve("text.vortex");
+        ImportOptions options = ImportOptions.defaults().withSchema(DType.structBuilder()
+                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("name"), DType.UTF8.asNullable())
+                .build());
+
+        // When
+        CsvImporter.importCsv(csv, vortex, options);
+
+        // Then
+        try (VortexReader reader = VortexReader.open(vortex);
+             ScanIterator iter = reader.scan(ScanOptions.all());
+             Chunk chunk = iter.next()) {
+            MaskedArray.Unwrapped name = MaskedArray.unwrap(chunk.column(ColumnName.of("name")));
+            assertThat(name.validity()).isNotNull();
+            assertThat(name.validity().getBoolean(0)).isTrue();
+            assertThat(name.validity().getBoolean(1)).isFalse();
+        }
+    }
+
+    @Test
     void chunksWrittenInTheBackgroundKeepFileOrder(@TempDir Path tmp) throws Exception {
         // Given: two full chunks and a partial one, so each is converted while the next is parsed
         int rows = 2 * ImportOptions.defaults().chunkSize() + 123;
@@ -146,7 +285,7 @@ class CsvImporterTest {
              ScanIterator iter = reader.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
                 try (Chunk chunk = iter.next()) {
-                    LongArray ids = chunk.column(ColumnName.of("id"));
+                    LongArray ids = (LongArray) MaskedArray.unwrap(chunk.column(ColumnName.of("id"))).inner();
                     for (int i = 0; i < chunk.rowCount(); i++) {
                         assertThat(ids.getLong(i)).isEqualTo(expected++);
                     }
@@ -313,5 +452,10 @@ class CsvImporterTest {
         } catch (NumberFormatException e) {
             return e.getClass().getName() + ": " + e.getMessage();
         }
+    }
+
+    /// The column types that have no stand-in for an empty cell: every type but text.
+    private static Stream<DType> numberAndBooleanTypes() {
+        return Stream.of(DType.I64, DType.F64, DType.BOOL);
     }
 }

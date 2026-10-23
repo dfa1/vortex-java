@@ -549,6 +549,11 @@ own, so it is only ever an `import` *source*: never a destination (there is no C
 `import`), and never a source for the other subcommands, which all expect a Vortex or Parquet
 file.
 
+An empty cell is a missing value. Inferred number and boolean columns are nullable and store it
+as null; an inferred text column stores `""`. With a schema, a nullable column stores null (text
+too), and a non-nullable number or boolean column fails the import with
+`IllegalArgumentException`. A schema column the file lacks is empty in every row.
+
 | Method                                       | Notes                                                     |
 |-----------------------------------------------|------------------------------------------------------------|
 | `importCsv(Path in, Path out)`               | Defaults                                                  |

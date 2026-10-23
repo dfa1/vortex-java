@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,7 +39,9 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 ///
 /// Column types are inferred in priority order: long → double → boolean → utf8.
 /// Provide a schema via [ImportOptions#withSchema] to skip inference.
-/// Empty cell values are treated as 0 / false / "" for typed columns.
+/// An empty cell is a missing value: inferred number and boolean columns are nullable and store it
+/// as null; an inferred text column keeps it as `""`. With an explicit schema, an empty cell in a
+/// nullable column is null, and in a non-nullable number or boolean column fails the import.
 ///
 /// Import is single-pass streaming. The first [ImportOptions#chunkSize()] data rows
 /// are buffered to infer the schema (or skipped when a schema is provided), then
@@ -314,7 +317,16 @@ public final class CsvImporter {
         List<ColumnName> names = Arrays.stream(headers).map(ColumnName::of).toList();
         List<DType> types = new ArrayList<>(colCount);
         for (int c = 0; c < colCount; c++) {
-            types.add(resolveType(canBeLong[c], canBeDouble[c], canBeBool[c]));
+            DType type = resolveType(canBeLong[c], canBeDouble[c], canBeBool[c]);
+            // Every inferred number or boolean column is nullable, as Arrow's and DuckDB's CSV
+            // readers make them: an empty cell anywhere in the file, not only in the rows types
+            // are inferred from, is then a null rather than a failed import. A column without
+            // nulls pays next to nothing for it (+0.008% file size on a 2.7 GB import). Text keeps
+            // an empty cell as "", as Arrow does by default.
+            if (!(type instanceof DType.Utf8)) {
+                type = type.asNullable();
+            }
+            types.add(type);
         }
         return new DType.Struct(names, types, false);
     }
@@ -377,7 +389,8 @@ public final class CsvImporter {
         for (int c = 0; c < schema.fieldNames().size(); c++) {
             DType dtype = schema.fieldTypes().get(c);
             int column = c;
-            columns.add(CompletableFuture.supplyAsync(() -> buildColumn(dtype, rows, column), executor));
+            String name = schema.fieldNames().get(c).value();
+            columns.add(CompletableFuture.supplyAsync(() -> buildColumn(dtype, name, rows, column), executor));
         }
         Map<ColumnName, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < columns.size(); c++) {
@@ -390,30 +403,51 @@ public final class CsvImporter {
     /// ASCII numbers are parsed in place, anything else falls back to `Long.parseLong` and friends
     /// on the decoded text, so their results, and their errors, are unchanged. A column the file
     /// lacks (a schema with more fields than the CSV) is all empty fields.
-    private static Object buildColumn(DType dtype, ColumnChunk rows, int column) {
+    ///
+    /// An empty field is a missing value: null in a nullable column, `""` in a non-nullable text
+    /// column, and an error in a non-nullable number or boolean column, which has no value to
+    /// stand in for it (#592: it was stored as `0` or `false`).
+    private static Object buildColumn(DType dtype, String name, ColumnChunk rows, int column) {
         int n = rows.rows();
         byte[] bytes = column < rows.columns() ? rows.bytes(column) : null;
+        // text carries its nulls in the byte[][] itself, so only numbers and booleans need a mask
+        boolean[] valid = dtype.nullable() && !(dtype instanceof DType.Utf8) ? new boolean[n] : null;
         return switch (dtype) {
             case DType.Primitive p when p.ptype() == PType.I64 -> {
                 long[] arr = new long[n];
-                for (int i = 0; bytes != null && i < n; i++) {
+                for (int i = 0; i < n; i++) {
+                    if (isEmpty(bytes, rows, column, i)) {
+                        requireNullable(valid, name, bytes);
+                        continue;
+                    }
                     arr[i] = parseLong(bytes, rows.start(column, i), rows.end(column, i));
+                    markValid(valid, i);
                 }
-                yield arr;
+                yield valid == null ? arr : new NullableData(arr, valid);
             }
             case DType.Primitive p when p.ptype() == PType.F64 -> {
                 double[] arr = new double[n];
-                for (int i = 0; bytes != null && i < n; i++) {
+                for (int i = 0; i < n; i++) {
+                    if (isEmpty(bytes, rows, column, i)) {
+                        requireNullable(valid, name, bytes);
+                        continue;
+                    }
                     arr[i] = parseDouble(bytes, rows.start(column, i), rows.end(column, i));
+                    markValid(valid, i);
                 }
-                yield arr;
+                yield valid == null ? arr : new NullableData(arr, valid);
             }
             case DType.Bool _ -> {
                 boolean[] arr = new boolean[n];
-                for (int i = 0; bytes != null && i < n; i++) {
+                for (int i = 0; i < n; i++) {
+                    if (isEmpty(bytes, rows, column, i)) {
+                        requireNullable(valid, name, bytes);
+                        continue;
+                    }
                     arr[i] = parseBoolean(bytes, rows.start(column, i), rows.end(column, i));
+                    markValid(valid, i);
                 }
-                yield arr;
+                yield valid == null ? arr : new NullableData(arr, valid);
             }
             case DType.Utf8 _ -> {
                 byte[][] arr = new byte[n][];
@@ -421,8 +455,11 @@ public final class CsvImporter {
                 // is usually all ASCII, which is always well-formed UTF-8
                 boolean ascii = bytes == null || n == 0 || isAscii(bytes, 0, rows.end(column, n - 1));
                 for (int i = 0; i < n; i++) {
-                    if (bytes == null) {
-                        arr[i] = EMPTY;
+                    if (isEmpty(bytes, rows, column, i)) {
+                        // a nullable column's null stays null in the byte[][], as the writer expects
+                        if (!dtype.nullable()) {
+                            arr[i] = EMPTY;
+                        }
                     } else if (ascii) {
                         arr[i] = Arrays.copyOfRange(bytes, rows.start(column, i), rows.end(column, i));
                     } else {
@@ -435,14 +472,35 @@ public final class CsvImporter {
         };
     }
 
+    /// Whether row `i` of `column` is empty, or the file lacks the column (`bytes` is `null`).
+    private static boolean isEmpty(byte[] bytes, ColumnChunk rows, int column, int i) {
+        return bytes == null || rows.start(column, i) == rows.end(column, i);
+    }
+
+    private static void markValid(boolean[] valid, int i) {
+        if (valid != null) {
+            valid[i] = true;
+        }
+    }
+
+    /// Rejects an empty field in a non-nullable number or boolean column (`valid` is `null`),
+    /// naming a column the file lacks (`bytes` is `null`) as missing rather than as empty.
+    private static void requireNullable(boolean[] valid, String name, byte[] bytes) {
+        if (valid == null && bytes == null) {
+            throw new IllegalArgumentException("the CSV has no column for '" + name + "', but its type in the"
+                    + " schema is not nullable");
+        }
+        if (valid == null) {
+            throw new IllegalArgumentException("column '" + name + "' has an empty cell, but its type in the"
+                    + " schema is not nullable");
+        }
+    }
+
     private static final byte[] EMPTY = new byte[0];
 
-    /// `Long.parseLong` on the field's text, `0` for an empty field. Up to 18 ASCII digits cannot
-    /// overflow a long, so they are summed in place; anything else takes the `String` path.
+    /// `Long.parseLong` on the field's non-empty text. Up to 18 ASCII digits cannot overflow a
+    /// long, so they are summed in place; anything else takes the `String` path.
     static long parseLong(byte[] b, int from, int to) {
-        if (from == to) {
-            return 0L;
-        }
         int i = from;
         boolean negative = b[i] == '-';
         if (negative || b[i] == '+') {
@@ -480,9 +538,6 @@ public final class CsvImporter {
     /// The field's bytes as a Utf8 value: copied when well-formed UTF-8, else decoded and encoded
     /// back, which turns each malformed sequence into U+FFFD as FastCSV's decoding did.
     static byte[] utf8(byte[] b, int from, int to) {
-        if (from == to) {
-            return EMPTY;
-        }
         if (isAscii(b, from, to) || Utf8Validation.isWellFormed(b, from, to)) {
             return Arrays.copyOfRange(b, from, to);
         }
@@ -509,16 +564,13 @@ public final class CsvImporter {
             1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,
             1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
 
-    /// `Double.parseDouble` on the field's text, `0.0` for an empty field.
+    /// `Double.parseDouble` on the field's non-empty text.
     ///
     /// A plain decimal (`-12.345`) whose digits fit 2^53 is computed as `digits / 10^fractionDigits`:
     /// both operands are exact doubles and IEEE division rounds correctly, so the result is the
     /// correctly rounded value `parseDouble` returns (Clinger's fast path). Anything else (an
     /// exponent, more digits, `NaN`, spaces, a bare `.5`) takes `parseDouble` itself.
     static double parseDouble(byte[] b, int from, int to) {
-        if (from == to) {
-            return 0.0;
-        }
         int i = from;
         boolean negative = b[i] == '-';
         if (negative || b[i] == '+') {
