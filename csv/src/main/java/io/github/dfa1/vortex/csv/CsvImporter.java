@@ -413,14 +413,30 @@ public final class CsvImporter {
         // text carries its nulls in the byte[][] itself, so only numbers and booleans need a mask
         boolean[] valid = dtype.nullable() && !(dtype instanceof DType.Utf8) ? new boolean[n] : null;
         return switch (dtype) {
-            case DType.Primitive p when p.ptype() == PType.I64 -> {
+            case DType.Primitive p when p.ptype().isInteger() -> {
                 long[] arr = new long[n];
                 for (int i = 0; i < n; i++) {
                     if (isEmpty(bytes, rows, column, i)) {
                         requireNullable(valid, name, bytes);
                         continue;
                     }
-                    arr[i] = parseLong(bytes, rows.start(column, i), rows.end(column, i));
+                    arr[i] = parseInteger(p.ptype(), name, bytes, rows.start(column, i), rows.end(column, i));
+                    markValid(valid, i);
+                }
+                Object values = narrow(p.ptype(), arr);
+                yield valid == null ? values : new NullableData(values, valid);
+            }
+            case DType.Primitive p when p.ptype() == PType.F32 -> {
+                float[] arr = new float[n];
+                for (int i = 0; i < n; i++) {
+                    if (isEmpty(bytes, rows, column, i)) {
+                        requireNullable(valid, name, bytes);
+                        continue;
+                    }
+                    // ponytail: no byte fast path; rounding the double parse to float would round
+                    // twice and can differ from Float.parseFloat, so F32 pays a String per value
+                    int from = rows.start(column, i);
+                    arr[i] = Float.parseFloat(new String(bytes, from, rows.end(column, i) - from, UTF_8));
                     markValid(valid, i);
                 }
                 yield valid == null ? arr : new NullableData(arr, valid);
@@ -497,6 +513,65 @@ public final class CsvImporter {
     }
 
     private static final byte[] EMPTY = new byte[0];
+
+    /// The field's integer, checked to fit `ptype`; an unsigned value is returned as its bits, so
+    /// a `U64` above `Long.MAX_VALUE` is negative here.
+    static long parseInteger(PType ptype, String name, byte[] b, int from, int to) {
+        // more than 18 bytes may overflow a long, where only Long.parseUnsignedLong reads U64's top half
+        if (ptype == PType.U64 && to - from > 18) {
+            return Long.parseUnsignedLong(new String(b, from, to - from, UTF_8));
+        }
+        long value = parseLong(b, from, to);
+        long min = switch (ptype) {
+            case I8 -> Byte.MIN_VALUE;
+            case I16 -> Short.MIN_VALUE;
+            case I32 -> Integer.MIN_VALUE;
+            case I64 -> Long.MIN_VALUE;
+            default -> 0;
+        };
+        long max = switch (ptype) {
+            case I8 -> Byte.MAX_VALUE;
+            case U8 -> 0xFFL;
+            case I16 -> Short.MAX_VALUE;
+            case U16 -> 0xFFFFL;
+            case I32 -> Integer.MAX_VALUE;
+            case U32 -> 0xFFFF_FFFFL;
+            default -> Long.MAX_VALUE;
+        };
+        if (value < min || value > max) {
+            throw new IllegalArgumentException("column '" + name + "' has " + value + ", which is out of range for "
+                    + ptype);
+        }
+        return value;
+    }
+
+    /// The parsed values in the array the writer takes for `ptype`; each value already fits.
+    private static Object narrow(PType ptype, long[] values) {
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] out = new byte[values.length];
+                for (int i = 0; i < values.length; i++) {
+                    out[i] = (byte) values[i];
+                }
+                yield out;
+            }
+            case I16, U16 -> {
+                short[] out = new short[values.length];
+                for (int i = 0; i < values.length; i++) {
+                    out[i] = (short) values[i];
+                }
+                yield out;
+            }
+            case I32, U32 -> {
+                int[] out = new int[values.length];
+                for (int i = 0; i < values.length; i++) {
+                    out[i] = (int) values[i];
+                }
+                yield out;
+            }
+            default -> values;
+        };
+    }
 
     /// `Long.parseLong` on the field's non-empty text. Up to 18 ASCII digits cannot overflow a
     /// long, so they are summed in place; anything else takes the `String` path.
