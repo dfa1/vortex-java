@@ -17,12 +17,23 @@ import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.MaskedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import io.github.dfa1.vortex.writer.WriteRegistry;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -372,6 +383,131 @@ class MaskedEncodingEncoderTest {
         MaskedArray masked = (MaskedArray) decoded;
         for (int i = 0; i < n; i++) {
             assertThat(masked.isValid(i)).as("row %d", i).isEqualTo(validity[i]);
+        }
+    }
+
+    /// Rust's compressor turns an all-invalid array into one null-scalar `vortex.constant` before
+    /// trying any scheme (`compressor/cascade.rs`); Java wrapped it in `vortex.masked` over a
+    /// constant `0` values child, a different tree carrying nothing.
+    @Nested
+    class AllNull {
+
+        private static final int ROWS = 2_000;
+        private static final ReadRegistry READ = ReadRegistry.loadAll();
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("everyCarrier")
+        void isOneNullConstantThatReadsBackAllNull(DType dtype, Object values) throws IOException {
+            // Given
+            NullableData data = new NullableData(values, new boolean[ROWS]);
+
+            // When
+            EncodeResult result = SUT.encode(dtype, data, EncodeTestHelper.cascadingCtx());
+
+            // Then: one leaf constant whose scalar is null, with no min/max for a zone without values
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+            assertThat(result.rootNode().children()).isEmpty();
+            assertThat(result.buffers()).hasSize(1);
+            assertThat(result.statsMin()).isNull();
+            assertThat(result.statsMax()).isNull();
+            MemorySegment scalar = result.buffers().getFirst();
+            assertThat(ProtoScalarValue.decode(scalar, 0, scalar.byteSize()).null_value()).isNotNull();
+            assertEveryRowNull(READ.decode(DecodeTestHelper.toDecodeContext(result, ROWS, dtype, READ)));
+        }
+
+        static Stream<Arguments> everyCarrier() {
+            return Stream.of(
+                    Arguments.of(DType.I8.asNullable(), new byte[ROWS]),
+                    Arguments.of(DType.U8.asNullable(), new byte[ROWS]),
+                    Arguments.of(DType.I16.asNullable(), new short[ROWS]),
+                    Arguments.of(DType.U16.asNullable(), new short[ROWS]),
+                    Arguments.of(DType.F16.asNullable(), new short[ROWS]),
+                    Arguments.of(DType.I32.asNullable(), new int[ROWS]),
+                    Arguments.of(DType.U32.asNullable(), new int[ROWS]),
+                    Arguments.of(DType.I64.asNullable(), new long[ROWS]),
+                    Arguments.of(DType.U64.asNullable(), new long[ROWS]),
+                    Arguments.of(DType.F32.asNullable(), new float[ROWS]),
+                    Arguments.of(DType.F64.asNullable(), new double[ROWS]),
+                    Arguments.of(DType.BOOL.asNullable(), new boolean[ROWS]),
+                    Arguments.of(DType.UTF8.asNullable(), new String[ROWS]),
+                    Arguments.of(DType.UTF8.asNullable(), new byte[ROWS][]),
+                    Arguments.of(DType.BINARY.asNullable(), new byte[ROWS][]),
+                    Arguments.of(new DType.Decimal((byte) 10, (byte) 2, true), new BigDecimal[ROWS]),
+                    Arguments.of(new DType.Decimal((byte) 38, (byte) 4, true), new BigDecimal[ROWS]));
+        }
+
+        @Test
+        void anUncompressedWriteKeepsTheMask() {
+            // Given: depth 0 writes without the compressor, where Rust keeps the array's own validity
+            NullableData data = new NullableData(new long[ROWS], new boolean[ROWS]);
+
+            // When
+            EncodeResult result = SUT.encode(DType.I64.asNullable(), data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
+            assertEveryRowNull(READ.decode(DecodeTestHelper.toDecodeContext(result, ROWS, DType.I64.asNullable(), READ)));
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = {0, 1, ROWS / 2, ROWS - 1})
+        void oneValidRowKeepsTheMask(int validRow) {
+            // Given: a single valid row anywhere, first and last included, is not an all-null chunk
+            long[] values = new long[ROWS];
+            values[validRow] = 42;
+            boolean[] validity = new boolean[ROWS];
+            validity[validRow] = true;
+
+            // When
+            EncodeResult result = SUT.encode(DType.I64.asNullable(), new NullableData(values, validity), EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
+            MaskedArray masked = (MaskedArray) READ.decode(
+                    DecodeTestHelper.toDecodeContext(result, ROWS, DType.I64.asNullable(), READ));
+            for (int i = 0; i < ROWS; i++) {
+                assertThat(masked.isValid(i)).as("row %d", i).isEqualTo(i == validRow);
+            }
+            assertThat(((LongArray) masked.inner()).getLong(validRow)).isEqualTo(42);
+        }
+
+        @Test
+        void anAllValidChunkIsNotANullConstant() {
+            // Given: every row valid and equal; the all-equal validity check must not read as all-null
+            boolean[] validity = new boolean[ROWS];
+            Arrays.fill(validity, true);
+
+            // When
+            EncodeResult result = SUT.encode(DType.I64.asNullable(), new NullableData(new long[ROWS], validity),
+                    EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
+            MaskedArray masked = (MaskedArray) READ.decode(
+                    DecodeTestHelper.toDecodeContext(result, ROWS, DType.I64.asNullable(), READ));
+            assertThat(masked.isValid(0)).isTrue();
+            assertThat(masked.isValid(ROWS - 1)).isTrue();
+        }
+
+        @Test
+        void anEmptyChunkIsNotANullConstant() {
+            // Given: zero rows have no null to speak of
+
+            // When
+            EncodeResult result = SUT.encode(DType.I64.asNullable(), new NullableData(new long[0], new boolean[0]),
+                    EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
+        }
+
+        private static void assertEveryRowNull(Array decoded) {
+            assertThat(decoded).isInstanceOf(MaskedArray.class);
+            assertThat(decoded.length()).isEqualTo(ROWS);
+            MaskedArray masked = (MaskedArray) decoded;
+            for (int i = 0; i < ROWS; i++) {
+                assertThat(masked.isValid(i)).as("row %d", i).isFalse();
+            }
         }
     }
 }
