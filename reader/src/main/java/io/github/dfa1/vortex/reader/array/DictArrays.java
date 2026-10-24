@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 
+import java.lang.foreign.MemorySegment;
+
 /// Package-private helpers shared by the `DictXxxArray` records.
 ///
 /// Centralizes the codes-type validation (so the four record `of`
@@ -24,6 +26,17 @@ final class DictArrays {
             throw new VortexException("Dict codes: length " + codes.length()
                     + " does not match expected " + expectedLength);
         }
+    }
+
+    /// The array's segment when it holds all `n` elements of `width` bytes, so a gather can read it
+    /// directly instead of through a virtual `getX` whose call site sees every pool type there is.
+    ///
+    /// @param array the pool or codes array
+    /// @param n     the elements it must hold
+    /// @param width the element width in bytes
+    /// @return the segment, or `null` for a lazy array or a broadcast buffer shorter than `n`
+    static MemorySegment flat(Array array, long n, int width) {
+        return array.segmentIfPresent().filter(s -> s.byteSize() >= n * width).orElse(null);
     }
 
     /// Reads the code at row `i` from `codes`. One switch on the

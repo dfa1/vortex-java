@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+- Folding dict-encoded float columns and scan windows reads their buffers directly, about 3% faster on a two-column taxi scan. ([#600](https://github.com/dfa1/vortex-java/pull/600))
+
 ### Added
 - A CSV import schema can declare any integer type from `I8` to `U64`, range-checked per value, and `F32`; an unsupported type fails in `withSchema` instead of at the first chunk. ([#593](https://github.com/dfa1/vortex-java/pull/593))
 

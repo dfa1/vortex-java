@@ -60,7 +60,19 @@ public record DictIntArray(DType dtype, long length, IntArray values, Array code
         long n = length;
         MemorySegment dst = arena.allocate(n * 4L, 4);
         IntArray vals = values;
-        switch (CanonicalArrays.of(codes, arena)) {
+        Array flatCodes = CanonicalArrays.of(codes, arena);
+        // A flat pool and flat u16 codes, as a global dict column has them: gather off the two
+        // segments, skipping a virtual getShort and getInt per row.
+        MemorySegment pool = DictArrays.flat(vals, vals.length(), 4);
+        MemorySegment c = flatCodes instanceof ShortArray ? DictArrays.flat(flatCodes, n, 2) : null;
+        if (pool != null && c != null) {
+            for (long i = 0; i < n; i++) {
+                long code = Short.toUnsignedLong(c.getAtIndex(VortexFormat.LE_SHORT, i));
+                dst.setAtIndex(VortexFormat.LE_INT, i, pool.getAtIndex(VortexFormat.LE_INT, code));
+            }
+            return dst.asReadOnly();
+        }
+        switch (flatCodes) {
             case ByteArray ba -> {
                 for (long i = 0; i < n; i++) {
                     dst.setAtIndex(VortexFormat.LE_INT, i, vals.getInt(Byte.toUnsignedLong(ba.getByte(i))));
