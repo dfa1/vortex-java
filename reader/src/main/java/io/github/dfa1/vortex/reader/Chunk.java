@@ -113,12 +113,12 @@ public final class Chunk implements AutoCloseable {
     /// It takes over this chunk's arena, so this chunk must not be used again; closing the result
     /// releases both.
     ///
-    /// @param rows      the rows to keep, ascending, each in `[0, rowCount())`
+    /// @param rows      the rows to keep, strictly ascending, each in `[0, rowCount())`
     /// @param names     the columns to keep, a subset of this chunk's
     /// @param positions each of `names` to its index
     /// @param onClose   called when the result closes
     /// @return the selected rows
-    Chunk select(long[] rows, List<ColumnName> names, Map<ColumnName, Integer> positions, Consumer<Chunk> onClose) {
+    Chunk select(int[] rows, List<ColumnName> names, Map<ColumnName, Integer> positions, Consumer<Chunk> onClose) {
         IntFunction<Column> selected = i -> {
             Column column = column(position(names.get(i)));
             return new Column(SelectedArrays.select(column.array(), rows, arena), column.dtype());
