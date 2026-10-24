@@ -108,7 +108,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // A chunk hasNext() decoded to test the filter on, and its matching rows, until next() returns
     // them: a chunk with no match is skipped, as Rust's scan returns no empty batch.
     private Chunk pending;
-    private long[] pendingRows;
+    private int[] pendingRows;
     private List<ColumnName> projectedNames;
     private List<DType> projectedDtypes;
     private Map<ColumnName, Integer> projectedPositions;
@@ -364,11 +364,16 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Chunk full = chunkFor(spec, spec.rowCount());
         try {
             RowSelection selection = Compute.matcher(full, filter);
-            long[] rows = new long[(int) Math.min(spec.rowCount(), limit - rowsReturned)];
+            // the matching rows, grown as they come: memory follows the matches, not the chunk
+            int allowed = (int) Math.min(spec.rowCount(), limit - rowsReturned);
+            int[] rows = new int[Math.min(allowed, 1024)];
             int count = 0;
-            for (long row = selection.nextSelected(0); row >= 0 && count < rows.length;
+            for (long row = selection.nextSelected(0); row >= 0 && count < allowed;
                     row = selection.nextSelected(row + 1)) {
-                rows[count++] = row;
+                if (count == rows.length) {
+                    rows = Arrays.copyOf(rows, (int) Math.min(allowed, 2L * count));
+                }
+                rows[count++] = (int) row;
             }
             if (count == 0) {
                 full.close();
@@ -421,7 +426,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Chunk chunk;
         if (pending != null) {
             chunk = pending;
-            long[] rows = pendingRows;
+            int[] rows = pendingRows;
             pending = null;
             pendingRows = null;
             chunk = selectedChunk(chunk, rows);
@@ -437,7 +442,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     /// The `rows` of `full` over the output columns, or `full` itself when that is every row and
     /// every column.
-    private Chunk selectedChunk(Chunk full, long[] rows) {
+    private Chunk selectedChunk(Chunk full, int[] rows) {
         List<ColumnName> names = outputNames;
         Map<ColumnName, Integer> positions = outputPositions;
         if (singleColumnIsSyntheticWrapper) {
