@@ -62,7 +62,7 @@ class ZoneMapPruningTest {
 
     /// Returns one entry per surviving chunk: its row count after filter pruning.
     private static List<Long> scanRowCounts(Path file, ScanFilter filter) throws IOException {
-        var opts = ScanOptions.all().withFilter(filter);
+        var opts = filter == null ? ScanOptions.all() : ScanOptions.all().withFilter(filter);
         var registry = registry();
         var rowCounts = new ArrayList<Long>();
         try (var vf = VortexReader.open(file, registry);

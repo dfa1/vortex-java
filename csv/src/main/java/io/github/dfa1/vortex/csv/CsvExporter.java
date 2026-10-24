@@ -77,7 +77,7 @@ public final class CsvExporter {
     }
 
     /// Like [#exportCsv(Path, Writer, ExportOptions)] but with zone-map chunk pruning
-    /// ([ScanOptions#rowFilter()]) and a row-level predicate applied after decoding.
+    /// ([ScanOptions#filter()]) and a row-level predicate applied after decoding.
     ///
     /// @param vortexPath  the Vortex file to read
     /// @param out         where the CSV text goes

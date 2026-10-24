@@ -48,7 +48,7 @@ class NullCountPruningTest {
     }
 
     private List<Long> scanRowCounts(Path file, ScanFilter filter) throws IOException {
-        var opts = ScanOptions.all().withFilter(filter);
+        var opts = filter == null ? ScanOptions.all() : ScanOptions.all().withFilter(filter);
         var counts = new ArrayList<Long>();
         try (VortexReader reader = VortexReader.open(file);
              var iter = reader.scan(opts)) {

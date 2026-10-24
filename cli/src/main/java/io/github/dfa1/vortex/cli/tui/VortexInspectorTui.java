@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.layout.ZonedStatsSchema;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.reader.ScanLimit;
 import io.github.dfa1.vortex.reader.ScanOptions;
 
 import java.io.IOException;
@@ -745,7 +746,7 @@ public final class VortexInspectorTui {
         private void runDataLoad(String columnName) {
             try {
                 DType declared = columnDtypeByName(columnName);
-                ScanOptions opts = ScanOptions.columns(ColumnName.of(columnName)).withLimit(DATA_PREVIEW_ROWS);
+                ScanOptions opts = ScanOptions.columns(ColumnName.of(columnName)).withLimit(ScanLimit.of(DATA_PREVIEW_ROWS));
                 try (ScanIterator it = handle.scan(opts)) {
                     if (!it.hasNext()) {
                         dataCache.put(columnName, new DataState.Loaded(List.of()));

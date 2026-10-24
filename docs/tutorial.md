@@ -102,6 +102,7 @@ The file is complete and readable as soon as `VortexWriter` is closed.
 
 ```java
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.ScanLimit;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -149,7 +150,7 @@ Reading every column is wasteful when you only need two. Use `withColumns` to pr
 ```java
 ScanOptions opts = ScanOptions.all()
     .withColumns(ColumnName.of("symbol"), ColumnName.of("price"))
-    .withLimit(2);
+    .withLimit(ScanLimit.of(2));
 
 try (VortexReader vf = VortexReader.open(outPath);
      var iter = vf.scan(opts)) {

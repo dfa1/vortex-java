@@ -3,29 +3,28 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
-/// Options controlling a file scan: an immutable configuration built from [#all()],
-/// [#columns(ColumnName...)] or [#limit(long)] and adjusted with the `withXxx` methods, each
-/// returning a copy.
+/// Options controlling a file scan: an immutable configuration built from [#all()] or
+/// [#columns(ColumnName...)] and adjusted with the `withXxx` methods, each returning a copy.
 ///
-/// Empty `columns` = read all columns.
-/// Null `rowFilter` = no zone-map pruning.
+/// Empty `columns` = read all columns. No filter = no zone-map pruning; no limit = every row. The
+/// filter and the limit are optional, as in Rust's `ScanBuilder`.
 ///
 /// Projection names are validated [ColumnName]s, so a control-character name fails at the
 /// call site rather than silently matching nothing.
 ///
 /// A plain class rather than a record, like `WriteOptions`: it is configuration, not a value.
 public final class ScanOptions {
-    /// Sentinel limit meaning "no row limit".
-    public static final long NO_LIMIT = Long.MAX_VALUE;
 
     private final List<ColumnName> columns;
-    private final ScanFilter rowFilter;
-    private final long limit;
+    private final ScanFilter filter;
+    private final ScanLimit limit;
 
-    private ScanOptions(List<ColumnName> columns, ScanFilter rowFilter, long limit) {
+    private ScanOptions(List<ColumnName> columns, ScanFilter filter, ScanLimit limit) {
         this.columns = List.copyOf(columns);
-        this.rowFilter = rowFilter;
+        this.filter = filter;
         this.limit = limit;
     }
 
@@ -38,23 +37,23 @@ public final class ScanOptions {
 
     /// The zone-map pruning filter.
     ///
-    /// @return the row filter, or `null` for none
-    public ScanFilter rowFilter() {
-        return rowFilter;
+    /// @return the filter, or empty for none
+    public Optional<ScanFilter> filter() {
+        return Optional.ofNullable(filter);
     }
 
-    /// The row limit.
+    /// The most rows the scan returns.
     ///
-    /// @return the maximum rows to read, or [#NO_LIMIT]
-    public long limit() {
-        return limit;
+    /// @return the limit, or empty for every row
+    public Optional<ScanLimit> limit() {
+        return Optional.ofNullable(limit);
     }
 
     /// Scans every column with no filter or limit.
     ///
     /// @return options selecting all columns
     public static ScanOptions all() {
-        return new ScanOptions(List.of(), null, NO_LIMIT);
+        return new ScanOptions(List.of(), null, null);
     }
 
     /// Projects the named columns.
@@ -62,15 +61,7 @@ public final class ScanOptions {
     /// @param names column names to project
     /// @return options projecting `names`
     public static ScanOptions columns(ColumnName... names) {
-        return new ScanOptions(List.of(names), null, NO_LIMIT);
-    }
-
-    /// Scans every column, capped at `limit` rows.
-    ///
-    /// @param limit maximum rows to read
-    /// @return options with the given row limit
-    public static ScanOptions limit(long limit) {
-        return new ScanOptions(List.of(), null, limit);
+        return new ScanOptions(List.of(names), null, null);
     }
 
     /// Returns a copy projecting the named columns.
@@ -78,23 +69,23 @@ public final class ScanOptions {
     /// @param names column names to project
     /// @return a copy with `names` projected
     public ScanOptions withColumns(ColumnName... names) {
-        return new ScanOptions(List.of(names), rowFilter, limit);
+        return new ScanOptions(List.of(names), filter, limit);
     }
 
     /// Returns a copy with the given row limit.
     ///
-    /// @param limit maximum rows to read
+    /// @param limit the most rows to return
     /// @return a copy with the given limit
-    public ScanOptions withLimit(long limit) {
-        return new ScanOptions(columns, rowFilter, limit);
+    public ScanOptions withLimit(ScanLimit limit) {
+        return new ScanOptions(columns, filter, Objects.requireNonNull(limit, "limit"));
     }
 
     /// Returns a copy with the given zone-map filter.
     ///
-    /// @param filter the row filter, or `null` for none
+    /// @param filter the filter
     /// @return a copy with the given filter
     public ScanOptions withFilter(ScanFilter filter) {
-        return new ScanOptions(columns, filter, limit);
+        return new ScanOptions(columns, Objects.requireNonNull(filter, "filter"), limit);
     }
 
     /// Reports whether the scan reads a subset of the columns.
@@ -102,19 +93,5 @@ public final class ScanOptions {
     /// @return `true` if a column projection is set
     public boolean hasProjection() {
         return !columns.isEmpty();
-    }
-
-    /// Reports whether the scan prunes chunks with a zone-map filter.
-    ///
-    /// @return `true` if a zone-map filter is set
-    public boolean hasFilter() {
-        return rowFilter != null;
-    }
-
-    /// Reports whether the scan stops after a number of rows.
-    ///
-    /// @return `true` if a row limit is set
-    public boolean hasLimit() {
-        return limit != NO_LIMIT;
     }
 }
