@@ -387,7 +387,7 @@ public class JavaVsJniReadBenchmark {
         long taken = 0L;
         try (VortexReader vf = VortexReader.open(benchFile, registry);
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all()
-                             .withColumns(ColumnName.of("volume")).withLimit(limit))) {
+                             .withColumns(ColumnName.of("volume")).withLimit(io.github.dfa1.vortex.reader.ScanLimit.of(limit)))) {
             while (iter.hasNext() && taken < limit) {
                 try (Chunk c = iter.next()) {
                     LongArray volume = c.column(ColumnName.of("volume"));

@@ -90,6 +90,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     private final VortexHandle file;
     private final ScanOptions options;
+    // the options' limit, with no limit as Long.MAX_VALUE so the row arithmetic needs no branch
+    private final long limit;
+    // the options' filter, or null for none
+    private final ScanFilter filter;
 
     private List<ChunkSpec> chunks;
     private List<ColumnName> projectedNames;
@@ -138,6 +142,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     ScanIterator(VortexHandle file, ScanOptions options) {
         this.file = file;
         this.options = options;
+        this.limit = options.limit().map(ScanLimit::rows).orElse(Long.MAX_VALUE);
+        this.filter = options.filter().orElse(null);
     }
 
     /// Index of a chunked layout's first data child: `metadata[0] == 1` means `children[0]` is the
@@ -317,12 +323,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (peekedChunkIdx >= 0) {
             return true;
         }
-        if (rowsReturned >= options.limit()) {
+        if (rowsReturned >= limit) {
             return false;
         }
         while (chunkIndex < chunks.size()) {
             ChunkSpec spec = chunks.get(chunkIndex);
-            if (options.hasFilter() && canPruneChunk(spec, options.rowFilter())) {
+            if (filter != null && canPruneChunk(spec, filter)) {
                 chunkIndex++;
                 continue;
             }
@@ -347,7 +353,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         evictPassedFlats(spec);
 
-        long remaining = options.limit() - rowsReturned;
+        long remaining = limit - rowsReturned;
         long chunkRows = Math.min(spec.rowCount(), remaining);
 
         Arena arena = Arena.ofConfined();

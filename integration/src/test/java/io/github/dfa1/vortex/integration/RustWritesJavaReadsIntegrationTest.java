@@ -598,11 +598,11 @@ class RustWritesJavaReadsIntegrationTest {
         }
         writeJni(file, ids, vals);
 
-        // When — Java reader with ScanOptions.limit(10)
+        // When — Java reader with a 10-row limit
         long[] javaIds;
         double[] javaVals;
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
-             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all().withLimit(10))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all().withLimit(io.github.dfa1.vortex.reader.ScanLimit.of(10)))) {
             long rowsSeen = 0;
             var idList = new ArrayList<Long>();
             var valList = new ArrayList<Double>();

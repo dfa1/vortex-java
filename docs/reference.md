@@ -207,18 +207,18 @@ A plain final class: start from a factory below and adjust with the `withXxx` me
 
 ### `ScanOptions` (`io.github.dfa1.vortex.reader.ScanOptions`)
 
-Record: `(List<ColumnName> columns, ScanFilter rowFilter, long limit)` (built via `columns(ColumnName...)`). Empty `columns` = read all. `NO_LIMIT` =
-`Long.MAX_VALUE`.
+A plain final class: start from a factory and adjust with the `withXxx` methods, each returning a
+copy. Empty `columns` = read all. The filter and the limit are optional, as in Rust's `ScanBuilder`.
 
-| Factory / builder                                   | Effect                           |
-|-----------------------------------------------------|----------------------------------|
-| `ScanOptions.all()`                                 | All columns, no filter, no limit |
-| `ScanOptions.columns(ColumnName... names)`         | Project columns                  |
-| `ScanOptions.limit(long n)`                         | Limit rows                       |
-| `.withColumns(ColumnName... names)`                | Project columns (builder)        |
-| `.withFilter(ScanFilter)`                            | Add zone-map filter              |
-| `.withLimit(long n)`                                | Cap rows                         |
-| `.hasProjection()` / `.hasFilter()` / `.hasLimit()` | Predicates                       |
+| Factory / builder / accessor                | Effect                                      |
+|---------------------------------------------|---------------------------------------------|
+| `ScanOptions.all()`                         | All columns, no filter, no limit            |
+| `ScanOptions.columns(ColumnName... names)`  | Project columns                             |
+| `.withColumns(ColumnName... names)`         | Project columns (builder)                   |
+| `.withFilter(ScanFilter)`                   | Add zone-map filter                         |
+| `.withLimit(ScanLimit)`                     | Cap rows: `ScanLimit.of(n)`, `n >= 0`       |
+| `.filter()` / `.limit()`                    | `Optional<ScanFilter>` / `Optional<ScanLimit>` |
+| `.hasProjection()`                          | Whether a column projection is set          |
 
 ### `ScanFilter` (`io.github.dfa1.vortex.reader.ScanFilter`)
 

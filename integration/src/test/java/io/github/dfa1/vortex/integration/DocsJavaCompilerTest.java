@@ -55,6 +55,7 @@ class DocsJavaCompilerTest {
     private static final List<String> HOW_TO_PRELUDE_IMPORTS = List.of(
             "import io.github.dfa1.vortex.reader.VortexReader;",
             "import io.github.dfa1.vortex.reader.ScanOptions;",
+            "import io.github.dfa1.vortex.reader.ScanLimit;",
             "import io.github.dfa1.vortex.reader.ScanFilter;",
             "import io.github.dfa1.vortex.writer.VortexWriter;",
             "import io.github.dfa1.vortex.writer.WriteOptions;",

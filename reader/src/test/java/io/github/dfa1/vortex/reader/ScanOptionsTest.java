@@ -2,21 +2,35 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ScanOptionsTest {
 
     @Test
-    void withLimit_setsLimit() {
+    void all_hasNoProjectionFilterOrLimit() {
         // Given / When
-        ScanOptions sut = ScanOptions.all().withLimit(10);
+        ScanOptions sut = ScanOptions.all();
 
         // Then
-        assertThat(sut.limit()).isEqualTo(10);
-        assertThat(sut.hasLimit()).isTrue();
         assertThat(sut.columns()).isEmpty();
-        assertThat(sut.rowFilter()).isNull();
+        assertThat(sut.hasProjection()).isFalse();
+        assertThat(sut.filter()).isEmpty();
+        assertThat(sut.limit()).isEmpty();
+    }
+
+    @Test
+    void withLimit_setsLimit() {
+        // Given / When
+        ScanOptions sut = ScanOptions.all().withLimit(ScanLimit.of(10));
+
+        // Then
+        assertThat(sut.limit()).contains(ScanLimit.of(10));
+        assertThat(sut.columns()).isEmpty();
+        assertThat(sut.filter()).isEmpty();
     }
 
     @Test
@@ -27,7 +41,7 @@ class ScanOptionsTest {
         // Then
         assertThat(sut.columns()).containsExactly(ColumnName.of("price"), ColumnName.of("qty"));
         assertThat(sut.hasProjection()).isTrue();
-        assertThat(sut.limit()).isEqualTo(ScanOptions.NO_LIMIT);
+        assertThat(sut.limit()).isEmpty();
     }
 
     @Test
@@ -39,22 +53,22 @@ class ScanOptionsTest {
         ScanOptions sut = ScanOptions.all().withFilter(filter);
 
         // Then
-        assertThat(sut.rowFilter()).isEqualTo(filter);
-        assertThat(sut.hasFilter()).isTrue();
+        assertThat(sut.filter()).contains(filter);
     }
 
     @Test
     void fluent_chainingPreservesAllFields() {
         // Given / When
+        ScanFilter filter = ScanFilter.gte(ColumnName.of("price"), 50);
         ScanOptions sut = ScanOptions.all()
                                   .withColumns(ColumnName.of("price"), ColumnName.of("qty"))
-                                  .withLimit(10)
-                                  .withFilter(ScanFilter.gte(ColumnName.of("price"), 50));
+                                  .withLimit(ScanLimit.of(10))
+                                  .withFilter(filter);
 
         // Then
         assertThat(sut.columns()).containsExactly(ColumnName.of("price"), ColumnName.of("qty"));
-        assertThat(sut.limit()).isEqualTo(10);
-        assertThat(sut.hasFilter()).isTrue();
+        assertThat(sut.limit()).contains(ScanLimit.of(10));
+        assertThat(sut.filter()).contains(filter);
     }
 
     @Test
@@ -63,10 +77,39 @@ class ScanOptionsTest {
         ScanOptions original = ScanOptions.all();
 
         // When
-        original.withLimit(5).withColumns(ColumnName.of("x"));
+        original.withLimit(ScanLimit.of(5)).withColumns(ColumnName.of("x"));
 
         // Then
-        assertThat(original.limit()).isEqualTo(ScanOptions.NO_LIMIT);
+        assertThat(original.limit()).isEmpty();
         assertThat(original.columns()).isEmpty();
+    }
+
+    @Test
+    void withFilterAndWithLimit_rejectNull() {
+        // Given: an absent filter or limit is the default, never a null argument
+        ScanOptions sut = ScanOptions.all();
+
+        // When / Then
+        assertThatThrownBy(() -> sut.withFilter(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> sut.withLimit(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, 1, Long.MAX_VALUE})
+    void scanLimit_acceptsZeroAndMore(long rows) {
+        // When
+        ScanLimit result = ScanLimit.of(rows);
+
+        // Then
+        assertThat(result.rows()).isEqualTo(rows);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {-1, Long.MIN_VALUE})
+    void scanLimit_rejectsANegativeCount(long rows) {
+        // When / Then
+        assertThatThrownBy(() -> ScanLimit.of(rows))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not be negative");
     }
 }

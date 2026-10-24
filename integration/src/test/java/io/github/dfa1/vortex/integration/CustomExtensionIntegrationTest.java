@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanFilter;
+import io.github.dfa1.vortex.reader.ScanLimit;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -141,7 +142,7 @@ class CustomExtensionIntegrationTest {
             int limit = CHUNK_ROWS + 7;
 
             // When
-            SequencedMap<Long, float[]> result = readVectors(file, ScanOptions.limit(limit));
+            SequencedMap<Long, float[]> result = readVectors(file, ScanOptions.all().withLimit(ScanLimit.of(limit)));
 
             // Then
             assertThat(result.keySet()).containsExactlyElementsOf(ids(0, limit));
@@ -195,7 +196,7 @@ class CustomExtensionIntegrationTest {
             // When
             float firstElementOfRow1;
             try (VortexReader reader = VortexReader.open(file, allowUnknown);
-                 var iter = reader.scan(ScanOptions.limit(2));
+                 var iter = reader.scan(ScanOptions.all().withLimit(ScanLimit.of(2)));
                  Chunk chunk = iter.next()) {
                 FixedSizeListArray storage = (FixedSizeListArray) chunk.column(EMBEDDING);
                 firstElementOfRow1 = ((FloatArray) storage.elements()).getFloat(DIM);
@@ -213,7 +214,7 @@ class CustomExtensionIntegrationTest {
             ReadRegistry allowUnknown = ReadRegistry.builder().registerDefaults().allowUnknown().build();
 
             try (VortexReader reader = VortexReader.open(file, allowUnknown);
-                 var iter = reader.scan(ScanOptions.limit(2));
+                 var iter = reader.scan(ScanOptions.all().withLimit(ScanLimit.of(2)));
                  Chunk chunk = iter.next()) {
                 // When / Then
                 assertThatThrownBy(() -> chunk.as(EMBEDDING, float[].class))
@@ -229,7 +230,7 @@ class CustomExtensionIntegrationTest {
             writeVectors(file, vectorDtype(DIM, false));
 
             try (VortexReader reader = VortexReader.open(file, READ_REGISTRY);
-                 var iter = reader.scan(ScanOptions.limit(2));
+                 var iter = reader.scan(ScanOptions.all().withLimit(ScanLimit.of(2)));
                  Chunk chunk = iter.next()) {
                 // When / Then
                 assertThatThrownBy(() -> chunk.as(EMBEDDING, double[].class))

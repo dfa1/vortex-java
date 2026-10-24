@@ -289,7 +289,7 @@ Compare it with `time java -jar ...`, which also counts the JVM's own start-up (
 **API:**
 
 ```java
-ScanOptions opts = ScanOptions.all().withLimit(10);
+ScanOptions opts = ScanOptions.all().withLimit(ScanLimit.of(10));
 
 try (VortexReader vf = VortexReader.open(Path.of("data.vortex"));
      var iter = vf.scan(opts)) {

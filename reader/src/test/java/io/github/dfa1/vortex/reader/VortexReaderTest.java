@@ -261,7 +261,7 @@ class VortexReaderTest {
         // When
         long totalRows = 0;
         try (var sut = VortexReader.open(path);
-             var iter = sut.scan(ScanOptions.limit(limit))) {
+             var iter = sut.scan(ScanOptions.all().withLimit(ScanLimit.of(limit)))) {
             while (iter.hasNext()) {
                 try (Chunk chunk = iter.next()) {
                     totalRows += chunk.rowCount();
@@ -294,7 +294,7 @@ class VortexReaderTest {
         // When
         long totalWithLimit = 0;
         try (var sut = VortexReader.open(path);
-             var iter = sut.scan(ScanOptions.limit(Long.MAX_VALUE))) {
+             var iter = sut.scan(ScanOptions.all().withLimit(ScanLimit.of(Long.MAX_VALUE)))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     totalWithLimit += c.rowCount();
@@ -314,7 +314,7 @@ class VortexReaderTest {
         // When
         long totalRows = 0;
         try (var sut = VortexReader.open(path);
-             var iter = sut.scan(ScanOptions.limit(0))) {
+             var iter = sut.scan(ScanOptions.all().withLimit(ScanLimit.of(0)))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     totalRows += c.rowCount();
