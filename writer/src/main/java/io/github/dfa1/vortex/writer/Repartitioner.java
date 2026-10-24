@@ -7,18 +7,18 @@ import io.github.dfa1.vortex.writer.encode.NullableData;
 
 import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 /// Coalesces one column's `writeChunk` batches into the chunks Rust's default write strategy
-/// emits (`vortex-layout/src/layouts/repartition.rs`, configured in `vortex-file/src/strategy.rs`):
-/// each batch is cut into [#BLOCK_ROWS]-row pieces, and the moment at least [#BLOCK_BYTES] of
-/// uncompressed data and [#BLOCK_ROWS] rows are pending, every whole block pending is emitted as
-/// one chunk (a piece straddling the last block boundary is split). Whatever is pending at the end
-/// becomes the last chunk. So a fixed-width column gets chunks of the fewest whole blocks reaching
-/// 1 MB: 131 072 rows of 8-byte values, 524 288 of U16 dict codes.
+/// emits (`vortex-file/src/strategy.rs`). Its outer `RepartitionStrategy` first re-cuts the stream
+/// into [#BLOCK_ROWS]-row blocks aligned to the column's first row, whatever the batches; the inner
+/// one (`vortex-layout/src/layouts/repartition.rs`) emits every pending block as one chunk the
+/// moment they reach [#BLOCK_BYTES], each block measured as a whole by Rust's exact uncompressed
+/// size. The partial block at the end becomes the last chunk, after the pending whole blocks when
+/// it tops them up to [#BLOCK_BYTES]. So a fixed-width column gets chunks of the fewest whole blocks
+/// reaching 1 MB: 131 072 rows of 8-byte values, 524 288 of U16 dict codes.
 ///
 /// Chunk size drives both segment granularity and compression: a ~1 MB chunk gives the cascade's
 /// sample enough rows to pick what Rust picks (#458, #470).
@@ -30,14 +30,16 @@ final class Repartitioner {
     /// Rust's `data_block_target_bytes` (`ONE_MEG`), the coalescing `block_size_minimum`.
     static final long BLOCK_BYTES = 1L << 20;
 
-    // A row range of one batch, with its Rust nbytes (Rust's ChunksBuffer entry).
-    private record Piece(Object data, int offset, int length, long nbytes) {
+    // A row range of one batch inside one block, with the bytes its valid out-of-line strings add.
+    private record Piece(Object data, int offset, int length, long outOfLineBytes) {
     }
 
     private final DType dtype;
-    private final ArrayDeque<Piece> pending = new ArrayDeque<>();
-    private long pendingRows;
+    private final List<Piece> block = new ArrayList<>();
+    private int blockRows;
+    private final List<Piece> pending = new ArrayList<>();
     private long pendingBytes;
+    private long rows;
 
     Repartitioner(DType dtype) {
         this.dtype = dtype;
@@ -52,6 +54,43 @@ final class Repartitioner {
                 || storage instanceof DType.Binary;
     }
 
+    /// The rows added so far: where the next batch starts.
+    long rows() {
+        return rows;
+    }
+
+    /// Measures the pieces of a batch ahead of [#add(Object,long,long[])], so a caller can measure
+    /// the columns of a batch in parallel: columns are independent, and measuring a string column
+    /// reads every one of its strings.
+    ///
+    /// @param data     the batch, as it will be handed to [#add(Object,long,long[])]
+    /// @param rows     the batch's row count
+    /// @param firstRow the column's [#rows()] before the batch
+    /// @return the out-of-line string bytes of each piece, in order
+    static long[] sizePieces(Object data, long rows, long firstRow) {
+        int len = (int) rows;
+        int first = pieceRows(len, firstRow);
+        long[] sizes = new long[len == 0 ? 0 : 1 + (len - first + BLOCK_ROWS - 1) / BLOCK_ROWS];
+        int piece = 0;
+        int off = 0;
+        while (off < len) {
+            int length = pieceRows(len - off, firstRow + off);
+            sizes[piece] = outOfLineBytes(data, off, length);
+            piece++;
+            off += length;
+        }
+        return sizes;
+    }
+
+    /// Whether sizing a batch of `data` reads its values, as for strings and binaries -- the
+    /// only batches worth [#sizePieces(Object,long,long)] ahead of time.
+    ///
+    /// @param data the batch
+    /// @return `true` for a variable-width batch
+    static boolean sizeReadsValues(Object data) {
+        return values(data) instanceof Object[];
+    }
+
     /// Adds one batch and returns the chunks now ready, in order.
     ///
     /// @param data the batch, as handed to the column's encoder
@@ -61,140 +100,144 @@ final class Repartitioner {
         return add(data, rows, null);
     }
 
-    /// Sizes the [#BLOCK_ROWS]-row pieces of a batch ahead of [#add(Object,long,long[])], so a caller
-    /// can measure the columns of a batch in parallel: columns are independent, and measuring a
-    /// string column reads every one of its strings.
-    ///
-    /// @param data the batch, as it will be handed to [#add(Object,long,long[])]
-    /// @param rows the batch's row count
-    /// @return the byte count of each piece, in order
-    long[] sizePieces(Object data, long rows) {
-        int len = (int) rows;
-        long[] sizes = new long[(len + BLOCK_ROWS - 1) / BLOCK_ROWS];
-        for (int i = 0; i < sizes.length; i++) {
-            int off = i * BLOCK_ROWS;
-            sizes[i] = nbytes(data, off, Math.min(BLOCK_ROWS, len - off));
-        }
-        return sizes;
-    }
-
-    /// Whether sizing a batch of `data` reads its values, as for strings and binaries -- the
-    /// only batches worth [#sizePieces(Object,long)] ahead of time.
-    ///
-    /// @param data the batch
-    /// @return `true` for a variable-width batch
-    static boolean sizeReadsValues(Object data) {
-        return values(data) instanceof Object[];
-    }
-
-    /// Adds one batch whose pieces were already sized by [#sizePieces(Object,long)].
+    /// Adds one batch whose pieces were already measured by [#sizePieces(Object,long,long)].
     ///
     /// @param data       the batch, as handed to the column's encoder
     /// @param rows       the batch's row count
-    /// @param pieceSizes the batch's [#sizePieces(Object,long)], or `null` to size it here
+    /// @param pieceSizes the batch's [#sizePieces(Object,long,long)], or `null` to measure it here
     /// @return the chunks to write, possibly none
     List<Object> add(Object data, long rows, long[] pieceSizes) {
         List<Object> out = new ArrayList<>();
         int len = (int) rows;
-        for (int off = 0; off < len; off += BLOCK_ROWS) {
-            int length = Math.min(BLOCK_ROWS, len - off);
-            pushBack(pieceSizes != null
-                    ? new Piece(data, off, length, pieceSizes[off / BLOCK_ROWS])
-                    : piece(data, off, length));
-            if (pendingBytes >= BLOCK_BYTES && pendingRows >= BLOCK_ROWS) {
-                out.add(collectExactBlocks());
+        int piece = 0;
+        int off = 0;
+        while (off < len) {
+            int length = pieceRows(len - off, this.rows);
+            long outOfLine = pieceSizes != null ? pieceSizes[piece] : outOfLineBytes(data, off, length);
+            piece++;
+            block.add(new Piece(data, off, length, outOfLine));
+            blockRows += length;
+            this.rows += length;
+            off += length;
+            if (blockRows == BLOCK_ROWS) {
+                pendingBytes += blockBytes();
+                pending.addAll(block);
+                block.clear();
+                blockRows = 0;
+                if (pendingBytes >= BLOCK_BYTES) {
+                    out.add(drainPending());
+                }
             }
         }
         return out;
     }
 
-    /// The rows still pending, as the column's last chunk, or `null` when none are.
-    Object finish() {
-        if (pending.isEmpty()) {
-            return null;
+    /// The rows still pending, as the column's last chunks: the whole blocks, when the partial
+    /// block tops them up to [#BLOCK_BYTES], then the partial block, as Rust's `ChunksBuffer`
+    /// does when the outer repartition flushes it; otherwise all of them as one chunk.
+    List<Object> finish() {
+        List<Object> out = new ArrayList<>();
+        if (!pending.isEmpty() && pendingBytes + blockBytes() >= BLOCK_BYTES) {
+            out.add(drainPending());
         }
-        List<Piece> rest = new ArrayList<>(pending);
-        pending.clear();
-        pendingRows = 0;
-        pendingBytes = 0;
-        return concat(rest);
+        pending.addAll(block);
+        if (!pending.isEmpty()) {
+            out.add(drainPending());
+        }
+        block.clear();
+        blockRows = 0;
+        return out;
     }
 
-    // Rust's ChunksBuffer::collect_exact_blocks: pops whole blocks' worth of rows, splitting the
-    // piece that straddles the boundary and keeping its tail pending.
-    private Object collectExactBlocks() {
-        long remaining = pendingRows / BLOCK_ROWS * BLOCK_ROWS;
-        List<Piece> taken = new ArrayList<>();
-        while (remaining > 0) {
-            Piece p = popFront();
-            if (p.length() > remaining) {
-                int head = (int) remaining;
-                taken.add(piece(p.data(), p.offset(), head));
-                pushFront(piece(p.data(), p.offset() + head, p.length() - head));
-                remaining = 0;
-            } else {
-                taken.add(p);
-                remaining -= p.length();
+    // A piece starting at column row `at` runs to the end of that row's block, or of the batch.
+    private static int pieceRows(int remaining, long at) {
+        return (int) Math.min(remaining, BLOCK_ROWS - at % BLOCK_ROWS);
+    }
+
+    private Object drainPending() {
+        Object chunk = concat(pending);
+        pending.clear();
+        pendingBytes = 0;
+        return chunk;
+    }
+
+    /// Rust's exact `uncompressed_size_in_bytes` of the block being filled, as one canonical
+    /// array (`vortex-array/src/aggregate_fn/fns/uncompressed_size_in_bytes`): fixed-width values
+    /// at their width, Utf8/Binary as a 16-byte view per row plus each valid value too long to
+    /// inline in its view, and the validity per [#validityBytes(long,long)].
+    private long blockBytes() {
+        long outOfLine = 0;
+        long valid = 0;
+        for (Piece p : block) {
+            outOfLine += p.outOfLineBytes();
+            valid += validRows(p);
+        }
+        DType storage = dtype instanceof DType.Extension ext ? ext.storageDType() : dtype;
+        long values = switch (storage) {
+            case DType.Utf8 _, DType.Binary _ -> 16L * blockRows + outOfLine;
+            case DType.Bool _ -> (blockRows + 7L) / 8;
+            default -> (long) blockRows * elementBytes(storage);
+        };
+        return values + validityBytes(valid, blockRows);
+    }
+
+    /// Rust's `validity_uncompressed_size_in_bytes` of a block's mask: nothing when every row is
+    /// valid, a bitmap when some are, and when none are, a `ConstantArray(false)`'s one buffer --
+    /// the 2-byte proto `ScalarValue { bool_value: false }`.
+    private static long validityBytes(long valid, long rows) {
+        if (valid == rows) {
+            return 0;
+        }
+        if (valid == 0) {
+            return 2;
+        }
+        return (rows + 7) / 8;
+    }
+
+    private static long validRows(Piece p) {
+        if (!(p.data() instanceof NullableData nd)) {
+            return p.length();
+        }
+        long valid = 0;
+        for (int i = p.offset(); i < p.offset() + p.length(); i++) {
+            if (nd.validity()[i]) {
+                valid++;
             }
         }
-        return concat(taken);
+        return valid;
     }
 
-    private Piece piece(Object data, int offset, int length) {
-        return new Piece(data, offset, length, nbytes(data, offset, length));
-    }
-
-    private void pushBack(Piece p) {
-        pending.addLast(p);
-        pendingRows += p.length();
-        pendingBytes += p.nbytes();
-    }
-
-    private void pushFront(Piece p) {
-        pending.addFirst(p);
-        pendingRows += p.length();
-        pendingBytes += p.nbytes();
-    }
-
-    private Piece popFront() {
-        Piece p = pending.removeFirst();
-        pendingRows -= p.length();
-        pendingBytes -= p.nbytes();
-        return p;
-    }
-
-    /// Rust's `ArrayRef::nbytes` of the canonical array: fixed-width values at their width plus a
-    /// validity bitmap when nullable, and Utf8/Binary as Rust's canonical `VarBinView` -- a 16-byte
-    /// view per row plus its bytes.
-    // ponytail: a sliced Rust VarBinView counts its whole shared data buffers, so string chunk
-    // boundaries can differ from Rust's; exact only for fixed-width columns.
-    private long nbytes(Object data, int offset, int rows) {
-        long validity = data instanceof NullableData ? (rows + 7L) / 8 : 0;
-        Object values = values(data);
-        return validity + switch (values) {
+    // The bytes of the valid values longer than 12, which a VarBinView keeps out of its views
+    // (BinaryView::MAX_INLINED_SIZE); zero for any other carrier.
+    private static long outOfLineBytes(Object data, int offset, int rows) {
+        boolean[] validity = data instanceof NullableData nd ? nd.validity() : null;
+        long n = 0;
+        switch (values(data)) {
             case String[] a -> {
-                long n = 16L * rows;
                 for (int i = offset; i < offset + rows; i++) {
-                    // Encoding to count beats a char-by-char count by 2x: the JDK encodes ASCII
-                    // with a vectorized copy, and the throwaway array dies young.
-                    n += a[i] == null ? 0 : a[i].getBytes(StandardCharsets.UTF_8).length;
+                    if (a[i] != null && (validity == null || validity[i])) {
+                        // Encoding to count beats a char-by-char count by 2x: the JDK encodes ASCII
+                        // with a vectorized copy, and the throwaway array dies young.
+                        int length = a[i].getBytes(StandardCharsets.UTF_8).length;
+                        n += length > 12 ? length : 0;
+                    }
                 }
-                yield n;
             }
             case byte[][] a -> {
-                long n = 16L * rows;
                 for (int i = offset; i < offset + rows; i++) {
-                    n += a[i] == null ? 0 : a[i].length;
+                    if (a[i] != null && (validity == null || validity[i])) {
+                        n += a[i].length > 12 ? a[i].length : 0;
+                    }
                 }
-                yield n;
             }
-            case boolean[] _ -> (rows + 7L) / 8;
-            default -> (long) rows * elementBytes();
-        };
+            default -> {
+                // fixed width: blockBytes sizes it from the dtype
+            }
+        }
+        return n;
     }
 
-    private long elementBytes() {
-        DType storage = dtype instanceof DType.Extension ext ? ext.storageDType() : dtype;
+    private static long elementBytes(DType storage) {
         return switch (storage) {
             case DType.Primitive p -> p.ptype().byteSize();
             case DType.Decimal d -> d.byteWidth();

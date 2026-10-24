@@ -607,12 +607,13 @@ public final class VortexWriter implements Closeable {
             // of an import. Columns are independent, so the pool sizes them all at once.
             if (zonedLayout && Repartitioner.supports(colDtype) && Repartitioner.sizeReadsValues(data)
                     && !dictCandidates.contains(colName)) {
-                // Not the column's own Repartitioner: creating that here would change the order
+                // Only read the column's own Repartitioner: creating it here would change the order
                 // flushRepartitioners writes the last chunks in.
-                Repartitioner sizer = new Repartitioner(colDtype);
+                Repartitioner own = repartitioners.get(colName);
+                long firstRow = own == null ? 0 : own.rows();
                 Object batch = data;
                 pieceSizes.put(colName, CompletableFuture.supplyAsync(
-                        () -> sizer.sizePieces(batch, arrayLength(batch)), options.executor()));
+                        () -> Repartitioner.sizePieces(batch, arrayLength(batch), firstRow), options.executor()));
             }
         }
 
@@ -704,11 +705,10 @@ public final class VortexWriter implements Closeable {
         colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
     }
 
-    /// Writes every column's pending rows as its last chunk.
+    /// Writes every column's pending rows as its last chunk or chunks.
     private void flushRepartitioners() throws IOException {
         for (Map.Entry<ColumnName, Repartitioner> e : repartitioners.entrySet()) {
-            Object last = e.getValue().finish();
-            if (last != null) {
+            for (Object last : e.getValue().finish()) {
                 writeDataChunk(e.getKey(), columnDtype(e.getKey()), last);
             }
         }
@@ -1580,8 +1580,7 @@ public final class VortexWriter implements Closeable {
                 codesRowCounts.add((long) ((short[]) chunk).length);
             }
         }
-        Object last = repartitioner != null ? repartitioner.finish() : null;
-        if (last != null) {
+        for (Object last : repartitioner != null ? repartitioner.finish() : List.of()) {
             codesSegIdxes.add(writeSegment(codesDtype, last));
             codesRowCounts.add((long) ((short[]) last).length);
         }

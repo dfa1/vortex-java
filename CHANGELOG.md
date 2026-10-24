@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An all-null chunk stored as a null constant (as vortex-jni writes it) reads as a masked array with every row null, like any nullable chunk, instead of a `NullArray` that the CLI, SQL and Parquet export failed on. ([#594](https://github.com/dfa1/vortex-java/pull/594))
 - An all-null date, time, timestamp or uuid chunk is written as a bare null `vortex.constant`, as Rust writes it, without a `vortex.ext` around it. ([#595](https://github.com/dfa1/vortex-java/pull/595))
 - An all-null decimal chunk reads as a masked array too, and a filter selects every row of an all-null uuid or list chunk for `IS NULL`, where it selected none. ([#595](https://github.com/dfa1/vortex-java/pull/595))
+- The writer cuts string and nullable columns into the same chunks as vortex-jni 0.89, which measures its 8192-row blocks by the bytes their rows reference. ([#596](https://github.com/dfa1/vortex-java/pull/596))
 - `filter` and `select --where` on the command line work on a nullable column, where they failed; a null row matches no comparison, as in SQL. ([#593](https://github.com/dfa1/vortex-java/pull/593))
 
 ## [0.18.1] — 2026-10-22
