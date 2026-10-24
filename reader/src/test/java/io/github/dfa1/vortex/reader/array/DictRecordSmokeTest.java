@@ -783,6 +783,84 @@ class DictRecordSmokeTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /// The flat-segment gathers must equal the per-row path they bypass: same values, same row
+    /// order. The fold operator is order-sensitive (`acc * 2 + v`) so a reordered gather fails.
+    @Nested
+    class FlatGather {
+
+        @Test
+        void doubleFold_u16Codes_matchesPerRow() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                DoubleArray values = doubleArray(arena, 0.5, 1.5, 2.5);
+                ShortArray codes = shortArray(arena, U16, (short) 2, (short) 0, (short) 1, (short) 2);
+                DictDoubleArray sut = DictDoubleArray.of(F64, 4, values, codes);
+
+                // When
+                double result = sut.fold(1.0, (acc, v) -> acc * 2 + v);
+
+                // Then
+                assertThat(result).isEqualTo(perRowDoubleFold(sut));
+            }
+        }
+
+        @Test
+        void doubleFold_u8Codes_matchesPerRow() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                DoubleArray values = doubleArray(arena, 0.5, 1.5, 2.5);
+                ByteArray codes = byteArray(arena, (byte) 1, (byte) 2, (byte) 0);
+                DictDoubleArray sut = DictDoubleArray.of(F64, 3, values, codes);
+
+                // When
+                double result = sut.fold(1.0, (acc, v) -> acc * 2 + v);
+
+                // Then
+                assertThat(result).isEqualTo(perRowDoubleFold(sut));
+            }
+        }
+
+        @Test
+        void doubleFold_poolWithoutSegment_takesThePerRowPath() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — an offset view has no segment of its own, so the fast path must step aside
+                DoubleArray values = new OffsetDoubleArray(F64, 3, doubleArray(arena, 9.0, 0.5, 1.5, 2.5), 1);
+                ShortArray codes = shortArray(arena, U16, (short) 2, (short) 0, (short) 1);
+                DictDoubleArray sut = DictDoubleArray.of(F64, 3, values, codes);
+
+                // When
+                double result = sut.fold(1.0, (acc, v) -> acc * 2 + v);
+
+                // Then — ((1 * 2 + 2.5) * 2 + 0.5) * 2 + 1.5
+                assertThat(result).isEqualTo(20.5);
+            }
+        }
+
+        @Test
+        void intMaterialize_u16Codes_matchesPerRow() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                IntArray values = intArray(arena, I32, 10, 20, 30);
+                ShortArray codes = shortArray(arena, U16, (short) 2, (short) 2, (short) 0, (short) 1);
+                DictIntArray sut = DictIntArray.of(I32, 4, values, codes);
+
+                // When
+                MemorySegment result = sut.materialize(arena);
+
+                // Then
+                assertThat(result.toArray(VortexFormat.LE_INT)).containsExactly(30, 30, 10, 20);
+            }
+        }
+
+        private static double perRowDoubleFold(DoubleArray array) {
+            double acc = 1.0;
+            for (long i = 0; i < array.length(); i++) {
+                acc = acc * 2 + array.getDouble(i);
+            }
+            return acc;
+        }
+    }
+
     private static LongArray longArray(Arena arena, long... values) {
         return longArray(arena, I64, values);
     }

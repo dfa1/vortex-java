@@ -244,6 +244,33 @@ class OffsetArrayTest {
             assertThat(sut.getInt(0)).isEqualTo(30);
             assertThat(sut.getInt(1)).isEqualTo(40);
         }
+
+        @Test
+        void fold_flatInner_foldsTheWindowInOrder() {
+            // Given — an order-sensitive operator, so folding outside the window or out of order fails
+            IntArray inner = TestArrays.ints(1, 2, 3, 4, 5);
+            var sut = new OffsetIntArray(DType.I32, 3, inner, 1L);
+
+            // When
+            int result = sut.fold(0, (acc, v) -> acc * 10 + v);
+
+            // Then
+            assertThat(result).isEqualTo(234);
+        }
+
+        @Test
+        void fold_broadcastInner_fallsBackToPerRow() {
+            // Given a one-element buffer standing for 4 rows: a window read off it would overrun
+            MemorySegment one = Arena.ofAuto().allocate(4, 4);
+            one.setAtIndex(ValueLayout.JAVA_INT_UNALIGNED, 0, 7);
+            var sut = new OffsetIntArray(DType.I32, 3, new MaterializedIntArray(DType.I32, 4, one), 1L);
+
+            // When
+            int result = sut.fold(0, Integer::sum);
+
+            // Then
+            assertThat(result).isEqualTo(21);
+        }
     }
 
     @Nested
@@ -271,6 +298,33 @@ class OffsetArrayTest {
             // When / Then
             assertThat(sut.getDouble(0)).isEqualTo(2.5);
             assertThat(sut.getDouble(1)).isEqualTo(3.5);
+        }
+
+        @Test
+        void fold_flatInner_foldsTheWindowInOrder() {
+            // Given — an order-sensitive operator, so folding outside the window or out of order fails
+            DoubleArray inner = TestArrays.doubles(1.0, 2.0, 3.0, 4.0);
+            var sut = new OffsetDoubleArray(DType.F64, 2, inner, 1L);
+
+            // When
+            double result = sut.fold(0.0, (acc, v) -> acc * 10 + v);
+
+            // Then
+            assertThat(result).isEqualTo(23.0);
+        }
+
+        @Test
+        void fold_broadcastInner_fallsBackToPerRow() {
+            // Given a one-element buffer standing for 4 rows: a window read off it would overrun
+            MemorySegment one = Arena.ofAuto().allocate(8, 8);
+            one.setAtIndex(ValueLayout.JAVA_DOUBLE_UNALIGNED, 0, 1.5);
+            var sut = new OffsetDoubleArray(DType.F64, 3, new MaterializedDoubleArray(DType.F64, 4, one), 1L);
+
+            // When
+            double result = sut.fold(0.0, java.lang.Double::sum);
+
+            // Then
+            assertThat(result).isEqualTo(4.5);
         }
     }
 

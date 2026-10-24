@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.ValueLayout;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
@@ -117,11 +118,40 @@ public record DictDoubleArray(DType dtype, long length, DoubleArray values, Arra
         }
     }
 
+    /// Folds the gathered values in row order. With a flat pool and flat `u8`/`u16` codes, as a
+    /// decoded chunk has them, it gathers straight off the two segments: the per-row path paid a
+    /// virtual `getShort` and a virtual `getDouble`, each with its broadcast check, for every row.
+    /// Codes were range-checked against the pool when decoded.
+    ///
+    /// @param identity initial accumulator value
+    /// @param op       binary operator applied to the accumulator and each gathered value
+    /// @return the final accumulated result
     @Override
     public double fold(double identity, DoubleBinaryOperator op) {
         long n = length;
         DoubleArray vals = values;
         double result = identity;
+        MemorySegment pool = DictArrays.flat(vals, vals.length(), 8);
+        if (pool != null && codes instanceof ShortArray) {
+            MemorySegment c = DictArrays.flat(codes, n, 2);
+            if (c != null) {
+                for (long i = 0; i < n; i++) {
+                    long code = Short.toUnsignedLong(c.getAtIndex(VortexFormat.LE_SHORT, i));
+                    result = op.applyAsDouble(result, pool.getAtIndex(VortexFormat.LE_DOUBLE, code));
+                }
+                return result;
+            }
+        }
+        if (pool != null && codes instanceof ByteArray) {
+            MemorySegment c = DictArrays.flat(codes, n, 1);
+            if (c != null) {
+                for (long i = 0; i < n; i++) {
+                    long code = Byte.toUnsignedLong(c.get(ValueLayout.JAVA_BYTE, i));
+                    result = op.applyAsDouble(result, pool.getAtIndex(VortexFormat.LE_DOUBLE, code));
+                }
+                return result;
+            }
+        }
         switch (codes) {
             case ByteArray ba -> {
                 for (long i = 0; i < n; i++) {

@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.CanonicalArrays;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictDoubleArray;
 import io.github.dfa1.vortex.reader.array.DictFloat16Array;
@@ -140,7 +141,14 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 physicalBytes(rawValues), valPType.byteSize());
         validateCodesInRange(rawCodes, codePType, rawValues.length());
 
-        Array values = buildLazyDict(ctx.dtype(), valPType, rowCount, rawValues, rawCodes);
+        // A floating pool is decoded once, as Rust's dict canonicalizes its values before
+        // gathering: a lazy ALP pool re-ran its multiply on every row. An integer pool stays lazy:
+        // FoR costs an add a row, and decoding it shifted the gathers' type profile enough to cost
+        // the TPC-DS store_sales scan 3.5%.
+        Array pool = rawValues instanceof DoubleArray || rawValues instanceof FloatArray
+                ? CanonicalArrays.of(rawValues, ctx.arena())
+                : rawValues;
+        Array values = buildLazyDict(ctx.dtype(), valPType, rowCount, pool, rawCodes);
         BoolArray rowValidity = poolValidity == null
                 ? codesValidity
                 : rowValidity(ctx, ctx.materialize(rawCodes), codePType, codesValidity, poolValidity, rowCount);
