@@ -114,7 +114,7 @@ class GlobalDictPrimitiveTest {
         int cardinality = 300;
         long[] data = new long[rows];
         for (int i = 0; i < rows; i++) {
-            data[i] = i % cardinality;
+            data[i] = wide(i % cardinality);
         }
         Path file = tmp.resolve("u16_i64.vortex");
 
@@ -133,7 +133,7 @@ class GlobalDictPrimitiveTest {
         // full key set only at flush, so it trips the per-chunk fallback in writeGlobalDictColumn.
         long[] c0 = new long[1_000];
         for (int i = 0; i < c0.length; i++) {
-            c0[i] = i % 400;
+            c0[i] = wide(i % 400);
         }
         long[] c1 = new long[1_700];
         for (int i = 0; i < c1.length; i++) {
@@ -174,7 +174,7 @@ class GlobalDictPrimitiveTest {
             for (int c = 0; c < chunkCount; c++) {
                 long[] data = new long[rowsPerChunk];
                 for (int i = 0; i < rowsPerChunk; i++) {
-                    long value = (c == 0) ? (i % 200) : (1_000_000L + next++);
+                    long value = (c == 0) ? wide(i % 200) : (1_000_000L + next++);
                     data[i] = value;
                     expected[c * rowsPerChunk + i] = value;
                 }
@@ -287,6 +287,37 @@ class GlobalDictPrimitiveTest {
         // And values round-trip exactly.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             assertThat(readAllDoubles(vf, "rate")).containsExactly(expected);
+        }
+    }
+
+    /// The `k`th of a set of 64-bit-wide values. The dict layout takes a non-null integer column
+    /// only when the cascade picks a dictionary for its first block, as Rust's probe does; small
+    /// values like `i % 200` bit-pack better and never get one, so the global-dict paths below need
+    /// values a dictionary actually wins on.
+    private static long wide(long k) {
+        return k * 0x9E3779B97F4A7C15L;
+    }
+
+    @Test
+    void wideLowCardinality_i64_getsTheGlobalDictLayout(@TempDir Path tmp) throws IOException {
+        // Given — the first chunk the demotion and cap tests above rely on being admitted
+        long[] data = new long[1_000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = wide(i % 200);
+        }
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
+        Path file = tmp.resolve("wide_dict_i64.vortex");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
+        }
+
+        // When
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            var result = unwrapZoned(vf.layout().children().getFirst());
+
+            // Then
+            assertThat(result.isDict()).isTrue();
         }
     }
 
