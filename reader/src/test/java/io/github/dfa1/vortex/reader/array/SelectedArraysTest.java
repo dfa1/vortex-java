@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -33,16 +34,16 @@ class SelectedArraysTest {
     @Test
     void primitives_copyTheSelectedRowsIntoFlatBuffers() {
         // When
-        LongArray longs = (LongArray) SelectedArrays.select(TestArrays.longs(10, 11, 12, 13), ROWS, ARENA);
-        IntArray ints = (IntArray) SelectedArrays.select(TestArrays.ints(10, 11, 12, 13), ROWS, ARENA);
-        ShortArray shorts = (ShortArray) SelectedArrays.select(
+        LongArray longs = (LongArray) select(TestArrays.longs(10, 11, 12, 13), ROWS, ARENA);
+        IntArray ints = (IntArray) select(TestArrays.ints(10, 11, 12, 13), ROWS, ARENA);
+        ShortArray shorts = (ShortArray) select(
                 TestArrays.shorts((short) 10, (short) 11, (short) 12, (short) 13), ROWS, ARENA);
-        ByteArray bytes = (ByteArray) SelectedArrays.select(
+        ByteArray bytes = (ByteArray) select(
                 TestArrays.bytes((byte) 10, (byte) 11, (byte) 12, (byte) 13), ROWS, ARENA);
-        DoubleArray doubles = (DoubleArray) SelectedArrays.select(TestArrays.doubles(1.5, 2.5, 3.5, 4.5), ROWS, ARENA);
-        FloatArray floats = (FloatArray) SelectedArrays.select(TestArrays.floats(1.5f, 2.5f, 3.5f, 4.5f), ROWS, ARENA);
-        Float16Array halves = (Float16Array) SelectedArrays.select(TestArrays.float16(1.5f, 2.5f, 3.5f, 4.5f), ROWS, ARENA);
-        BoolArray bools = (BoolArray) SelectedArrays.select(TestArrays.bools(false, true, false, true), ROWS, ARENA);
+        DoubleArray doubles = (DoubleArray) select(TestArrays.doubles(1.5, 2.5, 3.5, 4.5), ROWS, ARENA);
+        FloatArray floats = (FloatArray) select(TestArrays.floats(1.5f, 2.5f, 3.5f, 4.5f), ROWS, ARENA);
+        Float16Array halves = (Float16Array) select(TestArrays.float16(1.5f, 2.5f, 3.5f, 4.5f), ROWS, ARENA);
+        BoolArray bools = (BoolArray) select(TestArrays.bools(false, true, false, true), ROWS, ARENA);
 
         // Then
         assertThat(longs.length()).isEqualTo(3);
@@ -69,12 +70,12 @@ class SelectedArraysTest {
         int[] sparse = rows(0, 5, 9);
 
         // When
-        LongArray longs = (LongArray) SelectedArrays.select(TestArrays.longs(0, 1, 2, 3, 4, 5, 6, 7, 8, 9), sparse, ARENA);
-        IntArray ints = (IntArray) SelectedArrays.select(TestArrays.ints(0, 1, 2, 3, 4, 5, 6, 7, 8, 9), sparse, ARENA);
-        ShortArray shorts = (ShortArray) SelectedArrays.select(TestArrays.shorts(
+        LongArray longs = (LongArray) select(TestArrays.longs(0, 1, 2, 3, 4, 5, 6, 7, 8, 9), sparse, ARENA);
+        IntArray ints = (IntArray) select(TestArrays.ints(0, 1, 2, 3, 4, 5, 6, 7, 8, 9), sparse, ARENA);
+        ShortArray shorts = (ShortArray) select(TestArrays.shorts(
                 (short) 0, (short) 1, (short) 2, (short) 3, (short) 4, (short) 5, (short) 6, (short) 7, (short) 8, (short) 9),
                 sparse, ARENA);
-        ByteArray bytes = (ByteArray) SelectedArrays.select(TestArrays.bytes(
+        ByteArray bytes = (ByteArray) select(TestArrays.bytes(
                 (byte) 0, (byte) 1, (byte) 2, (byte) 3, (byte) 4, (byte) 5, (byte) 6, (byte) 7, (byte) 8, (byte) 9),
                 sparse, ARENA);
 
@@ -96,7 +97,7 @@ class SelectedArraysTest {
         Array constant = new MaterializedLongArray(DType.I64, 4, one);
 
         // When
-        LongArray result = (LongArray) SelectedArrays.select(constant, rows(1, 2, 3), ARENA);
+        LongArray result = (LongArray) select(constant, rows(1, 2, 3), ARENA);
 
         // Then
         assertThat(List.of(result.getLong(0), result.getLong(1), result.getLong(2))).isEqualTo(List.of(42L, 42L, 42L));
@@ -115,7 +116,7 @@ class SelectedArraysTest {
         }
 
         // When
-        BoolArray result = (BoolArray) SelectedArrays.select(TestArrays.bools(values), selected, ARENA);
+        BoolArray result = (BoolArray) select(TestArrays.bools(values), selected, ARENA);
 
         // Then
         assertThat(result.length()).isEqualTo(19);
@@ -128,7 +129,7 @@ class SelectedArraysTest {
     @Test
     void materialize_writesTheSelectedRowsInOrder() {
         // Given
-        Array selected = SelectedArrays.select(TestArrays.longs(10, 11, 12, 13), ROWS, ARENA);
+        Array selected = select(TestArrays.longs(10, 11, 12, 13), ROWS, ARENA);
 
         // When
         MemorySegment result = selected.materialize(ARENA);
@@ -140,7 +141,7 @@ class SelectedArraysTest {
     @Test
     void float16Materialize_keepsTheHalfBits() {
         // Given
-        Float16Array selected = (Float16Array) SelectedArrays.select(TestArrays.float16(1.5f, 2.5f, 3.5f), rows(0, 2), ARENA);
+        Float16Array selected = (Float16Array) select(TestArrays.float16(1.5f, 2.5f, 3.5f), rows(0, 2), ARENA);
 
         // When
         MemorySegment result = selected.materialize(ARENA);
@@ -156,7 +157,7 @@ class SelectedArraysTest {
         Array masked = new MaskedArray(TestArrays.longs(10, 11, 12, 13), TestArrays.bools(true, false, true, true));
 
         // When
-        MaskedArray result = (MaskedArray) SelectedArrays.select(masked, rows(1, 2), ARENA);
+        MaskedArray result = (MaskedArray) select(masked, rows(1, 2), ARENA);
 
         // Then
         assertThat(result.isValid(0)).isFalse();
@@ -167,7 +168,7 @@ class SelectedArraysTest {
     @Test
     void strings_copyTheSelectedRows() {
         // When
-        VarBinArray result = (VarBinArray) SelectedArrays.select(strings("a", "bb", "ccc", "dddd"), ROWS, ARENA);
+        VarBinArray result = (VarBinArray) select(strings("a", "bb", "ccc", "dddd"), ROWS, ARENA);
 
         // Then
         assertThat(List.of(result.getString(0), result.getString(1), result.getString(2)))
@@ -187,7 +188,7 @@ class SelectedArraysTest {
         Array dict = stringDict(new String[]{"x", "y"}, new byte[]{1, 0, 1, 0});
 
         // When
-        Array result = SelectedArrays.select(dict, rows(0, 1), ARENA);
+        Array result = select(dict, rows(0, 1), ARENA);
 
         // Then
         assertThat(result).isInstanceOf(VarBinDictArray.class);
@@ -204,7 +205,7 @@ class SelectedArraysTest {
         Array dict = DictLongArray.of(DType.I64, 4, pool, codes);
 
         // When
-        Array result = SelectedArrays.select(dict, rows(2, 3), ARENA);
+        Array result = select(dict, rows(2, 3), ARENA);
 
         // Then
         assertThat(result).isInstanceOf(DictLongArray.class);
@@ -215,18 +216,78 @@ class SelectedArraysTest {
 
     @Test
     void offsetSlice_selectsFromTheArrayItSlicesSoADictionaryStaysOne() {
-        // Given: a slice starting at row 2 of a four-row dictionary
+        // Given: a slice starting at row 1 of a four-row dictionary; keeping slice rows 0 and 2
+        // reads dictionary rows 1 and 3 only if the slice offset is applied
         Array dict = DictLongArray.of(DType.I64, 4, TestArrays.longs(100, 200),
-                codes((byte) 0, (byte) 0, (byte) 1, (byte) 0));
-        Array slice = new OffsetLongArray(DType.I64, 2, (LongArray) dict, 2);
+                codes((byte) 0, (byte) 1, (byte) 0, (byte) 1));
+        Array slice = new OffsetLongArray(DType.I64, 3, (LongArray) dict, 1);
 
         // When
-        Array result = SelectedArrays.select(slice, rows(0, 1), ARENA);
+        Array result = select(slice, rows(0, 2), ARENA);
 
         // Then
         assertThat(result).isInstanceOf(DictLongArray.class);
         LongArray selected = (LongArray) result;
-        assertThat(List.of(selected.getLong(0), selected.getLong(1))).isEqualTo(List.of(200L, 100L));
+        assertThat(List.of(selected.getLong(0), selected.getLong(1))).isEqualTo(List.of(200L, 200L));
+    }
+
+    @Test
+    void allTrueMask_returnsTheArrayItself() {
+        // Given
+        Array full = TestArrays.longs(1, 2, 3);
+
+        // When
+        Array result = SelectedArrays.select(full, new Mask.AllTrue(3), ARENA);
+
+        // Then: no copy when every row is kept, as Rust's filter returns the array unchanged
+        assertThat(result).isSameAs(full);
+    }
+
+    @Test
+    void denseSelectionWithLongRuns_copiesEachRunInBulk() {
+        // Given: 100 rows, all kept but rows 10 and 50: density 0.98, three runs averaging 32
+        // rows, so the flat copy takes the run path; a run boundary off by one would show
+        long[] values = new long[100];
+        int[] kept = new int[98];
+        int k = 0;
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i;
+            if (i != 10 && i != 50) {
+                kept[k++] = i;
+            }
+        }
+
+        // When
+        LongArray result = (LongArray) select(TestArrays.longs(values), kept, ARENA);
+
+        // Then
+        assertThat(result.length()).isEqualTo(98);
+        for (int j = 0; j < 98; j++) {
+            assertThat(result.getLong(j)).as("kept row %d", j).isEqualTo(kept[j]);
+        }
+    }
+
+    @Test
+    void denseSelectionWithShortRuns_gathersEachRow() {
+        // Given: every row but each third kept: density 2/3 but runs of two, under the average
+        // run of eight a bulk copy needs, so the copy gathers row by row
+        long[] values = new long[30];
+        int[] kept = new int[20];
+        int k = 0;
+        for (int i = 0; i < values.length; i++) {
+            values[i] = 100 + i;
+            if (i % 3 != 0) {
+                kept[k++] = i;
+            }
+        }
+
+        // When
+        LongArray result = (LongArray) select(TestArrays.longs(values), kept, ARENA);
+
+        // Then
+        for (int j = 0; j < 20; j++) {
+            assertThat(result.getLong(j)).as("kept row %d", j).isEqualTo(100 + kept[j]);
+        }
     }
 
     @Test
@@ -238,7 +299,7 @@ class SelectedArraysTest {
         Array masked = new MaskedArray(values, validity);
 
         // When
-        MaskedArray result = (MaskedArray) SelectedArrays.select(masked, rows(1, 2), ARENA);
+        MaskedArray result = (MaskedArray) select(masked, rows(1, 2), ARENA);
 
         // Then: slice rows 1 and 2 are rows 2 and 3 of the sliced arrays
         assertThat(((IntArray) result.inner()).getInt(1)).isEqualTo(13);
@@ -253,12 +314,27 @@ class SelectedArraysTest {
         Array struct = new StructArray(dtype, 3, List.of(TestArrays.longs(1, 2, 3), strings("p", "q", "r")));
 
         // When
-        StructArray result = (StructArray) SelectedArrays.select(struct, rows(0, 2), ARENA);
+        StructArray result = (StructArray) select(struct, rows(0, 2), ARENA);
 
         // Then
         assertThat(result.length()).isEqualTo(2);
         assertThat(((LongArray) result.field(0)).getLong(1)).isEqualTo(3);
         assertThat(((VarBinArray) result.field(1)).getString(1)).isEqualTo("r");
+    }
+
+    @Test
+    void fixedSizeListOfNoElements_keepsTheSelectedRowCount() {
+        // Given: three rows of zero elements each, which Rust accepts; the element mask keeps
+        // nothing, so a copy that assumed some kept elements would fail
+        DType.FixedSizeList dtype = new DType.FixedSizeList(DType.I64, 0, false);
+        Array list = new FixedSizeListArray(dtype, 3, TestArrays.longs());
+
+        // When
+        FixedSizeListArray result = (FixedSizeListArray) select(list, rows(0, 2), ARENA);
+
+        // Then
+        assertThat(result.length()).isEqualTo(2);
+        assertThat(result.elements().length()).isZero();
     }
 
     @Test
@@ -268,7 +344,7 @@ class SelectedArraysTest {
         Array list = new FixedSizeListArray(dtype, 3, TestArrays.longs(1, 2, 3, 4, 5, 6));
 
         // When
-        FixedSizeListArray result = (FixedSizeListArray) SelectedArrays.select(list, rows(0, 2), ARENA);
+        FixedSizeListArray result = (FixedSizeListArray) select(list, rows(0, 2), ARENA);
 
         // Then
         LongArray elements = (LongArray) result.elements();
@@ -284,7 +360,7 @@ class SelectedArraysTest {
         Array list = new ListArray(dtype, 3, TestArrays.longs(10, 20, 21, 30, 31, 32), TestArrays.ints(0, 1, 3, 6));
 
         // When
-        ListViewArray result = (ListViewArray) SelectedArrays.select(list, rows(1, 2), ARENA);
+        ListViewArray result = (ListViewArray) select(list, rows(1, 2), ARENA);
 
         // Then: row 0 starts at element 1 and holds 2; row 1 starts at 3 and holds 3
         assertThat(((LongArray) result.offsets()).getLong(0)).isEqualTo(1);
@@ -305,7 +381,7 @@ class SelectedArraysTest {
         Array decimals = new LazyDecimalArray(dtype, 3, buf, 4);
 
         // When
-        DecimalArray result = (DecimalArray) SelectedArrays.select(decimals, rows(0, 2), ARENA);
+        DecimalArray result = (DecimalArray) select(decimals, rows(0, 2), ARENA);
 
         // Then
         assertThat(result.getDecimal(0)).isEqualTo(new BigDecimal("1.00"));
@@ -333,7 +409,7 @@ class SelectedArraysTest {
         Array decimals = new LazyDecimalArray(dtype, values.length, buf, 16);
 
         // When
-        DecimalArray result = (DecimalArray) SelectedArrays.select(decimals, rows(0, 2), ARENA);
+        DecimalArray result = (DecimalArray) select(decimals, rows(0, 2), ARENA);
 
         // Then
         assertThat(result.getDecimal(0)).isEqualTo(new BigDecimal(values[0]));
@@ -343,7 +419,7 @@ class SelectedArraysTest {
     @Test
     void nullArray_keepsItsTypeWithTheSelectedLength() {
         // When
-        Array result = SelectedArrays.select(new NullArray(DType.I64.asNullable(), 10), ROWS, ARENA);
+        Array result = select(new NullArray(DType.I64.asNullable(), 10), ROWS, ARENA);
 
         // Then
         assertThat(result).isEqualTo(new NullArray(DType.I64.asNullable(), 3));
@@ -352,7 +428,7 @@ class SelectedArraysTest {
     @Test
     void anEmptySelection_hasNoRows() {
         // When
-        Array result = SelectedArrays.select(TestArrays.longs(1, 2, 3), new int[0], ARENA);
+        Array result = select(TestArrays.longs(1, 2, 3), new int[0], ARENA);
 
         // Then
         assertThat(result.length()).isZero();
@@ -365,13 +441,18 @@ class SelectedArraysTest {
                 new MemorySegment[0], new Array[0]);
 
         // When / Then
-        assertThatThrownBy(() -> SelectedArrays.select(unknown, rows(0), ARENA))
+        assertThatThrownBy(() -> select(unknown, rows(0), ARENA))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("cannot select rows");
     }
 
     private static int[] rows(int... rows) {
         return rows;
+    }
+
+    /// Selects `rows` of `full` through the mask a filter would build from them.
+    private static Array select(Array full, int[] rows, SegmentAllocator arena) {
+        return SelectedArrays.select(full, Mask.Values.fromIndices((int) full.length(), rows), arena);
     }
 
     private static VarBinArray strings(String... values) {
