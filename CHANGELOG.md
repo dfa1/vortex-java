@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Breaking:** `RowFilter` is renamed `ScanFilter`, matching `ScanOptions`. ([#598](https://github.com/dfa1/vortex-java/pull/598))
+- **Breaking:** a filtered scan returns only the rows that match, and a limit counts those rows, as Rust's scan does; the filter only skipped whole chunks before, so a scan returned their non-matching rows too and a limit could cut matching ones. ([#598](https://github.com/dfa1/vortex-java/pull/598))
 - **Breaking:** `ScanOptions.filter()` and `limit()` return `Optional<ScanFilter>` and `Optional<ScanLimit>`, as Rust's `ScanBuilder` holds them; `withLimit` takes a `ScanLimit`, and `NO_LIMIT`, `ScanOptions.limit(long)`, `rowFilter()`, `hasFilter()` and `hasLimit()` are gone. ([#598](https://github.com/dfa1/vortex-java/pull/598))
 - **Breaking:** CSV import stores an empty cell in a number or boolean column as null instead of `0` or `false`, so inferred number and boolean columns are now nullable (read through `MaskedArray`), and an empty cell or a missing column fails the import where the schema declares the column non-nullable. ([#592](https://github.com/dfa1/vortex-java/issues/592))
 

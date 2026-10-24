@@ -62,10 +62,10 @@ class ScanIteratorDictPruningTest {
         ScanIterator sut = scan(strings("a", "b"), 2, predicate);
 
         // When
-        boolean result = sut.hasNext();
+        boolean result = sut.isChunkPruned(0);
 
         // Then
-        assertThat(result).isEqualTo(!skipped);
+        assertThat(result).isEqualTo(skipped);
     }
 
     @Test
@@ -75,12 +75,12 @@ class ScanIteratorDictPruningTest {
                 MemorySegment.ofArray(new byte[]{0b01})));
 
         // When
-        boolean neqA = scan(values, 2, new Predicate.Neq("a")).hasNext();
-        boolean isNotNull = scan(values, 2, new Predicate.IsNotNull()).hasNext();
+        boolean neqA = scan(values, 2, new Predicate.Neq("a")).isChunkPruned(0);
+        boolean isNotNull = scan(values, 2, new Predicate.IsNotNull()).isChunkPruned(0);
 
         // Then
-        assertThat(neqA).isFalse();
-        assertThat(isNotNull).isTrue();
+        assertThat(neqA).isTrue();
+        assertThat(isNotNull).isFalse();
     }
 
     @Test
@@ -89,10 +89,10 @@ class ScanIteratorDictPruningTest {
         ScanIterator sut = scan(strings("a", "b", "x"), 1, new Predicate.Eq("x"));
 
         // When
-        boolean result = sut.hasNext();
+        boolean result = sut.isChunkPruned(0);
 
         // Then
-        assertThat(result).isTrue();
+        assertThat(result).isFalse();
     }
 
     @Test
@@ -101,10 +101,10 @@ class ScanIteratorDictPruningTest {
         ScanIterator sut = scan(strings("a", "b", "c", "d", "e"), 5, new Predicate.Eq("x"));
 
         // When
-        boolean result = sut.hasNext();
+        boolean result = sut.isChunkPruned(0);
 
         // Then
-        assertThat(result).isTrue();
+        assertThat(result).isFalse();
     }
 
     @Test
@@ -115,7 +115,7 @@ class ScanIteratorDictPruningTest {
         ScanIterator sut = scan(values, 2, new Predicate.Eq("x"));
 
         // When / Then
-        assertThatThrownBy(sut::hasNext).isInstanceOf(VortexException.class);
+        assertThatThrownBy(() -> sut.isChunkPruned(0)).isInstanceOf(VortexException.class);
     }
 
     /// A scan of one dict column whose values layout decodes to `values` and claims `claimed`

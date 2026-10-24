@@ -60,14 +60,20 @@ class ZoneMapPruningTest {
         return file;
     }
 
-    /// Returns one entry per surviving chunk: its row count after filter pruning.
+    /// Returns one entry per chunk the filter's zone maps keep: its row count. The scan itself
+    /// returns only the matching rows, so the pruning decision is read from its plan.
     private static List<Long> scanRowCounts(Path file, ScanFilter filter) throws IOException {
         var opts = filter == null ? ScanOptions.all() : ScanOptions.all().withFilter(filter);
         var registry = registry();
         var rowCounts = new ArrayList<Long>();
         try (var vf = VortexReader.open(file, registry);
              var iter = vf.scan(opts)) {
-            iter.forEachRemaining(c -> rowCounts.add(c.rowCount()));
+            long[] chunkRows = iter.chunkRowCounts();
+            for (int i = 0; i < chunkRows.length; i++) {
+                if (!iter.isChunkPruned(i)) {
+                    rowCounts.add(chunkRows[i]);
+                }
+            }
         }
         return rowCounts;
     }

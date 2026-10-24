@@ -245,7 +245,7 @@ ScanFilter filter = ScanFilter.gte(ColumnName.of("volume"), 1_000_000)
 ```
 
 For the supported predicate set and CLI operator syntax, see
-[reference.md#rowfilter](reference.md#rowfilter-iogithubdfa1vortexreaderrowfilter)
+[reference.md#scanfilter](reference.md#scanfilter-iogithubdfa1vortexreaderscanfilter)
 and [reference.md#filter-expression-syntax](reference.md#filter-expression-syntax).
 
 **CLI:**

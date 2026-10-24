@@ -215,7 +215,7 @@ copy. Empty `columns` = read all. The filter and the limit are optional, as in R
 | `ScanOptions.all()`                         | All columns, no filter, no limit            |
 | `ScanOptions.columns(ColumnName... names)`  | Project columns                             |
 | `.withColumns(ColumnName... names)`         | Project columns (builder)                   |
-| `.withFilter(ScanFilter)`                   | Add zone-map filter                         |
+| `.withFilter(ScanFilter)`                   | Return only matching rows                   |
 | `.withLimit(ScanLimit)`                     | Cap rows: `ScanLimit.of(n)`, `n >= 0`       |
 | `.filter()` / `.limit()`                    | `Optional<ScanFilter>` / `Optional<ScanLimit>` |
 | `.hasProjection()`                          | Whether a column projection is set          |
@@ -226,7 +226,9 @@ Sealed predicate tree used for zone-map pruning (per-chunk min/max) and row sele
 variants: `ScanFilter.Column(ColumnName, Predicate)` binds one column to a value-test
 `Predicate` (`io.github.dfa1.vortex.reader.compute.Predicate` — the same vocabulary the
 compute kernels evaluate); `ScanFilter.And(List<ScanFilter>)` conjoins several. Chunks that
-cannot match are skipped entirely.
+cannot match are skipped entirely; in the rest every row is tested, so a scan returns only the
+matching rows, and a limit counts them, as Rust's scan does. A chunk with no matching row is not
+returned. The filter's columns are decoded even when they are not projected.
 
 | Static factory              | Builds                            |
 |------------------------------|------------------------------------|
