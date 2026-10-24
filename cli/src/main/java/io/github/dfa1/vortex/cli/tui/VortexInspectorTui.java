@@ -39,44 +39,20 @@ public final class VortexInspectorTui {
     private VortexInspectorTui() {
     }
 
-    /// Opens the terminal in raw mode, builds an inspector tree, and runs the
-    /// interactive viewer until quit.
+    /// Opens the terminal in raw mode and runs the interactive viewer until quit. The tree is built
+    /// shallow, so the screen is interactive immediately; encoding, stats and data previews are
+    /// fetched lazily as the user navigates.
     ///
-    /// @param handle open Vortex file handle
-    /// @throws IOException if the terminal cannot be initialized
-    public static void show(VortexHandle handle) throws IOException {
-        show(handle, InspectorTree.Progress.NOOP);
-    }
-
-    /// Builds an inspector tree (reporting progress on each segment peek)
-    /// and runs the interactive viewer until quit. The TUI now uses the
-    /// shallow builder so the screen is interactive immediately; encoding,
-    /// stats and data previews are fetched lazily as the user navigates.
-    /// The `progress` parameter is retained for source compatibility
-    /// but is no longer invoked - shallow build does no peeks.
-    ///
-    /// @param handle   open Vortex file handle
-    /// @param progress unused; kept for API stability
-    /// @throws IOException if the terminal cannot be initialized
-    public static void show(VortexHandle handle, InspectorTree.Progress progress) throws IOException {
-        show(handle, null, progress);
-    }
-
-    /// Variant that dispatches every `handle` I/O call onto the supplied
-    /// [IoWorker]. Required when the handle was opened on a different
-    /// thread (Vortex readers use a confined [java.lang.foreign.Arena],
-    /// so cross-thread access throws `WrongThreadException`).
-    ///
-    /// Passing `null` for `worker` falls back to synchronous I/O
-    /// on the render thread — fine for tests but causes the sluggishness this
+    /// Every `handle` I/O call is dispatched onto `worker`: Vortex readers use a confined
+    /// [java.lang.foreign.Arena], so a handle opened on another thread throws
+    /// `WrongThreadException` when touched from the render thread. Passing `null` falls back to
+    /// synchronous I/O on the render thread — fine for tests but causes the sluggishness this
     /// machinery was built to avoid.
     ///
-    /// @param handle   open Vortex file handle
-    /// @param worker   I/O dispatcher that owns the handle's thread; may be `null`
-    /// @param progress unused; kept for API stability
+    /// @param handle open Vortex file handle
+    /// @param worker I/O dispatcher that owns the handle's thread; may be `null`
     /// @throws IOException if the terminal cannot be initialized
-    public static void show(VortexHandle handle, IoWorker worker, InspectorTree.Progress progress)
-            throws IOException {
+    public static void show(VortexHandle handle, IoWorker worker) throws IOException {
         InspectorTree tree = InspectorTree.buildShallow(handle);
         try (Terminal term = Terminal.open()) {
             run(term, tree, handle, worker);
@@ -86,7 +62,7 @@ public final class VortexInspectorTui {
     /// Runs the inspector viewer against a caller-supplied terminal. Package-private
     /// seam used by tests to drive the loop with a scripted fake terminal,
     /// bypassing the OS raw-mode setup in
-    /// [#show(VortexHandle, IoWorker, InspectorTree.Progress)].
+    /// [#show(VortexHandle, IoWorker)].
     ///
     /// @param term   terminal to render to and read keys from
     /// @param tree   pre-built inspector tree for `handle`

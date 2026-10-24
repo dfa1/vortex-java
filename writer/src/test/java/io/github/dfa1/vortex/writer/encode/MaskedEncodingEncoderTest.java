@@ -290,10 +290,6 @@ class MaskedEncodingEncoderTest {
         assertThat(result.hasStats()).isFalse();
     }
 
-    private static io.github.dfa1.vortex.core.proto.ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
-        MemorySegment seg = MemorySegment.ofArray(bytes);
-        return io.github.dfa1.vortex.core.proto.ProtoScalarValue.decode(seg, 0, seg.byteSize());
-    }
 
     @Test
     void withCascade_periodicNulls_prefersSparseOverRawBitmap() {

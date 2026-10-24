@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.writer.encode.ComparableValues;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -245,10 +244,5 @@ class ZoneMapStatCodecTest {
             // When / Then
             assertThat(ZoneMapStatCodec.columnMinMax(list, new Object[0])).isNull();
         }
-    }
-
-    private static ProtoScalarValue scalar(byte[] bytes) throws IOException {
-        MemorySegment seg = MemorySegment.ofArray(bytes);
-        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 }

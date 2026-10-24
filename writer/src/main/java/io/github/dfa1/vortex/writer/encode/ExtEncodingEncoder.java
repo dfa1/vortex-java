@@ -89,7 +89,7 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
     /// @param data    the storage-shaped values being encoded
     /// @return the [MinMax] of encoded scalars, or `null`
     private static MinMax storageStats(DType storage, Object data) {
-        return storage instanceof DType.Primitive(PType ptype, boolean ignored)
+        return storage instanceof DType.Primitive(PType ptype, boolean _)
                 ? PrimitiveEncodingEncoder.minMaxStats(ptype, data)
                 : null;
     }

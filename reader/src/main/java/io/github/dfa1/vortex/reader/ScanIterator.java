@@ -1379,13 +1379,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return i < 0 ? null : columnLayouts[i];
         }
 
-        /// The offset of this window into `col`'s covering chunk, or `-1` if `col` is not part of
-        /// this window. `windowStart() - sliceOffsetFor(col)` is that chunk's absolute row start.
-        long sliceOffsetFor(ColumnName col) {
-            int i = indexFor(col);
-            return i < 0 ? -1 : sliceOffsets[i];
-        }
-
         private int indexFor(ColumnName col) {
             for (int i = 0; i < columnNames.length; i++) {
                 if (columnNames[i].equals(col)) {

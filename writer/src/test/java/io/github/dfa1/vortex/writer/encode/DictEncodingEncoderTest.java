@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.core.testing.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
@@ -315,10 +314,5 @@ class DictEncodingEncoderTest {
                 .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
         assertThat(result.openChildren().get(1).excluded())
                 .containsExactly(EncodingId.VORTEX_DICT);
-    }
-
-    private static ProtoScalarValue scalar(byte[] bytes) throws IOException {
-        MemorySegment seg = MemorySegment.ofArray(bytes);
-        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 }

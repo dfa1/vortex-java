@@ -2,11 +2,9 @@ package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.cli.tui.IoWorker;
 import io.github.dfa1.vortex.cli.tui.VortexInspectorTui;
-import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.VortexHandle;
 
 import java.io.IOException;
-import java.io.PrintStream;
 import java.util.Optional;
 
 @SuppressWarnings("java:S106") // CLI command: stdout is the intended output channel
@@ -27,7 +25,7 @@ final class TuiCommand {
             }
             VortexHandle handle = opened.get();
             try {
-                VortexInspectorTui.show(handle, worker, progressBar(System.err));
+                VortexInspectorTui.show(handle, worker);
             } finally {
                 CliHandles.closeOnWorker(worker, handle);
             }
@@ -40,26 +38,5 @@ final class TuiCommand {
             e.printStackTrace(System.err);
             return ExitStatus.ERROR;
         }
-    }
-
-    private static InspectorTree.Progress progressBar(PrintStream out) {
-        int width = 30;
-        return (current, total) -> {
-            if (total <= 0) {
-                return;
-            }
-            int filled = (int) ((long) current * width / total);
-            StringBuilder bar = new StringBuilder(width + 32);
-            bar.append('\r').append("Loading metadata [");
-            for (int i = 0; i < width; i++) {
-                bar.append(i < filled ? '#' : '-');
-            }
-            bar.append("] ").append(current).append('/').append(total);
-            if (current == total) {
-                bar.append('\n');
-            }
-            out.print(bar);
-            out.flush();
-        };
     }
 }

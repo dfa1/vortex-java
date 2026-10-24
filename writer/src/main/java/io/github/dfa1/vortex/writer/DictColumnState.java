@@ -134,10 +134,6 @@ final class DictColumnState {
         return chunkCodes.get(c);
     }
 
-    boolean[] chunkValidity(int c) {
-        return chunkValidity.get(c);
-    }
-
     List<Long> chunkRowCounts() {
         return chunkRowCounts;
     }

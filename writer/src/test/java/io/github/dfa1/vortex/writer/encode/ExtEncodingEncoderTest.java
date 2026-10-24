@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.WriteRegistry;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
@@ -85,11 +84,6 @@ class ExtEncodingEncoderTest {
 
             // Then
             assertThat(result.hasStats()).isFalse();
-        }
-
-        private ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
-            MemorySegment seg = MemorySegment.ofArray(bytes);
-            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
         }
     }
 

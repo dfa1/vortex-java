@@ -61,11 +61,4 @@ final class LeBitReader {
             bitPos += 8 - bitsInCurrentByte;
         }
     }
-
-    /// Current byte offset (only meaningful after [#alignToByte()]).
-    ///
-    /// @return current stream position in bytes
-    public long byteOffset() {
-        return bitPos >>> 3;
-    }
 }

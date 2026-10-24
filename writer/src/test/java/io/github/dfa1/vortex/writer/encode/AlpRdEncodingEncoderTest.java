@@ -11,7 +11,6 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
-import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -21,7 +20,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.util.Random;
 import java.util.stream.Stream;
 
@@ -359,10 +357,5 @@ class AlpRdEncodingEncoderTest {
             a[i] = f;
         }
         return a;
-    }
-
-    private static ProtoScalarValue scalar(byte[] bytes) throws IOException {
-        MemorySegment seg = MemorySegment.ofArray(bytes);
-        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 }
