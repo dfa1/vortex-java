@@ -29,9 +29,9 @@ no upgrade risk, and a supported LTS for users.
 ## Benchmarks
 
 JMH throughput (ops/s = full-file scans or writes per second). Higher is better. Re-measured
-2026-10-09 against vortex-jni 0.86.1: the OHLC, big-file and Parquet suites on `04d862b0`
+2026-10-09 against vortex-jni 0.86.1: the OHLC and big-file suites on `04d862b0`
 (after the `core.simd` kernels, #484), the real-file scans on `73bf8026` (after the sequential
-decode work, #497–#502).
+decode work, #497–#502). The Parquet suite was re-measured 2026-10-24 on `b98b525f`.
 
 **Environment:** Apple M5, Zulu JDK 25.0.2. Reads 3 forks (`-f 3`), writes 5 forks (`-f 5`):
 the cascading write varies ~±5% from fork to fork, so fewer forks cannot resolve it. Each
@@ -126,18 +126,19 @@ Two Parquet variants are measured to isolate format cost from API overhead:
 
 | Benchmark                                                                | ops/s        | vs Parquet batch         |
 |--------------------------------------------------------------------------|--------------|--------------------------|
-| `parquetRead` — batch, 1 col (`trip_distance`)                           | 283.3 ± 3.5  | baseline                 |
-| `parquetReadRowByRow` — row cursor, 1 col                                | 84.0 ± 1.9   | 0.30× (3.4× API penalty) |
-| `vortexRead` — 1 col (`trip_distance`)                                   | 273.4 ± 1.6  | 0.97×                    |
-| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 191.1 ± 22.8 | baseline                 |
-| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 48.6 ± 1.9   | 0.25× (3.9× API penalty) |
-| `vortexReadMultiColumn` — 2 cols                                         | 130.5 ± 0.6  | 0.68×                    |
+| `parquetRead` — batch, 1 col (`trip_distance`)                           | 279.7 ± 3.3  | baseline                 |
+| `parquetReadRowByRow` — row cursor, 1 col                                | 95.7 ± 0.8   | 0.34× (2.9× API penalty) |
+| `vortexRead` — 1 col (`trip_distance`)                                   | 274.7 ± 0.4  | 0.98×                    |
+| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 221.0 ± 2.1  | baseline                 |
+| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 52.9 ± 0.5   | 0.24× (4.2× API penalty) |
+| `vortexReadMultiColumn` — 2 cols                                         | 156.7 ± 0.3  | 0.71×                    |
 
 Hardwood's batch reads got much faster since the 2026-07-24 snapshot (`trip_distance` 172.7 →
-283.3, two columns 109.1 → 191.1), so single-column Vortex is now at parity rather than 1.58×
-ahead. Two-column `vortexReadMultiColumn` nearly tripled (46.9 → 130.5) but still trails the
-two-column Parquet batch. Both Vortex columns here are nullable global dictionaries, read as a
-`MaskedArray` whose values the benchmark folds.
+279.7, two columns 109.1 → 221.0), so single-column Vortex is now at parity rather than 1.58×
+ahead. Two-column `vortexReadMultiColumn` more than tripled (46.9 → 156.7) but still trails the
+two-column Parquet batch. Both Vortex columns are nullable, read as a `MaskedArray` whose values
+the benchmark folds: `PULocationID` as a global dictionary of 260 values, `fare_amount` as ALP
+in 131 072-row chunks.
 
 #### Why ZstdEncoding is excluded from the numeric cascade
 
@@ -536,12 +537,11 @@ constraints.
 
 See the [benchmark tables](#benchmarks) for numbers. Summary:
 
-- **Single-column scan**: at parity with Parquet batch (0.97×) since Hardwood's batch reads
+- **Single-column scan**: at parity with Parquet batch (0.98×) since Hardwood's batch reads
   got faster; Vortex was 1.58× ahead in the 2026-07-24 snapshot.
-- **Multi-column scan**: Vortex trails Parquet batch (0.68× on two taxi columns). Both
-  columns are nullable global dictionaries (on by default, `WriteOptions.withGlobalDict`,
-  [ADR 0021](../adr/0021-cardinality-bounded-global-dict-buffering.md)), read as a
-  `MaskedArray` the benchmark folds.
+- **Multi-column scan**: Vortex trails Parquet batch, 0.71× on two nullable taxi columns:
+  one a global dictionary, on by default
+  ([ADR 0021](../adr/0021-cardinality-bounded-global-dict-buffering.md)), the other ALP.
 - **Filtered scan (zone-map pruning)**: Vortex skips entire chunks when the Zoned
   min/max rules out a predicate. Parquet does the same at row-group granularity, but
   Vortex chunks are smaller (131 072 rows vs Parquet's typical 1 M row groups), so
