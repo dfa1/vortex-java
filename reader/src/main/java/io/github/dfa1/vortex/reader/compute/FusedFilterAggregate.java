@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.Mask;
 import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
@@ -720,6 +721,15 @@ final class FusedFilterAggregate {
         @Override
         public boolean test(long row) {
             return (bits[(int) (row >>> 6)] & 1L << row) != 0 && (residual == null || residual.test(row));
+        }
+
+        /// The bitmap itself when it is the whole filter, with no walk.
+        @Override
+        public Mask toMask(int length) {
+            if (residual == null && length == rows) {
+                return Mask.fromBitmap(bits, length);
+            }
+            return RowSelection.super.toMask(length);
         }
 
         @Override

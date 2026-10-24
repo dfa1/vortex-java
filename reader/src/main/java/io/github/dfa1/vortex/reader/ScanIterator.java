@@ -27,6 +27,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.Mask;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.OffsetBoolArray;
@@ -50,7 +51,6 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -108,7 +108,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // A chunk hasNext() decoded to test the filter on, and its matching rows, until next() returns
     // them: a chunk with no match is skipped, as Rust's scan returns no empty batch.
     private Chunk pending;
-    private int[] pendingRows;
+    private Mask pendingRows;
     private List<ColumnName> projectedNames;
     private List<DType> projectedDtypes;
     private Map<ColumnName, Integer> projectedPositions;
@@ -364,23 +364,18 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Chunk full = chunkFor(spec, spec.rowCount());
         try {
             RowSelection selection = Compute.matcher(full, filter);
-            // the matching rows, grown as they come: memory follows the matches, not the chunk
-            int allowed = (int) Math.min(spec.rowCount(), limit - rowsReturned);
-            int[] rows = new int[Math.min(allowed, 1024)];
-            int count = 0;
-            for (long row = selection.nextSelected(0); row >= 0 && count < allowed;
-                    row = selection.nextSelected(row + 1)) {
-                if (count == rows.length) {
-                    rows = Arrays.copyOf(rows, (int) Math.min(allowed, 2L * count));
-                }
-                rows[count++] = (int) row;
+            if (spec.rowCount() > Integer.MAX_VALUE) {
+                throw new VortexException("scan: a filtered chunk of " + spec.rowCount()
+                        + " rows exceeds the " + Integer.MAX_VALUE + " rows a row selection holds");
             }
-            if (count == 0) {
+            int allowed = (int) Math.min(spec.rowCount(), limit - rowsReturned);
+            Mask mask = selection.toMask((int) spec.rowCount()).limit(allowed);
+            if (mask.trueCount() == 0) {
                 full.close();
                 return false;
             }
             pending = full;
-            pendingRows = count == rows.length ? rows : Arrays.copyOf(rows, count);
+            pendingRows = mask;
             return true;
         } catch (RuntimeException e) {
             full.close();
@@ -426,11 +421,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Chunk chunk;
         if (pending != null) {
             chunk = pending;
-            int[] rows = pendingRows;
+            Mask rows = pendingRows;
             pending = null;
             pendingRows = null;
             chunk = selectedChunk(chunk, rows);
-            rowsReturned += rows.length;
+            rowsReturned += rows.trueCount();
         } else {
             long chunkRows = Math.min(spec.rowCount(), limit - rowsReturned);
             chunk = chunkFor(spec, chunkRows);
@@ -442,7 +437,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     /// The `rows` of `full` over the output columns, or `full` itself when that is every row and
     /// every column.
-    private Chunk selectedChunk(Chunk full, int[] rows) {
+    private Chunk selectedChunk(Chunk full, Mask rows) {
         List<ColumnName> names = outputNames;
         Map<ColumnName, Integer> positions = outputPositions;
         if (singleColumnIsSyntheticWrapper) {
@@ -450,7 +445,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             names = List.copyOf(full.columns().keySet());
             positions = Chunk.positions(names);
         }
-        if (rows.length == full.rowCount() && names.size() == full.columns().size()) {
+        if (rows instanceof Mask.AllTrue && names.size() == full.columns().size()) {
             return full;
         }
         return full.select(rows, names, positions, this::onChunkClosed);

@@ -8,8 +8,12 @@ import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.Mask;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
+import io.github.dfa1.vortex.reader.array.SelectedArrays;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinSlicedArray;
@@ -21,6 +25,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -118,6 +124,31 @@ class ComputeTest {
                     Arguments.of(named("is null", new Predicate.IsNull()), codes, List.of(3L)),
                     Arguments.of(named("is null or eq", new Predicate.Or(new Predicate.IsNull(),
                             new Predicate.Eq("AAPL"))), codes, List.of(1L, 3L, 4L))));
+        }
+
+        /// u8 and u16 codes hand their bitmap to the mask with no walk; i32 codes and the null
+        /// tests go through the default walk: both must keep the rows the row test selects.
+        @ParameterizedTest(name = "{0} over {1} codes")
+        @MethodSource("predicates")
+        void toMask_keepsTheRowsTheMatcherSelects(Predicate predicate, PType codesPType, List<Long> expected) {
+            // Given: the row numbers as a column, so the selected column reads back the kept rows
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.<Array>column(SYM)).willReturn(nullableDict(codesPType));
+            given(chunk.rowCount()).willReturn(6L);
+            RowSelection sut = Compute.matcher(chunk, new ScanFilter.Column(SYM, predicate));
+            MemorySegment rowNumbers = ARENA.allocate(6 * 8L, 8);
+            for (int i = 0; i < 6; i++) {
+                rowNumbers.setAtIndex(ValueLayout.JAVA_LONG, i, i);
+            }
+            Array column = new MaterializedLongArray(DType.I64, 6, rowNumbers);
+
+            // When
+            Mask result = sut.toMask(6);
+
+            // Then
+            LongArray kept = (LongArray) SelectedArrays.select(column, result, ARENA);
+            assertThat(result.trueCount()).isEqualTo(expected.size());
+            assertThat(LongStream.range(0, kept.length()).map(kept::getLong).boxed().toList()).isEqualTo(expected);
         }
 
         @ParameterizedTest(name = "{0} over {1} codes")
