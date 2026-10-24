@@ -224,7 +224,7 @@ java -jar cli/target/vortex-cli-*-all.jar select trades.vortex ts price \
 **API:**
 
 ```java
-RowFilter filter = RowFilter.gte(ColumnName.of("volume"), 1_000_000);
+ScanFilter filter = ScanFilter.gte(ColumnName.of("volume"), 1_000_000);
 ScanOptions opts = ScanOptions.all().withFilter(filter);
 
 try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
@@ -240,8 +240,8 @@ try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
 Combine filters with `and()`:
 
 ```java
-RowFilter filter = RowFilter.gte(ColumnName.of("volume"), 1_000_000)
-    .and(RowFilter.lte(ColumnName.of("price"), 200.0));
+ScanFilter filter = ScanFilter.gte(ColumnName.of("volume"), 1_000_000)
+    .and(ScanFilter.lte(ColumnName.of("price"), 200.0));
 ```
 
 For the supported predicate set and CLI operator syntax, see

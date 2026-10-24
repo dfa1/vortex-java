@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -125,7 +125,7 @@ class CustomExtensionIntegrationTest {
 
             // When
             SequencedMap<Long, float[]> result =
-                    readVectors(file, ScanOptions.all().withFilter(RowFilter.gte(ID, threshold)));
+                    readVectors(file, ScanOptions.all().withFilter(ScanFilter.gte(ID, threshold)));
 
             // Then — a hash lookup per id: AssertJ's containsAll scans the whole key set for each of
             // the 15 000 ids, which took 2 s

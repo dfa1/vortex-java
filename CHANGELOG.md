@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A CSV import schema can declare any integer type from `I8` to `U64`, range-checked per value, and `F32`; an unsupported type fails in `withSchema` instead of at the first chunk. ([#593](https://github.com/dfa1/vortex-java/pull/593))
 
 ### Changed
+- **Breaking:** `RowFilter` is renamed `ScanFilter`, matching `ScanOptions`. ([#598](https://github.com/dfa1/vortex-java/pull/598))
 - **Breaking:** CSV import stores an empty cell in a number or boolean column as null instead of `0` or `false`, so inferred number and boolean columns are now nullable (read through `MaskedArray`), and an empty cell or a missing column fails the import where the schema declares the column non-nullable. ([#592](https://github.com/dfa1/vortex-java/issues/592))
 
 ### Fixed

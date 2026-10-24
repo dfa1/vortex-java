@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DecimalArray;
@@ -55,7 +55,7 @@ final class GroupedAggregate {
     /// @return the fold per group value (`String`, `Boolean` or `Long`; the `null` key is the null
     ///         group), or empty when the group or aggregate column has a shape this kernel does not fold
     static Optional<Map<Object, FilteredAggregate>> aggregate(Chunk chunk, ColumnName groupColumn,
-                                                              RowFilter filter, ColumnName aggColumn) {
+                                                              ScanFilter filter, ColumnName aggColumn) {
         Lane lane = Lane.of(aggColumn == null ? null : chunk.column(aggColumn));
         if (lane == null) {
             return Optional.empty();

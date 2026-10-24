@@ -117,7 +117,7 @@ class FilterTranslationTest {
                 List.of(ColumnName.of("small")), List.of(DType.I16));
 
         // Then
-        assertThat(result).contains(io.github.dfa1.vortex.reader.RowFilter.lt(ColumnName.of("small"), 5L));
+        assertThat(result).contains(io.github.dfa1.vortex.reader.ScanFilter.lt(ColumnName.of("small"), 5L));
     }
 
     /// `BIGINT` to `DOUBLE` rounds past 2^53, so comparing the cast is not comparing the column.

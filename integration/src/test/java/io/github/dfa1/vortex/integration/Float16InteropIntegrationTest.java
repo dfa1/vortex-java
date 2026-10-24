@@ -263,7 +263,7 @@ class Float16InteropIntegrationTest {
         long[] matching = {0};
         try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
             reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()
-                    .withFilter(io.github.dfa1.vortex.reader.RowFilter.gt(COLUMN, 1000.0f))).forEachRemaining(chunk -> {
+                    .withFilter(io.github.dfa1.vortex.reader.ScanFilter.gt(COLUMN, 1000.0f))).forEachRemaining(chunk -> {
                 Float16Array column = chunk.column(COLUMN);
                 for (long i = 0; i < column.length(); i++) {
                     matching[0] += column.getFloat(i) > 1000.0f ? 1 : 0;

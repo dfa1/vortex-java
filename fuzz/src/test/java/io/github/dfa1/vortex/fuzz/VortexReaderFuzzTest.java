@@ -12,7 +12,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -103,7 +103,7 @@ class VortexReaderFuzzTest {
         try (VortexReader reader = VortexReader.open(fuzzFile)) {
             if (reader.dtype() instanceof DType.Struct schema && !schema.fieldNames().isEmpty()) {
                 int column = Math.floorMod(header.getInt(), schema.fieldNames().size());
-                RowFilter filter = filter(schema.fieldNames().get(column), schema.fieldTypes().get(column),
+                ScanFilter filter = filter(schema.fieldNames().get(column), schema.fieldTypes().get(column),
                         header.get(), header.getLong());
                 scan(reader, ScanOptions.all().withFilter(filter));
             }
@@ -152,7 +152,7 @@ class VortexReaderFuzzTest {
 
     /// A predicate on `column` with a value of the type its dtype compares against: a mismatched
     /// value is a caller error, not malformed input, so it would only produce false findings.
-    private static RowFilter filter(ColumnName column, DType dtype, byte kind, long bits) {
+    private static ScanFilter filter(ColumnName column, DType dtype, byte kind, long bits) {
         Comparable<?> value = switch (dtype) {
             case DType.Primitive p when p.ptype().isFloating() -> Double.longBitsToDouble(bits);
             case DType.Primitive _ -> bits;
@@ -161,17 +161,17 @@ class VortexReaderFuzzTest {
             default -> null;
         };
         if (value == null) {
-            return (kind & 1) == 0 ? RowFilter.isNull(column) : RowFilter.isNotNull(column);
+            return (kind & 1) == 0 ? ScanFilter.isNull(column) : ScanFilter.isNotNull(column);
         }
         return switch (Math.floorMod(kind, 8)) {
-            case 0 -> RowFilter.eq(column, value);
-            case 1 -> RowFilter.neq(column, value);
-            case 2 -> RowFilter.gt(column, value);
-            case 3 -> RowFilter.gte(column, value);
-            case 4 -> RowFilter.lt(column, value);
-            case 5 -> RowFilter.lte(column, value);
-            case 6 -> RowFilter.isNull(column);
-            default -> RowFilter.isNotNull(column);
+            case 0 -> ScanFilter.eq(column, value);
+            case 1 -> ScanFilter.neq(column, value);
+            case 2 -> ScanFilter.gt(column, value);
+            case 3 -> ScanFilter.gte(column, value);
+            case 4 -> ScanFilter.lt(column, value);
+            case 5 -> ScanFilter.lte(column, value);
+            case 6 -> ScanFilter.isNull(column);
+            default -> ScanFilter.isNotNull(column);
         };
     }
 }

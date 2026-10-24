@@ -207,7 +207,7 @@ A plain final class: start from a factory below and adjust with the `withXxx` me
 
 ### `ScanOptions` (`io.github.dfa1.vortex.reader.ScanOptions`)
 
-Record: `(List<ColumnName> columns, RowFilter rowFilter, long limit)` (built via `columns(ColumnName...)`). Empty `columns` = read all. `NO_LIMIT` =
+Record: `(List<ColumnName> columns, ScanFilter rowFilter, long limit)` (built via `columns(ColumnName...)`). Empty `columns` = read all. `NO_LIMIT` =
 `Long.MAX_VALUE`.
 
 | Factory / builder                                   | Effect                           |
@@ -216,29 +216,29 @@ Record: `(List<ColumnName> columns, RowFilter rowFilter, long limit)` (built via
 | `ScanOptions.columns(ColumnName... names)`         | Project columns                  |
 | `ScanOptions.limit(long n)`                         | Limit rows                       |
 | `.withColumns(ColumnName... names)`                | Project columns (builder)        |
-| `.withFilter(RowFilter)`                            | Add zone-map filter              |
+| `.withFilter(ScanFilter)`                            | Add zone-map filter              |
 | `.withLimit(long n)`                                | Cap rows                         |
 | `.hasProjection()` / `.hasFilter()` / `.hasLimit()` | Predicates                       |
 
-### `RowFilter` (`io.github.dfa1.vortex.reader.RowFilter`)
+### `ScanFilter` (`io.github.dfa1.vortex.reader.ScanFilter`)
 
 Sealed predicate tree used for zone-map pruning (per-chunk min/max) and row selection. Two
-variants: `RowFilter.Column(ColumnName, Predicate)` binds one column to a value-test
+variants: `ScanFilter.Column(ColumnName, Predicate)` binds one column to a value-test
 `Predicate` (`io.github.dfa1.vortex.reader.compute.Predicate` — the same vocabulary the
-compute kernels evaluate); `RowFilter.And(List<RowFilter>)` conjoins several. Chunks that
+compute kernels evaluate); `ScanFilter.And(List<ScanFilter>)` conjoins several. Chunks that
 cannot match are skipped entirely.
 
 | Static factory              | Builds                            |
 |------------------------------|------------------------------------|
-| `RowFilter.eq(col, val)`    | `Column` bound to `Predicate.Eq`   |
-| `RowFilter.neq(col, val)`   | `Column` bound to `Predicate.Neq`  |
-| `RowFilter.gt(col, val)`    | `Column` bound to `Predicate.Gt`   |
-| `RowFilter.gte(col, val)`   | `Column` bound to `Predicate.Gte`  |
-| `RowFilter.lt(col, val)`    | `Column` bound to `Predicate.Lt`   |
-| `RowFilter.lte(col, val)`   | `Column` bound to `Predicate.Lte`  |
-| `RowFilter.isNull(col)`     | `Column` bound to `Predicate.IsNull`    |
-| `RowFilter.isNotNull(col)`  | `Column` bound to `Predicate.IsNotNull` |
-| `RowFilter.and(f1, f2, …)` / `f1.and(f2)` | `And` over the given filters |
+| `ScanFilter.eq(col, val)`    | `Column` bound to `Predicate.Eq`   |
+| `ScanFilter.neq(col, val)`   | `Column` bound to `Predicate.Neq`  |
+| `ScanFilter.gt(col, val)`    | `Column` bound to `Predicate.Gt`   |
+| `ScanFilter.gte(col, val)`   | `Column` bound to `Predicate.Gte`  |
+| `ScanFilter.lt(col, val)`    | `Column` bound to `Predicate.Lt`   |
+| `ScanFilter.lte(col, val)`   | `Column` bound to `Predicate.Lte`  |
+| `ScanFilter.isNull(col)`     | `Column` bound to `Predicate.IsNull`    |
+| `ScanFilter.isNotNull(col)`  | `Column` bound to `Predicate.IsNotNull` |
+| `ScanFilter.and(f1, f2, …)` / `f1.and(f2)` | `And` over the given filters |
 
 ### `ScanIterator` (`io.github.dfa1.vortex.reader.ScanIterator`)
 

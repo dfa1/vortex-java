@@ -130,7 +130,7 @@ class ScanIteratorDictPruningTest {
         given(file.layoutRegistry()).willReturn(LayoutRegistry.builder().registerDefaults()
                 .register(new FixedValues(values)).build());
         given(file.registry()).willReturn(ReadRegistry.builder().registerDefaults().build());
-        return new ScanIterator(file, ScanOptions.columns(S).withFilter(new RowFilter.Column(S, predicate)));
+        return new ScanIterator(file, ScanOptions.columns(S).withFilter(new ScanFilter.Column(S, predicate)));
     }
 
     private static VarBinOffsetArray strings(String... values) {

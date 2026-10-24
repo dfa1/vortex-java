@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -64,16 +64,16 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     /// @param file                   the Vortex file to scan
     /// @param chunksScannedLastQuery counter reset to zero here and incremented per decoded chunk,
     ///                               so [VortexTable#chunksScannedLastQuery()] reports this scan
-    /// @param options                the scan options (projection plus any pushed [io.github.dfa1.vortex.reader.RowFilter])
+    /// @param options                the scan options (projection plus any pushed [io.github.dfa1.vortex.reader.ScanFilter])
     /// @param names                  output column names, in emission order
     /// @param types                  output column dtypes, parallel to `names`
     /// @param exactFilter            a predicate [VortexTable#scan(DataContext, java.util.List, int[])]
     ///                               removed from Calcite's own re-check list, enforced here row-by-row
-    ///                               via [Compute#matcher(RowFilter)] so the result stays
+    ///                               via [Compute#matcher(ScanFilter)] so the result stays
     ///                               exact — or `null` when every pushed predicate is still Calcite's to
     ///                               re-check
     VortexEnumerator(Path file, AtomicLong chunksScannedLastQuery, ScanOptions options,
-                      ColumnName[] names, DType[] types, RowFilter exactFilter) {
+                      ColumnName[] names, DType[] types, ScanFilter exactFilter) {
         this.file = file;
         this.chunksScannedLastQuery = chunksScannedLastQuery;
         this.names = names;

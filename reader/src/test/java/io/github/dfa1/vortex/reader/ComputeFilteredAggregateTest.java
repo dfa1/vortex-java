@@ -40,9 +40,9 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Oracle test for the fused multi-column [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]
+/// Oracle test for the fused multi-column [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)]
 /// kernel: its one-pass result over a chunk must equal a brute-force row scan that evaluates the same
-/// [RowFilter] (an n-ary `AND` of column-bound [Predicate] leaves) and folds the aggregate over the
+/// [ScanFilter] (an n-ary `AND` of column-bound [Predicate] leaves) and folds the aggregate over the
 /// selected non-null rows. The reference is hand-written from the SQL three-valued-logic semantics
 /// (`==`/`<`/`<=` on the raw values, a null in a filter column failing that leaf, a null aggregate
 /// value skipped), independent of the kernel's range-lowering, so any drift is a correctness bug.
@@ -86,14 +86,14 @@ class ComputeFilteredAggregateTest {
         columns.put("v", longArray(agg, false));
         Chunk chunk = chunk(rows, columns);
 
-        List<RowFilter> leaves = new ArrayList<>();
+        List<ScanFilter> leaves = new ArrayList<>();
         int leafCount = 1 + random.nextInt(3);
         for (int k = 0; k < leafCount; k++) {
-            leaves.add(new RowFilter.Column(ColumnName.of("f" + random.nextInt(2)), randomPredicate(random)));
+            leaves.add(new ScanFilter.Column(ColumnName.of("f" + random.nextInt(2)), randomPredicate(random)));
         }
-        RowFilter filter = leaves.size() == 1
+        ScanFilter filter = leaves.size() == 1
                 ? leaves.getFirst()
-                : RowFilter.and(leaves.toArray(RowFilter[]::new));
+                : ScanFilter.and(leaves.toArray(ScanFilter[]::new));
 
         // When the fused kernel folds the aggregate over the rows the filter selects
         FilteredAggregate result = Compute.filteredAggregate(chunk, filter, ColumnName.of("v"));
@@ -109,7 +109,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(0, Map.of("f0", longArray(empty, false), "v", longArray(empty, false)));
 
         // When the kernel folds over zero rows
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f0"), 0L), ColumnName.of("v"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f0"), 0L), ColumnName.of("v"));
 
         // Then nothing is selected and the sum is the additive identity, min/max are null
         assertThat(result.selectedRows()).isZero();
@@ -127,7 +127,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(4, Map.of("f0", longArray(f0, false), "v", longArray(agg, false)));
 
         // When the kernel filters with a never-true predicate
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f0"), 100L), ColumnName.of("v"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f0"), 100L), ColumnName.of("v"));
 
         // Then no row is selected and the aggregate is empty
         assertThat(result.selectedRows()).isZero();
@@ -144,7 +144,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(4, Map.of("f0", longArray(f0, false), "v", longArray(agg, false)));
 
         // When the kernel filters with an always-true predicate
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f0"), 0L), ColumnName.of("v"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f0"), 0L), ColumnName.of("v"));
 
         // Then it folds every aggregate value
         assertThat(result.selectedRows()).isEqualTo(4L);
@@ -163,7 +163,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(4, Map.of("f0", longArray(f0, false), "v", longArray(agg, true)));
 
         // When the kernel selects all rows but every aggregate value is null
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f0"), 0L), ColumnName.of("v"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f0"), 0L), ColumnName.of("v"));
 
         // Then all rows are selected, none contribute to the aggregate, sum is the identity
         assertThat(result.selectedRows()).isEqualTo(4L);
@@ -182,7 +182,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(4, Map.of("f0", longArray(f0, true), "v", longArray(agg, false)));
 
         // When the kernel filters f0 > 0 — the null row (index 1) is excluded though 20 > 0
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f0"), 0L), ColumnName.of("v"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f0"), 0L), ColumnName.of("v"));
 
         // Then only the three non-null filter rows are selected
         assertThat(result.selectedRows()).isEqualTo(3L);
@@ -199,7 +199,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(5, Map.of("f0", longArray(f0, false)));
 
         // When the kernel counts the selected rows with a null aggregate column
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f0"), 2L), null);
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f0"), 2L), null);
 
         // Then only the selected count is meaningful; the aggregate fields are empty
         assertThat(result.selectedRows()).isEqualTo(3L);
@@ -217,7 +217,7 @@ class ComputeFilteredAggregateTest {
         Reference agg = new Reference(new long[]{10, 20, 30, 40}, null);
         Chunk chunk = chunk(4, Map.of(
                 "f0", longArray(f0, false), "f1", longArray(f1, false), "v", longArray(agg, false)));
-        RowFilter filter = RowFilter.gt(ColumnName.of("f0"), 1L).and(RowFilter.lt(ColumnName.of("f1"), 4L));
+        ScanFilter filter = ScanFilter.gt(ColumnName.of("f0"), 1L).and(ScanFilter.lt(ColumnName.of("f1"), 4L));
 
         // When the kernel intersects the two per-column leaves — rows 1,2,3 pass f0>1, rows 1,2,3 pass
         // f1<4, so rows 1,2,3 are selected (row 0 fails f0>1)
@@ -239,7 +239,7 @@ class ComputeFilteredAggregateTest {
                 "f", doubleArray(fValues), "d", doubleArray(aValues)));
 
         // When the kernel filters f > 1.0 and folds the double aggregate
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f"), 1.0), ColumnName.of("d"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f"), 1.0), ColumnName.of("d"));
 
         // Then only the last three rows fold, with a double sum/min/max
         assertThat(result.selectedRows()).isEqualTo(3L);
@@ -256,7 +256,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(5, Map.of("f0", dictColumn(new long[]{5, 7}, new int[]{1, 0, 1, 1, 0})));
 
         // When the kernel counts the rows where the dict value is 7 (code 1)
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.eq(ColumnName.of("f0"), 7L), null);
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.eq(ColumnName.of("f0"), 7L), null);
 
         // Then only the selected count is meaningful; the aggregate fields are empty
         assertThat(result.selectedRows()).isEqualTo(3L);
@@ -280,7 +280,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(3, Map.of("f0", filter, "v", agg));
 
         // When the kernel folds the u64 aggregate over the rows where the dict value is 2 (rows 0, 2)
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.eq(ColumnName.of("f0"), 2L), ColumnName.of("v"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.eq(ColumnName.of("f0"), 2L), ColumnName.of("v"));
 
         // Then the extremes order unsigned (5 < 2^63) and the sum wraps on the raw bits
         assertThat(result.selectedRows()).isEqualTo(2L);
@@ -298,7 +298,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(4, Map.of("f0", filter, "v", floatArray(1.5f, 9.0f, 2.5f, 4.0f)));
 
         // When the kernel folds the f32 aggregate over the rows where the dict value is 2 (rows 0, 2, 3)
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.eq(ColumnName.of("f0"), 2L), ColumnName.of("v"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.eq(ColumnName.of("f0"), 2L), ColumnName.of("v"));
 
         // Then the sum is a Double and the extremes carry the column's Float box
         assertThat(result.selectedRows()).isEqualTo(3L);
@@ -316,7 +316,7 @@ class ComputeFilteredAggregateTest {
                 "cat", dictColumn(new long[]{5, 7}, new int[]{1, 0, 1, 1, 0, 1}),
                 "score", longArray(new Reference(new long[]{10, 90, 20, 80, 70, 60}, null), false),
                 "v", longArray(new Reference(new long[]{1, 2, 4, 8, 16, 32}, null), false)));
-        RowFilter filter = RowFilter.eq(ColumnName.of("cat"), 7L).and(RowFilter.gt(ColumnName.of("score"), 50L));
+        ScanFilter filter = ScanFilter.eq(ColumnName.of("cat"), 7L).and(ScanFilter.gt(ColumnName.of("score"), 50L));
 
         // When the kernel folds `cat == 7 AND score > 50` — code matches at rows 0,2,3,5, of which
         // the residual keeps rows 3 (80) and 5 (60)
@@ -337,7 +337,7 @@ class ComputeFilteredAggregateTest {
                 "cat", dictColumn(new long[]{5, 7}, new int[]{1, 0, 1, 1, 0, 1}),
                 "score", longArray(new Reference(new long[]{10, 90, 20, 80, 70, 60}, null), false),
                 "v", longArray(new Reference(new long[]{1, 2, 4, 8, 16, 32}, null), false)));
-        RowFilter filter = RowFilter.gt(ColumnName.of("score"), 50L).and(RowFilter.eq(ColumnName.of("cat"), 7L));
+        ScanFilter filter = ScanFilter.gt(ColumnName.of("score"), 50L).and(ScanFilter.eq(ColumnName.of("cat"), 7L));
 
         // When the kernel folds with the leaves in the opposite order
         FilteredAggregate result = Compute.filteredAggregate(chunk, filter, ColumnName.of("v"));
@@ -356,7 +356,7 @@ class ComputeFilteredAggregateTest {
                 "cat", dictColumn(new long[]{5, 7}, new int[]{1, 1, 0, 1, 1}),
                 "flag", longArray(flags, true),
                 "v", longArray(new Reference(new long[]{1, 2, 4, 8, 16}, null), false)));
-        RowFilter filter = RowFilter.eq(ColumnName.of("cat"), 7L).and(RowFilter.isNotNull(ColumnName.of("flag")));
+        ScanFilter filter = ScanFilter.eq(ColumnName.of("cat"), 7L).and(ScanFilter.isNotNull(ColumnName.of("flag")));
 
         // When the kernel folds `cat == 7 AND flag IS NOT NULL` — code matches at rows 0,1,3,4, of
         // which flag is non-null at rows 0 and 4
@@ -373,7 +373,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(6, Map.of(
                 "cat", dictColumn(new long[]{5, 7}, new int[]{1, 0, 1, 1, 0, 1}),
                 "score", longArray(new Reference(new long[]{10, 90, 20, 80, 70, 60}, null), false)));
-        RowFilter filter = RowFilter.eq(ColumnName.of("cat"), 7L).and(RowFilter.gt(ColumnName.of("score"), 50L));
+        ScanFilter filter = ScanFilter.eq(ColumnName.of("cat"), 7L).and(ScanFilter.gt(ColumnName.of("score"), 50L));
 
         // When the kernel counts with no aggregate column
         FilteredAggregate result = Compute.filteredAggregate(chunk, filter, null);
@@ -394,7 +394,7 @@ class ComputeFilteredAggregateTest {
                 "v", longArray(new Reference(new long[]{1, 2, 4, 8}, null), false)));
 
         // When the kernel folds over the rows where the dict value is > 2.0 (code 1: rows 0, 2, 3)
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f0"), 2.0), ColumnName.of("v"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f0"), 2.0), ColumnName.of("v"));
 
         // Then the selected rows fold exactly as the value-level evaluation would
         assertThat(result.selectedRows()).isEqualTo(3L);
@@ -406,7 +406,7 @@ class ComputeFilteredAggregateTest {
 
     @Test
     void andOfOneDictLeafUnwrapsToTheLane() {
-        // Given a one-element AND around a dict comparison leaf — RowFilter.and(...) wraps a single
+        // Given a one-element AND around a dict comparison leaf — ScanFilter.and(...) wraps a single
         // conjunct, and the dict lane must see through it to the leaf rather than falling back
         Chunk chunk = chunk(5, Map.of(
                 "f0", dictColumn(new long[]{5, 7}, new int[]{1, 0, 1, 1, 0}),
@@ -414,7 +414,7 @@ class ComputeFilteredAggregateTest {
 
         // When the kernel folds through the one-leaf AND
         FilteredAggregate result = Compute.filteredAggregate(chunk,
-                new RowFilter.And(List.of(RowFilter.eq(ColumnName.of("f0"), 7L))), ColumnName.of("v"));
+                new ScanFilter.And(List.of(ScanFilter.eq(ColumnName.of("f0"), 7L))), ColumnName.of("v"));
 
         // Then the selected rows 0, 2 and 3 fold exactly as with the bare leaf
         assertThat(result.selectedRows()).isEqualTo(3L);
@@ -434,7 +434,7 @@ class ComputeFilteredAggregateTest {
         Chunk chunk = chunk(4, Map.of("f", doubleArray(fValues), "h", float16Array(aValues)));
 
         // When the kernel filters f > 1.0 and folds the f16 aggregate over the last three rows
-        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt(ColumnName.of("f"), 1.0), ColumnName.of("h"));
+        FilteredAggregate result = Compute.filteredAggregate(chunk, ScanFilter.gt(ColumnName.of("f"), 1.0), ColumnName.of("h"));
 
         // Then SUM is a non-null Double (mirroring the two-pass Reductions.sum f16 routing), and
         // MIN / MAX are the f16-widened Float extremes
@@ -445,7 +445,7 @@ class ComputeFilteredAggregateTest {
         assertThat(result.max()).isEqualTo(40.0f);
     }
 
-    private static void assertMatchesBruteForce(FilteredAggregate result, int rows, List<RowFilter> leaves,
+    private static void assertMatchesBruteForce(FilteredAggregate result, int rows, List<ScanFilter> leaves,
                                                 Map<String, Reference> references, Reference agg) {
         long selected = 0;
         long nonNull = 0;
@@ -480,9 +480,9 @@ class ComputeFilteredAggregateTest {
         assertThat(result.max()).as("max").isEqualTo(found ? Long.valueOf(max) : null);
     }
 
-    private static boolean allLeavesAccept(List<RowFilter> leaves, Map<String, Reference> references, int i) {
-        for (RowFilter leaf : leaves) {
-            RowFilter.Column column = (RowFilter.Column) leaf;
+    private static boolean allLeavesAccept(List<ScanFilter> leaves, Map<String, Reference> references, int i) {
+        for (ScanFilter leaf : leaves) {
+            ScanFilter.Column column = (ScanFilter.Column) leaf;
             if (!accepts(column.predicate(), references.get(column.column().value()), i)) {
                 return false;
             }

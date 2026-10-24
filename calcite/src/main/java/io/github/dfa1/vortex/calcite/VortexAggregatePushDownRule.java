@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.calcite.interpreter.Bindables;
@@ -151,9 +151,9 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         if (scan instanceof Bindables.BindableTableScan bindable) {
             predicates.addAll(bindable.filters);
         }
-        RowFilter pushedFilter = null;
+        ScanFilter pushedFilter = null;
         if (!predicates.isEmpty()) {
-            Optional<RowFilter> translated = table.translatePushedFilters(predicates);
+            Optional<ScanFilter> translated = table.translatePushedFilters(predicates);
             if (translated.isEmpty()) {
                 return;
             }
@@ -190,7 +190,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     }
 
     /// Rewrites a `GROUP BY` on one string, integer or boolean column into a [LogicalValues] with one
-    /// row per group, folded by [VortexTable#groupedFold(ColumnName, RowFilter, java.util.Set, int)]
+    /// row per group, folded by [VortexTable#groupedFold(ColumnName, ScanFilter, java.util.Set, int)]
     /// instead of materializing every row for Calcite to hash. Leaves the plan alone when the group
     /// column is not a string, an aggregate is not `COUNT`/`SUM`/`MIN`/`MAX` over a plain column, or
     /// the fold declines (a chunk not dictionary-encoded, an aggregate column it cannot total, too
@@ -198,7 +198,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     /// (`VortexSortPushDownRule.MAX_VALUES_CELLS`).
     private static void rewriteGrouped(RelOptRuleCall call, Aggregate aggregate, VortexTable table,
                                        List<ColumnName> scanColumns, RelDataType scanRowType, Project project,
-                                       RexBuilder rexBuilder, List<RelDataType> outTypes, RowFilter filter) {
+                                       RexBuilder rexBuilder, List<RelDataType> outTypes, ScanFilter filter) {
         ColumnName group = resolveColumn(aggregate.getGroupSet().nth(0), scanColumns, project);
         RelDataTypeField groupField = group == null ? null : scanRowType.getField(group.value(), true, false);
         if (groupField == null) {
@@ -291,7 +291,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     /// abandons.
     private static RexLiteral evaluate(AggregateCall agg, RelDataType outType, VortexTable table,
                                        List<ColumnName> scanColumns, RelDataType scanRowType,
-                                       Project project, RexBuilder rexBuilder, RowFilter filter,
+                                       Project project, RexBuilder rexBuilder, ScanFilter filter,
                                        RelOptPlanner planner) {
         return switch (agg.getAggregation().getKind()) {
             case COUNT -> {
@@ -380,7 +380,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     private record ColumnFold(Number sum, Object min, Object max, Long nullCount, long rows) {
     }
 
-    private static ColumnFold columnFold(VortexTable table, ColumnName column, RowFilter filter,
+    private static ColumnFold columnFold(VortexTable table, ColumnName column, ScanFilter filter,
                                          RelOptPlanner planner) {
         if (filter == null) {
             VortexTable.ColumnStats stats = table.statsAndRows(column);
@@ -399,17 +399,17 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         return zones;
     }
 
-    /// [VortexTable#decimalFold(ColumnName, RowFilter)], computed once per planner run.
-    private static ColumnFold decimalFold(VortexTable table, ColumnName column, RowFilter filter,
+    /// [VortexTable#decimalFold(ColumnName, ScanFilter)], computed once per planner run.
+    private static ColumnFold decimalFold(VortexTable table, ColumnName column, ScanFilter filter,
                                           RelOptPlanner planner) {
         List<Object> foldKey = List.of("decimal", table, filter == null ? List.of() : filter, column);
         Optional<VortexTable.FilteredFold> fold = memo(planner, foldKey, () -> table.decimalFold(column, filter));
         return fold.map(f -> new ColumnFold(f.sum(), f.min(), f.max(), f.nullCount(), f.rows())).orElse(null);
     }
 
-    /// [VortexTable#filteredFold(RowFilter, ColumnName)], computed once per planner run.
+    /// [VortexTable#filteredFold(ScanFilter, ColumnName)], computed once per planner run.
     private static Optional<VortexTable.FilteredFold> filteredFold(RelOptPlanner planner, VortexTable table,
-                                                                    RowFilter filter, ColumnName column) {
+                                                                    ScanFilter filter, ColumnName column) {
         List<Object> foldKey = List.of("filtered", table, filter, column == null ? List.of() : column);
         return memo(planner, foldKey, () -> table.filteredFold(filter, column));
     }

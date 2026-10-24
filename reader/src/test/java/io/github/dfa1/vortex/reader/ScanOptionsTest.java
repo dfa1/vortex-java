@@ -33,7 +33,7 @@ class ScanOptionsTest {
     @Test
     void withFilter_setsFilter() {
         // Given
-        RowFilter filter = RowFilter.gte(ColumnName.of("price"), 100);
+        ScanFilter filter = ScanFilter.gte(ColumnName.of("price"), 100);
 
         // When
         ScanOptions sut = ScanOptions.all().withFilter(filter);
@@ -49,7 +49,7 @@ class ScanOptionsTest {
         ScanOptions sut = ScanOptions.all()
                                   .withColumns(ColumnName.of("price"), ColumnName.of("qty"))
                                   .withLimit(10)
-                                  .withFilter(RowFilter.gte(ColumnName.of("price"), 50));
+                                  .withFilter(ScanFilter.gte(ColumnName.of("price"), 50));
 
         // Then
         assertThat(sut.columns()).containsExactly(ColumnName.of("price"), ColumnName.of("qty"));

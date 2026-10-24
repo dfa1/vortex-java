@@ -23,7 +23,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// An ungrouped `COUNT(DISTINCT col)` is counted by [VortexTable#distinctCount(ColumnName,
-/// io.github.dfa1.vortex.reader.RowFilter)] instead of Calcite hashing a boxed value per row. Each
+/// io.github.dfa1.vortex.reader.ScanFilter)] instead of Calcite hashing a boxed value per row. Each
 /// query must equal Calcite's own count over `CASE WHEN id > 0 THEN col END` (`id` is always positive),
 /// which the rule leaves alone; the test asserts that oracle really scans.
 class CountDistinctTest {

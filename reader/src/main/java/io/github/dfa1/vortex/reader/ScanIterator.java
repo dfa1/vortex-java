@@ -972,18 +972,18 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     // ── Limit truncation ─────────────────────────────────────────────────────
 
-    private boolean canPruneChunk(ChunkSpec chunk, RowFilter filter) {
+    private boolean canPruneChunk(ChunkSpec chunk, ScanFilter filter) {
         return switch (filter) {
-            case RowFilter.And(var filters) -> {
+            case ScanFilter.And(var filters) -> {
                 // Conjunction: pruning any one conjunct prunes the whole chunk (short-circuit).
-                for (RowFilter f : filters) {
+                for (ScanFilter f : filters) {
                     if (canPruneChunk(chunk, f)) {
                         yield true;
                     }
                 }
                 yield false;
             }
-            case RowFilter.Column(var col, var predicate) -> {
+            case ScanFilter.Column(var col, var predicate) -> {
                 // A valid-but-absent name yields no layout (no pruning), matching the row-level
                 // scan it gates.
                 Layout flat = chunk.layoutFor(col);
@@ -1036,7 +1036,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (size > dict.rowCount()) {
             return false;
         }
-        LongPredicate matches = Compute.matcher(pool, new RowFilter.Column(col, predicate));
+        LongPredicate matches = Compute.matcher(pool, new ScanFilter.Column(col, predicate));
         for (long v = 0; v < size; v++) {
             if (matches.test(v)) {
                 return false;

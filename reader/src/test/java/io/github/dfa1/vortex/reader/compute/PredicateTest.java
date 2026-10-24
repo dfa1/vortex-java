@@ -110,7 +110,7 @@ class PredicateTest {
 
         @Test
         void isNotNullHasNoComponents() {
-            // Given the dedicated not-null test — present so the vocabulary is a superset of RowFilter
+            // Given the dedicated not-null test — present so the vocabulary is a superset of ScanFilter
             Predicate sut = new Predicate.IsNotNull();
 
             // When inspecting it

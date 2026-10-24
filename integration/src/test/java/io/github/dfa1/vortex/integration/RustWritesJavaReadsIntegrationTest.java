@@ -290,7 +290,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When
         long result = countChunks(file, io.github.dfa1.vortex.reader.ScanOptions.all()
-                .withFilter(io.github.dfa1.vortex.reader.RowFilter.eq(ColumnName.of("k"), "key-00000005")));
+                .withFilter(io.github.dfa1.vortex.reader.ScanFilter.eq(ColumnName.of("k"), "key-00000005")));
 
         // Then
         assertThat(totalChunks).isGreaterThan(1);
@@ -308,7 +308,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When
         long result = countChunks(file, io.github.dfa1.vortex.reader.ScanOptions.all()
-                .withFilter(io.github.dfa1.vortex.reader.RowFilter.eq(ColumnName.of("k"), emoji)));
+                .withFilter(io.github.dfa1.vortex.reader.ScanFilter.eq(ColumnName.of("k"), emoji)));
 
         // Then — the only chunk holds the match, so it must survive pruning
         assertThat(result).isEqualTo(1);
@@ -344,7 +344,7 @@ class RustWritesJavaReadsIntegrationTest {
                 });
             }
             // The scan filter only prunes zones; rows are matched per row, as the Calcite adapter does
-            var filter = io.github.dfa1.vortex.reader.RowFilter.eq(ColumnName.of("k"), "café");
+            var filter = io.github.dfa1.vortex.reader.ScanFilter.eq(ColumnName.of("k"), "café");
             try (var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all().withFilter(filter))) {
                 iter.forEachRemaining(c -> {
                     VarBinArray k = c.column(ColumnName.of("k"));
@@ -415,13 +415,13 @@ class RustWritesJavaReadsIntegrationTest {
         Path file = tmp.resolve("jni_dict_utf8_filter.vtx");
         writeJniNullableUtf8(file, values);
         ColumnName column = ColumnName.of("k");
-        io.github.dfa1.vortex.reader.RowFilter filter = switch (op) {
-            case "EQ" -> io.github.dfa1.vortex.reader.RowFilter.eq(column, bound);
-            case "NOT_EQ" -> io.github.dfa1.vortex.reader.RowFilter.neq(column, bound);
-            case "GT" -> io.github.dfa1.vortex.reader.RowFilter.gt(column, bound);
-            case "GTE" -> io.github.dfa1.vortex.reader.RowFilter.gte(column, bound);
-            case "LT" -> io.github.dfa1.vortex.reader.RowFilter.lt(column, bound);
-            default -> io.github.dfa1.vortex.reader.RowFilter.lte(column, bound);
+        io.github.dfa1.vortex.reader.ScanFilter filter = switch (op) {
+            case "EQ" -> io.github.dfa1.vortex.reader.ScanFilter.eq(column, bound);
+            case "NOT_EQ" -> io.github.dfa1.vortex.reader.ScanFilter.neq(column, bound);
+            case "GT" -> io.github.dfa1.vortex.reader.ScanFilter.gt(column, bound);
+            case "GTE" -> io.github.dfa1.vortex.reader.ScanFilter.gte(column, bound);
+            case "LT" -> io.github.dfa1.vortex.reader.ScanFilter.lt(column, bound);
+            default -> io.github.dfa1.vortex.reader.ScanFilter.lte(column, bound);
         };
 
         // When

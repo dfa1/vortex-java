@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
@@ -39,7 +39,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 /// Oracle test for the [DictFilter] code-scan lane of
-/// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]: the lane's sum must be bit-identical to
+/// [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)]: the lane's sum must be bit-identical to
 /// the independent boxing reference — a plain per-element `if (predicate) acc += value` loop over
 /// the same columns — which shares no code with the code-scan (the reference decodes every row
 /// through the dict accessor; the lane never does).
@@ -278,7 +278,7 @@ class DictFilterTest {
             aggColumn = ColumnName.of("v");
             given(chunk.<Array>column(aggColumn)).willReturn(agg);
         }
-        return Compute.filteredAggregate(chunk, new RowFilter.Column(filterColumn, predicate), aggColumn);
+        return Compute.filteredAggregate(chunk, new ScanFilter.Column(filterColumn, predicate), aggColumn);
     }
 
     /// Independent boxing oracle: a plain per-element filter-then-sum over the same columns, with

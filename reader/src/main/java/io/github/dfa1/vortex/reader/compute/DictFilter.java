@@ -60,7 +60,7 @@ final class DictFilter {
     }
 
     /// Attempts the dict code-scan lane for the filtered-aggregate fold of
-    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]: the selected row count, the
+    /// [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)]: the selected row count, the
     /// aggregate's non-null count among them, and its `SUM` / `MIN` / `MAX`, folded per matching
     /// row with the same domain semantics as the kernel's own lanes (wrapping [Long] sum and
     /// unsigned-aware order in the long domain, [Double#compare(double, double)] order and the

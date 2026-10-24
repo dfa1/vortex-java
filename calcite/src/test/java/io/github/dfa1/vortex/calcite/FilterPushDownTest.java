@@ -35,12 +35,12 @@ import java.util.Properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Drives [VortexTable]'s filter push-down (`scan(root, filters, projects)`) through a real Calcite
-/// JDBC planner: every supported `WHERE` comparison must be translated into a zone-map [RowFilter]
+/// JDBC planner: every supported `WHERE` comparison must be translated into a zone-map [ScanFilter]
 /// (so the scan can prune chunks) while Calcite still returns the exact rows. Predicates the
 /// translator does not understand must be left untouched, not break the query.
 class FilterPushDownTest {
 
-    // Two chunks of three rows so the pushed RowFilter has chunks to (potentially) prune.
+    // Two chunks of three rows so the pushed ScanFilter has chunks to (potentially) prune.
     private static final DType.Struct SCHEMA = DType.structBuilder()
             .field(ColumnName.of("i64"), DType.I64)
             .field(ColumnName.of("i32"), DType.I32)
@@ -75,7 +75,7 @@ class FilterPushDownTest {
 
     @ParameterizedTest(name = "[{index}] WHERE {0} -> {1} rows")
     @CsvSource({
-            // every comparison kind the RowFilter translator supports, over a Long column
+            // every comparison kind the ScanFilter translator supports, over a Long column
             "i64 = 1000,            1",   // EQUALS        -> Column(i64, Predicate.Eq)
             "i64 <> 1000,           5",   // NOT_EQUALS    -> Column(i64, Predicate.Neq)
             "i64 < 3000,            2",   // LESS_THAN     -> Column(i64, Predicate.Lt)
@@ -84,7 +84,7 @@ class FilterPushDownTest {
             "i64 >= 4000,           3",   // GREATER_EQ    -> Column(i64, Predicate.Gte)
             "s = 'a',               1",   // Utf8 literal coercion
             "f64 > 3.0,             3",   // floating literal coercion
-            // multiple conjuncts arrive as separate filters -> RowFilter.and over the list
+            // multiple conjuncts arrive as separate filters -> ScanFilter.and over the list
             "i64 > 1000 AND i32 < 600, 4",
             // bare boolean ref is not a RexCall -> not pushed, query still exact
             "b,                     3",

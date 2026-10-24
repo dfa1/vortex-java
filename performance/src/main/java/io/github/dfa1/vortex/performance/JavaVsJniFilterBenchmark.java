@@ -11,7 +11,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import org.apache.arrow.memory.BufferAllocator;
@@ -139,12 +139,12 @@ public class JavaVsJniFilterBenchmark {
         return sum;
     }
 
-    /// Java read: zone-map prune via RowFilter, then per-row predicate in
+    /// Java read: zone-map prune via ScanFilter, then per-row predicate in
     /// user code over the fully-decoded chunk. Materialization happens for
     /// every row in non-pruned chunks regardless of the filter outcome.
     @Benchmark
     public double javaFilterClose() throws IOException {
-        RowFilter filter = RowFilter.gt(ColumnName.of("close"), threshold);
+        ScanFilter filter = ScanFilter.gt(ColumnName.of("close"), threshold);
         var opts = io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("close"))
                 .withFilter(filter);
 
