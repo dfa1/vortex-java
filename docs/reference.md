@@ -183,11 +183,11 @@ than rounded. Every precision Rust supports (1–76, i8 … i256 storage) and ne
 
 ### `WriteOptions` (`io.github.dfa1.vortex.writer.WriteOptions`)
 
-Record: `(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading, boolean globalDict, MemorySize globalDictMaxRetainedBytes, Map<EditionFamily, Edition> editions)`.
+A plain final class: start from a factory below and adjust with the `withXxx` methods, each returning a copy.
 
 | Factory                         | Defaults                                                                                          |
 |---------------------------------|---------------------------------------------------------------------------------------------------|
-| `WriteOptions.defaults()`       | `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=3` (Rust's `MAX_CASCADE`), `globalDict=true`, `compact=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_3}` |
+| `WriteOptions.defaults()`       | `enableZoneMaps=true`, `allowedCascading=3` (Rust's `MAX_CASCADE`), `globalDict=true`, `compact=false`, `globalDictMaxRetainedBytes=MemorySize.ofGiB(2)`, `editions={CORE: Editions.CORE_2026_08_3}` |
 | `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`; `0` disables cascading (each column takes the first accepting encoder) |
 
 | Method | Notes |

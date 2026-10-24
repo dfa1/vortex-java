@@ -459,11 +459,6 @@ class ConstantEncodingEncoderTest {
             assertThat(result.statsMin()).isNull();
             assertThat(result.statsMax()).isNull();
         }
-
-        private static ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
-            MemorySegment seg = MemorySegment.ofArray(bytes);
-            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
-        }
     }
 
     /// Rust can write a constant array whose scalar is null (proto null_value tag).

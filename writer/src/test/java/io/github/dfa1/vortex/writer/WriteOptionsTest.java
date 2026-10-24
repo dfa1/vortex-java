@@ -45,7 +45,6 @@ class WriteOptionsTest {
         // Then — only the budget changes; every other component is copied unchanged.
         assertThat(result.globalDictMaxRetainedBytes()).isEqualTo(new MemorySize(120_000));
         assertThat(result.enableZoneMaps()).isEqualTo(base.enableZoneMaps());
-        assertThat(result.compressionRatioThreshold()).isEqualTo(base.compressionRatioThreshold());
         assertThat(result.allowedCascading()).isEqualTo(base.allowedCascading());
         assertThat(result.globalDict()).isEqualTo(base.globalDict());
         assertThat(result.compact()).isEqualTo(base.compact());

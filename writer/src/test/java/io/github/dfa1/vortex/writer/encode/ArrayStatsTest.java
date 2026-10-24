@@ -132,14 +132,9 @@ class ArrayStatsTest {
             data[i] = rng.nextInt(n / 2 + 1);
         }
         Map<Long, Integer> reference = new HashMap<>();
-        long expectedTopBits = 0;
         int expectedTopFreq = 0;
         for (long v : data) {
-            int c = reference.merge(v, 1, Integer::sum);
-            if (c > expectedTopFreq) {
-                expectedTopFreq = c;
-                expectedTopBits = v;
-            }
+            expectedTopFreq = Math.max(expectedTopFreq, reference.merge(v, 1, Integer::sum));
         }
 
         // When

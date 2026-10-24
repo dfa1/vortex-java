@@ -206,9 +206,8 @@ final class PcoHistogram {
             b = t;
         }
         if (v[c] < v[b]) {
-            int t = b;
+            // Rust swaps b and c here, but c is not read again
             b = c;
-            c = t;
         }
         if (v[b] < v[a]) {
             b = a;

@@ -275,11 +275,6 @@ class ZigZagEncodingEncoderTest {
             assertThat(result.statsMin()).isNull();
             assertThat(result.statsMax()).isNull();
         }
-
-        private static io.github.dfa1.vortex.core.proto.ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
-            MemorySegment seg = MemorySegment.ofArray(bytes);
-            return io.github.dfa1.vortex.core.proto.ProtoScalarValue.decode(seg, 0, seg.byteSize());
-        }
     }
 
     /// Cascading zigzag (issue #410) hands its unsigned output to the compressor as an open child

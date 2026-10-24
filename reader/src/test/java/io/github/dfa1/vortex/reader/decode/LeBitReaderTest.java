@@ -184,32 +184,20 @@ class LeBitReaderTest {
 
         @Test
         void already_aligned_is_noop() {
-            // Given
+            // Given — exactly one byte consumed, so aligning must not skip the second
             var sut = readerOf((byte) 0xFF, (byte) 0xAB);
-            sut.readBits(8); // consume exactly one byte
-
-            // When
+            sut.readBits(8);
             sut.alignToByte();
 
-            // Then — byte offset unchanged
-            assertThat(sut.byteOffset()).isEqualTo(1);
+            // When
+            long result = sut.readBits(8);
+
+            // Then
+            assertThat(result).isEqualTo(0xABL);
         }
 
         @Test
         void partial_byte_advances_to_next_byte() {
-            // Given
-            var sut = readerOf((byte) 0xFF, (byte) 0xAB);
-            sut.readBits(3); // consume 3 bits of first byte
-
-            // When
-            sut.alignToByte();
-
-            // Then — aligned to byte 1
-            assertThat(sut.byteOffset()).isEqualTo(1);
-        }
-
-        @Test
-        void next_read_after_align_reads_clean_byte() {
             // Given
             var sut = readerOf((byte) 0xFF, (byte) 0xAB);
             sut.readBits(3);

@@ -18,7 +18,6 @@ import java.util.concurrent.Executor;
 /// carries has no meaningful equality, so neither do the options.
 public final class WriteOptions {
     private final boolean enableZoneMaps;
-    private final double compressionRatioThreshold;
     private final int allowedCascading;
     private final boolean globalDict;
     private final boolean compact;
@@ -27,7 +26,7 @@ public final class WriteOptions {
     private final Map<ColumnName, ColumnEncoding> columnEncodings;
     private final Executor executor;
 
-    private WriteOptions(boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading,
+    private WriteOptions(boolean enableZoneMaps, int allowedCascading,
                          boolean globalDict, boolean compact,
                          MemorySize globalDictMaxRetainedBytes,
                          Map<EditionFamily, Edition> editions, Map<ColumnName, ColumnEncoding> columnEncodings,
@@ -38,7 +37,6 @@ public final class WriteOptions {
                             + "use WriteOptions.cascading(depth).withCompact(true)");
         }
         this.enableZoneMaps = enableZoneMaps;
-        this.compressionRatioThreshold = compressionRatioThreshold;
         this.allowedCascading = allowedCascading;
         this.globalDict = globalDict;
         this.compact = compact;
@@ -53,13 +51,6 @@ public final class WriteOptions {
     /// @return `true` if zone maps are written
     public boolean enableZoneMaps() {
         return enableZoneMaps;
-    }
-
-    /// The minimum compression ratio (0–1) for an encoding to be accepted.
-    ///
-    /// @return the compression-ratio threshold
-    public double compressionRatioThreshold() {
-        return compressionRatioThreshold;
     }
 
     /// The maximum recursive cascade depth; `0` disables cascading.
@@ -138,7 +129,7 @@ public final class WriteOptions {
     /// @param executor runs the compression tasks; the writer never shuts it down
     /// @return a new `WriteOptions` with the executor set
     public WriteOptions withExecutor(Executor executor) {
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+        return new WriteOptions(enableZoneMaps, allowedCascading, globalDict,
                 compact, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
@@ -151,7 +142,7 @@ public final class WriteOptions {
     public WriteOptions withColumnEncoding(ColumnName column, ColumnEncoding encoding) {
         Map<ColumnName, ColumnEncoding> updated = new HashMap<>(columnEncodings);
         updated.put(Objects.requireNonNull(column, "column"), Objects.requireNonNull(encoding, "encoding"));
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+        return new WriteOptions(enableZoneMaps, allowedCascading, globalDict,
                 compact, globalDictMaxRetainedBytes, editions, updated, executor);
     }
 
@@ -187,7 +178,7 @@ public final class WriteOptions {
     /// @param depth maximum cascade depth
     /// @return `WriteOptions` with cascading enabled at the given depth
     public static WriteOptions cascading(int depth) {
-        return new WriteOptions(true, 0.90, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
+        return new WriteOptions(true, depth, true, false, DEFAULT_GLOBAL_DICT_MAX_RETAINED_BYTES,
                 DEFAULT_EDITIONS, Map.of(), CALLER_RUNS);
     }
 
@@ -196,7 +187,7 @@ public final class WriteOptions {
     /// @param enabled `true` to write per-chunk min/max/sum statistics for zone-map pruning
     /// @return a new `WriteOptions` with the zone-map flag updated
     public WriteOptions withZoneMaps(boolean enabled) {
-        return new WriteOptions(enabled, compressionRatioThreshold, allowedCascading, globalDict, compact, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
+        return new WriteOptions(enabled, allowedCascading, globalDict, compact, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with global dictionary encoding set to `enabled`.
@@ -204,7 +195,7 @@ public final class WriteOptions {
     /// @param enabled `true` to enable global dictionary encoding across chunks
     /// @return a new `WriteOptions` with the global dict flag updated
     public WriteOptions withGlobalDict(boolean enabled) {
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, enabled, compact, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
+        return new WriteOptions(enableZoneMaps, allowedCascading, enabled, compact, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
     /// Returns a copy of these options with Rust's compact preset set to `enabled`
@@ -224,7 +215,7 @@ public final class WriteOptions {
     /// @return a new `WriteOptions` with the compact flag updated
     /// @throws IllegalArgumentException if `enabled` is `true` and `allowedCascading()` is `0`
     public WriteOptions withCompact(boolean enabled) {
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+        return new WriteOptions(enableZoneMaps, allowedCascading, globalDict,
                 enabled, globalDictMaxRetainedBytes, editions, columnEncodings, executor);
     }
 
@@ -239,7 +230,7 @@ public final class WriteOptions {
     /// @param budget aggregate retention budget for buffered global-dict candidate columns
     /// @return a new `WriteOptions` with the global-dict retention budget updated
     public WriteOptions withGlobalDictMaxRetainedBytes(MemorySize budget) {
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+        return new WriteOptions(enableZoneMaps, allowedCascading, globalDict,
                 compact, budget, editions, columnEncodings, executor);
     }
 
@@ -258,7 +249,7 @@ public final class WriteOptions {
     public WriteOptions withEdition(Edition edition) {
         Map<EditionFamily, Edition> updated = new HashMap<>(editions);
         updated.put(edition.id().family(), edition);
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+        return new WriteOptions(enableZoneMaps, allowedCascading, globalDict,
                 compact, globalDictMaxRetainedBytes, updated, columnEncodings, executor);
     }
 
@@ -271,7 +262,7 @@ public final class WriteOptions {
     ///
     /// @return a new `WriteOptions` with no edition enabled
     public WriteOptions withoutEditions() {
-        return new WriteOptions(enableZoneMaps, compressionRatioThreshold, allowedCascading, globalDict,
+        return new WriteOptions(enableZoneMaps, allowedCascading, globalDict,
                 compact, globalDictMaxRetainedBytes, Map.of(), columnEncodings, executor);
     }
 }

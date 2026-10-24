@@ -296,10 +296,5 @@ class FrameOfReferenceEncodingEncoderTest {
             assertThat(result.statsMin().int64_value()).isEqualTo(990L);
             assertThat(result.statsMax().int64_value()).isEqualTo(1050L);
         }
-
-        private static ProtoScalarValue scalar(byte[] bytes) throws IOException {
-            MemorySegment seg = MemorySegment.ofArray(bytes);
-            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
-        }
     }
 }

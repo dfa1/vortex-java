@@ -206,8 +206,8 @@ class CascadeDepthGainIntegrationTest {
     private static Path writeJni(Path dir, Pattern pattern) throws IOException {
         Path file = dir.resolve(pattern.name() + "-jni.vtx");
         ArrowType arrowType = switch (pattern.data()) {
-            case long[] ignored -> new ArrowType.Int(64, true);
-            case double[] ignored -> new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
+            case long[] _ -> new ArrowType.Int(64, true);
+            case double[] _ -> new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
             default -> ArrowType.Utf8.INSTANCE;
         };
         Schema schema = new Schema(java.util.List.of(Field.notNullable("v", arrowType)));

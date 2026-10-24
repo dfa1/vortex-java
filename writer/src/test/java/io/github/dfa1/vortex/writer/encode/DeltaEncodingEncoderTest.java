@@ -10,7 +10,6 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
-import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.DeltaEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Test;
@@ -210,11 +209,6 @@ class DeltaEncodingEncoderTest {
         assertThat(result.statsMin()).isNull();
         assertThat(result.statsMax()).isNull();
         assertThat(result.hasStats()).isFalse();
-    }
-
-    private static ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
-        MemorySegment seg = MemorySegment.ofArray(bytes);
-        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 
     private static Stream<Arguments> randomIntegerArrays() {

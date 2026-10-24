@@ -340,7 +340,7 @@ public final class HtmlReport {
         // An extension's storage dtype is what occupies the bytes, so a timestamp column compares
         // against its i64 storage width rather than reporting no ratio at all.
         DType effective = dtype instanceof DType.Extension ext ? ext.storageDType() : dtype;
-        return effective instanceof DType.Primitive(PType ptype, boolean ignored) ? rows * ptype.byteSize() : 0L;
+        return effective instanceof DType.Primitive(PType ptype, boolean _) ? rows * ptype.byteSize() : 0L;
     }
 
     /// The dtype that actually occupies the bytes: an extension's storage dtype, or the column's

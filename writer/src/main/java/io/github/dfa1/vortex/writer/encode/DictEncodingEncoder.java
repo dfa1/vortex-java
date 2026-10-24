@@ -148,7 +148,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         if (dtype instanceof DType.Utf8) {
-            return encodeUtf8Cascade(data, ctx);
+            return encodeUtf8Cascade(data);
         }
         DictData d = buildDictData(dtype, data);
         PType codePType = d.codePType();
@@ -177,9 +177,8 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     /// competition, so the pool is never wrapped in a second dict the reader cannot unwrap.
     ///
     /// @param data the column's values, a `String[]` or UTF-8 `byte[][]`
-    /// @param ctx  encoding context supplying the arena
     /// @return a cascade step whose values child (index 1) is left open for compression
-    private static CascadeStep encodeUtf8Cascade(Object data, EncodeContext ctx) {
+    private static CascadeStep encodeUtf8Cascade(Object data) {
         int n = Array.getLength(data);
         Object[] keys = new Object[n];
         var valueMap = new LinkedHashMap<Object, Integer>();

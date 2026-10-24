@@ -69,7 +69,7 @@ class ScanIteratorChunkGridTest {
         // When
         List<ChunkSpec> result = ScanIterator.buildChunks(columnFlats);
 
-        // Then `windowStart() - sliceOffsetFor(col)` recovers each column's covering chunk's
+        // Then `windowStart()` minus the column's slice offset recovers each column's covering chunk's
         // absolute row start: A's single chunk starts at row 0 in both windows (its one physical
         // chunk spans both, so the derived start must not drift with the window), while B's second
         // window is covered by its second chunk, starting at row 4. This is the invariant zone-map
@@ -81,7 +81,8 @@ class ScanIteratorChunkGridTest {
     }
 
     private static long chunkStart(ChunkSpec spec, ColumnName column) {
-        return spec.windowStart() - spec.sliceOffsetFor(column);
+        int i = List.of(spec.columnNames()).indexOf(column);
+        return spec.windowStart() - spec.sliceOffsets()[i];
     }
 
     @Test
