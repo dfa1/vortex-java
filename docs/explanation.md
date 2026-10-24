@@ -536,12 +536,12 @@ constraints.
 
 See the [benchmark tables](#benchmarks) for numbers. Summary:
 
-- **Single-column scan**: Vortex 1.4× faster than Parquet batch. ALP + mmap zero-copy
-  beats Parquet's RLE definition-level decode + page framing overhead.
-- **Multi-column scan**: roughly even today. Gap caused by per-chunk dict encoding in Java
-  vs Rust's global dict — global dict is now implemented as an opt-in
-  `WriteOptions.withGlobalDict(true)` ([ADR 0021](../adr/0021-cardinality-bounded-global-dict-buffering.md)),
-  not yet the default, so this benchmark (run with default write options) doesn't reflect it.
+- **Single-column scan**: at parity with Parquet batch (0.97×) since Hardwood's batch reads
+  got faster; Vortex was 1.58× ahead in the 2026-07-24 snapshot.
+- **Multi-column scan**: Vortex trails Parquet batch (0.68× on two taxi columns). Both
+  columns are nullable global dictionaries (on by default, `WriteOptions.withGlobalDict`,
+  [ADR 0021](../adr/0021-cardinality-bounded-global-dict-buffering.md)), read as a
+  `MaskedArray` the benchmark folds.
 - **Filtered scan (zone-map pruning)**: Vortex skips entire chunks when the Zoned
   min/max rules out a predicate. Parquet does the same at row-group granularity, but
   Vortex chunks are smaller (131 072 rows vs Parquet's typical 1 M row groups), so
