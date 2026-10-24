@@ -57,8 +57,8 @@ class CalciteInteropIntegrationTest {
     // several batches, so the row count is a sum over chunks, not a single chunk's length
     private static final int BATCHES = 3;
     private static final int BATCH_ROWS = 1_000;
-    // over 1 MiB a batch, the least Rust writes as a chunk of its own
-    private static final int EVENT_BATCH_ROWS = 20_000;
+    // three batches past 1 MiB per column, so Rust writes several chunks (see writeEventsWithJni)
+    private static final int EVENT_BATCH_ROWS = 50_000;
     private static final LocalDate DATE = LocalDate.of(2024, 2, 29);
     private static final LocalTime TIME = LocalTime.of(13, 45, 30);
     // pre-epoch on purpose: millisecond truncation must floor, not round toward zero
@@ -760,8 +760,9 @@ class CalciteInteropIntegrationTest {
 
     /// Writes `id`, `e` (an ascending event id, "é"-suffixed every 13th row, null every 97th), `t`
     /// (an ascending value repeated ten times) and `r` (a scrambled value with repeats) in [#BATCHES]
-    /// batches of [#EVENT_BATCH_ROWS], over 1 MiB each, so Rust writes several chunks: Rust coalesces
-    /// smaller batches into one. Its chunks hold a multiple of 8,192 rows, not of ten, so a run of
+    /// batches of [#EVENT_BATCH_ROWS], past 1 MiB per column by Rust's exact size (a string of at
+    /// most 12 bytes costs only its 16-byte view), so Rust writes several chunks: Rust coalesces
+    /// smaller columns into one. Its chunks hold a multiple of 8,192 rows, not of ten, so a run of
     /// equal `t` straddles each chunk edge.
     private static void writeEventsWithJni(Path file) throws Exception {
         Schema schema = new Schema(List.of(

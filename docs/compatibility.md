@@ -1,6 +1,6 @@
 # Compatibility
 
-Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.88.0.
+Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.89.0.
 For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](reference.md).
 
 ## Read-only deployment
@@ -256,7 +256,7 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `preview2026.08.0` | `preview` | nothing yet |
 | `zstd2026.02.0` | `zstd` | `vortex.zstd_buffers` (read only; buffer-level Zstd for GPU decode; declared by Rust's `vortex-zstd` plugin, opt-in) |
 
-Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.88.0);
+Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.89.0);
 `EditionCatalogParityIntegrationTest` fails the build on drift. `core` editions are frozen with a
 forever read-compatibility guarantee; `preview` holds opt-in components not yet adopted by `core`;
 `zstd` is declared by Rust's `vortex-zstd` plugin crate rather than the core declarations, and is

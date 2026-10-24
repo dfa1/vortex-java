@@ -148,7 +148,9 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 
 Batches are not chunks: as Rust's writer does, each primitive, boolean, decimal, string and binary
 column is repartitioned into chunks of whole 8192-row blocks reaching 1 MB of uncompressed data
-(e.g. 131 072 rows of I64, 524 288 of U16 dict codes), the rest becoming the last chunk. Nested
+(e.g. 131 072 rows of I64, 524 288 of U16 dict codes), the rest becoming the last chunk. Blocks
+count from the column's first row, whatever the batches, and are measured as Rust measures them: a
+string of at most 12 bytes costs only its 16-byte view, and a block without nulls no validity. Nested
 columns, and targets before `core2026.08.0` (legacy `vortex.stats` zones), keep one chunk per batch.
 
 ### `Chunk` (`io.github.dfa1.vortex.writer.Chunk`)
