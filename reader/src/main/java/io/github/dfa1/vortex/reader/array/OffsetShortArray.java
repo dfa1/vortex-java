@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Optional;
 
 import java.util.function.LongBinaryOperator;
 
@@ -33,6 +34,15 @@ public record OffsetShortArray(DType dtype, long length, ShortArray inner, long 
             acc = op.applyAsLong(acc, getShort(i));
         }
         return acc;
+    }
+
+    /// The window of a flat inner buffer (see `OffsetArrays#window`), empty otherwise: a scan
+    /// window over a shared dict's codes then reads as flat codes, which the gathers read directly.
+    ///
+    /// @return the window's segment, if the inner buffer covers it
+    @Override
+    public Optional<MemorySegment> segmentIfPresent() {
+        return OffsetArrays.window(inner, offset, length, 2);
     }
 
     /// Zero-copy over a flat inner buffer (see `OffsetArrays#window`), else the per-row default.

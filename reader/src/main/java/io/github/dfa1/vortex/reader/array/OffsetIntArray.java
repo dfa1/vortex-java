@@ -42,6 +42,15 @@ public record OffsetIntArray(DType dtype, long length, IntArray inner, long offs
         return result;
     }
 
+    /// The window of a flat inner buffer (see `OffsetArrays#window`), empty otherwise: a scan
+    /// window over a shared dict's codes then reads as flat codes, which the gathers read directly.
+    ///
+    /// @return the window's segment, if the inner buffer covers it
+    @Override
+    public Optional<MemorySegment> segmentIfPresent() {
+        return OffsetArrays.window(inner, offset, length, 4);
+    }
+
     /// Zero-copy over a flat inner buffer (see `OffsetArrays#window`), else the per-row default.
     ///
     /// @param arena allocator for the per-row fallback
