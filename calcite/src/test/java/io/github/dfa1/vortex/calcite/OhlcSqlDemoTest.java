@@ -153,7 +153,7 @@ class OhlcSqlDemoTest {
             String windowed = "select high from vtx.ohlc where `date` between " + lo + " and " + hi;
 
             // When a full-scan baseline runs, every chunk is decoded. The predicate `high > low` is a
-            // column-vs-column comparison: it is not a zone-map RowFilter (so nothing is pruned). It
+            // column-vs-column comparison: it is not a zone-map ScanFilter (so nothing is pruned). It
             // projects a row column too, so no aggregate fold intercepts it — the scan decodes every
             // chunk.
             try (Statement st = conn.createStatement();

@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.calcite.interpreter.Bindables;
@@ -37,11 +37,11 @@ import java.util.Optional;
 
 /// Rewrites `ORDER BY ... LIMIT n` over a [VortexTable] into a [LogicalValues] holding the first
 /// `n` rows, found by streaming the table through a bounded buffer
-/// ([VortexTable#topN(int[], RowFilter, List, int)]) instead of letting Calcite sort every row:
+/// ([VortexTable#topN(int[], ScanFilter, List, int)]) instead of letting Calcite sort every row:
 /// Calcite's sort compares numbers by converting both to `BigDecimal`, which dominated a 4M-row
 /// `ORDER BY ... DESC LIMIT 10`. A `SELECT DISTINCT` (a `GROUP BY` with no aggregate) under the sort
 /// is answered the same way, keeping only the first `n` distinct rows
-/// ([VortexTable#distinctTopN(int[], RowFilter, List, int)]) instead of hashing every row.
+/// ([VortexTable#distinctTopN(int[], ScanFilter, List, int)]) instead of hashing every row.
 ///
 /// Fires for a `LIMIT` of at most [#MAX_ROWS] (with any `OFFSET`) over the table, optionally
 /// through a projection of plain columns and a `WHERE` the filter translation captures in full.
@@ -148,9 +148,9 @@ public final class VortexSortPushDownRule extends RelOptRule {
         if (scan instanceof Bindables.BindableTableScan bindable) {
             predicates.addAll(bindable.filters);
         }
-        RowFilter rowFilter = null;
+        ScanFilter rowFilter = null;
         if (!predicates.isEmpty()) {
-            Optional<RowFilter> translated = table.translatePushedFilters(predicates);
+            Optional<ScanFilter> translated = table.translatePushedFilters(predicates);
             if (translated.isEmpty()) {
                 return; // a row Calcite would drop must not reach the top N
             }
@@ -180,7 +180,7 @@ public final class VortexSortPushDownRule extends RelOptRule {
             return;
         }
         int count = offset + fetch;
-        RowFilter finalFilter = rowFilter;
+        ScanFilter finalFilter = rowFilter;
         int[] emitted = cols;
         boolean once = distinct != null;
         List<Object> foldKey = List.of(once ? "distinctTopN" : "topN", table, java.util.Arrays.toString(cols),

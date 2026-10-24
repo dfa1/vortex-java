@@ -6,22 +6,22 @@ import io.github.dfa1.vortex.reader.compute.Predicate;
 import java.util.List;
 import java.util.Objects;
 
-/// A column-bound predicate tree for zone-map pruning and row selection. A [RowFilter.Column] binds
-/// one column to a value-test [Predicate]; a [RowFilter.And] conjoins several. The same [Predicate]
+/// A column-bound predicate tree for zone-map pruning and row selection. A [ScanFilter.Column] binds
+/// one column to a value-test [Predicate]; a [ScanFilter.And] conjoins several. The same [Predicate]
 /// vocabulary the compute kernels evaluate against a decoded array (ADR 0013 §4) is here compiled
 /// against per-chunk statistics — min/max for the comparisons, null count for the null tests — so a
 /// chunk where no row can satisfy the filter is skipped entirely (ADR 0013 §5).
 ///
 /// Build filters through the static factories ([#eq(ColumnName, Object)], [#gt(ColumnName, Comparable)],
 /// [#isNull(ColumnName)], …); each binds the column name to the matching [Predicate]. Conjoin with
-/// [#and(RowFilter...)] or the [#and(RowFilter)] instance method.
-public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
+/// [#and(ScanFilter...)] or the [#and(ScanFilter)] instance method.
+public sealed interface ScanFilter permits ScanFilter.Column, ScanFilter.And {
 
-    /// Conjoins the given filters into a single [RowFilter.And].
+    /// Conjoins the given filters into a single [ScanFilter.And].
     ///
     /// @param filters the filters to conjoin
     /// @return an `And` over `filters`
-    static RowFilter and(RowFilter... filters) {
+    static ScanFilter and(ScanFilter... filters) {
         return new And(List.of(filters));
     }
 
@@ -30,7 +30,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the value to compare against
     /// @return a `Column` bound to a [Predicate.Eq]
-    static RowFilter eq(ColumnName col, Object val) {
+    static ScanFilter eq(ColumnName col, Object val) {
         return new Column(col, new Predicate.Eq(val));
     }
 
@@ -39,7 +39,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the value to compare against
     /// @return a `Column` bound to a [Predicate.Neq]
-    static RowFilter neq(ColumnName col, Object val) {
+    static ScanFilter neq(ColumnName col, Object val) {
         return new Column(col, new Predicate.Neq(val));
     }
 
@@ -48,7 +48,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the exclusive lower bound
     /// @return a `Column` bound to a [Predicate.Gt]
-    static RowFilter gt(ColumnName col, Comparable<?> val) {
+    static ScanFilter gt(ColumnName col, Comparable<?> val) {
         return new Column(col, new Predicate.Gt(val));
     }
 
@@ -57,7 +57,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the inclusive lower bound
     /// @return a `Column` bound to a [Predicate.Gte]
-    static RowFilter gte(ColumnName col, Comparable<?> val) {
+    static ScanFilter gte(ColumnName col, Comparable<?> val) {
         return new Column(col, new Predicate.Gte(val));
     }
 
@@ -66,7 +66,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the exclusive upper bound
     /// @return a `Column` bound to a [Predicate.Lt]
-    static RowFilter lt(ColumnName col, Comparable<?> val) {
+    static ScanFilter lt(ColumnName col, Comparable<?> val) {
         return new Column(col, new Predicate.Lt(val));
     }
 
@@ -75,7 +75,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// @param col the column name
     /// @param val the inclusive upper bound
     /// @return a `Column` bound to a [Predicate.Lte]
-    static RowFilter lte(ColumnName col, Comparable<?> val) {
+    static ScanFilter lte(ColumnName col, Comparable<?> val) {
         return new Column(col, new Predicate.Lte(val));
     }
 
@@ -83,7 +83,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     ///
     /// @param col the column name
     /// @return a `Column` bound to a [Predicate.IsNull]
-    static RowFilter isNull(ColumnName col) {
+    static ScanFilter isNull(ColumnName col) {
         return new Column(col, new Predicate.IsNull());
     }
 
@@ -91,15 +91,15 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     ///
     /// @param col the column name
     /// @return a `Column` bound to a [Predicate.IsNotNull]
-    static RowFilter isNotNull(ColumnName col) {
+    static ScanFilter isNotNull(ColumnName col) {
         return new Column(col, new Predicate.IsNotNull());
     }
 
-    /// Conjoins this filter with `other` into a binary [RowFilter.And].
+    /// Conjoins this filter with `other` into a binary [ScanFilter.And].
     ///
     /// @param other the filter to conjoin with this one
     /// @return an `And` over this filter and `other`
-    default RowFilter and(RowFilter other) {
+    default ScanFilter and(ScanFilter other) {
         return new And(List.of(this, other));
     }
 
@@ -107,7 +107,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     /// chunk is pruned when any sub-filter prunes it.
     ///
     /// @param filters the conjoined sub-filters, must be non-null
-    record And(List<RowFilter> filters) implements RowFilter {
+    record And(List<ScanFilter> filters) implements ScanFilter {
 
         /// Validates the list.
         ///
@@ -122,7 +122,7 @@ public sealed interface RowFilter permits RowFilter.Column, RowFilter.And {
     ///
     /// @param column    the column name, must be non-null
     /// @param predicate the value-test to apply to the column, must be non-null
-    record Column(ColumnName column, Predicate predicate) implements RowFilter {
+    record Column(ColumnName column, Predicate predicate) implements ScanFilter {
 
         /// Validates both components.
         ///

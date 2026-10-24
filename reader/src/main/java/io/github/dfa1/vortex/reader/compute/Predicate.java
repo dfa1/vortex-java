@@ -10,7 +10,7 @@ import java.util.Objects;
 /// lowers each leaf into an encoded-domain comparison for the array at hand (ALP, for instance,
 /// encodes the scalar into its integer domain once, then runs a long compare). The same predicate
 /// can instead be compiled against per-zone min/max statistics for chunk pruning — ADR 0013 §5
-/// makes this the shared vocabulary that [io.github.dfa1.vortex.reader.RowFilter] will accept once
+/// makes this the shared vocabulary that [io.github.dfa1.vortex.reader.ScanFilter] will accept once
 /// the two layers unify.
 ///
 /// The leaf variants split by what they test:
@@ -144,7 +144,7 @@ public sealed interface Predicate
     /// Matches rows whose value is not null.
     ///
     /// The complement of [Predicate.IsNull]; present so the vocabulary is a superset of
-    /// [io.github.dfa1.vortex.reader.RowFilter], which pushes both null tests into zone-map pruning.
+    /// [io.github.dfa1.vortex.reader.ScanFilter], which pushes both null tests into zone-map pruning.
     record IsNotNull() implements Predicate {
     }
 

@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
@@ -20,11 +20,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-/// Translates Calcite `RexNode` predicates into a zone-map [RowFilter], in two variants used by
+/// Translates Calcite `RexNode` predicates into a zone-map [ScanFilter], in two variants used by
 /// [VortexTable]: a lenient translation for the scan path (an unrecognized predicate is simply
 /// dropped, since Calcite still re-checks every row) and a strict translation for aggregate
 /// push-down (a single untranslatable predicate abandons the whole rewrite, since answering from
-/// stats is only sound when the [RowFilter] captures the predicate in full).
+/// stats is only sound when the [ScanFilter] captures the predicate in full).
 final class RexFilterTranslator {
 
     /// Used only to expand `SEARCH`/`Sarg` predicates (e.g. `BETWEEN`, `IN`) back into ordinary
@@ -34,7 +34,7 @@ final class RexFilterTranslator {
     private RexFilterTranslator() {
     }
 
-    /// Translates the Calcite predicates into a zone-map [RowFilter], keeping only what we can prune
+    /// Translates the Calcite predicates into a zone-map [ScanFilter], keeping only what we can prune
     /// on: `=`, `<>`, `<`, `<=`, `>`, `>=` between a column and a literal, `IS [NOT] NULL`, a
     /// prefix `LIKE 'abc%'`, a single-column `OR` (such as an `IN` list), and `AND`. Predicates we don't understand are
     /// simply not pushed — Calcite still applies them.
@@ -43,8 +43,8 @@ final class RexFilterTranslator {
     /// @param names   the table's column names, by field index
     /// @param types   the table's column dtypes, by field index
     /// @return the conjoined filter capturing every translatable predicate, or empty if none is
-    static Optional<RowFilter> toRowFilter(List<RexNode> filters, List<ColumnName> names, List<DType> types) {
-        List<RowFilter> pushed = new ArrayList<>();
+    static Optional<ScanFilter> toScanFilter(List<RexNode> filters, List<ColumnName> names, List<DType> types) {
+        List<ScanFilter> pushed = new ArrayList<>();
         for (RexNode node : filters) {
             // Calcite encodes BETWEEN / IN / range unions as SEARCH(ref, Sarg); expand back to a
             // comparison tree (>=, <=, AND, OR) before translating.
@@ -57,26 +57,26 @@ final class RexFilterTranslator {
         if (pushed.size() == 1) {
             return Optional.of(pushed.getFirst());
         }
-        return Optional.of(RowFilter.and(pushed.toArray(RowFilter[]::new)));
+        return Optional.of(ScanFilter.and(pushed.toArray(ScanFilter[]::new)));
     }
 
-    /// Translates the predicates a `WHERE` pushed onto the scan into one [RowFilter], **strictly**:
+    /// Translates the predicates a `WHERE` pushed onto the scan into one [ScanFilter], **strictly**:
     /// returns empty if any predicate (or any conjunct of one) is not a column-vs-literal
     /// comparison or `AND` of them. The strictness is the correctness guard for aggregate
-    /// push-down — answering from stats is only sound when the [RowFilter] captures the *whole*
+    /// push-down — answering from stats is only sound when the [ScanFilter] captures the *whole*
     /// predicate, so a single untranslatable conjunct must abandon the rewrite rather than silently
-    /// drop a filter (as [#toRowFilter] does for the scan path, where Calcite still re-checks
+    /// drop a filter (as [#toScanFilter] does for the scan path, where Calcite still re-checks
     /// every row).
     ///
     /// @param filters the predicates Calcite pushed onto the scan
     /// @param names   the table's column names, by field index
     /// @param types   the table's column dtypes, by field index
     /// @return the conjoined filter, or empty when any predicate is not fully translatable
-    static Optional<RowFilter> translateStrict(List<RexNode> filters, List<ColumnName> names, List<DType> types) {
-        List<RowFilter> translated = new ArrayList<>();
+    static Optional<ScanFilter> translateStrict(List<RexNode> filters, List<ColumnName> names, List<DType> types) {
+        List<ScanFilter> translated = new ArrayList<>();
         for (RexNode node : filters) {
             RexNode expanded = RexUtil.expandSearch(REX_BUILDER, null, node);
-            Optional<RowFilter> one = strictComparison(expanded, names, types);
+            Optional<ScanFilter> one = strictComparison(expanded, names, types);
             if (one.isEmpty()) {
                 return Optional.empty();
             }
@@ -88,7 +88,7 @@ final class RexFilterTranslator {
         if (translated.size() == 1) {
             return Optional.of(translated.getFirst());
         }
-        return Optional.of(RowFilter.and(translated.toArray(RowFilter[]::new)));
+        return Optional.of(ScanFilter.and(translated.toArray(ScanFilter[]::new)));
     }
 
     /// Collects every column the filter references into `out`, so the scan can include them for
@@ -96,27 +96,27 @@ final class RexFilterTranslator {
     ///
     /// @param filter the filter tree to walk
     /// @param out    the set to add every referenced column name into
-    static void collectColumns(RowFilter filter, Set<ColumnName> out) {
+    static void collectColumns(ScanFilter filter, Set<ColumnName> out) {
         switch (filter) {
-            case RowFilter.And(var parts) -> parts.forEach(f -> collectColumns(f, out));
-            case RowFilter.Column(var col, _) -> out.add(col);
+            case ScanFilter.And(var parts) -> parts.forEach(f -> collectColumns(f, out));
+            case ScanFilter.Column(var col, _) -> out.add(col);
         }
     }
 
-    /// Lenient translation for the scan path ([#toRowFilter]): an unrecognized node (or `AND`
+    /// Lenient translation for the scan path ([#toScanFilter]): an unrecognized node (or `AND`
     /// conjunct) is simply dropped, since the scan re-checks every row so a partially captured filter
     /// is still correct, just less selective for zone-map pruning. Delegates to the shared
     /// [#comparison] dispatch with `strict = false`.
-    private static Optional<RowFilter> toComparison(RexNode node, List<ColumnName> names, List<DType> types) {
+    private static Optional<ScanFilter> toComparison(RexNode node, List<ColumnName> names, List<DType> types) {
         return comparison(node, names, types, false);
     }
 
     /// Strict counterpart of [#toComparison]: the same grammar, but a single unrecognized node (or
     /// one `AND` conjunct) collapses the whole result to empty rather than being dropped. Used by
-    /// [#translateStrict] so aggregate push-down answers from stats only when the [RowFilter]
+    /// [#translateStrict] so aggregate push-down answers from stats only when the [ScanFilter]
     /// captures the predicate in full. Delegates to the shared [#comparison] dispatch with
     /// `strict = true`.
-    private static Optional<RowFilter> strictComparison(RexNode node, List<ColumnName> names, List<DType> types) {
+    private static Optional<ScanFilter> strictComparison(RexNode node, List<ColumnName> names, List<DType> types) {
         return comparison(node, names, types, true);
     }
 
@@ -136,16 +136,16 @@ final class RexFilterTranslator {
     /// @param strict `true` to fail-closed on any untranslatable node and accept null tests, `false`
     ///               to drop untranslatable nodes
     /// @return the translated filter, or empty per the `strict` policy above
-    private static Optional<RowFilter> comparison(RexNode node, List<ColumnName> names, List<DType> types,
+    private static Optional<ScanFilter> comparison(RexNode node, List<ColumnName> names, List<DType> types,
                                                   boolean strict) {
         if (!(node instanceof RexCall call)) {
             return Optional.empty();
         }
         return switch (call.getKind()) {
             case AND -> {
-                List<RowFilter> parts = new ArrayList<>();
+                List<ScanFilter> parts = new ArrayList<>();
                 for (RexNode operand : call.getOperands()) {
-                    Optional<RowFilter> part = comparison(operand, names, types, strict);
+                    Optional<ScanFilter> part = comparison(operand, names, types, strict);
                     if (part.isPresent()) {
                         parts.add(part.get());
                     } else if (strict) {
@@ -153,13 +153,13 @@ final class RexFilterTranslator {
                     }
                 }
                 yield parts.isEmpty() ? Optional.empty()
-                        : Optional.of(RowFilter.and(parts.toArray(RowFilter[]::new)));
+                        : Optional.of(ScanFilter.and(parts.toArray(ScanFilter[]::new)));
             }
             case OR -> {
                 ColumnName column = null;
                 Predicate predicate = null;
                 for (RexNode operand : call.getOperands()) {
-                    Optional<RowFilter.Column> part = comparison(operand, names, types, true)
+                    Optional<ScanFilter.Column> part = comparison(operand, names, types, true)
                             .flatMap(RexFilterTranslator::singleColumn);
                     if (part.isEmpty() || column != null && !column.equals(part.get().column())) {
                         yield Optional.empty();
@@ -168,7 +168,7 @@ final class RexFilterTranslator {
                     predicate = predicate == null ? part.get().predicate()
                             : new Predicate.Or(predicate, part.get().predicate());
                 }
-                yield Optional.of(new RowFilter.Column(column, predicate));
+                yield Optional.of(new ScanFilter.Column(column, predicate));
             }
             case EQUALS, NOT_EQUALS, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL ->
                     binary(call, names, types);
@@ -180,14 +180,14 @@ final class RexFilterTranslator {
 
     /// The filter as one column's predicate: itself for a column filter, the conjunction of an `AND`
     /// whose parts all test the same column, else empty.
-    private static Optional<RowFilter.Column> singleColumn(RowFilter filter) {
+    private static Optional<ScanFilter.Column> singleColumn(ScanFilter filter) {
         return switch (filter) {
-            case RowFilter.Column column -> Optional.of(column);
-            case RowFilter.And(var parts) -> {
+            case ScanFilter.Column column -> Optional.of(column);
+            case ScanFilter.And(var parts) -> {
                 ColumnName column = null;
                 Predicate predicate = null;
-                for (RowFilter part : parts) {
-                    Optional<RowFilter.Column> one = singleColumn(part);
+                for (ScanFilter part : parts) {
+                    Optional<ScanFilter.Column> one = singleColumn(part);
                     if (one.isEmpty() || column != null && !column.equals(one.get().column())) {
                         yield Optional.empty();
                     }
@@ -195,32 +195,32 @@ final class RexFilterTranslator {
                     predicate = predicate == null ? one.get().predicate()
                             : new Predicate.And(predicate, one.get().predicate());
                 }
-                yield Optional.of(new RowFilter.Column(column, predicate));
+                yield Optional.of(new ScanFilter.Column(column, predicate));
             }
         };
     }
 
     /// Translates `col IS NULL` / `col IS NOT NULL` over a bare column reference into the matching
-    /// [RowFilter], which the zone-map fold answers from each zone's null count. Anything other than
+    /// [ScanFilter], which the zone-map fold answers from each zone's null count. Anything other than
     /// a direct [RexInputRef] operand (e.g. `IS NULL` over an expression) abandons the translation —
     /// fail-closed, mirroring [#binary].
-    private static Optional<RowFilter> nullCheck(RexCall call, List<ColumnName> names) {
+    private static Optional<ScanFilter> nullCheck(RexCall call, List<ColumnName> names) {
         List<RexNode> ops = call.getOperands();
         if (ops.size() != 1 || !(ops.getFirst() instanceof RexInputRef ref)) {
             return Optional.empty();
         }
         ColumnName col = names.get(ref.getIndex());
         return Optional.of(call.getKind() == SqlKind.IS_NULL
-                ? RowFilter.isNull(col)
-                : RowFilter.isNotNull(col));
+                ? ScanFilter.isNull(col)
+                : ScanFilter.isNotNull(col));
     }
 
     /// Translates `col LIKE 'prefix%'` on a string column into the range `col >= prefix AND col <
     /// successor(prefix)`, which holds exactly the strings starting with `prefix`: the successor
     /// raises the prefix's last code point by one, and code-point order is the UTF-8 byte order
-    /// [RowFilter] compares strings in. A pattern with any other wildcard (`_`, an inner `%`) or an
+    /// [ScanFilter] compares strings in. A pattern with any other wildcard (`_`, an inner `%`) or an
     /// `ESCAPE` clause is not translated; Calcite evaluates it. `LIKE '%'` keeps every non-null row.
-    private static Optional<RowFilter> like(RexCall call, List<ColumnName> names, List<DType> types) {
+    private static Optional<ScanFilter> like(RexCall call, List<ColumnName> names, List<DType> types) {
         List<RexNode> ops = call.getOperands();
         if (ops.size() != 2 || !(ops.get(0) instanceof RexInputRef ref) || !(ops.get(1) instanceof RexLiteral lit)
                 || !(types.get(ref.getIndex()) instanceof DType.Utf8)) {
@@ -236,11 +236,11 @@ final class RexFilterTranslator {
         }
         ColumnName col = names.get(ref.getIndex());
         if (prefix.isEmpty()) {
-            return Optional.of(RowFilter.isNotNull(col));
+            return Optional.of(ScanFilter.isNotNull(col));
         }
         return Optional.of(successor(prefix)
-                .map(upper -> RowFilter.and(RowFilter.gte(col, prefix), RowFilter.lt(col, upper)))
-                .orElseGet(() -> RowFilter.gte(col, prefix)));
+                .map(upper -> ScanFilter.and(ScanFilter.gte(col, prefix), ScanFilter.lt(col, upper)))
+                .orElseGet(() -> ScanFilter.gte(col, prefix)));
     }
 
     /// The least string greater than every string starting with `prefix`: its last code point raised
@@ -261,7 +261,7 @@ final class RexFilterTranslator {
         return Optional.empty();
     }
 
-    private static Optional<RowFilter> binary(RexCall call, List<ColumnName> names, List<DType> types) {
+    private static Optional<ScanFilter> binary(RexCall call, List<ColumnName> names, List<DType> types) {
         List<RexNode> ops = call.getOperands();
         if (ops.size() != 2) {
             return Optional.empty();
@@ -287,12 +287,12 @@ final class RexFilterTranslator {
         ColumnName col = names.get(ref.getIndex());
         Comparable<?> cmp = (Comparable<?>) val;
         return Optional.of(switch (kind) {
-            case EQUALS -> RowFilter.eq(col, val);
-            case NOT_EQUALS -> RowFilter.neq(col, val);
-            case LESS_THAN -> RowFilter.lt(col, cmp);
-            case LESS_THAN_OR_EQUAL -> RowFilter.lte(col, cmp);
-            case GREATER_THAN -> RowFilter.gt(col, cmp);
-            case GREATER_THAN_OR_EQUAL -> RowFilter.gte(col, cmp);
+            case EQUALS -> ScanFilter.eq(col, val);
+            case NOT_EQUALS -> ScanFilter.neq(col, val);
+            case LESS_THAN -> ScanFilter.lt(col, cmp);
+            case LESS_THAN_OR_EQUAL -> ScanFilter.lte(col, cmp);
+            case GREATER_THAN -> ScanFilter.gt(col, cmp);
+            case GREATER_THAN_OR_EQUAL -> ScanFilter.gte(col, cmp);
             default -> throw new IllegalStateException("unreachable kind: " + kind);
         });
     }
@@ -334,7 +334,7 @@ final class RexFilterTranslator {
     }
 
     /// Coerces a SQL literal to the Java type the column's zone-map statistics are stored as, so
-    /// the comparison in [RowFilter] is type-compatible. Integer scalars are stored as `Long` and
+    /// the comparison in [ScanFilter] is type-compatible. Integer scalars are stored as `Long` and
     /// floats as `Double` in the stats, regardless of the column's physical width — a mismatched
     /// boxed type silently disables pruning (the comparator swallows the `ClassCastException`).
     /// Returns `null` for unsupported columns.

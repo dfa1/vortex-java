@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.calcite.VortexTable;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -64,7 +64,7 @@ import java.util.concurrent.TimeUnit;
 ///   data-decode win this A/B isolates. The baseline is also a bare reader path, so both sides differ
 ///   only in how many chunks they decode.
 /// - [#fullScanBaseline] is the pre-feature cost: a [VortexReader] scan with the same range as a
-///   [RowFilter]. Zone-map pruning still drops the fully-OUT chunks, but every surviving chunk —
+///   [ScanFilter]. Zone-map pruning still drops the fully-OUT chunks, but every surviving chunk —
 ///   INTERIOR and BOUNDARY alike — is decoded and the predicate evaluated per row. This is exactly
 ///   the work the old "abandon to a zone-map-pruned scan" did before the boundary fold landed.
 ///
@@ -99,7 +99,7 @@ public class CalciteBoundaryAggregateBenchmark {
 
     private Path file;
     private VortexTable table;
-    private RowFilter filter;
+    private ScanFilter filter;
     private ScanOptions baselineOptions;
     private long lo;
     private long hi;
@@ -115,7 +115,7 @@ public class CalciteBoundaryAggregateBenchmark {
 
         table = new VortexTable(file);
         // BETWEEN lowers to `id >= lo AND id <= hi`; the same filter drives both paths.
-        filter = RowFilter.and(RowFilter.gte(ColumnName.of("id"), lo), RowFilter.lte(ColumnName.of("id"), hi));
+        filter = ScanFilter.and(ScanFilter.gte(ColumnName.of("id"), lo), ScanFilter.lte(ColumnName.of("id"), hi));
         baselineOptions = ScanOptions.columns(ColumnName.of("id"), ColumnName.of(AGG_COLUMN)).withFilter(filter);
 
         // Only the fold's trial runs the checks: decoding through the fold in the baseline's JVM

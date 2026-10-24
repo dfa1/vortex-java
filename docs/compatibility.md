@@ -216,7 +216,7 @@ values satisfies the filter, when a null row cannot satisfy it either, deciding 
 without reading a code. Rust evaluates a dictionary filter over the values too, but always reads the
 codes: results are the same, but a corrupt codes buffer under such a filter goes unreported where
 Rust fails the scan. This is a deliberate divergence, for `WHERE col = 'x'` with `x` absent from the
-dictionary. The row test `Compute.matcher(RowFilter)` builds for a string dictionary follows Rust:
+dictionary. The row test `Compute.matcher(ScanFilter)` builds for a string dictionary follows Rust:
 the filter is evaluated once per dictionary value per scan, and `u8`/`u16` codes are mapped to the
 selected rows in one pass, Rust's `values.take(codes)`.
 

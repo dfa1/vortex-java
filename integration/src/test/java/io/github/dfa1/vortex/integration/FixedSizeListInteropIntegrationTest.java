@@ -13,7 +13,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -258,7 +258,7 @@ class FixedSizeListInteropIntegrationTest {
 
         // When Java reads everything, then only what a filter on the id lets through
         List<Object[]> full = readJava(file, element, size, null);
-        List<Object[]> filtered = readJava(file, element, size, RowFilter.gte(ID, THRESHOLD));
+        List<Object[]> filtered = readJava(file, element, size, ScanFilter.gte(ID, THRESHOLD));
 
         // Then each row's list is whole and belongs to its id
         assertThat(full).hasSize(ROWS);
@@ -636,7 +636,7 @@ class FixedSizeListInteropIntegrationTest {
     }
 
     /// Each row as `{id, list}`.
-    private static List<Object[]> readJava(Path file, Element element, int size, RowFilter filter)
+    private static List<Object[]> readJava(Path file, Element element, int size, ScanFilter filter)
             throws IOException {
         io.github.dfa1.vortex.reader.ScanOptions options = io.github.dfa1.vortex.reader.ScanOptions.all();
         if (filter != null) {

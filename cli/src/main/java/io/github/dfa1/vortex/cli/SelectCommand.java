@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 
 import java.io.IOException;
@@ -24,7 +24,7 @@ final class SelectCommand {
     private static final String USAGE = "usage: select <file.vortex> <col1> [col2 ...] [--where \"<expr>\" ...]";
 
     /// The columns to print and the `--where` conditions (all must hold) parsed from the arguments after the file.
-    private record ParsedArgs(List<ColumnName> columns, List<RowFilter> conditions) {
+    private record ParsedArgs(List<ColumnName> columns, List<ScanFilter> conditions) {
     }
 
     private SelectCommand() {
@@ -55,9 +55,9 @@ final class SelectCommand {
             if (parsed.conditions().isEmpty()) {
                 CsvExporter.exportCsv(path, stdout, options);
             } else {
-                RowFilter filter = parsed.conditions().size() == 1
+                ScanFilter filter = parsed.conditions().size() == 1
                         ? parsed.conditions().getFirst()
-                        : new RowFilter.And(parsed.conditions());
+                        : new ScanFilter.And(parsed.conditions());
                 // The scan reads the printed columns and the filtered ones: the row check runs on decoded
                 // chunks, so a column that is only filtered on must be there even if it is not printed.
                 Set<ColumnName> scanned = new LinkedHashSet<>(parsed.columns());
@@ -77,7 +77,7 @@ final class SelectCommand {
 
     private static ParsedArgs parseArgs(String[] args) {
         List<ColumnName> columns = new ArrayList<>();
-        List<RowFilter> conditions = new ArrayList<>();
+        List<ScanFilter> conditions = new ArrayList<>();
         for (int i = 2; i < args.length; i++) {
             if ("--where".equals(args[i])) {
                 if (i + 1 >= args.length) {

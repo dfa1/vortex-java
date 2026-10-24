@@ -805,13 +805,13 @@ class JavaWritesRustReadsIntegrationTest {
             sut.writeChunk(Map.of(ColumnName.of("v"), new double[]{0.0, 1.0, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY}));
         }
         ColumnName column = ColumnName.of("v");
-        io.github.dfa1.vortex.reader.RowFilter filter = switch (op) {
-            case "EQ" -> io.github.dfa1.vortex.reader.RowFilter.eq(column, bound);
-            case "NOT_EQ" -> io.github.dfa1.vortex.reader.RowFilter.neq(column, bound);
-            case "GT" -> io.github.dfa1.vortex.reader.RowFilter.gt(column, bound);
-            case "GTE" -> io.github.dfa1.vortex.reader.RowFilter.gte(column, bound);
-            case "LT" -> io.github.dfa1.vortex.reader.RowFilter.lt(column, bound);
-            default -> io.github.dfa1.vortex.reader.RowFilter.lte(column, bound);
+        io.github.dfa1.vortex.reader.ScanFilter filter = switch (op) {
+            case "EQ" -> io.github.dfa1.vortex.reader.ScanFilter.eq(column, bound);
+            case "NOT_EQ" -> io.github.dfa1.vortex.reader.ScanFilter.neq(column, bound);
+            case "GT" -> io.github.dfa1.vortex.reader.ScanFilter.gt(column, bound);
+            case "GTE" -> io.github.dfa1.vortex.reader.ScanFilter.gte(column, bound);
+            case "LT" -> io.github.dfa1.vortex.reader.ScanFilter.lt(column, bound);
+            default -> io.github.dfa1.vortex.reader.ScanFilter.lte(column, bound);
         };
 
         // When

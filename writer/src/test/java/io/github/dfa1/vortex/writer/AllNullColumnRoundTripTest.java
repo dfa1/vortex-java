@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -116,8 +116,8 @@ class AllNullColumnRoundTripTest {
         Path file = write(column, shape);
 
         // When
-        long nulls = countRows(file, RowFilter.isNull(COLUMN));
-        long nonNulls = countRows(file, RowFilter.isNotNull(COLUMN));
+        long nulls = countRows(file, ScanFilter.isNull(COLUMN));
+        long nonNulls = countRows(file, ScanFilter.isNotNull(COLUMN));
 
         // Then
         assertThat(nulls).isEqualTo(2L * ROWS - shape.nonNullRows());
@@ -132,7 +132,7 @@ class AllNullColumnRoundTripTest {
         Path file = write(column, shape);
 
         // When
-        long result = countRows(file, RowFilter.gte(COLUMN, column.lowest()));
+        long result = countRows(file, ScanFilter.gte(COLUMN, column.lowest()));
 
         // Then
         assertThat(result).isEqualTo(shape.nonNullRows());
@@ -197,7 +197,7 @@ class AllNullColumnRoundTripTest {
     /// The rows `filter` selects: the scan prunes zones by their stats, then each surviving chunk's
     /// rows are tested, so a zone pruned by mistake loses rows and a placeholder read as a value
     /// adds them.
-    private static long countRows(Path file, RowFilter filter) throws IOException {
+    private static long countRows(Path file, ScanFilter filter) throws IOException {
         long[] rows = {0};
         try (VortexReader reader = VortexReader.open(file);
              var iter = reader.scan(ScanOptions.all().withFilter(filter))) {

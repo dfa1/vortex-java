@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -46,7 +46,7 @@ import org.openjdk.jmh.annotations.Warmup;
 
 /// Baseline for the encoded-domain compute-kernel specialization of ADR 0013.
 ///
-/// The fused compute kernel ([Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]) today decodes every
+/// The fused compute kernel ([Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)]) today decodes every
 /// element through the typed accessor: it reads `getLong(i)` / `getDouble(i)` per row, so an ALP or
 /// Frame-of-Reference column is fully reconstructed into the value domain before a single comparison
 /// or addition runs. The future work compares and reduces directly in the encoded integer domain
@@ -223,7 +223,7 @@ public class ComputeKernelBenchmark {
         }
     }
 
-    /// Fused one-pass pipeline: per chunk, [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]
+    /// Fused one-pass pipeline: per chunk, [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)]
     /// filters the ALP-encoded `price` column with `price > 500` and folds the FoR-encoded `measure`
     /// column over the selected rows in a single scan, with no intermediate selection bitmap. Decodes
     /// each price and (when selected) each measure through the accessor; [#forLoopFilteredSum()] is
@@ -236,15 +236,15 @@ public class ComputeKernelBenchmark {
         long acc = 0;
         for (Chunk chunk : chunks) {
             FilteredAggregate aggregate = Compute.filteredAggregate(
-                    chunk, RowFilter.gt(ColumnName.of("price"), PRICE_THRESHOLD), ColumnName.of("measure"));
+                    chunk, ScanFilter.gt(ColumnName.of("price"), PRICE_THRESHOLD), ColumnName.of("measure"));
             acc += aggregate.selectedRows() + aggregate.sum().longValue();
         }
         return acc;
     }
 
     /// Fused dict-filtered multi-column aggregate: per chunk,
-    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)] evaluates `category == 7` as a whole
-    /// [RowFilter] and folds `measure`'s `SUM` / `MIN` / `MAX` / non-null count over the selected
+    /// [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)] evaluates `category == 7` as a whole
+    /// [ScanFilter] and folds `measure`'s `SUM` / `MIN` / `MAX` / non-null count over the selected
     /// rows — the kernel behind the Calcite boundary-chunk aggregate push-down, on the same
     /// dict-filtered workload as [#forLoopDictSegment()]. Folds the selected count and sum into
     /// the return value so JMH cannot eliminate the loop.
@@ -263,13 +263,13 @@ public class ComputeKernelBenchmark {
         long acc = 0;
         for (Chunk chunk : chunks) {
             FilteredAggregate aggregate = Compute.filteredAggregate(
-                    chunk, RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE), ColumnName.of("measure"));
+                    chunk, ScanFilter.eq(ColumnName.of("category"), CATEGORY_VALUE), ColumnName.of("measure"));
             acc += aggregate.selectedRows() + aggregate.sum().longValue();
         }
         return acc;
     }
 
-    /// Fused dict-filtered `COUNT(*)`: [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)] with
+    /// Fused dict-filtered `COUNT(*)`: [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)] with
     /// no aggregate column, so the `DictFilter` lane counts the rows matching `category == 7` and
     /// reads no other column — the scan's pure code-compare cost.
     ///
@@ -279,14 +279,14 @@ public class ComputeKernelBenchmark {
         long acc = 0;
         for (Chunk chunk : chunks) {
             acc += Compute.filteredAggregate(
-                    chunk, RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE), null).selectedRows();
+                    chunk, ScanFilter.eq(ColumnName.of("category"), CATEGORY_VALUE), null).selectedRows();
         }
         return acc;
     }
 
     /// ADR 0019 baseline, lever 1 — multi-aggregate over one filter: `SUM`/`MIN`(measure) and
     /// `SUM`(plain) under the same single-leaf `category == 7` filter, expressed the only way the
-    /// current API allows — one [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)] call PER
+    /// current API allows — one [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)] call PER
     /// aggregate column, so the filter column is re-scanned once per aggregate. The transducer
     /// façade folds every aggregate from one scan; this method is the number it must beat.
     ///
@@ -298,7 +298,7 @@ public class ComputeKernelBenchmark {
     public long fusedFilteredAggregateTwoAggregates() {
         long acc = 0;
         for (Chunk chunk : chunks) {
-            RowFilter filter = RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE);
+            ScanFilter filter = ScanFilter.eq(ColumnName.of("category"), CATEGORY_VALUE);
             FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, ColumnName.of("measure"));
             FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, ColumnName.of("plain"));
             acc += measure.selectedRows() + measure.sum().longValue()
@@ -325,8 +325,8 @@ public class ComputeKernelBenchmark {
     public long fusedFilteredAggregateMulti() {
         long acc = 0;
         for (Chunk chunk : chunks) {
-            RowFilter filter = RowFilter.eq(ColumnName.of("category"), CATEGORY_VALUE)
-                    .and(RowFilter.gt(ColumnName.of("price"), PRICE_THRESHOLD));
+            ScanFilter filter = ScanFilter.eq(ColumnName.of("category"), CATEGORY_VALUE)
+                    .and(ScanFilter.gt(ColumnName.of("price"), PRICE_THRESHOLD));
             FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, ColumnName.of("measure"));
             FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, ColumnName.of("plain"));
             acc += measure.selectedRows() + measure.sum().longValue() + plain.sum().longValue();

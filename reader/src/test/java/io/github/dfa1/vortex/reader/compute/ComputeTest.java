@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -48,7 +48,7 @@ class ComputeTest {
         // When the chunk or the filter is null
         // Then the facade fails fast
         assertThatNullPointerException()
-                .isThrownBy(() -> Compute.filteredAggregate(null, RowFilter.gt(ColumnName.of("f"), 0L), ColumnName.of("v")));
+                .isThrownBy(() -> Compute.filteredAggregate(null, ScanFilter.gt(ColumnName.of("f"), 0L), ColumnName.of("v")));
         assertThatNullPointerException()
                 .isThrownBy(() -> Compute.filteredAggregate(chunk, null, ColumnName.of("v")));
     }
@@ -77,7 +77,7 @@ class ComputeTest {
             // Given
             Chunk chunk = mock(Chunk.class);
             given(chunk.<Array>column(COL)).willReturn(new NullArray(DType.I64.asNullable(), ROWS));
-            RowFilter filter = new RowFilter.Column(COL, predicate);
+            ScanFilter filter = new ScanFilter.Column(COL, predicate);
 
             // When
             LongPredicate result = Compute.matcher(chunk, filter);
@@ -90,9 +90,9 @@ class ComputeTest {
         }
     }
 
-    /// [Compute#matcher(Chunk, RowFilter)] lowers a filter once per chunk; over a string dictionary
+    /// [Compute#matcher(Chunk, ScanFilter)] lowers a filter once per chunk; over a string dictionary
     /// it evaluates the predicate per dictionary entry instead of per row (#552). The per-row
-    /// [Compute#matches(Chunk, RowFilter, long)] is the oracle: both must select the same rows.
+    /// [Compute#matches(Chunk, ScanFilter, long)] is the oracle: both must select the same rows.
     @Nested
     class Matcher {
 
@@ -126,7 +126,7 @@ class ComputeTest {
             // Given
             Chunk chunk = mock(Chunk.class);
             given(chunk.<Array>column(SYM)).willReturn(nullableDict(codesPType));
-            RowFilter filter = new RowFilter.Column(SYM, predicate);
+            ScanFilter filter = new ScanFilter.Column(SYM, predicate);
 
             // When
             LongPredicate sut = Compute.matcher(chunk, filter);
@@ -147,7 +147,7 @@ class ComputeTest {
                     codesPType);
             Chunk chunk = mock(Chunk.class);
             given(chunk.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DType.UTF8, 3, dict, 2));
-            RowFilter filter = RowFilter.eq(SYM, "b");
+            ScanFilter filter = ScanFilter.eq(SYM, "b");
 
             // When
             LongPredicate sut = Compute.matcher(chunk, filter);
@@ -168,7 +168,7 @@ class ComputeTest {
                     new String[]{"a", "b", "c", "d"}, new int[]{3, 1}));
 
             // When
-            LongPredicate sut = Compute.matcher(chunk, RowFilter.eq(SYM, "b"));
+            LongPredicate sut = Compute.matcher(chunk, ScanFilter.eq(SYM, "b"));
 
             // Then
             assertThat(LongStream.range(0, 2).filter(sut).boxed().toList()).containsExactly(1L);
@@ -184,7 +184,7 @@ class ComputeTest {
             Chunk chunk = mock(Chunk.class);
             given(chunk.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA,
                     new String[]{"a", "b"}, new int[]{0, 7, 1}, codesPType));
-            LongPredicate sut = Compute.matcher(chunk, RowFilter.eq(SYM, "b"));
+            LongPredicate sut = Compute.matcher(chunk, ScanFilter.eq(SYM, "b"));
 
             // When / Then
             assertThat(sut.test(2)).isTrue();
@@ -200,7 +200,7 @@ class ComputeTest {
             Chunk chunk = mock(Chunk.class);
             given(chunk.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA,
                     new String[]{"a", "b"}, new int[]{0, 7, 1}, codesPType));
-            LongPredicate sut = Compute.matcher(chunk, RowFilter.eq(SYM, "z"));
+            LongPredicate sut = Compute.matcher(chunk, ScanFilter.eq(SYM, "z"));
 
             // When / Then
             assertThat(sut.test(2)).isFalse();
@@ -221,7 +221,7 @@ class ComputeTest {
             Chunk third = mock(Chunk.class);
             given(third.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA, new String[]{"b", "a"},
                     new int[]{1, 0}, PType.U16));
-            Function<Chunk, RowSelection> sut = Compute.matcher(RowFilter.eq(SYM, "b"));
+            Function<Chunk, RowSelection> sut = Compute.matcher(ScanFilter.eq(SYM, "b"));
 
             // When
             List<List<Long>> result = Stream.of(first, second, third)
@@ -268,14 +268,14 @@ class ComputeTest {
             }
             Chunk chunk = mock(Chunk.class);
             given(chunk.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA, pool, codes, PType.U8));
-            LongPredicate sut = Compute.matcher(chunk, RowFilter.eq(SYM, "v7"));
+            LongPredicate sut = Compute.matcher(chunk, ScanFilter.eq(SYM, "v7"));
 
             // When
             List<Long> result = LongStream.range(0, 300).filter(sut).boxed().toList();
 
             // Then — rows 7 and 263 code entry 7; entry 299, past what a u8 code reaches, matches no row
             assertThat(result).containsExactly(7L, 263L);
-            assertThat(LongStream.range(0, 300).filter(Compute.matcher(chunk, RowFilter.eq(SYM, "v299"))).count())
+            assertThat(LongStream.range(0, 300).filter(Compute.matcher(chunk, ScanFilter.eq(SYM, "v299"))).count())
                     .isZero();
         }
 
@@ -285,10 +285,10 @@ class ComputeTest {
             Chunk chunk = mock(Chunk.class);
 
             // When / Then
-            assertThatNullPointerException().isThrownBy(() -> Compute.matcher(null, RowFilter.eq(SYM, "b")));
+            assertThatNullPointerException().isThrownBy(() -> Compute.matcher(null, ScanFilter.eq(SYM, "b")));
             assertThatNullPointerException().isThrownBy(() -> Compute.matcher(chunk, null));
-            assertThatNullPointerException().isThrownBy(() -> Compute.matcher((RowFilter) null));
-            assertThatNullPointerException().isThrownBy(() -> Compute.matcher(RowFilter.eq(SYM, "b")).apply(null));
+            assertThatNullPointerException().isThrownBy(() -> Compute.matcher((ScanFilter) null));
+            assertThatNullPointerException().isThrownBy(() -> Compute.matcher(ScanFilter.eq(SYM, "b")).apply(null));
         }
 
         /// [RowSelection#nextSelected(long)] jumps between selected rows, a 64-row word at a time over
@@ -325,20 +325,20 @@ class ComputeTest {
 
             static Stream<Arguments> filters() {
                 return Stream.of(PType.U8, PType.U16, PType.I32).flatMap(codes -> Stream.of(
-                        Arguments.of(named("one bitmap leaf", RowFilter.eq(SYM, "b")), codes),
-                        Arguments.of(named("no row", RowFilter.eq(SYM, "z")), codes),
+                        Arguments.of(named("one bitmap leaf", ScanFilter.eq(SYM, "b")), codes),
+                        Arguments.of(named("no row", ScanFilter.eq(SYM, "z")), codes),
                         // two bitmaps ANDed into one: "b" on even rows only
-                        Arguments.of(named("two bitmap leaves", RowFilter.and(RowFilter.eq(SYM, "b"),
-                                RowFilter.eq(OTHER, "x"))), codes),
+                        Arguments.of(named("two bitmap leaves", ScanFilter.and(ScanFilter.eq(SYM, "b"),
+                                ScanFilter.eq(OTHER, "x"))), codes),
                         // a numeric leaf tested only on the bitmap's rows
-                        Arguments.of(named("bitmap and residual", RowFilter.and(RowFilter.eq(SYM, "b"),
-                                RowFilter.gt(N, 100L))), codes),
-                        Arguments.of(named("no bitmap", RowFilter.gt(N, 190L)), codes)));
+                        Arguments.of(named("bitmap and residual", ScanFilter.and(ScanFilter.eq(SYM, "b"),
+                                ScanFilter.gt(N, 100L))), codes),
+                        Arguments.of(named("no bitmap", ScanFilter.gt(N, 190L)), codes)));
             }
 
             @ParameterizedTest(name = "{0} over {1} codes")
             @MethodSource("filters")
-            void walk_visitsExactlyTheRowsTheTestAccepts(RowFilter filter, PType codesPType) {
+            void walk_visitsExactlyTheRowsTheTestAccepts(ScanFilter filter, PType codesPType) {
                 // Given
                 Chunk chunk = chunk(codesPType);
                 RowSelection sut = Compute.matcher(chunk, filter);
@@ -359,7 +359,7 @@ class ComputeTest {
             @Test
             void fromPastTheLastRow_selectsNothing() {
                 // Given
-                RowSelection sut = Compute.matcher(chunk(PType.U16), RowFilter.eq(SYM, "b"));
+                RowSelection sut = Compute.matcher(chunk(PType.U16), ScanFilter.eq(SYM, "b"));
 
                 // When
                 long result = sut.nextSelected(ROWS);
@@ -370,7 +370,7 @@ class ComputeTest {
         }
     }
 
-    /// [Compute#groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)] folds per dictionary
+    /// [Compute#groupedAggregate(Chunk, ColumnName, ScanFilter, ColumnName)] folds per dictionary
     /// code; every expectation below is the plain per-row SQL answer, worked out by hand.
     @Nested
     class Grouped {
@@ -445,7 +445,7 @@ class ComputeTest {
             Chunk chunk = chunk(nullableGroups(), v);
 
             // When
-            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, RowFilter.gt(V, 4L), V)
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, ScanFilter.gt(V, 4L), V)
                     .orElseThrow();
 
             // Then — groups with no selected row do not appear
@@ -533,7 +533,7 @@ class ComputeTest {
             Array v = ComputeArrays.longArray(ARENA, 1, 2, 3, 4, 5);
 
             // When
-            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, RowFilter.gt(V, 1L), V)
+            Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, ScanFilter.gt(V, 1L), V)
                     .orElseThrow();
 
             // Then

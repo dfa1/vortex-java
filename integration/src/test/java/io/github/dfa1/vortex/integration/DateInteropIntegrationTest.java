@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -85,7 +85,7 @@ class DateInteropIntegrationTest {
         long threshold = CHUNK_ROWS + CHUNK_ROWS / 2;
 
         // When
-        SequencedMap<Long, LocalDate> result = readJava(file, ScanOptions.all().withFilter(RowFilter.gte(ID, threshold)));
+        SequencedMap<Long, LocalDate> result = readJava(file, ScanOptions.all().withFilter(ScanFilter.gte(ID, threshold)));
 
         // Then
         assertThat(result.keySet()).contains(threshold, (long) ROWS - 1);

@@ -17,7 +17,7 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.csv.RowPredicate;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 
@@ -48,7 +48,7 @@ final class FilterCommand {
             return ExitStatus.FILE_NOT_FOUND;
         }
         String expr = String.join(" ", Arrays.asList(args).subList(2, args.length));
-        RowFilter filter;
+        ScanFilter filter;
         try {
             filter = parseFilter(expr);
         } catch (IllegalArgumentException e) {
@@ -72,7 +72,7 @@ final class FilterCommand {
         }
     }
 
-    static RowFilter parseFilter(String expr) {
+    static ScanFilter parseFilter(String expr) {
         String trimmed = expr.trim();
         int opStart = indexOfOperator(trimmed);
         if (opStart <= 0) {
@@ -88,12 +88,12 @@ final class FilterCommand {
         Comparable<?> value = parseValue(rawValue);
         ColumnName column = ColumnName.of(col);
         return switch (op) {
-            case ">" -> RowFilter.gt(column, value);
-            case ">=" -> RowFilter.gte(column, value);
-            case "<" -> RowFilter.lt(column, value);
-            case "<=" -> RowFilter.lte(column, value);
-            case "=", "==" -> RowFilter.eq(column, value);
-            case "!=" -> RowFilter.neq(column, value);
+            case ">" -> ScanFilter.gt(column, value);
+            case ">=" -> ScanFilter.gte(column, value);
+            case "<" -> ScanFilter.lt(column, value);
+            case "<=" -> ScanFilter.lte(column, value);
+            case "=", "==" -> ScanFilter.eq(column, value);
+            case "!=" -> ScanFilter.neq(column, value);
             default -> throw new IllegalArgumentException("unknown operator: " + op);
         };
     }
@@ -157,17 +157,17 @@ final class FilterCommand {
     }
 
     /// The columns a filter reads, so a projecting scan can include them even when the output omits them.
-    static List<ColumnName> filterColumns(RowFilter filter) {
+    static List<ColumnName> filterColumns(ScanFilter filter) {
         return switch (filter) {
-            case RowFilter.Column(var col, _) -> List.of(col);
-            case RowFilter.And(var filters) -> filters.stream().flatMap(f -> filterColumns(f).stream()).toList();
+            case ScanFilter.Column(var col, _) -> List.of(col);
+            case ScanFilter.And(var filters) -> filters.stream().flatMap(f -> filterColumns(f).stream()).toList();
         };
     }
 
-    static RowPredicate toRowPredicate(RowFilter filter) {
+    static RowPredicate toRowPredicate(ScanFilter filter) {
         return switch (filter) {
-            case RowFilter.Column(var col, var predicate) -> columnPredicate(col, predicate);
-            case RowFilter.And(var filters) -> {
+            case ScanFilter.Column(var col, var predicate) -> columnPredicate(col, predicate);
+            case ScanFilter.And(var filters) -> {
                 RowPredicate[] preds = filters.stream().map(FilterCommand::toRowPredicate).toArray(RowPredicate[]::new);
                 yield (chunk, rowIdx) -> {
                     for (RowPredicate p : preds) {

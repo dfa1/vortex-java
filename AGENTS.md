@@ -45,7 +45,7 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
                         see docs/compatibility.md), SimdOperationsSupport#preferred() (picks one)
           core.fbs / core.proto — generated wire codecs + their runtimes
 reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats, Zone,
-          ScanOptions, RowFilter; file internals (Footer, Trailer, PostscriptParser, …)
+          ScanOptions, ScanFilter; file internals (Footer, Trailer, PostscriptParser, …)
           reader.array  — Array + all subtypes (decode outputs)
           reader.decode — EncodingDecoder, DecodeContext, ArrayNode + *EncodingDecoder impls
           reader.extension — ExtensionDecoder + Date/Time/Timestamp/Uuid impls

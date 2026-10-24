@@ -436,7 +436,7 @@ class AggregateWhereCleanPartitionTest {
     }
 
     static java.util.stream.Stream<AbandonCase> untranslatableShapes() {
-        // Each shape is a predicate strictComparison cannot fully translate to a RowFilter, so the
+        // Each shape is a predicate strictComparison cannot fully translate to a ScanFilter, so the
         // aggregate rewrite must abandon and let the scan compute the answer. The ground truth uses
         // val == id over 0..ROWS-1.
         return java.util.stream.Stream.of(

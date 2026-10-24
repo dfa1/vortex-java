@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -47,7 +47,7 @@ class NullCountPruningTest {
         return file;
     }
 
-    private List<Long> scanRowCounts(Path file, RowFilter filter) throws IOException {
+    private List<Long> scanRowCounts(Path file, ScanFilter filter) throws IOException {
         var opts = ScanOptions.all().withFilter(filter);
         var counts = new ArrayList<Long>();
         try (VortexReader reader = VortexReader.open(file);
@@ -63,7 +63,7 @@ class NullCountPruningTest {
         Path file = write();
 
         // When / Then surviving chunk sizes are 2 (1-null) and 4 (all-null)
-        assertThat(scanRowCounts(file, RowFilter.isNull(ColumnName.of("v")))).containsExactly(2L, 4L);
+        assertThat(scanRowCounts(file, ScanFilter.isNull(ColumnName.of("v")))).containsExactly(2L, 4L);
     }
 
     @Test
@@ -72,7 +72,7 @@ class NullCountPruningTest {
         Path file = write();
 
         // When / Then surviving chunk sizes are 3 (0-null) and 2 (1-null)
-        assertThat(scanRowCounts(file, RowFilter.isNotNull(ColumnName.of("v")))).containsExactly(3L, 2L);
+        assertThat(scanRowCounts(file, ScanFilter.isNotNull(ColumnName.of("v")))).containsExactly(3L, 2L);
     }
 
     @Test

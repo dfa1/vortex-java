@@ -20,10 +20,10 @@ public final class ScanOptions {
     public static final long NO_LIMIT = Long.MAX_VALUE;
 
     private final List<ColumnName> columns;
-    private final RowFilter rowFilter;
+    private final ScanFilter rowFilter;
     private final long limit;
 
-    private ScanOptions(List<ColumnName> columns, RowFilter rowFilter, long limit) {
+    private ScanOptions(List<ColumnName> columns, ScanFilter rowFilter, long limit) {
         this.columns = List.copyOf(columns);
         this.rowFilter = rowFilter;
         this.limit = limit;
@@ -39,7 +39,7 @@ public final class ScanOptions {
     /// The zone-map pruning filter.
     ///
     /// @return the row filter, or `null` for none
-    public RowFilter rowFilter() {
+    public ScanFilter rowFilter() {
         return rowFilter;
     }
 
@@ -93,7 +93,7 @@ public final class ScanOptions {
     ///
     /// @param filter the row filter, or `null` for none
     /// @return a copy with the given filter
-    public ScanOptions withFilter(RowFilter filter) {
+    public ScanOptions withFilter(ScanFilter filter) {
         return new ScanOptions(columns, filter, limit);
     }
 

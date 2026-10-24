@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.LongPredicate;
 
-/// The fused, one-pass multi-column filter-and-aggregate kernel: it evaluates a whole [RowFilter]
+/// The fused, one-pass multi-column filter-and-aggregate kernel: it evaluates a whole [ScanFilter]
 /// (an n-ary `AND` of column-bound [Predicate] leaves, or a single leaf) and, over the rows it
 /// selects, folds an optional aggregate column's `SUM` / `MIN` / `MAX` / non-null count — all in a
 /// single scan of the chunk's rows, with no intermediate selection bitmap and no second pass.
@@ -72,7 +72,7 @@ final class FusedFilterAggregate {
     ///                  only (`COUNT(*)`)
     /// @return the fold over the selected rows: the selected row count, the aggregate's non-null count
     ///         among them, and (when `aggColumn` is given) its `SUM` / `MIN` / `MAX`
-    static FilteredAggregate aggregate(Chunk chunk, RowFilter filter, ColumnName aggColumn) {
+    static FilteredAggregate aggregate(Chunk chunk, ScanFilter filter, ColumnName aggColumn) {
         long n = chunk.rowCount();
         FilteredAggregate dictResult = tryDictLane(chunk, filter, aggColumn, n);
         if (dictResult != null) {
@@ -108,13 +108,13 @@ final class FusedFilterAggregate {
     /// @param aggColumn the aggregate column name, or `null` to count selected rows only
     /// @param n         the chunk's row count
     /// @return the fold, or `null` when the shape does not qualify for the dict lane
-    private static FilteredAggregate tryDictLane(Chunk chunk, RowFilter filter, ColumnName aggColumn, long n) {
-        List<RowFilter.Column> leaves = new ArrayList<>();
+    private static FilteredAggregate tryDictLane(Chunk chunk, ScanFilter filter, ColumnName aggColumn, long n) {
+        List<ScanFilter.Column> leaves = new ArrayList<>();
         flattenLeaves(filter, leaves);
         int driver = -1;
         Array driverData = null;
         for (int i = 0; i < leaves.size(); i++) {
-            RowFilter.Column leaf = leaves.get(i);
+            ScanFilter.Column leaf = leaves.get(i);
             if (isComparisonLeaf(leaf.predicate()) && PrimitiveFilter.predicateOk(leaf.predicate())) {
                 Array data = NumericColumns.unwrap(chunk.column(leaf.column()));
                 if (DictFilter.isScannable(data)) {
@@ -127,7 +127,7 @@ final class FusedFilterAggregate {
         if (driver < 0) {
             return null;
         }
-        RowFilter.Column driverLeaf = leaves.get(driver);
+        ScanFilter.Column driverLeaf = leaves.get(driver);
         BoolArray driverValidity = NumericColumns.validityOf(chunk.column(driverLeaf.column()));
         LongPredicate residual = residualOf(chunk, leaves, driver);
         // no aggregate column (COUNT(*)): the lane counts the selected rows only
@@ -149,11 +149,11 @@ final class FusedFilterAggregate {
     /// @param leaves the flattened column-bound leaves
     /// @param driver the index of the leaf driving the code scan
     /// @return the conjunction of the non-driver leaves, or `null` when the driver is the only leaf
-    private static LongPredicate residualOf(Chunk chunk, List<RowFilter.Column> leaves, int driver) {
+    private static LongPredicate residualOf(Chunk chunk, List<ScanFilter.Column> leaves, int driver) {
         List<LongPredicate> lowered = new ArrayList<>(leaves.size() - 1);
         for (int i = 0; i < leaves.size(); i++) {
             if (i != driver) {
-                RowFilter.Column leaf = leaves.get(i);
+                ScanFilter.Column leaf = leaves.get(i);
                 lowered.add(leafTest(chunk.column(leaf.column()), leaf.predicate(), new DictMemo()));
             }
         }
@@ -171,14 +171,14 @@ final class FusedFilterAggregate {
     ///
     /// @param filter the (sub-)filter to walk
     /// @param out    the collected leaves
-    private static void flattenLeaves(RowFilter filter, List<RowFilter.Column> out) {
+    private static void flattenLeaves(ScanFilter filter, List<ScanFilter.Column> out) {
         switch (filter) {
-            case RowFilter.And(var parts) -> {
-                for (RowFilter part : parts) {
+            case ScanFilter.And(var parts) -> {
+                for (ScanFilter part : parts) {
                     flattenLeaves(part, out);
                 }
             }
-            case RowFilter.Column column -> out.add(column);
+            case ScanFilter.Column column -> out.add(column);
         }
     }
 
@@ -396,20 +396,20 @@ final class FusedFilterAggregate {
         return true;
     }
 
-    /// Walks the filter tree, lowering each [RowFilter.Column] leaf into a hoisted [LongPredicate] over
+    /// Walks the filter tree, lowering each [ScanFilter.Column] leaf into a hoisted [LongPredicate] over
     /// its decoded column and flattening the conjuncts of an n-ary `AND` into `out`.
     ///
     /// @param chunk  the chunk supplying each leaf's column
     /// @param filter the (sub-)filter to walk
     /// @param out    the collected per-leaf row predicates
-    private static void collectLeaves(Chunk chunk, RowFilter filter, List<LongPredicate> out, DictMemo memo) {
+    private static void collectLeaves(Chunk chunk, ScanFilter filter, List<LongPredicate> out, DictMemo memo) {
         switch (filter) {
-            case RowFilter.And(var parts) -> {
-                for (RowFilter part : parts) {
+            case ScanFilter.And(var parts) -> {
+                for (ScanFilter part : parts) {
                     collectLeaves(chunk, part, out, memo);
                 }
             }
-            case RowFilter.Column(var column, var predicate) ->
+            case ScanFilter.Column(var column, var predicate) ->
                     out.add(leafTest(chunk.column(column), predicate, memo));
         }
     }
@@ -498,7 +498,7 @@ final class FusedFilterAggregate {
         return i -> validity.getBoolean(i) ? (bits[(int) (i >>> 6)] & 1L << i) != 0 : generic.test(i);
     }
 
-    /// A leaf whose selected rows are a bitmap, bit `i` for row `i`, which [#rowTest(Chunk, RowFilter,
+    /// A leaf whose selected rows are a bitmap, bit `i` for row `i`, which [#rowTest(Chunk, ScanFilter,
     /// DictMemo)] walks a word at a time.
     ///
     /// @param bits the bitmap
@@ -649,14 +649,14 @@ final class FusedFilterAggregate {
         }
     }
 
-    /// Lowers a whole [RowFilter] over `chunk` into one row predicate: each leaf is lowered once by
+    /// Lowers a whole [ScanFilter] over `chunk` into one row predicate: each leaf is lowered once by
     /// [#leafTest(Array, Predicate, DictMemo)], and a row matches when every leaf accepts it.
     ///
     /// @param chunk  the decoded chunk holding every column `filter` references
     /// @param filter the whole predicate
     /// @param memo   the dictionary entry results of earlier chunks of the same scan
     /// @return a row predicate valid for `chunk`'s rows
-    static RowSelection rowTest(Chunk chunk, RowFilter filter, DictMemo memo) {
+    static RowSelection rowTest(Chunk chunk, ScanFilter filter, DictMemo memo) {
         List<LongPredicate> leafList = new ArrayList<>();
         collectLeaves(chunk, filter, leafList, memo);
         // the bitmap leaves are ANDed into one, which then drives the walk; the other leaves are

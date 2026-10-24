@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -118,14 +118,14 @@ class DictFilterInteropIntegrationTest {
     }
 
     static Stream<Arguments> filters() {
-        List<Function<Fixture, RowFilter>> filters = List.of(
-                f -> RowFilter.eq(S, f.present()),
-                f -> RowFilter.eq(S, f.missing()),
-                f -> RowFilter.neq(S, f.missing()),
+        List<Function<Fixture, ScanFilter>> filters = List.of(
+                f -> ScanFilter.eq(S, f.present()),
+                f -> ScanFilter.eq(S, f.missing()),
+                f -> ScanFilter.neq(S, f.missing()),
                 // a null row satisfies IS NULL whatever the values, so the dictionary cannot prune
-                f -> new RowFilter.Column(S, new Predicate.Or(new Predicate.Eq(f.missing()), new Predicate.IsNull())),
-                f -> RowFilter.and(RowFilter.eq(S, f.missing()), RowFilter.lt(ID, 10L)),
-                f -> RowFilter.and(RowFilter.eq(S, f.present()), RowFilter.gte(ID, 1500L)));
+                f -> new ScanFilter.Column(S, new Predicate.Or(new Predicate.Eq(f.missing()), new Predicate.IsNull())),
+                f -> ScanFilter.and(ScanFilter.eq(S, f.missing()), ScanFilter.lt(ID, 10L)),
+                f -> ScanFilter.and(ScanFilter.eq(S, f.present()), ScanFilter.gte(ID, 1500L)));
         List<String> names = List.of("eq present", "eq missing", "neq missing", "missing or null",
                 "missing and id", "present and id");
         return Stream.of(0, 1, 2, 3).flatMap(fixture -> Stream.iterate(0, i -> i < filters.size(), i -> i + 1)
@@ -134,12 +134,12 @@ class DictFilterInteropIntegrationTest {
 
     @ParameterizedTest(name = "{1} over fixture {0}")
     @MethodSource("filters")
-    void filteredScan_selectsTheRowsTheRowTestSelects(int index, Function<Fixture, RowFilter> filterOf)
+    void filteredScan_selectsTheRowsTheRowTestSelects(int index, Function<Fixture, ScanFilter> filterOf)
             throws Exception {
         // Given
         Fixture fixture = fixtures.get(index);
         assertThat(codesOf(fixture.file())).as("%s decodes s as a dictionary", fixture).isEqualTo(fixture.codes());
-        RowFilter filter = filterOf.apply(fixture);
+        ScanFilter filter = filterOf.apply(fixture);
         List<Long> expected = new ArrayList<>();
         for (int id = 0; id < fixture.written().size(); id++) {
             if (matches(filter, fixture.written().get(id), id)) {
@@ -166,7 +166,7 @@ class DictFilterInteropIntegrationTest {
         assertThat(countChunks(fixture.file(), ScanOptions.columns(S, ID))).isPositive();
 
         // When
-        long result = countChunks(fixture.file(), ScanOptions.columns(S, ID).withFilter(RowFilter.eq(S, fixture.missing())));
+        long result = countChunks(fixture.file(), ScanOptions.columns(S, ID).withFilter(ScanFilter.eq(S, fixture.missing())));
 
         // Then
         assertThat(result).as(fixture.name()).isZero();
@@ -184,7 +184,7 @@ class DictFilterInteropIntegrationTest {
         return chunks;
     }
 
-    private static List<Long> scanIds(Path file, RowFilter filter) throws Exception {
+    private static List<Long> scanIds(Path file, ScanFilter filter) throws Exception {
         List<Long> ids = new ArrayList<>();
         Function<Chunk, RowSelection> matcher = Compute.matcher(filter);
         try (VortexReader reader = VortexReader.open(file);
@@ -225,10 +225,10 @@ class DictFilterInteropIntegrationTest {
     }
 
     /// The oracle: `filter` worked out on the written values with plain Java.
-    private static boolean matches(RowFilter filter, String s, long id) {
+    private static boolean matches(ScanFilter filter, String s, long id) {
         return switch (filter) {
-            case RowFilter.And(var parts) -> parts.stream().allMatch(part -> matches(part, s, id));
-            case RowFilter.Column(var column, var predicate) -> holds(predicate, column.equals(ID) ? id : s);
+            case ScanFilter.And(var parts) -> parts.stream().allMatch(part -> matches(part, s, id));
+            case ScanFilter.Column(var column, var predicate) -> holds(predicate, column.equals(ID) ? id : s);
         };
     }
 

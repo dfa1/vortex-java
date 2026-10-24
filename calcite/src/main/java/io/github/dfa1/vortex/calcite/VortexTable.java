@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -65,11 +65,11 @@ import java.util.concurrent.atomic.AtomicLong;
 /// zone-map filter push-down.
 ///
 /// Projection (`projects`) is honored exactly — only the requested columns are decoded and
-/// returned. Every filter (`filters`) that translates to a [RowFilter] is pushed into the scan for
+/// returned. Every filter (`filters`) that translates to a [ScanFilter] is pushed into the scan for
 /// *chunk skipping* via zone-map statistics (approximate — it drops whole chunks that cannot
 /// match, not individual rows). A filter captured *in full* by the translation is additionally
 /// enforced row-by-row in the returned enumerator (via the `NaN`-correct
-/// [Compute#matches(io.github.dfa1.vortex.reader.Chunk, RowFilter, long)]) and removed from
+/// [Compute#matches(io.github.dfa1.vortex.reader.Chunk, ScanFilter, long)]) and removed from
 /// Calcite's own `filters` list, so Calcite does not also re-check it; a filter the translation
 /// only partially captures is left in `filters` for Calcite's own row check. The win is decoding
 /// far fewer chunks when the filter is selective on a clustered column, and — for a fully captured
@@ -215,7 +215,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// A fold of the rows a pushed `WHERE` filter selects, returned by
-    /// [#filteredFold(RowFilter, ColumnName)]. A zone the filter selects entirely is folded from its
+    /// [#filteredFold(ScanFilter, ColumnName)]. A zone the filter selects entirely is folded from its
     /// statistics with no decode; a boundary zone the filter only partially selects is decoded and
     /// reduced under a row-level selection mask (ADR 0013 §6 tier-2). The aggregate rule reads the
     /// field its aggregate needs; the values cover exactly the rows the filter matches, so the fold
@@ -237,7 +237,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// footer statistics with no decode; a boundary zone the filter only partially selects is decoded
     /// for the aggregate and filter columns and reduced in one fused pass — the whole filter and the
     /// aggregate fold evaluated together via
-    /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)], with no intermediate selection bitmap.
+    /// [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)], with no intermediate selection bitmap.
     /// The two tiers combine into one fold, so the caller answers the filtered aggregate while decoding
     /// only the boundary zones.
     ///
@@ -259,11 +259,11 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// zone-map-pruned scan is the cheaper answer. An all-OUT selection (no IN, no boundary) is not
     /// this case — it folds to a correct empty aggregate with no decode and is kept.
     ///
-    /// @param filter    the pushed predicate, already translated to the reader's [RowFilter]
+    /// @param filter    the pushed predicate, already translated to the reader's [ScanFilter]
     /// @param aggColumn the column to reduce over the selected rows, or `null` for a row-count-only
     ///                  fold
     /// @return the fold over the selected rows, or empty when it cannot be answered soundly
-    public Optional<FilteredFold> filteredFold(RowFilter filter, ColumnName aggColumn) {
+    public Optional<FilteredFold> filteredFold(ScanFilter filter, ColumnName aggColumn) {
         java.util.LinkedHashSet<ColumnName> filterColumns = new java.util.LinkedHashSet<>();
         RexFilterTranslator.collectColumns(filter, filterColumns);
         java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>(filterColumns);
@@ -364,7 +364,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
     }
 
-    /// One group's fold, returned by [#groupedFold(ColumnName, RowFilter, Set, int)].
+    /// One group's fold, returned by [#groupedFold(ColumnName, ScanFilter, Set, int)].
     ///
     /// @param rows    the rows of the group the filter selects
     /// @param columns per aggregate column, its fold over those rows
@@ -373,7 +373,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
 
     /// Folds aggregates per value of a dictionary-encoded string, boolean or integer column over the
     /// rows `filter` selects, without building a row per record: each chunk
-    /// goes through [Compute#groupedAggregate(Chunk, ColumnName, RowFilter, ColumnName)] and the
+    /// goes through [Compute#groupedAggregate(Chunk, ColumnName, ScanFilter, ColumnName)] and the
     /// chunks' results merge per group value.
     ///
     /// The result is empty, leaving the query to the scan, when the kernel declines a chunk (a string
@@ -386,7 +386,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param maxGroups  most groups to answer; the scan stops as soon as it sees more
     /// @return the fold per group value (`String`, `Boolean` or `Long`; `null` is the null group), or
     ///         empty
-    public Optional<Map<Object, GroupFold>> groupedFold(ColumnName group, RowFilter filter, Set<ColumnName> aggColumns,
+    public Optional<Map<Object, GroupFold>> groupedFold(ColumnName group, ScanFilter filter, Set<ColumnName> aggColumns,
                                                         int maxGroups) {
         java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
         columns.add(group);
@@ -463,7 +463,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param column the column to count distinct values of
     /// @param filter the rows to count over, or `null` for every row
     /// @return the count, or empty for a column type this does not count (decimals, binary, nested)
-    public Optional<Long> distinctCount(ColumnName column, RowFilter filter) {
+    public Optional<Long> distinctCount(ColumnName column, ScanFilter filter) {
         java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
         columns.add(column);
         ScanOptions options;
@@ -565,7 +565,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param column the decimal column
     /// @param filter the rows to fold, or `null` for every row
     /// @return the fold, or empty for a precision past 18 or a sum past a long, which Calcite totals
-    public Optional<FilteredFold> decimalFold(ColumnName column, RowFilter filter) {
+    public Optional<FilteredFold> decimalFold(ColumnName column, ScanFilter filter) {
         if (!(columnType(column) instanceof DType.Decimal decimal) || decimal.precision() > 18) {
             return Optional.empty();
         }
@@ -621,7 +621,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 nonNull == 0 ? null : java.math.BigDecimal.valueOf(max, scale), rows - nonNull, rows));
     }
 
-    /// One `ORDER BY` key of [#topN(int[], RowFilter, List, int)].
+    /// One `ORDER BY` key of [#topN(int[], ScanFilter, List, int)].
     ///
     /// @param field      the key's position in the projected row
     /// @param descending whether larger values come first
@@ -643,7 +643,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param keys   the `ORDER BY` keys, most significant first
     /// @param count  how many rows to return
     /// @return the first `count` rows in order (fewer if the table has fewer)
-    public List<Object[]> topN(int[] cols, RowFilter filter, List<SortKey> keys, int count) {
+    public List<Object[]> topN(int[] cols, ScanFilter filter, List<SortKey> keys, int count) {
         if (count <= 0) {
             return List.of();
         }
@@ -804,7 +804,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return kept.size() == count ? kept.getLast().row : null;
     }
 
-    /// A row [#topN(int[], RowFilter, List, int)] keeps: its key columns until it is read in full.
+    /// A row [#topN(int[], ScanFilter, List, int)] keeps: its key columns until it is read in full.
     private static final class Candidate {
         private final Object[] row;
         private final long position;
@@ -827,7 +827,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param keys   the `ORDER BY` keys, most significant first
     /// @param count  how many distinct rows to return
     /// @return the first `count` distinct rows in order (fewer if the table has fewer)
-    public List<Object[]> distinctTopN(int[] cols, RowFilter filter, List<SortKey> keys, int count) {
+    public List<Object[]> distinctTopN(int[] cols, ScanFilter filter, List<SortKey> keys, int count) {
         if (count <= 0) {
             return List.of();
         }
@@ -861,12 +861,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return List.copyOf(kept);
     }
 
-    /// [#distinctTopN(int[], RowFilter, List, int)] of one string column, comparing each chunk's
+    /// [#distinctTopN(int[], ScanFilter, List, int)] of one string column, comparing each chunk's
     /// distinct values ([#distinctStrings]) instead of every row: `SELECT DISTINCT isin ... LIMIT 1`
     /// over 100M rows otherwise built and compared 100M strings to find 5000 values.
     ///
     /// @return the rows, or `null` when a chunk of the column is not a string array
-    private List<Object[]> distinctTopNStrings(int col, RowFilter filter, java.util.Comparator<Object[]> order,
+    private List<Object[]> distinctTopNStrings(int col, ScanFilter filter, java.util.Comparator<Object[]> order,
                                                int count) {
         ColumnName column = struct().fieldNames().get(col);
         java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
@@ -933,7 +933,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
 
     /// A scan of the projection `cols` over the rows `filter` selects, also decoding the columns the
     /// filter reads.
-    private VortexEnumerator enumerator(int[] cols, RowFilter filter) {
+    private VortexEnumerator enumerator(int[] cols, ScanFilter filter) {
         DType.Struct struct = struct();
         ColumnName[] outNames = new ColumnName[cols.length];
         DType[] outTypes = new DType[cols.length];
@@ -990,11 +990,11 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
 
         /// Folds the rows `filter` selects in `zone`, in one fused pass per chunk part via
-        /// [Compute#filteredAggregate(Chunk, RowFilter, ColumnName)]. `SUM` is guarded: the kernel
+        /// [Compute#filteredAggregate(Chunk, ScanFilter, ColumnName)]. `SUM` is guarded: the kernel
         /// reports a `null` sum for a non-numeric aggregate column, which disables only the sum.
         ///
         /// @return `false` when a column cannot be sliced, so the caller abandons to the scan
-        boolean fold(Zone zone, RowFilter filter, ColumnName aggColumn, Fold fold) {
+        boolean fold(Zone zone, ScanFilter filter, ColumnName aggColumn, Fold fold) {
             long row = zone.firstRow();
             long end = row + zone.rowCount();
             while (row < end) {
@@ -1130,17 +1130,17 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
     }
 
-    /// Translates the predicates a `WHERE` pushed onto the scan into one [RowFilter], **strictly**:
+    /// Translates the predicates a `WHERE` pushed onto the scan into one [ScanFilter], **strictly**:
     /// returns empty if any predicate (or any conjunct of one) is not a column-vs-literal
     /// comparison or `AND` of them. The strictness is the correctness guard for aggregate
-    /// push-down — answering from stats is only sound when the [RowFilter] captures the *whole*
+    /// push-down — answering from stats is only sound when the [ScanFilter] captures the *whole*
     /// predicate, so a single untranslatable conjunct must abandon the rewrite rather than silently
-    /// drop a filter (as the best-effort [RexFilterTranslator#toRowFilter] does for the scan path, where Calcite still
+    /// drop a filter (as the best-effort [RexFilterTranslator#toScanFilter] does for the scan path, where Calcite still
     /// re-checks every row).
     ///
     /// @param filters the predicates Calcite pushed onto the scan
     /// @return the conjoined filter, or empty when any predicate is not fully translatable
-    public Optional<RowFilter> translatePushedFilters(List<RexNode> filters) {
+    public Optional<ScanFilter> translatePushedFilters(List<RexNode> filters) {
         DType.Struct struct = struct();
         List<ColumnName> names = struct.fieldNames();
         List<DType> types = struct.fieldTypes();
@@ -1206,13 +1206,13 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// Classifies one zone against `filter` from the zone's footer statistics, applying SQL
     /// three-valued logic: a row that is `NULL` in a compared column does not match a comparison,
     /// so a zone is [Match#IN] for a comparison only when it also provably carries no nulls.
-    private static Match classify(RowFilter filter, int zone,
+    private static Match classify(ScanFilter filter, int zone,
                                   java.util.Map<ColumnName, List<ArrayStats>> zoneStats, long rowCount,
                                   DType.Struct struct) {
         return switch (filter) {
-            case RowFilter.And(var parts) -> {
+            case ScanFilter.And(var parts) -> {
                 boolean allIn = true;
-                for (RowFilter part : parts) {
+                for (ScanFilter part : parts) {
                     Match m = classify(part, zone, zoneStats, rowCount, struct);
                     if (m == Match.OUT) {
                         yield Match.OUT; // one conjunct excludes the whole zone
@@ -1223,7 +1223,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield allIn ? Match.IN : Match.BOUNDARY;
             }
-            case RowFilter.Column(var col, var predicate) -> classifyColumn(predicate,
+            case ScanFilter.Column(var col, var predicate) -> classifyColumn(predicate,
                     zoneStats.get(col).get(zone), rowCount, isFloating(struct, col));
         };
     }
@@ -1248,7 +1248,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return floating && match == Match.IN ? Match.BOUNDARY : match;
     }
 
-    /// The comparison ops carry the same three-valued-logic semantics as before the [RowFilter] /
+    /// The comparison ops carry the same three-valued-logic semantics as before the [ScanFilter] /
     /// [Predicate] unification: an unrecognized stat shape or a partially-overlapping zone is
     /// [Match#BOUNDARY], a zone provably outside the predicate is [Match#OUT], and a zone every row
     /// of which matches (which, for a value comparison, also requires the zone to carry no nulls) is
@@ -1467,7 +1467,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
 
         // Filter push-down for chunk-skip: every predicate we understand, applied leniently (an
         // untranslatable conjunct is just dropped rather than abandoning the whole rewrite).
-        Optional<RowFilter> pushed = RexFilterTranslator.toRowFilter(filters, allNames, allTypes);
+        Optional<ScanFilter> pushed = RexFilterTranslator.toScanFilter(filters, allNames, allTypes);
 
         // Exact push-down: a top-level predicate captured *in full* is enforced row-by-row below
         // (via Compute#matcher, which lowers it per chunk through the NaN-correct PrimitiveFilter /
@@ -1475,19 +1475,19 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         // redundantly re-evaluating rows this scan has already excluded — Calcite's
         // TableScanNode#createProjectableFilterable wraps a `.where()` residual check around
         // whatever is still left in `filters` after this call returns.
-        List<RowFilter> exactParts = new ArrayList<>();
+        List<ScanFilter> exactParts = new ArrayList<>();
         java.util.Iterator<RexNode> it = filters.iterator();
         while (it.hasNext()) {
             RexNode node = it.next();
-            Optional<RowFilter> exact = RexFilterTranslator.translateStrict(List.of(node), allNames, allTypes);
+            Optional<ScanFilter> exact = RexFilterTranslator.translateStrict(List.of(node), allNames, allTypes);
             if (exact.isPresent()) {
                 exactParts.add(exact.get());
                 it.remove();
             }
         }
-        RowFilter exactFilter = exactParts.isEmpty() ? null
+        ScanFilter exactFilter = exactParts.isEmpty() ? null
                 : exactParts.size() == 1 ? exactParts.getFirst()
-                : RowFilter.and(exactParts.toArray(RowFilter[]::new));
+                : ScanFilter.and(exactParts.toArray(ScanFilter[]::new));
 
         // The scan must decode any column a filter needs — pruning or exact enforcement — even
         // when it is not projected. Output still emits only outNames.
@@ -1505,7 +1505,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         // (in G1's young gen) instead of piling a whole-result List<Object[]> into the old gen — the
         // dominant cost an async-profiler run showed for the full-scan path (~72% in GC).
         ScanOptions scanOptions = options;
-        RowFilter enumeratorFilter = exactFilter;
+        ScanFilter enumeratorFilter = exactFilter;
         return new AbstractEnumerable<>() {
             @Override
             public Enumerator<Object[]> enumerator() {

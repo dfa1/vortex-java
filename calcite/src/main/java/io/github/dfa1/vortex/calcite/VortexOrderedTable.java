@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 
 import org.apache.calcite.DataContext;
 import org.apache.calcite.linq4j.AbstractEnumerable;
@@ -39,13 +39,13 @@ final class VortexOrderedTable extends AbstractTable implements ScannableTable {
 
     private final VortexTable table;
     private final int[] cols;
-    private final RowFilter filter;
+    private final ScanFilter filter;
     private final List<VortexTable.SortKey> keys;
     private final RelDataType rowType;
     private final double estimatedRows;
     private final RelCollation collation;
 
-    VortexOrderedTable(VortexTable table, int[] cols, RowFilter filter, List<VortexTable.SortKey> keys,
+    VortexOrderedTable(VortexTable table, int[] cols, ScanFilter filter, List<VortexTable.SortKey> keys,
                        RelDataType rowType, double estimatedRows, RelCollation collation) {
         this.table = table;
         this.cols = cols;

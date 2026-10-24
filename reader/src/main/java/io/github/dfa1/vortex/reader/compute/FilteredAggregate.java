@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader.compute;
 
 /// The result of a fused multi-column filtered aggregation over one chunk, returned by
-/// [Compute#filteredAggregate(io.github.dfa1.vortex.reader.Chunk, io.github.dfa1.vortex.reader.RowFilter, io.github.dfa1.vortex.core.model.ColumnName)].
+/// [Compute#filteredAggregate(io.github.dfa1.vortex.reader.Chunk, io.github.dfa1.vortex.reader.ScanFilter, io.github.dfa1.vortex.core.model.ColumnName)].
 ///
-/// The fold covers exactly the rows the whole [io.github.dfa1.vortex.reader.RowFilter] selects. The
+/// The fold covers exactly the rows the whole [io.github.dfa1.vortex.reader.ScanFilter] selects. The
 /// aggregate fields are populated only when an aggregate column was given; with no aggregate column
 /// (a `COUNT(*)`) only [#selectedRows()] is meaningful and the rest are zero / `null`.
 ///

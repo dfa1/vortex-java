@@ -22,7 +22,7 @@ import java.util.List;
 ///
 /// The node carries no projection or filter of its own. A `VortexExpandTableScanRule` immediately
 /// rewrites it to a [LogicalTableScan], so Calcite's stock `Bindables` rules drive column
-/// projection and `RowFilter` chunk-skip push-down exactly as before — this class only adds the
+/// projection and `ScanFilter` chunk-skip push-down exactly as before — this class only adds the
 /// rule-registration seam, it does not change the scan/execute path.
 final class VortexTableScan extends TableScan {
 

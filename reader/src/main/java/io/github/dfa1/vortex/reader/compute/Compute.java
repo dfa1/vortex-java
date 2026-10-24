@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.compute;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanFilter;
 
 import java.util.Map;
 import java.util.Objects;
@@ -17,12 +17,12 @@ import java.util.function.Function;
 /// (transducer / Stream / fluent builder) will replace. There is no builder, no pipeline, no rich
 /// API here — just the primitives.
 ///
-/// [#filteredAggregate(Chunk, RowFilter, ColumnName)] folds the filter and the reduce in a single
-/// pass with no intermediate selection bitmap: it evaluates a whole [RowFilter] and folds an
+/// [#filteredAggregate(Chunk, ScanFilter, ColumnName)] folds the filter and the reduce in a single
+/// pass with no intermediate selection bitmap: it evaluates a whole [ScanFilter] and folds an
 /// aggregate column's `SUM` / `MIN` / `MAX` / non-null count over the rows it selects.
-/// [#matches(Chunk, RowFilter, long)] is its un-fused, per-row counterpart: a plain boolean test
+/// [#matches(Chunk, ScanFilter, long)] is its un-fused, per-row counterpart: a plain boolean test
 /// with no aggregate at all, for a caller that needs to select rows rather than reduce them;
-/// [#matcher(Chunk, RowFilter)] lowers that test once per chunk for a caller testing many rows.
+/// [#matcher(Chunk, ScanFilter)] lowers that test once per chunk for a caller testing many rows.
 ///
 /// Null handling follows the Rust reference: a filter excludes null positions (a null value makes a
 /// value predicate false), and the reduce skips them — `SUM` and `COUNT` over zero selected non-null
@@ -51,14 +51,14 @@ public final class Compute {
     /// @param filter    the whole chunk predicate to evaluate
     /// @param aggColumn the column to reduce over the selected rows, or `null` to count rows only
     /// @return the fold over the rows `filter` selects
-    public static FilteredAggregate filteredAggregate(Chunk chunk, RowFilter filter, ColumnName aggColumn) {
+    public static FilteredAggregate filteredAggregate(Chunk chunk, ScanFilter filter, ColumnName aggColumn) {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(filter, "filter");
         return FusedFilterAggregate.aggregate(chunk, filter, aggColumn);
     }
 
     /// Evaluates `filter` against a single row of `chunk`'s already-decoded columns, the un-fused
-    /// counterpart of [#filteredAggregate(Chunk, RowFilter, ColumnName)] for a caller that needs one
+    /// counterpart of [#filteredAggregate(Chunk, ScanFilter, ColumnName)] for a caller that needs one
     /// row's yes/no answer rather than a folded aggregate — for example, a downstream adapter that
     /// decodes a chunk once and streams only the rows a pushed filter selects, instead of returning
     /// every row for its caller to re-check row-by-row.
@@ -71,43 +71,43 @@ public final class Compute {
     /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
     /// @param row    the zero-based row to test
     /// @return `true` if `row` satisfies `filter`
-    public static boolean matches(Chunk chunk, RowFilter filter, long row) {
+    public static boolean matches(Chunk chunk, ScanFilter filter, long row) {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(filter, "filter");
         return evaluate(chunk, filter, row);
     }
 
     /// Lowers `filter` once for `chunk` and returns the row test, the form of
-    /// [#matches(Chunk, RowFilter, long)] for a caller that tests many rows of one chunk.
+    /// [#matches(Chunk, ScanFilter, long)] for a caller that tests many rows of one chunk.
     ///
     /// The per-leaf work that does not depend on the row is done here rather than per row: a
     /// numeric comparison resolves its bounds once, and a comparison over a dictionary-encoded
     /// string column is evaluated once per dictionary entry and its codes are mapped to a bitmap of
     /// the selected rows, which [RowSelection#nextSelected(long)] walks 64 rows at a time. The
-    /// selected rows are the same as [#matches(Chunk, RowFilter, long)].
+    /// selected rows are the same as [#matches(Chunk, ScanFilter, long)].
     ///
     /// @param chunk  the decoded chunk holding every column `filter` references
     /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
     /// @return the rows of `chunk` that `filter` selects, valid while `chunk` is open
-    public static RowSelection matcher(Chunk chunk, RowFilter filter) {
+    public static RowSelection matcher(Chunk chunk, ScanFilter filter) {
         Objects.requireNonNull(chunk, "chunk");
         return matcher(filter).apply(chunk);
     }
 
-    /// [#matcher(Chunk, RowFilter)] for the chunks of one scan, in order: work that depends only on a
+    /// [#matcher(Chunk, ScanFilter)] for the chunks of one scan, in order: work that depends only on a
     /// dictionary the chunks share, as the chunks of Rust's dict layout do, is done once for the scan
     /// instead of once per chunk. Not for concurrent use.
     ///
     /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
     /// @return a function from a chunk to the rows it selects, each valid while its chunk is open
-    public static Function<Chunk, RowSelection> matcher(RowFilter filter) {
+    public static Function<Chunk, RowSelection> matcher(ScanFilter filter) {
         Objects.requireNonNull(filter, "filter");
         FusedFilterAggregate.DictMemo memo = new FusedFilterAggregate.DictMemo();
         return chunk -> FusedFilterAggregate.rowTest(Objects.requireNonNull(chunk, "chunk"), filter, memo);
     }
 
     /// Folds `aggColumn` per value of `groupColumn` over the rows `filter` selects: the per-group
-    /// counterpart of [#filteredAggregate(Chunk, RowFilter, ColumnName)].
+    /// counterpart of [#filteredAggregate(Chunk, ScanFilter, ColumnName)].
     ///
     /// Rows accumulate per group id in primitive arrays, so a row costs a key read and a few array
     /// updates, and no key is boxed per row. The group column may be a dictionary-encoded string
@@ -128,23 +128,23 @@ public final class Compute {
     /// @param aggColumn   the numeric column to reduce, or `null` to count rows only
     /// @return the fold per group value, or empty when the columns do not qualify
     public static Optional<Map<Object, FilteredAggregate>> groupedAggregate(Chunk chunk, ColumnName groupColumn,
-                                                                            RowFilter filter, ColumnName aggColumn) {
+                                                                            ScanFilter filter, ColumnName aggColumn) {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(groupColumn, "groupColumn");
         return GroupedAggregate.aggregate(chunk, groupColumn, filter, aggColumn);
     }
 
-    private static boolean evaluate(Chunk chunk, RowFilter filter, long row) {
+    private static boolean evaluate(Chunk chunk, ScanFilter filter, long row) {
         return switch (filter) {
-            case RowFilter.And(var parts) -> {
-                for (RowFilter part : parts) {
+            case ScanFilter.And(var parts) -> {
+                for (ScanFilter part : parts) {
                     if (!evaluate(chunk, part, row)) {
                         yield false;
                     }
                 }
                 yield true;
             }
-            case RowFilter.Column(var col, var predicate) ->
+            case ScanFilter.Column(var col, var predicate) ->
                     PredicateEvaluator.evaluate(chunk.column(col), row, predicate);
         };
     }
