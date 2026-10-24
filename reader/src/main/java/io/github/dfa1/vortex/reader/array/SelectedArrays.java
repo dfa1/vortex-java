@@ -188,6 +188,7 @@ public final class SelectedArrays {
         };
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Longs(LongArray inner, long[] rows) implements LongArray {
         @Override
         public long length() {
@@ -205,6 +206,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Ints(IntArray inner, long[] rows) implements IntArray {
         @Override
         public long length() {
@@ -222,6 +224,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Shorts(ShortArray inner, long[] rows) implements ShortArray {
         @Override
         public long length() {
@@ -248,6 +251,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Bytes(ByteArray inner, long[] rows) implements ByteArray {
         @Override
         public long length() {
@@ -274,6 +278,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Doubles(DoubleArray inner, long[] rows) implements DoubleArray {
         @Override
         public long length() {
@@ -291,6 +296,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Floats(FloatArray inner, long[] rows) implements FloatArray {
         @Override
         public long length() {
@@ -308,6 +314,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Float16s(Float16Array inner, long[] rows) implements Float16Array {
         @Override
         public long length() {
@@ -341,6 +348,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Bools(BoolArray inner, long[] rows) implements BoolArray {
         @Override
         public long length() {
@@ -358,6 +366,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record VarBins(VarBinArray inner, long[] rows) implements VarBinArray {
         @Override
         public long length() {
@@ -407,6 +416,7 @@ public final class SelectedArrays {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Decimals(DecimalArray inner, long[] rows) implements DecimalArray {
         @Override
         public long length() {
