@@ -133,6 +133,10 @@ public final class VortexWriter implements Closeable {
     private final WriteRegistry extensionRegistry;
     private final List<EncodingEncoder> cascadeCodecs;
     private final WriteRegistry cascadeRegistry;
+    // The dict-layout probe's codecs: the cascade with the integer dictionary back in, as Rust's
+    // probe is its full compressor while its data compressor leaves IntDictScheme out.
+    private final List<EncodingEncoder> probeCodecs;
+    private final WriteRegistry probeRegistry;
     private final List<SegRef> segs = new ArrayList<>();
     private final Map<ColumnName, List<ChunkRef>> colChunks = new LinkedHashMap<>();
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
@@ -226,6 +230,10 @@ public final class VortexWriter implements Closeable {
         // the caller left out would produce a file their own read registry may not decode.
         this.cascadeCodecs = encodings == DEFAULT_CODECS ? buildCascadeCodecs(options) : List.copyOf(encodings);
         this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
+        this.probeCodecs = this.cascadeCodecs.stream()
+                .map(e -> e instanceof DictEncodingEncoder ? new DictEncodingEncoder() : e)
+                .toList();
+        this.probeRegistry = buildRegistry(this.probeCodecs);
         this.editionAllowed = editionAllowed(options.editions());
         this.zonedLayout = options.enableZoneMaps() && editionHasZonedLayout(options.editions());
         for (Map.Entry<ColumnName, ColumnEncoding> e : options.columnEncodings().entrySet()) {
@@ -646,6 +654,13 @@ public final class VortexWriter implements Closeable {
                     // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported).
                     candidate = DictColumnState.isVarBinDictCandidate((Object[]) values, validity);
                 }
+                // ponytail: only non-null primitives take Rust's probe. A nullable column's cascade
+                // runs under vortex.masked, which leaves the validity out of the sampled sizes Rust
+                // charges bit-packing with, and strings pick OnPair where Rust's StringDictScheme
+                // wins, so for those the cardinality check above still matches Rust more often.
+                if (candidate && colDtype instanceof DType.Primitive p && !p.nullable()) {
+                    candidate = probeCompressesToDict(colDtype, data);
+                }
                 if (candidate) {
                     dictCandidates.add(colName);
                     dictStates.put(colName, new DictColumnState(colDtype));
@@ -682,6 +697,22 @@ public final class VortexWriter implements Closeable {
             }
         }
         firstChunkSeen = true;
+    }
+
+    /// Rust's `DictStrategy` admission: the column gets a dict layout only when the full cascade,
+    /// its probe compressor, turns the first 8192-row block into a `vortex.dict`
+    /// (`vortex-layout/src/layouts/dict/writer.rs`). Without a cascade there is no compressor to
+    /// ask, and the cardinality check alone decides.
+    private boolean probeCompressesToDict(DType colDtype, Object data) {
+        if (options.allowedCascading() == 0) {
+            return true;
+        }
+        Object block = Repartitioner.head(data, (int) Math.min(Repartitioner.BLOCK_ROWS, arrayLength(data)));
+        try (Arena arena = Arena.ofConfined()) {
+            EncodeContext ctx = EncodeContext.ofDepth(options.allowedCascading(), arena, probeRegistry, editionExcluded);
+            EncodeResult result = new CascadingCompressor(probeCodecs).encode(colDtype, block, ctx);
+            return result.rootNode().encodingId().equals(EncodingId.VORTEX_DICT);
+        }
     }
 
     /// Hands one batch of a column to its [Repartitioner], writing every chunk it completes; a

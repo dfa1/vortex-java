@@ -82,6 +82,15 @@ final class Repartitioner {
         return sizes;
     }
 
+    /// The first `rows` rows of a batch, in the batch's carrier shape.
+    ///
+    /// @param data a batch of a column [#supports(DType)] accepts
+    /// @param rows how many leading rows to keep, at most the batch's row count
+    /// @return the leading rows
+    static Object head(Object data, int rows) {
+        return concat(List.of(new Piece(data, 0, rows, 0)));
+    }
+
     /// Whether sizing a batch of `data` reads its values, as for strings and binaries -- the
     /// only batches worth [#sizePieces(Object,long,long)] ahead of time.
     ///
