@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.ValueLayout;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
@@ -61,13 +62,21 @@ public record DictIntArray(DType dtype, long length, IntArray values, Array code
         MemorySegment dst = arena.allocate(n * 4L, 4);
         IntArray vals = values;
         Array flatCodes = CanonicalArrays.of(codes, arena);
-        // A flat pool and flat u16 codes, as a global dict column has them: gather off the two
-        // segments, skipping a virtual getShort and getInt per row.
+        // A flat pool and flat u8/u16 codes, as a global dict column has them: gather off the two
+        // segments, skipping a virtual getShort/getByte and getInt per row.
         MemorySegment pool = DictArrays.flat(vals, vals.length(), 4);
-        MemorySegment c = flatCodes instanceof ShortArray ? DictArrays.flat(flatCodes, n, 2) : null;
-        if (pool != null && c != null) {
+        MemorySegment c16 = flatCodes instanceof ShortArray ? DictArrays.flat(flatCodes, n, 2) : null;
+        if (pool != null && c16 != null) {
             for (long i = 0; i < n; i++) {
-                long code = Short.toUnsignedLong(c.getAtIndex(VortexFormat.LE_SHORT, i));
+                long code = Short.toUnsignedLong(c16.getAtIndex(VortexFormat.LE_SHORT, i));
+                dst.setAtIndex(VortexFormat.LE_INT, i, pool.getAtIndex(VortexFormat.LE_INT, code));
+            }
+            return dst.asReadOnly();
+        }
+        MemorySegment c8 = flatCodes instanceof ByteArray ? DictArrays.flat(flatCodes, n, 1) : null;
+        if (pool != null && c8 != null) {
+            for (long i = 0; i < n; i++) {
+                long code = Byte.toUnsignedLong(c8.get(ValueLayout.JAVA_BYTE, i));
                 dst.setAtIndex(VortexFormat.LE_INT, i, pool.getAtIndex(VortexFormat.LE_INT, code));
             }
             return dst.asReadOnly();
@@ -129,11 +138,36 @@ public record DictIntArray(DType dtype, long length, IntArray values, Array code
         }
     }
 
+    /// Folds the gathered values in row order. With a flat pool and flat `u16` codes, as a scan
+    /// window of a global dict column has them, it gathers straight off the two segments instead
+    /// of through a virtual `getShort` and `getInt` per row. Codes were range-checked against the
+    /// pool when decoded.
+    ///
+    /// @param identity initial accumulator value
+    /// @param op       binary operator applied to the accumulator and each gathered value
+    /// @return the final accumulated result
     @Override
     public int fold(int identity, IntBinaryOperator op) {
         long n = length;
         IntArray vals = values;
         int result = identity;
+        MemorySegment pool = DictArrays.flat(vals, vals.length(), 4);
+        MemorySegment c16 = codes instanceof ShortArray ? DictArrays.flat(codes, n, 2) : null;
+        if (pool != null && c16 != null) {
+            for (long i = 0; i < n; i++) {
+                long code = Short.toUnsignedLong(c16.getAtIndex(VortexFormat.LE_SHORT, i));
+                result = op.applyAsInt(result, pool.getAtIndex(VortexFormat.LE_INT, code));
+            }
+            return result;
+        }
+        MemorySegment c8 = codes instanceof ByteArray ? DictArrays.flat(codes, n, 1) : null;
+        if (pool != null && c8 != null) {
+            for (long i = 0; i < n; i++) {
+                long code = Byte.toUnsignedLong(c8.get(ValueLayout.JAVA_BYTE, i));
+                result = op.applyAsInt(result, pool.getAtIndex(VortexFormat.LE_INT, code));
+            }
+            return result;
+        }
         switch (codes) {
             case ByteArray ba -> {
                 for (long i = 0; i < n; i++) {

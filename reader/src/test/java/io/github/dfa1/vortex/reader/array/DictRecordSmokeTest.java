@@ -837,6 +837,22 @@ class DictRecordSmokeTest {
         }
 
         @Test
+        void intFold_u16Codes_matchesPerRow() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                IntArray values = intArray(arena, I32, 10, 20, 30);
+                ShortArray codes = shortArray(arena, U16, (short) 2, (short) 2, (short) 0, (short) 1);
+                DictIntArray sut = DictIntArray.of(I32, 4, values, codes);
+
+                // When
+                int result = sut.fold(0, (acc, v) -> acc * 100 + v);
+
+                // Then
+                assertThat(result).isEqualTo(30301020);
+            }
+        }
+
+        @Test
         void intMaterialize_u16Codes_matchesPerRow() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given

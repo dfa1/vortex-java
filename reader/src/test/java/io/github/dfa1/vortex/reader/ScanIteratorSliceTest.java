@@ -4,6 +4,8 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.DecimalArray;
+import io.github.dfa1.vortex.reader.array.DictIntArray;
+import io.github.dfa1.vortex.reader.array.TestArrays;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
@@ -47,6 +49,22 @@ class ScanIteratorSliceTest {
         assertThat(result.length()).isEqualTo(2);
         assertThat(result.getDecimal(0)).isEqualTo(new BigDecimal("2.00"));
         assertThat(result.getDecimal(1)).isEqualTo(new BigDecimal("3.00"));
+    }
+
+    @Test
+    void intDict_sharesItsPoolAndSlicesItsCodesToAFlatWindow() {
+        // Given — a global dict column cached whole: the window must stay a dict (its fold gathers
+        // off the pool) whose codes read as a flat segment (the gather's fast path)
+        IntArray pool = TestArrays.ints(10, 20, 30);
+        var full = DictIntArray.of(DType.I32, 5, pool, TestArrays.shorts((short) 2, (short) 0, (short) 1, (short) 1, (short) 0));
+
+        // When
+        var result = (DictIntArray) ScanIterator.sliceArray(full, 1, 3, DType.I32);
+
+        // Then
+        assertThat(result.values()).isSameAs(pool);
+        assertThat(result.codes().segmentIfPresent()).hasValueSatisfying(seg -> assertThat(seg.byteSize()).isEqualTo(6));
+        assertThat(result.fold(0, (acc, v) -> acc * 100 + v)).isEqualTo(102020);
     }
 
     @Test

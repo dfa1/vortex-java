@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.compute.RowSelection;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.CanonicalArrays;
+import io.github.dfa1.vortex.reader.array.DictIntArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
@@ -975,8 +976,20 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         // slice then reads a flat buffer instead of re-resolving lazy composite children per row.
         return sharedFlats.computeIfAbsent(flat, f -> {
             Arena flatArena = Arena.ofConfined();
-            return new CachedFlat(flatArena, CanonicalArrays.of(decodeLayout(f, dtype, flatArena), flatArena));
+            return new CachedFlat(flatArena, canonicalShared(decodeLayout(f, dtype, flatArena), flatArena));
         }).array();
+    }
+
+    /// Canonicalizes a shared flat, except that an `i32` dict stays a dict over flat codes and a
+    /// flat pool: each window slices just its codes, and a fold gathers off the pool, where
+    /// expanding it first wrote and re-read a 4-byte value for every row of the flat.
+    private static Array canonicalShared(Array array, Arena arena) {
+        return switch (array) {
+            case MaskedArray m -> new MaskedArray(canonicalShared(m.inner(), arena), m.validity());
+            case DictIntArray d -> DictIntArray.of(d.dtype(), d.length(),
+                    (IntArray) CanonicalArrays.of(d.values(), arena), CanonicalArrays.of(d.codes(), arena));
+            default -> CanonicalArrays.of(array, arena);
+        };
     }
 
     /// Releases every cached coarse flat the scan has moved past. As `spec` is decoded, a column
@@ -1010,6 +1023,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 yield new MaskedArray(innerSlice, validitySlice);
             }
             case LongArray a -> new OffsetLongArray(dtype, length, a, offset);
+            // A dict window shares the pool and slices only its codes.
+            case DictIntArray d -> DictIntArray.of(dtype, length, d.values(),
+                    sliceArray(d.codes(), offset, length, d.codes().dtype()));
             case IntArray a -> new OffsetIntArray(dtype, length, a, offset);
             case DoubleArray a -> new OffsetDoubleArray(dtype, length, a, offset);
             case FloatArray a -> new OffsetFloatArray(dtype, length, a, offset);

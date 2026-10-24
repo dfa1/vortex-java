@@ -83,6 +83,37 @@ class OffsetArrayTest {
         }
 
         @Test
+        void segmentIfPresent_flatInner_isTheWindow() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — a sliced dict's codes: gathers read this window as flat codes
+                ShortArray inner = shortArray(arena, (short) 100, (short) 200, (short) 300);
+                var sut = new OffsetShortArray(U16, 2, inner, 1L);
+
+                // When
+                var result = sut.segmentIfPresent();
+
+                // Then
+                assertThat(result).hasValueSatisfying(seg -> {
+                    assertThat(seg.byteSize()).isEqualTo(4);
+                    assertThat(seg.getAtIndex(ValueLayout.JAVA_SHORT_UNALIGNED, 0)).isEqualTo((short) 200);
+                });
+            }
+        }
+
+        @Test
+        void segmentIfPresent_broadcastInner_isEmpty() {
+            // Given a one-element buffer standing for 4 rows: no segment holds the window's rows
+            MemorySegment one = Arena.ofAuto().allocate(2, 2);
+            var sut = new OffsetShortArray(U16, 2, new MaterializedShortArray(U16, 4, one), 1L);
+
+            // When
+            var result = sut.segmentIfPresent();
+
+            // Then
+            assertThat(result).isEmpty();
+        }
+
+        @Test
         void getIntWidensUnsignedThroughOffset() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — 0xFFFF at inner index 1; sliced index 0 reads unsigned 65535

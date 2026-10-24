@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Performance
+- Scanning an integer column with a dict layout folds its codes against the dictionary instead of expanding every row first, about 16% faster on a two-column taxi scan. ([#603](https://github.com/dfa1/vortex-java/pull/603))
 - Folding dict-encoded float columns and scan windows reads their buffers directly, about 3% faster on a two-column taxi scan. ([#600](https://github.com/dfa1/vortex-java/pull/600))
 
 ### Added
