@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.compute.Predicate;
+import io.github.dfa1.vortex.reader.compute.RowSelection;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.CanonicalArrays;
@@ -48,8 +49,10 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -57,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.SequencedMap;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.LongPredicate;
@@ -96,6 +100,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private final ScanFilter filter;
 
     private List<ChunkSpec> chunks;
+    // The columns each returned chunk exposes: the projection, without the columns decoded only to
+    // test the filter.
+    private List<ColumnName> outputNames;
+    private Map<ColumnName, Integer> outputPositions;
+    // A chunk hasNext() decoded to test the filter on, and its matching rows, until next() returns
+    // them: a chunk with no match is skipped, as Rust's scan returns no empty batch.
+    private Chunk pending;
+    private long[] pendingRows;
     private List<ColumnName> projectedNames;
     private List<DType> projectedDtypes;
     private Map<ColumnName, Integer> projectedPositions;
@@ -328,7 +340,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         while (chunkIndex < chunks.size()) {
             ChunkSpec spec = chunks.get(chunkIndex);
-            if (filter != null && canPruneChunk(spec, filter)) {
+            if (filter != null && (canPruneChunk(spec, filter) || !selectMatchingRows(spec))) {
                 chunkIndex++;
                 continue;
             }
@@ -336,6 +348,58 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return true;
         }
         return false;
+    }
+
+    /// Decodes `spec` and keeps the rows the filter selects, up to the rows the limit still
+    /// allows, for [#next()] to return: the filter is exact, as in Rust, so the limit counts rows
+    /// after filtering.
+    ///
+    /// @return `false`, and nothing kept, when no row of `spec` matches
+    private boolean selectMatchingRows(ChunkSpec spec) {
+        // an open chunk may still read the flats eviction would free; next() evicts once it is closed
+        if (openChunk == null || openChunk.isClosed()) {
+            evictPassedFlats(spec);
+        }
+        Chunk full = chunkFor(spec, spec.rowCount());
+        try {
+            RowSelection selection = Compute.matcher(full, filter);
+            long[] rows = new long[(int) Math.min(spec.rowCount(), limit - rowsReturned)];
+            int count = 0;
+            for (long row = selection.nextSelected(0); row >= 0 && count < rows.length;
+                    row = selection.nextSelected(row + 1)) {
+                rows[count++] = row;
+            }
+            if (count == 0) {
+                full.close();
+                return false;
+            }
+            pending = full;
+            pendingRows = count == rows.length ? rows : Arrays.copyOf(rows, count);
+            return true;
+        } catch (RuntimeException e) {
+            full.close();
+            throw e;
+        }
+    }
+
+    /// Whether the filter's zone statistics or dictionary values skip chunk `index` without
+    /// decoding it: the pruning half of a filtered scan, ahead of its row test. Like
+    /// [#chunkRowCounts()], it describes the scan's plan and ignores the limit.
+    ///
+    /// @param index the chunk, in `[0, chunkCount())`
+    /// @return `true` when chunk `index` holds no row the filter can select; `false` with no filter
+    public boolean isChunkPruned(int index) {
+        if (chunks == null) {
+            initialize();
+        }
+        return filter != null && canPruneChunk(chunks.get(index), filter);
+    }
+
+    private static void collectColumns(ScanFilter filter, Set<ColumnName> out) {
+        switch (filter) {
+            case ScanFilter.And(var parts) -> parts.forEach(part -> collectColumns(part, out));
+            case ScanFilter.Column(var col, var _) -> out.add(col);
+        }
     }
 
     @Override
@@ -353,32 +417,59 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         evictPassedFlats(spec);
 
-        long remaining = limit - rowsReturned;
-        long chunkRows = Math.min(spec.rowCount(), remaining);
-
-        Arena arena = Arena.ofConfined();
         Chunk chunk;
+        if (pending != null) {
+            chunk = pending;
+            long[] rows = pendingRows;
+            pending = null;
+            pendingRows = null;
+            chunk = selectedChunk(chunk, rows);
+            rowsReturned += rows.length;
+        } else {
+            long chunkRows = Math.min(spec.rowCount(), limit - rowsReturned);
+            chunk = chunkFor(spec, chunkRows);
+            rowsReturned += chunkRows;
+        }
+        openChunk = chunk;
+        return chunk;
+    }
+
+    /// The `rows` of `full` over the output columns, or `full` itself when that is every row and
+    /// every column.
+    private Chunk selectedChunk(Chunk full, long[] rows) {
+        List<ColumnName> names = outputNames;
+        Map<ColumnName, Integer> positions = outputPositions;
+        if (singleColumnIsSyntheticWrapper) {
+            // the synthetic column was unpacked into the file's real columns
+            names = List.copyOf(full.columns().keySet());
+            positions = Chunk.positions(names);
+        }
+        if (rows.length == full.rowCount() && names.size() == full.columns().size()) {
+            return full;
+        }
+        return full.select(rows, names, positions, this::onChunkClosed);
+    }
+
+    /// The first `chunkRows` rows of `spec`, in a chunk owning a new arena.
+    private Chunk chunkFor(ChunkSpec spec, long chunkRows) {
+        Arena arena = Arena.ofConfined();
         if (singleColumnIsSyntheticWrapper) {
             try {
                 SequencedMap<ColumnName, Chunk.Column> columns = buildColumnMap(spec, arena);
                 if (chunkRows < spec.rowCount()) {
                     columns = limitedColumns(columns, chunkRows);
                 }
-                chunk = new Chunk(chunkRows, columns, arena, file.registry(), this::onChunkClosed);
+                return new Chunk(chunkRows, columns, arena, file.registry(), this::onChunkClosed);
             } catch (RuntimeException e) {
                 arena.close();
                 throw e;
             }
-        } else {
-            // Each column is decoded when first read, so a caller reading a few of the projected
-            // columns (a sort key, a filter column) skips decoding the rest of the chunk. The decode
-            // runs while the chunk is open, before next() can evict the flats it slices.
-            chunk = new Chunk(chunkRows, projectedNames, projectedPositions,
-                    i -> decodeColumn(spec, i, chunkRows, arena), arena, file.registry(), this::onChunkClosed);
         }
-        rowsReturned += chunkRows;
-        openChunk = chunk;
-        return chunk;
+        // Each column is decoded when first read, so a caller reading a few of the projected
+        // columns (a sort key, a filter column) skips decoding the rest of the chunk. The decode
+        // runs while the chunk is open, before next() can evict the flats it slices.
+        return new Chunk(chunkRows, projectedNames, projectedPositions,
+                i -> decodeColumn(spec, i, chunkRows, arena), arena, file.registry(), this::onChunkClosed);
     }
 
     private Chunk.Column decodeColumn(ChunkSpec spec, int i, long chunkRows, Arena arena) {
@@ -734,6 +825,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             openChunk.close();
         }
         openChunk = null;
+        if (pending != null) {
+            pending.close();
+            pending = null;
+        }
         if (sharedFlats != null) {
             for (CachedFlat cached : sharedFlats.values()) {
                 cached.arena().close();
@@ -759,13 +854,18 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         var columnFlats = new LinkedHashMap<ColumnName, List<Layout>>();
         Map<ColumnName, DType> columnDtypes = new LinkedHashMap<>();
 
+        List<ColumnName> projection = options.columns();
         if (rootLayout.isStruct() && rootDtype instanceof DType.Struct structDtype) {
-            List<ColumnName> projection = options.columns();
+            // the filter's columns are decoded too, to test each row, even when not projected
+            Set<ColumnName> filterColumns = new HashSet<>();
+            if (filter != null) {
+                collectColumns(filter, filterColumns);
+            }
             int offset = fieldChildOffset(structDtype);
             for (int i = 0; i < structDtype.fieldNames().size(); i++) {
                 ColumnName colName = structDtype.fieldNames().get(i);
                 DType colDtype = structDtype.fieldTypes().get(i);
-                if (!projection.isEmpty() && !projection.contains(colName)) {
+                if (!projection.isEmpty() && !projection.contains(colName) && !filterColumns.contains(colName)) {
                     continue;
                 }
                 Layout colTop = rootLayout.children().get(offset + i);
@@ -786,6 +886,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         projectedNames = List.copyOf(columnDtypes.keySet());
         projectedDtypes = List.copyOf(columnDtypes.values());
         projectedPositions = Chunk.positions(projectedNames);
+        outputNames = projectedNames;
+        if (!projection.isEmpty() && !singleColumnIsSyntheticWrapper) {
+            outputNames = projectedNames.stream().filter(projection::contains).toList();
+        }
+        outputPositions = Chunk.positions(outputNames);
         lastCoveringFlats = new Layout[projectedNames.size()];
         chunks = buildChunks(columnFlats);
     }

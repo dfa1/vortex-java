@@ -49,10 +49,16 @@ class NullCountPruningTest {
 
     private List<Long> scanRowCounts(Path file, ScanFilter filter) throws IOException {
         var opts = filter == null ? ScanOptions.all() : ScanOptions.all().withFilter(filter);
+        // the scan returns only the matching rows, so the pruning decision is read from its plan
         var counts = new ArrayList<Long>();
         try (VortexReader reader = VortexReader.open(file);
              var iter = reader.scan(opts)) {
-            iter.forEachRemaining(c -> counts.add(c.rowCount()));
+            long[] chunkRows = iter.chunkRowCounts();
+            for (int i = 0; i < chunkRows.length; i++) {
+                if (!iter.isChunkPruned(i)) {
+                    counts.add(chunkRows[i]);
+                }
+            }
         }
         return counts;
     }

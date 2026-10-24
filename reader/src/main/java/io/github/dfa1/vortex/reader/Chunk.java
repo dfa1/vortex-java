@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.SelectedArrays;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 
@@ -106,6 +107,23 @@ public final class Chunk implements AutoCloseable {
             return new Column(ScanIterator.sliceArray(column.array(), offset, length, column.dtype()), column.dtype());
         };
         return new Chunk(length, names, positions, sliced, null, registry, _ -> { });
+    }
+
+    /// The rows `rows` of the columns `names`, in that order: the chunk a filtered scan returns.
+    /// It takes over this chunk's arena, so this chunk must not be used again; closing the result
+    /// releases both.
+    ///
+    /// @param rows      the rows to keep, ascending, each in `[0, rowCount())`
+    /// @param names     the columns to keep, a subset of this chunk's
+    /// @param positions each of `names` to its index
+    /// @param onClose   called when the result closes
+    /// @return the selected rows
+    Chunk select(long[] rows, List<ColumnName> names, Map<ColumnName, Integer> positions, Consumer<Chunk> onClose) {
+        IntFunction<Column> selected = i -> {
+            Column column = column(position(names.get(i)));
+            return new Column(SelectedArrays.select(column.array(), rows, arena), column.dtype());
+        };
+        return new Chunk(rows.length, names, positions, selected, arena, registry, onClose);
     }
 
     /// One decoded column: its zero-copy [Array] view and the [DType] it was declared with in the
