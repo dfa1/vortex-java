@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A non-null integer or float column gets a dict layout only when the compressor picks a dictionary for its first 8192 rows, as Rust's writer decides, so a column that bit-packs better is no longer dictionary-encoded. ([#599](https://github.com/dfa1/vortex-java/pull/599))
 - The writer cuts string and nullable columns into the same chunks as vortex-jni 0.89, which measures its 8192-row blocks by the bytes their rows reference. ([#596](https://github.com/dfa1/vortex-java/pull/596))
 - `filter` and `select --where` on the command line work on a nullable column, where they failed; a null row matches no comparison, as in SQL. ([#593](https://github.com/dfa1/vortex-java/pull/593))
+- The command line prints sizes past 1 GiB in GB, TB, PB or EB, where a 2.3 GB file read as `2179.1 MB`. ([#608](https://github.com/dfa1/vortex-java/pull/608))
 
 ## [0.18.1] — 2026-10-22
 
