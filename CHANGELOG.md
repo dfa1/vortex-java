@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** CSV import stores an empty cell in a number or boolean column as null instead of `0` or `false`, so inferred number and boolean columns are now nullable (read through `MaskedArray`), and an empty cell or a missing column fails the import where the schema declares the column non-nullable. ([#592](https://github.com/dfa1/vortex-java/issues/592))
 
 ### Fixed
+- Run-end ends and RLE indices and offsets are stored in the narrowest unsigned type that holds them, as Rust narrows them, instead of fixed `u32`, `u16` and `u64`. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - Frame-of-reference bit-packs its residuals directly, as Rust's FoR scheme does, instead of letting the cascade pick another encoding for them. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - The cascade costs a child encoding by what it encodes to, as Rust does, not by its estimate, which made it pick run-end where Rust picks RLE. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - The cascade keeps an encoding only when it comes out smaller than the raw array, as Rust does, so a short column no longer bit-packs into more bytes than it holds. ([#604](https://github.com/dfa1/vortex-java/issues/604))

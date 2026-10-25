@@ -417,11 +417,14 @@ class RleEncodingEncoderTest {
             ChildSlot offsets = result.openChildren().get(2);
             assertThat((int[]) values.childData()).containsExactly(5, 9, 9);
             assertThat(values.excluded()).containsExactly(EncodingId.FASTLANES_RLE);
-            assertThat(indices.childDtype()).isEqualTo(new DType.Primitive(io.github.dfa1.vortex.core.model.PType.U16, false));
-            assertThat((short[]) indices.childData()).hasSize(2_048);
-            assertThat(((short[]) indices.childData())[599]).isZero();
-            assertThat(((short[]) indices.childData())[600]).isEqualTo((short) 1);
-            assertThat((long[]) offsets.childData()).containsExactly(0L, 2L);
+            // indices and offsets are narrowed to the smallest type holding their largest value
+            // (1 and 2), as Rust's rle_compress narrows them before compressing
+            assertThat(indices.childDtype()).isEqualTo(new DType.Primitive(io.github.dfa1.vortex.core.model.PType.U8, false));
+            assertThat((byte[]) indices.childData()).hasSize(2_048);
+            assertThat(((byte[]) indices.childData())[599]).isZero();
+            assertThat(((byte[]) indices.childData())[600]).isEqualTo((byte) 1);
+            assertThat(offsets.childDtype()).isEqualTo(new DType.Primitive(io.github.dfa1.vortex.core.model.PType.U8, false));
+            assertThat((byte[]) offsets.childData()).containsExactly(0, 2);
             for (ChildSlot positions : List.of(indices, offsets)) {
                 assertThat(positions.excluded()).containsExactlyInAnyOrder(EncodingId.FASTLANES_RLE,
                         EncodingId.VORTEX_DICT, EncodingId.VORTEX_SPARSE);

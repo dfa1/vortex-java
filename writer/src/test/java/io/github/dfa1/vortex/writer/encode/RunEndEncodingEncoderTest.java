@@ -242,8 +242,9 @@ class RunEndEncodingEncoderTest {
             assertThat(result.ownedBuffers()).isEmpty();
             ChildSlot ends = result.openChildren().get(0);
             ChildSlot values = result.openChildren().get(1);
-            assertThat((int[]) ends.childData()).containsExactly(3, 5, 6);
-            assertThat(ends.childDtype()).isEqualTo(new DType.Primitive(PType.U32, false));
+            // ends are narrowed to the smallest type holding the last one, as Rust narrows them
+            assertThat((byte[]) ends.childData()).containsExactly(3, 5, 6);
+            assertThat(ends.childDtype()).isEqualTo(new DType.Primitive(PType.U8, false));
             assertThat(ends.excluded()).containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_RUNEND,
                     EncodingId.FASTLANES_RLE, EncodingId.VORTEX_SPARSE);
             assertThat((long[]) values.childData()).containsExactly(7L, -2L, 7L);

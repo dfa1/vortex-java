@@ -241,11 +241,14 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         ends[k] = n;
         values[k] = widened[n - 1];
 
+        // Rust narrows the u64 ends to the smallest unsigned type that holds the last one (`n`)
+        PType endsPtype = PType.narrowestUnsigned(n);
         byte[] metaBytes = new ProtoRunEndMetadata(
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U32.ordinal()), numRuns, 0L).encode();
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(endsPtype.ordinal()), numRuns, 0L).encode();
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_RUNEND, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{null, null}, new int[0]);
-        ChildSlot endsSlot = new ChildSlot(new DType.Primitive(PType.U32, false), ends, 0, ENDS_EXCLUDED);
+        ChildSlot endsSlot = new ChildSlot(new DType.Primitive(endsPtype, false),
+                PrimitiveArrays.fromIntsArray(ends, endsPtype, EncodingId.VORTEX_RUNEND), 0, ENDS_EXCLUDED);
         ChildSlot valuesSlot = new ChildSlot(dtype, PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.VORTEX_RUNEND), 1, VALUES_EXCLUDED);
         MinMax stats = ZoneMapStats.of(dtype, data);
         return new CascadeStep(partialRoot, List.of(), List.of(endsSlot, valuesSlot),
