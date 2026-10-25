@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - A CSV import schema can declare any integer type from `I8` to `U64`, range-checked per value, and `F32`; an unsupported type fails in `withSchema` instead of at the first chunk. ([#593](https://github.com/dfa1/vortex-java/pull/593))
+- `ScanIterator.chunkStats` is public: each chunk's own array stats, which carry a string column's exact min/max where the zone map only bounds it. ([#608](https://github.com/dfa1/vortex-java/pull/608))
 
 ### Changed
 - **Breaking:** `RowFilter` is renamed `ScanFilter`, matching `ScanOptions`. ([#598](https://github.com/dfa1/vortex-java/pull/598))
