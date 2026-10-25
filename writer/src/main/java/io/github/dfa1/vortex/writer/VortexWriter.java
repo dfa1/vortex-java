@@ -359,18 +359,32 @@ public final class VortexWriter implements Closeable {
         codecs.add(new FixedSizeListEncodingEncoder());
         codecs.add(new ListEncodingEncoder());
         codecs.add(new ConstantEncodingEncoder());
+        // The primitive schemes in Rust's registration order (vortex-btrblocks session.rs), which
+        // breaks a tie between equal scores: integers FoR, ZigZag, BitPacking, Sparse, IntDict,
+        // RunEnd, Sequence, RLE, Delta; floats ALP, ALP-RD, FloatDict, sparse, RLE. One list
+        // serves both, so Dict sits before Sparse as the floats have it; for integers the two only
+        // meet in the probe and zone tables, on an exact tie of two estimates.
+        codecs.add(new FrameOfReferenceEncodingEncoder());
+        // ZigZag folds signed values to small unsigned magnitudes and cascades them into
+        // bit-packing, as Rust's ZigZagScheme does (issue #410). It competes with FoR, which
+        // always fits in as few bits, so it is here for parity rather than for size.
+        codecs.add(new ZigZagEncodingEncoder());
+        codecs.add(new BitpackedEncodingEncoder());
         codecs.add(new AlpEncodingEncoder());
         // ALP-RD competes for high-precision F64/F32 that plain ALP can't fit without too many
         // exceptions (e.g. nyc-311 Latitude): without it in the competition such columns fall back
         // to raw vortex.primitive or dict, matching neither the Rust reference (which uses alprd) nor
         // its size (#304). Registered on WriteRegistry already; this adds it as a top-level candidate.
         codecs.add(new AlpRdEncodingEncoder());
-        codecs.add(new FrameOfReferenceEncodingEncoder());
-        // ZigZag folds signed values to small unsigned magnitudes and cascades them into
-        // bit-packing, as Rust's ZigZagScheme does (issue #410). It competes with FoR, which
-        // always fits in as few bits, so it is here for parity rather than for size.
-        codecs.add(new ZigZagEncodingEncoder());
+        // Rust's file writer keeps integers out of the data cascade because its DictStrategy
+        // dictionary-encodes suitable columns as a layout. That is our global dictionary: with it
+        // off (a streaming CSV import cannot buffer a whole column), an integer chunk keeps its
+        // per-chunk dictionary, or a low-cardinality integer column loses its dictionary entirely.
+        codecs.add(options.globalDict() ? DictEncodingEncoder.forDataCascade() : new DictEncodingEncoder());
+        codecs.add(new SparseEncodingEncoder());
         codecs.add(new RunEndEncodingEncoder());
+        // Rust's SequenceScheme: an exact integer arithmetic sequence costs two scalars (#507).
+        codecs.add(new SequenceEncodingEncoder());
         codecs.add(new RleEncodingEncoder());
         // Delta is in no edition ("no edition includes fastlanes.delta yet"), so like Rust's
         // DeltaScheme it competes only when the edition guard is off (WriteOptions#withoutEditions).
@@ -378,15 +392,6 @@ public final class VortexWriter implements Closeable {
         if (allowed.isEmpty() || allowed.contains(EncodingId.FASTLANES_DELTA)) {
             codecs.add(new DeltaEncodingEncoder());
         }
-        codecs.add(new SparseEncodingEncoder());
-        // Rust's SequenceScheme: an exact integer arithmetic sequence costs two scalars (#507).
-        codecs.add(new SequenceEncodingEncoder());
-        // Rust's file writer keeps integers out of the data cascade because its DictStrategy
-        // dictionary-encodes suitable columns as a layout. That is our global dictionary: with it
-        // off (a streaming CSV import cannot buffer a whole column), an integer chunk keeps its
-        // per-chunk dictionary, or a low-cardinality integer column loses its dictionary entirely.
-        codecs.add(options.globalDict() ? DictEncodingEncoder.forDataCascade() : new DictEncodingEncoder());
-        codecs.add(new BitpackedEncodingEncoder());
         // Decimals: byte-parts (precision <= 18) cascades its i64 mantissa through FoR/bit-packing;
         // plain vortex.decimal covers every width. The competition keeps the smaller.
         codecs.add(new DecimalBytePartsEncodingEncoder());
