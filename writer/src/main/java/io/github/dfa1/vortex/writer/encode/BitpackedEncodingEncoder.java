@@ -48,6 +48,28 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         return p.ptype().isInteger();
     }
 
+    /// Rust's `BitPackingScheme::compress` run directly, as FoR runs it on its residuals: packed
+    /// at one global width, or kept a `vortex.primitive` when the best width is the native one
+    /// (`compress_global` returns `None`).
+    ///
+    /// @param dtype the non-negative integer dtype
+    /// @param data  the values
+    /// @param ctx   the encode context
+    /// @return the bit-packed or canonical array
+    static EncodeResult encodeLeaf(DType dtype, Object data, EncodeContext ctx) {
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_BITPACKED);
+        long typeMask = FastLanes.lowMask(ptype.bits());
+        int[] bitWidthFreq = new int[ptype.bits() + 1];
+        for (long v : longs) {
+            bitWidthFreq[Long.SIZE - Long.numberOfLeadingZeros(v & typeMask)]++;
+        }
+        if (bestBitWidth(bitWidthFreq, ptype.byteSize() + 4, longs.length) == ptype.bits()) {
+            return new PrimitiveEncodingEncoder().encode(dtype, data, ctx);
+        }
+        return new BitpackedEncodingEncoder().encode(dtype, data, ctx);
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         PType ptype = ((DType.Primitive) dtype).ptype();

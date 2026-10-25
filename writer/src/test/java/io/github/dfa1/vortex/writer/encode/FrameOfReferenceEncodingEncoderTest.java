@@ -296,5 +296,36 @@ class FrameOfReferenceEncodingEncoderTest {
             assertThat(result.statsMin().int64_value()).isEqualTo(990L);
             assertThat(result.statsMax().int64_value()).isEqualTo(1050L);
         }
+
+        @Test
+        void encodeCascade_bitPacksTheResidualsWithoutCascading() {
+            // Given — Rust's v1 FoR has no cascaded child: it bit-packs its residuals at once, so
+            // no other scheme (a dict, a run-end) can win them
+            long[] data = new long[2048];
+            for (int i = 0; i < data.length; i++) {
+                data[i] = 1_000_000L + i % 4;
+            }
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DTypes.I64, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.isTerminal()).isTrue();
+            assertThat(result.partialRoot().children()[0].encodingId()).isEqualTo(EncodingId.FASTLANES_BITPACKED);
+        }
+
+        @Test
+        void encodeCascade_residualsAtFullWidth_stayPrimitive() {
+            // Given — values spanning the whole i64 range, so most residuals need all 64 bits and
+            // bit-packing cannot narrow them (Rust's compress_global returns None): they stay a
+            // vortex.primitive
+            long[] data = {Long.MIN_VALUE, Long.MAX_VALUE, -1L, 0L};
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DTypes.I64, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.partialRoot().children()[0].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+        }
     }
 }

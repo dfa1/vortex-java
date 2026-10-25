@@ -10,7 +10,6 @@ import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
-import java.util.Set;
 import java.util.List;
 
 /// Write-only encoder for `fastlanes.for` (Frame of Reference).
@@ -89,14 +88,22 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         if (ref == 0L && ptype.isUnsigned()) {
             return CascadeStep.notApplicable();
         }
-        MemorySegment meta = buildForMeta(ref, ptype);
+        return step(p, ref, residualsAsNativeArray(longs, ref, ptype), PrimitiveEncodingEncoder.minMaxStats(ptype, data),
+                encodeCtx);
+    }
 
-        EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_FOR, meta, new EncodeNode[1], new int[0]);
-        ChildSlot slot = new ChildSlot(dtype, residualsAsNativeArray(longs, ref, ptype), 0,
-                Set.of(EncodingId.FASTLANES_FOR));
-        MinMax stats = PrimitiveEncodingEncoder.minMaxStats(ptype, data);
-        return new CascadeStep(partialRoot, List.of(), List.of(slot),
-                PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
+    /// Rust's v1 `FoRScheme::compress`: the residuals are bit-packed at once, never cascaded
+    /// ("if any other scheme was preferable, it would be chosen instead of bitpacking",
+    /// `schemes/integer/for_.rs`), and stay canonical when bit-packing cannot narrow them.
+    private static CascadeStep step(DType.Primitive dtype, long ref, Object residuals, MinMax stats,
+                                    EncodeContext ctx) {
+        EncodeResult child = ctx.excluded().contains(EncodingId.FASTLANES_BITPACKED)
+                ? new PrimitiveEncodingEncoder().encode(dtype, residuals, ctx)
+                : BitpackedEncodingEncoder.encodeLeaf(dtype, residuals, ctx);
+        EncodeNode root = new EncodeNode(EncodingId.FASTLANES_FOR, buildForMeta(ref, dtype.ptype()),
+                new EncodeNode[]{child.rootNode()}, new int[0]);
+        return CascadeStep.terminal(new EncodeResult(root, child.encodedBuffers(),
+                PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats)));
     }
 
     // Rust takes the reference from Stat::Min, an unsigned min for unsigned ptypes: a signed one
