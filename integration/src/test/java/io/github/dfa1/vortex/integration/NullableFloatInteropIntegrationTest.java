@@ -85,6 +85,10 @@ class NullableFloatInteropIntegrationTest {
                 shape("f64 constant with nulls", PType.F64, _ -> 1.5, every7),
                 // few distinct: a flat dict whose codes keep the bitmap
                 shape("f64 five distinct", PType.F64, i -> Math.floorMod(RANDOM[i], 5) * 0.25, every7),
+                // runs with null runs: RLE and dict tie on the probe's sample, and Rust's
+                // registration order (dict first) gives the dict layout
+                shape("f64 runs with null runs", PType.F64, i -> Math.floorMod(RANDOM[i / 20], 100_000) / 7.0,
+                        i -> (i / 20) % 7 == 0),
                 // taxi Airport_fee: one dominant value, two rare ones, nulls: a dict layout
                 shape("f64 airport fee", PType.F64, i -> i % 17 == 0 ? 1.75 : i % 101 == 0 ? -1.75 : 0.0,
                         i -> i % 10 == 3));
