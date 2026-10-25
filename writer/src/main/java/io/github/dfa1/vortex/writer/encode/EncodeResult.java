@@ -12,6 +12,9 @@ import java.util.List;
 /// @param encodedBuffers flat list of data buffers in the order referenced by `rootNode`
 /// @param statsMin minimum value for zone-map pruning, or `null`
 /// @param statsMax maximum value for zone-map pruning, or `null`
+// Stats are the generated ProtoScalarValue, which core only qualified-exports; suppress the exports-leak lint
+// rather than publish the whole generated codec (as VariantData does).
+@SuppressWarnings("exports")
 public record EncodeResult(
         EncodeNode rootNode,
         List<EncodedBuffer> encodedBuffers,

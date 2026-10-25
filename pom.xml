@@ -140,6 +140,7 @@
              tests trip the matching JDK warning (FFM or System.loadLibrary callers; Unsafe users such as protobuf-java). -->
         <test.native.args />
         <test.unsafe.args />
+        <test.modules.args />
         <!-- release plugins -->
         <central-publishing-plugin.version>0.12.0</central-publishing-plugin.version>
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
@@ -390,6 +391,9 @@
                         <failOnWarning>true</failOnWarning>
                         <compilerArgs>
                             <arg>-Xlint:all</arg>
+                            <!-- JDK 26 flags the incubating Vector API module for every module that resolves core (its
+                                 requires static); the opt-in kernels are intentional, and no other module uses it. -->
+                            <arg>-Xlint:-incubating</arg>
                         </compilerArgs>
                     </configuration>
                 </plugin>
@@ -405,7 +409,7 @@
                              {@code net.bytebuddy:byte-buddy-agent:jar} is resolved to an absolute path
                              by {@code maven-dependency-plugin:properties} (declared in build/plugins);
                              loading it as a javaagent suppresses the Mockito self-attach warning. -->
-                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} ${test.vector.args} ${test.native.args} ${test.unsafe.args}</argLine>
+                        <argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} ${test.vector.args} ${test.native.args} ${test.unsafe.args} ${test.modules.args}</argLine>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -454,6 +458,9 @@
                     <version>${maven-javadoc-plugin.version}</version>
                     <configuration>
                         <excludePackageNames>io.github.dfa1.vortex.core.fbs:io.github.dfa1.vortex.core.proto</excludePackageNames>
+                        <!-- Sibling-module links would point at ${project.url}/<artifact>/apidocs/, which does not
+                             exist, and fail a classpath module (jdbc-driver, demo) that links a named one. -->
+                        <detectOfflineLinks>false</detectOfflineLinks>
                         <!-- Errors and warnings both fail the build. A dangling [Type#member]
                              reference means a refactor left the docs pointing at a type that no
                              longer exists; a warning (missing @param, undocumented default
@@ -545,6 +552,34 @@
     </build>
 
     <profiles>
+        <!-- JDK 26+ javadoc rejects VectorApiSimdOperations's import of the incubating module ("package ... is not
+             visible") unless the module is added, and then prints the "using incubating module(s)" warning for core
+             and every named module that reads it, which javadoc has no -Xlint switch to silence. On JDK 26+ add the
+             module and tolerate that warning; the warning-free ratchet stays on for JDK 25, where javadoc does not
+             complain. -->
+        <profile>
+            <id>javadoc-sees-incubating-module</id>
+            <activation>
+                <jdk>[26,)</jdk>
+            </activation>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-javadoc-plugin</artifactId>
+                            <configuration>
+                                <failOnWarnings>false</failOnWarnings>
+                                <additionalOptions>
+                                    <additionalOption>--add-modules</additionalOption>
+                                    <additionalOption>jdk.incubator.vector</additionalOption>
+                                </additionalOptions>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+        </profile>
         <profile>
             <!-- Activated in CI: ./mvnw verify -P coverage  -->
             <!-- Attaches the JaCoCo agent to surefire/failsafe and writes one

@@ -56,6 +56,9 @@ public record ArrayStats(
     ///
     /// @param fbs the FlatBuffers stats table, or `null`
     /// @return parsed stats, or an empty instance if no usable data is present
+    // Low-level entry point for the parse path and the inspector; it intentionally exposes the generated
+    // FlatBuffers type, which core only qualified-exports to the modules that need it.
+    @SuppressWarnings("exports")
     public static ArrayStats fromFbs(io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs) {
         if (fbs == null) {
             return EMPTY;

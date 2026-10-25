@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -198,6 +199,14 @@ class DocsJavaCompilerTest {
 
     // ── compilation ───────────────────────────────────────────────────────────
 
+    private static String vortexModules() {
+        return ModuleLayer.boot().modules().stream()
+                .map(Module::getName)
+                .filter(name -> name.startsWith("io.github.dfa1.vortex.") && !name.endsWith(".integration"))
+                .sorted()
+                .collect(Collectors.joining(","));
+    }
+
     private static List<Diagnostic<? extends JavaFileObject>> compileErrors(List<JavaFileObject> sources)
             throws IOException {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
@@ -208,10 +217,16 @@ class DocsJavaCompilerTest {
         try (StandardJavaFileManager fileManager =
                      compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8)) {
             fileManager.setLocation(StandardLocation.CLASS_OUTPUT, List.of(outDir.toFile()));
-            List<String> options = List.of(
+            List<String> options = new ArrayList<>(List.of(
                     "--release", "25",
                     "-classpath", System.getProperty("java.class.path"),
-                    "-proc:none");
+                    "-proc:none"));
+            // The library modules are on the module path (failsafe/surefire run modular), not the classpath, so the
+            // snippets need that path too, with the vortex modules as roots they can import from.
+            String modulePath = System.getProperty("jdk.module.path");
+            if (modulePath != null) {
+                options.addAll(List.of("--module-path", modulePath, "--add-modules", vortexModules()));
+            }
             compiler.getTask(null, fileManager, diagnostics, options, null, sources).call();
         } finally {
             deleteRecursively(outDir);

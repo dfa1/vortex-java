@@ -21,6 +21,8 @@ import java.util.List;
 /// @param statsMin     minimum stat scalar, or `null`
 /// @param statsMax     maximum stat scalar, or `null`
 /// @param applicable   `false` if this encoding cannot handle the input data
+// Generated ProtoScalarValue, qualified-exported by core: see EncodeResult.
+@SuppressWarnings("exports")
 public record CascadeStep(
         EncodeNode partialRoot,
         List<EncodedBuffer> ownedBuffers,

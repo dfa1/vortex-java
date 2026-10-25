@@ -16,7 +16,10 @@
 
     <properties>
         <!-- Our own FFM zstd binding (io.github.dfa1.zstd.NativeLibrary calls SymbolLookup#libraryLookup, a restricted method). -->
-        <test.native.args>--enable-native-access=ALL-UNNAMED</test.native.args>
+        <test.native.args>--enable-native-access=io.github.dfa1.zstd</test.native.args>
+        <!-- Test JVM only: the round-trip tests decode with the reader, which sits on the test classpath (an unnamed
+             module, since the writer never requires it) and needs core's qualified fbs/proto exports. -->
+        <test.modules.args>--add-exports io.github.dfa1.vortex.core/io.github.dfa1.vortex.core.fbs=ALL-UNNAMED --add-exports io.github.dfa1.vortex.core/io.github.dfa1.vortex.core.proto=ALL-UNNAMED</test.modules.args>
     </properties>
 
     <dependencies>
@@ -69,6 +72,22 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Encoders and decoders are stateless public classes that the registries instantiate; an explicit
+                 constructor on each would be noise, so the missing-explicit-ctor lint (new with modules) is off. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs combine.children="append">
+                        <arg>-Xlint:-missing-explicit-ctor</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
     <profiles>
         <!-- Mutation testing (opt-in: -P pitest). Common PIT setup is inherited from the parent

@@ -1,117 +1,116 @@
-# ADR 0024: JPMS adoption for core/reader/writer
+# ADR 0024: JPMS adoption
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-14); first recorded as Proposed on 2026-09-06
 - **Date:** 2026-09-06
 - **Deciders:** project maintainer
 - **Related:** [ADR 0017 — In-house FlatBuffers codegen](0017-in-house-flatbuffers-codegen.md),
-  [PR #176 — feat(jpms): add module-info for core/reader/writer \[WIP\]](https://github.com/dfa1/vortex-java/pull/176)
+  [PR #176 — feat(jpms): add module-info for core/reader/writer \[WIP\]](https://github.com/dfa1/vortex-java/pull/176) (superseded by PR #538)
 
 ## Context
 
 `flatbuffers-java` used to make a real JPMS module graph impossible: it ships as an
 automatic module with an unstable, jar-filename-derived name, and a named module
 cannot reliably `requires` one. ADR 0017 removed that dependency in favor of the
-in-house `fbs-gen`/`proto-gen` toolchain, which removed the blocker — but nobody has
-finished adding `module-info.java` since. TODO.md has carried a single unqualified
-line ("use JPMS, watch out for 'dfa1' in package name") since before that ADR, with
-no record of *why* it might be worth doing or what it would cost.
+in-house `fbs-gen`/`proto-gen` toolchain, which removed the blocker.
 
-PR #176 is the in-progress attempt, parked as draft ("do not merge yet"). It already
-gives a concrete, evidence-based account of both sides:
+When this ADR was first written the decision was left open, leaning against: PR #176 got
+`core`, `reader` and `writer` building as modules, but `writer`'s **test** sourceset failed
+under `-Werror` because its round-trip tests decode with test-scope `reader` types while the
+writer module (correctly) does not `require reader`. A second gap was that
+`io.github.dfa1.zstd:zstd` (a separate project of this maintainer's) was an automatic module;
+it now ships a real `module-info`, which closed it.
 
-**What works today:** `core`, `reader`, and `writer` (main sourcesets) are all
-modular with clean, green builds (359 / 857 tests respectively for core/reader).
-`writer` correctly does not `require reader`, preserving the architecture rule from
-ADR 0001. Downstream modules (`calcite`, `cli`, `csv`, `jdbc`, `parquet`,
-`inspector`) are left non-modular by design, consumed as automatic modules.
-
-**What's blocking it:** `writer`'s **test** sourceset fails under `-Werror`.
-Writer's tests decode-verify round-trips using test-scope `reader` types, but they
-patch into the `writer` module, which — correctly — does not `require reader` in
-its main module graph. The workaround attempted (`testCompile
---add-reads=ALL-MODULE-PATH` plus Surefire `useModulePath=false`) still leaves a
-residual exports/reads lint warning. There is, as of this ADR, no clean way to let
-the test module read `reader` without polluting the main module graph — this is
-the actual reason #176 is still a draft, not the historically-cited flatbuffers
-blocker.
-
-A second, smaller gap: `reader`/`writer` both `requires static zstd` against
-`io.github.dfa1.zstd:zstd` (a separate project of this maintainer's), which itself
-resolves as an automatic module with no `module-info.java` of its own. Unlike the
-former `flatbuffers-java` situation, this one is fully within this maintainer's
-control to close — but it hasn't been done, so it remains a live gap today.
-
-Separately from the mechanics: **JPMS adoption for consumed libraries is low in
-practice.** Most consumers put jars on the classpath regardless of whether a
-`module-info.java` exists; strict encapsulation and `jlink` custom runtime images
-matter far more for applications than for a library shipped to Maven Central. The
-actual encapsulation goal this project cares about — internal FlatBuffers/protobuf
-runtime classes (`FbsTable`, `FbsMemorySegment`, the proto codec) staying hidden —
-is already achieved today via ordinary `public`/package-private visibility, with no
-module system required.
+The case for doing it anyway: running the tests on the module path makes them check the module
+graph (a missing `requires`, an accidental split package, a leaked internal) instead of the
+classpath hiding all of it. The counter-argument stays true: JPMS adoption among consumers of a
+Maven Central library is low, and the project's encapsulation goal (hiding the FlatBuffers/protobuf
+runtime) was already met with ordinary `public`/package-private visibility. The decision is
+therefore about what the project gets for its own build, not about downstream demand.
 
 ## Decision
 
-Not yet made — this ADR records the tradeoff for a decision that is still open.
-Recorded here for future reference so the same ground doesn't need re-deriving.
+Adopt JPMS for the published library modules and run surefire and failsafe on the module path
+(PR #538, replacing the stale draft #176). The rules:
 
-The maintainer's current lean: **do not prioritize finishing PR #176** absent a
-concrete downstream request for a strict module graph or a `jlink`-based runtime
-image. Keep it parked exactly as drafted (do not merge) rather than force through
-the test-sourceset workaround under time pressure, and revisit if a real consumer
-need surfaces — mirroring the "capture the design now, defer implementation until
-a concrete need" posture already used in [ADR 0016](0016-vortex-arrow-bridge.md).
+1. **Module name = package root.** `core`, `fsst`, `reader`, `writer`, `csv`, `jdbc` are
+   `io.github.dfa1.vortex.<name>`; the inspector is `io.github.dfa1.vortex.inspect` because its
+   package is `...inspect`, not `...inspector`. The artifact id may differ from the module name.
+   The `dfa1` terminal-digit lint is suppressed with `@SuppressWarnings("module")` on each
+   declaration: the name has to match the packages and the published group.
+2. **A module with an automatic-module dependency stays descriptor-less.** A published named module
+   must not `requires` a jar with no descriptor (its derived name is unstable). The libraries `parquet`
+   (hardwood) and `calcite` (calcite-core/babel) pin a stable `Automatic-Module-Name` in the jar
+   manifest instead, so a modular application can `requires` them under the name a future descriptor
+   will keep. `cli` (an application run from its `-all` jar), `jdbc-driver` (loaded by `DriverManager`)
+   and the unpublished generators `fbs-gen`/`proto-gen` are never required, so they pin nothing.
+   Unpublished `performance`, `demo` and `fuzz`
+   stay on the classpath (`performance` also declares a class in `core`'s `simd` package, a split
+   package on the module path).
+3. **Generated wire codecs are not public API.** `core` exports `fbs` and `proto` only to the modules
+   that use them (a qualified export); a new consumer module is added to that list. Where a public
+   signature must expose a generated type (`ArrayStats.fromFbs`, `VariantData`), the `exports` lint is
+   suppressed on that one declaration with a comment rather than widening the export.
+4. **The writer never requires the reader.** This is what blocked #176. Its round-trip tests see the
+   reader on the test classpath, and the `--add-exports` of core's `fbs`/`proto` it needs live in the writer
+   POM's `test.modules.args`, never in a `module-info`. The writer test compile takes no extra flags, so
+   IDEs import main and test with one compiler configuration; the one test that needed `java.net.http`
+   moved to `integration`.
+5. **`integration` has a code-less main descriptor.** Failsafe only uses the module path when the module
+   has a descriptor, and a test-only descriptor would put every test dependency (including the
+   invalid-named `zstd-native-*` resource jars) on the module path and fail at boot. A main descriptor
+   requiring the named modules keeps the non-modular libraries (vortex-jni, hardwood, Arrow's netty
+   bits, calcite) on the classpath.
+6. **Shared test code cannot re-declare production packages.** `core`'s test-jar ships only
+   `core.testing`; shipping its `*Test` classes was a split package.
+7. **JVM flags are per module and named where possible.** The shared test `argLine` carries only the
+   agent and Vector API flags; `test.native.args`, `test.unsafe.args` and `test.modules.args` are empty
+   root properties that a module sets when its tests need them. A named module is enabled by name
+   (`--enable-native-access=io.github.dfa1.zstd`), not `ALL-UNNAMED`.
+8. **JDK 26 lints.** `-Xlint:-incubating` is set once in the root compiler config because every module
+   resolving `core` sees `jdk.incubator.vector` (its `requires static`); `missing-explicit-ctor` is off
+   in `reader`/`writer`, whose public encoders and decoders are stateless and registry-instantiated.
 
 ## Consequences
 
 ### Positive
 
-- If finished: a verified, reliable module graph for `core`/`reader`/`writer`,
-  catching missing/duplicate dependency issues at compile time instead of runtime.
-- If finished: unlocks `jlink` custom runtime images for anyone embedding
-  vortex-java in a minimal-footprint deployment (e.g. the `cli` module).
-- The investigation itself (PR #176) already validated that ADR 0017's dependency
-  removal was sufficient to make the main-sourceset module graph work cleanly.
+- A broken or missing `requires`, an accidental split package or a leaked internal fails the unit
+  tests, not a consumer.
+- Native access is granted to the one module that needs it, so a new native caller is a visible warning.
+- Module-path consumers and `jlink` users get stable names for every published artifact.
 
 ### Negative
 
-- **Test friction is the dominant cost.** Package-private internals that tests
-  reach into (this project's own convention — see CLAUDE.md's `FbsTable`/proto
-  runtime pattern) turn into split-package errors or `--patch-module`/`--add-reads`
-  Surefire configuration once a real module boundary exists, as PR #176's own
-  blocker demonstrates concretely.
-- Mockito-based mocking of non-trivial classes needs per-package `opens` directives
-  — ongoing bookkeeping unrelated to the domain.
-- Per-module `module-info.java` maintenance scales with this project's module
-  count (16 modules today), for a payoff that mostly benefits application-style
-  consumers, which vortex-java mostly isn't.
+- Tests that reach across modules need explicit flags (rule 4), and a new qualified-export consumer must
+  be added by hand (rule 3).
+- `integration` runs half on the module path and half on the classpath (rule 5), so it does not
+  exercise a fully modular consumer.
+- Public APIs that expose a generated type carry a lint suppression.
+- Mockito and package-private test access are the standing friction of a real module boundary; they
+  have been manageable so far because tests are patched into the module they test.
 
 ### Risks to manage
 
-- The `io.github.dfa1.zstd:zstd` automatic-module gap is self-inflicted (this
-  maintainer's own dependency) and cheap to close independently of the rest of
-  this decision — giving it a real `module-info.java` removes one blocker
-  regardless of what happens with #176.
-- If revisited later, re-verify the FlatBuffers-derived blocker is still fully
-  gone (ADR 0017 must not have regressed) before resuming from #176's state.
+- The `Automatic-Module-Name` modules (rule 2) can become named modules once hardwood and calcite ship
+  descriptors; revisit then.
+- JDK lint categories change between releases (rule 8); CI runs on 25 and 26 to catch it.
 
 ## Alternatives considered
 
-- **Finish #176 now.** Rejected for the moment: the test-sourceset blocker needs
-  a real solution (not a suppressed warning) to land cleanly, and no consumer has
-  asked for strict modularity yet.
-- **Partial modularization (core only).** Would sidestep writer's test-sourceset
-  blocker, but reader/writer are exactly the modules whose FFM/zero-copy internals
-  most benefit from encapsulation guarantees — modularizing only the least
-  interesting module captures little of the value.
-- **Abandon JPMS entirely, close #176, delete the TODO item without replacement.**
-  Rejected: the low-adoption argument is about *downstream* JPMS adoption, not
-  about whether the maintainer might still want it for `jlink`/internal reasons
-  someday; parking costs nothing, closing forecloses the option.
+- **Keep the deferral.** Rejected: the blockers were closed, and classpath-only tests hide
+  module-graph errors.
+- **Descriptors for every module, `requires` of automatic modules.** Rejected for published modules
+  (unstable derived names).
+- **A test-side descriptor for `integration`.** Tried: it puts invalid-named native resource jars on the
+  module path and fails at boot.
+- **Widening `core`'s `fbs`/`proto` exports.** Rejected: it would publish the whole generated codec.
+- **Partial modularization (core only).** Rejected: `reader` and `writer` are the modules whose
+  FFM/zero-copy internals most benefit from encapsulation.
 
 ## References
 
-- [PR #176 — feat(jpms): add module-info for core/reader/writer \[WIP\]](https://github.com/dfa1/vortex-java/pull/176)
+- [PR #538 — JPMS modules, surefire and failsafe on the module path](https://github.com/dfa1/vortex-java/pull/538)
+- [PR #176 — feat(jpms): add module-info for core/reader/writer \[WIP\]](https://github.com/dfa1/vortex-java/pull/176) (stale draft)
 - [ADR 0017 — In-house FlatBuffers codegen + MemorySegment-native runtime](0017-in-house-flatbuffers-codegen.md)
-- [ADR 0016 — vortex-arrow bridge](0016-vortex-arrow-bridge.md) — precedent for "capture now, defer until a concrete need"
-- [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md) — the writer-never-depends-on-reader rule PR #176 preserves and that its test sourceset struggles against
+- [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md) — the
+  writer-never-depends-on-reader rule
