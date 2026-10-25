@@ -153,13 +153,28 @@ public final class RleEncodingEncoder implements EncodingEncoder {
             return CascadeStep.notApplicable();
         }
         Runs runs = runs(longs);
-        EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_RLE, MemorySegment.ofArray(runs.metadata()),
+        // Rust narrows the u16 indices and u64 offsets to the smallest unsigned type that holds
+        // their largest value before compressing them (`rle_compress`, `PrimitiveArray::narrow`)
+        int[] indices = new int[runs.paddedLen()];
+        int maxIndex = 0;
+        for (int i = 0; i < indices.length; i++) {
+            indices[i] = Short.toUnsignedInt(runs.indices()[i]);
+            maxIndex = Math.max(maxIndex, indices[i]);
+        }
+        PType indicesPtype = PType.narrowestUnsigned(maxIndex);
+        long[] offsets = Arrays.copyOf(runs.offsets(), runs.numChunks());
+        PType offsetsPtype = PType.narrowestUnsigned(offsets[offsets.length - 1]);
+        Object indicesData = PrimitiveArrays.fromIntsArray(indices, indicesPtype, EncodingId.FASTLANES_RLE);
+        EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_RLE,
+                MemorySegment.ofArray(runs.metadata(indicesPtype, offsetsPtype)),
                 new EncodeNode[]{null, null, null}, new int[0]);
         long[] values = Arrays.copyOf(runs.values(), runs.valuesCount());
         List<ChildSlot> slots = List.of(
                 new ChildSlot(dtype, PrimitiveArrays.fromBitsArray(values, ptype, EncodingId.FASTLANES_RLE), 0, VALUES_EXCLUDED),
-                new ChildSlot(new DType.Primitive(PType.U16, false), runs.indices(), 1, POSITIONS_EXCLUDED),
-                new ChildSlot(new DType.Primitive(PType.U64, false), runs.offsets(), 2, POSITIONS_EXCLUDED));
+                new ChildSlot(new DType.Primitive(indicesPtype, false), indicesData, 1, POSITIONS_EXCLUDED),
+                new ChildSlot(new DType.Primitive(offsetsPtype, false),
+                        PrimitiveArrays.fromLongsArray(offsets, offsetsPtype, EncodingId.FASTLANES_RLE), 2,
+                        POSITIONS_EXCLUDED));
         MinMax stats = ZoneMapStats.of(dtype, data);
         return new CascadeStep(partialRoot, List.of(), slots, ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }
@@ -177,12 +192,16 @@ public final class RleEncodingEncoder implements EncodingEncoder {
             int numChunks) {
 
         byte[] metadata() {
+            return metadata(PType.U16, PType.U64);
+        }
+
+        byte[] metadata(PType indicesPtype, PType offsetsPtype) {
             return new ProtoRLEMetadata(
                     valuesCount,
                     paddedLen,
-                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U16.ordinal()),
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
                     numChunks,
-                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U64.ordinal()),
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
                     0L
             ).encode();
         }
