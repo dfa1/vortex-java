@@ -1325,8 +1325,12 @@ public final class VortexWriter implements Closeable {
     /// list, as Rust's stats strategy always compresses it: [CascadingCompressor] encodes the
     /// struct itself (including the nullable `bounded_max` state) and falls back to canonical
     /// encodings for any field no candidate accepts.
+    ///
+    /// The candidates are the probe's: Rust compresses stats tables with its full compressor,
+    /// integer dictionaries included, and keeps `IntDictScheme` out of the data compressor only
+    /// (`vortex-file` `strategy.rs`), so a zone's `null_count` column can be a `vortex.dict`.
     private EncodingEncoder zoneTableEncoder() {
-        List<EncodingEncoder> codecs = cascadeCodecs;
+        List<EncodingEncoder> codecs = probeCodecs;
         return new EncodingEncoder() {
             @Override
             public EncodingId encodingId() {
