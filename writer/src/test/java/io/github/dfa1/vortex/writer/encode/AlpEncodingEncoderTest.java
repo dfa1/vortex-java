@@ -363,6 +363,21 @@ class AlpEncodingEncoderTest {
             assertThat(result.statsMin()).isNull();
             assertThat(result.statsMax()).isNull();
         }
+
+        @Test
+        void encodeCascade_f32_opensTheEncodedIntsForTheCascade() {
+            // Given — Rust's ALP scheme compresses the encoded ints of either width; f32 wrote
+            // them as a raw i32 buffer, which the cascade could never bit-pack
+            float[] values = {1.5f, 2.5f, 3.5f, 1.5f};
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DTypes.F32, values, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.openChildren()).hasSize(1);
+            assertThat(result.openChildren().getFirst().childDtype()).isEqualTo(DTypes.I32);
+            assertThat((int[]) result.openChildren().getFirst().childData()).containsExactly(15, 25, 35, 15);
+        }
     }
 
     /// Property-based round-trip. ALP is a **lossless** codec: every value either fits the

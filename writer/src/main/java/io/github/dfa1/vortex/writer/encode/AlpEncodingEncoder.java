@@ -82,7 +82,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         if (ptype == PType.F64) {
             return encodeCascadeF64((double[]) data, ctx);
         }
-        return CascadeStep.terminal(encode(dtype, data, ctx));
+        return encodeCascadeF32((float[]) data, ctx);
     }
 
     // Rust's `encode_single_unchecked`: `(value * 10^e * 10^-f).fast_round() as i64`, the cast
@@ -367,7 +367,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return ((long) values.length * bits + 7) / 8 + (long) patches * PATCH_BYTES_F32;
     }
 
-    private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
+    private static AlpF32Data computeF32(float[] values) {
         int n = values.length;
         int[] exps = findExponentsF32(values);
         int expE = exps[0];
@@ -407,6 +407,52 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
         ProtoScalarValue statsMin = n > 0 ? scalarF32(min) : null;
         ProtoScalarValue statsMax = n > 0 ? scalarF32(max) : null;
+        return new AlpF32Data(expE, expF, encodedArr, patchIndices, patchValues, statsMin, statsMax);
+    }
+
+    /// The F32 counterpart of [#encodeCascadeF64(double[], EncodeContext)]: Rust's ALP scheme
+    /// compresses the encoded `i32`s through the cascade for either width.
+    private static CascadeStep encodeCascadeF32(float[] values, EncodeContext ctx) {
+        AlpF32Data d = computeF32(values);
+        if (d.patchIndices().isEmpty()) {
+            byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
+            EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
+                MemorySegment.ofArray(metaBytes), new EncodeNode[1], new int[0]);
+            ChildSlot slot = new ChildSlot(DType.I32, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
+            return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
+        }
+
+        int numPatches = d.patchIndices().size();
+        PatchBuffers patchBuffers = PatchBuffers.of(d.patchIndices(), values.length, ctx);
+        MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 4, 4);
+        for (int i = 0; i < numPatches; i++) {
+            valBuf.setAtIndex(VortexFormat.LE_FLOAT, i, d.patchValues().get(i));
+        }
+
+        ProtoPatchesMetadata patches = patchBuffers.meta(numPatches);
+        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patches).encode();
+
+        EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+        EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
+        EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
+            MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode, offsetsNode}, new int[0]);
+        ChildSlot slot = new ChildSlot(DType.I32, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
+        return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()),
+                EncodedBuffer.of(valBuf, PType.F32), EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())),
+                List.of(slot), d.statsMin(), d.statsMax(), true);
+    }
+
+    private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
+        AlpF32Data d = computeF32(values);
+        int n = values.length;
+        int expE = d.expE();
+        int expF = d.expF();
+        int[] encodedArr = d.encodedArr();
+        List<Integer> patchIndices = d.patchIndices();
+        List<Float> patchValues = d.patchValues();
+        ProtoScalarValue statsMin = d.statsMin();
+        ProtoScalarValue statsMax = d.statsMax();
 
         MemorySegment encodedBuf = ctx.arena().allocate((long) n * 4, 4);
         for (int i = 0; i < n; i++) {
@@ -450,6 +496,12 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
     private static ProtoScalarValue scalarF32(float v) {
         return ProtoScalarValue.ofF32Value(v);
+    }
+
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
+    private record AlpF32Data(int expE, int expF, int[] encodedArr,
+                              List<Integer> patchIndices, List<Float> patchValues,
+                              ProtoScalarValue statsMin, ProtoScalarValue statsMax) {
     }
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
