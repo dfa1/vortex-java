@@ -299,9 +299,10 @@ public final class CascadingCompressor {
     ///
     /// @param encoder   the winning encoder, or `null` when none beat the baseline
     /// @param size      the winner's sample size in bytes, or the baseline when there is none;
-    ///                  unmeasured when `alwaysUse`
-    /// @param alwaysUse whether the winner was settled by [Estimate#ALWAYS_USE]
-    private record Choice(EncodingEncoder encoder, double size, boolean alwaysUse) {
+    ///                  unmeasured when `estimated`
+    /// @param estimated whether the winner won without being encoded: by [Estimate#ALWAYS_USE] or
+    ///                  a stats [Estimate.Ratio], so `size` is not what it encodes to
+    private record Choice(EncodingEncoder encoder, double size, boolean estimated) {
     }
 
     /// Rust's `choose_best_scheme` (`compressor/select.rs`), for one array.
@@ -323,6 +324,7 @@ public final class CascadingCompressor {
                               Supplier<Object> sample) {
         EncodingEncoder best = null;
         double bestSize = baseline;
+        boolean bestEstimated = false;
         List<EncodingEncoder> deferred = new ArrayList<>();
         for (EncodingEncoder enc : encodings) {
             if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
@@ -337,13 +339,14 @@ public final class CascadingCompressor {
                 if (size < bestSize) {
                     best = enc;
                     bestSize = size;
+                    bestEstimated = true;
                 }
             } else if (est == Estimate.COMPLETE) {
                 deferred.add(enc);
             }
         }
         if (deferred.isEmpty()) {
-            return new Choice(best, bestSize, false);
+            return new Choice(best, bestSize, bestEstimated);
         }
 
         Object measured = sample.get();
@@ -358,9 +361,10 @@ public final class CascadingCompressor {
             if (size < bestSize) {
                 best = enc;
                 bestSize = size;
+                bestEstimated = false;
             }
         }
-        return new Choice(best, bestSize, false);
+        return new Choice(best, bestSize, bestEstimated);
     }
 
     /// Derives the context a child slot is filled under: one cascade level deeper, with the slot's
@@ -390,8 +394,11 @@ public final class CascadingCompressor {
             return baseline;
         }
         Choice choice = chooseBest(dtype, withStats(dtype, data, ctx), ctx, baseline, () -> data);
-        if (choice.alwaysUse()) {
-            // ALWAYS_USE: settled without a measurement, so measure the winner for its size
+        if (choice.estimated()) {
+            // Rust compresses a child for real even on a sample (`compress_child`), so an estimate
+            // picks the winner but its cost is what it encodes to, and the child stays canonical
+            // when that is not smaller: a FoR ratio says nothing of the 1024-value block its
+            // bit-packing pads a short child to
             CascadeStep step = choice.encoder().encodeCascade(dtype, data, ctx);
             return Math.min(baseline, measureStep(choice.encoder(), step, ctx));
         }
