@@ -72,11 +72,12 @@ class DictAdmissionInteropIntegrationTest {
                 Arguments.of("f64, 5 distinct", Kind.F64, 5, 0),
                 Arguments.of("utf8, 5 distinct", Kind.UTF8, 5, 0),
                 Arguments.of("nullable i32, 10 distinct", Kind.I32, 10, 7),
-                // under half distinct, yet bit-packing 7 bits wins over a 100-value dictionary.
-                // A nullable column with 1000 distinct values still gets a dict in Java only: its
-                // admission keeps the cardinality check until the nullable cascade charges
-                // bit-packing the validity, as Rust's sampled sizes do.
+                // under half distinct, yet bit-packing 7 bits wins over a 100-value dictionary
                 Arguments.of("i64, 100 distinct", Kind.I64, 100, 0),
+                // the probe charges bit-packing the validity, as Rust's sampled sizes do (#604):
+                // 10 bits a row plus a null bit still beat a 1000-value dictionary
+                Arguments.of("nullable i32, 1000 distinct", Kind.I32, 1000, 7),
+                Arguments.of("nullable i64, 100 distinct", Kind.I64, 100, 7),
                 Arguments.of("i32, 1000 distinct", Kind.I32, 1000, 0),
                 Arguments.of("utf8, 1000 distinct", Kind.UTF8, 1000, 0),
                 Arguments.of("utf8, mostly distinct", Kind.UTF8, 1_000_000, 0));

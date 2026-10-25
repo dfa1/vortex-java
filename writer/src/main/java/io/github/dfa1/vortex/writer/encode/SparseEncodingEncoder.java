@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoNullValue;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.proto.ProtoSparseMetadata;
@@ -13,6 +14,7 @@ import io.github.dfa1.vortex.core.proto.ProtoSparseMetadata;
 import java.lang.foreign.MemorySegment;
 import java.util.Set;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /// Write-only encoder for `vortex.sparse`.
@@ -48,6 +50,14 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Primitive;
     }
 
+    /// A nullable integer array keeps its nulls in the fill or the patch values, as Rust's
+    /// `Sparse::encode` does. Nullable floats are not taken yet: they still go through
+    /// `vortex.masked`.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return dtype instanceof DType.Primitive p && p.ptype().isInteger();
+    }
+
     @Override
     public StatsOptions statsOptions() {
         return StatsOptions.defaults().withTrackMostFrequent(true);
@@ -58,8 +68,20 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         if (!(dtype instanceof DType.Primitive p)) {
             return Estimate.COMPLETE;
         }
-        // Rust's float sparse scheme only takes null-dominated arrays; nulls never reach a
-        // primitive here (validity is split off by vortex.masked), so floats never qualify.
+        // Rust's SparseScheme takes a mostly-null array whatever its values: only the valid rows
+        // are stored. An all-null array is a null constant, decided before any scheme.
+        int len = data.length();
+        int nulls = data.nullCount();
+        if (nulls > 0) {
+            if (nulls == len) {
+                return Estimate.SKIP;
+            }
+            if ((double) nulls / len > 0.9) {
+                return Estimate.ratio((double) len / (len - nulls));
+            }
+        }
+        // Rust's float sparse scheme only takes null-dominated arrays; nullable floats are still
+        // split off by vortex.masked before they reach a primitive here, so floats never qualify.
         if (p.ptype().isFloating()) {
             return Estimate.SKIP;
         }
@@ -83,12 +105,15 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     /// Airport_fee / congestion_surcharge.
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
-        // `data` is the whole logical column -- the fill value and patch positions are derived
-        // from it below -- so the column's bounds are just its bounds, patches included.
-        MinMax stats = ZoneMapStats.of(dtype, data);
         if (!(dtype instanceof DType.Primitive p)) {
             return CascadeStep.notApplicable();
         }
+        if (data instanceof NullableData nullable) {
+            return encodeNullableCascade(p, nullable, ctx);
+        }
+        // `data` is the whole logical column -- the fill value and patch positions are derived
+        // from it below -- so the column's bounds are just its bounds, patches included.
+        MinMax stats = ZoneMapStats.of(dtype, data);
         PType ptype = p.ptype();
         int n = arrayLength(data, ptype);
         if (n == 0) {
@@ -119,16 +144,73 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             return CascadeStep.notApplicable();
         }
 
-        // Owned buffers: fill scalar. idx and val moved to ChildSlot so cascade can bitpack.
-        ProtoScalarValue fillScalar = scalar(ptype, fill);
+        Object valArr = PrimitiveArrays.fromBitsArray(
+                patchBits.stream().mapToLong(Long::longValue).toArray(), ptype, EncodingId.VORTEX_SPARSE);
+        return cascadeStep(dtype, scalar(ptype, fill), patchIdx.stream().mapToInt(Integer::intValue).toArray(),
+                idxPtype, valArr, stats, ctx);
+    }
+
+    /// Rust's `Sparse::encode` on a nullable array (`encodings/sparse`). When more than 90% of
+    /// the rows are null the fill is null and the valid rows are the patches, their values keeping
+    /// an all-valid bitmap as Rust's filtered array does. Otherwise the most frequent valid value is
+    /// the fill and every other row, null or not, is a patch, the values keeping the validity.
+    private static CascadeStep encodeNullableCascade(DType.Primitive dtype, NullableData data, EncodeContext ctx) {
+        PType ptype = dtype.ptype();
+        boolean[] validity = data.validity();
+        int n = validity.length;
+        int nulls = data.nullCount();
+        MinMax stats = ZoneMapStats.of(dtype.withNullable(false), data);
+        PType idxPtype = PType.narrowestUnsigned(n);
+        if (nulls > 0.9 * n) {
+            int[] idx = new int[n - nulls];
+            for (int i = 0, p = 0; i < n; i++) {
+                if (validity[i]) {
+                    idx[p++] = i;
+                }
+            }
+            boolean[] allValid = new boolean[idx.length];
+            Arrays.fill(allValid, true);
+            ProtoScalarValue nullFill = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE);
+            return cascadeStep(dtype, nullFill, idx, idxPtype, new NullableData(data.validValues(), allValid),
+                    stats, ctx);
+        }
+        Object values = data.values();
+        long fill = fillBits(ptype, data.validValues());
+        int count = 0;
+        for (int i = 0; i < n; i++) {
+            if (!validity[i] || readBits(values, ptype, i) != fill) {
+                count++;
+            }
+        }
+        if (count == 0) {
+            return CascadeStep.notApplicable();
+        }
+        int[] idx = new int[count];
+        long[] bits = new long[count];
+        boolean[] patchValidity = new boolean[count];
+        for (int i = 0, p = 0; i < n; i++) {
+            if (!validity[i] || readBits(values, ptype, i) != fill) {
+                idx[p] = i;
+                bits[p] = validity[i] ? readBits(values, ptype, i) : 0;
+                patchValidity[p] = validity[i];
+                p++;
+            }
+        }
+        Object patchValues = PrimitiveArrays.fromBitsArray(bits, ptype, EncodingId.VORTEX_SPARSE);
+        return cascadeStep(dtype, scalar(ptype, fill), idx, idxPtype, new NullableData(patchValues, patchValidity),
+                stats, ctx);
+    }
+
+    /// The sparse node with its fill scalar as the one owned buffer and the patch indices and
+    /// values as open children, so the cascade compresses both.
+    private static CascadeStep cascadeStep(DType dtype, ProtoScalarValue fillScalar, int[] patchIdx, PType idxPtype,
+                                           Object patchValues, MinMax stats, EncodeContext ctx) {
+        int numPatches = patchIdx.length;
         byte[] fillBytes = fillScalar.encode();
         MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
         MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
+        Object idxArr = PrimitiveArrays.fromIntsArray(patchIdx, idxPtype, EncodingId.VORTEX_SPARSE);
 
-        Object idxArr = PrimitiveArrays.fromIntsArray(
-                patchIdx.stream().mapToInt(Integer::intValue).toArray(), idxPtype, EncodingId.VORTEX_SPARSE);
-        Object valArr = PrimitiveArrays.fromBitsArray(
-                patchBits.stream().mapToLong(Long::longValue).toArray(), ptype, EncodingId.VORTEX_SPARSE);
 
         ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(
                 numPatches,
@@ -144,7 +226,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{null, null}, new int[]{0});
         DType idxDtype = new DType.Primitive(idxPtype, false);
         ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0, SELF);
-        ChildSlot valSlot = new ChildSlot(dtype, valArr, 1, SELF);
+        ChildSlot valSlot = new ChildSlot(dtype, patchValues, 1, SELF);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(fillBuf)), List.of(idxSlot, valSlot), ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }
 
@@ -177,7 +259,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             }
         }
         boolean[] patchVals = new boolean[numPatches];
-        java.util.Arrays.fill(patchVals, !fillValue);
+        Arrays.fill(patchVals, !fillValue);
 
         PType idxPtype = PType.narrowestUnsigned(n);
         Object idxArr = PrimitiveArrays.fromIntsArray(patchIdx, idxPtype, EncodingId.VORTEX_SPARSE);

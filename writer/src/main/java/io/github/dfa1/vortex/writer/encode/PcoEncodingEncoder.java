@@ -63,8 +63,20 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         };
     }
 
+    /// A nullable array compresses only its valid values and keeps the validity as child 0, as
+    /// Rust's `Pco::from_primitive` does (`collect_valid`).
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData nullable) {
+            return Encoder.encode(dtype, nullable.validValues(), ctx)
+                    .withStats(ZoneMapStats.of(dtype.withNullable(false), nullable))
+                    .withValidity(nullable.validity(), ctx);
+        }
         // Pco is a lossless numeric codec: it reorders nothing and drops nothing, so the column's
         // bounds are the input's. Attached here rather than inside Encoder, which assembles the
         // result several frames deep from the values.

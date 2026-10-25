@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 
+import java.lang.reflect.Array;
+
 /// An array bundled with its lazily computed [ArrayStats]: Rust's `ArrayAndStats`
 /// (`vortex-compressor/src/stats/cache.rs`).
 ///
@@ -47,10 +49,31 @@ public final class ArrayAndStats {
     /// @return the stats under this bundle's [StatsOptions]
     public ArrayStats stats() {
         if (stats == null) {
-            stats = dtype instanceof DType.Primitive p
-                    ? ArrayStats.compute(p.ptype(), data, options)
-                    : ArrayStats.EMPTY;
+            stats = ArrayStats.EMPTY;
+            if (dtype instanceof DType.Primitive p) {
+                // Rust's stats skip nulls: min, max and the distinct values are the valid rows',
+                // and a null continues the run before it, so runs are counted over the valid rows
+                Object values = data instanceof NullableData nullable ? nullable.validValues() : data;
+                stats = ArrayStats.compute(p.ptype(), values, options);
+            }
         }
         return stats;
+    }
+
+    /// Returns the number of rows, null or not.
+    ///
+    /// @return the array length
+    public int length() {
+        if (data instanceof NullableData nullable) {
+            return nullable.length();
+        }
+        return Array.getLength(data);
+    }
+
+    /// Returns the number of null rows: Rust's `null_count`.
+    ///
+    /// @return how many rows are null; `0` for an array without validity
+    public int nullCount() {
+        return data instanceof NullableData nullable ? nullable.nullCount() : 0;
     }
 }

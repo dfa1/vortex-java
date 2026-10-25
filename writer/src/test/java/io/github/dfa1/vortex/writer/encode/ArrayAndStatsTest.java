@@ -28,6 +28,27 @@ class ArrayAndStatsTest {
     }
 
     @Test
+    void stats_nullable_skipNulls() {
+        // Given: the nulls hold 0, below every valid value, and sit between equal values, as
+        // Rust's stats see them only as gaps: a null continues the run before it
+        long[] values = {5, 0, 5, 9, 0, 9, 9};
+        boolean[] validity = {true, false, true, true, false, true, true};
+        ArrayAndStats sut = new ArrayAndStats(DType.I64, new NullableData(values, validity), ALL_STATS);
+
+        // When
+        ArrayStats result = sut.stats();
+
+        // Then: 5 valid values in 2 runs, 0 never counted
+        assertThat(result.valueCount()).isEqualTo(5);
+        assertThat(result.distinctCount()).isEqualTo(2);
+        assertThat(result.min()).isEqualTo(5L);
+        assertThat(result.max()).isEqualTo(9L);
+        assertThat(result.averageRunLength()).isEqualTo(2);
+        assertThat(sut.length()).isEqualTo(7);
+        assertThat(sut.nullCount()).isEqualTo(2);
+    }
+
+    @Test
     void stats_nonPrimitive_isEmpty() {
         // Given: strings go through the same competition, but no stats consumer reads them
         ArrayAndStats sut = new ArrayAndStats(DType.UTF8, new String[]{"a", "b"}, ALL_STATS);

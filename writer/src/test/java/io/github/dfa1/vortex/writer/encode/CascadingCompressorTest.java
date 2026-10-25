@@ -413,6 +413,147 @@ class CascadingCompressorTest {
         }
     }
 
+    /// A nullable integer keeps its validity in the encoding that stores the values, as Rust's
+    /// arrays do (#604), so each case checks the tree Rust writes and that the nulls decode.
+    @Nested
+    class NullableInteger {
+
+        private static final DType I32 = new DType.Primitive(PType.I32, true);
+
+        /// The integer schemes of Rust's default compressor (no Pco or Zstd).
+        private final CascadingCompressor sut = new CascadingCompressor(List.of(
+                new ConstantEncodingEncoder(), new FrameOfReferenceEncodingEncoder(), new ZigZagEncodingEncoder(),
+                new RunEndEncodingEncoder(), new RleEncodingEncoder(), new SparseEncodingEncoder(),
+                new SequenceEncodingEncoder(), new BitpackedEncodingEncoder(), new PrimitiveEncodingEncoder()));
+
+        @Test
+        void smallValues_bitPackedWithTheBitmapAsLastChild() {
+            // Given — 4 bits a row, a null every 7th: Rust bit-packs and keeps the bitmap on it
+            NullableData data = nullable(4096, i -> i % 16, i -> i % 7 == 0);
+
+            // When
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            EncodeNode root = result.rootNode();
+            assertThat(root.encodingId()).isEqualTo(EncodingId.FASTLANES_BITPACKED);
+            assertThat(root.children()[root.children().length - 1].encodingId()).isEqualTo(EncodingId.VORTEX_BOOL);
+            assertDecodes(result, data);
+        }
+
+        @Test
+        void noNull_writtenWithoutValidity() {
+            // Given — nullable, but no row is null: Rust imports it as all-valid and stores no bitmap
+            NullableData data = nullable(4096, i -> i % 16, _ -> false);
+
+            // When
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.FASTLANES_BITPACKED);
+            assertThat(result.rootNode().children()).isEmpty();
+        }
+
+        @Test
+        void validRowsOneValue_constantMaskedByAPlainBitmap() {
+            // Given — the compressor's own constant check, before any scheme (Rust compress_constant)
+            NullableData data = nullable(4096, _ -> 42, i -> i % 7 == 0);
+
+            // When
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            EncodeNode root = result.rootNode();
+            assertThat(root.encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
+            assertThat(root.children()).extracting(EncodeNode::encodingId)
+                    .containsExactly(EncodingId.VORTEX_CONSTANT, EncodingId.VORTEX_BOOL);
+            assertDecodes(result, data);
+        }
+
+        @Test
+        void everyRowNull_nullConstant() {
+            // Given
+            NullableData data = nullable(4096, i -> i, _ -> true);
+
+            // When
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+            assertThat(result.rootNode().children()).isEmpty();
+        }
+
+        @Test
+        void largeOffset_forPassesTheBitmapToTheBitPackedResiduals() {
+            // Given — 10-bit residuals over a 1e9 reference
+            NullableData data = nullable(4096, i -> 1_000_000_000 + i % 1000, i -> i % 7 == 0);
+
+            // When
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            EncodeNode root = result.rootNode();
+            assertThat(root.encodingId()).isEqualTo(EncodingId.FASTLANES_FOR);
+            EncodeNode packed = root.children()[0];
+            assertThat(packed.encodingId()).isEqualTo(EncodingId.FASTLANES_BITPACKED);
+            assertThat(packed.children()[packed.children().length - 1].encodingId())
+                    .isEqualTo(EncodingId.VORTEX_BOOL);
+            assertDecodes(result, data);
+        }
+
+        @Test
+        void nullRuns_runEndValuesKeepTheBitmap() {
+            // Given — runs of 200, every 4th run null: a null run is one more run, invalid
+            NullableData data = nullable(4096, i -> (i / 200) * 1_000_003, i -> (i / 200) % 4 == 0);
+
+            // When
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_RUNEND);
+            assertDecodes(result, data);
+        }
+
+        @Test
+        void mostlyNull_sparseWithANullFill() {
+            // Given — 95% null: Rust's sparse stores only the valid rows
+            NullableData data = nullable(4096, i -> i * 7, i -> i % 20 != 0);
+
+            // When
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_SPARSE);
+            assertDecodes(result, data);
+        }
+
+        private static NullableData nullable(int n, java.util.function.IntUnaryOperator value,
+                                             java.util.function.IntPredicate isNull) {
+            int[] values = new int[n];
+            boolean[] validity = new boolean[n];
+            for (int i = 0; i < n; i++) {
+                validity[i] = !isNull.test(i);
+                values[i] = validity[i] ? value.applyAsInt(i) : 0;
+            }
+            return new NullableData(values, validity);
+        }
+
+        private static void assertDecodes(EncodeResult result, NullableData expected) {
+            ReadRegistry readRegistry = ReadRegistry.loadAll();
+            int n = expected.length();
+            DecodeContext decodeCtx = DecodeTestHelper.toDecodeContext(result, n, I32, readRegistry);
+            MaskedArray decoded = (MaskedArray) readRegistry.decode(decodeCtx);
+            IntArray values = (IntArray) decoded.inner();
+            int[] expectedValues = (int[]) expected.values();
+            for (int i = 0; i < n; i++) {
+                assertThat(decoded.isValid(i)).as("validity of row %d", i).isEqualTo(expected.validity()[i]);
+                if (expected.validity()[i]) {
+                    assertThat(values.getInt(i)).as("row %d", i).isEqualTo(expectedValues[i]);
+                }
+            }
+        }
+    }
+
     /// A winner is kept only when it comes out smaller than the array, as Rust's
     /// `choose_and_compress` accepts it: the sample alone can favor a scheme the full array does
     /// not.

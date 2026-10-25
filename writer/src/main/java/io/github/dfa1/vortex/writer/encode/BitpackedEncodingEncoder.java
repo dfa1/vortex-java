@@ -48,21 +48,45 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         return p.ptype().isInteger();
     }
 
+    /// A nullable array keeps its validity as a trailing `vortex.bool` child, after any patches,
+    /// as Rust's `BitPackedArray` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
+    @Override
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData nullable) {
+            return encodeNullable(dtype, nullable, ctx);
+        }
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_BITPACKED);
+        return encodeLongs(ptype, longs, ctx);
+    }
+
     /// Rust's `BitPackingScheme::compress` run directly, as FoR runs it on its residuals: packed
     /// at one global width, or kept a `vortex.primitive` when the best width is the native one
     /// (`compress_global` returns `None`).
     ///
     /// @param dtype the non-negative integer dtype
-    /// @param data  the values
+    /// @param data  the values, dense or a [NullableData]
     /// @param ctx   the encode context
     /// @return the bit-packed or canonical array
     static EncodeResult encodeLeaf(DType dtype, Object data, EncodeContext ctx) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_BITPACKED);
+        boolean[] validity = null;
+        Object values = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            values = nullable.values();
+        }
+        long[] longs = PrimitiveArrays.toLongs(values, ptype, EncodingId.FASTLANES_BITPACKED);
         long typeMask = FastLanes.lowMask(ptype.bits());
         int[] bitWidthFreq = new int[ptype.bits() + 1];
-        for (long v : longs) {
-            bitWidthFreq[Long.SIZE - Long.numberOfLeadingZeros(v & typeMask)]++;
+        for (int i = 0; i < longs.length; i++) {
+            int width = validity == null || validity[i] ? Long.SIZE - Long.numberOfLeadingZeros(longs[i] & typeMask) : 0;
+            bitWidthFreq[width]++;
         }
         if (bestBitWidth(bitWidthFreq, ptype.byteSize() + 4, longs.length) == ptype.bits()) {
             return new PrimitiveEncodingEncoder().encode(dtype, data, ctx);
@@ -70,10 +94,25 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         return new BitpackedEncodingEncoder().encode(dtype, data, ctx);
     }
 
-    @Override
-    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+    /// Rust's `bitpack_encode` on a nullable array: the bit-width histogram counts a null at width
+    /// 0 and only valid values become patches (`bit_width_histogram`, `gather_patches`). A null slot
+    /// is zeroed first, which gives both, and packs as Rust packs the zero an Arrow null holds.
+    private static EncodeResult encodeNullable(DType dtype, NullableData data, EncodeContext ctx) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_BITPACKED);
+        long[] longs = PrimitiveArrays.toLongs(data.values(), ptype, EncodingId.FASTLANES_BITPACKED).clone();
+        boolean[] validity = data.validity();
+        for (int i = 0; i < longs.length; i++) {
+            if (!validity[i]) {
+                longs[i] = 0;
+            }
+        }
+        MinMax stats = ZoneMapStats.of(dtype.withNullable(false), data);
+        EncodeResult packed = encodeLongs(ptype, longs, ctx);
+        return new EncodeResult(packed.rootNode(), packed.encodedBuffers(), PrimitiveEncodingEncoder.minOf(stats),
+                PrimitiveEncodingEncoder.maxOf(stats)).withValidity(validity, ctx);
+    }
+
+    private static EncodeResult encodeLongs(PType ptype, long[] longs, EncodeContext ctx) {
         int n = longs.length;
         int typeBits = ptype.bits();
         long typeMask = FastLanes.lowMask(typeBits);

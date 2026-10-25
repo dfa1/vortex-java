@@ -70,6 +70,12 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Utf8;
     }
 
+    /// A nullable primitive keeps its validity on the codes, as Rust's dict schemes do.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return dtype instanceof DType.Primitive && accepts(dtype);
+    }
+
     @Override
     public StatsOptions statsOptions() {
         return StatsOptions.defaults().withCountDistinct(true);
@@ -117,7 +123,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         if (dtype instanceof DType.Utf8) {
             return encodeUtf8(data, ctx);
         }
-        DictData d = buildDictData(dtype, data);
+        DictData d = buildDictData(dtype, data, null);
         PType codePType = d.codePType();
         int codeBytes = codePType.byteSize();
 
@@ -150,7 +156,13 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         if (dtype instanceof DType.Utf8) {
             return encodeUtf8Cascade(data);
         }
-        DictData d = buildDictData(dtype, data);
+        boolean[] validity = null;
+        Object values = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            values = nullable.values();
+        }
+        DictData d = buildDictData(dtype, values, validity);
         PType codePType = d.codePType();
 
         // Same [codes, values] wire shape as the terminal path above, with both children left open:
@@ -163,10 +175,13 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{null, null},
                 new int[0]);
 
-        DType codesDtype = new DType.Primitive(codePType, false);
-        MinMax stats = PrimitiveEncodingEncoder.minMaxStats(((DType.Primitive) dtype).ptype(), data);
+        // Rust's dict schemes keep a nullable array's validity on the codes and give the values an
+        // all-valid one (`builtins/dict/integer.rs`), so only the codes carry a bitmap
+        DType codesDtype = new DType.Primitive(codePType, validity != null);
+        Object codes = validity == null ? d.codesArr() : new NullableData(d.codesArr(), validity);
+        MinMax stats = ZoneMapStats.of(dtype.withNullable(false), data);
         return new CascadeStep(partialRoot, List.of(),
-                List.of(new ChildSlot(codesDtype, d.codesArr(), 0, CODES_EXCLUDED),
+                List.of(new ChildSlot(codesDtype, codes, 0, CODES_EXCLUDED),
                         new ChildSlot(dtype, d.valuesArr(), 1, Set.of(EncodingId.VORTEX_DICT))),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
     }
@@ -413,7 +428,10 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 EncodedBuffer.of(codesBuf, codePType)), statsMin, statsMax);
     }
 
-    private static DictData buildDictData(DType dtype, Object data) {
+    /// A null row is not a dictionary entry: its code is that of the value in its slot when that
+    /// value is in the dictionary, else 0, as Rust's `DictEncoder::encode` looks it up
+    /// (`unwrap_or_default`). Its validity keeps the code from being read.
+    private static DictData buildDictData(DType dtype, Object data, boolean[] validity) {
         PType ptype = ((DType.Primitive) dtype).ptype();
         int len = Array.getLength(data);
 
@@ -432,6 +450,9 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         long[] firstSeenRaw = new long[16];
         int dictSize = 0;
         for (int i = 0; i < len; i++) {
+            if (validity != null && !validity[i]) {
+                continue;
+            }
             long raw = rawBits(data, ptype, i);
             int code = index.get(canonicalBits(raw, ptype));
             if (code < 0) {
@@ -446,13 +467,20 @@ public final class DictEncodingEncoder implements EncodingEncoder {
             codes[i] = code;
         }
 
+        if (validity != null) {
+            for (int i = 0; i < len; i++) {
+                if (!validity[i]) {
+                    codes[i] = Math.max(0, index.get(canonicalBits(rawBits(data, ptype, i), ptype)));
+                }
+            }
+        }
         PType codePType = codePType(dictSize);
 
         Object uniqueArray = buildUniqueArray(ptype, firstSeenRaw, dictSize);
         MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
 
         Object codesArr = PrimitiveArrays.fromIntsArray(codes, codePType, EncodingId.VORTEX_DICT);
-        return new DictData(valuesBuf, uniqueArray, codesArr, codePType, len, dictSize);
+        return new DictData(valuesBuf, uniqueArray, codesArr, codePType, len, dictSize, validity != null);
     }
 
     private static PType codePType(int dictSize) {
@@ -531,12 +559,12 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         return new ProtoDictMetadata(
                 d.dictSize(),
                 io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(d.codePType().ordinal()),
-                null,
+                d.nullableCodes() ? Boolean.TRUE : null,
                 null
         ).encode();
     }
 
     private record DictData(MemorySegment valuesBuf, Object valuesArr, Object codesArr, PType codePType, int len,
-                            int dictSize) {
+                            int dictSize, boolean nullableCodes) {
     }
 }

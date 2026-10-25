@@ -155,29 +155,46 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
     /// On size it never beats frame-of-reference, which competes for the same columns: FoR needs
     /// `bits(max - min)`, zigzag `bits(2 * max|v|)`, never fewer (they tie when the data is
     /// symmetric around zero). It is kept for parity with the reference compressor.
+    /// A nullable array passes its validity down to the encoded values, as Rust's `zigzag_encode`
+    /// does; a null slot's zero encodes as zero.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         PType signed = ((DType.Primitive) dtype).ptype();
-        long[] values = PrimitiveArrays.toLongs(data, signed, EncodingId.VORTEX_ZIGZAG);
+        boolean[] validity = null;
+        Object raw = data;
+        Object valid = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            raw = nullable.values();
+            valid = nullable.validValues();
+        }
+        long[] values = PrimitiveArrays.toLongs(raw, signed, EncodingId.VORTEX_ZIGZAG);
         int n = values.length;
         // Rust skips on stats before sampling; ours carry no minimum, so find it with a read-only
         // scan before allocating anything — the common all-non-negative column stops here
-        if (n == 0 || SimdOperationsSupport.preferred().minMax(values, PType.I64)[0] >= 0L) {
+        long[] validLongs = PrimitiveArrays.toLongs(valid, signed, EncodingId.VORTEX_ZIGZAG);
+        if (validLongs.length == 0 || SimdOperationsSupport.preferred().minMax(validLongs, PType.I64)[0] >= 0L) {
             return CascadeStep.notApplicable();
         }
         long[] encoded = new long[n];
         for (int i = 0; i < n; i++) {
-            long v = values[i];
+            long v = validity == null || validity[i] ? values[i] : 0;
             // computed at 64 bits: for a value sign-extended from a narrower width, the low bits
             // of the result equal that width's zigzag, and fromLongsArray truncates to them
             encoded[i] = (v << 1) ^ (v >> 63);
         }
         PType unsigned = toUnsigned(signed);
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ZIGZAG, null, new EncodeNode[]{null}, new int[0]);
-        ChildSlot slot = new ChildSlot(new DType.Primitive(unsigned, false),
-                PrimitiveArrays.fromLongsArray(encoded, unsigned, EncodingId.VORTEX_ZIGZAG), 0, ENCODED_EXCLUDED);
+        Object encodedValues = PrimitiveArrays.fromLongsArray(encoded, unsigned, EncodingId.VORTEX_ZIGZAG);
+        ChildSlot slot = new ChildSlot(new DType.Primitive(unsigned, validity != null),
+                validity == null ? encodedValues : new NullableData(encodedValues, validity), 0, ENCODED_EXCLUDED);
         // zigzag is not order-preserving, so the bounds come from the original signed values
-        MinMax stats = ZoneMapStats.of(dtype, data);
+        MinMax stats = ZoneMapStats.of(dtype.withNullable(false), data);
         return new CascadeStep(partialRoot, List.of(), List.of(slot),
                 ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }

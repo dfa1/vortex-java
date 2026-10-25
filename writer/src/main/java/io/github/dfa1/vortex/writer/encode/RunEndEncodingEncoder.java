@@ -36,6 +36,13 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Primitive p && p.ptype().isInteger();
     }
 
+    /// A nullable array keeps its nulls as runs, invalid in the run values' validity, as Rust's
+    /// `runend_encode` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     /// Rust's `RunEndScheme` verdict: skip unless runs average at least [#RUN_END_THRESHOLD]
     /// values, else defer to the sample. Needs no distinct count, so it declares no
     /// [StatsOptions], as Rust's scheme declares none.
@@ -217,29 +224,48 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
             return CascadeStep.notApplicable();
         }
         PType ptype = p.ptype();
-        int n = Array.getLength(data);
+        boolean[] validity = null;
+        Object raw = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            raw = nullable.values();
+        }
+        int n = Array.getLength(raw);
         if (n == 0) {
             return CascadeStep.notApplicable();
         }
-        long[] widened = PrimitiveArrays.toLongs(data, ptype, EncodingId.VORTEX_RUNEND);
+        long[] widened = PrimitiveArrays.toLongs(raw, ptype, EncodingId.VORTEX_RUNEND);
+        if (validity != null) {
+            // Rust's runend_encode_nullable_primitive compares Option values: a null ends a valid
+            // run and a run of nulls is one run, stored as an invalid 0. Zeroing the null slots
+            // and comparing validity too gives exactly those runs.
+            widened = widened.clone();
+            for (int i = 0; i < n; i++) {
+                if (!validity[i]) {
+                    widened[i] = 0;
+                }
+            }
+        }
         int numRuns = 1;
         for (int i = 1; i < n; i++) {
-            if (widened[i] != widened[i - 1]) {
+            if (newRun(widened, validity, i)) {
                 numRuns++;
             }
         }
         int[] ends = new int[numRuns];
         long[] values = new long[numRuns];
+        boolean[] runValidity = new boolean[numRuns];
+        boolean anyNullRun = false;
         int k = 0;
-        for (int i = 1; i < n; i++) {
-            if (widened[i] != widened[i - 1]) {
+        for (int i = 1; i <= n; i++) {
+            if (i == n || newRun(widened, validity, i)) {
                 ends[k] = i;
                 values[k] = widened[i - 1];
+                runValidity[k] = validity == null || validity[i - 1];
+                anyNullRun |= !runValidity[k];
                 k++;
             }
         }
-        ends[k] = n;
-        values[k] = widened[n - 1];
 
         // Rust narrows the u64 ends to the smallest unsigned type that holds the last one (`n`)
         PType endsPtype = PType.narrowestUnsigned(n);
@@ -249,10 +275,17 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{null, null}, new int[0]);
         ChildSlot endsSlot = new ChildSlot(new DType.Primitive(endsPtype, false),
                 PrimitiveArrays.fromIntsArray(ends, endsPtype, EncodingId.VORTEX_RUNEND), 0, ENDS_EXCLUDED);
-        ChildSlot valuesSlot = new ChildSlot(dtype, PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.VORTEX_RUNEND), 1, VALUES_EXCLUDED);
-        MinMax stats = ZoneMapStats.of(dtype, data);
+        // The run values' validity is all-valid unless a run is null, as Rust builds it from bits
+        Object runValues = PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.VORTEX_RUNEND);
+        Object valuesData = anyNullRun ? new NullableData(runValues, runValidity) : runValues;
+        ChildSlot valuesSlot = new ChildSlot(dtype, valuesData, 1, VALUES_EXCLUDED);
+        MinMax stats = ZoneMapStats.of(dtype.withNullable(false), data);
         return new CascadeStep(partialRoot, List.of(), List.of(endsSlot, valuesSlot),
                 ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
+    }
+
+    private static boolean newRun(long[] values, boolean[] validity, int i) {
+        return values[i] != values[i - 1] || validity != null && validity[i] != validity[i - 1];
     }
 
     private static ProtoScalarValue statsBytes(PType ptype, long value) {

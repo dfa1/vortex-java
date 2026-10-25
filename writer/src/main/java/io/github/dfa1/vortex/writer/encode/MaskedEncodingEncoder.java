@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
@@ -178,6 +179,31 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     static boolean isNullConstant(boolean[] validity, EncodeContext ctx) {
         return ctx.allowedCascading() > 0 && validity.length > 0 && !validity[0]
                 && SimdOperationsSupport.preferred().allEqual(validity);
+    }
+
+    /// Rust's `compress_constant` for a nullable primitive whose valid rows all hold one value: a
+    /// `vortex.constant` of that value masked by the validity, stored as a plain `vortex.bool`.
+    /// As `compress_as_constant`, the canonical array is kept when the constant is not smaller.
+    ///
+    /// @param dtype the column's nullable primitive dtype
+    /// @param data  the column, with at least one null
+    /// @param valid the valid rows' values, all equal and at least one
+    /// @param ctx   the encode context
+    /// @return the masked constant, or the canonical primitive with its validity
+    static EncodeResult maskedConstant(DType dtype, NullableData data, Object valid, EncodeContext ctx) {
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        boolean[] validity = data.validity();
+        EncodeResult constant = new ConstantEncodingEncoder().encode(dtype, valid, ctx);
+        if (constant.buffers().getFirst().byteSize() >= (long) validity.length * ptype.byteSize()) {
+            return new PrimitiveEncodingEncoder().encode(dtype, data, ctx);
+        }
+        EncodeResult bool = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeNode validityNode = EncodeNode.remapBufferIndices(bool.rootNode(), constant.buffers().size());
+        List<EncodedBuffer> buffers = new ArrayList<>(constant.encodedBuffers());
+        buffers.addAll(bool.encodedBuffers());
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_MASKED, null,
+                new EncodeNode[]{constant.rootNode(), validityNode}, new int[0]);
+        return new EncodeResult(root, buffers, constant.statsMin(), constant.statsMax());
     }
 
     /// A `vortex.constant` whose scalar is null: every row null, and no min/max.
