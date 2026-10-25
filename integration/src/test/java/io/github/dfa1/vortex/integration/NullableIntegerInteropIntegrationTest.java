@@ -103,7 +103,9 @@ class NullableIntegerInteropIntegrationTest {
                 shape("wide runs with scattered nulls", PType.I64, i -> RANDOM[i / 20] >>> 20, i -> i % 13 == 0),
                 // mostly null: sparse with a null fill, the valid rows as patches
                 shape("95% null", PType.I32, i -> Math.floorMod(RANDOM[i], 1000), i -> Math.floorMod(RANDOM[i] >>> 20, 100) < 95),
-                shape("clustered nulls", PType.I32, i -> Math.floorMod(RANDOM[i], 1000), i -> (i / 500) % 3 == 0));
+                shape("clustered nulls", PType.I32, i -> Math.floorMod(RANDOM[i], 1000), i -> (i / 500) % 3 == 0),
+                // one null in one zone: that zone's null count makes the stats table's dict
+                shape("one null", PType.I32, i -> Math.floorMod(RANDOM[i], 1000), i -> i == 5));
     }
 
     @ParameterizedTest(name = "{0}")

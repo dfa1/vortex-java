@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A nullable integer column keeps its validity in the encoding that stores its values instead of a `vortex.masked` wrapper, as Rust writes it, so the cascade and the dict layout pick what Rust picks. ([#604](https://github.com/dfa1/vortex-java/issues/604))
+- Zone stats tables are compressed with integer dictionaries among the candidates, as Rust's stats compressor has them. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - Run-end ends and RLE indices and offsets are stored in the narrowest unsigned type that holds them, as Rust narrows them, instead of fixed `u32`, `u16` and `u64`. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - Frame-of-reference bit-packs its residuals directly, as Rust's FoR scheme does, instead of letting the cascade pick another encoding for them. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - The cascade costs a child encoding by what it encodes to, as Rust does, not by its estimate, which made it pick run-end where Rust picks RLE. ([#604](https://github.com/dfa1/vortex-java/issues/604))
