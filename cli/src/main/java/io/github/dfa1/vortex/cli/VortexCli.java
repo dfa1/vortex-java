@@ -58,6 +58,7 @@ public final class VortexCli {
         }
         return switch (args[0]) {
             case "inspect" -> InspectCommand.run(args);
+            case "explore" -> ExploreCommand.run(args);
             case "tui" -> TuiCommand.run(args);
             case "view" -> ViewCommand.run(args);
             case "export" -> ExportCommand.run(args);
@@ -78,6 +79,9 @@ public final class VortexCli {
     static void printUsage(PrintStream out) {
         out.println("Usage: java -jar vortex-cli-<version>-all.jar <subcommand> [args] [--timing] [--allow-unknown]");
         out.println("  inspect [--html] <file|url>         print file structure; --html writes an HTML report");
+        out.println("  explore [--serve | --html <out.html>] <file|url>");
+        out.println("                                       per-column statistics: serve them to the browser (default),");
+        out.println("                                       or write one HTML file with every column analyzed");
         out.println("  tui     <file|url>                  open interactive inspector; url is http(s)://");
         out.println("  view    <file|url>                  open scrollable data grid; url is http(s)://");
         out.println("  export  <file.vortex> [out.csv|out.parquet|-]  write CSV or Parquet; default is <name>.csv, `-` for stdout");

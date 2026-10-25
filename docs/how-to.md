@@ -66,6 +66,51 @@ java -jar cli/target/vortex-cli-*-all.jar stats data.vortex
 
 ---
 
+## Explore in the browser
+
+`explore` is the data-first view, for asking what is in a file rather than how it is stored. By
+default (`--serve`) it serves a page on a local port and opens it in your browser, and runs until
+you press Ctrl-C.
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar explore data.vortex
+# serving http://127.0.0.1:49605/b3a1f2.../ - press Ctrl-C to stop
+```
+
+To publish or send the page instead, `--html` analyzes every column up front and writes one
+self-contained file, nothing to fetch and no server needed:
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar explore --html report.html data.vortex
+# written: report.html  (19 columns analyzed, 111.4 KB)
+```
+
+The page lists every column with its share of nulls, its min and max, and a sparkline of each
+zone's min-max band from the first row to the last. The sparkline shows whether a column is sorted
+(a rising band), clustered or random, which is also how well a filter on it prunes zones. Everything
+comes from the statistics the file already records and no data is decoded, so a 2.3 GB,
+100-million-row file opens in well under a second. A mean appears only for files that record a sum: Rust's zone map and array
+stats carry none.
+
+**Analyze** on a column (or **Analyze all**) reads its values once and adds, under its row, the
+non-null count, the total and mean of a numeric column, the number of distinct values, a string
+column's byte lengths, and how the values are spread:
+
+- a column with at most 30 distinct values (a status, a country, a flag) shows each value with its
+  count and share
+- a numeric, date or timestamp column with more shows a 30-bin histogram between its min and max
+- a string column with more shows its 10 most frequent values, and past 10,000 distinct values none
+
+This one decodes the column: on a 2.3 GB, 100-million-row file each column takes one to two seconds.
+Columns are analyzed in parallel, one per core, so **Analyze all** on that file's nine columns takes
+about as long as the slowest one: 2.2 s on 10 cores against 9-11 s one after another.
+
+The page is reachable only from this machine (`127.0.0.1`) and only under the random path printed
+at start-up. The file can also be an `http(s)://` URL, as for `inspect`; analyzing a column then
+downloads it.
+
+---
+
 ## Inspect as a web page
 
 `inspect --html` writes a single self-contained HTML page to stdout — no scripts, no CDN,

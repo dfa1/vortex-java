@@ -9,6 +9,8 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.inspect.ColumnDistribution;
+import io.github.dfa1.vortex.inspect.ColumnProfile;
 import io.github.dfa1.vortex.inspect.HtmlReport;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.inspect.VortexInspector;
@@ -163,6 +165,129 @@ class VortexInspectorIntegrationTest {
         assertThat(result)
                 .contains("<td><code>apple</code></td><td><code>banana</code></td>")
                 .contains("<td><code>cherry</code></td><td><code>date</code></td>");
+    }
+
+    @Test
+    void columnProfile_rustWrittenFile_matchesTheData(@TempDir Path tmp) throws IOException {
+        // Given — the `gui` statistics table is folded from Rust's zone map alone, so a fold that
+        // misreads it (a zone skipped, a bound taken as a value) shows a wrong range for real files
+        Path file = tmp.resolve("zoned.vtx");
+        writeJni(file, 50_000);
+        var rng = new Random(42L);
+        double minValue = Double.POSITIVE_INFINITY;
+        double maxValue = Double.NEGATIVE_INFINITY;
+        for (int i = 0; i < 50_000; i++) {
+            double v = rng.nextDouble() * 1000.0;
+            minValue = Math.min(minValue, v);
+            maxValue = Math.max(maxValue, v);
+        }
+
+        // When
+        List<ColumnProfile> result;
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            result = ColumnProfile.of(vf);
+        }
+
+        // Then — Rust zones every 8192 rows: 50,000 rows make 7 zones, one sparkline point each
+        assertThat(result).extracting(ColumnProfile::name).containsExactly("id", "value");
+        ColumnProfile id = result.getFirst();
+        assertThat(id.min()).isEqualTo(0L);
+        assertThat(id.max()).isEqualTo(49_999L);
+        assertThat(id.nullCount()).isZero();
+        assertThat(id.zones()).hasSize(7);
+        ColumnProfile value = result.get(1);
+        assertThat(value.min()).isEqualTo(minValue);
+        assertThat(value.max()).isEqualTo(maxValue);
+    }
+
+    @Test
+    void columnProfile_globalDictColumn_rangeFromValuesNotCodes(@TempDir Path tmp) throws IOException {
+        // Given — the default vortex.zoned map records only truncated bounds for a string, so the
+        // profile takes min/max from each chunk's own stats; under a dict layout those are the
+        // values pool's. The pool's sum and null count describe the dictionary, not the rows, and
+        // must not leak in: four distinct values against 2,000 rows
+        Path file = tmp.resolve("dict.vtx");
+        ColumnName fruit = ColumnName.of("fruit");
+        var schema = new DType.Struct(List.of(fruit), List.of(DType.UTF8), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            writer.writeChunk(Map.of(fruit, repeat(1_000, "apple", "banana")));
+            writer.writeChunk(Map.of(fruit, repeat(1_000, "cherry", "date")));
+        }
+
+        // When
+        ColumnProfile result;
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            result = ColumnProfile.of(vf).getFirst();
+        }
+
+        // Then
+        assertThat(result.min()).isEqualTo("apple");
+        assertThat(result.max()).isEqualTo("date");
+        assertThat(result.nullCount()).isZero();
+        assertThat(result.sum()).isNull();
+    }
+
+    @Test
+    void columnDistribution_rustWrittenFile_totalsAndHistogramMatchTheData(@TempDir Path tmp) throws IOException {
+        // Given — 0..49,999 in `id`: its total is known, and 50,000 rows in 30 equal bins over
+        // [0, 49999] put 1,666 or 1,667 rows in each, so a bin that drops or double-counts a chunk
+        // shows up
+        Path file = tmp.resolve("zoned.vtx");
+        writeJni(file, 50_000);
+        var rng = new Random(42L);
+        double valueSum = 0;
+        for (int i = 0; i < 50_000; i++) {
+            valueSum += rng.nextDouble() * 1000.0;
+        }
+
+        // When
+        ColumnDistribution id;
+        ColumnDistribution value;
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            List<ColumnProfile> profiles = ColumnProfile.of(vf);
+            id = ColumnDistribution.of(vf, profiles.getFirst());
+            value = ColumnDistribution.of(vf, profiles.get(1));
+        }
+
+        // Then
+        assertThat(id.rows()).isEqualTo(50_000);
+        assertThat(id.nulls()).isZero();
+        assertThat(id.sum()).isEqualTo(49_999L * 50_000L / 2);
+        assertThat(id.distinct()).isNull();
+        assertThat(id.histogram()).isTrue();
+        assertThat(id.bars()).hasSize(30)
+                .allSatisfy(bin -> assertThat(bin.count()).isBetween(1_666L, 1_667L));
+        assertThat(value.sum().doubleValue()).isCloseTo(valueSum, org.assertj.core.data.Offset.offset(1e-3));
+        assertThat(value.bars().stream().mapToLong(ColumnDistribution.Bar::count).sum()).isEqualTo(50_000);
+    }
+
+    @Test
+    void columnDistribution_dictColumn_countsEveryValue(@TempDir Path tmp) throws IOException {
+        // Given — a dictionary column is counted off its codes; each value must still get its own
+        // rows, not its code's or another chunk's
+        Path file = tmp.resolve("dict.vtx");
+        ColumnName fruit = ColumnName.of("fruit");
+        var schema = new DType.Struct(List.of(fruit), List.of(DType.UTF8), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            writer.writeChunk(Map.of(fruit, repeat(1_000, "apple", "banana")));
+            writer.writeChunk(Map.of(fruit, repeat(3_000, "cherry", "apple")));
+        }
+
+        // When
+        ColumnDistribution result;
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            result = ColumnDistribution.of(vf, ColumnProfile.of(vf).getFirst());
+        }
+
+        // Then — most frequent first
+        assertThat(result.distinct()).isEqualTo(3L);
+        assertThat(result.bars()).containsExactly(
+                new ColumnDistribution.Bar("apple", null, 2_000),
+                new ColumnDistribution.Bar("cherry", null, 1_500),
+                new ColumnDistribution.Bar("banana", null, 500));
+        assertThat(result.lengths()).isEqualTo(new ColumnDistribution.Lengths(5, 6, 2_000L * 5 + 1_500L * 6 + 500L * 6));
     }
 
     @Test

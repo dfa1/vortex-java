@@ -746,6 +746,7 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | Subcommand | Syntax                                         | Description                                      |
 |------------|------------------------------------------------|--------------------------------------------------|
 | `inspect`  | `inspect [--html] <file.vortex \| http(s)://url>` | Layout tree, encodings, row counts, buffer sizes; `--html` emits a self-contained HTML report on stdout |
+| `explore`  | `explore [--serve \| --html <out.html>] <file.vortex \| http(s)://url>` | Per-column nulls, min/max and zone sparklines from the recorded statistics. `--serve` (default) serves them on `127.0.0.1` under a random path and opens the page in the browser, where **Analyze** reads a column for its total, mean, distinct count and value counts or histogram; `--html` writes one self-contained page with every column already analyzed; see [Explore in the browser](how-to.md#explore-in-the-browser) |
 | `tui`      | `tui <file.vortex \| http(s)://url>`           | Interactive layout-tree browser (lazy stats + data) |
 | `view`     | `view <file.vortex \| http(s)://url>`          | Interactive spreadsheet-grid browser over the row data |
 | `schema`   | `schema <file.vortex>`                         | Column names and types                           |

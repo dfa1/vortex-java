@@ -62,10 +62,7 @@ public final class HtmlReport {
     public static String render(InspectorTree tree, String title) {
         List<ColumnView> columns = columns(tree);
         StringBuilder sb = new StringBuilder(64 * 1024);
-        sb.append("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
-                .append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
-                .append("<title>").append(escape(title)).append(" - Vortex inspector</title>\n")
-                .append("<style>\n").append(css()).append("</style>\n</head>\n<body>\n<main>\n");
+        appendHead(sb, title + " - Vortex inspector");
         appendHeader(sb, tree, columns, title);
         appendStrip(sb, tree, columns);
         sb.append("<div class=\"panels\">\n");
@@ -75,6 +72,13 @@ public final class HtmlReport {
                 : List.of(wholeFile(tree)));
         sb.append("</div>\n</main>\n</body>\n</html>\n");
         return sb.toString();
+    }
+
+    static void appendHead(StringBuilder sb, String title) {
+        sb.append("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
+                .append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
+                .append("<title>").append(escape(title)).append("</title>\n")
+                .append("<style>\n").append(css()).append("</style>\n</head>\n<body>\n<main>\n");
     }
 
     // ---------------------------------------------------------------- sections
@@ -501,7 +505,7 @@ public final class HtmlReport {
 
     // ---------------------------------------------------------------- fragments
 
-    private static void stat(StringBuilder sb, String label, String value) {
+    static void stat(StringBuilder sb, String label, String value) {
         sb.append("<div><dt>").append(label).append("</dt><dd>").append(value).append("</dd></div>\n");
     }
 
@@ -516,7 +520,7 @@ public final class HtmlReport {
                 .append(";background:").append(fill).append("\" title=\"").append(escape(tip)).append("\"></i>\n");
     }
 
-    private static void bar(StringBuilder sb, long value, long max, String fill) {
+    static void bar(StringBuilder sb, long value, long max, String fill) {
         sb.append("<span class=\"bar\"><i style=\"width:").append(width(value, max))
                 .append(";background:").append(fill).append("\"></i></span>");
     }
@@ -531,7 +535,7 @@ public final class HtmlReport {
         return factor < 1.05 ? "" : String.format(Locale.ROOT, "%.1fx", factor);
     }
 
-    private static String fill(int column) {
+    static String fill(int column) {
         return column < 0 || column >= LIGHT_SERIES.size()
                 ? "var(--other)"
                 : "var(--series-" + (column + 1) + ")";
@@ -542,11 +546,11 @@ public final class HtmlReport {
         return String.format(Locale.ROOT, "%.4f%%", pct);
     }
 
-    private static String percent(long value, long total) {
+    static String percent(long value, long total) {
         return total <= 0 ? "0%" : String.format(Locale.ROOT, "%.1f%%", 100.0 * value / total);
     }
 
-    private static String count(long n) {
+    static String count(long n) {
         return String.format(Locale.ROOT, "%,d", n);
     }
 
@@ -561,7 +565,7 @@ public final class HtmlReport {
         return count(firstRow) + "-" + count(firstRow + rows - 1);
     }
 
-    private static String value(Object raw, DType type) {
+    static String value(Object raw, DType type) {
         if (raw == null) {
             return "<span class=\"muted\">-</span>";
         }
@@ -578,7 +582,7 @@ public final class HtmlReport {
     /// utf8 showed `2024-01-01T00:00:00` would make the better-typed file the harder one to read.
     /// Anything unrecognized, and any metadata this cannot parse - the bytes come from an
     /// untrusted file - falls back to the raw value rather than failing the render.
-    private static Object readable(Object raw, DType type) {
+    static Object readable(Object raw, DType type) {
         if (!(type instanceof DType.Extension ext) || !(raw instanceof Long epoch)) {
             return raw;
         }
@@ -725,5 +729,20 @@ public final class HtmlReport {
             .num { font-variant-numeric: tabular-nums; }
             .sized { text-align: right; white-space: nowrap; }
             .sized .bar { width: 46px; display: inline-flex; margin: 0 8px 0 0; vertical-align: 1px; }
+            .scroll { overflow-x: auto; }
+            .profiles td { white-space: nowrap; }
+            .spark { width: 120px; height: 24px; display: block; }
+            .spark polygon { fill-opacity: 0.35; stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+            button { font: inherit; font-size: 12px; color: var(--text-secondary); background: var(--surface-0); border: 1px solid var(--border); border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+            button:hover:not(:disabled) { color: var(--text-primary); border-color: var(--text-muted); }
+            button:disabled { cursor: default; color: var(--text-muted); }
+            .profiles tr.detail > td { white-space: normal; background: var(--surface-0); padding: 10px 14px 14px; }
+            .dist { max-width: 720px; }
+            .hist { width: 100%%; height: 90px; display: block; }
+            .hist rect { fill: var(--series-1); }
+            .hist rect:hover { fill-opacity: 0.7; }
+            .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+            .bars td { border-bottom: 0; padding: 2px 10px 2px 0; }
+            .bars .track { width: 50%%; }
             """;
 }
