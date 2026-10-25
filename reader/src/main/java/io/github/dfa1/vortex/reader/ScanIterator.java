@@ -590,11 +590,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// Each scan window's exact embedded array stats for `column`, read from the covering chunk's
     /// data segment rather than the zone map: what [VortexReader#columnStats()] falls back on when
     /// the zone map only bounds a string column's min/max (Rust's `bounded_max`/`bounded_min`).
-    /// A dictionary chunk reports its values pool's stats, which bound exactly the values it holds.
+    /// A dictionary chunk reports only the min/max of its values pool, which bound exactly the
+    /// values it holds; the pool's other stats (its sum, its null count) describe the dictionary,
+    /// not the chunk's rows, so they are left absent.
+    ///
+    /// Like [#columnZoneStats(ColumnName)], filter pruning and `ScanOptions.limit()` are not applied.
     ///
     /// @param name the column name
     /// @return per-window stats, positionally aligned with [#chunkRowCounts()]
-    List<ArrayStats> chunkStats(ColumnName name) {
+    public List<ArrayStats> chunkStats(ColumnName name) {
         if (chunks == null) {
             initialize();
         }
@@ -603,7 +607,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             Layout layout = spec.layoutFor(name);
             if (layout != null && layout.isDict() && !layout.children().isEmpty()) {
                 // child[0] = values, child[1] = codes — the order DictLayoutDecoder decodes.
-                layout = layout.children().getFirst();
+                Layout values = layout.children().getFirst();
+                ArrayStats pool = values.isFlat() ? readFlatStats(values) : ArrayStats.empty();
+                out.add(new ArrayStats(pool.min(), pool.minExact(), pool.max(), pool.maxExact(),
+                        null, null, null, null, null, null, null));
+                continue;
             }
             out.add(layout == null || !layout.isFlat() ? ArrayStats.empty() : readFlatStats(layout));
         }
