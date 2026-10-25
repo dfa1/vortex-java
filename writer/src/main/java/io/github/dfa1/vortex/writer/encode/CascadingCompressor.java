@@ -172,6 +172,11 @@ public final class CascadingCompressor {
         return (long) n * p.ptype().byteSize();
     }
 
+    /// Rust's `exact_uncompressed_size` of a primitive array: its values.
+    private static long uncompressedBytes(DType dtype, Object data) {
+        return primitiveBytes(dtype, dataLength(data));
+    }
+
     /// Entry point: encode `data` using the best cascading strategy.
     ///
     /// Cascade parameters (depth, sampling, exclusions) are taken from `ctx`.
@@ -259,13 +264,35 @@ public final class CascadingCompressor {
         int sampleSize = sampleSize(n, ctx);
         Choice choice = chooseBest(dtype, input, ctx, baselineFn.applyAsLong(sampleSize),
                 () -> sampleSize < n ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data);
+        return encodeChoice(choice, dtype, data, ctx);
+    }
 
+    /// Runs the winner of a selection on the full data, or the first accepting encoder when no
+    /// candidate beat the baseline.
+    ///
+    /// A primitive winner is kept only when it comes out smaller than the array it encodes, as
+    /// Rust's `choose_and_compress` accepts it (`compressor/cascade.rs`): a sample can favor a
+    /// scheme the full array does not, such as bit-packing a short array that pads to a whole
+    /// 1024-value block. Otherwise the array stays canonical.
+    private EncodeResult encodeChoice(Choice choice, DType dtype, Object data, EncodeContext ctx) {
+        EncodingEncoder canonical = findPrimitiveEncoding(dtype, ctx.excluded());
         if (choice.encoder() == null) {
-            // No encoding beats the baseline — fall back to the first accepting encoder
-            return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
+            return spliceResult(canonical, dtype, data, ctx);
         }
-        // Run the winner on the full data
-        return spliceResult(choice.encoder(), dtype, data, ctx);
+        EncodeResult result = spliceResult(choice.encoder(), dtype, data, ctx);
+        if (dtype instanceof DType.Primitive && choice.encoder() != canonical
+                && totalBytes(result) >= uncompressedBytes(dtype, data)) {
+            return spliceResult(canonical, dtype, data, ctx);
+        }
+        return result;
+    }
+
+    private static long totalBytes(EncodeResult result) {
+        long total = 0;
+        for (EncodedBuffer buffer : result.encodedBuffers()) {
+            total += buffer.data().byteSize();
+        }
+        return total;
     }
 
     /// The winner of a selection and the size it was scored at on the sample (or its estimate).

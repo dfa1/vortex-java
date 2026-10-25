@@ -413,6 +413,48 @@ class CascadingCompressorTest {
         }
     }
 
+    /// A winner is kept only when it comes out smaller than the array, as Rust's
+    /// `choose_and_compress` accepts it: the sample alone can favor a scheme the full array does
+    /// not.
+    @Nested
+    class Acceptance {
+
+        @Test
+        void bitPackingPaddedPastTheRawSize_keepsTheArrayCanonical() {
+            // Given — 1500 u16 values of 15 bits: a 1024-row sample packs to 1920 of 2048 bytes and
+            // picks bit-packing, but the full array pads to 2048 values, 3840 bytes over its 3000
+            short[] values = new short[1500];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = (short) (i * 21);
+            }
+            DType u16 = new DType.Primitive(PType.U16, false);
+            CascadingCompressor sut = new CascadingCompressor(
+                    List.of(new BitpackedEncodingEncoder(), new PrimitiveEncodingEncoder()));
+
+            // When
+            EncodeResult result = sut.encode(u16, values, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+        }
+
+        @Test
+        void forOverAFewValues_keepsTheArrayCanonical() {
+            // Given — a zone table's null counts: FoR wins on its estimate, but bit-packing the
+            // residuals pads 4 values to a 1024-value block, past the 32 raw bytes
+            long[] values = {4681, 4681, 4681, 4682};
+            DType u64 = new DType.Primitive(PType.U64, false);
+            CascadingCompressor sut = new CascadingCompressor(List.of(new FrameOfReferenceEncodingEncoder(),
+                    new BitpackedEncodingEncoder(), new PrimitiveEncodingEncoder()));
+
+            // When
+            EncodeResult result = sut.encode(u64, values, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+        }
+    }
+
     @Nested
     class NullableStructField {
 
