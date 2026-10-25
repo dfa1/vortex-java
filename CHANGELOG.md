@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** CSV import stores an empty cell in a number or boolean column as null instead of `0` or `false`, so inferred number and boolean columns are now nullable (read through `MaskedArray`), and an empty cell or a missing column fails the import where the schema declares the column non-nullable. ([#592](https://github.com/dfa1/vortex-java/issues/592))
 
 ### Fixed
+- The cascade keeps an encoding only when it comes out smaller than the raw array, as Rust does, so a short column no longer bit-packs into more bytes than it holds. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - An all-null chunk is written as one null `vortex.constant`, as Rust writes it, instead of a masked constant `0`. ([#594](https://github.com/dfa1/vortex-java/pull/594))
 - An all-null chunk stored as a null constant (as vortex-jni writes it) reads as a masked array with every row null, like any nullable chunk, instead of a `NullArray` that the CLI, SQL and Parquet export failed on. ([#594](https://github.com/dfa1/vortex-java/pull/594))
 - An all-null date, time, timestamp or uuid chunk is written as a bare null `vortex.constant`, as Rust writes it, without a `vortex.ext` around it. ([#595](https://github.com/dfa1/vortex-java/pull/595))
