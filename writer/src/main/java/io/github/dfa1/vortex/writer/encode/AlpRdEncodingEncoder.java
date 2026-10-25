@@ -308,9 +308,14 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         short[] leftCodes, Object rightPartsData, DType rightDtype,
         Exceptions exceptions, ProtoScalarValue statsMin, ProtoScalarValue statsMax, EncodeContext ctx) {
 
-        EncodingEncoder bp = ctx.lookupEncoder(EncodingId.FASTLANES_BITPACKED);
-        EncodeResult leftResult = bp.encode(DType.U16, leftCodes, ctx);
-        EncodeResult rightResult = bp.encode(rightDtype, rightPartsData, ctx);
+        // Rust packs both parts at the dictionary's widths (`bitpack_encode_unchecked` in
+        // `encode_generic`), never at narrower ones a histogram would find: the left codes at the
+        // width of the largest code, at least 1 bit (`alp` crate `bit_width`), the right parts at
+        // the right bit width. A narrower pack measured ALP-RD smaller than Rust measures it.
+        int leftBitWidth = Math.max(1, Integer.SIZE - Integer.numberOfLeadingZeros(dict.length - 1));
+        EncodeResult leftResult = BitpackedEncodingEncoder.encodeAtWidth(DType.U16, leftCodes, leftBitWidth, ctx);
+        EncodeResult rightResult = BitpackedEncodingEncoder.encodeAtWidth(rightDtype, rightPartsData, rightBitWidth,
+                ctx);
 
         List<EncodedBuffer> allBuffers = new ArrayList<>(leftResult.encodedBuffers());
         int leftBufCount = allBuffers.size();
