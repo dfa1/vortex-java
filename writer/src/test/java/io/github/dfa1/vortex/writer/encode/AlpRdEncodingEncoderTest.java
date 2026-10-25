@@ -86,6 +86,28 @@ class AlpRdEncodingEncoderTest {
     }
 
     @Test
+    void encode_f64_packsBothPartsAtTheDictionaryWidths() throws IOException {
+        // Given — quarters, whose right parts are all zero: a histogram would pack them in 0 bits,
+        // but Rust packs them at the right bit width, and the left codes at the width of the
+        // largest code, never narrower, so the cascade measures ALP-RD as Rust does
+        double[] values = new double[2048];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = (i % 5) * 0.25;
+        }
+        var sut = new AlpRdEncodingEncoder();
+
+        // When
+        EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+        // Then
+        var metaSeg = result.rootNode().metadata();
+        ProtoALPRDMetadata meta = ProtoALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+        int leftWidth = Math.max(1, Integer.SIZE - Integer.numberOfLeadingZeros(meta.dict_len() - 1));
+        assertThat(result.buffers().get(0).byteSize()).isEqualTo(2048L * leftWidth / 8);
+        assertThat(result.buffers().get(1).byteSize()).isEqualTo(2048L * meta.right_bit_width() / 8);
+    }
+
+    @Test
     void encode_f64_tiedPrefixesGetDeterministicDictionaryCodes() throws IOException {
         // Given: the `alp` crate's own tie test (rd_encoder_uses_deterministic_codes_for_tied_prefixes).
         // Several left parts occur equally often, so which eight make the dictionary, and in what

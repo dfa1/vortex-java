@@ -94,6 +94,32 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         return new BitpackedEncodingEncoder().encode(dtype, data, ctx);
     }
 
+    /// Rust's `bitpack_encode_unchecked`: every value packed at `bitWidth`, without patches or
+    /// stats, and a nullable array's validity as the last child. The caller guarantees the values
+    /// fit, as ALP-RD's dictionary codes and right parts do by construction.
+    ///
+    /// @param dtype    the unsigned integer dtype of the values
+    /// @param data     the values, dense or a [NullableData]
+    /// @param bitWidth the width every value is packed at
+    /// @param ctx      the encode context
+    /// @return the bit-packed array
+    static EncodeResult encodeAtWidth(DType dtype, Object data, int bitWidth, EncodeContext ctx) {
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        boolean[] validity = null;
+        Object values = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            values = nullable.values();
+        }
+        long[] longs = PrimitiveArrays.toLongs(values, ptype, EncodingId.FASTLANES_BITPACKED);
+        MemorySegment packed = packFastLanes(longs, longs.length, bitWidth, ptype.bits(), ctx.arena());
+        byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, null).encode();
+        EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, MemorySegment.ofArray(metaBytes),
+                new EncodeNode[0], new int[]{0});
+        EncodeResult result = new EncodeResult(root, List.of(EncodedBuffer.of(packed, ptype)), null, null);
+        return validity == null ? result : result.withValidity(validity, ctx);
+    }
+
     /// Rust's `bitpack_encode` on a nullable array: the bit-width histogram counts a null at width
     /// 0 and only valid values become patches (`bit_width_histogram`, `gather_patches`). A null slot
     /// is zeroed first, which gives both, and packs as Rust packs the zero an Arrow null holds.
