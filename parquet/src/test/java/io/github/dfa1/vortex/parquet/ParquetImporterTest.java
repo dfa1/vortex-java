@@ -400,11 +400,9 @@ class ParquetImporterTest {
                  ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk first = iter.next()) {
-                    // c_customer_sk is nullable I64, so it round-trips as a MaskedArray (validity
-                    // + Primitive values child): a boxed Long[] buffer during import, so a null
-                    // row is tracked instead of silently becoming 0. First three rows are non-null.
-                    MaskedArray sk = first.column(ColumnName.of("c_customer_sk"));
-                    LongArray skValues = (LongArray) sk.inner();
+                    // c_customer_sk is nullable I64 but holds no null, so it is written without a
+                    // validity, as Rust writes an all-valid array, and reads as plain longs
+                    LongArray skValues = first.column(ColumnName.of("c_customer_sk"));
                     assertThat(skValues.getLong(0)).isEqualTo(100L);
                     assertThat(skValues.getLong(1)).isEqualTo(99L);
                     assertThat(skValues.getLong(2)).isEqualTo(98L);

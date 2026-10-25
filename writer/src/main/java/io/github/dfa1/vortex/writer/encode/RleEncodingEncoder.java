@@ -44,6 +44,12 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         return data.stats().averageRunLength() < RUN_LENGTH_THRESHOLD ? Estimate.SKIP : Estimate.COMPLETE;
     }
 
+    /// A nullable array keeps its validity on the indices, as Rust's `RLEData::encode` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public boolean accepts(DType dtype) {
         // every primitive, floats included (Rust's FloatRLEScheme): runs compare raw bits, so -0.0,
@@ -148,9 +154,18 @@ public final class RleEncodingEncoder implements EncodingEncoder {
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        long[] longs = toLongs(data, ptype);
+        boolean[] validity = null;
+        Object raw = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            raw = nullable.values();
+        }
+        long[] longs = toLongs(raw, ptype);
         if (longs.length == 0) {
             return CascadeStep.notApplicable();
+        }
+        if (validity != null) {
+            longs = fillForwardNulls(longs, validity);
         }
         Runs runs = runs(longs);
         // Rust narrows the u16 indices and u64 offsets to the smallest unsigned type that holds
@@ -164,19 +179,42 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         PType indicesPtype = PType.narrowestUnsigned(maxIndex);
         long[] offsets = Arrays.copyOf(runs.offsets(), runs.numChunks());
         PType offsetsPtype = PType.narrowestUnsigned(offsets[offsets.length - 1]);
-        Object indicesData = PrimitiveArrays.fromIntsArray(indices, indicesPtype, EncodingId.FASTLANES_RLE);
+        Object narrowIndices = PrimitiveArrays.fromIntsArray(indices, indicesPtype, EncodingId.FASTLANES_RLE);
+        Object indicesData = narrowIndices;
+        if (validity != null) {
+            // the rows' validity, padded invalid to a whole chunk (Rust's `padded_validity`)
+            indicesData = new NullableData(narrowIndices, Arrays.copyOf(validity, runs.paddedLen()));
+        }
         EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_RLE,
                 MemorySegment.ofArray(runs.metadata(indicesPtype, offsetsPtype)),
                 new EncodeNode[]{null, null, null}, new int[0]);
         long[] values = Arrays.copyOf(runs.values(), runs.valuesCount());
         List<ChildSlot> slots = List.of(
                 new ChildSlot(dtype, PrimitiveArrays.fromBitsArray(values, ptype, EncodingId.FASTLANES_RLE), 0, VALUES_EXCLUDED),
-                new ChildSlot(new DType.Primitive(indicesPtype, false), indicesData, 1, POSITIONS_EXCLUDED),
+                new ChildSlot(new DType.Primitive(indicesPtype, validity != null), indicesData, 1, POSITIONS_EXCLUDED),
                 new ChildSlot(new DType.Primitive(offsetsPtype, false),
                         PrimitiveArrays.fromLongsArray(offsets, offsetsPtype, EncodingId.FASTLANES_RLE), 2,
                         POSITIONS_EXCLUDED));
-        MinMax stats = ZoneMapStats.of(dtype, data);
+        MinMax stats = ZoneMapStats.of(dtype.withNullable(false), data);
         return new CascadeStep(partialRoot, List.of(), slots, ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
+    }
+
+    /// Rust's `fill_forward_nulls` with `ChunkBoundary::Reset` (`encodings/fastlanes/src/lib.rs`):
+    /// a null takes the last valid value, or 0 when it opens a chunk, so nulls add no runs.
+    private static long[] fillForwardNulls(long[] longs, boolean[] validity) {
+        long[] filled = longs.clone();
+        long lastValid = 0;
+        for (int i = 0; i < filled.length; i++) {
+            if (validity[i]) {
+                lastValid = filled[i];
+            } else {
+                if ((i & (FL_CHUNK_SIZE - 1)) == 0) {
+                    lastValid = 0;
+                }
+                filled[i] = lastValid;
+            }
+        }
+        return filled;
     }
 
     /// One column run-length encoded in FastLanes 1024-row chunks.

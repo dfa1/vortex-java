@@ -1,9 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
 import java.lang.foreign.MemorySegment;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /// Output of encoding an array to bytes for one flat segment.
@@ -57,6 +60,23 @@ public record EncodeResult(
         return stats == null
                 ? this
                 : new EncodeResult(rootNode, encodedBuffers, stats.min(), stats.max());
+    }
+
+    /// This result with `validity` appended to the root as its last child, a plain `vortex.bool`:
+    /// where Rust's primitive and bit-packed arrays keep the validity of a nullable array, which
+    /// the encodings stacked above them (FoR, ZigZag, dict codes) pass down unchanged.
+    ///
+    /// @param validity per-row validity
+    /// @param ctx      the encode context
+    /// @return a copy of this result with the validity child and its buffer
+    EncodeResult withValidity(boolean[] validity, EncodeContext ctx) {
+        EncodeResult bool = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeNode[] children = Arrays.copyOf(rootNode.children(), rootNode.children().length + 1);
+        children[children.length - 1] = EncodeNode.remapBufferIndices(bool.rootNode(), encodedBuffers.size());
+        List<EncodedBuffer> buffers = new ArrayList<>(encodedBuffers);
+        buffers.addAll(bool.encodedBuffers());
+        EncodeNode root = new EncodeNode(rootNode.encodingId(), rootNode.metadata(), children, rootNode.bufferIndices());
+        return new EncodeResult(root, List.copyOf(buffers), statsMin, statsMax);
     }
 
     /// Returns `true` if both `statsMin` and `statsMax` are present.

@@ -29,8 +29,20 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Primitive;
     }
 
+    /// A nullable primitive keeps its validity as a `vortex.bool` child, as Rust's canonical
+    /// `PrimitiveArray` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return dtype instanceof DType.Primitive;
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData nullable) {
+            return encode(dtype, nullable.values(), ctx)
+                    .withStats(ZoneMapStats.of(dtype.withNullable(false), nullable))
+                    .withValidity(nullable.validity(), ctx);
+        }
         PType ptype = ((DType.Primitive) dtype).ptype();
         // byte[] needs no byte swap, so it is wrapped in place rather than copied off-heap.
         MemorySegment seg = data instanceof byte[] bytes

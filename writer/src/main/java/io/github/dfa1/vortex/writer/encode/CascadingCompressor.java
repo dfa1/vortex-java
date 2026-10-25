@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +38,7 @@ public final class CascadingCompressor {
     private static int dataLength(Object data) {
         return switch (data) {
             case StructData(var fieldArrays) -> fieldArrays.isEmpty() ? 0 : dataLength(fieldArrays.getFirst());
+            case NullableData nullable -> nullable.length();
             case byte[] a -> a.length;
             case short[] a -> a.length;
             case int[] a -> a.length;
@@ -79,6 +82,14 @@ public final class CascadingCompressor {
                 List<Object> sliced = fieldArrays.stream()
                         .map(f -> stratifiedSample(f, sampleSize, seed)).toList();
                 yield new StructData(sliced);
+            }
+            case NullableData(var values, var validity) -> new NullableData(
+                    stratifiedSample(values, sampleSize, seed), (boolean[]) stratifiedSample(validity, sampleSize, seed));
+            case boolean[] a -> {
+                boolean[] out = new boolean[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
             }
             case byte[] a -> {
                 byte[] out = new byte[sampleSize];
@@ -172,9 +183,34 @@ public final class CascadingCompressor {
         return (long) n * p.ptype().byteSize();
     }
 
-    /// Rust's `exact_uncompressed_size` of a primitive array: its values.
+    /// Rust's `exact_uncompressed_size` of a primitive array: the values, plus a packed bitmap
+    /// when some row is null (`validity_uncompressed_size_in_bytes`, nothing when all are valid).
     private static long uncompressedBytes(DType dtype, Object data) {
-        return primitiveBytes(dtype, dataLength(data));
+        int n = dataLength(data);
+        long values = primitiveBytes(dtype, n);
+        if (data instanceof NullableData nullable && nullable.nullCount() > 0) {
+            return values + (n + 7) / 8;
+        }
+        return values;
+    }
+
+    /// Whether `enc` may compete for `data`: it accepts the dtype, is not excluded, and, for a
+    /// nullable primitive, keeps the validity itself, as every Rust scheme does on its array.
+    private static boolean eligible(EncodingEncoder enc, DType dtype, Object data, EncodeContext ctx) {
+        if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
+            return false;
+        }
+        return !(data instanceof NullableData) || enc.acceptsNullable(dtype);
+    }
+
+    /// Whether a nullable column of `dtype` keeps its validity in the encoding that stores its
+    /// values, as every Rust array does, rather than in a `vortex.masked` wrapper (#604). Integers
+    /// do; floats still go through `vortex.masked` until ALP and ALP-RD carry a validity.
+    ///
+    /// @param dtype the column's dtype
+    /// @return `true` for an integer primitive
+    public static boolean keepsValidity(DType dtype) {
+        return dtype instanceof DType.Primitive p && p.ptype().isInteger();
     }
 
     /// Entry point: encode `data` using the best cascading strategy.
@@ -188,10 +224,19 @@ public final class CascadingCompressor {
     /// @param ctx   encoding context supplying the arena, encoder map, and cascade parameters
     /// @return the [EncodeResult] produced by the winning encoding
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        // A column without nulls has no validity to store, as Rust imports an Arrow array whose
+        // null count is zero (`Validity::AllValid`). Deeper down a NullableData keeps its bitmap
+        // even when every bit is set, as a filtered or sampled Rust array does.
+        if (keepsValidity(dtype) && data instanceof NullableData nullable && nullable.nullCount() == 0) {
+            return encodeWithCtx(dtype, nullable.values(), ctx);
+        }
         return encodeWithCtx(dtype, data, ctx);
     }
 
     private EncodeResult encodeWithCtx(DType dtype, Object data, EncodeContext ctx) {
+        if (keepsValidity(dtype) && data instanceof NullableData nullable) {
+            return encodeNullablePrimitive(dtype, nullable, ctx);
+        }
         if (dtype instanceof DType.Struct structDtype) {
             return data instanceof NullableData(StructData fields, boolean[] validity)
                     ? encodeStruct(structDtype, fields, validity, ctx)
@@ -232,7 +277,7 @@ public final class CascadingCompressor {
     private ArrayAndStats withStats(DType dtype, Object data, EncodeContext ctx) {
         StatsOptions merged = StatsOptions.defaults();
         for (EncodingEncoder enc : encodings) {
-            if (enc.accepts(dtype) && !ctx.excluded().contains(enc.encodingId())) {
+            if (eligible(enc, dtype, data, ctx)) {
                 merged = StatsOptions.merge(merged, enc.statsOptions());
             }
         }
@@ -295,6 +340,31 @@ public final class CascadingCompressor {
         return total;
     }
 
+    /// Rust's `choose_and_compress` for a primitive array with nulls: an all-null array is a null
+    /// constant and one whose valid rows hold a single value is a constant masked by the validity,
+    /// both decided by the compressor before any scheme (`compressor/cascade.rs`). Otherwise the
+    /// schemes compete with the validity in their arrays: a sampled scheme is measured with its
+    /// validity child, against the values plus a packed bitmap.
+    private EncodeResult encodeNullablePrimitive(DType dtype, NullableData data, EncodeContext ctx) {
+        int n = data.length();
+        if (MaskedEncodingEncoder.isNullConstant(data.validity(), ctx)) {
+            return MaskedEncodingEncoder.nullConstant();
+        }
+        if (n > 0 && ctx.allowedCascading() > 0 && !ctx.sample()
+                && !ctx.excluded().contains(EncodingId.VORTEX_CONSTANT)) {
+            Object valid = data.validValues();
+            PType ptype = ((DType.Primitive) dtype).ptype();
+            if (SimdOperationsSupport.preferred().allEqual(valid, ptype)) {
+                return MaskedEncodingEncoder.maskedConstant(dtype, data, valid, ctx);
+            }
+        }
+        ArrayAndStats input = withStats(dtype, data, ctx);
+        int sampleSize = sampleSize(n, ctx);
+        Object sample = sampleSize < n ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data;
+        Choice choice = chooseBest(dtype, input, ctx, uncompressedBytes(dtype, sample), () -> sample);
+        return encodeChoice(choice, dtype, data, ctx);
+    }
+
     /// The winner of a selection and the size it was scored at on the sample (or its estimate).
     ///
     /// @param encoder   the winning encoder, or `null` when none beat the baseline
@@ -327,7 +397,7 @@ public final class CascadingCompressor {
         boolean bestEstimated = false;
         List<EncodingEncoder> deferred = new ArrayList<>();
         for (EncodingEncoder enc : encodings) {
-            if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
+            if (!eligible(enc, dtype, input.data(), ctx)) {
                 continue;
             }
             Estimate est = competes(dtype) ? enc.expectedRatio(dtype, input, ctx) : Estimate.COMPLETE;
@@ -389,7 +459,7 @@ public final class CascadingCompressor {
     /// (`compressor/cascade.rs`), so it costs nothing.
     private long measureBestChild(DType dtype, Object data, EncodeContext ctx) {
         int n = dataLength(data);
-        long baseline = primitiveBytes(dtype, n);
+        long baseline = uncompressedBytes(dtype, data);
         if (n == 0) {
             return baseline;
         }
@@ -456,12 +526,13 @@ public final class CascadingCompressor {
             // Mirrors StructEncodingEncoder's own field loop: a nullable field arrives as
             // NullableData(values, validity), not the dense array (String[], byte[][], ...)
             // encodeWithCtx's per-dtype dispatch expects. A nullable struct carries its validity
-            // as its own child instead, so it recurses rather than being masked.
-            boolean masked = fieldData instanceof NullableData
-                    && !(fieldDtype instanceof DType.Extension) && !(fieldDtype instanceof DType.Struct);
+            // as its own child instead, so it recurses rather than being masked, and a nullable
+            // primitive keeps its validity in the encoding that stores its values.
+            boolean masked = fieldData instanceof NullableData && !(fieldDtype instanceof DType.Extension)
+                    && !(fieldDtype instanceof DType.Struct) && !keepsValidity(fieldDtype);
             EncodeResult fieldResult = masked
                     ? new MaskedEncodingEncoder().encode(fieldDtype, fieldData, ctx)
-                    : encodeWithCtx(fieldDtype, fieldData, ctx);
+                    : encode(fieldDtype, fieldData, ctx);
             int bufOffset = allBuffers.size();
             children[fieldOffset + i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
             allBuffers.addAll(fieldResult.encodedBuffers());

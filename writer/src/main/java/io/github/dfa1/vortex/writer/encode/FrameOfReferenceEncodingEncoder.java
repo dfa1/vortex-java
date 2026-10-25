@@ -72,10 +72,19 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats));
     }
 
+    /// A nullable array passes its validity down to the residuals, as Rust's `FoR::encode` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
         if (!(dtype instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + dtype);
+        }
+        if (data instanceof NullableData nullable) {
+            return encodeNullableCascade(p, nullable, encodeCtx);
         }
         PType ptype = p.ptype();
         long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_FOR);
@@ -104,6 +113,27 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{child.rootNode()}, new int[0]);
         return CascadeStep.terminal(new EncodeResult(root, child.encodedBuffers(),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats)));
+    }
+
+    /// Rust's `FoR::encode` on a nullable array: the reference is the smallest valid value, and a
+    /// null slot's residual is zero, so it costs no bits in the bit-packing below
+    /// (`for_compress.rs`). The residuals keep the validity.
+    private static CascadeStep encodeNullableCascade(DType.Primitive dtype, NullableData data, EncodeContext ctx) {
+        PType ptype = dtype.ptype();
+        long[] valid = PrimitiveArrays.toLongs(data.validValues(), ptype, EncodingId.FASTLANES_FOR);
+        long ref = computeRef(valid, valid.length, ptype);
+        if (ref == 0L && ptype.isUnsigned()) {
+            return CascadeStep.notApplicable();
+        }
+        long[] longs = PrimitiveArrays.toLongs(data.values(), ptype, EncodingId.FASTLANES_FOR).clone();
+        boolean[] validity = data.validity();
+        for (int i = 0; i < longs.length; i++) {
+            if (!validity[i]) {
+                longs[i] = ref;
+            }
+        }
+        return step(dtype, ref, new NullableData(residualsAsNativeArray(longs, ref, ptype), validity),
+                ZoneMapStats.of(dtype.withNullable(false), data), ctx);
     }
 
     // Rust takes the reference from Stat::Min, an unsigned min for unsigned ptypes: a signed one
