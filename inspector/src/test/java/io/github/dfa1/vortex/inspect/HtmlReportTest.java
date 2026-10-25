@@ -114,6 +114,18 @@ class HtmlReportTest {
     }
 
     @Test
+    void render_technicalReportLeavesColumnStatisticsToExplore() {
+        // Given — `inspect --html` is for people asking how a file is stored, `explore` for what is in it
+        InspectorTree sut = twoColumnTree();
+
+        // When
+        String result = HtmlReport.render(sut, "data.vortex");
+
+        // Then
+        assertThat(result).doesNotContain("card profiles");
+    }
+
+    @Test
     void render_zeroSizedFile_doesNotDivideByZero() {
         // Given — a degenerate tree; percentage math must not produce NaN or Infinity in CSS
         Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of());
