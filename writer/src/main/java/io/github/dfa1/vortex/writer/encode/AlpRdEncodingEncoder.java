@@ -42,17 +42,32 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         return p.ptype() == PType.F32 || p.ptype() == PType.F64;
     }
 
+    /// A nullable array splits every slot and keeps the validity on the bit-packed left parts, as
+    /// Rust's `RDEncoder::encode` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        return switch (ptype) {
-            case F64 -> encodeF64((double[]) data, ctx);
-            case F32 -> encodeF32((float[]) data, ctx);
+        boolean[] validity = null;
+        Object values = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            values = nullable.values();
+        }
+        EncodeResult result = switch (ptype) {
+            case F64 -> encodeF64((double[]) values, validity, ctx);
+            case F32 -> encodeF32((float[]) values, validity, ctx);
             default -> throw new UnsupportedOperationException("ALP-RD encode not supported for " + ptype);
         };
+        // the bounds are the valid values', never a null slot's placeholder
+        return validity == null ? result : result.withStats(ZoneMapStats.of(dtype.withNullable(false), data));
     }
 
-    private static EncodeResult encodeF64(double[] values, EncodeContext ctx) {
+    private static EncodeResult encodeF64(double[] values, boolean[] validity, EncodeContext ctx) {
         int n = values.length;
         if (n == 0) {
             return emptyResult(DType.U64, ctx);
@@ -94,7 +109,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         }
 
         return buildEncodeResult(
-            best.dict, best.rightBitWidth, leftCodes, rightParts,
+            best.dict, best.rightBitWidth, leftCodes, validity, rightParts,
             DType.U64, exceptions, scalarF64(min), scalarF64(max), ctx);
     }
 
@@ -182,7 +197,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         return count;
     }
 
-    private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
+    private static EncodeResult encodeF32(float[] values, boolean[] validity, EncodeContext ctx) {
         int n = values.length;
         if (n == 0) {
             return emptyResult(DType.U32, ctx);
@@ -222,7 +237,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         }
 
         return buildEncodeResult(
-            best.dict, best.rightBitWidth, leftCodes, rightParts,
+            best.dict, best.rightBitWidth, leftCodes, validity, rightParts,
             DType.U32, exceptions, scalarF32(min), scalarF32(max), ctx);
     }
 
@@ -305,15 +320,16 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
     private static EncodeResult buildEncodeResult(
         short[] dict, int rightBitWidth,
-        short[] leftCodes, Object rightPartsData, DType rightDtype,
+        short[] leftCodes, boolean[] validity, Object rightPartsData, DType rightDtype,
         Exceptions exceptions, ProtoScalarValue statsMin, ProtoScalarValue statsMax, EncodeContext ctx) {
 
         // Rust packs both parts at the dictionary's widths (`bitpack_encode_unchecked` in
         // `encode_generic`), never at narrower ones a histogram would find: the left codes at the
         // width of the largest code, at least 1 bit (`alp` crate `bit_width`), the right parts at
         // the right bit width. A narrower pack measured ALP-RD smaller than Rust measures it.
+        Object left = validity == null ? leftCodes : new NullableData(leftCodes, validity);
         int leftBitWidth = Math.max(1, Integer.SIZE - Integer.numberOfLeadingZeros(dict.length - 1));
-        EncodeResult leftResult = BitpackedEncodingEncoder.encodeAtWidth(DType.U16, leftCodes, leftBitWidth, ctx);
+        EncodeResult leftResult = BitpackedEncodingEncoder.encodeAtWidth(DType.U16, left, leftBitWidth, ctx);
         EncodeResult rightResult = BitpackedEncodingEncoder.encodeAtWidth(rightDtype, rightPartsData, rightBitWidth,
                 ctx);
 

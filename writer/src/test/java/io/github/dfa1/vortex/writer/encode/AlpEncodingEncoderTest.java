@@ -365,6 +365,25 @@ class AlpEncodingEncoderTest {
         }
 
         @Test
+        void encodeCascade_nullable_patchesOnlyValidExceptions() {
+            // Given — PI does not fit two decimals, so it is an exception at row 1 (valid) and at
+            // row 3 (null): Rust keeps only the valid one, and the encoded ints keep the validity
+            double[] values = {1.25, Math.PI, 2.5, Math.PI, 3.75};
+            boolean[] validity = {true, true, true, false, true};
+            NullableData data = new NullableData(values, validity);
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DTypes.F64_N, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            ChildSlot encoded = result.openChildren().getFirst();
+            assertThat(encoded.childData()).isInstanceOf(NullableData.class);
+            assertThat(((NullableData) encoded.childData()).validity()).isEqualTo(validity);
+            assertThat(result.ownedBuffers().getFirst().data().byteSize())
+                    .as("one patch index").isEqualTo(1);
+        }
+
+        @Test
         void encodeCascade_f32_opensTheEncodedIntsForTheCascade() {
             // Given — Rust's ALP scheme compresses the encoded ints of either width; f32 wrote
             // them as a raw i32 buffer, which the cascade could never bit-pack

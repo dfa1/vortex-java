@@ -654,13 +654,10 @@ public final class VortexWriter implements Closeable {
                     // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported).
                     candidate = DictColumnState.isVarBinDictCandidate((Object[]) values, validity);
                 }
-                // ponytail: only primitives whose cascade sees their validity take Rust's probe
-                // (#604). Nullable floats still run under vortex.masked, which leaves the validity
-                // out of the sampled sizes Rust charges bit-packing with, and strings pick OnPair
-                // where Rust's StringDictScheme wins, so for those the cardinality check above
-                // still matches Rust more often.
-                if (candidate && colDtype instanceof DType.Primitive p
-                        && (!p.nullable() || CascadingCompressor.keepsValidity(p))) {
+                // ponytail: only primitives take Rust's probe. Strings pick OnPair where Rust's
+                // StringDictScheme wins, so for them the cardinality check above still matches
+                // Rust more often.
+                if (candidate && colDtype instanceof DType.Primitive) {
                     candidate = probeCompressesToDict(colDtype, data);
                 }
                 if (candidate) {
@@ -876,7 +873,7 @@ public final class VortexWriter implements Closeable {
         if (encodingOverride == null && dtype instanceof DType.Map) {
             return new io.github.dfa1.vortex.writer.encode.MapEncodingEncoder();
         }
-        // With cascading on, a nullable integer column goes to the compressor, which keeps the
+        // With cascading on, a nullable primitive column goes to the compressor, which keeps the
         // validity in the encoding that stores the values, as Rust does (#604)
         boolean keepsValidity = options.allowedCascading() > 0 && CascadingCompressor.keepsValidity(dtype);
         if (encodingOverride == null
