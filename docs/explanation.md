@@ -360,7 +360,7 @@ single `entries` child.
   `vortex.masked` + `vortex.list` as before.
 - **A null *entry value*** (`DType.Map(key, value.asNullable(), ...)`, e.g. `{a: 1, b: null}`
   inside an otherwise-present map row) is a completely different bit: it rides the entry
-  struct's own `value` field validity — kept by the encoding of an integer value and wrapped in
+  struct's own `value` field validity — kept by the encoding of a primitive value and wrapped in
   `vortex.masked` otherwise, exactly like a nullable field anywhere else inside a `vortex.struct`. It has nothing to do with the map row
   being present or absent.
 

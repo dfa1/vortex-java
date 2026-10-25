@@ -204,13 +204,13 @@ public final class CascadingCompressor {
     }
 
     /// Whether a nullable column of `dtype` keeps its validity in the encoding that stores its
-    /// values, as every Rust array does, rather than in a `vortex.masked` wrapper (#604). Integers
-    /// do; floats still go through `vortex.masked` until ALP and ALP-RD carry a validity.
+    /// values, as every Rust array does, rather than in a `vortex.masked` wrapper (#604): every
+    /// primitive does.
     ///
     /// @param dtype the column's dtype
-    /// @return `true` for an integer primitive
+    /// @return `true` for a primitive
     public static boolean keepsValidity(DType dtype) {
-        return dtype instanceof DType.Primitive p && p.ptype().isInteger();
+        return dtype instanceof DType.Primitive;
     }
 
     /// Entry point: encode `data` using the best cascading strategy.

@@ -10,15 +10,9 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.core.fbs.FbsArray;
-import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.reader.SegmentSpec;
-import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.apache.arrow.c.ArrowArray;
@@ -39,7 +33,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -51,7 +44,6 @@ import java.util.function.IntPredicate;
 import java.util.function.IntToLongFunction;
 import java.util.stream.Stream;
 
-import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// A nullable integer column keeps its validity in the encoding that stores its values, as Rust's
@@ -116,13 +108,13 @@ class NullableIntegerInteropIntegrationTest {
         Path jniFile = tmp.resolve("jni.vortex");
         Path javaFile = tmp.resolve("java.vortex");
         writeWithJni(jniFile, ptype, values, isNull);
-        List<String> expected = encodingTree(jniFile);
+        List<String> expected = EncodingTrees.of(jniFile);
 
         // When
         writeWithJava(javaFile, ptype, values, isNull, WriteOptions.defaults());
 
         // Then
-        assertThat(encodingTree(javaFile)).isEqualTo(expected);
+        assertThat(EncodingTrees.of(javaFile)).isEqualTo(expected);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -242,42 +234,5 @@ class NullableIntegerInteropIntegrationTest {
             }
         }
         return out;
-    }
-
-    /// The file's layouts and array encodings, depth first, one indented id a line. A chunked
-    /// layout is left out: Java keeps one around a single chunk, where Rust writes the flat
-    /// layout directly, and that layout shape is not what these columns test.
-    private static List<String> encodingTree(Path file) throws IOException {
-        List<String> out = new ArrayList<>();
-        try (VortexReader reader = VortexReader.open(file)) {
-            layoutTree(reader, reader.layout(), 0, out);
-        }
-        return out;
-    }
-
-    private static void layoutTree(VortexReader reader, Layout layout, int depth, List<String> out) {
-        if (layout.isChunked() && layout.children().size() == 1) {
-            layoutTree(reader, layout.children().getFirst(), depth, out);
-            return;
-        }
-        out.add("  ".repeat(depth) + layout.layoutId().id());
-        if (layout.isFlat() && !layout.segments().isEmpty()) {
-            SegmentSpec spec = reader.footer().segmentSpecs().get(layout.segments().getFirst());
-            MemorySegment seg = reader.rawSegment(spec);
-            int fbLen = seg.get(LE_INT, seg.byteSize() - 4L);
-            FbsArray array = FbsArray.getRootAsFbsArray(seg.asSlice(seg.byteSize() - 4L - fbLen, fbLen));
-            arrayTree(array.root(), reader.footer().arraySpecs(), depth + 1, out);
-            return;
-        }
-        for (Layout child : layout.children()) {
-            layoutTree(reader, child, depth + 1, out);
-        }
-    }
-
-    private static void arrayTree(FbsArrayNode node, List<EncodingId> specs, int depth, List<String> out) {
-        out.add("  ".repeat(depth) + specs.get(node.encoding()).id());
-        for (int i = 0; i < node.childrenLength(); i++) {
-            arrayTree(node.children(i), specs, depth + 1, out);
-        }
     }
 }

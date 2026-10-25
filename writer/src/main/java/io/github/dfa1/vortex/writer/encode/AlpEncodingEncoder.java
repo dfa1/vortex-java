@@ -66,8 +66,28 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return p.ptype() == PType.F64 || p.ptype() == PType.F32;
     }
 
+    /// A nullable array encodes every slot, keeps the validity on the encoded ints and patches
+    /// only valid exceptions, as Rust's `alp_encode` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData) {
+            // No cascade to fill the encoded ints with: they stay a primitive keeping the validity
+            CascadeStep step = encodeCascade(dtype, data, ctx);
+            ChildSlot slot = step.openChildren().getFirst();
+            EncodeResult child = new PrimitiveEncodingEncoder().encode(slot.childDtype(), slot.childData(), ctx);
+            List<EncodedBuffer> buffers = new ArrayList<>(step.ownedBuffers());
+            EncodeNode[] children = step.partialRoot().children().clone();
+            children[slot.parentChildIdx()] = EncodeNode.remapBufferIndices(child.rootNode(), buffers.size());
+            buffers.addAll(child.encodedBuffers());
+            EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP, step.partialRoot().metadata(), children,
+                    new int[0]);
+            return new EncodeResult(root, List.copyOf(buffers), step.statsMin(), step.statsMax());
+        }
         PType ptype = ((DType.Primitive) dtype).ptype();
         return switch (ptype) {
             case F64 -> encodeF64((double[]) data, ctx);
@@ -79,10 +99,40 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        if (ptype == PType.F64) {
-            return encodeCascadeF64((double[]) data, ctx);
+        boolean[] validity = null;
+        Object values = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            values = nullable.values();
         }
-        return encodeCascadeF32((float[]) data, ctx);
+        CascadeStep step;
+        if (ptype == PType.F64) {
+            step = encodeCascadeF64((double[]) values, validity, ctx);
+        } else {
+            step = encodeCascadeF32((float[]) values, validity, ctx);
+        }
+        // the bounds are the valid values', never a null slot's placeholder
+        return validity == null ? step : step.withStats(ZoneMapStats.of(dtype.withNullable(false), data));
+    }
+
+    /// Rust drops the exceptions at null rows: "we remove null exceptions in order to keep the
+    /// Patches small" (`alp_encode_components_typed`). Their encoded slots keep the fill value.
+    private static <T> void dropNullExceptions(List<Integer> indices, List<T> values, boolean[] validity) {
+        if (validity == null) {
+            return;
+        }
+        for (int i = indices.size() - 1; i >= 0; i--) {
+            if (!validity[indices.get(i)]) {
+                indices.remove(i);
+                values.remove(i);
+            }
+        }
+    }
+
+    /// The encoded ints, keeping the column's validity when it has one.
+    private static ChildSlot encodedSlot(DType dtype, Object encoded, boolean[] validity) {
+        Object data = validity == null ? encoded : new NullableData(encoded, validity);
+        return new ChildSlot(dtype.withNullable(validity != null), data, 0, Set.of(EncodingId.VORTEX_ALP));
     }
 
     // Rust's `encode_single_unchecked`: `(value * 10^e * 10^-f).fast_round() as i64`, the cast
@@ -265,13 +315,14 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
                 EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())), d.statsMin(), d.statsMax());
     }
 
-    private static CascadeStep encodeCascadeF64(double[] values, EncodeContext ctx) {
+    private static CascadeStep encodeCascadeF64(double[] values, boolean[] validity, EncodeContext ctx) {
         AlpF64Data d = computeF64(values);
+        dropNullExceptions(d.patchIndices(), d.patchValues(), validity);
         if (d.patchIndices().isEmpty()) {
             byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[1], new int[0]);
-            ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
+            ChildSlot slot = encodedSlot(DType.I64, d.encodedArr(), validity);
             return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
         }
 
@@ -290,7 +341,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
             MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode, offsetsNode}, new int[0]);
-        ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
+        ChildSlot slot = encodedSlot(DType.I64, d.encodedArr(), validity);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()),
                 EncodedBuffer.of(valBuf, PType.F64), EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())),
                 List.of(slot), d.statsMin(), d.statsMax(), true);
@@ -410,15 +461,16 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return new AlpF32Data(expE, expF, encodedArr, patchIndices, patchValues, statsMin, statsMax);
     }
 
-    /// The F32 counterpart of [#encodeCascadeF64(double[], EncodeContext)]: Rust's ALP scheme
+    /// The F32 counterpart of [#encodeCascadeF64(double[], boolean[], EncodeContext)]: Rust's ALP scheme
     /// compresses the encoded `i32`s through the cascade for either width.
-    private static CascadeStep encodeCascadeF32(float[] values, EncodeContext ctx) {
+    private static CascadeStep encodeCascadeF32(float[] values, boolean[] validity, EncodeContext ctx) {
         AlpF32Data d = computeF32(values);
+        dropNullExceptions(d.patchIndices(), d.patchValues(), validity);
         if (d.patchIndices().isEmpty()) {
             byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[1], new int[0]);
-            ChildSlot slot = new ChildSlot(DType.I32, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
+            ChildSlot slot = encodedSlot(DType.I32, d.encodedArr(), validity);
             return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
         }
 
@@ -437,7 +489,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
             MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode, offsetsNode}, new int[0]);
-        ChildSlot slot = new ChildSlot(DType.I32, d.encodedArr(), 0, Set.of(EncodingId.VORTEX_ALP));
+        ChildSlot slot = encodedSlot(DType.I32, d.encodedArr(), validity);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()),
                 EncodedBuffer.of(valBuf, PType.F32), EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())),
                 List.of(slot), d.statsMin(), d.statsMax(), true);

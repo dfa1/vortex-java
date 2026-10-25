@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - ALP-RD packs its left and right parts at the dictionary's widths, as Rust does, instead of narrower widths that made it win where Rust picks a dictionary. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - ALP on an `F32` column compresses its encoded integers through the cascade, as Rust does for both float widths, instead of storing them raw. ([#604](https://github.com/dfa1/vortex-java/issues/604))
-- A nullable integer column keeps its validity in the encoding that stores its values instead of a `vortex.masked` wrapper, as Rust writes it, so the cascade and the dict layout pick what Rust picks. ([#604](https://github.com/dfa1/vortex-java/issues/604))
+- A nullable integer or float column keeps its validity in the encoding that stores its values instead of a `vortex.masked` wrapper, as Rust writes it, so the cascade and the dict layout pick what Rust picks. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - Zone stats tables are compressed with integer dictionaries among the candidates, as Rust's stats compressor has them. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - Run-end ends and RLE indices and offsets are stored in the narrowest unsigned type that holds them, as Rust narrows them, instead of fixed `u32`, `u16` and `u64`. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - Frame-of-reference bit-packs its residuals directly, as Rust's FoR scheme does, instead of letting the cascade pick another encoding for them. ([#604](https://github.com/dfa1/vortex-java/issues/604))

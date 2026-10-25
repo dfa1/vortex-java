@@ -15,6 +15,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 
 /// Write-only encoder for `vortex.sparse`.
@@ -23,6 +24,10 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     /// This encoding, barred from its own children: the values child keeps the input dtype, so
     /// without this the cascade could sparse-encode the sparse values.
     private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_SPARSE);
+
+    /// Every encoding but `vortex.primitive`, so a child stays canonical.
+    private static final Set<EncodingId> ALL_BUT_PRIMITIVE =
+            Set.copyOf(EnumSet.complementOf(EnumSet.of(EncodingId.WellKnown.VORTEX_PRIMITIVE)));
 
     /// Candidates for compressing a boolean mask's patch-index array ([#encodeBool]) — a sorted,
     /// often-regular sequence (e.g. a periodic null pattern), so `vortex.sequence`/`fastlanes.delta`
@@ -50,12 +55,11 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Primitive;
     }
 
-    /// A nullable integer array keeps its nulls in the fill or the patch values, as Rust's
-    /// `Sparse::encode` does. Nullable floats are not taken yet: they still go through
-    /// `vortex.masked`.
+    /// A nullable array keeps its nulls in the fill or the patch values, as Rust's
+    /// `Sparse::encode` does.
     @Override
     public boolean acceptsNullable(DType dtype) {
-        return dtype instanceof DType.Primitive p && p.ptype().isInteger();
+        return accepts(dtype);
     }
 
     @Override
@@ -80,8 +84,8 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
                 return Estimate.ratio((double) len / (len - nulls));
             }
         }
-        // Rust's float sparse scheme only takes null-dominated arrays; nullable floats are still
-        // split off by vortex.masked before they reach a primitive here, so floats never qualify.
+        // Rust's float sparse scheme (NullDominatedSparseScheme) only takes the null-dominated
+        // arrays above
         if (p.ptype().isFloating()) {
             return Estimate.SKIP;
         }
@@ -226,7 +230,9 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{null, null}, new int[]{0});
         DType idxDtype = new DType.Primitive(idxPtype, false);
         ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0, SELF);
-        ChildSlot valSlot = new ChildSlot(dtype, patchValues, 1, SELF);
+        // Rust's float sparse scheme compresses only the indices: the values stay as they are
+        Set<EncodingId> valuesExcluded = ((DType.Primitive) dtype).ptype().isFloating() ? ALL_BUT_PRIMITIVE : SELF;
+        ChildSlot valSlot = new ChildSlot(dtype, patchValues, 1, valuesExcluded);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(fillBuf)), List.of(idxSlot, valSlot), ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }
 
