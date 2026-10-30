@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.performance;
 
+import dev.hardwood.HardwoodContext;
 import dev.hardwood.InputFile;
 import dev.hardwood.reader.ColumnReader;
 import dev.hardwood.reader.ColumnReaders;
@@ -50,6 +51,10 @@ import java.util.concurrent.TimeUnit;
 ///   - `parquetReadRowByRow` / `parquetReadMultiColumnRowByRow`:
 ///     Hardwood row cursor ([RowReader]) — measures row-oriented API overhead
 ///     on top of format decode cost.
+///   - `parquetReadSingleThread` / `parquetReadMultiColumnSingleThread`: the batch reads with a
+///     one-thread decode pool ([HardwoodContext#create(int)]). Hardwood decodes pages on a pool
+///     sized to the machine by default, while the Vortex reads scan on the calling thread, so the
+///     default variants compare several cores against one: these are the like-for-like ones.
 ///
 /// Override the Parquet source with: `-Dbench.parquet=/path/to/file.parquet`
 ///
@@ -77,6 +82,7 @@ public class ParquetVsVortexReadBenchmark {
 
     private Path parquetFile;
     private Path vortexFile;
+    private HardwoodContext singleThread;
     ReadRegistry registry;
 
     private static Path downloadIfAbsent(Path dest, String url) throws Exception {
@@ -120,12 +126,14 @@ public class ParquetVsVortexReadBenchmark {
             parquetFile = sharedParquetFile;
             vortexFile = sharedVortexFile;
         }
+        singleThread = HardwoodContext.create(1);
     }
 
     // ── Batch API (apples-to-apples with Vortex) ─────────────────────────────
 
     @TearDown(Level.Trial)
     public void tearDown() throws IOException {
+        singleThread.close();
         synchronized (SETUP_LOCK) {
             refCount--;
             if (refCount == 0) {
@@ -139,9 +147,22 @@ public class ParquetVsVortexReadBenchmark {
     /// Hardwood batch: decode trip_distance column in chunks, sum all values.
     @Benchmark
     public double parquetRead() throws IOException {
+        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile))) {
+            return sumTripDistance(reader);
+        }
+    }
+
+    /// [#parquetRead()] with a one-thread decode pool, like for like with [#vortexRead()].
+    @Benchmark
+    public double parquetReadSingleThread() throws IOException {
+        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile), singleThread)) {
+            return sumTripDistance(reader);
+        }
+    }
+
+    private static double sumTripDistance(ParquetFileReader reader) throws IOException {
         double sum = 0.0;
-        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile));
-             ColumnReader cr = reader.columnReader("trip_distance")) {
+        try (ColumnReader cr = reader.columnReader("trip_distance")) {
             while (cr.nextBatch()) {
                 double[] vals = cr.getDoubles();
                 int n = cr.getRecordCount();
@@ -158,10 +179,24 @@ public class ParquetVsVortexReadBenchmark {
     /// Hardwood batch: decode fare_amount + PULocationID in chunks, sum both.
     @Benchmark
     public double parquetReadMultiColumn() throws IOException {
+        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile))) {
+            return sumFareAndLocation(reader);
+        }
+    }
+
+    /// [#parquetReadMultiColumn()] with a one-thread decode pool, like for like with
+    /// [#vortexReadMultiColumn()].
+    @Benchmark
+    public double parquetReadMultiColumnSingleThread() throws IOException {
+        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile), singleThread)) {
+            return sumFareAndLocation(reader);
+        }
+    }
+
+    private static double sumFareAndLocation(ParquetFileReader reader) throws IOException {
         double fareSum = 0.0;
         long idSum = 0L;
-        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile));
-             ColumnReaders crs = reader.columnReaders(ColumnProjection.columns("fare_amount", "PULocationID"))) {
+        try (ColumnReaders crs = reader.columnReaders(ColumnProjection.columns("fare_amount", "PULocationID"))) {
             while (crs.nextBatch()) {
                 int n = crs.getRecordCount();
                 double[] fares = crs.getColumnReader("fare_amount").getDoubles();
