@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Performance
+- A filter on a `vortex.datetimeparts` timestamp column reassembles each chunk's values once and compares them in one pass, instead of rebuilding every row on its own, about 7× faster on a one-hour window over the NYC taxi pickups. ([#616](https://github.com/dfa1/vortex-java/pull/616))
 - A filtered scan copies the matching rows into flat arrays, as Rust's `filter` does, instead of reading them through a per-row index lookup, and allocates up to 11× less. ([#602](https://github.com/dfa1/vortex-java/issues/602))
 - Scanning an integer column with a dict layout folds its codes against the dictionary instead of expanding every row first, about 16% faster on a two-column taxi scan. ([#603](https://github.com/dfa1/vortex-java/pull/603))
 - Folding dict-encoded float columns and scan windows reads their buffers directly, about 3% faster on a two-column taxi scan. ([#600](https://github.com/dfa1/vortex-java/pull/600))

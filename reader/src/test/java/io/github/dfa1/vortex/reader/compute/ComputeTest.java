@@ -4,10 +4,13 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.LazyDateTimePartsLongArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
+import io.github.dfa1.vortex.reader.array.LazyRunEndLongArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.Mask;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -93,6 +96,118 @@ class ComputeTest {
                 assertThat(result.test(i)).as("row %d", i).isEqualTo(selected);
                 assertThat(Compute.matches(chunk, filter, i)).as("row %d", i).isEqualTo(selected);
             }
+        }
+    }
+
+    /// A `vortex.datetimeparts` timestamp column is compared after reassembling its parts once per
+    /// chunk, into a bitmap, rather than per row. The per-row [Compute#matches(Chunk, ScanFilter, long)]
+    /// is the oracle: both must select the same rows.
+    @Nested
+    class DateTimeParts {
+
+        private static final ColumnName TS = ColumnName.of("ts");
+        private static final int ROWS = 200;
+        private static final long UNITS_PER_SECOND = 1_000_000L;
+        private static final long UNITS_PER_DAY = 86_400L * UNITS_PER_SECOND;
+
+        /// 200 microsecond timestamps over four bitmap words: a run-end `days` part (three days of
+        /// 70, 70 and 60 rows, the shape real files take), varying seconds and subseconds.
+        private static LazyDateTimePartsLongArray timestamps() {
+            long[] seconds = new long[ROWS];
+            long[] subseconds = new long[ROWS];
+            for (int r = 0; r < ROWS; r++) {
+                seconds[r] = r * 397L % 86_400L;
+                subseconds[r] = r * 7_919L % UNITS_PER_SECOND;
+            }
+            Array days = new LazyRunEndLongArray(DType.I64, ROWS,
+                    ComputeArrays.longArray(ARENA, 19_737L, 19_738L, 19_739L),
+                    ComputeArrays.longArray(ARENA, 70L, 140L, 200L), 0L);
+            return new LazyDateTimePartsLongArray(TimestampDtype.of(false), ROWS, days,
+                    ComputeArrays.longArray(ARENA, seconds), ComputeArrays.longArray(ARENA, subseconds),
+                    UNITS_PER_DAY, UNITS_PER_SECOND);
+        }
+
+        /// Every seventh row null: a comparison never selects a null row.
+        private static Array nullableTimestamps() {
+            boolean[] valid = new boolean[ROWS];
+            for (int r = 0; r < ROWS; r++) {
+                valid[r] = r % 7 != 3;
+            }
+            return new MaskedArray(timestamps(), ComputeArrays.boolArray(ARENA, valid));
+        }
+
+        static Stream<Arguments> filters() {
+            LazyDateTimePartsLongArray ts = timestamps();
+            long at = ts.getLong(100);
+            long from = ts.getLong(60);
+            long to = ts.getLong(150);
+            return Stream.of(
+                    Arguments.of(named("eq", ScanFilter.eq(TS, at))),
+                    Arguments.of(named("neq", ScanFilter.neq(TS, at))),
+                    Arguments.of(named("lt", ScanFilter.lt(TS, at))),
+                    Arguments.of(named("lte", ScanFilter.lte(TS, at))),
+                    Arguments.of(named("gt", ScanFilter.gt(TS, at))),
+                    Arguments.of(named("gte", ScanFilter.gte(TS, at))),
+                    Arguments.of(named("between", new ScanFilter.Column(TS, new Predicate.Between(from, to)))),
+                    Arguments.of(named("window", ScanFilter.and(ScanFilter.gte(TS, from), ScanFilter.lt(TS, to)))),
+                    Arguments.of(named("nothing matches", ScanFilter.lt(TS, 0L))),
+                    // compared as doubles, not truncated to a long: `< at + 0.5` keeps the row at `at`
+                    Arguments.of(named("lt a fractional double", ScanFilter.lt(TS, at + 0.5))),
+                    Arguments.of(named("eq a fractional double", ScanFilter.eq(TS, at + 0.5))),
+                    Arguments.of(named("int operand", ScanFilter.gt(TS, Integer.MAX_VALUE))),
+                    Arguments.of(named("is null", ScanFilter.isNull(TS))));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("filters")
+        void selectsTheRowsMatchesSelects(ScanFilter filter) {
+            // Given
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.<Array>column(TS)).willReturn(timestamps());
+            given(chunk.rowCount()).willReturn((long) ROWS);
+
+            // When
+            LongPredicate sut = Compute.matcher(chunk, filter);
+
+            // Then
+            assertThat(LongStream.range(0, ROWS).filter(sut).boxed().toList())
+                    .isEqualTo(LongStream.range(0, ROWS).filter(i -> Compute.matches(chunk, filter, i)).boxed().toList());
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("filters")
+        void nullable_neverSelectsANullRowForAComparison(ScanFilter filter) {
+            // Given
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.<Array>column(TS)).willReturn(nullableTimestamps());
+            given(chunk.rowCount()).willReturn((long) ROWS);
+
+            // When
+            LongPredicate sut = Compute.matcher(chunk, filter);
+
+            // Then
+            assertThat(LongStream.range(0, ROWS).filter(sut).boxed().toList())
+                    .isEqualTo(LongStream.range(0, ROWS).filter(i -> Compute.matches(chunk, filter, i)).boxed().toList());
+        }
+
+        @Test
+        void window_selectsExactlyTheRowsInside() {
+            // Given a window from row 60's value (inclusive) to row 150's (exclusive); seconds wrap
+            // within a day, so the selected rows are those whose reassembled value falls inside
+            LazyDateTimePartsLongArray ts = timestamps();
+            long from = ts.getLong(60);
+            long to = ts.getLong(150);
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.<Array>column(TS)).willReturn(ts);
+            given(chunk.rowCount()).willReturn((long) ROWS);
+
+            // When
+            Mask result = Compute.matcher(chunk, ScanFilter.and(ScanFilter.gte(TS, from), ScanFilter.lt(TS, to)))
+                    .toMask(ROWS);
+
+            // Then
+            long expected = LongStream.range(0, ROWS).filter(i -> ts.getLong(i) >= from && ts.getLong(i) < to).count();
+            assertThat(result.trueCount()).isEqualTo(expected).isPositive();
         }
     }
 
