@@ -47,6 +47,8 @@ import java.util.function.Supplier;
 final class ExploreCommand {
 
     private static final String USAGE = "usage: explore [--serve | --html <out.html>] <file.vortex | http(s)://url>";
+    /// Draws the per-session URL token that keeps other local users off the served page.
+    private static final SecureRandom TOKENS = new SecureRandom();
 
     private ExploreCommand() {
     }
@@ -97,7 +99,7 @@ final class ExploreCommand {
             }
             String page = ExplorePage.render(title, handle.fileSize(), handle.layout().rowCount(), profiles);
             byte[] token = new byte[16];
-            new SecureRandom().nextBytes(token);
+            TOKENS.nextBytes(token);
             String path = "/" + HexFormat.of().formatHex(token) + "/";
             HttpServer server = serve(page, path, profiles.size(), analyze);
             URI url = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + path);

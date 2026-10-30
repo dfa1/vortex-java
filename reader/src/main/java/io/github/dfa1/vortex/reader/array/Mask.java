@@ -113,7 +113,9 @@ public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.Values {
         private final long[] words;
         private final int length;
         private final int trueCount;
+        @SuppressWarnings("java:S3077") // published whole after being built, never written after
         private volatile int[] indices;
+        @SuppressWarnings("java:S3077") // published whole after being built, never written after
         private volatile int[] slices;
 
         private Values(long[] words, int length, int trueCount) {
