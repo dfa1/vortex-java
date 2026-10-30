@@ -137,7 +137,7 @@ public record ColumnDistribution(
                     for (long i = 0; value != null && i < chunk.rowCount(); i++) {
                         double v = value.applyAsDouble(i);
                         // NaN would poison min/max; the histogram leaves it out too.
-                        if ((validity == null || validity.getBoolean(i)) && v == v) {
+                        if ((validity == null || validity.getBoolean(i)) && !Double.isNaN(v)) {
                             range[0] = Math.min(range[0], v);
                             range[1] = Math.max(range[1], v);
                         }
@@ -314,7 +314,7 @@ public record ColumnDistribution(
 
         private void bin(double v) {
             // NaN sits outside every bin; min/max skip it too.
-            if (v == v) {
+            if (!Double.isNaN(v)) {
                 bins[Math.clamp((long) ((v - lo) * scale), 0, BINS - 1)]++;
             }
         }

@@ -245,7 +245,7 @@ public final class SelectedArrays {
         for (int k = 0; k < rows.length; k++) {
             if (a.getBoolean(rows[k] + offset)) {
                 long at = (long) k >>> 3;
-                out.set(ValueLayout.JAVA_BYTE, at, (byte) (out.get(ValueLayout.JAVA_BYTE, at) | 1 << (k & 7)));
+                out.set(ValueLayout.JAVA_BYTE, at, (byte) ((out.get(ValueLayout.JAVA_BYTE, at) & 0xff) | 1 << (k & 7)));
             }
         }
         return out;
