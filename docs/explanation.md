@@ -117,26 +117,32 @@ had hidden.
 Both formats store all 19 columns; projection happens at read time. 3 warmup × 3 s,
 5 measurement × 5 s, 3 forks.
 
-Two Parquet variants are measured to isolate format cost from API overhead:
+Three Parquet variants are measured to isolate format cost from API overhead and threading:
 
-- **batch**: Hardwood's `ColumnReader.nextBatch()` + loop over `getDoubles()`/`getInts()` arrays — apples-to-apples with Vortex's
-  batch fold
+- **batch**: Hardwood's `ColumnReader.nextBatch()` + loop over `getDoubles()`/`getInts()` arrays, on
+  Hardwood's default decode pool, which is sized to the machine
+- **batch, 1 thread**: the same loop with a one-thread pool (`HardwoodContext.create(1)`). The Vortex
+  reads scan on the calling thread, so this is the like-for-like comparison
 - **row-by-row**: Hardwood's `RowReader.next()` + `getDouble("col")` per row — measures the full row-cursor overhead on top of
   format decode
 
-| Benchmark                                                                | ops/s        | vs Parquet batch         |
-|--------------------------------------------------------------------------|--------------|--------------------------|
-| `parquetRead` — batch, 1 col (`trip_distance`)                           | 279.7 ± 3.3  | baseline                 |
-| `parquetReadRowByRow` — row cursor, 1 col                                | 95.7 ± 0.8   | 0.34× (2.9× API penalty) |
-| `vortexRead` — 1 col (`trip_distance`)                                   | 274.7 ± 0.4  | 0.98×                    |
-| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 221.0 ± 2.1  | baseline                 |
-| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 52.9 ± 0.5   | 0.24× (4.2× API penalty) |
-| `vortexReadMultiColumn` — 2 cols                                         | 156.7 ± 0.3  | 0.71×                    |
+Measured 2026-10-30 on an Apple M5 Max (18 cores), JDK 25.0.5, Hardwood 1.1.0.Beta2.
 
-Hardwood's batch reads got much faster since the 2026-07-24 snapshot (`trip_distance` 172.7 →
-279.7, two columns 109.1 → 221.0), so single-column Vortex is now at parity rather than 1.58×
-ahead. Two-column `vortexReadMultiColumn` more than tripled (46.9 → 156.7) but still trails the
-two-column Parquet batch. Both Vortex columns are nullable, read as a `MaskedArray` whose values
+| Benchmark                                                                | ops/s        | vs Parquet batch, 1 thread |
+|--------------------------------------------------------------------------|--------------|----------------------------|
+| `parquetRead` — batch, 1 col (`trip_distance`)                           | 349.9 ± 1.5  | 1.56× (~2.9 cores busy)    |
+| `parquetReadSingleThread` — batch, 1 thread, 1 col                       | 224.5 ± 14.0 | baseline                   |
+| `parquetReadRowByRow` — row cursor, 1 col                                | 108.9 ± 1.7  | 0.49×                      |
+| `vortexRead` — 1 col (`trip_distance`)                                   | 288.6 ± 8.8  | **1.29×**                  |
+| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 319.9 ± 3.3  | 2.37× (~4.4 cores busy)    |
+| `parquetReadMultiColumnSingleThread` — batch, 1 thread, 2 cols           | 135.2 ± 3.5  | baseline                   |
+| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 61.8 ± 1.6   | 0.46×                      |
+| `vortexReadMultiColumn` — 2 cols                                         | 191.9 ± 6.4  | **1.42×**                  |
+
+On its default pool Hardwood is ahead on wall time by using more cores: per scan it spends 8.5 ms
+of CPU on one column and 15.8 ms on two, against Vortex's 3.8 ms and 6.2 ms (process CPU time,
+outside JMH). Even with a one-thread pool it keeps about 1.5 cores busy, the calling thread
+consuming batches while the worker decodes the next. Both Vortex columns are nullable, read as a `MaskedArray` whose values
 the benchmark folds: `PULocationID` as a global dictionary of 260 values, `fare_amount` as ALP
 in 131 072-row chunks.
 
@@ -537,11 +543,13 @@ constraints.
 
 See the [benchmark tables](#benchmarks) for numbers. Summary:
 
-- **Single-column scan**: at parity with Parquet batch (0.98×) since Hardwood's batch reads
-  got faster; Vortex was 1.58× ahead in the 2026-07-24 snapshot.
-- **Multi-column scan**: Vortex trails Parquet batch, 0.71× on two nullable taxi columns:
-  one a global dictionary, on by default
+- **Single-column scan**: 1.29× faster than Parquet batch on one thread. Hardwood's default
+  decode pool is 1.21× faster on wall time, on about three cores; Vortex scans on one.
+- **Multi-column scan**: 1.42× faster than Parquet batch on one thread, on two nullable taxi
+  columns: one a global dictionary, on by default
   ([ADR 0021](../adr/0021-cardinality-bounded-global-dict-buffering.md)), the other ALP.
+  Hardwood's default pool is 1.67× faster on wall time, on about four cores, spending 2.5× the
+  CPU.
 - **Filtered scan (zone-map pruning)**: Vortex skips entire chunks when the Zoned
   min/max rules out a predicate. Parquet does the same at row-group granularity, but
   Vortex chunks are smaller (131 072 rows vs Parquet's typical 1 M row groups), so

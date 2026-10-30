@@ -60,7 +60,7 @@ class DocsConsistencyTest {
             "Runtime", "Math", "Integer", "Long", "Double",
             // Hardwood parquet API, cited in the benchmark comparison (explanation.md) and the
             // ParquetExporter/ExportOptions reference (reference.md)
-            "ColumnReader", "RowReader", "WriterConfig");
+            "ColumnReader", "RowReader", "HardwoodContext", "WriterConfig");
 
     private static Path repoRoot;
     private static List<Path> livingDocs;
