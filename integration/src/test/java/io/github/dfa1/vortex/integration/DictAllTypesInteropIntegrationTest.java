@@ -60,6 +60,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 /// vortex-jni writes a low-cardinality column of every Arrow type it accepts, dict-encoding the ones
 /// Rust supports; vortex-java must read each one back and rebuild the exact values.
@@ -232,6 +233,11 @@ class DictAllTypesInteropIntegrationTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("cases")
     void jniDictColumn_javaRebuildsValues(Case c, @TempDir Path tmp) throws IOException {
+        // vortex-jni 0.90 keeps min/max for nested columns (vortex-data/vortex#9775), and its
+        // writer's close() cannot hand a uuid's fixed_size_list(u8)[16] statistic back to Java
+        // ("cannot return nested scalar write statistic", vortex-jni/src/writer.rs)
+        assumeFalse(c.name().equals("uuid"), "vortex-jni 0.90 cannot close a writer with a uuid column");
+
         // Given — ROWS rows cycling through 4 distinct values, written by vortex-jni
         Path file = tmp.resolve("dict.vortex");
         writeJni(file, c);
