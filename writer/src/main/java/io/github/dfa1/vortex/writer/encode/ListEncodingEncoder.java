@@ -48,7 +48,7 @@ public final class ListEncodingEncoder implements EncodingEncoder {
         // fallback encoder (which expects dense values, not a NullableData wrapper).
         EncodingEncoder elemEncoding = (elements instanceof NullableData && !(elementType instanceof DType.Extension))
                 ? new MaskedEncodingEncoder()
-                : findEncoding(elementType);
+                : FallbackEncodings.require(FALLBACK, elementType);
         EncodeResult elemResult = elemEncoding.encode(elementType, elements, ctx);
 
         List<EncodedBuffer> allBuffers = new ArrayList<>(elemResult.encodedBuffers());
@@ -75,14 +75,5 @@ public final class ListEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{elemNode, offsetsNode},
                 new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
-    }
-
-    private static EncodingEncoder findEncoding(DType dtype) {
-        for (EncodingEncoder enc : FALLBACK) {
-            if (enc.accepts(dtype)) {
-                return enc;
-            }
-        }
-        throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
     }
 }

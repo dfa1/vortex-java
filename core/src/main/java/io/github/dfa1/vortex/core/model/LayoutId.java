@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.core.model;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -95,16 +94,7 @@ public sealed interface LayoutId permits LayoutId.WellKnown, LayoutId.Custom {
         /// @throws IllegalArgumentException if `id` is blank, contains an ISO control character, or
         ///                                  matches a [WellKnown] wire string
         public Custom {
-            Objects.requireNonNull(id, "id");
-            if (id.isBlank()) {
-                throw new IllegalArgumentException("layout id must not be blank");
-            }
-            for (int i = 0; i < id.length(); i++) {
-                if (Character.isISOControl(id.charAt(i))) {
-                    throw new IllegalArgumentException(
-                            "layout id contains control character U+%04X".formatted((int) id.charAt(i)));
-                }
-            }
+            Ids.requireValid(id, "layout");
             WellKnown wellKnown = WellKnown.byId(id);
             if (wellKnown != null) {
                 throw new IllegalArgumentException(

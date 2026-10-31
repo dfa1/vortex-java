@@ -5,15 +5,11 @@ import io.github.dfa1.vortex.core.error.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Objects;
 import java.util.Optional;
 
-import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
-import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
-import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 
 /// Fallback [Array] for dtypes that lack a dedicated concrete subtype.
 ///
@@ -135,32 +131,9 @@ public final class GenericArray implements Array {
         if (width != 1 && width != 2 && width != 4 && width != 8 && width != 16 && width != 32) {
             throw new VortexException("getDecimal: unsupported element width " + width + " bytes");
         }
-        return readSignedLe(buf, i * width, width);
+        return DecimalMantissas.readSignedLe(buf, i * width, width);
     }
 
-
-    private static BigInteger readSignedLe(MemorySegment buf, long offset, int width) {
-        return switch (width) {
-            case 1 -> BigInteger.valueOf(buf.get(ValueLayout.JAVA_BYTE, offset));
-            case 2 -> BigInteger.valueOf(buf.get(LE_SHORT, offset));
-            case 4 -> BigInteger.valueOf(buf.get(LE_INT, offset));
-            case 8 -> BigInteger.valueOf(buf.get(LE_LONG, offset));
-            case 16, 32 -> readWideSignedLe(buf, offset, width);
-            default -> throw new VortexException("readSignedLe: unsupported width " + width);
-        };
-    }
-
-    private static BigInteger readWideSignedLe(MemorySegment buf, long offset, int width) {
-        // Two's-complement i128/i256 on disk in little-endian; BigInteger ingests big-endian.
-        // No SIMD intrinsic for 16- or 32-byte signed integers, so we materialize into a heap
-        // buffer here. Only fires for decimal(>18, _) — narrow-precision fast paths above
-        // stay allocation-free.
-        byte[] be = new byte[width];
-        for (int k = 0; k < width; k++) {
-            be[width - 1 - k] = buf.get(ValueLayout.JAVA_BYTE, offset + k);
-        }
-        return new BigInteger(be);
-    }
 
     /// Returns the child array at position `i`.
     ///
