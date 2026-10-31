@@ -2,9 +2,6 @@ package io.github.dfa1.vortex.cli.tui.term;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintStream;
-import java.time.Duration;
-import java.util.Optional;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
@@ -22,8 +19,7 @@ import java.lang.invoke.MethodHandle;
 ///
 /// `GetConsoleScreenBufferInfo` drives [#size()]; we report the visible
 /// window rect, not the scrollback buffer.
-@SuppressWarnings("java:S106") // terminal driver: writes control sequences straight to stdout
-public final class WindowsTerminal implements Terminal {
+public final class WindowsTerminal extends RawModeTerminal {
 
     private static final long STD_INPUT_HANDLE = -10L;
     private static final long STD_OUTPUT_HANDLE = -11L;
@@ -67,27 +63,20 @@ public final class WindowsTerminal implements Terminal {
                     ValueLayout.ADDRESS,   // hConsoleInput
                     ValueLayout.ADDRESS)); // lpcNumberOfEvents
 
-    private final Arena arena;
     private final MemorySegment stdinHandle;
     private final MemorySegment stdoutHandle;
     private final int savedInMode;
     private final int savedOutMode;
-    private final PrintStream out;
     private final InputStream stdinStream;
-    private final Thread shutdownHook;
-    private boolean closed;
 
     private WindowsTerminal(Arena arena, MemorySegment stdinHandle, MemorySegment stdoutHandle,
             int savedInMode, int savedOutMode) {
-        this.arena = arena;
+        super(arena, "windows-term-restore");
         this.stdinHandle = stdinHandle;
         this.stdoutHandle = stdoutHandle;
         this.savedInMode = savedInMode;
         this.savedOutMode = savedOutMode;
-        this.out = System.out;
         this.stdinStream = new ConsoleInputStream();
-        this.shutdownHook = new Thread(this::restore, "windows-term-restore");
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
 
     /// Enables VT processing on stdout and VT input on stdin.
@@ -114,10 +103,7 @@ public final class WindowsTerminal implements Terminal {
             }
 
             WindowsTerminal term = new WindowsTerminal(arena, stdin, stdout, inMode, outMode);
-            term.out.print(Ansi.ENTER_ALT_SCREEN);
-            term.out.print(Ansi.HIDE_CURSOR);
-            term.out.print(Ansi.CLEAR_SCREEN);
-            term.out.flush();
+            term.enter();
             return term;
         } catch (Throwable t) {
             arena.close();
@@ -136,10 +122,10 @@ public final class WindowsTerminal implements Terminal {
         try {
             int rc = (int) GET_CONSOLE_SCREEN_BUFFER_INFO.invokeExact(stdoutHandle, info);
             if (rc == 0) {
-                return new Size(24, 80);
+                return DEFAULT_SIZE;
             }
         } catch (Throwable _) {
-            return new Size(24, 80);
+            return DEFAULT_SIZE;
         }
         int left = info.get(ValueLayout.JAVA_SHORT, 10);
         int top = info.get(ValueLayout.JAVA_SHORT, 12);
@@ -148,44 +134,21 @@ public final class WindowsTerminal implements Terminal {
         int rows = bottom - top + 1;
         int cols = right - left + 1;
         if (rows <= 0 || cols <= 0) {
-            return new Size(24, 80);
+            return DEFAULT_SIZE;
         }
         return new Size(rows, cols);
     }
 
     @Override
-    public void write(String s) {
-        out.print(s);
+    InputStream input() {
+        return stdinStream;
     }
 
     @Override
-    public void flush() {
-        out.flush();
-    }
-
-    @Override
-    public Key readKey() throws IOException {
-        return KeyDecoder.next(stdinStream);
-    }
-
-    @Override
-    public Optional<Key> readKey(Duration timeout) throws IOException {
-        return KeyDecoder.nextWithTimeout(stdinStream, timeout);
-    }
-
-    @Override
-    public void close() {
-        if (closed) {
-            return;
-        }
-        closed = true;
-        try {
-            Runtime.getRuntime().removeShutdownHook(shutdownHook);
-        } catch (IllegalStateException _) {
-            // JVM already shutting down.
-        }
-        restore();
-        arena.close();
+    void restoreMode() throws Throwable {
+        MemorySegment stdin = invokeHandle(GET_STD_HANDLE, STD_INPUT_HANDLE);
+        SET_CONSOLE_MODE.invokeExact(stdin, savedInMode);
+        SET_CONSOLE_MODE.invokeExact(stdoutHandle, savedOutMode);
     }
 
     /// Reads bytes directly from the Windows console handle via `ReadFile`,
@@ -219,20 +182,6 @@ public final class WindowsTerminal implements Terminal {
             } catch (Throwable _) {
                 return 0;
             }
-        }
-    }
-
-    private void restore() {
-        try {
-            out.print(Ansi.SHOW_CURSOR);
-            out.print(Ansi.EXIT_ALT_SCREEN);
-            out.print(Ansi.RESET);
-            out.flush();
-            MemorySegment stdin = invokeHandle(GET_STD_HANDLE, STD_INPUT_HANDLE);
-            SET_CONSOLE_MODE.invokeExact(stdin, savedInMode);
-            SET_CONSOLE_MODE.invokeExact(stdoutHandle, savedOutMode);
-        } catch (Throwable _) {
-            // Best-effort: JVM is exiting; nothing useful to do.
         }
     }
 

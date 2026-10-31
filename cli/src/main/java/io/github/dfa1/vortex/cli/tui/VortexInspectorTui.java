@@ -567,19 +567,26 @@ public final class VortexInspectorTui {
         }
 
         private DataState loadDictPreview(InspectorTree.Node dictNode) {
-            DataState existing = dictCache.get(dictNode);
+            return loadNodePreview(dictCache, dictNode, this::runDictLoad);
+        }
+
+        /// The cached preview of `node`, starting its load once (on the worker, or inline without
+        /// one) and reporting it pending until the load stores a result in `cache`.
+        private DataState loadNodePreview(Map<InspectorTree.Node, DataState> cache, InspectorTree.Node node,
+                                          java.util.function.Consumer<InspectorTree.Node> load) {
+            DataState existing = cache.get(node);
             if (existing != null) {
                 return existing;
             }
-            if (dictCache.putIfAbsent(dictNode, DataState.PENDING) != null) {
-                return dictCache.get(dictNode);
+            if (cache.putIfAbsent(node, DataState.PENDING) != null) {
+                return cache.get(node);
             }
             if (worker == null) {
-                runDictLoad(dictNode);
+                load.accept(node);
             } else {
-                worker.submit(() -> runDictLoad(dictNode));
+                worker.submit(() -> load.accept(node));
             }
-            return dictCache.getOrDefault(dictNode, DataState.PENDING);
+            return cache.getOrDefault(node, DataState.PENDING);
         }
 
         private void runDictLoad(InspectorTree.Node dictNode) {
@@ -629,19 +636,7 @@ public final class VortexInspectorTui {
         }
 
         private DataState loadStatsPreview(InspectorTree.Node anchor) {
-            DataState existing = statsCache.get(anchor);
-            if (existing != null) {
-                return existing;
-            }
-            if (statsCache.putIfAbsent(anchor, DataState.PENDING) != null) {
-                return statsCache.get(anchor);
-            }
-            if (worker == null) {
-                runStatsLoad(anchor);
-            } else {
-                worker.submit(() -> runStatsLoad(anchor));
-            }
-            return statsCache.getOrDefault(anchor, DataState.PENDING);
+            return loadNodePreview(statsCache, anchor, this::runStatsLoad);
         }
 
         private void runStatsLoad(InspectorTree.Node anchor) {

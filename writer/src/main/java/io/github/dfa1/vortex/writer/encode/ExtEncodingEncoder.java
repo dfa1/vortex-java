@@ -44,16 +44,8 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
         if (data instanceof NullableData) {
             childResult = new MaskedEncodingEncoder().encode(storage, data, ctx);
         } else {
-            EncodingEncoder storageEncoder = null;
-            for (EncodingEncoder enc : STORAGE_FALLBACK) {
-                if (enc.accepts(storage)) {
-                    storageEncoder = enc;
-                    break;
-                }
-            }
-            if (storageEncoder == null) {
-                throw new VortexException(EncodingId.VORTEX_EXT, "no storage encoder for " + storage);
-            }
+            EncodingEncoder storageEncoder = FallbackEncodings.find(STORAGE_FALLBACK, storage)
+                    .orElseThrow(() -> new VortexException(EncodingId.VORTEX_EXT, "no storage encoder for " + storage));
             childResult = storageEncoder.encode(storage, data, ctx);
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[]{childResult.rootNode()}, new int[0]);
