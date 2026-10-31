@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.writer;
+package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexHttpReader;
+import io.github.dfa1.vortex.writer.VortexWriter;
+import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,10 +39,11 @@ import static org.mockito.BDDMockito.given;
 /// segment just to check whether it can be skipped — otherwise "checking" a chunk costs as much
 /// over the network as simply not pruning it at all.
 ///
-/// Lives here (not in `reader`) because building the fixture needs [VortexWriter]; `vortex-writer`
-/// already depends on `vortex-reader` in test scope for round-trip assertions like this one.
+/// Lives here (not in `reader`) because building the fixture needs [VortexWriter], and not in
+/// `writer` because the writer module does not read `java.net.http`, which this module reaches
+/// through the reader.
 @ExtendWith(MockitoExtension.class)
-class WriterZoneMapHttpPruningTest {
+class ZoneMapHttpPruningIntegrationTest {
 
     @Mock
     private HttpClient client;

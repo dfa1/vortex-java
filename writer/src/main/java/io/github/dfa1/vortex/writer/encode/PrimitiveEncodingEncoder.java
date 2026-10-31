@@ -13,6 +13,8 @@ import java.lang.reflect.Array;
 import java.util.OptionalLong;
 
 /// Write-only encoder for `vortex.primitive` — raw little-endian primitive arrays.
+// The stat helpers return the generated ProtoScalarValue, qualified-exported by core: see EncodeResult.
+@SuppressWarnings("exports")
 public final class PrimitiveEncodingEncoder implements EncodingEncoder {
 
     /// Creates the encoder.

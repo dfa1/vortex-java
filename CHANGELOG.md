@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Folding dict-encoded float columns and scan windows reads their buffers directly, about 3% faster on a two-column taxi scan. ([#600](https://github.com/dfa1/vortex-java/pull/600))
 
 ### Added
+- `core`, `fsst`, `reader`, `writer`, `csv`, `jdbc` and `inspector` ship as named JPMS modules (`io.github.dfa1.vortex.*`), and `parquet` and `calcite` declare a stable `Automatic-Module-Name`. ([#538](https://github.com/dfa1/vortex-java/pull/538))
 - A CSV import schema can declare any integer type from `I8` to `U64`, range-checked per value, and `F32`; an unsupported type fails in `withSchema` instead of at the first chunk. ([#593](https://github.com/dfa1/vortex-java/pull/593))
 - `ScanIterator.chunkStats` is public: each chunk's own array stats, which carry a string column's exact min/max where the zone map only bounds it. ([#608](https://github.com/dfa1/vortex-java/pull/608))
 - `vortex explore` shows what is in a file: null %, min/max and a zone sparkline per column at once, then each column's total, mean, distinct count and value counts or histogram, served to the browser or written to one HTML file with `--html`. ([#608](https://github.com/dfa1/vortex-java/pull/608))

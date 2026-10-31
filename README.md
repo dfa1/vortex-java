@@ -121,7 +121,7 @@ If you are an AI agent asked to convert data to Vortex with this library, these 
 would otherwise guess. Working *on* this repository instead? Read [AGENTS.md](AGENTS.md).
 
 - **Java 25+.** The library uses FFM, not JNI: run with `--enable-native-access=ALL-UNNAMED`
-  (the CLI jar's manifest already sets it).
+  (the CLI jar's manifest already sets it), or `--enable-native-access=io.github.dfa1.zstd` on the module path.
 - **No code needed for a one-off conversion.** Download `vortex-cli-0.18.1-all.jar` from
   [Maven Central](https://central.sonatype.com/artifact/io.github.dfa1.vortex/vortex-cli) and run
   `java -jar vortex-cli-0.18.1-all.jar import data.csv data.vortex`. Add `--delimiter ';'` for

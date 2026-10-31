@@ -38,6 +38,6 @@ the decision shipped in (blank = not yet shipped).
 | 0021 | Cardinality-bounded global dict buffering     | Accepted  |          |
 | 0022 | Extract FSST into a standalone module, ported faithfully from the paper | Accepted |          |
 | 0023 | Adopt the Vortex editions model as a client-side write/read policy | Accepted |          |
-| 0024 | JPMS adoption for core/reader/writer          | Proposed  |          |
+| 0024 | JPMS adoption for core/reader/writer          | Accepted  |          |
 | 0025 | Centralize zone-map MIN/MAX stats computation in the writer | Accepted |          |
 | 0026 | FSST per-row lazy decode                      | Accepted  |          |

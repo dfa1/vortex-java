@@ -11,8 +11,9 @@ import java.util.List;
 
 /// Utilities for wrapping encode output into a [DecodeContext] for round-trip tests.
 ///
-/// Public so writer/ test trees can reuse via the reader test-jar.
-public final class DecodeTestHelper {
+/// Package-private: its signatures carry reader types, which the writer module only sees on the test
+/// classpath (an unnamed module), and a public one would fail the `exports` lint.
+final class DecodeTestHelper {
 
     private DecodeTestHelper() {
     }
@@ -24,7 +25,7 @@ public final class DecodeTestHelper {
     /// @param dtype    decoded dtype
     /// @param registry registry used for nested decode dispatch
     /// @return decode context ready for [EncodingDecoder#decode]
-    public static DecodeContext toDecodeContext(
+    static DecodeContext toDecodeContext(
             EncodeResult result, long rowCount, DType dtype, ReadRegistry registry
     ) {
         List<MemorySegment> buffers = result.buffers();
