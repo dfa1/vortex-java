@@ -122,7 +122,7 @@ class ForcedEncodingsNullableInteropIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, options)) {
             sut.writeChunk(Map.of(ID, ids, VALUE,
-                    new NullableData(ListInteropIntegrationTest.pack(element, expected), validity)));
+                    new NullableData(element.pack(expected), validity)));
         }
 
         // When

@@ -183,7 +183,7 @@ class FixedSizeListOfFixedSizeListsInteropIntegrationTest {
                 for (int i = 0; i < elementValidity.length; i++) {
                     elementValidity[i] = values.get(i) != null;
                 }
-                Object leaves = pack(element, values);
+                Object leaves = element.pack(values);
                 Object leafColumn = elements.nullableType() ? new NullableData(leaves, elementValidity) : leaves;
                 Object innerLists = new FixedSizeListData(leafColumn, (long) CHUNK_ROWS * outerSize);
                 Object innerColumn = inner != Nulls.NONE_NULL ? new NullableData(innerLists, innerValidity)
@@ -193,52 +193,6 @@ class FixedSizeListOfFixedSizeListsInteropIntegrationTest {
                         LISTS, outer != Nulls.NONE_NULL ? new NullableData(outerLists, outerValidity) : outerLists));
             }
         }
-    }
-
-    /// The dense array of `values`, with the element's zero (or empty) where one is null.
-    private static Object pack(Element element, List<Object> values) {
-        int n = values.size();
-        return switch (element) {
-            case INT -> {
-                int[] out = new int[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (Integer) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-            case DOUBLE -> {
-                double[] out = new double[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (Double) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-            case LONG -> {
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (Long) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-            case BOOL -> {
-                boolean[] out = new boolean[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (Boolean) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-            case UTF8 -> {
-                String[] out = new String[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (String) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-        };
-    }
-
-    private static Object orZero(Element element, Object value) {
-        return value == null ? element.zero() : value;
     }
 
     @SuppressWarnings("unchecked")

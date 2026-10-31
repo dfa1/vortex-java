@@ -103,6 +103,53 @@ class FixedSizeListInteropIntegrationTest {
             };
         }
 
+        /// The dense array of `values`, zero (or empty) where an element is null.
+        Object pack(List<Object> values) {
+            int n = values.size();
+            return switch (this) {
+                case INT -> {
+                    int[] out = new int[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (Integer) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+                case DOUBLE -> {
+                    double[] out = new double[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (Double) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+                case LONG -> {
+                    long[] out = new long[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (Long) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+                case BOOL -> {
+                    boolean[] out = new boolean[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (Boolean) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+                case UTF8 -> {
+                    String[] out = new String[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (String) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+            };
+        }
+
+        /// `value`, or this element's zero (or empty) value when it is null.
+        Object orZero(Object value) {
+            return value == null ? zero() : value;
+        }
+
         /// The flat elements of `rows` consecutive lists starting at `firstRow`.
         Object flat(long firstRow, int rows, int size) {
             return switch (this) {

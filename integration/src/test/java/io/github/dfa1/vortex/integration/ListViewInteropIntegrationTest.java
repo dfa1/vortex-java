@@ -178,7 +178,7 @@ class ListViewInteropIntegrationTest {
                 for (int i = 0; i < elementValidity.length; i++) {
                     elementValidity[i] = values.get(i) != null;
                 }
-                Object packed = ListInteropIntegrationTest.pack(element, values);
+                Object packed = element.pack(values);
                 Object elements = elementNulls.nullableType() ? new NullableData(packed, elementValidity) : packed;
                 Object lists = new ListViewData(elements, offsets, sizes, CHUNK_ROWS);
                 sut.writeChunk(Map.of(ID, ids, LISTS, nullableLists ? new NullableData(lists, listValidity) : lists));
