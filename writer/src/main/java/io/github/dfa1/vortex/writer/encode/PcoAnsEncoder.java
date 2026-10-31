@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.PcoAns;
+
 /// tANS encode table — port of `pco/src/ans/encoding.rs` and `spec.rs`.
 ///
 /// State is kept in Rust convention: `state ∈ [tableSize, 2*tableSize)`.
@@ -58,7 +60,7 @@ final class PcoAnsEncoder {
         }
 
         int[] nextSt = new int[start];
-        int[] stateSymbols = spreadStateSymbols(weights, tableSize);
+        int[] stateSymbols = PcoAns.spreadStateSymbols(weights, tableSize);
         for (int stateIdx = 0; stateIdx < tableSize; stateIdx++) {
             nextSt[firstIdx[stateSymbols[stateIdx]]++] = tableSize + stateIdx;
         }
@@ -93,23 +95,5 @@ final class PcoAnsEncoder {
     /// @return 0-based state index (= `state - tableSize`)
     int toStateIdx(int state) {
         return state - tableSize;
-    }
-
-    // Port of PcoTansDecoder.spreadStateSymbols (duplicated: writer cannot depend on reader).
-    private static int[] spreadStateSymbols(int[] weights, int tableSize) {
-        int[] stateSymbols = new int[tableSize];
-        int stride = (3 * tableSize) / 5;
-        if (stride % 2 == 0) {
-            stride++;
-        }
-        int modMask = tableSize - 1;
-        int step = 0;
-        for (int sym = 0; sym < weights.length; sym++) {
-            for (int k = 0; k < weights[sym]; k++) {
-                stateSymbols[(stride * step) & modMask] = sym;
-                step++;
-            }
-        }
-        return stateSymbols;
     }
 }
