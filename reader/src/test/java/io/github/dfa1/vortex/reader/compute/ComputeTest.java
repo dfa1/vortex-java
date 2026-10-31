@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LazyDateTimePartsLongArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.LazyRunEndLongArray;
@@ -16,6 +17,7 @@ import io.github.dfa1.vortex.reader.array.Mask;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
+import io.github.dfa1.vortex.reader.array.OffsetLongArray;
 import io.github.dfa1.vortex.reader.array.SelectedArrays;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinDictArray;
@@ -208,6 +210,41 @@ class ComputeTest {
             // Then
             long expected = LongStream.range(0, ROWS).filter(i -> ts.getLong(i) >= from && ts.getLong(i) < to).count();
             assertThat(result.trueCount()).isEqualTo(expected).isPositive();
+        }
+
+        /// The other shapes a timestamp filter column reaches: a scan window over a flat the scan
+        /// reassembled once (a column whose chunks span several windows), a window over the lazy
+        /// parts, a flat column, and a constant column.
+        static Stream<Arguments> shapes() {
+            LazyDateTimePartsLongArray ts = timestamps();
+            DType dtype = ts.dtype();
+            MemorySegment flat = ts.materialize(ARENA);
+            MemorySegment shared = ARENA.allocate((ROWS + 50) * 8L, 8);
+            MemorySegment.copy(flat, 0, shared, 50 * 8L, ROWS * 8L);
+            return Stream.of(
+                    named("scan window over a flat",
+                            new OffsetLongArray(dtype, ROWS, new MaterializedLongArray(dtype, ROWS + 50, shared), 50)),
+                    named("scan window over the parts", new OffsetLongArray(dtype, ROWS - 50, ts, 50)),
+                    named("flat", new MaterializedLongArray(dtype, ROWS, flat)),
+                    named("constant", new LazyConstantLongArray(dtype, ROWS, ts.getLong(100))))
+                    .flatMap(shape -> filters().map(filter -> Arguments.of(shape, filter.get()[0])));
+        }
+
+        @ParameterizedTest(name = "{0}: {1}")
+        @MethodSource("shapes")
+        void everyShape_selectsTheRowsMatchesSelects(Array column, ScanFilter filter) {
+            // Given
+            Chunk chunk = mock(Chunk.class);
+            given(chunk.<Array>column(TS)).willReturn(column);
+            given(chunk.rowCount()).willReturn(column.length());
+
+            // When
+            LongPredicate sut = Compute.matcher(chunk, filter);
+
+            // Then
+            assertThat(LongStream.range(0, column.length()).filter(sut).boxed().toList())
+                    .isEqualTo(LongStream.range(0, column.length())
+                            .filter(i -> Compute.matches(chunk, filter, i)).boxed().toList());
         }
     }
 

@@ -11,7 +11,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
-import io.github.dfa1.vortex.reader.array.LazyDateTimePartsLongArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.Mask;
 import io.github.dfa1.vortex.reader.array.VarBinDictArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
@@ -443,9 +443,11 @@ final class FusedFilterAggregate {
                 return longLeaf(data, validity, predicate);
             }
         }
-        if (data instanceof LazyDateTimePartsLongArray parts && isComparisonLeaf(predicate)
-                && integralOperands(predicate) && parts.length() <= Integer.MAX_VALUE) {
-            return dateTimePartsLeaf(parts, validity, predicate);
+        // A timestamp column, and any other extension over i64 storage, compares as signed longs.
+        if (data instanceof LongArray longs && !(data.dtype() instanceof DType.Primitive)
+                && isComparisonLeaf(predicate) && integralOperands(predicate)
+                && longs.length() <= Integer.MAX_VALUE) {
+            return extensionLongLeaf(longs, validity, predicate);
         }
         LongPredicate generic = i -> PredicateEvaluator.evaluate(column, i, predicate);
         if (data instanceof VarBinDictArray dict) {
@@ -789,26 +791,27 @@ final class FusedFilterAggregate {
         };
     }
 
-    /// Builds a comparison leaf over a `vortex.datetimeparts` column, comparing the reassembled
-    /// storage values as the per-row evaluator does. The values are reassembled once, column-wise
-    /// ([LazyDateTimePartsLongArray#materialize(java.lang.foreign.SegmentAllocator)]), and compared in
-    /// one pass into a bitmap: a per-row read re-resolves every child position, a binary search per
-    /// row for a run-end `days` child, which dominated a filtered scan of real timestamp columns.
+    /// Builds a comparison leaf over an extension column with `i64` storage, such as a timestamp,
+    /// comparing the storage values as signed longs, as the per-row evaluator does
+    /// ([Compare#values(Object, Object, DType)] for a non-primitive dtype). The values are read once
+    /// into a flat segment and compared in one pass into a bitmap: zero-copy for a flat column or a
+    /// scan window over one, column-wise for a `vortex.datetimeparts` column (`LazyDateTimePartsLongArray`),
+    /// whose per-row read re-resolves every child position, a binary search per row for a run-end
+    /// `days` child.
     ///
-    /// @param parts     the datetimeparts filter array
+    /// @param longs     the unwrapped filter array
     /// @param validity  the filter validity bitmap, or `null` when every row is valid
     /// @param predicate the comparison leaf
     /// @return the selected rows as a bitmap; a null row never matches a comparison
-    private static LongPredicate dateTimePartsLeaf(LazyDateTimePartsLongArray parts, BoolArray validity,
-                                                   Predicate predicate) {
+    private static LongPredicate extensionLongLeaf(LongArray longs, BoolArray validity, Predicate predicate) {
         PrimitiveFilter.LongRange range = PrimitiveFilter.lowerLong(predicate, 0L);
         long lo = range.lo();
         long hi = range.hi();
         long negate = range.negate() ? 1L : 0L;
-        int n = (int) parts.length();
+        int n = (int) longs.length();
         long[] bits = new long[(n + 63) >>> 6];
         try (Arena scratch = Arena.ofConfined()) {
-            MemorySegment values = parts.materialize(scratch);
+            MemorySegment values = longs.segmentIfPresent().orElseGet(() -> longs.materialize(scratch));
             for (int i = 0; i < n; i++) {
                 long v = values.getAtIndex(VortexFormat.LE_LONG, i);
                 long match = ((lo <= v & v <= hi) ? 1L : 0L) ^ negate;
