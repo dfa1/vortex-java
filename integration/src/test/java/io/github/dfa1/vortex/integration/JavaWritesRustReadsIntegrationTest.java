@@ -2259,7 +2259,7 @@ class JavaWritesRustReadsIntegrationTest {
             assertThat(tree.root().children())
                     .filteredOn(n -> n.fieldName().equals(java.util.Optional.of("b")))
                     .singleElement()
-                    .satisfies(n -> assertThat(hasDictLayout(n)).as("Binary column is a dict layout").isTrue());
+                    .satisfies(n -> assertThat(EncodingTrees.hasDictLayout(n)).as("Binary column is a dict layout").isTrue());
         }
         List<Object> full = readColumnFiltered(file, "b", Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(0L)));
@@ -2328,18 +2328,6 @@ class JavaWritesRustReadsIntegrationTest {
             }
         }
         return null;
-    }
-
-    private static boolean hasDictLayout(io.github.dfa1.vortex.inspect.InspectorTree.Node node) {
-        if (node.layout().isDict()) {
-            return true;
-        }
-        for (var child : node.children()) {
-            if (hasDictLayout(child)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Test

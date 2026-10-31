@@ -252,7 +252,7 @@ class DictAllTypesInteropIntegrationTest {
         // Then — Rust dict-encoded exactly the types it supports, and every row matches
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             InspectorTree tree = InspectorTree.build(vf);
-            assertThat(hasDictLayout(tree.root()) || tree.usedEncodings().contains("vortex.dict"))
+            assertThat(EncodingTrees.hasDictLayout(tree.root()) || tree.usedEncodings().contains("vortex.dict"))
                     .as("vortex-jni dict-encoded %s (encodings %s)", c.field().getType(), tree.usedEncodings())
                     .isEqualTo(c.rustDicts());
         }
@@ -291,18 +291,6 @@ class DictAllTypesInteropIntegrationTest {
             rows.forEachRemaining(row -> out.add(row.getField(0)));
         }
         return out;
-    }
-
-    private static boolean hasDictLayout(InspectorTree.Node node) {
-        if (node.layout().isDict()) {
-            return true;
-        }
-        for (InspectorTree.Node child : node.children()) {
-            if (hasDictLayout(child)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static Case primitive(String name, ArrowType type, Setter setter, String... expected) {

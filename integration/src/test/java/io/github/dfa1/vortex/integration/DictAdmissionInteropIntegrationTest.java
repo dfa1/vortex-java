@@ -7,8 +7,6 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.inspect.InspectorTree;
-import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.apache.arrow.c.ArrowArray;
@@ -92,13 +90,13 @@ class DictAdmissionInteropIntegrationTest {
         Path jniFile = tmp.resolve("jni.vortex");
         Path javaFile = tmp.resolve("java.vortex");
         writeWithJni(jniFile, kind, draws, nullEvery);
-        boolean expected = hasDictLayout(jniFile);
+        boolean expected = EncodingTrees.hasDictLayout(jniFile);
 
         // When
         writeWithJava(javaFile, kind, draws, nullEvery);
 
         // Then
-        assertThat(hasDictLayout(javaFile)).as("vortex-jni dict layout: %s", expected).isEqualTo(expected);
+        assertThat(EncodingTrees.hasDictLayout(javaFile)).as("vortex-jni dict layout: %s", expected).isEqualTo(expected);
     }
 
     private static boolean isNull(int row, int nullEvery) {
@@ -182,18 +180,5 @@ class DictAdmissionInteropIntegrationTest {
              var writer = io.github.dfa1.vortex.writer.VortexWriter.create(channel, schema, WriteOptions.defaults())) {
             writer.writeChunk(Map.of(V, data));
         }
-    }
-
-    private static boolean hasDictLayout(Path file) throws IOException {
-        try (VortexReader reader = VortexReader.open(file)) {
-            return hasDictLayout(InspectorTree.build(reader).root());
-        }
-    }
-
-    private static boolean hasDictLayout(InspectorTree.Node node) {
-        if (node.layout().isDict()) {
-            return true;
-        }
-        return node.children().stream().anyMatch(DictAdmissionInteropIntegrationTest::hasDictLayout);
     }
 }
