@@ -112,49 +112,27 @@ public final class VortexSortPushDownRule extends RelOptRule {
             }
         }
         Aggregate distinct = null;
-        Project project = null;
-        Filter filter = null;
-        RelNode current = call.rel(1);
         int index = 1;
-        if (current instanceof Aggregate a) {
+        if (call.rel(index) instanceof Aggregate a) {
             // SELECT DISTINCT, or a GROUP BY with no aggregate: rows come out once each
             if (lazy || !a.getAggCallList().isEmpty() || a.getGroupType() != Aggregate.Group.SIMPLE) {
                 return;
             }
             distinct = a;
-            current = call.rel(++index);
+            index++;
         }
-        if (current instanceof Project p) {
-            project = p;
-            current = call.rel(++index);
-        }
-        if (current instanceof Filter f) {
-            filter = f;
-            current = call.rel(++index);
-        }
-        TableScan scan = (TableScan) current;
-        VortexTable table = scan.getTable().unwrap(VortexTable.class);
-        if (table == null) {
+        // a row Calcite would drop must not reach the top N
+        Optional<PushDownInput> matched = PushDownInput.match(call, index);
+        if (matched.isEmpty()) {
             return;
         }
+        Project project = matched.get().project();
+        TableScan scan = matched.get().scan();
+        VortexTable table = matched.get().table();
+        ScanFilter rowFilter = matched.get().filter();
         Double rowCount = table.getStatistic().getRowCount();
         if (lazy && (rowCount == null || rowCount <= LAZY_SORT_MIN_ROWS)) {
             return; // small enough for Calcite to sort in memory
-        }
-        List<RexNode> predicates = new ArrayList<>();
-        if (filter != null) {
-            predicates.add(filter.getCondition());
-        }
-        if (scan instanceof Bindables.BindableTableScan bindable) {
-            predicates.addAll(bindable.filters);
-        }
-        ScanFilter rowFilter = null;
-        if (!predicates.isEmpty()) {
-            Optional<ScanFilter> translated = table.translatePushedFilters(predicates);
-            if (translated.isEmpty()) {
-                return; // a row Calcite would drop must not reach the top N
-            }
-            rowFilter = translated.get();
         }
         int[] cols = columns(scan, project);
         if (cols != null && distinct != null) {
