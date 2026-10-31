@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
 import dev.vortex.api.Expression;
-import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
@@ -45,7 +44,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -91,9 +89,9 @@ class ListInteropIntegrationTest {
         writeWithJava(file, element, nulls, elementNulls);
 
         // When
-        List<List<Object>> full = readJni(file, 0, ROWS, null);
-        List<List<Object>> range = readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = readJni(file, 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then
@@ -186,27 +184,6 @@ class ListInteropIntegrationTest {
                 sut.writeChunk(Map.of(ID, ids, LISTS, nullableLists ? new NullableData(lists, listValidity) : lists));
             }
         }
-    }
-
-    static List<List<Object>> readJni(Path file, long begin, long end, Expression filter) throws IOException {
-        var builder = ScanOptions.builder()
-                .projection(Expression.select(new String[]{"v"}, Expression.root()))
-                .rowRangeBegin(begin)
-                .rowRangeEnd(end);
-        if (filter != null) {
-            builder = builder.filter(filter);
-        }
-        List<List<Object>> rows = new ArrayList<>();
-        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), builder.build(), root -> {
-            FieldVector vector = root.getVector("v");
-            for (int i = 0; i < root.getRowCount(); i++) {
-                rows.add(vector.isNull(i) ? null : ((List<?>) vector.getObject(i)).stream()
-                        .map(item -> item instanceof org.apache.arrow.vector.util.Text text
-                                ? text.toString() : item)
-                        .collect(Collectors.toCollection(ArrayList::new)));
-            }
-        });
-        return rows;
     }
 
     private static void writeWithJni(Path file, Element element, Nulls nulls, ElementNulls elementNulls)

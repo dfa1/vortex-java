@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
 import dev.vortex.api.Expression;
-import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
@@ -292,9 +291,9 @@ class FixedSizeListInteropIntegrationTest {
         }
 
         // When Rust reads everything, a row range that cuts across chunks, and a filter on the id
-        List<List<Object>> full = readJni(file, 0, ROWS, null);
-        List<List<Object>> range = readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = readJni(file, 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then every list is whole and in its own row (vortex-jni may order partitions differently)
@@ -399,9 +398,9 @@ class FixedSizeListInteropIntegrationTest {
         writeWithJava(file, element, size, true, nulls, CHUNKS, CHUNK_ROWS);
 
         // When
-        List<List<Object>> full = readJni(file, 0, ROWS, null);
-        List<List<Object>> range = readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = readJni(file, 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then null lists stay null, and the others keep their elements
@@ -435,7 +434,7 @@ class FixedSizeListInteropIntegrationTest {
         writeWithJava(file, Element.INT, size, nullable, nulls, 1, rows);
 
         // When
-        List<List<Object>> result = readJni(file, 0, rows, null);
+        List<List<Object>> result = JniFiles.readColumn(file, "v", 0, rows, null);
 
         // Then
         assertThat(result).containsExactlyInAnyOrderElementsOf(expectedRows(Element.INT, size, nulls, 0, rows));
@@ -482,9 +481,9 @@ class FixedSizeListInteropIntegrationTest {
         writeWithJava(file, element, size, nullable, nulls, elementNulls, CHUNKS, CHUNK_ROWS);
 
         // When
-        List<List<Object>> full = readJni(file, 0, ROWS, null);
-        List<List<Object>> range = readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = readJni(file, 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then every null element is null, and no other element changed
@@ -610,26 +609,6 @@ class FixedSizeListInteropIntegrationTest {
         for (int row = from; row < to; row++) {
             rows.add(list(element, size, row));
         }
-        return rows;
-    }
-
-    private static List<List<Object>> readJni(Path file, long begin, long end, Expression filter) throws IOException {
-        var builder = ScanOptions.builder()
-                .projection(Expression.select(new String[]{"v"}, Expression.root()))
-                .rowRangeBegin(begin)
-                .rowRangeEnd(end);
-        if (filter != null) {
-            builder = builder.filter(filter);
-        }
-        List<List<Object>> rows = new ArrayList<>();
-        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), builder.build(), root -> {
-            FixedSizeListVector vector = (FixedSizeListVector) root.getVector("v");
-            for (int i = 0; i < root.getRowCount(); i++) {
-                rows.add(vector.isNull(i) ? null : vector.getObject(i).stream()
-                        .map(item -> item instanceof org.apache.arrow.vector.util.Text text ? text.toString() : item)
-                        .collect(java.util.stream.Collectors.toCollection(ArrayList::new)));
-            }
-        });
         return rows;
     }
 

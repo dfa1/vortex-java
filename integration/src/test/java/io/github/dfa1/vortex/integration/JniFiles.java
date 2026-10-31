@@ -1,5 +1,9 @@
 package io.github.dfa1.vortex.integration;
 
+import java.util.ArrayList;
+import org.apache.arrow.vector.util.Text;
+import org.apache.arrow.vector.FieldVector;
+import dev.vortex.api.Expression;
 import dev.vortex.api.DataSource;
 import dev.vortex.api.Partition;
 import dev.vortex.api.Scan;
@@ -66,6 +70,44 @@ final class JniFiles {
                 }
             }
         }
+    }
+
+    /// Reads `column` over rows `[begin, end)` with vortex-jni, keeping the rows `filter` selects
+    /// (every row when `null`), in order. Each value is the vector's own Java object made plain:
+    /// lists at any depth copied into [ArrayList]s and Arrow `Text` turned into [String], so a
+    /// row compares equal to the lists a test builds; a null row or element stays `null`.
+    @SuppressWarnings("unchecked")
+    static <T> List<T> readColumn(Path file, String column, long begin, long end, Expression filter)
+            throws IOException {
+        var options = ScanOptions.builder()
+                .projection(Expression.select(new String[]{column}, Expression.root()))
+                .rowRangeBegin(begin)
+                .rowRangeEnd(end);
+        if (filter != null) {
+            options = options.filter(filter);
+        }
+        List<T> rows = new ArrayList<>();
+        forEachBatch(file.toAbsolutePath().toUri().toString(), options.build(), root -> {
+            FieldVector vector = root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                rows.add((T) plain(vector.getObject(i)));
+            }
+        });
+        return rows;
+    }
+
+    private static Object plain(Object value) {
+        if (value instanceof List<?> list) {
+            List<Object> out = new ArrayList<>(list.size());
+            for (Object item : list) {
+                out.add(plain(item));
+            }
+            return out;
+        }
+        if (value instanceof Text text) {
+            return text.toString();
+        }
+        return value;
     }
 
     /// Writes `rows` rows in one batch: `id` (i64) counting from 0, and `value` (f64) seeded random

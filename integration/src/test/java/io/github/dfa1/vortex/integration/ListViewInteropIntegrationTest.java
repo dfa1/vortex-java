@@ -96,9 +96,9 @@ class ListViewInteropIntegrationTest {
         writeWithJava(file, element, nulls, elementNulls, reversed);
 
         // When
-        List<List<Object>> full = ListInteropIntegrationTest.readJni(file, 0, ROWS, null);
-        List<List<Object>> range = ListInteropIntegrationTest.readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = ListInteropIntegrationTest.readJni(file, 0, ROWS, Expression.binary(
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(
                 Expression.BinaryOp.GTE, Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then
