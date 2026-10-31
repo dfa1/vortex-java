@@ -5,9 +5,6 @@ import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.reader.VortexReader;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -99,11 +96,7 @@ class ColumnNameEdgeCasesIntegrationTest {
                 }
             }
             root.setRowCount(n);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, arrowSchema);
-                writer.writeBatch(arr.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 }

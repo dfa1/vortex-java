@@ -7,9 +7,6 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.DateDayVector;
@@ -106,11 +103,7 @@ class OhlcEncodingInspectionIntegrationTest {
                     }
                     root.setRowCount(n);
 
-                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                        writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
                 rowsLeft -= n;
             }
@@ -200,11 +193,7 @@ class OhlcEncodingInspectionIntegrationTest {
                         px[symIdx] = c;
                     }
                     root.setRowCount(n);
-                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                        writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
                 rowsLeft -= n;
             }

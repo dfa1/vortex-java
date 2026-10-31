@@ -9,9 +9,6 @@ import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -98,11 +95,7 @@ class RustListsInteropIntegrationTest {
             }
             vector.setValueCount(ROWS);
             root.setRowCount(ROWS);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, arrowSchema);
-                writer.writeBatch(arr.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 

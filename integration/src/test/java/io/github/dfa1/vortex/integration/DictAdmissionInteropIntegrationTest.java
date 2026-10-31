@@ -9,9 +9,6 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
@@ -144,11 +141,7 @@ class DictAdmissionInteropIntegrationTest {
             }
             vector.setValueCount(ROWS);
             root.setRowCount(ROWS);
-            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 

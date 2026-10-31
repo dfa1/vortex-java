@@ -13,9 +13,6 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.Float4Vector;
 import org.apache.arrow.vector.Float8Vector;
@@ -203,11 +200,7 @@ class RleF64InteropIntegrationTest {
     }
 
     private static void exportBatch(VortexWriter writer, VectorSchemaRoot root) throws IOException {
-        try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-             ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-            Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-            writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-        }
+        JniFiles.writeBatch(ALLOCATOR, writer, root);
     }
 
     private static double[] readDoubleColumn(Path file) throws IOException {

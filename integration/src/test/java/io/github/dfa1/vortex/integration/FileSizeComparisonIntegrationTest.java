@@ -12,9 +12,6 @@ import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.DateDayVector;
@@ -162,11 +159,7 @@ class FileSizeComparisonIntegrationTest {
                     }
                     root.setRowCount(n);
 
-                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                        writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }
@@ -323,11 +316,7 @@ class FileSizeComparisonIntegrationTest {
                 vec.setSafe(i, data[i]);
             }
             root.setRowCount(data.length);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
 
         long javaSize = Files.size(javaFile);
@@ -380,11 +369,7 @@ class FileSizeComparisonIntegrationTest {
                 }
             }
             root.setRowCount(n);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
 
         long javaSize = Files.size(javaFile);
@@ -512,11 +497,7 @@ class FileSizeComparisonIntegrationTest {
                         }
                     }
                     root.setRowCount(batch);
-                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                        writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }
@@ -614,11 +595,7 @@ class FileSizeComparisonIntegrationTest {
                 vec.setSafe(i, data[i].getBytes(StandardCharsets.UTF_8));
             }
             root.setRowCount(n);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
 
         long javaSize = Files.size(javaFile);

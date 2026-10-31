@@ -9,9 +9,6 @@ import io.github.dfa1.vortex.calcite.VortexTable;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.DateDayVector;
@@ -193,11 +190,7 @@ class CalciteInteropIntegrationTest {
             ((DecimalVector) root.getVector("amount")).setSafe(0, new BigDecimal("12.34"));
             ((VarBinaryVector) root.getVector("blob")).setSafe(0, new byte[]{1, 2, 3});
             root.setRowCount(1);
-            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 
@@ -250,11 +243,7 @@ class CalciteInteropIntegrationTest {
                 s.setSafe(i, values[i].getBytes(StandardCharsets.UTF_8));
             }
             root.setRowCount(values.length);
-            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
 
         // When
@@ -462,11 +451,7 @@ class CalciteInteropIntegrationTest {
                 i16.set(i, (short) (i % 20 - 10));
             }
             root.setRowCount(BATCH_ROWS);
-            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
         String select = "select s, count(*), min(i16), max(i16) from vtx.t where ";
         String sql = select + where + " group by s order by s";
@@ -562,11 +547,7 @@ class CalciteInteropIntegrationTest {
                         }
                     }
                     root.setRowCount(BATCH_ROWS);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                        writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }
@@ -693,11 +674,7 @@ class CalciteInteropIntegrationTest {
                         rows.add(new Object[]{symbol, id, nValue, xValue});
                     }
                     root.setRowCount(BATCH_ROWS);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                        writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }
@@ -738,11 +715,7 @@ class CalciteInteropIntegrationTest {
                 i8.set(i, i8Values[i]);
             }
             root.setRowCount(3);
-            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
 
         // When
@@ -794,11 +767,7 @@ class CalciteInteropIntegrationTest {
                         r.setSafe(i, utf8("K%05d".formatted(id * 7919 % 1009)));
                     }
                     root.setRowCount(EVENT_BATCH_ROWS);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                        writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }
@@ -834,11 +803,7 @@ class CalciteInteropIntegrationTest {
                         }
                     }
                     root.setRowCount(batchRows);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                        writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }

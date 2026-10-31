@@ -25,9 +25,6 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinSparseArray;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float8Vector;
@@ -351,11 +348,7 @@ class NullSparseRunEndInteropIntegrationTest {
                 fill.accept(root, i);
             }
             root.setRowCount(ROWS);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema as = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, as);
-                writer.writeBatch(arr.memoryAddress(), as.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 

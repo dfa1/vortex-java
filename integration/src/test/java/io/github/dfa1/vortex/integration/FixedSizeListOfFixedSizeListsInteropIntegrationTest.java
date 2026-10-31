@@ -23,9 +23,6 @@ import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
@@ -325,11 +322,7 @@ class FixedSizeListOfFixedSizeListsInteropIntegrationTest {
                         }
                     }
                     root.setRowCount(CHUNK_ROWS);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema exported = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, exported);
-                        writer.writeBatch(array.memoryAddress(), exported.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }

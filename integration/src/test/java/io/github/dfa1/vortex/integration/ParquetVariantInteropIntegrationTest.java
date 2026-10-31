@@ -15,9 +15,6 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VariantArray;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarBinaryVector;
@@ -141,11 +138,7 @@ class ParquetVariantInteropIntegrationTest {
             valueVector.setValueCount(ROWS);
             struct.setValueCount(ROWS);
             root.setRowCount(ROWS);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, arrowSchema);
-                writer.writeBatch(arr.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 
@@ -204,11 +197,7 @@ class ParquetVariantInteropIntegrationTest {
             typedVector.setValueCount(ROWS);
             struct.setValueCount(ROWS);
             root.setRowCount(ROWS);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, arrowSchema);
-                writer.writeBatch(arr.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 
