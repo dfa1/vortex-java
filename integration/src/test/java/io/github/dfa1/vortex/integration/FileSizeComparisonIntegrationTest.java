@@ -116,10 +116,7 @@ class FileSizeComparisonIntegrationTest {
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, opts)) {
             for (OhlcData.Batch b : batches) {
-                writer.writeChunk(Map.of(
-                        ColumnName.of("symbol"), b.symbol(), ColumnName.of("date"), b.date(),
-                        ColumnName.of("open"), b.open(), ColumnName.of("high"), b.high(),
-                        ColumnName.of("low"), b.low(), ColumnName.of("close"), b.close(), ColumnName.of("volume"), b.volume()));
+                writer.writeChunk(b.columns());
             }
         }
         return file;
