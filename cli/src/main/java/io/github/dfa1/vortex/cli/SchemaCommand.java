@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
 
 import java.io.IOException;
@@ -47,60 +48,15 @@ final class SchemaCommand {
             List<DType> types = s.fieldTypes();
             for (int i = 0; i < n; i++) {
                 out.printf("  %" + idxWidth + "d  %-" + nameWidth + "s  %s%n",
-                        i + 1, names.get(i), formatDType(types.get(i)));
+                        i + 1, names.get(i), VortexInspector.formatDType(types.get(i)));
             }
         } else {
             out.printf("%s (%s rows)%n%n  %s%n",
-                    path.getFileName(), formatRows(rowCount), formatDType(dtype));
+                    path.getFileName(), formatRows(rowCount), VortexInspector.formatDType(dtype));
         }
     }
 
     private static String formatRows(long rows) {
         return String.format(Locale.ROOT, "%,d", rows);
-    }
-
-    // Package-private for direct unit testing of every DType arm (see SchemaCommandTest).
-    static String formatDType(DType dtype) {
-        return switch (dtype) {
-            case DType.Struct s -> {
-                var sb = new StringBuilder("struct<");
-                for (int i = 0; i < s.fieldNames().size(); i++) {
-                    if (i > 0) {
-                        sb.append(", ");
-                    }
-                    sb.append(s.fieldNames().get(i).value()).append(": ").append(formatDType(s.fieldTypes().get(i)));
-                }
-                sb.append('>');
-                yield sb.toString();
-            }
-            case DType.Primitive(var pt, var nullable) -> pt.name() + (nullable ? "?" : "");
-            case DType.Utf8(var nullable) -> "utf8" + (nullable ? "?" : "");
-            case DType.Binary(var nullable) -> "binary" + (nullable ? "?" : "");
-            case DType.Bool(var nullable) -> "bool" + (nullable ? "?" : "");
-            case DType.Null _ -> "null";
-            case DType.Decimal(var p, var s, var nullable) -> "decimal(" + p + "," + s + ")" + (nullable ? "?" : "");
-            case DType.List(var elem, var nullable) -> "list<" + formatDType(elem) + ">" + (nullable ? "?" : "");
-            case DType.FixedSizeList(var elem, var size, var nullable) ->
-                    "list<" + formatDType(elem) + ">[" + size + "]" + (nullable ? "?" : "");
-            // keys_sorted is part of a map's identity — two schemas differing only in it are
-            // different types, so it is rendered rather than dropped (Rust prints it the same way).
-            case DType.Map(var key, var value, var keysSorted, var nullable) ->
-                    "map<" + formatDType(key) + ", " + formatDType(value)
-                            + ", keys_sorted=" + keysSorted + ">" + (nullable ? "?" : "");
-            case DType.Extension(var id, _, _, var nullable) ->
-                    "ext<" + id + ">" + (nullable ? "?" : "");
-            case DType.Variant(var nullable) -> "variant" + (nullable ? "?" : "");
-            case DType.Union u -> {
-                StringBuilder sb = new StringBuilder("union<");
-                for (int i = 0; i < u.names().size(); i++) {
-                    if (i > 0) {
-                        sb.append(", ");
-                    }
-                    sb.append(u.typeIds().get(i)).append(' ').append(u.names().get(i).value())
-                            .append(": ").append(formatDType(u.variantTypes().get(i)));
-                }
-                yield sb.append('>').append(u.nullable() ? "?" : "").toString();
-            }
-        };
     }
 }

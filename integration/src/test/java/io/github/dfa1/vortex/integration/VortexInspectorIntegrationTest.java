@@ -1,9 +1,5 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.Session;
-import dev.vortex.api.VortexWriter;
-import dev.vortex.arrow.ArrowAllocation;
-import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
@@ -15,17 +11,6 @@ import io.github.dfa1.vortex.inspect.HtmlReport;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.Float8Vector;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.types.FloatingPointPrecision;
-import org.apache.arrow.vector.types.pojo.ArrowType;
-import org.apache.arrow.vector.types.pojo.Field;
-import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -44,46 +29,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Verifies that VortexInspector produces a correct report for a JNI-written file.
 class VortexInspectorIntegrationTest {
 
-    private static final Session SESSION = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
-    private static final Schema SCHEMA = new Schema(List.of(
-            Field.notNullable("id", new ArrowType.Int(64, true)),
-            Field.notNullable("value", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
-    ));
-
-    static {
-        NativeLoader.loadJni();
-    }
-
     @SuppressWarnings("SameParameterValue")
-    private static void writeJni(Path file, int rows) throws IOException {
-        String uri = file.toAbsolutePath().toUri().toString();
-        var rng = new Random(42L);
-        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, SCHEMA, ALLOCATOR).build()) {
-            try (VectorSchemaRoot root = VectorSchemaRoot.create(SCHEMA, ALLOCATOR)) {
-                BigIntVector idVec = (BigIntVector) root.getVector("id");
-                Float8Vector valVec = (Float8Vector) root.getVector("value");
-                idVec.allocateNew(rows);
-                valVec.allocateNew(rows);
-                for (int i = 0; i < rows; i++) {
-                    idVec.setSafe(i, i);
-                    valVec.setSafe(i, rng.nextDouble() * 1000.0);
-                }
-                root.setRowCount(rows);
-                try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                    Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                    writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-                }
-            }
-        }
-    }
-
     @Test
     void inspect_showsFileInfoAndEncodings(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("inspect.vtx");
-        writeJni(file, 50_000);
+        JniFiles.writeIdsAndRandomValues(file, 50_000);
 
         // When
         String result;
@@ -109,7 +60,7 @@ class VortexInspectorIntegrationTest {
         // printed no min/max for any Rust-written file (#416). ids are 0..rows-1, so the
         // expected bounds are exact.
         Path file = tmp.resolve("zoned.vtx");
-        writeJni(file, 50_000);
+        JniFiles.writeIdsAndRandomValues(file, 50_000);
 
         // When
         String result;
@@ -126,7 +77,7 @@ class VortexInspectorIntegrationTest {
         // Given — same #416 gap in the HTML report: its per-chunk table read only array-level
         // stats, so a Rust-written single-chunk column showed empty min/max cells.
         Path file = tmp.resolve("zoned.vtx");
-        writeJni(file, 50_000);
+        JniFiles.writeIdsAndRandomValues(file, 50_000);
 
         // When
         String result;
@@ -172,7 +123,7 @@ class VortexInspectorIntegrationTest {
         // Given — the `gui` statistics table is folded from Rust's zone map alone, so a fold that
         // misreads it (a zone skipped, a bound taken as a value) shows a wrong range for real files
         Path file = tmp.resolve("zoned.vtx");
-        writeJni(file, 50_000);
+        JniFiles.writeIdsAndRandomValues(file, 50_000);
         var rng = new Random(42L);
         double minValue = Double.POSITIVE_INFINITY;
         double maxValue = Double.NEGATIVE_INFINITY;
@@ -234,7 +185,7 @@ class VortexInspectorIntegrationTest {
         // [0, 49999] put 1,666 or 1,667 rows in each, so a bin that drops or double-counts a chunk
         // shows up
         Path file = tmp.resolve("zoned.vtx");
-        writeJni(file, 50_000);
+        JniFiles.writeIdsAndRandomValues(file, 50_000);
         var rng = new Random(42L);
         double valueSum = 0;
         for (int i = 0; i < 50_000; i++) {
@@ -296,7 +247,7 @@ class VortexInspectorIntegrationTest {
         // ascending integer column. Java's ArrayStats used to drop both (and carried a trueCount
         // the wire has no field for), so these read as unknown.
         Path file = tmp.resolve("sorted.vtx");
-        writeJni(file, 50_000);
+        JniFiles.writeIdsAndRandomValues(file, 50_000);
 
         // When
         List<ArrayStats> result = new ArrayList<>();

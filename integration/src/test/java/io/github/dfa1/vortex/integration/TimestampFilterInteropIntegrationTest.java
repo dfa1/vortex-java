@@ -1,11 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
-import dev.vortex.api.Session;
-import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -23,11 +18,8 @@ import io.github.dfa1.vortex.writer.ColumnEncoding;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
-import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.TimeStampVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
@@ -55,8 +47,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// without matching (out-of-order outliers, as real trip data has) included.
 class TimestampFilterInteropIntegrationTest {
 
-    private static final Session SESSION = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     /// Rows per batch: more than a zone (8192), so filters cross chunk and zone boundaries.
     private static final int ROWS = 10_000;
     private static final int BATCHES = 3;
@@ -244,23 +234,16 @@ class TimestampFilterInteropIntegrationTest {
                 .rowRangeEnd(end)
                 .ordered(true);
         List<List<Long>> rows = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(options.build());
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector ids = (BigIntVector) root.getVector("id");
-                    TimeStampVector ts = (TimeStampVector) root.getVector("ts");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        List<Long> row = new ArrayList<>();
-                        row.add(ids.get(i));
-                        row.add(ts.isNull(i) ? null : ts.get(i));
-                        rows.add(row);
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), options.build(), root -> {
+            BigIntVector ids = (BigIntVector) root.getVector("id");
+            TimeStampVector ts = (TimeStampVector) root.getVector("ts");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                List<Long> row = new ArrayList<>();
+                row.add(ids.get(i));
+                row.add(ts.isNull(i) ? null : ts.get(i));
+                rows.add(row);
             }
-        }
+        });
         return rows;
     }
 }

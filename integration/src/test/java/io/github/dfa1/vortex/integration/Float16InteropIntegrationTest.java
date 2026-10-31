@@ -1,9 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
@@ -19,13 +16,9 @@ import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.writer.ColumnEncoding;
 import io.github.dfa1.vortex.writer.WriteOptions;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -325,11 +318,7 @@ class Float16InteropIntegrationTest {
                         }
                     }
                     root.setRowCount(step);
-                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema exported = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, exported);
-                        writer.writeBatch(arr.memoryAddress(), exported.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }
@@ -360,21 +349,14 @@ class Float16InteropIntegrationTest {
                 .projection(Expression.select(new String[]{"v"}, Expression.root())).build();
         List<Short> bits = new ArrayList<>();
         List<Boolean> valid = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(options);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    Float2Vector vec = (Float2Vector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        boolean isValid = !vec.isNull(i);
-                        valid.add(isValid);
-                        bits.add(isValid ? vec.get(i) : 0);
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), options, root -> {
+            Float2Vector vec = (Float2Vector) root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                boolean isValid = !vec.isNull(i);
+                valid.add(isValid);
+                bits.add(isValid ? vec.get(i) : 0);
             }
-        }
+        });
         return pack(bits, valid);
     }
 
@@ -397,11 +379,7 @@ class Float16InteropIntegrationTest {
                 vec.setSafe(i, data[i]);
             }
             root.setRowCount(data.length);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 
@@ -426,20 +404,12 @@ class Float16InteropIntegrationTest {
                 .projection(Expression.select(new String[]{"v"}, Expression.root()))
                 .build();
         List<Short> bits = new ArrayList<>();
-        DataSource source = DataSource.open(SESSION, uri);
-        Scan scan = source.scan(options);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    Float2Vector vec = (Float2Vector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        bits.add(vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, options, root -> {
+            Float2Vector vec = (Float2Vector) root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                bits.add(vec.get(i));
             }
-        }
+        });
         return toArray(bits);
     }
 

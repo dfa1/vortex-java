@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.ScanFilter;
 
 import com.google.common.collect.ImmutableList;
-import org.apache.calcite.interpreter.Bindables;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
@@ -119,46 +118,17 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 return;
             }
         }
-        // Explicit operands give concrete rels under both Hep and Volcano. Walk the optional
-        // Project and Filter nodes between the Aggregate and the TableScan; each rule variant fixes
-        // the shape, so the levels present here are exactly those its operand declared.
-        Project project = null;
-        Filter filter = null;
-        RelNode current = call.rel(1);
-        int index = 1;
-        if (current instanceof Project p) {
-            project = p;
-            current = call.rel(++index);
-        }
-        if (current instanceof Filter f) {
-            filter = f;
-            current = call.rel(++index);
-        }
-        TableScan scan = (TableScan) current;
-        VortexTable table = scan.getTable().unwrap(VortexTable.class);
-        if (table == null) {
+        // A WHERE makes whole-table stats invalid. When every predicate translates we may still
+        // answer from the zones it selects (filteredFold), but only when it partitions them cleanly;
+        // an untranslatable predicate leaves the scan to compute the result over the filtered rows.
+        Optional<PushDownInput> matched = PushDownInput.match(call, 1);
+        if (matched.isEmpty()) {
             return;
         }
-        // A WHERE makes whole-table stats invalid. The predicate is the Filter node's condition at
-        // the logical level (and BindableTableScan.filters once folded into a physical scan).
-        // Translate it strictly; if every predicate is captured we may still answer from the zones
-        // it selects (filteredFold), but only when it partitions them cleanly. An untranslatable
-        // predicate abandons the rewrite so the scan computes the result over the filtered rows.
-        List<RexNode> predicates = new ArrayList<>();
-        if (filter != null) {
-            predicates.add(filter.getCondition());
-        }
-        if (scan instanceof Bindables.BindableTableScan bindable) {
-            predicates.addAll(bindable.filters);
-        }
-        ScanFilter pushedFilter = null;
-        if (!predicates.isEmpty()) {
-            Optional<ScanFilter> translated = table.translatePushedFilters(predicates);
-            if (translated.isEmpty()) {
-                return;
-            }
-            pushedFilter = translated.get();
-        }
+        Project project = matched.get().project();
+        TableScan scan = matched.get().scan();
+        VortexTable table = matched.get().table();
+        ScanFilter pushedFilter = matched.get().filter();
         RelDataType scanRowType = scan.getRowType();
         List<ColumnName> scanColumns = scanRowType.getFieldNames().stream().map(ColumnName::of).toList();
 

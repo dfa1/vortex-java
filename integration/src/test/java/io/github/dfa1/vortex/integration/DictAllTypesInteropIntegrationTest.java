@@ -9,9 +9,6 @@ import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
@@ -252,7 +249,7 @@ class DictAllTypesInteropIntegrationTest {
         // Then — Rust dict-encoded exactly the types it supports, and every row matches
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             InspectorTree tree = InspectorTree.build(vf);
-            assertThat(hasDictLayout(tree.root()) || tree.usedEncodings().contains("vortex.dict"))
+            assertThat(EncodingTrees.hasDictLayout(tree.root()) || tree.usedEncodings().contains("vortex.dict"))
                     .as("vortex-jni dict-encoded %s (encodings %s)", c.field().getType(), tree.usedEncodings())
                     .isEqualTo(c.rustDicts());
         }
@@ -273,11 +270,7 @@ class DictAllTypesInteropIntegrationTest {
             }
             vector.setValueCount(ROWS);
             root.setRowCount(ROWS);
-            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, arrowSchema);
-                writer.writeBatch(arr.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 
@@ -291,18 +284,6 @@ class DictAllTypesInteropIntegrationTest {
             rows.forEachRemaining(row -> out.add(row.getField(0)));
         }
         return out;
-    }
-
-    private static boolean hasDictLayout(InspectorTree.Node node) {
-        if (node.layout().isDict()) {
-            return true;
-        }
-        for (InspectorTree.Node child : node.children()) {
-            if (hasDictLayout(child)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static Case primitive(String name, ArrowType type, Setter setter, String... expected) {

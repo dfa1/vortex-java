@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.core.compute.PcoAns;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
@@ -49,7 +50,7 @@ final class PcoTansDecoder {
             weights[i] = bins[i].weight();
         }
 
-        int[] stateSymbols = spreadStateSymbols(weights, tableSize);
+        int[] stateSymbols = PcoAns.spreadStateSymbols(weights, tableSize);
 
         int[] symbolXs = weights.clone();
         int[] nextStateIdxBase = new int[tableSize];
@@ -70,26 +71,6 @@ final class PcoTansDecoder {
         }
 
         return new PcoTansDecoder(nextStateIdxBase, bitsToRead, nodeOffsetBits, stateLowers);
-    }
-
-    /// Port of `Spec::spread_state_symbols` from pcodec.
-    ///
-    /// Spreads symbols across the table with a stride of ~3/5 * tableSize (odd).
-    static int[] spreadStateSymbols(int[] weights, int tableSize) {
-        int[] stateSymbols = new int[tableSize];
-        int stride = (3 * tableSize) / 5;
-        if (stride % 2 == 0) {
-            stride++;
-        }
-        int modMask = tableSize - 1;
-        int step = 0;
-        for (int sym = 0; sym < weights.length; sym++) {
-            for (int k = 0; k < weights[sym]; k++) {
-                stateSymbols[(stride * step) & modMask] = sym;
-                step++;
-            }
-        }
-        return stateSymbols;
     }
 
     /// Decode `n` raw latent values (U64) from `reader` into `out`.

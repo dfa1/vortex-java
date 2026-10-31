@@ -1,12 +1,7 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
-import dev.vortex.api.Session;
-import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -17,16 +12,10 @@ import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Nul
 import io.github.dfa1.vortex.integration.RustWritesNullableColumnsInteropIntegrationTest.Shape;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.writer.ColumnEncoding;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
-import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,8 +23,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -56,8 +43,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// other drops fails here too.
 class ForcedEncodingsNullableInteropIntegrationTest {
 
-    private static final Session SESSION = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     private static final ColumnName ID = ColumnName.of("id");
     private static final ColumnName VALUE = ColumnName.of("v");
     private static final int ROWS = 3_000;
@@ -132,12 +117,12 @@ class ForcedEncodingsNullableInteropIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, options)) {
             sut.writeChunk(Map.of(ID, ids, VALUE,
-                    new NullableData(ListInteropIntegrationTest.pack(element, expected), validity)));
+                    new NullableData(element.pack(expected), validity)));
         }
 
         // When
         List<Object> byRust = readJni(file);
-        List<Object> byJava = readJava(file, element);
+        List<Object> byJava = element.readColumn(file, VALUE);
 
         // Then
         assertThat(byRust).as("read by vortex-jni").containsExactlyElementsOf(expected);
@@ -168,38 +153,14 @@ class ForcedEncodingsNullableInteropIntegrationTest {
         ScanOptions options = ScanOptions.builder()
                 .projection(Expression.select(new String[]{"v"}, Expression.root())).build();
         List<Object> rows = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(options);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    FieldVector vector = root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        Object value = vector.isNull(i) ? null : vector.getObject(i);
-                        rows.add(value instanceof org.apache.arrow.vector.util.Text text ? text.toString() : value);
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), options, root -> {
+            FieldVector vector = root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                Object value = vector.isNull(i) ? null : vector.getObject(i);
+                rows.add(value instanceof org.apache.arrow.vector.util.Text text ? text.toString() : value);
             }
-        }
+        });
         return rows;
     }
 
-    private static List<Object> readJava(Path file, Element element) throws IOException {
-        List<Object> rows = new ArrayList<>();
-        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
-             Arena arena = Arena.ofConfined()) {
-            reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()).forEachRemaining(chunk -> {
-                MaskedArray.Unwrapped column = MaskedArray.unwrap(chunk.column(VALUE));
-                Array inner = column.inner();
-                boolean allNull = inner instanceof NullArray;
-                MemorySegment lanes = allNull || !element.lanes() ? null : inner.materialize(arena);
-                for (long i = 0; i < inner.length(); i++) {
-                    boolean isNull = allNull || column.validity() != null && !column.validity().getBoolean(i);
-                    rows.add(isNull ? null : element.get(inner, lanes, i));
-                }
-            });
-        }
-        return rows;
-    }
 }

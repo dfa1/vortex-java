@@ -1,10 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
-import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
@@ -24,9 +20,6 @@ import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
@@ -36,7 +29,6 @@ import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.FixedSizeListVector;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -108,6 +100,72 @@ class FixedSizeListInteropIntegrationTest {
                 // empty and non-ASCII strings among the plain ones: a length or an encoding slip shows
                 case UTF8 -> position == 0 && row % 5 == 0 ? "" : "r" + row + "/" + position + (row % 11 == 0 ? "é€" : "");
             };
+        }
+
+        /// Every row of `column` as a Java read of `file` returns it, `null` where the row is null.
+        List<Object> readColumn(Path file, ColumnName column) throws IOException {
+            List<Object> rows = new ArrayList<>();
+            try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
+                 Arena arena = Arena.ofConfined()) {
+                reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()).forEachRemaining(chunk -> {
+                    MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(chunk.column(column));
+                    Array inner = unwrapped.inner();
+                    boolean allNull = inner instanceof NullArray;
+                    MemorySegment flat = allNull || !lanes() ? null : inner.materialize(arena);
+                    for (long i = 0; i < inner.length(); i++) {
+                        boolean isNull = allNull || unwrapped.validity() != null && !unwrapped.validity().getBoolean(i);
+                        rows.add(isNull ? null : get(inner, flat, i));
+                    }
+                });
+            }
+            return rows;
+        }
+
+        /// The dense array of `values`, zero (or empty) where an element is null.
+        Object pack(List<Object> values) {
+            int n = values.size();
+            return switch (this) {
+                case INT -> {
+                    int[] out = new int[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (Integer) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+                case DOUBLE -> {
+                    double[] out = new double[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (Double) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+                case LONG -> {
+                    long[] out = new long[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (Long) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+                case BOOL -> {
+                    boolean[] out = new boolean[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (Boolean) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+                case UTF8 -> {
+                    String[] out = new String[n];
+                    for (int i = 0; i < n; i++) {
+                        out[i] = (String) orZero(values.get(i));
+                    }
+                    yield out;
+                }
+            };
+        }
+
+        /// `value`, or this element's zero (or empty) value when it is null.
+        Object orZero(Object value) {
+            return value == null ? zero() : value;
         }
 
         /// The flat elements of `rows` consecutive lists starting at `firstRow`.
@@ -233,9 +291,9 @@ class FixedSizeListInteropIntegrationTest {
         }
 
         // When Rust reads everything, a row range that cuts across chunks, and a filter on the id
-        List<List<Object>> full = readJni(file, 0, ROWS, null);
-        List<List<Object>> range = readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = readJni(file, 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then every list is whole and in its own row (vortex-jni may order partitions differently)
@@ -340,9 +398,9 @@ class FixedSizeListInteropIntegrationTest {
         writeWithJava(file, element, size, true, nulls, CHUNKS, CHUNK_ROWS);
 
         // When
-        List<List<Object>> full = readJni(file, 0, ROWS, null);
-        List<List<Object>> range = readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = readJni(file, 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then null lists stay null, and the others keep their elements
@@ -376,7 +434,7 @@ class FixedSizeListInteropIntegrationTest {
         writeWithJava(file, Element.INT, size, nullable, nulls, 1, rows);
 
         // When
-        List<List<Object>> result = readJni(file, 0, rows, null);
+        List<List<Object>> result = JniFiles.readColumn(file, "v", 0, rows, null);
 
         // Then
         assertThat(result).containsExactlyInAnyOrderElementsOf(expectedRows(Element.INT, size, nulls, 0, rows));
@@ -423,9 +481,9 @@ class FixedSizeListInteropIntegrationTest {
         writeWithJava(file, element, size, nullable, nulls, elementNulls, CHUNKS, CHUNK_ROWS);
 
         // When
-        List<List<Object>> full = readJni(file, 0, ROWS, null);
-        List<List<Object>> range = readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = readJni(file, 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then every null element is null, and no other element changed
@@ -554,33 +612,6 @@ class FixedSizeListInteropIntegrationTest {
         return rows;
     }
 
-    private static List<List<Object>> readJni(Path file, long begin, long end, Expression filter) throws IOException {
-        var builder = ScanOptions.builder()
-                .projection(Expression.select(new String[]{"v"}, Expression.root()))
-                .rowRangeBegin(begin)
-                .rowRangeEnd(end);
-        if (filter != null) {
-            builder = builder.filter(filter);
-        }
-        List<List<Object>> rows = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(builder.build());
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    FixedSizeListVector vector = (FixedSizeListVector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        rows.add(vector.isNull(i) ? null : vector.getObject(i).stream()
-                                .map(item -> item instanceof org.apache.arrow.vector.util.Text text ? text.toString() : item)
-                                .collect(java.util.stream.Collectors.toCollection(ArrayList::new)));
-                    }
-                }
-            }
-        }
-        return rows;
-    }
-
     private static void writeWithJni(Path file, Element element, int size) throws IOException {
         writeWithJni(file, element, size, false, Nulls.NONE_NULL, CHUNKS, CHUNK_ROWS);
     }
@@ -625,11 +656,7 @@ class FixedSizeListInteropIntegrationTest {
                         }
                     }
                     root.setRowCount(chunkRows);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema exported = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, exported);
-                        writer.writeBatch(array.memoryAddress(), exported.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }

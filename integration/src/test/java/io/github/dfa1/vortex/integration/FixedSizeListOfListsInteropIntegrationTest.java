@@ -1,10 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
-import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
@@ -26,16 +22,12 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
 import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.FixedSizeListVector;
 import org.apache.arrow.vector.complex.ListVector;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -55,7 +47,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -107,9 +98,9 @@ class FixedSizeListOfListsInteropIntegrationTest {
         writeWithJava(file, element, size, outer, inner, elements, model);
 
         // When
-        List<List<List<Object>>> full = readJni(file, 0, ROWS, null);
-        List<List<List<Object>>> range = readJni(file, 333, 1_777, null);
-        List<List<List<Object>>> filtered = readJni(file, 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
+        List<List<List<Object>>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<List<Object>>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<List<Object>>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(Expression.BinaryOp.GTE,
                 Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then
@@ -197,7 +188,7 @@ class FixedSizeListOfListsInteropIntegrationTest {
                 for (int i = 0; i < elementValidity.length; i++) {
                     elementValidity[i] = values.get(i) != null;
                 }
-                Object packed = pack(element, values);
+                Object packed = element.pack(values);
                 Object leaves = elements.nullableType() ? new NullableData(packed, elementValidity) : packed;
                 Object innerLists = new ListData(leaves, offsets, (long) CHUNK_ROWS * size);
                 Object innerColumn = inner != Nulls.NONE_NULL ? new NullableData(innerLists, innerValidity)
@@ -207,83 +198,6 @@ class FixedSizeListOfListsInteropIntegrationTest {
                         LISTS, outer != Nulls.NONE_NULL ? new NullableData(outerLists, outerValidity) : outerLists));
             }
         }
-    }
-
-    private static Object pack(Element element, List<Object> values) {
-        int n = values.size();
-        return switch (element) {
-            case INT -> {
-                int[] out = new int[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (Integer) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-            case DOUBLE -> {
-                double[] out = new double[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (Double) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-            case LONG -> {
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (Long) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-            case BOOL -> {
-                boolean[] out = new boolean[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (Boolean) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-            case UTF8 -> {
-                String[] out = new String[n];
-                for (int i = 0; i < n; i++) {
-                    out[i] = (String) orZero(element, values.get(i));
-                }
-                yield out;
-            }
-        };
-    }
-
-    private static Object orZero(Element element, Object value) {
-        return value == null ? element.zero() : value;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<List<List<Object>>> readJni(Path file, long begin, long end, Expression filter)
-            throws IOException {
-        var builder = ScanOptions.builder()
-                .projection(Expression.select(new String[]{"v"}, Expression.root()))
-                .rowRangeBegin(begin)
-                .rowRangeEnd(end);
-        if (filter != null) {
-            builder = builder.filter(filter);
-        }
-        List<List<List<Object>>> rows = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(builder.build());
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    FixedSizeListVector vector = (FixedSizeListVector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        rows.add(vector.isNull(i) ? null : vector.getObject(i).stream()
-                                .map(inner -> inner == null ? null : ((List<Object>) inner).stream()
-                                        .map(item -> item instanceof org.apache.arrow.vector.util.Text text
-                                                ? text.toString() : item)
-                                        .collect(Collectors.toCollection(ArrayList::new)))
-                                .collect(Collectors.toCollection(ArrayList::new)));
-                    }
-                }
-            }
-        }
-        return rows;
     }
 
     private static void writeWithJni(Path file, Element element, int size, Nulls outer, Nulls inner,
@@ -334,11 +248,7 @@ class FixedSizeListOfListsInteropIntegrationTest {
                     }
                     items.setValueCount(item);
                     root.setRowCount(CHUNK_ROWS);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema exported = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, exported);
-                        writer.writeBatch(array.memoryAddress(), exported.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }

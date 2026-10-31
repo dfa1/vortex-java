@@ -23,9 +23,6 @@ import io.github.dfa1.vortex.writer.ColumnEncoding;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.ListViewData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
@@ -99,9 +96,9 @@ class ListViewInteropIntegrationTest {
         writeWithJava(file, element, nulls, elementNulls, reversed);
 
         // When
-        List<List<Object>> full = ListInteropIntegrationTest.readJni(file, 0, ROWS, null);
-        List<List<Object>> range = ListInteropIntegrationTest.readJni(file, 333, 1_777, null);
-        List<List<Object>> filtered = ListInteropIntegrationTest.readJni(file, 0, ROWS, Expression.binary(
+        List<List<Object>> full = JniFiles.readColumn(file, "v", 0, ROWS, null);
+        List<List<Object>> range = JniFiles.readColumn(file, "v", 333, 1_777, null);
+        List<List<Object>> filtered = JniFiles.readColumn(file, "v", 0, ROWS, Expression.binary(
                 Expression.BinaryOp.GTE, Expression.column("id"), Expression.literal(THRESHOLD)));
 
         // Then
@@ -181,7 +178,7 @@ class ListViewInteropIntegrationTest {
                 for (int i = 0; i < elementValidity.length; i++) {
                     elementValidity[i] = values.get(i) != null;
                 }
-                Object packed = ListInteropIntegrationTest.pack(element, values);
+                Object packed = element.pack(values);
                 Object elements = elementNulls.nullableType() ? new NullableData(packed, elementValidity) : packed;
                 Object lists = new ListViewData(elements, offsets, sizes, CHUNK_ROWS);
                 sut.writeChunk(Map.of(ID, ids, LISTS, nullableLists ? new NullableData(lists, listValidity) : lists));
@@ -225,11 +222,7 @@ class ListViewInteropIntegrationTest {
                         lists.endValue(i, length);
                     }
                     root.setRowCount(CHUNK_ROWS);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema exported = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, exported);
-                        writer.writeBatch(array.memoryAddress(), exported.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }

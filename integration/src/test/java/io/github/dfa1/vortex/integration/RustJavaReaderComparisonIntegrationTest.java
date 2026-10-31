@@ -1,11 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
-import dev.vortex.api.Session;
-import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
@@ -23,7 +18,6 @@ import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.Chunk;
-import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float4Vector;
 import org.apache.arrow.vector.Float8Vector;
@@ -35,7 +29,6 @@ import org.apache.arrow.vector.UInt2Vector;
 import org.apache.arrow.vector.UInt4Vector;
 import org.apache.arrow.vector.UInt8Vector;
 import org.apache.arrow.vector.VarCharVector;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,6 +37,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Percentage.withPercentage;
@@ -59,8 +53,6 @@ import static org.assertj.core.data.Percentage.withPercentage;
 @Tag("slow")
 class RustJavaReaderComparisonIntegrationTest {
 
-    private static final Session SESSION = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
 
     static {
         NativeLoader.loadJni();
@@ -69,129 +61,121 @@ class RustJavaReaderComparisonIntegrationTest {
     private static Stats rustStats(Path file) throws Exception {
         Map<String, Double> numSums = new LinkedHashMap<>();
         Map<String, Long> strLenSums = new LinkedHashMap<>();
-        long rowCount = 0;
+        var rowCount = new AtomicLong();
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    var root = reader.getVectorSchemaRoot();
-                    rowCount += root.getRowCount();
-                    for (var field : root.getSchema().getFields()) {
-                        var vec = root.getVector(field.getName());
-                        switch (vec) {
-                            case BigIntVector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.get(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), (double) s, Double::sum);
-                            }
-                            case IntVector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.get(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), (double) s, Double::sum);
-                            }
-                            case SmallIntVector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.get(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), (double) s, Double::sum);
-                            }
-                            case TinyIntVector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.get(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), (double) s, Double::sum);
-                            }
-                            case UInt1Vector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.getValueAsLong(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), (double) s, Double::sum);
-                            }
-                            case Float8Vector v -> {
-                                double s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.get(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), s, Double::sum);
-                            }
-                            case Float4Vector v -> {
-                                double s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.get(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), s, Double::sum);
-                            }
-                            case UInt2Vector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.getValueAsLong(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), (double) s, Double::sum);
-                            }
-                            case UInt4Vector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.getValueAsLong(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), (double) s, Double::sum);
-                            }
-                            case UInt8Vector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.getValueAsLong(i);
-                                    }
-                                }
-                                numSums.merge(field.getName(), (double) s, Double::sum);
-                            }
-                            case VarCharVector v -> {
-                                long s = 0;
-                                for (int i = 0; i < root.getRowCount(); i++) {
-                                    if (!v.isNull(i)) {
-                                        s += v.get(i).length;
-                                    }
-                                }
-                                if (s > 0) {
-                                    strLenSums.merge(field.getName(), s, Long::sum);
-                                }
-                            }
-                            default -> {
-                                // skip: bool, null, list, struct, extension, etc.
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            rowCount.addAndGet(root.getRowCount());
+            for (var field : root.getSchema().getFields()) {
+                var vec = root.getVector(field.getName());
+                switch (vec) {
+                    case BigIntVector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.get(i);
                             }
                         }
+                        numSums.merge(field.getName(), (double) s, Double::sum);
+                    }
+                    case IntVector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.get(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), (double) s, Double::sum);
+                    }
+                    case SmallIntVector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.get(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), (double) s, Double::sum);
+                    }
+                    case TinyIntVector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.get(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), (double) s, Double::sum);
+                    }
+                    case UInt1Vector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.getValueAsLong(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), (double) s, Double::sum);
+                    }
+                    case Float8Vector v -> {
+                        double s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.get(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), s, Double::sum);
+                    }
+                    case Float4Vector v -> {
+                        double s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.get(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), s, Double::sum);
+                    }
+                    case UInt2Vector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.getValueAsLong(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), (double) s, Double::sum);
+                    }
+                    case UInt4Vector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.getValueAsLong(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), (double) s, Double::sum);
+                    }
+                    case UInt8Vector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.getValueAsLong(i);
+                            }
+                        }
+                        numSums.merge(field.getName(), (double) s, Double::sum);
+                    }
+                    case VarCharVector v -> {
+                        long s = 0;
+                        for (int i = 0; i < root.getRowCount(); i++) {
+                            if (!v.isNull(i)) {
+                                s += v.get(i).length;
+                            }
+                        }
+                        if (s > 0) {
+                            strLenSums.merge(field.getName(), s, Long::sum);
+                        }
+                    }
+                    default -> {
+                        // skip: bool, null, list, struct, extension, etc.
                     }
                 }
             }
-        }
-        return new Stats(rowCount, numSums, strLenSums);
+        });
+        return new Stats(rowCount.get(), numSums, strLenSums);
     }
 
     // ── download ─────────────────────────────────────────────────────────────

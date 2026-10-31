@@ -3,6 +3,8 @@ package io.github.dfa1.vortex.integration;
 import io.github.dfa1.vortex.core.fbs.FbsArray;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.inspect.InspectorTree;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.layout.Layout;
@@ -15,7 +17,8 @@ import java.util.List;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
-/// A file's layouts and array encodings, for comparing what vortex-jni and vortex-java write.
+/// A file's layouts and array encodings, for comparing what vortex-jni and vortex-java write, and
+/// whether it holds a dict layout.
 final class EncodingTrees {
 
     private EncodingTrees() {
@@ -30,6 +33,21 @@ final class EncodingTrees {
             layoutTree(reader, reader.layout(), 0, out);
         }
         return out;
+    }
+
+    /// Whether the file holds a dict layout anywhere in its layout tree.
+    static boolean hasDictLayout(Path file) throws IOException {
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll())) {
+            return hasDictLayout(InspectorTree.build(reader).root());
+        }
+    }
+
+    /// Whether `node` or any node below it is a dict layout.
+    static boolean hasDictLayout(InspectorTree.Node node) {
+        if (node.layout().isDict()) {
+            return true;
+        }
+        return node.children().stream().anyMatch(EncodingTrees::hasDictLayout);
     }
 
     private static void layoutTree(VortexReader reader, Layout layout, int depth, List<String> out) {

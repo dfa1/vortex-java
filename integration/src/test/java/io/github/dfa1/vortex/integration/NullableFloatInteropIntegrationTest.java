@@ -1,10 +1,7 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
 import dev.vortex.api.ImmutableScanOptions;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
@@ -15,15 +12,11 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.Float4Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -203,11 +196,7 @@ class NullableFloatInteropIntegrationTest {
             }
             vector.setValueCount(ROWS);
             root.setRowCount(ROWS);
-            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
-                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
-            }
+            JniFiles.writeBatch(ALLOCATOR, writer, root);
         }
     }
 
@@ -234,20 +223,12 @@ class NullableFloatInteropIntegrationTest {
     private static List<Double> readWithJni(Path file, ImmutableScanOptions.Builder options) throws IOException {
         ScanOptions opts = options.projection(Expression.select(new String[]{"v"}, Expression.root())).build();
         List<Double> out = new ArrayList<>();
-        DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    FieldVector vec = root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        out.add(vec.isNull(i) ? null : ((Number) vec.getObject(i)).doubleValue());
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), opts, root -> {
+            FieldVector vec = root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                out.add(vec.isNull(i) ? null : ((Number) vec.getObject(i)).doubleValue());
             }
-        }
+        });
         return out;
     }
 }

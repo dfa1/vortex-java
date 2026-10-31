@@ -114,7 +114,7 @@ class DictValuesPoolCompressionIntegrationTest {
         // Then — the column is stored as one global dictionary (a DICT layout node), not a per-chunk
         // fallback. Before the type-aware cap a 8 000-distinct column produced no DICT layout.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            assertThat(hasDictLayout(InspectorTree.build(vf).root()))
+            assertThat(EncodingTrees.hasDictLayout(InspectorTree.build(vf).root()))
                     .as("8 000-distinct Utf8 column admitted to the global dictionary")
                     .isTrue();
         }
@@ -161,18 +161,6 @@ class DictValuesPoolCompressionIntegrationTest {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             assertThat(readAllStrings(vf)).isEqualTo(expected);
         }
-    }
-
-    private static boolean hasDictLayout(InspectorTree.Node node) {
-        if (node.layout().isDict()) {
-            return true;
-        }
-        for (InspectorTree.Node child : node.children()) {
-            if (hasDictLayout(child)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static List<String> readAllStrings(VortexReader vf) {

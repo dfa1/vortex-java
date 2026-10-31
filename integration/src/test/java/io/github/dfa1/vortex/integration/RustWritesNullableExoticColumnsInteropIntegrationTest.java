@@ -10,12 +10,6 @@ import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Ele
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Nulls;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.NullArray;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
@@ -30,8 +24,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -120,7 +112,7 @@ class RustWritesNullableExoticColumnsInteropIntegrationTest {
         writeWithJni(file, exotic, nulls);
 
         // When
-        List<Object> result = readJava(file, exotic.element);
+        List<Object> result = exotic.element.readColumn(file, VALUE);
 
         // Then
         List<Object> expected = new ArrayList<>();
@@ -167,32 +159,10 @@ class RustWritesNullableExoticColumnsInteropIntegrationTest {
                         }
                     }
                     root.setRowCount(BATCH_ROWS);
-                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema exported = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, exported);
-                        writer.writeBatch(array.memoryAddress(), exported.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
             }
         }
-    }
-
-    private static List<Object> readJava(Path file, Element element) throws IOException {
-        List<Object> rows = new ArrayList<>();
-        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
-             Arena arena = Arena.ofConfined()) {
-            reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()).forEachRemaining(chunk -> {
-                MaskedArray.Unwrapped column = MaskedArray.unwrap(chunk.column(VALUE));
-                Array inner = column.inner();
-                boolean allNull = inner instanceof NullArray;
-                MemorySegment lanes = allNull || !element.lanes() ? null : inner.materialize(arena);
-                for (long i = 0; i < inner.length(); i++) {
-                    boolean isNull = allNull || column.validity() != null && !column.validity().getBoolean(i);
-                    rows.add(isNull ? null : element.get(inner, lanes, i));
-                }
-            });
-        }
-        return rows;
     }
 
     private static String encodings(Path file) {

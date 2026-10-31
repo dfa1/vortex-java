@@ -7,9 +7,6 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
-import org.apache.arrow.c.ArrowArray;
-import org.apache.arrow.c.ArrowSchema;
-import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.DateDayVector;
@@ -60,68 +57,11 @@ class OhlcEncodingInspectionIntegrationTest {
         return Math.round(v * 100.0) / 100.0;
     }
 
-    @SuppressWarnings("SameParameterValue")
-    private static void writeOhlc(Path file, int totalRows, int batchSize) throws IOException {
-        String uri = file.toAbsolutePath().toUri().toString();
-        var rng = new Random(42L);
-        double px = 100.0;
-        int day = (int) LocalDate.of(2020, 1, 2).toEpochDay();
-
-        try (VortexWriter writer = VortexWriter.builder(SESSION, uri, OHLC_SCHEMA, ALLOCATOR).build()) {
-            int rowsLeft = totalRows;
-            while (rowsLeft > 0) {
-                int n = Math.min(rowsLeft, batchSize);
-                try (VectorSchemaRoot root = VectorSchemaRoot.create(OHLC_SCHEMA, ALLOCATOR)) {
-                    DateDayVector dateVec = (DateDayVector) root.getVector("date");
-                    VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
-                    Float8Vector openVec = (Float8Vector) root.getVector("open");
-                    Float8Vector highVec = (Float8Vector) root.getVector("high");
-                    Float8Vector lowVec = (Float8Vector) root.getVector("low");
-                    Float8Vector closeVec = (Float8Vector) root.getVector("close");
-                    BigIntVector volumeVec = (BigIntVector) root.getVector("volume");
-
-                    dateVec.allocateNew(n);
-                    symbolVec.allocateNew(n);
-                    openVec.allocateNew(n);
-                    highVec.allocateNew(n);
-                    lowVec.allocateNew(n);
-                    closeVec.allocateNew(n);
-                    volumeVec.allocateNew(n);
-
-                    for (int i = 0; i < n; i++) {
-                        double ret = rng.nextGaussian() * 0.02;
-                        double o = round(px * (1 + ret * 0.3));
-                        double c = round(px * (1 + ret));
-                        double spread = Math.abs(px * rng.nextDouble() * 0.03);
-                        double h = round(Math.max(o, c) + spread);
-                        double l = round(Math.min(o, c) - spread);
-                        dateVec.setSafe(i, day++);
-                        symbolVec.setSafe(i, "ACME".getBytes(StandardCharsets.UTF_8));
-                        openVec.setSafe(i, o);
-                        highVec.setSafe(i, h);
-                        lowVec.setSafe(i, l);
-                        closeVec.setSafe(i, c);
-                        volumeVec.setSafe(i, Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000)));
-                        px = c;
-                    }
-                    root.setRowCount(n);
-
-                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                        writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-                    }
-                }
-                rowsLeft -= n;
-            }
-        }
-    }
-
     @Test
     void inspect_ohlcFile_showsColumnEncodings(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("ohlc.vtx");
-        writeOhlc(file, ROWS, BATCH_SIZE);
+        writeOhlc(file, ROWS, BATCH_SIZE, new String[]{"ACME"});
 
         // When
         String result;
@@ -141,7 +81,7 @@ class OhlcEncodingInspectionIntegrationTest {
         java.nio.file.Files.deleteIfExists(file);
 
         // When
-        writeOhlcMultiSymbol(file, 10_000, BATCH_SIZE,
+        writeOhlc(file, 10_000, BATCH_SIZE,
                 new String[]{"ACME", "WIDGET", "GADGET", "MEGA", "PIXEL"});
 
         // Then
@@ -150,10 +90,9 @@ class OhlcEncodingInspectionIntegrationTest {
         assertThat(java.nio.file.Files.exists(file)).isTrue();
     }
 
-    /// Variant of writeOhlc that cycles through multiple ticker symbols so the
-    /// resulting file exercises low-cardinality Utf8 column compression.
-    @SuppressWarnings("SameParameterValue")
-    private static void writeOhlcMultiSymbol(Path file, int totalRows, int batchSize,
+    /// Writes seeded OHLC rows with vortex-jni, cycling through `symbols` one row each; several
+    /// symbols make the `symbol` column a low-cardinality Utf8 one.
+    private static void writeOhlc(Path file, int totalRows, int batchSize,
             String[] symbols) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
         var rng = new Random(42L);
@@ -200,11 +139,7 @@ class OhlcEncodingInspectionIntegrationTest {
                         px[symIdx] = c;
                     }
                     root.setRowCount(n);
-                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-                         ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                        writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-                    }
+                    JniFiles.writeBatch(ALLOCATOR, writer, root);
                 }
                 rowsLeft -= n;
             }

@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 /// Writer-agnostic synthetic OHLC (open/high/low/close + volume) data generator, shared by tests
@@ -52,6 +53,20 @@ public final class OhlcData {
     /// @param volume traded volume per row
     public record Batch(int[] date, String[] symbol, double[] open, double[] high,
                         double[] low, double[] close, long[] volume) {
+
+        /// The batch as a writer chunk: each [#SCHEMA] column name to its array.
+        ///
+        /// @return the column arrays by name
+        public Map<ColumnName, Object> columns() {
+            return Map.of(
+                    ColumnName.of("date"), date,
+                    ColumnName.of("symbol"), symbol,
+                    ColumnName.of("open"), open,
+                    ColumnName.of("high"), high,
+                    ColumnName.of("low"), low,
+                    ColumnName.of("close"), close,
+                    ColumnName.of("volume"), volume);
+        }
     }
 
     private OhlcData() {
