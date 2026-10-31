@@ -103,6 +103,25 @@ class FixedSizeListInteropIntegrationTest {
             };
         }
 
+        /// Every row of `column` as a Java read of `file` returns it, `null` where the row is null.
+        List<Object> readColumn(Path file, ColumnName column) throws IOException {
+            List<Object> rows = new ArrayList<>();
+            try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
+                 Arena arena = Arena.ofConfined()) {
+                reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()).forEachRemaining(chunk -> {
+                    MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(chunk.column(column));
+                    Array inner = unwrapped.inner();
+                    boolean allNull = inner instanceof NullArray;
+                    MemorySegment flat = allNull || !lanes() ? null : inner.materialize(arena);
+                    for (long i = 0; i < inner.length(); i++) {
+                        boolean isNull = allNull || unwrapped.validity() != null && !unwrapped.validity().getBoolean(i);
+                        rows.add(isNull ? null : get(inner, flat, i));
+                    }
+                });
+            }
+            return rows;
+        }
+
         /// The dense array of `values`, zero (or empty) where an element is null.
         Object pack(List<Object> values) {
             int n = values.size();

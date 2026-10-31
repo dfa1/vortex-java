@@ -12,9 +12,6 @@ import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Nul
 import io.github.dfa1.vortex.integration.RustWritesNullableColumnsInteropIntegrationTest.Shape;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.writer.ColumnEncoding;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -26,8 +23,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -127,7 +122,7 @@ class ForcedEncodingsNullableInteropIntegrationTest {
 
         // When
         List<Object> byRust = readJni(file);
-        List<Object> byJava = readJava(file, element);
+        List<Object> byJava = element.readColumn(file, VALUE);
 
         // Then
         assertThat(byRust).as("read by vortex-jni").containsExactlyElementsOf(expected);
@@ -168,21 +163,4 @@ class ForcedEncodingsNullableInteropIntegrationTest {
         return rows;
     }
 
-    private static List<Object> readJava(Path file, Element element) throws IOException {
-        List<Object> rows = new ArrayList<>();
-        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
-             Arena arena = Arena.ofConfined()) {
-            reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all()).forEachRemaining(chunk -> {
-                MaskedArray.Unwrapped column = MaskedArray.unwrap(chunk.column(VALUE));
-                Array inner = column.inner();
-                boolean allNull = inner instanceof NullArray;
-                MemorySegment lanes = allNull || !element.lanes() ? null : inner.materialize(arena);
-                for (long i = 0; i < inner.length(); i++) {
-                    boolean isNull = allNull || column.validity() != null && !column.validity().getBoolean(i);
-                    rows.add(isNull ? null : element.get(inner, lanes, i));
-                }
-            });
-        }
-        return rows;
-    }
 }
