@@ -1,6 +1,9 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
@@ -8,6 +11,7 @@ import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.List;
+import java.util.Optional;
 
 /// The index and chunk-offset buffers of an encoding's patches, laid out as Rust's
 /// `compress_patches` (`vortex-btrblocks`) leaves them: positions and offsets narrowed to the
@@ -24,16 +28,17 @@ record PatchBuffers(PType indexType, MemorySegment indices, PType offsetType, Me
     /// Values per chunk of patch offsets (Rust's `ENCODE_CHUNK_SIZE`, one FastLanes block).
     static final int CHUNK_SIZE = 1024;
 
-    /// Lays out the patches of an array of `length` values, `positions` being ascending.
+    /// Lays out the patches of an array of `length` values, `positionArray` being ascending.
     ///
-    /// @param positions the positions of the patched values, ascending
-    /// @param length    the number of values in the array being patched
-    /// @param ctx       the context supplying the arena
+    /// @param positionArray the positions of the patched values, ascending, at least one
+    /// @param length        the number of values in the array being patched
+    /// @param ctx           the context supplying the arena
     /// @return the buffers, with chunk offsets
-    static PatchBuffers of(List<Integer> positions, int length, EncodeContext ctx) {
-        long[] positionArray = new long[positions.size()];
-        for (int i = 0; i < positionArray.length; i++) {
-            positionArray[i] = positions.get(i);
+    /// @throws IllegalArgumentException if there are no positions: an array without patches has no
+    ///                                  patch children at all
+    static PatchBuffers of(long[] positionArray, int length, EncodeContext ctx) {
+        if (positionArray.length == 0) {
+            throw new IllegalArgumentException("no patches to lay out");
         }
         int chunkCount = (length + CHUNK_SIZE - 1) / CHUNK_SIZE;
         long[] offsetArray = new long[chunkCount];
@@ -48,6 +53,62 @@ record PatchBuffers(PType indexType, MemorySegment indices, PType offsetType, Me
         PType offsetType = narrowestUnsigned(offsetArray[chunkCount - 1]);
         return new PatchBuffers(indexType, unsigned(positionArray, indexType, ctx),
                 offsetType, unsigned(offsetArray, offsetType, ctx), chunkCount);
+    }
+
+    /// Appends the patches to `buffers` as the three children Rust writes them as: indices,
+    /// values (see [#valuesNode(Object, PType, List, EncodeContext)]) and chunk offsets.
+    ///
+    /// @param values  the patch values, as [#valuesNode(Object, PType, List, EncodeContext)] takes them
+    /// @param ptype   the values' type
+    /// @param buffers the node's buffers so far, appended to
+    /// @param ctx     the context supplying the arena
+    /// @return the indices, values and chunk-offsets children, pointing at the buffers appended
+    EncodeNode[] append(Object values, PType ptype, List<EncodedBuffer> buffers, EncodeContext ctx) {
+        EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, buffers.size());
+        buffers.add(EncodedBuffer.of(indices, indexType));
+        EncodeNode valuesNode = valuesNode(values, ptype, buffers, ctx);
+        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, buffers.size());
+        buffers.add(EncodedBuffer.of(offsets, offsetType));
+        return new EncodeNode[]{indicesNode, valuesNode, offsetsNode};
+    }
+
+    /// Appends the patch values to `buffers` as Rust's `compress_patches` leaves them: a
+    /// `vortex.constant` when every value is equal, a `vortex.primitive` otherwise.
+    ///
+    /// @param values  the patch values: a primitive array of `ptype`, or for an integer `ptype` its
+    ///                values widened to a `long[]` as `PrimitiveArrays.toLongs` widens them
+    /// @param ptype   the values' type
+    /// @param buffers the node's buffers so far, appended to
+    /// @param ctx     the context supplying the arena
+    /// @return the values child, pointing at the buffers it appended
+    static EncodeNode valuesNode(Object values, PType ptype, List<EncodedBuffer> buffers, EncodeContext ctx) {
+        int first = buffers.size();
+        boolean widened = values instanceof long[] && ptype.isInteger();
+        Optional<EncodeResult> constant = widened
+                ? ConstantEncodingEncoder.encodeIfConstantWidened(ptype, (long[]) values)
+                : ConstantEncodingEncoder.encodeIfConstant(ptype, values);
+        if (constant.isPresent()) {
+            buffers.addAll(constant.get().encodedBuffers());
+            return EncodeNode.remapBufferIndices(constant.get().rootNode(), first);
+        }
+        MemorySegment segment;
+        if (widened) {
+            segment = narrowed((long[]) values, ptype, ctx);
+        } else {
+            segment = PrimitiveArrays.toSegment(values, ptype, ctx.arena());
+        }
+        buffers.add(EncodedBuffer.of(segment, ptype));
+        return EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, first);
+    }
+
+    // Writes widened integers back at their own width, in one copy.
+    private static MemorySegment narrowed(long[] values, PType ptype, EncodeContext ctx) {
+        int width = ptype.byteSize();
+        MemorySegment segment = ctx.arena().allocate((long) values.length * width, width);
+        for (int i = 0; i < values.length; i++) {
+            PTypeIO.set(segment, (long) i * width, ptype, values[i]);
+        }
+        return segment;
     }
 
     /// The patches metadata for `count` patches.

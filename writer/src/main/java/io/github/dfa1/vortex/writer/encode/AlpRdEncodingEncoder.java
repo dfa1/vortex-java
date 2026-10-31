@@ -1,14 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.compute.LongIntMap;
-import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -362,18 +360,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             allBuffers.add(EncodedBuffer.of(PatchBuffers.unsigned(excPosArr, idxType, ctx), idxType));
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, idxOffset);
 
-            EncodeNode valNode;
-            int valOffset = allBuffers.size();
-            if (SimdOperationsSupport.preferred().allEqual(excValsArr, PType.I16)) {
-                EncodeResult constant = new ConstantEncodingEncoder().encode(DType.U16, excValsArr, ctx);
-                allBuffers.addAll(constant.encodedBuffers());
-                valNode = EncodeNode.remapBufferIndices(constant.rootNode(), valOffset);
-            } else {
-                MemorySegment valBuf = ctx.arena().allocate((long) excValsArr.length * Short.BYTES, Short.BYTES);
-                MemorySegment.copy(excValsArr, 0, valBuf, VortexFormat.LE_SHORT, 0, excValsArr.length);
-                allBuffers.add(EncodedBuffer.of(valBuf, PType.U16));
-                valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, valOffset);
-            }
+            EncodeNode valNode = PatchBuffers.valuesNode(excValsArr, PType.U16, allBuffers, ctx);
 
             patchesMeta = new ProtoPatchesMetadata(
                     exceptions.size,

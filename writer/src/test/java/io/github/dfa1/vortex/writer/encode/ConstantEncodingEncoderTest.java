@@ -492,6 +492,75 @@ class ConstantEncodingEncoderTest {
         }
     }
 
+    /// The single-scan helpers patch encodings use for their values child.
+    @Nested
+    class IfConstant {
+
+        @Test
+        void encodeIfConstant_differingValues_isEmpty() {
+            // When
+            var result = ConstantEncodingEncoder.encodeIfConstant(PType.I32, new int[]{7, 7, 8});
+
+            // Then
+            assertThat(result).isEmpty();
+        }
+
+        /// Floats compare raw bits, as Rust's `is_constant` does: -0.0 is not 0.0.
+        @Test
+        void encodeIfConstant_signedZeros_isEmpty() {
+            // When
+            var result = ConstantEncodingEncoder.encodeIfConstant(PType.F64, new double[]{0.0, -0.0});
+
+            // Then
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        void encodeIfConstant_equalValues_isTheConstant() throws java.io.IOException {
+            // When
+            var result = ConstantEncodingEncoder.encodeIfConstant(PType.F32, new float[]{1.5f, 1.5f});
+
+            // Then
+            assertThat(result).isPresent();
+            assertThat(scalarOf(result.get()).f32_value()).isEqualTo(1.5f);
+        }
+
+        @Test
+        void encodeIfConstantWidened_differingValues_isEmpty() {
+            // When
+            var result = ConstantEncodingEncoder.encodeIfConstantWidened(PType.U16, new long[]{1, 2});
+
+            // Then
+            assertThat(result).isEmpty();
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoderTest#widenedConstants")
+        void encodeIfConstantWidened_equalValues_keepTheirSign(PType ptype, long widened,
+                                                              ProtoScalarValue expected) throws java.io.IOException {
+            // When
+            var result = ConstantEncodingEncoder.encodeIfConstantWidened(ptype, new long[]{widened, widened});
+
+            // Then
+            assertThat(result).isPresent();
+            assertThat(scalarOf(result.get())).isEqualTo(expected);
+        }
+
+        private static ProtoScalarValue scalarOf(EncodeResult result) throws java.io.IOException {
+            MemorySegment seg = result.encodedBuffers().getFirst().data();
+            return ProtoScalarValue.decode(seg, 0, seg.byteSize());
+        }
+    }
+
+    /// Values as `PrimitiveArrays.toLongs` widens them: unsigned zero-extended, signed sign-extended.
+    static Stream<Arguments> widenedConstants() {
+        return Stream.of(
+                Arguments.of(PType.U8, 230L, ProtoScalarValue.ofUint64Value(230L)),
+                Arguments.of(PType.I8, -26L, ProtoScalarValue.ofInt64Value(-26L)),
+                Arguments.of(PType.U32, 0xFFFF_FFF0L, ProtoScalarValue.ofUint64Value(0xFFFF_FFF0L)),
+                Arguments.of(PType.U64, -1L, ProtoScalarValue.ofUint64Value(-1L)));
+    }
+
     static Stream<Arguments> highUnsignedConstants() {
         return Stream.of(
                 Arguments.of(PType.U8, new byte[]{(byte) 230, (byte) 230}, 230L),

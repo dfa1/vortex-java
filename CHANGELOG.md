@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** CSV import stores an empty cell in a number or boolean column as null instead of `0` or `false`, so inferred number and boolean columns are now nullable (read through `MaskedArray`), and an empty cell or a missing column fails the import where the schema declares the column non-nullable. ([#592](https://github.com/dfa1/vortex-java/issues/592))
 
 ### Fixed
+- ALP writes patch values that are all equal as a `vortex.constant`, as Rust does. ([#619](https://github.com/dfa1/vortex-java/pull/619))
+- Bit-packing writes its patches as Rust does: indices and per-1024-value chunk offsets narrowed to the smallest unsigned type that holds them, and equal values as a `vortex.constant`. ([#619](https://github.com/dfa1/vortex-java/pull/619))
 - The cascade tries encodings in Rust's registration order, so a tie between two equally small encodings goes the way Rust breaks it. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - ALP-RD packs its left and right parts at the dictionary's widths, as Rust does, instead of narrower widths that made it win where Rust picks a dictionary. ([#604](https://github.com/dfa1/vortex-java/issues/604))
 - ALP on an `F32` column compresses its encoded integers through the cascade, as Rust does for both float widths, instead of storing them raw. ([#604](https://github.com/dfa1/vortex-java/issues/604))

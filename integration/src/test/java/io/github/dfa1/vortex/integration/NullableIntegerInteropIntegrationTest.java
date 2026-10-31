@@ -54,8 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// Each column goes through vortex-jni and vortex-java, and the two files must hold the same
 /// encoding tree, data and zone stats table alike. Each shape steers the cascade to a different
-/// winner. Not covered: a column whose bit-packing needs patches, as Rust also stores the patches'
-/// chunk offsets and Java does not yet.
+/// winner.
 class NullableIntegerInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -97,7 +96,13 @@ class NullableIntegerInteropIntegrationTest {
                 shape("95% null", PType.I32, i -> Math.floorMod(RANDOM[i], 1000), i -> Math.floorMod(RANDOM[i] >>> 20, 100) < 95),
                 shape("clustered nulls", PType.I32, i -> Math.floorMod(RANDOM[i], 1000), i -> (i / 500) % 3 == 0),
                 // one null in one zone: that zone's null count makes the stats table's dict
-                shape("one null", PType.I32, i -> Math.floorMod(RANDOM[i], 1000), i -> i == 5));
+                shape("one null", PType.I32, i -> Math.floorMod(RANDOM[i], 1000), i -> i == 5),
+                // a few wide values: bit-packing with patches, which carry one offset per 1024 rows
+                shape("wide outliers", PType.I32, i -> i % 97 == 0 ? 1_000_000 + Math.floorMod(RANDOM[i], 1_000_000)
+                        : Math.floorMod(RANDOM[i], 1000), every7),
+                // all outliers equal: the patch values are a constant
+                shape("equal outliers", PType.I32, i -> i % 97 == 0 ? 1_000_000_000 : Math.floorMod(RANDOM[i], 1000),
+                        every7));
     }
 
     @ParameterizedTest(name = "{0}")
