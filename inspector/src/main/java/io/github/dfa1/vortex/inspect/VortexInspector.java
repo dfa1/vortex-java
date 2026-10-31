@@ -181,15 +181,30 @@ public final class VortexInspector {
         }
     }
 
-    static String formatDType(DType dtype) {
+    /// Renders `dtype` as one line, as the schema views print it: `I64?`, `list<utf8>`,
+    /// `struct<a: I64, b: utf8>`, with a trailing `?` when nullable.
+    ///
+    /// @param dtype the type to render
+    /// @return the one-line rendering
+    public static String formatDType(DType dtype) {
         return switch (dtype) {
+            case DType.Struct s -> {
+                var sb = new StringBuilder("struct<");
+                for (int i = 0; i < s.fieldNames().size(); i++) {
+                    if (i > 0) {
+                        sb.append(", ");
+                    }
+                    sb.append(s.fieldNames().get(i).value()).append(": ").append(formatDType(s.fieldTypes().get(i)));
+                }
+                sb.append('>');
+                yield sb.toString();
+            }
             case DType.Primitive(var pt, var nullable) -> pt.name() + (nullable ? "?" : "");
             case DType.Utf8(var nullable) -> "utf8" + (nullable ? "?" : "");
             case DType.Binary(var nullable) -> "binary" + (nullable ? "?" : "");
             case DType.Bool(var nullable) -> "bool" + (nullable ? "?" : "");
             case DType.Null _ -> "null";
             case DType.Decimal(var p, var s, var nullable) -> "decimal(" + p + "," + s + ")" + (nullable ? "?" : "");
-            case DType.Struct _ -> "struct";
             case DType.List(var elem, var nullable) -> "list<" + formatDType(elem) + ">" + (nullable ? "?" : "");
             case DType.FixedSizeList(var elem, var size, var nullable) ->
                     "list<" + formatDType(elem) + ">[" + size + "]" + (nullable ? "?" : "");

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `vortex explore` shows what is in a file: null %, min/max and a zone sparkline per column at once, then each column's total, mean, distinct count and value counts or histogram, served to the browser or written to one HTML file with `--html`. ([#608](https://github.com/dfa1/vortex-java/pull/608))
 
 ### Changed
+- `vortex inspect` shows the fields of a struct nested in a list or map, as `vortex schema` does, instead of a bare `struct`. ([#622](https://github.com/dfa1/vortex-java/pull/622))
 - **Breaking:** `RowFilter` is renamed `ScanFilter`, matching `ScanOptions`. ([#598](https://github.com/dfa1/vortex-java/pull/598))
 - **Breaking:** a filtered scan returns only the rows that match, and a limit counts those rows, as Rust's scan does; the filter only skipped whole chunks before, so a scan returned their non-matching rows too and a limit could cut matching ones. ([#598](https://github.com/dfa1/vortex-java/pull/598))
 - **Breaking:** `ScanOptions.filter()` and `limit()` return `Optional<ScanFilter>` and `Optional<ScanLimit>`, as Rust's `ScanBuilder` holds them; `withLimit` takes a `ScanLimit`, and `NO_LIMIT`, `ScanOptions.limit(long)`, `rowFilter()`, `hasFilter()` and `hasLimit()` are gone. ([#598](https://github.com/dfa1/vortex-java/pull/598))
