@@ -91,7 +91,16 @@ class NullableFloatInteropIntegrationTest {
                         i -> (i / 20) % 7 == 0),
                 // taxi Airport_fee: one dominant value, two rare ones, nulls: a dict layout
                 shape("f64 airport fee", PType.F64, i -> i % 17 == 0 ? 1.75 : i % 101 == 0 ? -1.75 : 0.0,
-                        i -> i % 10 == 3));
+                        i -> i % 10 == 3),
+                // a few values ALP cannot round-trip, all equal: its patch values are a constant
+                shape("f64 equal exceptions", PType.F64, i -> i % 97 == 0 ? Math.PI : twoDecimals.applyAsDouble(i),
+                        every7),
+                // the same in F32, over halves: ALP with constant patch values (two decimals
+                // would go to ALP-RD in F32), with and without nulls
+                shape("f32 equal exceptions", PType.F32, i -> i % 97 == 0 ? Math.PI : Math.floorMod(RANDOM[i], 1000) * 0.5,
+                        every7),
+                shape("f32 equal exceptions, no nulls", PType.F32,
+                        i -> i % 97 == 0 ? Math.PI : Math.floorMod(RANDOM[i], 1000) * 0.5, _ -> false));
     }
 
     @ParameterizedTest(name = "{0}")

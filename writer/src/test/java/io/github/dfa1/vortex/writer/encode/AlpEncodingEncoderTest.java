@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -36,7 +37,8 @@ class AlpEncodingEncoderTest {
 
     private static final AlpEncodingEncoder ENCODER = new AlpEncodingEncoder();
     private static final AlpEncodingDecoder DECODER = new AlpEncodingDecoder();
-    private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder());
+    private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(),
+            new ConstantEncodingDecoder());
 
     @Nested
     class Decode {
@@ -245,6 +247,26 @@ class AlpEncodingEncoderTest {
             assertThat(new int[]{indices.get(VortexFormat.LE_SHORT, 0), indices.get(VortexFormat.LE_SHORT, 2),
                     indices.get(VortexFormat.LE_SHORT, 4)}).containsExactly(1_023, 1_024, 1_025);
             assertThat(offsets.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE)).containsExactly(0, 1, 3);
+        }
+
+        @Test
+        void encode_f64_equalExceptions_patchValuesAreConstant() {
+            // Given: Rust's compress_patches keeps patch values that are all equal as a constant
+            double[] values = new double[2_048];
+            java.util.Arrays.fill(values, 1.0);
+            values[10] = Math.PI;
+            values[1_500] = Math.PI;
+
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+            // Then: encoded, indices, values, chunk offsets
+            assertThat(result.rootNode().children()[2].encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, values.length, DTypes.F64, REGISTRY);
+            DoubleArray decoded = (DoubleArray) DECODER.decode(ctx);
+            assertThat(decoded.getDouble(10)).isEqualTo(Math.PI);
+            assertThat(decoded.getDouble(1_500)).isEqualTo(Math.PI);
+            assertThat(decoded.getDouble(11)).isEqualTo(1.0);
         }
 
         @Test

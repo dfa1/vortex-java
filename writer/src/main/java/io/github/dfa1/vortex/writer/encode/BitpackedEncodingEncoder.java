@@ -7,16 +7,15 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.simd.SimdOperations;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
-import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -207,7 +206,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
             return new EncodeResult(root, List.of(EncodedBuffer.of(packed, ptype)), statsMin, statsMax);
         }
 
-        int[] patchIdx = new int[numPatches];
+        long[] patchIdx = new long[numPatches];
         long[] patchVal = new long[numPatches];
         long packCap = 1L << bitWidth;
         for (int i = 0, p = 0; p < numPatches; i++) {
@@ -217,22 +216,17 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
                 p++;
             }
         }
-        PType idxPtype = PType.narrowestUnsigned(n);
-        MemorySegment idxBuf = buildPatchIdxBuf(patchIdx, idxPtype, ctx.arena());
-        MemorySegment valBuf = buildPatchValBuf(patchVal, ptype, ctx.arena());
 
-        ProtoPatchesMetadata patches = new ProtoPatchesMetadata(
-                numPatches, 0L,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxPtype.ordinal()),
-                null, null, null);
-        byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, patches).encode();
-
-        EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
+        // Rust's gather_patches records each 1024-value chunk's first patch, and compress_patches
+        // narrows the indices and those chunk offsets and keeps equal values as a constant
+        // (vortex-btrblocks schemes/patches.rs): children [indices, values, chunk_offsets]
+        PatchBuffers patchBuffers = PatchBuffers.of(patchIdx, n, ctx);
+        List<EncodedBuffer> buffers = new ArrayList<>(List.of(EncodedBuffer.of(packed, ptype)));
+        EncodeNode[] patchNodes = patchBuffers.append(patchVal, ptype, buffers, ctx);
+        byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, patchBuffers.meta(numPatches)).encode();
         EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, MemorySegment.ofArray(metaBytes),
-                new EncodeNode[]{idxNode, valNode}, new int[]{0});
-        return new EncodeResult(root, List.of(EncodedBuffer.of(packed, ptype), EncodedBuffer.of(idxBuf, idxPtype),
-                EncodedBuffer.of(valBuf, ptype)), statsMin, statsMax);
+                patchNodes, new int[]{0});
+        return new EncodeResult(root, buffers, statsMin, statsMax);
     }
 
     /// Picks the bit-width that minimizes `packed_bytes + exceptions_bytes`.
@@ -255,26 +249,6 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
             }
         }
         return bestWidth;
-    }
-
-    private static MemorySegment buildPatchIdxBuf(int[] idx, PType idxPtype, Arena arena) {
-        int numPatches = idx.length;
-        int elemBytes = idxPtype.byteSize();
-        MemorySegment seg = arena.allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
-        for (int i = 0; i < numPatches; i++) {
-            PTypeIO.set(seg, (long) i * elemBytes, idxPtype, idx[i]);
-        }
-        return seg;
-    }
-
-    private static MemorySegment buildPatchValBuf(long[] val, PType ptype, Arena arena) {
-        int numPatches = val.length;
-        int elemBytes = ptype.byteSize();
-        MemorySegment seg = arena.allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
-        for (int i = 0; i < numPatches; i++) {
-            PTypeIO.set(seg, (long) i * elemBytes, ptype, val[i]);
-        }
-        return seg;
     }
 
     private static MemorySegment packFastLanes(long[] values, int n, int bitWidth, int typeBits, Arena arena) {

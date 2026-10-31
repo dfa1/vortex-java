@@ -11,6 +11,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 /// Write-only encoder for `vortex.constant`.
@@ -70,16 +71,45 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         if (!(dtype instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive or Bool dtype, got " + dtype);
         }
-        PType ptype = p.ptype();
-        long firstRaw = constantBits(data, ptype)
+        return encodeIfConstant(p.ptype(), data)
                 .orElseThrow(() -> new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array"));
-        ProtoScalarValue scalar = buildScalar(ptype, firstRaw);
-        byte[] scalarBytes = scalar.encode();
-        ProtoScalarValue statsScalar = scalar;
-        // A constant array's min and max are both the one repeated value, by construction -- no
-        // scan needed. Empty arrays report no stats, matching every other encoder's convention.
-        ProtoScalarValue stats = Array.getLength(data) > 0 ? statsScalar : null;
-        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)), stats, stats);
+    }
+
+    /// Encodes `data` as a `vortex.constant` when every value is equal (floats by raw bits), in
+    /// one scan: checking first and then encoding would scan it twice.
+    ///
+    /// @param ptype the values' type
+    /// @param data  a primitive array of `ptype`
+    /// @return the constant array, or empty when the values differ
+    static Optional<EncodeResult> encodeIfConstant(PType ptype, Object data) {
+        OptionalLong bits = constantBits(data, ptype);
+        if (bits.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(constant(ptype, bits.getAsLong(), Array.getLength(data) > 0));
+    }
+
+    /// The [#encodeIfConstant(PType, Object)] of integers already widened to `long`, as
+    /// `PrimitiveArrays.toLongs` widens them: zero-extended when unsigned, sign-extended when signed.
+    ///
+    /// @param ptype   the integer type the values were widened from
+    /// @param widened the widened values
+    /// @return the constant array, or empty when the values differ
+    static Optional<EncodeResult> encodeIfConstantWidened(PType ptype, long[] widened) {
+        if (widened.length > 0 && !SimdOperationsSupport.preferred().allEqual(widened, PType.I64)) {
+            return Optional.empty();
+        }
+        long bits = widened.length > 0 ? widened[0] : 0L;
+        return Optional.of(constant(ptype, bits, widened.length > 0));
+    }
+
+    // A constant array's min and max are both the one repeated value, by construction -- no
+    // scan needed. Empty arrays report no stats, matching every other encoder's convention.
+    private static EncodeResult constant(PType ptype, long rawBits, boolean hasStats) {
+        ProtoScalarValue scalar = buildScalar(ptype, rawBits);
+        ProtoScalarValue stats = hasStats ? scalar : null;
+        return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalar.encode())),
+                stats, stats);
     }
 
     @Override

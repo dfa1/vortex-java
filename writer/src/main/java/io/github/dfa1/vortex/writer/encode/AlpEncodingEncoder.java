@@ -5,12 +5,12 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
-import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Set;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /// Write-only encoder for `vortex.alp`.
@@ -41,6 +41,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     /// `patch_bytes`).
     private static final int PATCH_BYTES_F64 = Double.BYTES + Short.BYTES;
     private static final int PATCH_BYTES_F32 = Float.BYTES + Short.BYTES;
+    /// Initial capacity of the exception arrays, grown by doubling: most columns have few.
+    private static final int INITIAL_PATCHES = 16;
 
     /// Creates the encoder.
     public AlpEncodingEncoder() {
@@ -117,16 +119,36 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
     /// Rust drops the exceptions at null rows: "we remove null exceptions in order to keep the
     /// Patches small" (`alp_encode_components_typed`). Their encoded slots keep the fill value.
-    private static <T> void dropNullExceptions(List<Integer> indices, List<T> values, boolean[] validity) {
+    /// Compacts `indices` and `values` in place and returns how many are kept, at the front.
+    private static int dropNullExceptions(long[] indices, double[] values, boolean[] validity) {
         if (validity == null) {
-            return;
+            return indices.length;
         }
-        for (int i = indices.size() - 1; i >= 0; i--) {
-            if (!validity[indices.get(i)]) {
-                indices.remove(i);
-                values.remove(i);
+        int kept = 0;
+        for (int i = 0; i < indices.length; i++) {
+            if (validity[(int) indices[i]]) {
+                indices[kept] = indices[i];
+                values[kept] = values[i];
+                kept++;
             }
         }
+        return kept;
+    }
+
+    /// The F32 counterpart of [#dropNullExceptions(long[], double[], boolean[])].
+    private static int dropNullExceptions(long[] indices, float[] values, boolean[] validity) {
+        if (validity == null) {
+            return indices.length;
+        }
+        int kept = 0;
+        for (int i = 0; i < indices.length; i++) {
+            if (validity[(int) indices[i]]) {
+                indices[kept] = indices[i];
+                values[kept] = values[i];
+                kept++;
+            }
+        }
+        return kept;
     }
 
     /// The encoded ints, keeping the column's validity when it has one.
@@ -234,8 +256,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         int expF = exps[1];
 
         long[] encodedArr = new long[n];
-        var patchIndices = new ArrayList<Integer>();
-        var patchValues = new ArrayList<Double>();
+        long[] patchIndices = new long[INITIAL_PATCHES];
+        double[] patchValues = new double[INITIAL_PATCHES];
+        int patches = 0;
 
         double min = Double.MAX_VALUE;
         double max = -Double.MAX_VALUE;
@@ -248,8 +271,13 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             // Bit-exact, as Rust's is_eq: -0.0 encodes to 0 and decodes to +0.0, so it is an
             // exception like any other value that does not round-trip.
             if (Double.doubleToRawLongBits(decodeF64(encoded, expE, expF)) != Double.doubleToRawLongBits(v)) {
-                patchIndices.add(i);
-                patchValues.add(v);
+                if (patches == patchIndices.length) {
+                    patchIndices = Arrays.copyOf(patchIndices, patches * 2);
+                    patchValues = Arrays.copyOf(patchValues, patches * 2);
+                }
+                patchIndices[patches] = i;
+                patchValues[patches] = v;
+                patches++;
             } else if (!haveFill) {
                 fill = encoded;
                 haveFill = true;
@@ -265,14 +293,15 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         // encoded child keeps its range (a 0 there widened prices' frame of reference); with no
         // such value the raw encodings stay, as in Rust.
         if (haveFill) {
-            for (int idx : patchIndices) {
-                encodedArr[idx] = fill;
+            for (int p = 0; p < patches; p++) {
+                encodedArr[(int) patchIndices[p]] = fill;
             }
         }
 
         ProtoScalarValue statsMin = n > 0 ? scalarF64(min) : null;
         ProtoScalarValue statsMax = n > 0 ? scalarF64(max) : null;
-        return new AlpF64Data(expE, expF, encodedArr, patchIndices, patchValues, statsMin, statsMax);
+        return new AlpF64Data(expE, expF, encodedArr, Arrays.copyOf(patchIndices, patches),
+                Arrays.copyOf(patchValues, patches), statsMin, statsMax);
     }
 
     private static EncodeResult encodeF64(double[] values, EncodeContext ctx) {
@@ -286,39 +315,27 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
         EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 
-        if (d.patchIndices().isEmpty()) {
+        if (d.patchIndices().length == 0) {
             byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
             return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I64)), d.statsMin(), d.statsMax());
         }
 
-        int numPatches = d.patchIndices().size();
         PatchBuffers patchBuffers = PatchBuffers.of(d.patchIndices(), n, ctx);
-        MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 8, 8);
-        for (int i = 0; i < numPatches; i++) {
-            valBuf.setAtIndex(VortexFormat.LE_DOUBLE, i, d.patchValues().get(i));
-        }
-
-        ProtoPatchesMetadata patches = patchBuffers.meta(numPatches);
-        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patches).encode();
-
-        EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
-        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-            MemorySegment.ofArray(metaBytes),
-            new EncodeNode[]{encodedNode, idxNode, valNode, offsetsNode},
-            new int[0]);
-        return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I64),
-                EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()), EncodedBuffer.of(valBuf, PType.F64),
-                EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())), d.statsMin(), d.statsMax());
+        List<EncodedBuffer> buffers = new ArrayList<>(List.of(EncodedBuffer.of(encodedBuf, PType.I64)));
+        EncodeNode[] patchNodes = patchBuffers.append(d.patchValues(), PType.F64, buffers, ctx);
+        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patchBuffers.meta(d.patchIndices().length))
+                .encode();
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(metaBytes),
+            new EncodeNode[]{encodedNode, patchNodes[0], patchNodes[1], patchNodes[2]}, new int[0]);
+        return new EncodeResult(root, buffers, d.statsMin(), d.statsMax());
     }
 
     private static CascadeStep encodeCascadeF64(double[] values, boolean[] validity, EncodeContext ctx) {
         AlpF64Data d = computeF64(values);
-        dropNullExceptions(d.patchIndices(), d.patchValues(), validity);
-        if (d.patchIndices().isEmpty()) {
+        int kept = dropNullExceptions(d.patchIndices(), d.patchValues(), validity);
+        if (kept == 0) {
             byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[1], new int[0]);
@@ -326,25 +343,14 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
         }
 
-        int numPatches = d.patchIndices().size();
-        PatchBuffers patchBuffers = PatchBuffers.of(d.patchIndices(), values.length, ctx);
-        MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 8, 8);
-        for (int i = 0; i < numPatches; i++) {
-            valBuf.setAtIndex(VortexFormat.LE_DOUBLE, i, d.patchValues().get(i));
-        }
-
-        ProtoPatchesMetadata patches = patchBuffers.meta(numPatches);
-        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patches).encode();
-
-        EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
-        EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
-        EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
-            MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode, offsetsNode}, new int[0]);
+        PatchBuffers patchBuffers = PatchBuffers.of(Arrays.copyOf(d.patchIndices(), kept), values.length, ctx);
+        List<EncodedBuffer> buffers = new ArrayList<>();
+        EncodeNode[] patchNodes = patchBuffers.append(Arrays.copyOf(d.patchValues(), kept), PType.F64, buffers, ctx);
+        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patchBuffers.meta(kept)).encode();
+        EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(metaBytes),
+            new EncodeNode[]{null, patchNodes[0], patchNodes[1], patchNodes[2]}, new int[0]);
         ChildSlot slot = encodedSlot(DType.I64, d.encodedArr(), validity);
-        return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()),
-                EncodedBuffer.of(valBuf, PType.F64), EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())),
-                List.of(slot), d.statsMin(), d.statsMax(), true);
+        return new CascadeStep(partialRoot, buffers, List.of(slot), d.statsMin(), d.statsMax(), true);
     }
 
     private static int encodeF32(float v, int e, int f) {
@@ -424,8 +430,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         int expE = exps[0];
         int expF = exps[1];
         int[] encodedArr = new int[n];
-        var patchIndices = new ArrayList<Integer>();
-        var patchValues = new ArrayList<Float>();
+        long[] patchIndices = new long[INITIAL_PATCHES];
+        float[] patchValues = new float[INITIAL_PATCHES];
+        int patches = 0;
 
         float min = Float.MAX_VALUE;
         float max = -Float.MAX_VALUE;
@@ -437,8 +444,13 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             encodedArr[i] = encoded;
             // Bit-exact: see the F64 path above for why (-0.0 vs +0.0).
             if (Float.floatToRawIntBits(decodeF32(encoded, expE, expF)) != Float.floatToRawIntBits(v)) {
-                patchIndices.add(i);
-                patchValues.add(v);
+                if (patches == patchIndices.length) {
+                    patchIndices = Arrays.copyOf(patchIndices, patches * 2);
+                    patchValues = Arrays.copyOf(patchValues, patches * 2);
+                }
+                patchIndices[patches] = i;
+                patchValues[patches] = v;
+                patches++;
             } else if (!haveFill) {
                 fill = encoded;
                 haveFill = true;
@@ -451,22 +463,23 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             }
         }
         if (haveFill) {
-            for (int idx : patchIndices) {
-                encodedArr[idx] = fill;
+            for (int p = 0; p < patches; p++) {
+                encodedArr[(int) patchIndices[p]] = fill;
             }
         }
 
         ProtoScalarValue statsMin = n > 0 ? scalarF32(min) : null;
         ProtoScalarValue statsMax = n > 0 ? scalarF32(max) : null;
-        return new AlpF32Data(expE, expF, encodedArr, patchIndices, patchValues, statsMin, statsMax);
+        return new AlpF32Data(expE, expF, encodedArr, Arrays.copyOf(patchIndices, patches),
+                Arrays.copyOf(patchValues, patches), statsMin, statsMax);
     }
 
     /// The F32 counterpart of [#encodeCascadeF64(double[], boolean[], EncodeContext)]: Rust's ALP scheme
     /// compresses the encoded `i32`s through the cascade for either width.
     private static CascadeStep encodeCascadeF32(float[] values, boolean[] validity, EncodeContext ctx) {
         AlpF32Data d = computeF32(values);
-        dropNullExceptions(d.patchIndices(), d.patchValues(), validity);
-        if (d.patchIndices().isEmpty()) {
+        int kept = dropNullExceptions(d.patchIndices(), d.patchValues(), validity);
+        if (kept == 0) {
             byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[1], new int[0]);
@@ -474,25 +487,14 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
         }
 
-        int numPatches = d.patchIndices().size();
-        PatchBuffers patchBuffers = PatchBuffers.of(d.patchIndices(), values.length, ctx);
-        MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 4, 4);
-        for (int i = 0; i < numPatches; i++) {
-            valBuf.setAtIndex(VortexFormat.LE_FLOAT, i, d.patchValues().get(i));
-        }
-
-        ProtoPatchesMetadata patches = patchBuffers.meta(numPatches);
-        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patches).encode();
-
-        EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
-        EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
-        EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
-            MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode, offsetsNode}, new int[0]);
+        PatchBuffers patchBuffers = PatchBuffers.of(Arrays.copyOf(d.patchIndices(), kept), values.length, ctx);
+        List<EncodedBuffer> buffers = new ArrayList<>();
+        EncodeNode[] patchNodes = patchBuffers.append(Arrays.copyOf(d.patchValues(), kept), PType.F32, buffers, ctx);
+        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patchBuffers.meta(kept)).encode();
+        EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(metaBytes),
+            new EncodeNode[]{null, patchNodes[0], patchNodes[1], patchNodes[2]}, new int[0]);
         ChildSlot slot = encodedSlot(DType.I32, d.encodedArr(), validity);
-        return new CascadeStep(partialRoot, List.of(EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()),
-                EncodedBuffer.of(valBuf, PType.F32), EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())),
-                List.of(slot), d.statsMin(), d.statsMax(), true);
+        return new CascadeStep(partialRoot, buffers, List.of(slot), d.statsMin(), d.statsMax(), true);
     }
 
     private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
@@ -501,8 +503,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         int expE = d.expE();
         int expF = d.expF();
         int[] encodedArr = d.encodedArr();
-        List<Integer> patchIndices = d.patchIndices();
-        List<Float> patchValues = d.patchValues();
+        long[] patchIndices = d.patchIndices();
+        float[] patchValues = d.patchValues();
         ProtoScalarValue statsMin = d.statsMin();
         ProtoScalarValue statsMax = d.statsMax();
 
@@ -513,33 +515,20 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
         EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 
-        if (patchIndices.isEmpty()) {
+        if (patchIndices.length == 0) {
             byte[] metaBytes = new ProtoALPMetadata(expE, expF, null).encode();
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
                 MemorySegment.ofArray(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
             return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I32)), statsMin, statsMax);
         }
 
-        int numPatches = patchIndices.size();
         PatchBuffers patchBuffers = PatchBuffers.of(patchIndices, n, ctx);
-        MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 4, 4);
-        for (int i = 0; i < numPatches; i++) {
-            valBuf.setAtIndex(VortexFormat.LE_FLOAT, i, patchValues.get(i));
-        }
-
-        ProtoPatchesMetadata patches = patchBuffers.meta(numPatches);
-        byte[] metaBytes = new ProtoALPMetadata(expE, expF, patches).encode();
-
-        EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
-        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-            MemorySegment.ofArray(metaBytes),
-            new EncodeNode[]{encodedNode, idxNode, valNode, offsetsNode},
-            new int[0]);
-        return new EncodeResult(root, List.of(EncodedBuffer.of(encodedBuf, PType.I32),
-                EncodedBuffer.of(patchBuffers.indices(), patchBuffers.indexType()), EncodedBuffer.of(valBuf, PType.F32),
-                EncodedBuffer.of(patchBuffers.offsets(), patchBuffers.offsetType())), statsMin, statsMax);
+        List<EncodedBuffer> buffers = new ArrayList<>(List.of(EncodedBuffer.of(encodedBuf, PType.I32)));
+        EncodeNode[] patchNodes = patchBuffers.append(patchValues, PType.F32, buffers, ctx);
+        byte[] metaBytes = new ProtoALPMetadata(expE, expF, patchBuffers.meta(patchIndices.length)).encode();
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(metaBytes),
+            new EncodeNode[]{encodedNode, patchNodes[0], patchNodes[1], patchNodes[2]}, new int[0]);
+        return new EncodeResult(root, buffers, statsMin, statsMax);
     }
 
     private static ProtoScalarValue scalarF64(double v) {
@@ -552,13 +541,13 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record AlpF32Data(int expE, int expF, int[] encodedArr,
-                              List<Integer> patchIndices, List<Float> patchValues,
+                              long[] patchIndices, float[] patchValues,
                               ProtoScalarValue statsMin, ProtoScalarValue statsMax) {
     }
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record AlpF64Data(int expE, int expF, long[] encodedArr,
-                              List<Integer> patchIndices, List<Double> patchValues,
+                              long[] patchIndices, double[] patchValues,
                               ProtoScalarValue statsMin, ProtoScalarValue statsMax) {
     }
 }
