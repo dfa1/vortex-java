@@ -1,12 +1,7 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
-import dev.vortex.api.Session;
-import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -16,9 +11,6 @@ import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.OnPairEncodingEncoder;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -43,8 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// dictionary. A row range slices the codes window, which a full scan never exercises.
 class OnPairInteropIntegrationTest {
 
-    private static final Session SESSION = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
 
@@ -136,19 +126,12 @@ class OnPairInteropIntegrationTest {
 
     private static List<String> read(Path file, ScanOptions opts) throws IOException {
         var out = new ArrayList<String>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    var vec = root.getVector("s");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        out.add(vec.getObject(i).toString());
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), opts, root -> {
+            var vec = root.getVector("s");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                out.add(vec.getObject(i).toString());
             }
-        }
+        });
         return out;
     }
 

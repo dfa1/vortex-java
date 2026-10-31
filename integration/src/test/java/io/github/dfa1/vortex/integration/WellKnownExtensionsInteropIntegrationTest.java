@@ -1,11 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
-import dev.vortex.api.Session;
-import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -19,12 +14,9 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.StructData;
-import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.StructVector;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -47,8 +39,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// see the same values.
 class WellKnownExtensionsInteropIntegrationTest {
 
-    private static final Session SESSION = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     private static final MemorySegment NO_METADATA = MemorySegment.ofArray(new byte[0]);
     private static final DType POINT_STORAGE = new DType.Struct(
             List.of(ColumnName.of("x"), ColumnName.of("y")), List.of(DType.F64, DType.F64), false);
@@ -144,25 +134,18 @@ class WellKnownExtensionsInteropIntegrationTest {
 
     private static List<Row> readJni(Path file) throws IOException {
         List<Row> rows = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(ScanOptions.of());
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector ids = (BigIntVector) root.getVector("id");
-                    FieldVector json = root.getVector("j");
-                    FieldVector wkb = root.getVector("g");
-                    StructVector points = (StructVector) root.getVector("p");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        rows.add(new Row(ids.get(i), json.getObject(i).toString(),
-                                new String((byte[]) wkb.getObject(i), StandardCharsets.ISO_8859_1),
-                                (Double) points.getChild("x").getObject(i),
-                                (Double) points.getChild("y").getObject(i)));
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), ScanOptions.of(), root -> {
+            BigIntVector ids = (BigIntVector) root.getVector("id");
+            FieldVector json = root.getVector("j");
+            FieldVector wkb = root.getVector("g");
+            StructVector points = (StructVector) root.getVector("p");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                rows.add(new Row(ids.get(i), json.getObject(i).toString(),
+                        new String((byte[]) wkb.getObject(i), StandardCharsets.ISO_8859_1),
+                        (Double) points.getChild("x").getObject(i),
+                        (Double) points.getChild("y").getObject(i)));
             }
-        }
+        });
         return rows;
     }
 }

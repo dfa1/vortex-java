@@ -2,8 +2,6 @@ package io.github.dfa1.vortex.integration;
 
 import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
@@ -21,8 +19,6 @@ import org.apache.arrow.vector.UInt1Vector;
 import org.apache.arrow.vector.UInt2Vector;
 import org.apache.arrow.vector.UInt4Vector;
 import org.apache.arrow.vector.UInt8Vector;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -168,22 +164,15 @@ class CsvImportInteropIntegrationTest {
             options.filter(filter);
         }
         List<List<Object>> rows = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(options.build());
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        List<Object> row = new ArrayList<>();
-                        for (String column : columns) {
-                            row.add(value(root.getVector(column), i));
-                        }
-                        rows.add(row);
-                    }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), options.build(), root -> {
+            for (int i = 0; i < root.getRowCount(); i++) {
+                List<Object> row = new ArrayList<>();
+                for (String column : columns) {
+                    row.add(value(root.getVector(column), i));
                 }
+                rows.add(row);
             }
-        }
+        });
         return rows;
     }
 

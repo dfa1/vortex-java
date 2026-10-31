@@ -1,9 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
@@ -22,7 +19,6 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -353,21 +349,14 @@ class Float16InteropIntegrationTest {
                 .projection(Expression.select(new String[]{"v"}, Expression.root())).build();
         List<Short> bits = new ArrayList<>();
         List<Boolean> valid = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(options);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    Float2Vector vec = (Float2Vector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        boolean isValid = !vec.isNull(i);
-                        valid.add(isValid);
-                        bits.add(isValid ? vec.get(i) : 0);
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), options, root -> {
+            Float2Vector vec = (Float2Vector) root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                boolean isValid = !vec.isNull(i);
+                valid.add(isValid);
+                bits.add(isValid ? vec.get(i) : 0);
             }
-        }
+        });
         return pack(bits, valid);
     }
 
@@ -415,20 +404,12 @@ class Float16InteropIntegrationTest {
                 .projection(Expression.select(new String[]{"v"}, Expression.root()))
                 .build();
         List<Short> bits = new ArrayList<>();
-        DataSource source = DataSource.open(SESSION, uri);
-        Scan scan = source.scan(options);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    Float2Vector vec = (Float2Vector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        bits.add(vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, options, root -> {
+            Float2Vector vec = (Float2Vector) root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                bits.add(vec.get(i));
             }
-        }
+        });
         return toArray(bits);
     }
 

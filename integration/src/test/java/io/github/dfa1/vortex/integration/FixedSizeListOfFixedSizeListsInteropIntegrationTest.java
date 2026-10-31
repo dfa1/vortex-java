@@ -1,9 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
 import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
@@ -28,7 +25,6 @@ import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.FixedSizeListVector;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -256,24 +252,17 @@ class FixedSizeListOfFixedSizeListsInteropIntegrationTest {
             builder = builder.filter(filter);
         }
         List<List<List<Object>>> rows = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(builder.build());
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    FixedSizeListVector vector = (FixedSizeListVector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        rows.add(vector.isNull(i) ? null : vector.getObject(i).stream()
-                                .map(inner -> inner == null ? null : ((List<Object>) inner).stream()
-                                        .map(item -> item instanceof org.apache.arrow.vector.util.Text text
-                                                ? text.toString() : item)
-                                        .collect(Collectors.toCollection(ArrayList::new)))
-                                .collect(Collectors.toCollection(ArrayList::new)));
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), builder.build(), root -> {
+            FixedSizeListVector vector = (FixedSizeListVector) root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                rows.add(vector.isNull(i) ? null : vector.getObject(i).stream()
+                        .map(inner -> inner == null ? null : ((List<Object>) inner).stream()
+                                .map(item -> item instanceof org.apache.arrow.vector.util.Text text
+                                        ? text.toString() : item)
+                                .collect(Collectors.toCollection(ArrayList::new)))
+                        .collect(Collectors.toCollection(ArrayList::new)));
             }
-        }
+        });
         return rows;
     }
 

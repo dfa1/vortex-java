@@ -49,7 +49,6 @@ import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.TimeMilliVector;
 import org.apache.arrow.vector.TimeStampMilliVector;
 import org.apache.arrow.vector.ValueVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Disabled;
@@ -163,20 +162,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var longs = new ArrayList<Long>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector vec = (BigIntVector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        longs.add(vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            BigIntVector vec = (BigIntVector) root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                longs.add(vec.get(i));
             }
-        }
+        });
         return longs.stream().mapToLong(Long::longValue).toArray();
     }
 
@@ -187,20 +178,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .filter(filter)
                                    .build();
         var longs = new ArrayList<Long>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector vec = (BigIntVector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        longs.add(vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            BigIntVector vec = (BigIntVector) root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                longs.add(vec.get(i));
             }
-        }
+        });
         return longs.stream().mapToLong(Long::longValue).toArray();
     }
 
@@ -210,20 +193,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var doubles = new ArrayList<Double>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    Float8Vector vec = (Float8Vector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        doubles.add(vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            Float8Vector vec = (Float8Vector) root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                doubles.add(vec.get(i));
             }
-        }
+        });
         return doubles.stream().mapToDouble(Double::doubleValue).toArray();
     }
 
@@ -234,20 +209,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var floats = new ArrayList<Float>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    org.apache.arrow.vector.Float4Vector vec = (org.apache.arrow.vector.Float4Vector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        floats.add(vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            org.apache.arrow.vector.Float4Vector vec = (org.apache.arrow.vector.Float4Vector) root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                floats.add(vec.get(i));
             }
-        }
+        });
         float[] result = new float[floats.size()];
         for (int i = 0; i < result.length; i++) {
             result[i] = floats.get(i);
@@ -262,20 +229,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var halfs = new ArrayList<Short>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    Float2Vector vec = (Float2Vector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        halfs.add(vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            Float2Vector vec = (Float2Vector) root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                halfs.add(vec.get(i));
             }
-        }
+        });
         short[] result = new short[halfs.size()];
         for (int i = 0; i < result.length; i++) {
             result[i] = halfs.get(i);
@@ -290,20 +249,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var ints = new ArrayList<Integer>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    IntVector vec = (IntVector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        ints.add(vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            IntVector vec = (IntVector) root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                ints.add(vec.get(i));
             }
-        }
+        });
         return ints.stream().mapToInt(Integer::intValue).toArray();
     }
 
@@ -314,20 +265,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var strings = new ArrayList<String>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    ValueVector vec = root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        strings.add(vec.getObject(i).toString());
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            ValueVector vec = root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                strings.add(vec.getObject(i).toString());
             }
-        }
+        });
         return strings.toArray(String[]::new);
     }
 
@@ -368,20 +311,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var bools = new ArrayList<Boolean>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BitVector vec = (BitVector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        bools.add(!vec.isNull(i) && vec.get(i) == 1);
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            BitVector vec = (BitVector) root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                bools.add(!vec.isNull(i) && vec.get(i) == 1);
             }
-        }
+        });
         boolean[] result = new boolean[bools.size()];
         for (int i = 0; i < result.length; i++) {
             result[i] = bools.get(i);
@@ -412,25 +347,17 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var elements = new ArrayList<Long>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    ListVector vec = (ListVector) root.getVector(column);
-                    BigIntVector child = (BigIntVector) vec.getDataVector();
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        int start = vec.getOffsetBuffer().getInt((long) i * ListVector.OFFSET_WIDTH);
-                        int end = vec.getOffsetBuffer().getInt((long) (i + 1) * ListVector.OFFSET_WIDTH);
-                        for (int j = start; j < end; j++) {
-                            elements.add(child.get(j));
-                        }
-                    }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            ListVector vec = (ListVector) root.getVector(column);
+            BigIntVector child = (BigIntVector) vec.getDataVector();
+            for (int i = 0; i < root.getRowCount(); i++) {
+                int start = vec.getOffsetBuffer().getInt((long) i * ListVector.OFFSET_WIDTH);
+                int end = vec.getOffsetBuffer().getInt((long) (i + 1) * ListVector.OFFSET_WIDTH);
+                for (int j = start; j < end; j++) {
+                    elements.add(child.get(j));
                 }
             }
-        }
+        });
         return elements.stream().mapToLong(Long::longValue).toArray();
     }
 
@@ -660,21 +587,13 @@ class JavaWritesRustReadsIntegrationTest {
                                    .rowRangeEnd(end)
                                    .build();
         var values = new ArrayList<Object>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    var vector = root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        Object v = vector.getObject(i);
-                        values.add(v instanceof org.apache.arrow.vector.util.Text t ? t.toString() : v);
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            var vector = root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                Object v = vector.getObject(i);
+                values.add(v instanceof org.apache.arrow.vector.util.Text t ? t.toString() : v);
             }
-        }
+        });
         return values;
     }
 
@@ -1018,21 +937,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust parses the zone-map layout and returns every row, nulls included
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var values = new ArrayList<Long>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector vec = (BigIntVector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        values.add(vec.isNull(i) ? null : vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            BigIntVector vec = (BigIntVector) root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                values.add(vec.isNull(i) ? null : vec.get(i));
             }
-        }
+        });
         assertThat(values).containsExactly(data);
     }
 
@@ -1126,20 +1037,12 @@ class JavaWritesRustReadsIntegrationTest {
                                    .filter(filter)
                                    .build();
         var values = new ArrayList<Object>();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    var vector = root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        values.add(vector.getObject(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, opts, root -> {
+            var vector = root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                values.add(vector.getObject(i));
             }
-        }
+        });
         return values;
     }
 
@@ -1792,21 +1695,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust reads a nullable BigInt vector; null positions survive, values round-trip
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var values = new ArrayList<Long>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector vec = (BigIntVector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        values.add(vec.isNull(i) ? null : vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            BigIntVector vec = (BigIntVector) root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                values.add(vec.isNull(i) ? null : vec.get(i));
             }
-        }
+        });
         assertThat(values).containsExactly(10L, null, 30L, null, 50L, 60L);
     }
 
@@ -1827,21 +1722,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust reads the nullable Utf8 vector; null positions survive, values round-trip
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var values = new ArrayList<String>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    ValueVector vec = root.getVector("s");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        values.add(vec.isNull(i) ? null : vec.getObject(i).toString());
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            ValueVector vec = root.getVector("s");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                values.add(vec.isNull(i) ? null : vec.getObject(i).toString());
             }
-        }
+        });
         assertThat(values).containsExactly("alpha", null, "gamma", null, "epsilon");
     }
 
@@ -2026,21 +1913,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust reads a nullable BigInt vector; null positions survive, values round-trip
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var values = new ArrayList<Long>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector vec = (BigIntVector) root.getVector("v");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        values.add(vec.isNull(i) ? null : vec.get(i));
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            BigIntVector vec = (BigIntVector) root.getVector("v");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                values.add(vec.isNull(i) ? null : vec.get(i));
             }
-        }
+        });
         assertThat(values).containsExactly(10L, null, 30L, null, 50L, 60L);
     }
 
@@ -2062,21 +1941,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust reads the nullable Utf8 vector; null positions survive, values round-trip
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var values = new ArrayList<String>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    ValueVector vec = root.getVector("s");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        values.add(vec.isNull(i) ? null : vec.getObject(i).toString());
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            ValueVector vec = root.getVector("s");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                values.add(vec.isNull(i) ? null : vec.getObject(i).toString());
             }
-        }
+        });
         assertThat(values).containsExactly("hello", null, "world", null);
     }
 
@@ -2420,21 +2291,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust reads Date32 vector; row 1 null, rows 0/2 round-trip as epoch-day
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var dates = new ArrayList<LocalDate>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    DateDayVector vec = (DateDayVector) root.getVector("d");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        dates.add(vec.isNull(i) ? null : LocalDate.ofEpochDay(vec.get(i)));
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            DateDayVector vec = (DateDayVector) root.getVector("d");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                dates.add(vec.isNull(i) ? null : LocalDate.ofEpochDay(vec.get(i)));
             }
-        }
+        });
         assertThat(dates).containsExactly(d0, null, d2);
     }
 
@@ -2455,21 +2318,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust reads Time32(ms) vector; row 1 null, rows 0/2 round-trip as millis-of-day
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var times = new ArrayList<LocalTime>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    TimeMilliVector vec = (TimeMilliVector) root.getVector("t");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        times.add(vec.isNull(i) ? null : LocalTime.ofNanoOfDay((long) vec.get(i) * 1_000_000L));
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            TimeMilliVector vec = (TimeMilliVector) root.getVector("t");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                times.add(vec.isNull(i) ? null : LocalTime.ofNanoOfDay((long) vec.get(i) * 1_000_000L));
             }
-        }
+        });
         assertThat(times).containsExactly(t0, null, t2);
     }
 
@@ -2490,21 +2345,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust reads Timestamp(ms) vector; row 1 null, rows 0/2 round-trip as epoch millis
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var timestamps = new ArrayList<Instant>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    TimeStampMilliVector vec = (TimeStampMilliVector) root.getVector("ts");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        timestamps.add(vec.isNull(i) ? null : Instant.ofEpochMilli(vec.get(i)));
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            TimeStampMilliVector vec = (TimeStampMilliVector) root.getVector("ts");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                timestamps.add(vec.isNull(i) ? null : Instant.ofEpochMilli(vec.get(i)));
             }
-        }
+        });
         assertThat(timestamps).containsExactly(ts0, null, ts2);
     }
 
@@ -2528,21 +2375,13 @@ class JavaWritesRustReadsIntegrationTest {
 
         // Then — Rust reads FixedSizeBinary(16) vector; row 1 null, rows 0/2 round-trip as UUID
         String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
         var uuids = new ArrayList<UUID>();
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    FixedSizeBinaryVector vec = (FixedSizeBinaryVector) root.getVector("u");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        uuids.add(vec.isNull(i) ? null : uuidFromBytes(vec.get(i)));
-                    }
-                }
+        JniFiles.forEachBatch(uri, ScanOptions.of(), root -> {
+            FixedSizeBinaryVector vec = (FixedSizeBinaryVector) root.getVector("u");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                uuids.add(vec.isNull(i) ? null : uuidFromBytes(vec.get(i)));
             }
-        }
+        });
         assertThat(uuids).containsExactly(u0, null, u2);
     }
 

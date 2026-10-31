@@ -1,11 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
-import dev.vortex.api.Partition;
-import dev.vortex.api.Scan;
-import dev.vortex.api.Session;
-import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -20,10 +15,7 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
-import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.util.Text;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.io.TempDir;
@@ -47,8 +39,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// or not, so `withFilter(qty >= 25).withLimit(10)` returned rows Rust leaves out.
 class ScanFilterLimitInteropIntegrationTest {
 
-    private static final Session SESSION = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     /// Rows per batch: more than a zone (8192), so filters cross chunk and zone boundaries.
     private static final int ROWS = 10_000;
     private static final int BATCHES = 3;
@@ -182,27 +172,20 @@ class ScanFilterLimitInteropIntegrationTest {
                 .filter(c.jniFilter())
                 .ordered(true);
         List<List<Object>> rows = new ArrayList<>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(options.build());
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        List<Object> row = new ArrayList<>();
-                        for (String column : columns) {
-                            FieldVector vector = root.getVector(column);
-                            Object value = vector.isNull(i) ? null : vector.getObject(i);
-                            if (value instanceof Text text) {
-                                value = text.toString();
-                            }
-                            row.add(value);
-                        }
-                        rows.add(row);
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), options.build(), root -> {
+            for (int i = 0; i < root.getRowCount(); i++) {
+                List<Object> row = new ArrayList<>();
+                for (String column : columns) {
+                    FieldVector vector = root.getVector(column);
+                    Object value = vector.isNull(i) ? null : vector.getObject(i);
+                    if (value instanceof Text text) {
+                        value = text.toString();
                     }
+                    row.add(value);
                 }
+                rows.add(row);
             }
-        }
+        });
         if (c.limit() != null && rows.size() > c.limit()) {
             return rows.subList(0, c.limit().intValue());
         }

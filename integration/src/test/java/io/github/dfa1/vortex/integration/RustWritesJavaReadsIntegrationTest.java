@@ -466,19 +466,12 @@ class RustWritesJavaReadsIntegrationTest {
                 .filter(filter)
                 .build();
         var out = new ArrayList<String>();
-        Scan scan = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString()).scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    var vec = root.getVector("k");
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        out.add(vec.isNull(i) ? null : vec.getObject(i).toString());
-                    }
-                }
+        JniFiles.forEachBatch(file.toAbsolutePath().toUri().toString(), opts, root -> {
+            var vec = root.getVector("k");
+            for (int i = 0; i < root.getRowCount(); i++) {
+                out.add(vec.isNull(i) ? null : vec.getObject(i).toString());
             }
-        }
+        });
         return out;
     }
 

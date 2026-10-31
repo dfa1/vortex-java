@@ -1,5 +1,9 @@
 package io.github.dfa1.vortex.integration;
 
+import dev.vortex.api.DataSource;
+import dev.vortex.api.Partition;
+import dev.vortex.api.Scan;
+import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
@@ -14,12 +18,14 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Consumer;
 
 /// Writes files with vortex-jni for the interop tests.
 final class JniFiles {
@@ -44,6 +50,21 @@ final class JniFiles {
              ArrowSchema schema = ArrowSchema.allocateNew(allocator)) {
             Data.exportVectorSchemaRoot(allocator, root, null, array, schema);
             writer.writeBatch(array.memoryAddress(), schema.memoryAddress());
+        }
+    }
+
+    /// Scans a file with vortex-jni and hands each Arrow batch of every partition, in order, to
+    /// `batch`. The batch's vectors are valid only during the call.
+    static void forEachBatch(String uri, ScanOptions options, Consumer<VectorSchemaRoot> batch)
+            throws IOException {
+        Scan scan = DataSource.open(SESSION, uri).scan(options);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    batch.accept(reader.getVectorSchemaRoot());
+                }
+            }
         }
     }
 
