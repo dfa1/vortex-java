@@ -1,9 +1,7 @@
 package io.github.dfa1.vortex.core.model;
 
-import io.github.dfa1.vortex.core.error.VortexException;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
 /// Static factories and metadata accessors for `vortex.time` extension dtypes.
 ///
@@ -46,12 +44,8 @@ public final class TimeDtype {
     ///
     /// @param ext declared extension dtype
     /// @return the recorded time unit
-    /// @throws VortexException if metadata is missing or empty
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if metadata is missing or empty
     public static TimeUnit readUnit(DType.Extension ext) {
-        MemorySegment meta = ext.metadata();
-        if (meta == null || meta.byteSize() == 0) {
-            throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
-        }
-        return TimeUnit.fromTag(meta.get(ValueLayout.JAVA_BYTE, 0));
+        return TimeUnit.ofExtension(ext);
     }
 }

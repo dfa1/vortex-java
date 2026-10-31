@@ -1,9 +1,7 @@
 package io.github.dfa1.vortex.cli.tui.term;
 
 import java.io.IOException;
-import java.io.PrintStream;
-import java.time.Duration;
-import java.util.Optional;
+import java.io.InputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
@@ -21,8 +19,7 @@ import java.lang.invoke.MethodHandle;
 /// On entry: saves the original `termios`, switches to alt screen, hides
 /// the cursor. On [#close()]: restores everything, even on exceptions, via a
 /// shutdown hook that fires if the caller skips try-with-resources.
-@SuppressWarnings("java:S106") // terminal driver: writes control sequences straight to stdout
-public final class PosixTerminal implements Terminal {
+public final class PosixTerminal extends RawModeTerminal {
 
     private static final int STDIN_FD = 0;
     private static final int STDOUT_FD = 1;
@@ -50,18 +47,11 @@ public final class PosixTerminal implements Terminal {
                     ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
             Linker.Option.firstVariadicArg(2));
 
-    private final Arena arena;
     private final MemorySegment savedTermios;
-    private final PrintStream out;
-    private final Thread shutdownHook;
-    private boolean closed;
 
     private PosixTerminal(Arena arena, MemorySegment savedTermios) {
-        this.arena = arena;
+        super(arena, "posix-term-restore");
         this.savedTermios = savedTermios;
-        this.out = System.out;
-        this.shutdownHook = new Thread(this::restore, "posix-term-restore");
-        Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
 
     /// Enters raw mode and switches to the alternate screen.
@@ -84,10 +74,7 @@ public final class PosixTerminal implements Terminal {
                 throw new IOException("tcsetattr failed: rc=" + rc);
             }
             PosixTerminal term = new PosixTerminal(arena, saved);
-            term.out.print(Ansi.ENTER_ALT_SCREEN);
-            term.out.print(Ansi.HIDE_CURSOR);
-            term.out.print(Ansi.CLEAR_SCREEN);
-            term.out.flush();
+            term.enter();
             return term;
         } catch (Throwable t) {
             arena.close();
@@ -104,65 +91,28 @@ public final class PosixTerminal implements Terminal {
         try {
             int rc = (int) IOCTL.invokeExact(STDOUT_FD, TIOCGWINSZ, ws);
             if (rc != 0) {
-                return new Size(24, 80);
+                return DEFAULT_SIZE;
             }
         } catch (Throwable _) {
-            return new Size(24, 80);
+            return DEFAULT_SIZE;
         }
         int rows = Short.toUnsignedInt(ws.get(ValueLayout.JAVA_SHORT, 0));
         int cols = Short.toUnsignedInt(ws.get(ValueLayout.JAVA_SHORT, 2));
         if (rows == 0 || cols == 0) {
-            return new Size(24, 80);
+            return DEFAULT_SIZE;
         }
         return new Size(rows, cols);
     }
 
     @Override
-    public void write(String s) {
-        out.print(s);
+    InputStream input() {
+        return System.in;
     }
 
     @Override
-    public void flush() {
-        out.flush();
-    }
-
-    @Override
-    public Key readKey() throws IOException {
-        return KeyDecoder.next(System.in);
-    }
-
-    @Override
-    public Optional<Key> readKey(Duration timeout) throws IOException {
-        return KeyDecoder.nextWithTimeout(System.in, timeout);
-    }
-
-    @Override
-    public void close() {
-        if (closed) {
-            return;
-        }
-        closed = true;
-        try {
-            Runtime.getRuntime().removeShutdownHook(shutdownHook);
-        } catch (IllegalStateException _) {
-            // JVM already shutting down.
-        }
-        restore();
-        arena.close();
-    }
-
-    private void restore() {
-        try {
-            out.print(Ansi.SHOW_CURSOR);
-            out.print(Ansi.EXIT_ALT_SCREEN);
-            out.print(Ansi.RESET);
-            out.flush();
-            @SuppressWarnings("unused")
-            int rc = (int) TCSETATTR.invokeExact(STDIN_FD, TCSANOW, savedTermios);
-        } catch (Throwable _) {
-            // Best-effort: JVM is exiting; nothing useful to do.
-        }
+    void restoreMode() throws Throwable {
+        @SuppressWarnings("unused")
+        int rc = (int) TCSETATTR.invokeExact(STDIN_FD, TCSANOW, savedTermios);
     }
 
     @SuppressWarnings("restricted") // FFM native binding: libc downcalls are this class's purpose

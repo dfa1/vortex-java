@@ -464,32 +464,13 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @param filter the rows to count over, or `null` for every row
     /// @return the count, or empty for a column type this does not count (decimals, binary, nested)
     public Optional<Long> distinctCount(ColumnName column, ScanFilter filter) {
-        java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
-        columns.add(column);
-        ScanOptions options;
-        if (filter == null) {
-            options = ScanOptions.columns(column);
-        } else {
-            RexFilterTranslator.collectColumns(filter, columns);
-            options = ScanOptions.columns(columns.toArray(ColumnName[]::new)).withFilter(filter);
-        }
         LongIntMap bits = new LongIntMap(1024);
         java.util.Set<String> strings = new java.util.HashSet<>();
-        java.util.function.Function<Chunk, RowSelection> matcher =
-                filter == null ? null : Compute.matcher(filter);
-        try (VortexReader reader = VortexReader.open(file);
-             ScanIterator scan = reader.scan(options)) {
-            while (scan.hasNext()) {
-                try (Chunk chunk = scan.next()) {
-                    java.util.function.LongPredicate selected = matcher == null ? null : matcher.apply(chunk);
-                    Array array = chunk.column(column);
-                    BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
-                    Array data = array instanceof MaskedArray masked ? masked.inner() : array;
-                    long n = chunk.rowCount();
-                    if (!countChunk(data, validity, selected, n, bits, strings)) {
-                        return Optional.empty();
-                    }
-                }
+        try {
+            boolean counted = scanColumn(column, filter,
+                    (data, validity, selected, n) -> countChunk(data, validity, selected, n, bits, strings));
+            if (!counted) {
+                return Optional.empty();
             }
         } catch (IOException e) {
             throw new UncheckedIOException("cannot count distinct values of " + column + " in " + file, e);
@@ -569,56 +550,57 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         if (!(columnType(column) instanceof DType.Decimal decimal) || decimal.precision() > 18) {
             return Optional.empty();
         }
-        java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
-        columns.add(column);
-        ScanOptions options;
-        if (filter == null) {
-            options = ScanOptions.columns(column);
-        } else {
-            RexFilterTranslator.collectColumns(filter, columns);
-            options = ScanOptions.columns(columns.toArray(ColumnName[]::new)).withFilter(filter);
-        }
-        long sum = 0;
-        long min = Long.MAX_VALUE;
-        long max = Long.MIN_VALUE;
-        long rows = 0;
-        long nonNull = 0;
-        java.util.function.Function<Chunk, RowSelection> matcher =
-                filter == null ? null : Compute.matcher(filter);
-        try (VortexReader reader = VortexReader.open(file);
-             ScanIterator scan = reader.scan(options)) {
-            while (scan.hasNext()) {
-                try (Chunk chunk = scan.next()) {
-                    java.util.function.LongPredicate selected = matcher == null ? null : matcher.apply(chunk);
-                    Array array = chunk.column(column);
-                    BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
-                    DecimalArray data = (DecimalArray) (array instanceof MaskedArray masked ? masked.inner() : array);
-                    long n = chunk.rowCount();
-                    for (long i = 0; i < n; i++) {
-                        if (selected != null && !selected.test(i)) {
-                            continue;
-                        }
-                        rows++;
-                        if (validity != null && !validity.getBoolean(i)) {
-                            continue;
-                        }
-                        long v = data.getUnscaledLong(i);
-                        sum = Math.addExact(sum, v);
-                        min = Math.min(min, v);
-                        max = Math.max(max, v);
-                        nonNull++;
-                    }
-                }
-            }
+        DecimalTotals totals = new DecimalTotals();
+        try {
+            scanColumn(column, filter, (data, validity, selected, n) -> {
+                totals.add((DecimalArray) data, validity, selected, n);
+                return true;
+            });
         } catch (ArithmeticException overflow) {
             return Optional.empty();
         } catch (IOException e) {
             throw new UncheckedIOException("cannot sum " + column + " in " + file, e);
         }
-        int scale = decimal.scale();
-        return Optional.of(new FilteredFold(java.math.BigDecimal.valueOf(sum, scale),
-                nonNull == 0 ? null : java.math.BigDecimal.valueOf(min, scale),
-                nonNull == 0 ? null : java.math.BigDecimal.valueOf(max, scale), rows - nonNull, rows));
+        return Optional.of(totals.fold(decimal.scale()));
+    }
+
+    /// The running `SUM`/`MIN`/`MAX` and counts of [#decimalFold], as unscaled longs.
+    private static final class DecimalTotals {
+        private long sum;
+        private long min = Long.MAX_VALUE;
+        private long max = Long.MIN_VALUE;
+        private long rows;
+        private long nonNull;
+
+        /// Adds the selected rows of one chunk.
+        ///
+        /// @throws ArithmeticException if the sum overflows a long
+        void add(DecimalArray data, BoolArray validity, java.util.function.LongPredicate selected, long n) {
+            for (long i = 0; i < n; i++) {
+                if (selected != null && !selected.test(i)) {
+                    continue;
+                }
+                rows++;
+                if (validity != null && !validity.getBoolean(i)) {
+                    continue;
+                }
+                long v = data.getUnscaledLong(i);
+                sum = Math.addExact(sum, v);
+                min = Math.min(min, v);
+                max = Math.max(max, v);
+                nonNull++;
+            }
+        }
+
+        FilteredFold fold(int scale) {
+            java.math.BigDecimal lo = null;
+            java.math.BigDecimal hi = null;
+            if (nonNull > 0) {
+                lo = java.math.BigDecimal.valueOf(min, scale);
+                hi = java.math.BigDecimal.valueOf(max, scale);
+            }
+            return new FilteredFold(java.math.BigDecimal.valueOf(sum, scale), lo, hi, rows - nonNull, rows);
+        }
     }
 
     /// One `ORDER BY` key of [#topN(int[], ScanFilter, List, int)].
@@ -869,39 +851,68 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     private List<Object[]> distinctTopNStrings(int col, ScanFilter filter, java.util.Comparator<Object[]> order,
                                                int count) {
         ColumnName column = struct().fieldNames().get(col);
-        java.util.LinkedHashSet<ColumnName> columns = new java.util.LinkedHashSet<>();
-        columns.add(column);
-        ScanOptions options = ScanOptions.columns(column);
-        if (filter != null) {
-            RexFilterTranslator.collectColumns(filter, columns);
-            options = ScanOptions.columns(columns.toArray(ColumnName[]::new)).withFilter(filter);
-        }
         java.util.TreeSet<Object[]> kept = new java.util.TreeSet<>(order);
-        java.util.function.Function<Chunk, RowSelection> matcher =
-                filter == null ? null : Compute.matcher(filter);
-        try (VortexReader reader = VortexReader.open(file);
-             ScanIterator scan = reader.scan(options)) {
-            chunksScannedLastQuery.set(0);
-            while (scan.hasNext()) {
-                try (Chunk chunk = scan.next()) {
-                    chunksScannedLastQuery.incrementAndGet();
-                    java.util.function.LongPredicate selected = matcher == null ? null : matcher.apply(chunk);
-                    Array array = chunk.column(column);
-                    BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
-                    Array data = array instanceof MaskedArray masked ? masked.inner() : array;
-                    long n = chunk.rowCount();
-                    if (!distinctStrings(data, validity, selected, n, value -> offer(kept, order, new Object[]{value}, count))) {
-                        return null;
-                    }
-                    if (validity != null && hasSelectedNull(validity, selected, n)) {
-                        offer(kept, order, new Object[]{null}, count);
-                    }
+        chunksScannedLastQuery.set(0);
+        try {
+            boolean strings = scanColumn(column, filter, (data, validity, selected, n) -> {
+                chunksScannedLastQuery.incrementAndGet();
+                if (!distinctStrings(data, validity, selected, n, value -> offer(kept, order, new Object[]{value}, count))) {
+                    return false;
                 }
+                if (validity != null && hasSelectedNull(validity, selected, n)) {
+                    offer(kept, order, new Object[]{null}, count);
+                }
+                return true;
+            });
+            if (!strings) {
+                return null;
             }
         } catch (IOException e) {
             throw new UncheckedIOException("cannot scan " + file, e);
         }
         return List.copyOf(kept);
+    }
+
+    /// One chunk of a single-column scan.
+    @FunctionalInterface
+    private interface ColumnChunk {
+        /// Visits a chunk: the column's values (unwrapped when masked), its validity or `null` when
+        /// every row is valid, the rows the filter selects or `null` for all, and the row count.
+        ///
+        /// @return `false` to stop the scan
+        boolean visit(Array data, BoolArray validity, java.util.function.LongPredicate selected, long rows);
+    }
+
+    /// Scans `column` over the rows `filter` selects (every row when `null`), one chunk at a time.
+    ///
+    /// @return `false` when `visitor` stopped the scan
+    private boolean scanColumn(ColumnName column, ScanFilter filter, ColumnChunk visitor) throws IOException {
+        java.util.function.Function<Chunk, RowSelection> matcher = filter == null ? null : Compute.matcher(filter);
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(scanOptions(List.of(column), filter))) {
+            while (scan.hasNext()) {
+                try (Chunk chunk = scan.next()) {
+                    java.util.function.LongPredicate selected = matcher == null ? null : matcher.apply(chunk);
+                    Array array = chunk.column(column);
+                    BoolArray validity = array instanceof MaskedArray masked ? masked.validity() : null;
+                    Array data = array instanceof MaskedArray masked ? masked.inner() : array;
+                    if (!visitor.visit(data, validity, selected, chunk.rowCount())) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /// Reads `columns` and every column `filter` reads, with the filter pushed down.
+    private static ScanOptions scanOptions(java.util.Collection<ColumnName> columns, ScanFilter filter) {
+        java.util.LinkedHashSet<ColumnName> scanColumns = new java.util.LinkedHashSet<>(columns);
+        if (filter == null) {
+            return ScanOptions.columns(scanColumns.toArray(ColumnName[]::new));
+        }
+        RexFilterTranslator.collectColumns(filter, scanColumns);
+        return ScanOptions.columns(scanColumns.toArray(ColumnName[]::new)).withFilter(filter);
     }
 
     private static boolean hasSelectedNull(BoolArray validity, java.util.function.LongPredicate selected, long n) {
@@ -941,15 +952,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             outNames[i] = struct.fieldNames().get(cols[i]);
             outTypes[i] = struct.fieldTypes().get(cols[i]);
         }
-        java.util.LinkedHashSet<ColumnName> scanColumns = new java.util.LinkedHashSet<>(List.of(outNames));
-        ScanOptions options;
-        if (filter == null) {
-            options = ScanOptions.columns(scanColumns.toArray(ColumnName[]::new));
-        } else {
-            RexFilterTranslator.collectColumns(filter, scanColumns);
-            options = ScanOptions.columns(scanColumns.toArray(ColumnName[]::new)).withFilter(filter);
-        }
-        return new VortexEnumerator(file, chunksScannedLastQuery, options, outNames, outTypes, filter);
+        return new VortexEnumerator(file, chunksScannedLastQuery, scanOptions(List.of(outNames), filter), outNames,
+                outTypes, filter);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
