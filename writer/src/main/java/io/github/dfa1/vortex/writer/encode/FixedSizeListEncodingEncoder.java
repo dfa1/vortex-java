@@ -40,7 +40,7 @@ public final class FixedSizeListEncodingEncoder implements EncodingEncoder {
         // ListEncodingEncoder and StructEncodingEncoder do.
         EncodingEncoder inner = fsd.elements() instanceof NullableData && !(elementType instanceof DType.Extension)
                 ? new MaskedEncodingEncoder()
-                : findEncoding(elementType);
+                : FallbackEncodings.require(FALLBACK, elementType);
 
         EncodeResult elemResult = inner.encode(elementType, fsd.elements(), ctx);
 
@@ -53,14 +53,5 @@ public final class FixedSizeListEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[]{elemNode},
                 new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
-    }
-
-    private static EncodingEncoder findEncoding(DType dtype) {
-        for (EncodingEncoder enc : FALLBACK) {
-            if (enc.accepts(dtype)) {
-                return enc;
-            }
-        }
-        throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
     }
 }

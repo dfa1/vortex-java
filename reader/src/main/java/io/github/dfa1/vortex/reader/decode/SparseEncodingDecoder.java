@@ -121,19 +121,12 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         }
 
         if (ctx.dtype() instanceof DType.Bool) {
-            DType indicesDtype = new DType.Primitive(indicesPtype, false);
-            Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
-            Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
-            Array idxData = MaskedArray.innerOrSelf(patchIndices);
-            MaskedArray.Unwrapped unwrappedValues = MaskedArray.unwrap(patchValues);
-            Array valData = unwrappedValues.inner();
-            BoolArray patchValidity = unwrappedValues.validity();
-            checkPatchChild(idxData, numPatches, ROLE_INDICES);
-            checkPatchChild(valData, numPatches, ROLE_VALUES);
+            Patches decoded = decodePatches(ctx, numPatches, indicesPtype);
             boolean fillValue = Boolean.TRUE.equals(fillScalar.bool_value());
-            BoolArray boolValues = checkedCast(valData, BoolArray.class, ROLE_VALUES);
-            Array result = new LazySparseBoolArray(ctx.dtype(), n, fillValue, boolValues, idxData, offset);
-            return withSparseValidity(ctx, result, fillValid, patchValidity, idxData, numPatches, n, offset);
+            BoolArray boolValues = checkedCast(decoded.values(), BoolArray.class, ROLE_VALUES);
+            Array result = new LazySparseBoolArray(ctx.dtype(), n, fillValue, boolValues, decoded.indices(), offset);
+            return withSparseValidity(ctx, result, fillValid, decoded.validity(), decoded.indices(), numPatches, n,
+                    offset);
         }
 
         if (!(ctx.dtype() instanceof DType.Primitive)) {
@@ -145,15 +138,10 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         // Lazy path: keep fill bits + decoded patches; no n-sized buffer allocated.
         // When numPatches == 0 we still decode zero-length children so the record's
         // patchValues.length() and findPatch can rely on real (empty) Array instances.
-        DType indicesDtype = new DType.Primitive(indicesPtype, false);
-        Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
-        Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
-        Array idxData = MaskedArray.innerOrSelf(patchIndices);
-        MaskedArray.Unwrapped unwrappedValues = MaskedArray.unwrap(patchValues);
-        Array valData = unwrappedValues.inner();
-        BoolArray patchValidity = unwrappedValues.validity();
-        checkPatchChild(idxData, numPatches, ROLE_INDICES);
-        checkPatchChild(valData, numPatches, ROLE_VALUES);
+        Patches decoded = decodePatches(ctx, numPatches, indicesPtype);
+        Array idxData = decoded.indices();
+        Array valData = decoded.values();
+        BoolArray patchValidity = decoded.validity();
 
         Array result = switch (valuePtype) {
             case I64, U64 -> new LazySparseLongArray(ctx.dtype(), n, fillBits,
@@ -223,6 +211,21 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
     /// @param child      decoded patch child (indices or values)
     /// @param numPatches number of patches the metadata declares
     /// @param role       `"indices"` or `"values"`, for the error message
+    /// A sparse array's decoded patch children: positions and values unwrapped from any
+    /// `vortex.masked`, and the values' validity (`null` when every patch is valid).
+    private record Patches(Array indices, Array values, BoolArray validity) {
+    }
+
+    /// Decodes and checks the patch positions (child 0) and values (child 1).
+    private static Patches decodePatches(DecodeContext ctx, long numPatches, PType indicesPtype) {
+        Array indices = MaskedArray.innerOrSelf(
+                ctx.decodeChild(0, new DType.Primitive(indicesPtype, false), numPatches));
+        MaskedArray.Unwrapped values = MaskedArray.unwrap(ctx.decodeChild(1, ctx.dtype(), numPatches));
+        checkPatchChild(indices, numPatches, ROLE_INDICES);
+        checkPatchChild(values.inner(), numPatches, ROLE_VALUES);
+        return new Patches(indices, values.inner(), values.validity());
+    }
+
     private static void checkPatchChild(Array child, long numPatches, String role) {
         if (numPatches > 0 && child.segmentIfPresent().filter(s -> s.byteSize() == 0).isPresent()) {
             throw new VortexException(EncodingId.VORTEX_SPARSE,

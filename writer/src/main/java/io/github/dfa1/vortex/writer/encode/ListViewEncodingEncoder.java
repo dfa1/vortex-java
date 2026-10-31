@@ -55,7 +55,7 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
         EncodingEncoder elemEncoding =
                 (lvd.elements() instanceof NullableData && !(elementType instanceof DType.Extension))
                         ? new MaskedEncodingEncoder()
-                        : findEncoding(elementType);
+                        : FallbackEncodings.require(FALLBACK, elementType);
         EncodeResult elemResult = elemEncoding.encode(elementType, lvd.elements(), ctx);
 
         List<EncodedBuffer> allBuffers = new ArrayList<>(elemResult.encodedBuffers());
@@ -115,14 +115,5 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
             return validity.length;
         }
         return java.lang.reflect.Array.getLength(elements);
-    }
-
-    private static EncodingEncoder findEncoding(DType dtype) {
-        for (EncodingEncoder enc : FALLBACK) {
-            if (enc.accepts(dtype)) {
-                return enc;
-            }
-        }
-        throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
     }
 }

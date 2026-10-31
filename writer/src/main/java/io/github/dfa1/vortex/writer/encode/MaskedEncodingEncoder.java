@@ -265,12 +265,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     }
 
     private static EncodingEncoder pickInner(DType nonNullable) {
-        for (EncodingEncoder e : INNER_FALLBACK) {
-            if (e.accepts(nonNullable)) {
-                return e;
-            }
-        }
-        throw new VortexException(EncodingId.VORTEX_MASKED,
-                "no inner encoding for " + nonNullable);
+        return FallbackEncodings.find(INNER_FALLBACK, nonNullable)
+                .orElseThrow(() -> new VortexException(EncodingId.VORTEX_MASKED, "no inner encoding for " + nonNullable));
     }
 }

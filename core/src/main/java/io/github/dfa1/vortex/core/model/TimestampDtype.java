@@ -53,11 +53,7 @@ public final class TimestampDtype {
     /// @return the recorded time unit
     /// @throws VortexException if metadata is missing or empty
     public static TimeUnit readUnit(DType.Extension ext) {
-        MemorySegment meta = ext.metadata();
-        if (meta == null || meta.byteSize() == 0) {
-            throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
-        }
-        return TimeUnit.fromTag(meta.get(ValueLayout.JAVA_BYTE, 0));
+        return TimeUnit.ofExtension(ext);
     }
 
     /// Reads the optional IANA timezone from the metadata's UTF-8 suffix.

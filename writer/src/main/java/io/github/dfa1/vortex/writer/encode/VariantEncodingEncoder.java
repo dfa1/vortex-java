@@ -83,17 +83,9 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
     /// Encodes the shredded typed column as a child node, appending its buffers (remapped
     /// to follow the core-storage buffers already in `buffers`).
     private static EncodeNode encodeShredded(VariantData data, EncodeContext ctx, List<EncodedBuffer> buffers) {
-        EncodingEncoder enc = null;
-        for (EncodingEncoder e : SHREDDED_FALLBACK) {
-            if (e.accepts(data.shreddedDtype())) {
-                enc = e;
-                break;
-            }
-        }
-        if (enc == null) {
-            throw new VortexException(EncodingId.VORTEX_VARIANT,
-                    "no encoder for shredded dtype: " + data.shreddedDtype());
-        }
+        EncodingEncoder enc = FallbackEncodings.find(SHREDDED_FALLBACK, data.shreddedDtype())
+                .orElseThrow(() -> new VortexException(EncodingId.VORTEX_VARIANT,
+                        "no encoder for shredded dtype: " + data.shreddedDtype()));
         EncodeResult shredded = enc.encode(data.shreddedDtype(), data.shreddedData(), ctx);
         EncodeNode child = EncodeNode.remapBufferIndices(shredded.rootNode(), buffers.size());
         buffers.addAll(shredded.encodedBuffers());

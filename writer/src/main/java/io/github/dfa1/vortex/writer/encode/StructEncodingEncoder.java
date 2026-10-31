@@ -50,7 +50,7 @@ public final class StructEncodingEncoder implements EncodingEncoder {
             EncodingEncoder fieldEncoder =
                     (fieldData instanceof NullableData && !(fieldDtype instanceof DType.Extension))
                             ? new MaskedEncodingEncoder()
-                            : findEncoding(fieldDtype);
+                            : FallbackEncodings.require(FALLBACK, fieldDtype);
             EncodeResult fieldResult = fieldEncoder.encode(fieldDtype, fieldData, ctx);
             int bufOffset = allBuffers.size();
             children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
@@ -58,14 +58,5 @@ public final class StructEncodingEncoder implements EncodingEncoder {
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_STRUCT, null, children, new int[0]);
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
-    }
-
-    private static EncodingEncoder findEncoding(DType dtype) {
-        for (EncodingEncoder enc : FALLBACK) {
-            if (enc.accepts(dtype)) {
-                return enc;
-            }
-        }
-        throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
     }
 }

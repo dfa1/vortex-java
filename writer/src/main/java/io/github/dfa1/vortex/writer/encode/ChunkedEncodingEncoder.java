@@ -58,7 +58,7 @@ public final class ChunkedEncodingEncoder implements EncodingEncoder {
         EncodeNode[] children = new EncodeNode[nchunks + 1];
         children[0] = offsetsResult.rootNode();
 
-        EncodingEncoder inner = findEncoding(dtype);
+        EncodingEncoder inner = FallbackEncodings.require(FALLBACK, dtype);
         for (int i = 0; i < nchunks; i++) {
             EncodeResult chunkResult = inner.encode(dtype, chunks.get(i), ctx);
             int bufOffset = allBuffers.size();
@@ -72,14 +72,5 @@ public final class ChunkedEncodingEncoder implements EncodingEncoder {
                 children,
                 new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
-    }
-
-    private static EncodingEncoder findEncoding(DType dtype) {
-        for (EncodingEncoder enc : FALLBACK) {
-            if (enc.accepts(dtype)) {
-                return enc;
-            }
-        }
-        throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
     }
 }
