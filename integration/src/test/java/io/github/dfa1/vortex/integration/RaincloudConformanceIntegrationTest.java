@@ -236,9 +236,9 @@ class RaincloudConformanceIntegrationTest {
             TimeUnit[] units = new TimeUnit[struct.fieldTypes().size()];
             for (int i = 0; i < units.length; i++) {
                 if (struct.fieldTypes().get(i) instanceof DType.Extension ext) {
-                    if (ExtensionId.VORTEX_TIMESTAMP.id().equals(ext.extensionId())) {
+                    if (ext.extensionId() == ExtensionId.VORTEX_TIMESTAMP) {
                         units[i] = TimestampDtype.readUnit(ext);
-                    } else if (ExtensionId.VORTEX_TIME.id().equals(ext.extensionId())) {
+                    } else if (ext.extensionId() == ExtensionId.VORTEX_TIME) {
                         units[i] = TimeDtype.readUnit(ext);
                     }
                 }

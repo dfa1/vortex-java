@@ -94,7 +94,8 @@ class CustomExtensionIntegrationTest {
 
         @Test
         void fullScan_decodesEveryVectorAndNull(@TempDir Path tmp) throws IOException {
-            // Given — three batches of nullable vectors written from float[] values
+            // Given — three batches of nullable vectors written from float[] values, a null vector
+            // at every seventh row (3, 10, 17, …)
             Path file = tmp.resolve("vectors.vortex");
             writeVectors(file, vectorDtype(true));
 
@@ -104,20 +105,9 @@ class CustomExtensionIntegrationTest {
             // Then
             assertThat(result.keySet()).containsExactlyElementsOf(ids(0, ROWS));
             assertEachVectorMatchesItsId(result);
-        }
-
-        @Test
-        void nullRows_readBackAsNull(@TempDir Path tmp) throws IOException {
-            // Given — a nullable column written with a null vector at every seventh row (3, 10, 17, …)
-            Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(true));
-
-            // When
-            SequencedMap<Long, float[]> result = readVectors(file, ScanOptions.all());
-
-            // Then — the null rows, listed by id rather than compared with vector(): a fixture that
-            // stops writing nulls still agrees with vector() and passes assertEachVectorMatchesItsId,
-            // so only this catches it; an encoder or decoder losing the validity fails here too
+            // the null rows, listed by id rather than compared with vector(): a fixture that stops
+            // writing nulls still agrees with vector() and passes the check above, so only this
+            // catches it; an encoder or decoder losing the validity fails here too
             List<Long> nullRows = result.entrySet().stream()
                     .filter(row -> row.getValue() == null)
                     .map(Map.Entry::getKey)

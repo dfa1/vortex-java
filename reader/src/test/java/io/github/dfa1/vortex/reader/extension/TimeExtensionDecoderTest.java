@@ -64,19 +64,19 @@ class TimeExtensionDecoderTest {
         // Given — round-trip a known time-of-day through every TimeUnit
         try (Arena arena = Arena.ofConfined()) {
             // Seconds: 3661 s = 01:01:01
-            assertThat(sut.decode(ext("vortex.time", I32, unitByte((byte) 3)),
+            assertThat(sut.decode(ext(ExtensionId.VORTEX_TIME, I32, unitByte((byte) 3)),
                     i32(arena, 3661), 0))
                     .isEqualTo(LocalTime.of(1, 1, 1));
             // Milliseconds: 3_661_500 = 01:01:01.500
-            assertThat(sut.decode(ext("vortex.time", I32, unitByte((byte) 2)),
+            assertThat(sut.decode(ext(ExtensionId.VORTEX_TIME, I32, unitByte((byte) 2)),
                     i32(arena, 3_661_500), 0))
                     .isEqualTo(LocalTime.of(1, 1, 1, 500_000_000));
             // Microseconds: 1_000_001 = 00:00:01.000001
-            assertThat(sut.decode(ext("vortex.time", I64, unitByte((byte) 1)),
+            assertThat(sut.decode(ext(ExtensionId.VORTEX_TIME, I64, unitByte((byte) 1)),
                     i64(arena, 1_000_001L), 0))
                     .isEqualTo(LocalTime.of(0, 0, 1, 1_000));
             // Nanoseconds: 42 ns past midnight
-            assertThat(sut.decode(ext("vortex.time", I64, unitByte((byte) 0)),
+            assertThat(sut.decode(ext(ExtensionId.VORTEX_TIME, I64, unitByte((byte) 0)),
                     i64(arena, 42L), 0))
                     .isEqualTo(LocalTime.ofNanoOfDay(42));
         }
@@ -86,7 +86,7 @@ class TimeExtensionDecoderTest {
     void decode_daysUnitThrows() {
         // Given — Days isn't a sub-second unit
         try (Arena arena = Arena.ofConfined()) {
-            DType.Extension dtype = ext("vortex.time", I32, unitByte((byte) 4));
+            DType.Extension dtype = ext(ExtensionId.VORTEX_TIME, I32, unitByte((byte) 4));
             IntArray storage = i32(arena, 0);
 
             // When / Then

@@ -27,6 +27,15 @@ class DTypeExtensionTest {
         }
 
         @Test
+        void nullId_rejected() {
+            // Given / When / Then — refused where it is built, not later as an NPE in the serializer
+            // (`extensionId().id()`) or a registry lookup
+            assertThatThrownBy(() -> new DType.Extension(null, I32, OpaqueMetadata.EMPTY, false))
+                    .isInstanceOf(NullPointerException.class)
+                    .hasMessage("extensionId");
+        }
+
+        @Test
         void nonRecordMetadata_rejected() {
             // Given metadata whose equality is identity: a dtype holding it would not compare by
             // value, so two reads of one file would give unequal schemas
