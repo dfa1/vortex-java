@@ -3,6 +3,9 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimestampDtype;
+import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -88,6 +91,25 @@ class RepartitionerTest {
         assertThat(result).isInstanceOfSatisfying(NullableData.class, nd -> {
             assertThat((long[]) nd.values()).containsExactly(1, 0, 3, 4, 5);
             assertThat(nd.validity()).containsExactly(true, false, true, true, true);
+        });
+    }
+
+    @Test
+    void dateTimePartsBatchMixedWithNullableBatch_coalescesToNullablePlainStorage() {
+        // Given — a nullable timestamp column whose import sends a batch without nulls as
+        // pre-decomposed DateTimePartsData and one with nulls as NullableData (#627). Wrapping the
+        // parts carrier inside NullableData gave encoders a shape none of them accepts.
+        var sut = new Repartitioner(TimestampDtype.of(TimeUnit.Microseconds, null, true));
+        sut.add(new DateTimePartsData(new long[]{1, 2}, true), 2);
+        sut.add(new NullableData(new long[]{0, 4}, new boolean[]{false, true}), 2);
+
+        // When
+        Object result = sut.finish().getFirst();
+
+        // Then
+        assertThat(result).isInstanceOfSatisfying(NullableData.class, nd -> {
+            assertThat((long[]) nd.values()).containsExactly(1, 2, 0, 4);
+            assertThat(nd.validity()).containsExactly(true, true, false, true);
         });
     }
 

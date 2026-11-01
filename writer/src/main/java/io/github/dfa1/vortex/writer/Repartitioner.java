@@ -293,9 +293,13 @@ final class Repartitioner {
     }
 
     /// Rebuilds `like`'s carrier shape around new values (and validity, for a nullable carrier).
+    /// A validity always wraps the plain values: no encoder takes [DateTimePartsData] inside
+    /// [NullableData], so a parts piece coalesced with a nullable one (#627) becomes nullable
+    /// plain storage, the shape a nullable `Instant` column takes.
     private static Object rewrap(Object like, Object values, boolean[] validity) {
-        Object inner = like instanceof NullableData nd ? nd.values() : like;
-        Object wrapped = inner instanceof DateTimePartsData dtp ? new DateTimePartsData((long[]) values, dtp.nullable()) : values;
-        return validity == null ? wrapped : new NullableData(wrapped, validity);
+        if (validity != null) {
+            return new NullableData(values, validity);
+        }
+        return like instanceof DateTimePartsData dtp ? new DateTimePartsData((long[]) values, dtp.nullable()) : values;
     }
 }

@@ -41,6 +41,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -497,6 +498,36 @@ class ParquetExporterTest {
             List<Instant> instants = List.of(
                     Instant.ofEpochMilli(-1_500L),
                     Instant.EPOCH,
+                    Instant.ofEpochMilli(1_733_000_000_000L));
+            Path original = writeVortex(tmp, "original.vortex",
+                    List.of(ColumnName.of("events")), List.of(tsDtype),
+                    Map.of(ColumnName.of("events"), instants));
+            Path parquet = tmp.resolve("out.parquet");
+            Path reimported = tmp.resolve("reimported.vortex");
+
+            // When
+            ParquetExporter.exportParquet(original, parquet);
+            ParquetImporter.importParquet(parquet, reimported);
+
+            // Then
+            try (VortexReader reader = VortexReader.open(reimported);
+                 ScanIterator iter = reader.scan(ScanOptions.all())) {
+                assertThat(iter.hasNext()).isTrue();
+                try (Chunk chunk = iter.next()) {
+                    assertThat(chunk.as(ColumnName.of("events"), Instant.class)).containsExactlyElementsOf(instants);
+                }
+            }
+        }
+
+        @Test
+        void nullableTimestampColumn_withNulls_roundTripThroughParquetAndBack(@TempDir Path tmp) throws Exception {
+            // Given — an OPTIONAL Parquet TIMESTAMP holding nulls, first row included (#627: the
+            // import read a null into a primitive long[] and failed as "declared REQUIRED")
+            DType.Extension tsDtype = TimestampDtype.of(TimeUnit.Microseconds, null, true);
+            List<Instant> instants = Arrays.asList(
+                    null,
+                    Instant.ofEpochMilli(-1_500L),
+                    null,
                     Instant.ofEpochMilli(1_733_000_000_000L));
             Path original = writeVortex(tmp, "original.vortex",
                     List.of(ColumnName.of("events")), List.of(tsDtype),
