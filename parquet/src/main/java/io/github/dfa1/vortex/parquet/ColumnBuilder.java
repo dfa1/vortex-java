@@ -163,6 +163,11 @@ final class LeafColumnBuilder implements ColumnBuilder {
             throw new UnsupportedOperationException(
                     "nested Extension (timestamp) columns are not supported: " + dtype);
         }
+        // a nested DECIMAL used to map to its bare integer and be truncated through Number; until
+        // the builder carries BigDecimal elements it fails at the import's start instead
+        if (dtype instanceof DType.Decimal) {
+            throw new UnsupportedOperationException("nested DECIMAL columns are not supported: " + dtype);
+        }
         this.dtype = dtype;
     }
 

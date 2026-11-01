@@ -492,7 +492,9 @@ A decoder claims its ids via `LayoutDecoder.layoutIds()` (a set — the zoned de
 
 Supports flat schemas and nested `LIST`/`STRUCT` columns, recursively composable (e.g.
 `LIST<STRUCT<...>>`); `MAP` and `VARIANT` are not yet supported. Un-annotated `BYTE_ARRAY` maps
-to `DType.Binary`.
+to `DType.Binary`. A top-level `DECIMAL` column, in any of its four physical encodings (`INT32`,
+`INT64`, `FIXED_LEN_BYTE_ARRAY`, `BYTE_ARRAY`), maps to `DType.Decimal` with the annotation's
+precision and scale; a `DECIMAL` nested in a `LIST`/`STRUCT` is not yet supported.
 
 | Method                                            | Notes                              |
 |---------------------------------------------------|-------------------------------------|
