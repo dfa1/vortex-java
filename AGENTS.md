@@ -77,6 +77,13 @@ Trunk-based, `main` always green, small commits. The repo allows **rebase merges
 and merge commits are disabled): squash a PR's commits locally into one, force-push, then
 `gh pr merge --rebase`.
 
+**Always keep history linear:**
+- Before merging, run `git pull --rebase origin main` to ensure your branch is rebased on latest main
+- Use `git merge --ff-only` for fast-forward merges, or `git rebase` followed by `git merge --ff-only`
+- Never create merge commits; if a merge commit is created accidentally, reset and redo with rebase
+- When squashing commits locally, use `git reset --soft` to keep changes staged, then commit with one message
+- Verify linear history with `git log --oneline --graph` before pushing
+
 ## Commands
 
 **Never `mvn install` / `./mvnw install`.** Normal builds need no external tools; generated
