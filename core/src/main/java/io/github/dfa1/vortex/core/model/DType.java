@@ -335,12 +335,13 @@ public sealed interface DType
 
     /// Extension logical type with user-defined semantics layered over a storage type.
     ///
-    /// @param extensionId  unique string identifier for the extension type (e.g. `"vortex.timestamp"`)
+    /// @param extensionId  the extension type's id ([ExtensionId#VORTEX_TIMESTAMP], or a custom id
+    ///                     from [ExtensionId#parse(String)])
     /// @param storageDType underlying storage dtype used for physical encoding
     /// @param metadata     the extension's metadata, [OpaqueMetadata#EMPTY] for none
     /// @param nullable     whether null values are permitted
     record Extension(
-            String extensionId,
+            ExtensionId extensionId,
             DType storageDType,
             ExtensionMetadata metadata,
             boolean nullable
@@ -348,9 +349,10 @@ public sealed interface DType
 
         /// Requires metadata that is a record, so the dtype compares and hashes by value.
         ///
-        /// @throws NullPointerException     if `metadata` is `null`
+        /// @throws NullPointerException     if `extensionId` or `metadata` is `null`
         /// @throws IllegalArgumentException if `metadata` is not a record
         public Extension {
+            Objects.requireNonNull(extensionId, "extensionId");
             Objects.requireNonNull(metadata, "metadata");
             if (!metadata.getClass().isRecord()) {
                 throw new IllegalArgumentException(

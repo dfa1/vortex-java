@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -49,7 +50,7 @@ class ExtEncodingEncoderTest {
         // pruning and MIN/MAX push-down purely for being a timestamp rather than a bare i64.
 
         private static final DType.Extension TIMESTAMP =
-                new DType.Extension("vortex.timestamp", DTypes.I64, TIMESTAMP_MS, false);
+                new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, TIMESTAMP_MS, false);
 
         @Test
         void encode_extensionColumn_reportsStorageSpaceBounds() throws Exception {
@@ -98,7 +99,7 @@ class ExtEncodingEncoderTest {
         @Test
         void accepts_extensionDtype_returnsTrue() {
             // Given
-            DType extDType = new DType.Extension("vortex.timestamp",
+            DType extDType = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP,
                     DTypes.I64, TIMESTAMP_MS, false);
 
             // When / Then
@@ -116,7 +117,7 @@ class ExtEncodingEncoderTest {
             // Given
             long[] data = {100L, 200L, 300L, 400L};
             DType storageDType = DTypes.I64;
-            DType extDType = new DType.Extension("vortex.timestamp", storageDType, TIMESTAMP_MS, false);
+            DType extDType = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, storageDType, TIMESTAMP_MS, false);
 
             // When
             EncodeResult resultEncoded = ENCODER.encode(extDType, data, EncodeTestHelper.testCtx());
@@ -157,7 +158,7 @@ class ExtEncodingEncoderTest {
             // Given
             long[] data = {100L, 200L, 300L, 400L};
             DType storageDType = DTypes.I64;
-            DType extDType = new DType.Extension("vortex.timestamp", storageDType, TIMESTAMP_MS, false);
+            DType extDType = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, storageDType, TIMESTAMP_MS, false);
 
             // When
             CascadeStep result = ENCODER.encodeCascade(extDType, data, EncodeTestHelper.testCtx());
@@ -195,7 +196,7 @@ class ExtEncodingEncoderTest {
             MemorySegment buf = TestSegments.leLongs(values);
 
             DType storageDType = DTypes.I64;
-            DType extDType = new DType.Extension("vortex.timestamp", storageDType, TIMESTAMP_MS, false);
+            DType extDType = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, storageDType, TIMESTAMP_MS, false);
 
             ArrayNode primitiveNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
             ArrayNode extNode = new ArrayNode(EncodingId.VORTEX_EXT, null, new ArrayNode[]{primitiveNode}, new int[0]);
@@ -261,7 +262,7 @@ class ExtEncodingEncoderTest {
                                     nulls)),
                     Arguments.of(UuidExtensionEncoder.INSTANCE.dtype(true),
                             UuidExtensionEncoder.INSTANCE.encodeAll(UuidExtensionEncoder.INSTANCE.dtype(true), nulls)),
-                    Arguments.of(new DType.Extension("acme.custom", DTypes.U16, OpaqueMetadata.EMPTY, true),
+                    Arguments.of(new DType.Extension(ExtensionId.parse("acme.custom"), DTypes.U16, OpaqueMetadata.EMPTY, true),
                             new NullableData(new short[ROWS], new boolean[ROWS])));
         }
 

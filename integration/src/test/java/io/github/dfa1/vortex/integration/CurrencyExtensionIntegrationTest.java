@@ -156,7 +156,7 @@ class CurrencyExtensionIntegrationTest {
 
     /// The `acme.currency` dtype: `Utf8` storage of ISO 4217 codes, no metadata.
     static DType.Extension currencyDtype(boolean nullable) {
-        return new DType.Extension(CURRENCY.id(), nullable ? DTypes.UTF8.asNullable() : DTypes.UTF8,
+        return new DType.Extension(CURRENCY, nullable ? DTypes.UTF8.asNullable() : DTypes.UTF8,
                 OpaqueMetadata.EMPTY, nullable);
     }
 

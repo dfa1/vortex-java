@@ -35,7 +35,7 @@ public final class DateExtensionEncoder implements ExtensionEncoder {
     @Override
     public DType.Extension dtype(boolean nullable) {
         return new DType.Extension(
-                ExtensionId.VORTEX_DATE.id(),
+                ExtensionId.VORTEX_DATE,
                 new DType.Primitive(PType.I32, nullable),
                 new TimeUnitMetadata(TimeUnit.Days),
                 nullable);

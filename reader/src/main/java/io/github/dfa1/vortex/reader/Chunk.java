@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.Mask;
 import io.github.dfa1.vortex.reader.array.SelectedArrays;
-import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 
 import java.lang.foreign.Arena;
@@ -220,7 +219,7 @@ public final class Chunk implements AutoCloseable {
         if (!(col.dtype() instanceof DType.Extension ext)) {
             throw new VortexException("not an extension column: " + name);
         }
-        ExtensionDecoder<?> decoder = registry.lookup(ExtensionId.parse(ext.extensionId()));
+        ExtensionDecoder<?> decoder = registry.lookup(ext.extensionId());
         if (decoder == null) {
             throw new VortexException("no extension decoder registered for " + ext.extensionId()
                     + " (column '" + name + "')");

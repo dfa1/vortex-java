@@ -325,7 +325,7 @@ final class PostscriptParser {
                 }
                 ExtensionId id = ExtensionMetadataParser.parseId(e.id());
                 yield new DType.Extension(
-                        id.id(),
+                        id,
                         storage,
                         ExtensionMetadataParser.parse(id, metadata),
                         storage.nullable());

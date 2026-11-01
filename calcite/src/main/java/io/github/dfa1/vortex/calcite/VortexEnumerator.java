@@ -268,7 +268,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
             case DType.Decimal _ -> ((DecimalArray) array).getDecimal(r);
             // Calcite's internal forms: DATE is days since the epoch (int), TIME milliseconds of the
             // day (int), TIMESTAMP milliseconds since the epoch (long)
-            case DType.Extension ext -> switch (ExtensionId.parse(ext.extensionId())) {
+            case DType.Extension ext -> switch (ext.extensionId()) {
                 case ExtensionId.WellKnown.VORTEX_DATE ->
                         Math.toIntExact(DateExtensionDecoder.INSTANCE.decode(ext, (Array) array, r).toEpochDay());
                 case ExtensionId.WellKnown.VORTEX_TIME ->

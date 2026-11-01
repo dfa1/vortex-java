@@ -1557,7 +1557,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             case DType.Bool _ -> factory.createSqlType(SqlTypeName.BOOLEAN);
             case DType.Null _ -> factory.createSqlType(SqlTypeName.NULL);
             case DType.Decimal d -> factory.createSqlType(SqlTypeName.DECIMAL, d.precision(), d.scale());
-            case DType.Extension ext -> switch (ExtensionId.parse(ext.extensionId())) {
+            case DType.Extension ext -> switch (ext.extensionId()) {
                 case ExtensionId.WellKnown.VORTEX_DATE -> factory.createSqlType(SqlTypeName.DATE);
                 // millisecond precision, the precision the scan delivers: at Calcite's default of 0 a
                 // literal built for the column (a pushed-down MIN/MAX, a top-N row) lost its millis

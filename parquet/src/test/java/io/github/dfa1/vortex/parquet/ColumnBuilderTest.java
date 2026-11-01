@@ -4,6 +4,7 @@ import dev.hardwood.row.PqList;
 import dev.hardwood.row.PqStruct;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -201,7 +202,7 @@ class ColumnBuilderTest {
         void extensionDtype_rejectedAtConstruction() {
             // Given — nested Extension (timestamp) columns are unsupported; see class javadoc
             DType.Extension extensionDtype = new DType.Extension(
-                    "vortex.date", new DType.Primitive(PType.I32, false),
+                    ExtensionId.VORTEX_DATE, new DType.Primitive(PType.I32, false),
                     new io.github.dfa1.vortex.core.model.TimeUnitMetadata(io.github.dfa1.vortex.core.model.TimeUnit.Days), false);
 
             // When / Then

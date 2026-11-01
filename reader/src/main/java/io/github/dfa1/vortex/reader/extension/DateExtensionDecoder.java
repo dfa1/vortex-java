@@ -44,7 +44,7 @@ public final class DateExtensionDecoder implements ExtensionDecoder<LocalDate> {
     @Override
     public DType.Extension dtype(boolean nullable) {
         return new DType.Extension(
-                ExtensionId.VORTEX_DATE.id(),
+                ExtensionId.VORTEX_DATE,
                 new DType.Primitive(PType.I32, nullable),
                 new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Days),
                 nullable);

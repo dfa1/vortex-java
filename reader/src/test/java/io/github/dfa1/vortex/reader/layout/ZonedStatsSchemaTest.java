@@ -5,6 +5,7 @@ import java.lang.foreign.MemorySegment;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Nested;
@@ -206,7 +207,7 @@ class ZonedStatsSchemaTest {
         @Test
         void resolvesExtensionViaStorageDType() {
             // Given — ext over i32 storage; sum should widen using storage dtype (i32 → i64)
-            DType columnDtype = new DType.Extension("ip.address",
+            DType columnDtype = new DType.Extension(ExtensionId.parse("ip.address"),
                     DTypes.I32, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MIN, ZonedStatsSchema.Stat.SUM);

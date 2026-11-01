@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.TimeUnit;
@@ -102,7 +103,7 @@ class ExtensionStorageTest {
         }
 
         private DType.Extension ext(io.github.dfa1.vortex.core.model.ExtensionMetadata metadata) {
-            return new DType.Extension("vortex.timestamp", DTypes.I64, metadata, false);
+            return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, metadata, false);
         }
     }
 

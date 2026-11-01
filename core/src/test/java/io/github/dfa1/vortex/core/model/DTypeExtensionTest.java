@@ -22,7 +22,7 @@ class DTypeExtensionTest {
         @Test
         void nullMetadata_rejected() {
             // Given / When / Then — no metadata is OpaqueMetadata.EMPTY, so a dtype always has one
-            assertThatThrownBy(() -> new DType.Extension("vortex.date", I32, null, false))
+            assertThatThrownBy(() -> new DType.Extension(ExtensionId.VORTEX_DATE, I32, null, false))
                     .isInstanceOf(NullPointerException.class);
         }
 
@@ -34,7 +34,7 @@ class DTypeExtensionTest {
             };
 
             // When / Then
-            assertThatThrownBy(() -> new DType.Extension("acme.custom", I32, identity, false))
+            assertThatThrownBy(() -> new DType.Extension(ExtensionId.parse("acme.custom"), I32, identity, false))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("must be a record");
         }
@@ -46,10 +46,10 @@ class DTypeExtensionTest {
             MemorySegment offHeap = Arena.ofAuto().allocate(2);
             offHeap.set(ValueLayout.JAVA_BYTE, 0, (byte) 1);
             offHeap.set(ValueLayout.JAVA_BYTE, 1, (byte) 2);
-            var built = new DType.Extension("acme.custom", I32, new OpaqueMetadata(MemorySegment.ofArray(new byte[]{1, 2})), false);
+            var built = new DType.Extension(ExtensionId.parse("acme.custom"), I32, new OpaqueMetadata(MemorySegment.ofArray(new byte[]{1, 2})), false);
 
             // When
-            var result = new DType.Extension("acme.custom", I32, new OpaqueMetadata(offHeap), false);
+            var result = new DType.Extension(ExtensionId.parse("acme.custom"), I32, new OpaqueMetadata(offHeap), false);
 
             // Then
             assertThat(result).isEqualTo(built).hasSameHashCodeAs(built);

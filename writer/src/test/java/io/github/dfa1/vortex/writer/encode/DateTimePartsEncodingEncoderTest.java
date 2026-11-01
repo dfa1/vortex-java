@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.core.model.DTypes;
@@ -34,7 +35,7 @@ class DateTimePartsEncodingEncoderTest {
     private static final DType EXT_TIMESTAMP_NS = timestampDType(TimeUnit.Nanoseconds);
 
     private static DType timestampDType(TimeUnit unit) {
-        return new DType.Extension("vortex.timestamp",
+        return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP,
                 DTypes.I64, new io.github.dfa1.vortex.core.model.TimestampMetadata(unit, null), false);
     }
 
@@ -87,7 +88,7 @@ class DateTimePartsEncodingEncoderTest {
         @Test
         void encode_missingMetadata_throws() {
             // Given
-            DType noMeta = new DType.Extension("vortex.timestamp",
+            DType noMeta = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP,
                     DTypes.I64, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
             DateTimePartsData data = new DateTimePartsData(new long[]{0L}, false);
 

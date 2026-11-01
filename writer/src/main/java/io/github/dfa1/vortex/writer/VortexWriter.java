@@ -315,8 +315,7 @@ public final class VortexWriter implements Closeable {
     private void validateExtensions(DType dtype) {
         switch (dtype) {
             case DType.Extension ext -> {
-                io.github.dfa1.vortex.core.model.ExtensionId id =
-                        io.github.dfa1.vortex.core.model.ExtensionId.parse(ext.extensionId());
+                io.github.dfa1.vortex.core.model.ExtensionId id = ext.extensionId();
                 ExtensionEncoder encoder = extensionRegistry.lookup(id);
                 if (encoder != null) {
                     encoder.validate(ext);
@@ -611,8 +610,7 @@ public final class VortexWriter implements Closeable {
             // ExtEncoding wraps the storage child below — matches Rust's nested layout
             // (ExtEncoding → PrimitiveEncoding) and lets Registry skip its unwrap path.
             if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
-                ExtensionEncoder impl = extensionRegistry.lookup(
-                        io.github.dfa1.vortex.core.model.ExtensionId.parse(extDtype.extensionId()));
+                ExtensionEncoder impl = extensionRegistry.lookup(extDtype.extensionId());
                 if (impl == null) {
                     // Without an encoder the Collection would reach the encoders unconverted and
                     // fail far from the cause; raw storage arrays still pass through.

@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -35,7 +36,7 @@ class DateTimePartsEncodingDecoderTest {
     }
 
     private static DType timestampDType(TimeUnit unit, boolean nullable) {
-        return new DType.Extension("vortex.timestamp",
+        return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP,
                 new DType.Primitive(PType.I64, nullable),
                 new io.github.dfa1.vortex.core.model.TimestampMetadata(unit, null), nullable);
     }
@@ -111,7 +112,7 @@ class DateTimePartsEncodingDecoderTest {
     @Test
     void decode_extensionMissingTimeUnitMetadata_throws() {
         // Given an extension whose metadata records no time unit
-        DType noUnit = new DType.Extension("vortex.timestamp",
+        DType noUnit = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP,
                 DTypes.I64, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
         DecodeContext c = ctx(i64Meta(), noUnit, 1,
                 TestSegments.leLongs(0L), TestSegments.leLongs(0L), TestSegments.leLongs(0L));

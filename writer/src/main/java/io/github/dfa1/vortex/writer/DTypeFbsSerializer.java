@@ -73,7 +73,7 @@ final class DTypeFbsSerializer {
     }
 
     private byte[] serialize(DType.Extension ext) {
-        ExtensionId id = ExtensionId.parse(ext.extensionId());
+        ExtensionId id = ext.extensionId();
         byte[] bytes = switch (ext.metadata()) {
             case OpaqueMetadata(MemorySegment opaque) -> opaque.toArray(ValueLayout.JAVA_BYTE);
             case TimeUnitMetadata(TimeUnit unit) when id == ExtensionId.VORTEX_DATE || id == ExtensionId.VORTEX_TIME ->
@@ -182,7 +182,7 @@ final class DTypeFbsSerializer {
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsMap, inner);
             }
             case DType.Extension e -> {
-                int idOff = fbb.createString(e.extensionId());
+                int idOff = fbb.createString(e.extensionId().id());
                 int storageDtypeOff = serializeDType(fbb, e.storageDType());
                 // Always present, empty when there is none: Rust refuses an extension dtype whose
                 // metadata field is absent ("failed to parse extension metadata"), failing the file.

@@ -113,7 +113,7 @@ class ParquetImporterTest {
             // Then — vortex.timestamp extension over nullable I64 storage
             assertThat(result).isInstanceOf(DType.Extension.class);
             DType.Extension ext = (DType.Extension) result;
-            assertThat(ext.extensionId()).isEqualTo("vortex.timestamp");
+            assertThat(ext.extensionId().id()).isEqualTo("vortex.timestamp");
             assertThat(ext.storageDType()).isEqualTo(new DType.Primitive(PType.I64, true));
             assertThat(ext.nullable()).isTrue();
         }

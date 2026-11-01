@@ -31,7 +31,7 @@ record Temporal(ExtensionId.WellKnown kind, TimeUnit unit) {
     /// @throws VortexException for a unit the extension does not allow, as the decoders do
     static Temporal of(DType type) {
         if (!(type instanceof DType.Extension ext)
-                || !(ExtensionId.parse(ext.extensionId()) instanceof ExtensionId.WellKnown kind)
+                || !(ext.extensionId() instanceof ExtensionId.WellKnown kind)
                 || kind != ExtensionId.WellKnown.VORTEX_DATE && kind != ExtensionId.WellKnown.VORTEX_TIME
                 && kind != ExtensionId.WellKnown.VORTEX_TIMESTAMP) {
             return null;

@@ -587,7 +587,7 @@ public final class HtmlReport {
             return raw;
         }
         try {
-            return switch (ExtensionId.parse(ext.extensionId())) {
+            return switch (ext.extensionId()) {
                 case ExtensionId.WellKnown.VORTEX_TIMESTAMP ->
                         ExtensionStorage.instantFromRaw(epoch, ExtensionStorage.readUnit(ext));
                 case ExtensionId.WellKnown.VORTEX_DATE -> DateExtensionDecoder.INSTANCE.date(ext, epoch);

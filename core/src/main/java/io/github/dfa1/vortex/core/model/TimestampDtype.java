@@ -28,7 +28,7 @@ public final class TimestampDtype {
     /// @return matching extension dtype
     public static DType.Extension of(TimeUnit unit, ZoneId zone, boolean nullable) {
         return new DType.Extension(
-                ExtensionId.VORTEX_TIMESTAMP.id(),
+                ExtensionId.VORTEX_TIMESTAMP,
                 new DType.Primitive(PType.I64, nullable),
                 TimestampMetadata.of(unit, zone),
                 nullable);

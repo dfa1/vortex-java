@@ -8,6 +8,7 @@ import java.lang.foreign.ValueLayout;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
@@ -300,7 +301,7 @@ class WriterZoneMapTest {
         // two zones of two rows: zone 0 = [10, 11], zone 1 = [20, 21]. ExtEncoding propagates the
         // storage primitive's min/max, so the zone-map carries MAX+MIN+NULL_COUNT — same as I64.
         DType ext = new DType.Extension(
-                "test.ext", DTypes.I64, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
+                ExtensionId.parse("test.ext"), DTypes.I64, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("t")), List.of(ext), false);
         WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("ext.vtx");

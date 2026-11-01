@@ -9,6 +9,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -56,9 +57,9 @@ class WellKnownExtensionsInteropIntegrationTest {
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("id"), ColumnName.of("j"), ColumnName.of("g"), ColumnName.of("p")),
             List.of(DTypes.I64,
-                    new DType.Extension("vortex.json", DTypes.UTF8, NO_METADATA, false),
-                    new DType.Extension("vortex.st.wkb", DTypes.BINARY, NO_METADATA, false),
-                    new DType.Extension("vortex.st.point", POINT_STORAGE, NO_METADATA, false)),
+                    new DType.Extension(ExtensionId.VORTEX_JSON, DTypes.UTF8, NO_METADATA, false),
+                    new DType.Extension(ExtensionId.VORTEX_ST_WKB, DTypes.BINARY, NO_METADATA, false),
+                    new DType.Extension(ExtensionId.VORTEX_ST_POINT, POINT_STORAGE, NO_METADATA, false)),
             false);
     private static final int BATCHES = 2;
     private static final int BATCH_ROWS = 500;

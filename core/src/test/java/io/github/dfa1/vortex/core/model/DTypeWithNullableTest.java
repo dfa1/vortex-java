@@ -27,7 +27,7 @@ class DTypeWithNullableTest {
                 Arguments.of("Struct", new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(i32, DTypes.UTF8), false)),
                 Arguments.of("List", new DType.List(i32, false)),
                 Arguments.of("FixedSizeList", new DType.FixedSizeList(i32, 4, false)),
-                Arguments.of("Extension", new DType.Extension("ip.address", i32, OpaqueMetadata.EMPTY, false)),
+                Arguments.of("Extension", new DType.Extension(ExtensionId.parse("ip.address"), i32, OpaqueMetadata.EMPTY, false)),
                 Arguments.of("Variant", DTypes.VARIANT)
         );
     }
@@ -97,7 +97,7 @@ class DTypeWithNullableTest {
     void withNullable_preservesCompoundPayload_extensionAndFixedSizeList() {
         // Given
         DType storage = DTypes.I32;
-        DType.Extension ext = new DType.Extension("ip.address", storage, OpaqueMetadata.EMPTY, false);
+        DType.Extension ext = new DType.Extension(ExtensionId.parse("ip.address"), storage, OpaqueMetadata.EMPTY, false);
         DType.FixedSizeList fsl = new DType.FixedSizeList(storage, 16, false);
 
         // When
@@ -105,7 +105,7 @@ class DTypeWithNullableTest {
         DType.FixedSizeList fslResult = (DType.FixedSizeList) fsl.withNullable(true);
 
         // Then
-        assertThat(extResult.extensionId()).isEqualTo("ip.address");
+        assertThat(extResult.extensionId().id()).isEqualTo("ip.address");
         assertThat(extResult.storageDType()).isEqualTo(storage);
         assertThat(extResult.metadata()).isEqualTo(OpaqueMetadata.EMPTY);
         assertThat(fslResult.fixedSize()).isEqualTo(16);

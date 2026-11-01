@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.OpaqueMetadata;
@@ -107,13 +108,13 @@ class ConstantEncodingDecoderTest {
             cases.add(Arguments.of(DTypes.UTF8.asNullable(), VarBinArray.class));
             cases.add(Arguments.of(DTypes.BINARY.asNullable(), VarBinArray.class));
             cases.add(Arguments.of(new DType.Decimal((byte) 10, (byte) 2, true), DecimalArray.class));
-            cases.add(Arguments.of(new DType.Extension("vortex.date", DTypes.I32,
+            cases.add(Arguments.of(new DType.Extension(ExtensionId.VORTEX_DATE, DTypes.I32,
                     new TimeUnitMetadata(TimeUnit.Nanoseconds), true), IntArray.class));
-            cases.add(Arguments.of(new DType.Extension("vortex.time", DTypes.I32,
+            cases.add(Arguments.of(new DType.Extension(ExtensionId.VORTEX_TIME, DTypes.I32,
                     new TimeUnitMetadata(TimeUnit.Microseconds), true), IntArray.class));
-            cases.add(Arguments.of(new DType.Extension("vortex.timestamp", DTypes.I64,
+            cases.add(Arguments.of(new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64,
                     new TimestampMetadata(TimeUnit.Microseconds, null), true), LongArray.class));
-            cases.add(Arguments.of(new DType.Extension("acme.custom", DTypes.U16, OpaqueMetadata.EMPTY, true),
+            cases.add(Arguments.of(new DType.Extension(ExtensionId.parse("acme.custom"), DTypes.U16, OpaqueMetadata.EMPTY, true),
                     ShortArray.class));
             return cases.stream();
         }
@@ -155,7 +156,7 @@ class ConstantEncodingDecoderTest {
                     new DType.Struct(List.of(ColumnName.of("a")), List.of(DTypes.I64), true),
                     new DType.Map(DTypes.I64, DTypes.I64, false, true),
                     new DType.Variant(true),
-                    new DType.Extension("vortex.uuid", new DType.FixedSizeList(DTypes.U8, 16, false), OpaqueMetadata.EMPTY, true));
+                    new DType.Extension(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DTypes.U8, 16, false), OpaqueMetadata.EMPTY, true));
         }
 
         @Test

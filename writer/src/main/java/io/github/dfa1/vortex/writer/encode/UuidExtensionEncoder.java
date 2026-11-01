@@ -36,7 +36,7 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
         DType.Primitive u8 = DTypes.U8;
         // Rust vortex.uuid metadata: 0 bytes means "no specific version"
         return new DType.Extension(
-                ExtensionId.VORTEX_UUID.id(),
+                ExtensionId.VORTEX_UUID,
                 new DType.FixedSizeList(u8, 16, nullable),
                 OpaqueMetadata.EMPTY,
                 nullable);

@@ -271,7 +271,7 @@ class VariantEncodingDecoderTest {
             // Then id, storage dtype, and metadata bytes are preserved
             assertThat(result).isInstanceOf(DType.Extension.class);
             DType.Extension ext = (DType.Extension) result;
-            assertThat(ext.extensionId()).isEqualTo("ip.address");
+            assertThat(ext.extensionId().id()).isEqualTo("ip.address");
             assertThat(ext.storageDType()).isEqualTo(DTypes.I32);
             assertThat(ext.metadata()).isInstanceOf(io.github.dfa1.vortex.core.model.OpaqueMetadata.class);
             assertThat(((io.github.dfa1.vortex.core.model.OpaqueMetadata) ext.metadata()).bytes().byteSize()).isEqualTo(3);

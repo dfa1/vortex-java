@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.encode.ComparableValues;
@@ -119,7 +120,7 @@ class ZoneMapStatCodecTest {
     class ExtensionType {
 
         private static final DType TIMESTAMP_MS =
-                new DType.Extension("vortex.timestamp", DTypes.I64,
+                new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64,
                         new io.github.dfa1.vortex.core.model.TimestampMetadata(
                                 io.github.dfa1.vortex.core.model.TimeUnit.Nanoseconds, null), false);
 

@@ -196,7 +196,7 @@ class PostscriptParserDTypeGuardsTest {
 
         // Then
         assertThat(result.dtype()).isInstanceOfSatisfying(DType.Extension.class, ext ->
-                assertThat(ext.extensionId()).isEqualTo("acme.geopoint"));
+                assertThat(ext.extensionId().id()).isEqualTo("acme.geopoint"));
     }
 
     @org.junit.jupiter.params.ParameterizedTest

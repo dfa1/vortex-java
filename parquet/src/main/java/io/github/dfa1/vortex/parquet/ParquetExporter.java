@@ -195,7 +195,7 @@ public final class ParquetExporter {
     /// supported for export.
     private static void addTimestampColumn(FileSchema.Builder builder, String name, DType.Extension ext,
             RepetitionType rep) {
-        if (!ExtensionId.VORTEX_TIMESTAMP.id().equals(ext.extensionId())) {
+        if (ext.extensionId() != ExtensionId.VORTEX_TIMESTAMP) {
             throw new UnsupportedOperationException(
                     "unsupported extension type for Parquet export: " + ext.extensionId() + " (column: " + name + ")");
         }
