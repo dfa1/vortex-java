@@ -10,6 +10,7 @@ import dev.hardwood.schema.ColumnProjection;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
 import dev.hardwood.schema.SchemaNode;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
@@ -32,6 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /// Reads a Parquet file and writes a Vortex file.
@@ -234,7 +236,14 @@ public final class ParquetImporter {
         // value, big-endian for the byte forms); each maps to Vortex's decimal, as Arrow's
         // decimal128/256 does in Rust's Arrow import, never to the bare integer that drops the scale
         if (logical instanceof LogicalType.DecimalType(int precision, int scale)) {
-            return DType.Decimal.of(precision, scale, nullable);
+            try {
+                return DType.Decimal.of(precision, scale, nullable);
+            } catch (VortexException e) {
+                // Parquet allows a byte-array DECIMAL wider than Vortex's 76 digits (Rust's Arrow
+                // has no type for it either)
+                throw new UnsupportedOperationException("DECIMAL(" + precision + ", " + scale + ") column '"
+                        + name + "' has no Vortex decimal: " + e.getMessage(), e);
+            }
         }
         return switch (type) {
             case BOOLEAN -> new DType.Bool(nullable);
@@ -376,7 +385,7 @@ public final class ParquetImporter {
                 boolean isNull = types.get(c).nullable() && reader.isNull(name);
                 if (types.get(c) instanceof DType.Primitive p && p.ptype() == PType.F16) {
                     // Same carrier as I16, but the value is a 2-byte FIXED_LEN_BYTE_ARRAY, not an INT32
-                    putHalf(buffers[c], pos, isNull ? null : reader.getBinary(name));
+                    putHalf(buffers[c], pos, isNull ? null : Objects.requireNonNull(reader.getBinary(name)));
                     continue;
                 }
                 switch (buffers[c]) {
@@ -394,9 +403,12 @@ public final class ParquetImporter {
                     case Short[] arr -> arr[pos] = isNull ? null : (short) reader.getInt(name);
                     case byte[] arr -> arr[pos] = (byte) reader.getInt(name);
                     case Byte[] arr -> arr[pos] = isNull ? null : (byte) reader.getInt(name);
-                    case String[] arr -> arr[pos] = isNull ? null : reader.getString(name);
-                    case BigDecimal[] arr -> arr[pos] = isNull ? null : reader.getDecimal(name);
-                    case byte[][] arr -> arr[pos] = isNull ? null : reader.getBinary(name);
+                    case String[] arr -> arr[pos] = isNull ? null : Objects.requireNonNull(reader.getString(name));
+                    // getString/getBinary/getDecimal return null rather than throwing, so a null
+                    // under a REQUIRED column becomes the NPE the catch below reports with its file
+                    // row (a FLOAT16 one used to become a silent +0.0)
+                    case BigDecimal[] arr -> arr[pos] = isNull ? null : Objects.requireNonNull(reader.getDecimal(name));
+                    case byte[][] arr -> arr[pos] = isNull ? null : Objects.requireNonNull(reader.getBinary(name));
                     default -> throw new UnsupportedOperationException(
                             "unexpected buffer type: " + buffers[c].getClass().getSimpleName());
                 }
