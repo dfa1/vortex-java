@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -335,7 +336,7 @@ public final class ParquetImporter {
             case DType.Bool _ -> nullable ? new Boolean[chunkSize] : new boolean[chunkSize];
             case DType.Utf8 _ -> new String[chunkSize];
             case DType.Binary _ -> new byte[chunkSize][];
-            case DType.Extension _ -> new long[chunkSize]; // timestamp storage
+            case DType.Extension _ -> nullable ? new Long[chunkSize] : new long[chunkSize]; // timestamp storage
             case DType.Primitive p -> switch (p.ptype()) {
                 case I8, U8 -> nullable ? new Byte[chunkSize] : new byte[chunkSize];
                 case I16, U16 -> nullable ? new Short[chunkSize] : new short[chunkSize];
@@ -424,13 +425,35 @@ public final class ParquetImporter {
             } else {
                 value = trimBuffer(buffers[c], size);
                 if (types.get(c) instanceof DType.Extension) {
-                    boolean nullable = types.get(c).nullable();
-                    value = new DateTimePartsData((long[]) value, nullable);
+                    value = timestampChunk(value);
                 }
             }
             chunk.put(names.get(c), value);
         }
         return chunk;
+    }
+
+    /// Wraps a chunk of timestamp storage for the writer. A nullable column's boxed `Long[]` with
+    /// nulls becomes [NullableData] (a zero placeholder under each invalid slot), as
+    /// `TimestampExtensionEncoder` builds for an `Instant` collection with nulls; without nulls it
+    /// stays pre-decomposed [DateTimePartsData], as a non-nullable column's `long[]` always does.
+    private static Object timestampChunk(Object buffer) {
+        if (buffer instanceof long[] values) {
+            return new DateTimePartsData(values, false);
+        }
+        Long[] boxed = (Long[]) buffer;
+        long[] values = new long[boxed.length];
+        boolean[] validity = new boolean[boxed.length];
+        boolean anyNull = false;
+        for (int i = 0; i < boxed.length; i++) {
+            if (boxed[i] == null) {
+                anyNull = true;
+            } else {
+                values[i] = boxed[i];
+                validity[i] = true;
+            }
+        }
+        return anyNull ? new NullableData(values, validity) : new DateTimePartsData(values, true);
     }
 
     /// Filters the top-level schema nodes to those named in `names`, in the requested order.
