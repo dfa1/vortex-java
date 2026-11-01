@@ -375,6 +375,55 @@ class ParquetImporterTest {
                     .hasMessageContaining("malformed.parquet")
                     .hasCauseInstanceOf(NullPointerException.class);
         }
+
+        @ParameterizedTest(name = "{0}")
+        @CsvSource({"utf8", "binary", "float16"})
+        void requiredObjectColumnActuallyNull_reportsTheFileRow(String kind) {
+            // Given — getString/getBinary return null instead of throwing; a FLOAT16 null used to
+            // become a silent +0.0
+            DType dtype = switch (kind) {
+                case "utf8" -> new DType.Utf8(false);
+                case "binary" -> new DType.Binary(false);
+                default -> new DType.Primitive(PType.F16, false);
+            };
+            Object buffer = switch (kind) {
+                case "utf8" -> new String[1];
+                case "binary" -> new byte[1][];
+                default -> new short[1];
+            };
+            List<ColumnName> names = List.of(ColumnName.of("v"));
+            ColumnBuilder[] nestedBuilders = new ColumnBuilder[1];
+            if (kind.equals("utf8")) {
+                given(reader.getString("v")).willReturn(null);
+            } else {
+                given(reader.getBinary("v")).willReturn(null);
+            }
+
+            // When / Then
+            assertThatThrownBy(() -> ParquetImporter.fillRow(reader, names, List.of(dtype), new Object[]{buffer},
+                    nestedBuilders, 0, "malformed.parquet", 42L))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("REQUIRED")
+                    .hasMessageContaining("row 42");
+        }
+
+        @Test
+        void requiredDecimalActuallyNull_reportsTheFileRow() {
+            // Given — getDecimal returns null instead of throwing, unlike the primitive getters
+            List<ColumnName> names = List.of(ColumnName.of("amount"));
+            List<DType> types = List.of(DType.Decimal.of(15, 2, false));
+            Object[] buffers = {new BigDecimal[1]};
+            ColumnBuilder[] nestedBuilders = new ColumnBuilder[1];
+            given(reader.getDecimal("amount")).willReturn(null);
+
+            // When / Then — the file's row 70_000, not the row within the chunk
+            assertThatThrownBy(() -> ParquetImporter.fillRow(reader, names, types, buffers, nestedBuilders,
+                    0, "malformed.parquet", 70_000L))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("amount")
+                    .hasMessageContaining("REQUIRED")
+                    .hasMessageContaining("row 70000");
+        }
     }
 
     @Nested
@@ -413,32 +462,107 @@ class ParquetImporterTest {
             }
         }
 
+        @ParameterizedTest(name = "{0}")
+        @CsvSource({
+                "INT32, 0, 9, 2",
+                "INT64, 0, 18, 2",
+                "FIXED_LEN_BYTE_ARRAY, 7, 15, 2",
+                "BYTE_ARRAY, 0, 30, 2",
+        })
+        void requiredDecimalColumn_importsAsNonNullableDecimal(PhysicalType type, int length, int precision,
+                int scale, @TempDir Path tmp) throws Exception {
+            // Given — a REQUIRED DECIMAL column, the non-nullable BigDecimal[] path
+            List<BigDecimal> values = List.of(new BigDecimal("17.00"), new BigDecimal("-0.05"), new BigDecimal("0.00"));
+            Path parquet = writeDecimalParquet(tmp, type, length, precision, scale, RepetitionType.REQUIRED, values);
+            Path vortex = tmp.resolve("out.vortex");
+
+            // When
+            ParquetImporter.importParquet(parquet, vortex);
+
+            // Then
+            try (VortexReader reader = VortexReader.open(vortex);
+                 ScanIterator iter = reader.scan(ScanOptions.all())) {
+                DType.Struct schema = (DType.Struct) reader.dtype();
+                assertThat(schema.fieldTypes().getFirst()).isEqualTo(DType.Decimal.of(precision, scale, false));
+                try (Chunk chunk = iter.next()) {
+                    assertThat(decimals(chunk.column(ColumnName.of("d")), values.size()))
+                            .containsExactlyElementsOf(values);
+                }
+            }
+        }
+
+        @Test
+        void decimalWiderThanVortexAllows_throwsNamingTheColumn() {
+            // Given — Parquet allows a BYTE_ARRAY DECIMAL past Vortex's 76 digits
+            ColumnSchema schema = col("amount", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL,
+                    new LogicalType.DecimalType(100, 2));
+
+            // When / Then
+            assertThatThrownBy(() -> ParquetImporter.mapDType(schema))
+                    .isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining("amount")
+                    .hasMessageContaining("DECIMAL(100, 2)");
+        }
+
         private static Path writeDecimalParquet(Path tmp, PhysicalType type, int length, int precision, int scale)
                 throws Exception {
+            return writeDecimalParquet(tmp, type, length, precision, scale, RepetitionType.OPTIONAL, VALUES);
+        }
+
+        private static Path writeDecimalParquet(Path tmp, PhysicalType type, int length, int precision, int scale,
+                RepetitionType repetition, List<BigDecimal> values) throws Exception {
             FileSchema.Builder builder = FileSchema.builder("schema");
             LogicalType decimal = new LogicalType.DecimalType(precision, scale);
             if (length > 0) {
-                builder.addColumn("d", type, RepetitionType.OPTIONAL, length, decimal);
+                builder.addColumn("d", type, repetition, length, decimal);
             } else {
-                builder.addColumn("d", type, RepetitionType.OPTIONAL, decimal);
+                builder.addColumn("d", type, repetition, decimal);
             }
-            int n = VALUES.size();
+            int n = values.size();
             boolean[] nulls = new boolean[n];
             BigInteger[] unscaled = new BigInteger[n];
             for (int i = 0; i < n; i++) {
-                nulls[i] = VALUES.get(i) == null;
-                unscaled[i] = nulls[i] ? BigInteger.ZERO : VALUES.get(i).setScale(scale).unscaledValue();
+                nulls[i] = values.get(i) == null;
+                unscaled[i] = nulls[i] ? BigInteger.ZERO : values.get(i).setScale(scale).unscaledValue();
             }
+            // hardwood takes a null mask only for an OPTIONAL column, and its mask-less setters otherwise
+            boolean[] mask = repetition == RepetitionType.OPTIONAL ? nulls : null;
             Path parquet = tmp.resolve("decimal.parquet");
             try (ParquetFileWriter writer = ParquetFileWriter.create(OutputFile.of(parquet), builder.build())) {
                 writer.columnWriter().writeBatch(batch -> {
                     switch (type) {
-                        case INT32 -> batch.ints(0, Arrays.stream(unscaled).mapToInt(BigInteger::intValueExact).toArray(), nulls);
-                        case INT64 -> batch.longs(0, Arrays.stream(unscaled).mapToLong(BigInteger::longValueExact).toArray(), nulls);
-                        case FIXED_LEN_BYTE_ARRAY -> batch.fixed(0, Arrays.stream(unscaled).map(v -> bigEndian(v, length))
-                                .toArray(byte[][]::new), nulls);
-                        case BYTE_ARRAY -> batch.bytes(0, Arrays.stream(unscaled).map(BigInteger::toByteArray)
-                                .toArray(byte[][]::new), nulls);
+                        case INT32 -> {
+                            int[] ints = Arrays.stream(unscaled).mapToInt(BigInteger::intValueExact).toArray();
+                            if (mask == null) {
+                                batch.ints(0, ints);
+                            } else {
+                                batch.ints(0, ints, mask);
+                            }
+                        }
+                        case INT64 -> {
+                            long[] longs = Arrays.stream(unscaled).mapToLong(BigInteger::longValueExact).toArray();
+                            if (mask == null) {
+                                batch.longs(0, longs);
+                            } else {
+                                batch.longs(0, longs, mask);
+                            }
+                        }
+                        case FIXED_LEN_BYTE_ARRAY -> {
+                            byte[][] fixed = Arrays.stream(unscaled).map(v -> bigEndian(v, length)).toArray(byte[][]::new);
+                            if (mask == null) {
+                                batch.fixed(0, fixed);
+                            } else {
+                                batch.fixed(0, fixed, mask);
+                            }
+                        }
+                        case BYTE_ARRAY -> {
+                            byte[][] bytes = Arrays.stream(unscaled).map(BigInteger::toByteArray).toArray(byte[][]::new);
+                            if (mask == null) {
+                                batch.bytes(0, bytes);
+                            } else {
+                                batch.bytes(0, bytes, mask);
+                            }
+                        }
                         default -> throw new IllegalArgumentException(type.toString());
                     }
                 });

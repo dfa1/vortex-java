@@ -61,6 +61,8 @@ class ParquetImportInteropIntegrationTest {
     private static final ColumnName TS = ColumnName.of("ts");
     /// More than two zones (8192 rows), so the filtered read prunes and the range read slices.
     private static final int ROWS = 3 * 8192;
+    /// 10^37: a 12-digit value times it reaches 49 digits, past an i128 (about 1.7e38).
+    private static final BigInteger WIDE = BigInteger.TEN.pow(37);
     private static final long START_MICROS = 1_704_067_200_000_000L; // 2024-01-01T00:00:00Z
 
     static {
@@ -110,7 +112,7 @@ class ParquetImportInteropIntegrationTest {
             "INT64, 0, 18, 4",
             "FIXED_LEN_BYTE_ARRAY, 7, 15, 2",
             "BYTE_ARRAY, 0, 30, 3",
-            "BYTE_ARRAY, 0, 50, 3", // past decimal128: Rust's i256 values
+            "BYTE_ARRAY, 0, 50, 3", // past decimal128: values only an i256 holds
     })
     void decimalWithNulls_jniReadsImportedFile(PhysicalType type, int length, int precision, int scale,
                                                @TempDir Path tmp) throws Exception {
@@ -120,7 +122,16 @@ class ParquetImportInteropIntegrationTest {
         BigInteger[] unscaled = new BigInteger[ROWS];
         List<BigDecimal> expected = new ArrayList<>(ROWS);
         for (int i = 0; i < ROWS; i++) {
-            unscaled[i] = isNull.test(i) ? BigInteger.ZERO : BigInteger.valueOf(Math.floorMod(i * 7_919L, 2 * bound) - bound);
+            // the product wraps 2 * bound many times, so values take both signs
+            BigInteger value = BigInteger.valueOf(Math.floorMod(i * 7_919_919_919L, 2 * bound) - bound);
+            if (precision > 38) {
+                // scaled past what an i128 holds, so Rust reads real i256s
+                value = value.multiply(WIDE);
+            }
+            if (isNull.test(i)) {
+                value = BigInteger.ZERO;
+            }
+            unscaled[i] = value;
             expected.add(isNull.test(i) ? null : new BigDecimal(unscaled[i], scale));
         }
         Path parquet = decimalParquet(tmp, type, length, precision, scale, unscaled, isNull);
