@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -77,7 +78,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < valuesArr.length; i++) {
             valuesArr[i] = runs.values()[i] != 0L;
         }
-        EncodeResult valuesResult = new BoolEncodingEncoder().encode(DType.BOOL, valuesArr, ctx);
+        EncodeResult valuesResult = new BoolEncodingEncoder().encode(DTypes.BOOL, valuesArr, ctx);
         MemorySegment indicesSeg = toIndicesSeg(runs.indices(), runs.paddedLen(), ctx.arena());
         MemorySegment offsetsSeg = fromLongsU64(runs.offsets(), runs.numChunks(), ctx.arena());
 

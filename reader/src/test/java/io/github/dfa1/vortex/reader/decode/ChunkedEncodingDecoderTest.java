@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -38,7 +39,7 @@ class ChunkedEncodingDecoderTest {
         };
 
         // When
-        Array result = decode(DType.I64, 5, segs, primitiveNode(0), primitiveNode(1), primitiveNode(2));
+        Array result = decode(DTypes.I64, 5, segs, primitiveNode(0), primitiveNode(1), primitiveNode(2));
 
         // Then — a single logical i64 view spanning both chunks
         assertThat(result).isInstanceOf(LongArray.class);
@@ -65,7 +66,7 @@ class ChunkedEncodingDecoderTest {
         void noChildren_throws() {
             // Given — a chunked node with no children at all, not even the offsets child
             ArrayNode node = new ArrayNode(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[0], new int[0]);
-            DecodeContext ctx = new DecodeContext(node, DType.I64, 3, new MemorySegment[0],
+            DecodeContext ctx = new DecodeContext(node, DTypes.I64, 3, new MemorySegment[0],
                     REGISTRY, Arena.ofAuto());
 
             // When / Then
@@ -85,7 +86,7 @@ class ChunkedEncodingDecoderTest {
             ArrayNode offsetsChild = primitiveNode(0);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 10, segs, offsetsChild))
+            assertThatThrownBy(() -> decode(DTypes.I64, 10, segs, offsetsChild))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("no chunks for 10 row(s)");
         }
@@ -100,7 +101,7 @@ class ChunkedEncodingDecoderTest {
             ArrayNode chunkChild = primitiveNode(1);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 3, segs, offsetsChild, chunkChild))
+            assertThatThrownBy(() -> decode(DTypes.I64, 3, segs, offsetsChild, chunkChild))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("child holds 0 element(s)");
         }
@@ -123,7 +124,7 @@ class ChunkedEncodingDecoderTest {
             ArrayNode secondChunkChild = primitiveNode(2);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 3, segs,
+            assertThatThrownBy(() -> decode(DTypes.I64, 3, segs,
                     offsetsChild, firstChunkChild, secondChunkChild))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("non-decreasing");
@@ -139,7 +140,7 @@ class ChunkedEncodingDecoderTest {
             ArrayNode chunkChild = primitiveNode(1);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 3, segs, offsetsChild, chunkChild))
+            assertThatThrownBy(() -> decode(DTypes.I64, 3, segs, offsetsChild, chunkChild))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("non-decreasing");
         }

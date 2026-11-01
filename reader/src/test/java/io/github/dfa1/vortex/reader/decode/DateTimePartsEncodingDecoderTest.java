@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.testing.TestSegments;
@@ -111,7 +112,7 @@ class DateTimePartsEncodingDecoderTest {
     void decode_extensionMissingTimeUnitMetadata_throws() {
         // Given an extension whose metadata byte is absent
         DType noUnit = new DType.Extension("vortex.timestamp",
-                DType.I64, null, false);
+                DTypes.I64, null, false);
         DecodeContext c = ctx(i64Meta(), noUnit, 1,
                 TestSegments.leLongs(0L), TestSegments.leLongs(0L), TestSegments.leLongs(0L));
 
@@ -122,7 +123,7 @@ class DateTimePartsEncodingDecoderTest {
     @Test
     void decode_nonExtensionDtype_throws() {
         // Given a primitive (non-extension) logical type
-        DecodeContext c = ctx(i64Meta(), DType.I64, 1,
+        DecodeContext c = ctx(i64Meta(), DTypes.I64, 1,
                 TestSegments.leLongs(0L), TestSegments.leLongs(0L), TestSegments.leLongs(0L));
 
         // When / Then

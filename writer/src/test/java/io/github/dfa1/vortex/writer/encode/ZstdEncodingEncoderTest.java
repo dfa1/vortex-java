@@ -11,7 +11,7 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -45,11 +45,11 @@ class ZstdEncodingEncoderTest {
         ZstdEncodingEncoder sut = ZstdEncodingEncoder.forText();
 
         // When / Then
-        assertThat(sut.accepts(DType.UTF8)).isTrue();
-        assertThat(sut.accepts(DType.BINARY)).isTrue();
-        assertThat(sut.accepts(DType.I64)).isFalse();
-        assertThat(sut.acceptsNullable(DType.F64)).isFalse();
-        assertThat(ENCODER.accepts(DType.I64)).isTrue();
+        assertThat(sut.accepts(DTypes.UTF8)).isTrue();
+        assertThat(sut.accepts(DTypes.BINARY)).isTrue();
+        assertThat(sut.accepts(DTypes.I64)).isFalse();
+        assertThat(sut.acceptsNullable(DTypes.F64)).isFalse();
+        assertThat(ENCODER.accepts(DTypes.I64)).isTrue();
     }
     private static final ZstdEncodingDecoder DECODER = new ZstdEncodingDecoder();
     private static final BoolEncodingEncoder BOOL_ENCODER = new BoolEncodingEncoder();
@@ -294,7 +294,7 @@ class ZstdEncodingEncoderTest {
             EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DType.NULL, null, ctx))
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.NULL, null, ctx))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -321,7 +321,7 @@ class ZstdEncodingEncoderTest {
         private static DecodeContext makeNullableCtx(
                 byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames
         ) {
-            EncodeResult validityResult = BOOL_ENCODER.encode(DType.BOOL, validityBits, EncodeTestHelper.testCtx());
+            EncodeResult validityResult = BOOL_ENCODER.encode(DTypes.BOOL, validityBits, EncodeTestHelper.testCtx());
             EncodeNode remappedValidity = EncodeNode.remapBufferIndices(
                     validityResult.rootNode(), compressedFrames.length);
 

@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LazyForShortArrayTest {
 
-    private static final DType I16 = DType.I16;
+    private static final DType I16 = DTypes.I16;
 
     private static LazyForShortArray of(short ref, short... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 2, 2);

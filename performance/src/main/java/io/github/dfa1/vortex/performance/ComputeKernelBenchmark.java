@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.performance;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanFilter;
@@ -130,7 +131,7 @@ public class ComputeKernelBenchmark {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             COLUMNS.stream().map(ColumnName::of).toList(),
-            List.of(DType.F64, DType.I64, DType.I64, DType.I64),
+            List.of(DTypes.F64, DTypes.I64, DTypes.I64, DTypes.I64),
             false);
 
     /// Selects ≈ half of the uniform `[0, 1000)` `price` column.

@@ -6,6 +6,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -106,7 +107,7 @@ class DateInteropIntegrationTest {
             // Then — the unit byte and storage width Rust chose, which the decoder must honor
             TimeUnit expectedUnit = unit == DateUnit.DAY ? TimeUnit.Days : TimeUnit.Milliseconds;
             assertThat(TimeUnit.fromTag(result.metadata().get(ValueLayout.JAVA_BYTE, 0))).isEqualTo(expectedUnit);
-            assertThat(result.storageDType()).isEqualTo(unit == DateUnit.DAY ? DType.I32.asNullable() : DType.I64.asNullable());
+            assertThat(result.storageDType()).isEqualTo(unit == DateUnit.DAY ? DTypes.I32.asNullable() : DTypes.I64.asNullable());
         }
     }
 

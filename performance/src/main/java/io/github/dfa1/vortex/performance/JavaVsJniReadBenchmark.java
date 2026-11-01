@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -100,13 +101,13 @@ public class JavaVsJniReadBenchmark {
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("date"), ColumnName.of("symbol"), ColumnName.of("open"), ColumnName.of("high"), ColumnName.of("low"), ColumnName.of("close"), ColumnName.of("volume")),
             List.of(
-                    DType.I32,
-                    DType.UTF8,
-                    DType.F64,
-                    DType.F64,
-                    DType.F64,
-                    DType.F64,
-                    DType.I64
+                    DTypes.I32,
+                    DTypes.UTF8,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.I64
             ),
             false);
     private static final Object FILE_LOCK = new Object();

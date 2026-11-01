@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -63,7 +64,7 @@ public final class VarBinEncodingDecoder implements EncodingDecoder {
         if (numChildren != 2) {
             throw new VortexException(EncodingId.VORTEX_VARBIN, "expected 1 or 2 children, got " + numChildren);
         }
-        Array validity = ctx.decodeChild(1, DType.BOOL, n);
+        Array validity = ctx.decodeChild(1, DTypes.BOOL, n);
         return new MaskedArray(values, MaskedArray.requireBoolArray(validity, EncodingId.VORTEX_VARBIN, "validity child"));
     }
 }

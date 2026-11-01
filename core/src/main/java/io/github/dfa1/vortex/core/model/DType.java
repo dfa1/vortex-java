@@ -44,7 +44,7 @@ public sealed interface DType
 
     /// Returns a copy of this type marked nullable. Sugar over
     /// [#withNullable(boolean)] so call sites read as a fluent adjective:
-    /// `DType.I64.asNullable()`.
+    /// `DTypes.I64.asNullable()`.
     ///
     /// @return a new [DType] identical to this one but with `nullable = true`
     default DType asNullable() {
@@ -73,66 +73,6 @@ public sealed interface DType
         };
     }
 
-    // ── Canonical non-nullable types ─────────────────────────────────────────
-    //
-    // Shared immutable instances — prefer these over `new Bool(false)`,
-    // `new Utf8(false)`, etc. For a nullable column build from one with
-    // [#asNullable()], e.g. `DType.UTF8.asNullable()`.
-
-    /// Non-nullable [Bool].
-    Bool BOOL = new Bool(false);
-
-    /// Non-nullable [Utf8].
-    Utf8 UTF8 = new Utf8(false);
-
-    /// Non-nullable [Binary].
-    Binary BINARY = new Binary(false);
-
-    /// Non-nullable [Null].
-    Null NULL = new Null(false);
-
-    /// Non-nullable [Variant].
-    Variant VARIANT = new Variant(false);
-
-    // ── Canonical non-nullable primitives ───────────────────────────────────
-    //
-    // Shared immutable instances — prefer these over `new Primitive(pt, false)`.
-    // For a nullable column build from one with [#asNullable()], e.g.
-    // `DType.I64.asNullable()`.
-
-    /// Non-nullable [Primitive] of [PType#I8].
-    Primitive I8 = new Primitive(PType.I8, false);
-
-    /// Non-nullable [Primitive] of [PType#I16].
-    Primitive I16 = new Primitive(PType.I16, false);
-
-    /// Non-nullable [Primitive] of [PType#I32].
-    Primitive I32 = new Primitive(PType.I32, false);
-
-    /// Non-nullable [Primitive] of [PType#I64].
-    Primitive I64 = new Primitive(PType.I64, false);
-
-    /// Non-nullable [Primitive] of [PType#U8].
-    Primitive U8 = new Primitive(PType.U8, false);
-
-    /// Non-nullable [Primitive] of [PType#U16].
-    Primitive U16 = new Primitive(PType.U16, false);
-
-    /// Non-nullable [Primitive] of [PType#U32].
-    Primitive U32 = new Primitive(PType.U32, false);
-
-    /// Non-nullable [Primitive] of [PType#U64].
-    Primitive U64 = new Primitive(PType.U64, false);
-
-    /// Non-nullable [Primitive] of [PType#F16].
-    Primitive F16 = new Primitive(PType.F16, false);
-
-    /// Non-nullable [Primitive] of [PType#F32].
-    Primitive F32 = new Primitive(PType.F32, false);
-
-    /// Non-nullable [Primitive] of [PType#F64].
-    Primitive F64 = new Primitive(PType.F64, false);
-
     /// Creates a non-nullable [Decimal] of the given precision and scale.
     ///
     /// @param precision total number of significant decimal digits
@@ -147,10 +87,10 @@ public sealed interface DType
     ///
     /// ```java
     /// DType.Struct schema = DType.structBuilder()
-    ///     .field(ColumnName.of("timestamp"), DType.I64)
-    ///     .field(ColumnName.of("symbol"),    DType.UTF8)
-    ///     .field(ColumnName.of("price"),     DType.F64)
-    ///     .field(ColumnName.of("volume"),    DType.I64.asNullable())
+    ///     .field(ColumnName.of("timestamp"), DTypes.I64)
+    ///     .field(ColumnName.of("symbol"),    DTypes.UTF8)
+    ///     .field(ColumnName.of("price"),     DTypes.F64)
+    ///     .field(ColumnName.of("volume"),    DTypes.I64.asNullable())
     ///     .build();
     /// ```
     ///
@@ -446,13 +386,13 @@ public sealed interface DType
             if (this == o) {
                 return true;
             }
-            if (!(o instanceof Extension other)) {
+            if (!(o instanceof Extension(String id, DType dType, MemorySegment metadata1, boolean nullable1))) {
                 return false;
             }
-            return nullable == other.nullable
-                    && extensionId.equals(other.extensionId)
-                    && storageDType.equals(other.storageDType)
-                    && metadataEquals(metadata, other.metadata);
+            return nullable == nullable1
+                    && extensionId.equals(id)
+                    && storageDType.equals(dType)
+                    && metadataEquals(metadata, metadata1);
         }
 
         /// @return a hash consistent with [#equals(Object)] (metadata hashed by content)

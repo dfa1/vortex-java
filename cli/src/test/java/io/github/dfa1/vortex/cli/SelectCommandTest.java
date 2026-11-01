@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.Test;
@@ -175,7 +176,7 @@ class SelectCommandTest {
         Path file = dir.resolve("two.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("price")),
-                List.of(DType.I64, DType.F64),
+                List.of(DTypes.I64, DTypes.F64),
                 false);
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {

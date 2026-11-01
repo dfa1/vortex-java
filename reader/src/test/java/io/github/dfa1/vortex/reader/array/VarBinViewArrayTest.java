@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// referenced views into shared data buffers, length-only reads, and truncate.
 class VarBinViewArrayTest {
 
-    private static final DType UTF8 = DType.UTF8;
+    private static final DType UTF8 = DTypes.UTF8;
     private static final int VIEW_SIZE = 16;
 
     @Nested

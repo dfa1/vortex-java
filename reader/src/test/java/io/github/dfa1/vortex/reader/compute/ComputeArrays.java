@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.compute;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.ChunkedLongArray;
@@ -32,31 +32,31 @@ final class ComputeArrays {
     ///
     /// @param arena  the allocator for the off-heap buffer
     /// @param values the element values
-    /// @return a [LongArray] of [DType#I64]
+    /// @return a [LongArray] of [DTypes#I64]
     static MaterializedLongArray longArray(Arena arena, long... values) {
-        return new MaterializedLongArray(DType.I64, values.length, longSegment(arena, values));
+        return new MaterializedLongArray(DTypes.I64, values.length, longSegment(arena, values));
     }
 
     /// Builds a buffer-backed `u64` array from the given raw 64-bit values.
     ///
     /// @param arena  the allocator for the off-heap buffer
     /// @param values the raw element bits
-    /// @return a [LongArray] of [DType#U64]
+    /// @return a [LongArray] of [DTypes#U64]
     static MaterializedLongArray unsignedLongArray(Arena arena, long... values) {
-        return new MaterializedLongArray(DType.U64, values.length, longSegment(arena, values));
+        return new MaterializedLongArray(DTypes.U64, values.length, longSegment(arena, values));
     }
 
     /// Builds a buffer-backed `f64` array from the given values.
     ///
     /// @param arena  the allocator for the off-heap buffer
     /// @param values the element values
-    /// @return a [MaterializedDoubleArray] of [DType#F64]
+    /// @return a [MaterializedDoubleArray] of [DTypes#F64]
     static MaterializedDoubleArray doubleArray(Arena arena, double... values) {
         MemorySegment seg = arena.allocate(Math.max(1, values.length * 8L), 8);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(VortexFormat.LE_DOUBLE, i, values[i]);
         }
-        return new MaterializedDoubleArray(DType.F64, values.length, seg);
+        return new MaterializedDoubleArray(DTypes.F64, values.length, seg);
     }
 
     /// Wraps an `i64` child with a validity bitmap, the only array family that carries nulls.
@@ -64,7 +64,7 @@ final class ComputeArrays {
     /// @param arena  the allocator for the off-heap buffers
     /// @param values the element values (the value at a null position is ignored by the kernels)
     /// @param valid  per-position validity, parallel to `values`
-    /// @return a [MaskedArray] over an [DType#I64] child
+    /// @return a [MaskedArray] over an [DTypes#I64] child
     static MaskedArray maskedLongArray(Arena arena, long[] values, boolean[] valid) {
         return new MaskedArray(longArray(arena, values), boolArray(arena, valid));
     }
@@ -74,7 +74,7 @@ final class ComputeArrays {
     /// @param arena  the allocator for the off-heap buffers
     /// @param values the element values (the value at a null position is ignored by the kernels)
     /// @param valid  per-position validity, parallel to `values`
-    /// @return a [MaskedArray] over an [DType#F64] child
+    /// @return a [MaskedArray] over an [DTypes#F64] child
     static MaskedArray maskedDoubleArray(Arena arena, double[] values, boolean[] valid) {
         return new MaskedArray(doubleArray(arena, values), boolArray(arena, valid));
     }
@@ -85,18 +85,18 @@ final class ComputeArrays {
     /// @param arena the allocator for the off-heap buffers
     /// @param pool  the dictionary values
     /// @param codes the per-row indices into `pool`
-    /// @return a [DictLongArray] of [DType#I64]
+    /// @return a [DictLongArray] of [DTypes#I64]
     static DictLongArray dictLongArray(Arena arena, long[] pool, int[] codes) {
         LongArray values = longArray(arena, pool);
         ByteArray codeArray = byteArray(arena, codes);
-        return DictLongArray.of(DType.I64, codes.length, values, codeArray);
+        return DictLongArray.of(DTypes.I64, codes.length, values, codeArray);
     }
 
     /// Builds a chunked `i64` array by concatenating the given chunks.
     ///
     /// @param arena  the allocator for the off-heap buffers
     /// @param chunks the chunk value arrays, in order
-    /// @return a [ChunkedLongArray] of [DType#I64]
+    /// @return a [ChunkedLongArray] of [DTypes#I64]
     static ChunkedLongArray chunkedLongArray(Arena arena, long[]... chunks) {
         long total = 0;
         var children = new java.util.ArrayList<LongArray>(chunks.length);
@@ -104,14 +104,14 @@ final class ComputeArrays {
             children.add(longArray(arena, chunk));
             total += chunk.length;
         }
-        return ChunkedLongArray.of(DType.I64, total, List.copyOf(children));
+        return ChunkedLongArray.of(DTypes.I64, total, List.copyOf(children));
     }
 
     /// Builds a bit-packed boolean array (LSB-first) used as a [MaskedArray] validity bitmap.
     ///
     /// @param arena  the allocator for the off-heap buffer
     /// @param values the boolean values
-    /// @return a [MaterializedBoolArray] of [DType#BOOL]
+    /// @return a [MaterializedBoolArray] of [DTypes#BOOL]
     static MaterializedBoolArray boolArray(Arena arena, boolean... values) {
         long bytes = Math.max(1, (values.length + 7) >>> 3);
         MemorySegment seg = arena.allocate(bytes);
@@ -122,7 +122,7 @@ final class ComputeArrays {
                 seg.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) (existing | (1 << (i & 7))));
             }
         }
-        return new MaterializedBoolArray(DType.BOOL, values.length, seg);
+        return new MaterializedBoolArray(DTypes.BOOL, values.length, seg);
     }
 
     /// Builds an offset-based Utf8 [VarBinArray] from the given strings, off-heap so it looks like
@@ -131,7 +131,7 @@ final class ComputeArrays {
     ///
     /// @param arena  the allocator for the off-heap bytes and offsets buffers
     /// @param values the element strings, in row order
-    /// @return a [VarBinArray] of [DType#UTF8]
+    /// @return a [VarBinArray] of [DTypes#UTF8]
     static VarBinArray utf8Array(Arena arena, String... values) {
         byte[] allBytes = String.join("", values).getBytes(StandardCharsets.UTF_8);
         MemorySegment bytes = arena.allocate(Math.max(1, allBytes.length));
@@ -143,7 +143,7 @@ final class ComputeArrays {
             running += values[i].getBytes(StandardCharsets.UTF_8).length;
             offsets.setAtIndex(VortexFormat.LE_INT, i + 1, running);
         }
-        return new VarBinOffsetArray(DType.UTF8, values.length, bytes.asReadOnly(),
+        return new VarBinOffsetArray(DTypes.UTF8, values.length, bytes.asReadOnly(),
                 offsets, PType.I32);
     }
 
@@ -153,7 +153,7 @@ final class ComputeArrays {
     /// @param arena the allocator for the off-heap buffers
     /// @param pool  the dictionary entries
     /// @param codes the per-row codes into `pool`
-    /// @return a [VarBinArray] of [DType#UTF8] with `codes.length` rows
+    /// @return a [VarBinArray] of [DTypes#UTF8] with `codes.length` rows
     static VarBinArray utf8DictArray(Arena arena, String[] pool, int[] codes) {
         return utf8DictArray(arena, pool, codes, PType.I32);
     }
@@ -165,7 +165,7 @@ final class ComputeArrays {
     /// @param pool       the dictionary values
     /// @param codes      the per-row codes into `pool`
     /// @param codesPType the physical type of the stored codes
-    /// @return a [VarBinArray] of [DType#UTF8] with `codes.length` rows
+    /// @return a [VarBinArray] of [DTypes#UTF8] with `codes.length` rows
     static VarBinArray utf8DictArray(Arena arena, String[] pool, int[] codes, PType codesPType) {
         VarBinOffsetArray values = (VarBinOffsetArray) utf8Array(arena, pool);
         int width = codesPType.byteSize();
@@ -177,7 +177,7 @@ final class ComputeArrays {
                 default -> codeSegment.setAtIndex(VortexFormat.LE_INT, i, codes[i]);
             }
         }
-        return VarBinArray.ofDict(DType.UTF8, codes.length, values.bytesSegment(), values.offsetsSegment(),
+        return VarBinArray.ofDict(DTypes.UTF8, codes.length, values.bytesSegment(), values.offsetsSegment(),
                 values.offsetsPtype(), codeSegment, codesPType);
     }
 
@@ -194,6 +194,6 @@ final class ComputeArrays {
         for (int i = 0; i < values.length; i++) {
             seg.set(ValueLayout.JAVA_BYTE, i, (byte) values[i]);
         }
-        return new MaterializedByteArray(DType.U8, values.length, seg);
+        return new MaterializedByteArray(DTypes.U8, values.length, seg);
     }
 }

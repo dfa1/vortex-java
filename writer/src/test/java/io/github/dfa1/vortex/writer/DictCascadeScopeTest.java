@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -62,7 +63,7 @@ class DictCascadeScopeTest {
 
     private Path write(long[] values, WriteOptions options) throws IOException {
         Path file = tmp.resolve("code.vtx");
-        var schema = new DType.Struct(List.of(CODE), List.of(DType.I64), false);
+        var schema = new DType.Struct(List.of(CODE), List.of(DTypes.I64), false);
         try (var channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(channel, schema, options)) {
             sut.writeChunk(Map.of(CODE, values));

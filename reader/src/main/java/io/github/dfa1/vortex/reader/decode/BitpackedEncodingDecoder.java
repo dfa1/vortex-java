@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -120,7 +121,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.FASTLANES_BITPACKED,
                     "expected " + validityIdx + " or " + (validityIdx + 1) + " children, got " + childCount);
         }
-        Array va = ctx.decodeChild(validityIdx, DType.BOOL, rowCount);
+        Array va = ctx.decodeChild(validityIdx, DTypes.BOOL, rowCount);
         BoolArray validity = MaskedArray.requireBoolArray(va, EncodingId.FASTLANES_BITPACKED, "validity child");
         return new MaskedArray(values, validity);
     }

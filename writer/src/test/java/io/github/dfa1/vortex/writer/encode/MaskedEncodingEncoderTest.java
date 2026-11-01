@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -49,7 +50,7 @@ class MaskedEncodingEncoderTest {
             DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder(), new ConstantEncodingDecoder());
 
     private static EncodeResult maskedResult(int[] values, boolean[] validity) {
-        DType i32 = DType.I32;
+        DType i32 = DTypes.I32;
         EncodeResult childResult = PRIM_ENCODER.encode(i32, values, EncodeTestHelper.testCtx());
 
         List<EncodedBuffer> allBuffers = new ArrayList<>(childResult.encodedBuffers());
@@ -58,7 +59,7 @@ class MaskedEncodingEncoderTest {
         if (validity == null) {
             children = new EncodeNode[]{childResult.rootNode()};
         } else {
-            DType boolDtype = DType.BOOL;
+            DType boolDtype = DTypes.BOOL;
             EncodeResult validityResult = BOOL_ENCODER.encode(boolDtype, validity, EncodeTestHelper.testCtx());
             EncodeNode remapped = EncodeNode.remapBufferIndices(
                     validityResult.rootNode(), childResult.buffers().size());
@@ -180,7 +181,7 @@ class MaskedEncodingEncoderTest {
         // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
 
-        DType i32 = DType.I32;
+        DType i32 = DTypes.I32;
         EncodeResult childResult = PRIM_ENCODER.encode(i32, new int[]{1}, EncodeTestHelper.testCtx());
         EncodeNode childNode = childResult.rootNode();
         EncodeNode maskedNode = new EncodeNode(
@@ -413,21 +414,21 @@ class MaskedEncodingEncoderTest {
 
         static Stream<Arguments> everyCarrier() {
             return Stream.of(
-                    Arguments.of(DType.I8.asNullable(), new byte[ROWS]),
-                    Arguments.of(DType.U8.asNullable(), new byte[ROWS]),
-                    Arguments.of(DType.I16.asNullable(), new short[ROWS]),
-                    Arguments.of(DType.U16.asNullable(), new short[ROWS]),
-                    Arguments.of(DType.F16.asNullable(), new short[ROWS]),
-                    Arguments.of(DType.I32.asNullable(), new int[ROWS]),
-                    Arguments.of(DType.U32.asNullable(), new int[ROWS]),
-                    Arguments.of(DType.I64.asNullable(), new long[ROWS]),
-                    Arguments.of(DType.U64.asNullable(), new long[ROWS]),
-                    Arguments.of(DType.F32.asNullable(), new float[ROWS]),
-                    Arguments.of(DType.F64.asNullable(), new double[ROWS]),
-                    Arguments.of(DType.BOOL.asNullable(), new boolean[ROWS]),
-                    Arguments.of(DType.UTF8.asNullable(), new String[ROWS]),
-                    Arguments.of(DType.UTF8.asNullable(), new byte[ROWS][]),
-                    Arguments.of(DType.BINARY.asNullable(), new byte[ROWS][]),
+                    Arguments.of(DTypes.I8.asNullable(), new byte[ROWS]),
+                    Arguments.of(DTypes.U8.asNullable(), new byte[ROWS]),
+                    Arguments.of(DTypes.I16.asNullable(), new short[ROWS]),
+                    Arguments.of(DTypes.U16.asNullable(), new short[ROWS]),
+                    Arguments.of(DTypes.F16.asNullable(), new short[ROWS]),
+                    Arguments.of(DTypes.I32.asNullable(), new int[ROWS]),
+                    Arguments.of(DTypes.U32.asNullable(), new int[ROWS]),
+                    Arguments.of(DTypes.I64.asNullable(), new long[ROWS]),
+                    Arguments.of(DTypes.U64.asNullable(), new long[ROWS]),
+                    Arguments.of(DTypes.F32.asNullable(), new float[ROWS]),
+                    Arguments.of(DTypes.F64.asNullable(), new double[ROWS]),
+                    Arguments.of(DTypes.BOOL.asNullable(), new boolean[ROWS]),
+                    Arguments.of(DTypes.UTF8.asNullable(), new String[ROWS]),
+                    Arguments.of(DTypes.UTF8.asNullable(), new byte[ROWS][]),
+                    Arguments.of(DTypes.BINARY.asNullable(), new byte[ROWS][]),
                     Arguments.of(new DType.Decimal((byte) 10, (byte) 2, true), new BigDecimal[ROWS]),
                     Arguments.of(new DType.Decimal((byte) 38, (byte) 4, true), new BigDecimal[ROWS]));
         }
@@ -438,11 +439,11 @@ class MaskedEncodingEncoderTest {
             NullableData data = new NullableData(new long[ROWS], new boolean[ROWS]);
 
             // When
-            EncodeResult result = SUT.encode(DType.I64.asNullable(), data, EncodeTestHelper.testCtx());
+            EncodeResult result = SUT.encode(DTypes.I64.asNullable(), data, EncodeTestHelper.testCtx());
 
             // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
-            assertEveryRowNull(READ.decode(DecodeTestHelper.toDecodeContext(result, ROWS, DType.I64.asNullable(), READ)));
+            assertEveryRowNull(READ.decode(DecodeTestHelper.toDecodeContext(result, ROWS, DTypes.I64.asNullable(), READ)));
         }
 
         @ParameterizedTest
@@ -455,12 +456,12 @@ class MaskedEncodingEncoderTest {
             validity[validRow] = true;
 
             // When
-            EncodeResult result = SUT.encode(DType.I64.asNullable(), new NullableData(values, validity), EncodeTestHelper.cascadingCtx());
+            EncodeResult result = SUT.encode(DTypes.I64.asNullable(), new NullableData(values, validity), EncodeTestHelper.cascadingCtx());
 
             // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
             MaskedArray masked = (MaskedArray) READ.decode(
-                    DecodeTestHelper.toDecodeContext(result, ROWS, DType.I64.asNullable(), READ));
+                    DecodeTestHelper.toDecodeContext(result, ROWS, DTypes.I64.asNullable(), READ));
             for (int i = 0; i < ROWS; i++) {
                 assertThat(masked.isValid(i)).as("row %d", i).isEqualTo(i == validRow);
             }
@@ -474,13 +475,13 @@ class MaskedEncodingEncoderTest {
             Arrays.fill(validity, true);
 
             // When
-            EncodeResult result = SUT.encode(DType.I64.asNullable(), new NullableData(new long[ROWS], validity),
+            EncodeResult result = SUT.encode(DTypes.I64.asNullable(), new NullableData(new long[ROWS], validity),
                     EncodeTestHelper.cascadingCtx());
 
             // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
             MaskedArray masked = (MaskedArray) READ.decode(
-                    DecodeTestHelper.toDecodeContext(result, ROWS, DType.I64.asNullable(), READ));
+                    DecodeTestHelper.toDecodeContext(result, ROWS, DTypes.I64.asNullable(), READ));
             assertThat(masked.isValid(0)).isTrue();
             assertThat(masked.isValid(ROWS - 1)).isTrue();
         }
@@ -490,7 +491,7 @@ class MaskedEncodingEncoderTest {
             // Given: zero rows have no null to speak of
 
             // When
-            EncodeResult result = SUT.encode(DType.I64.asNullable(), new NullableData(new long[0], new boolean[0]),
+            EncodeResult result = SUT.encode(DTypes.I64.asNullable(), new NullableData(new long[0], new boolean[0]),
                     EncodeTestHelper.cascadingCtx());
 
             // Then

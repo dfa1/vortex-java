@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoScalar;
@@ -156,7 +157,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
             offsets[i + 1] = offsets[i] + runLengths.get(i);
         }
 
-        EncodeResult offsetsResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(DType.U64, offsets, ctx);
+        EncodeResult offsetsResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(DTypes.U64, offsets, ctx);
         buffers.addAll(offsetsResult.encodedBuffers());
 
         EncodeNode[] children = new EncodeNode[nruns + 1];

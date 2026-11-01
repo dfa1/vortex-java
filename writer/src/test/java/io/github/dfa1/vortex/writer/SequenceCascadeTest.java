@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -67,7 +68,7 @@ class SequenceCascadeTest {
 
     private Path write(long[] times) throws IOException {
         Path file = tmp.resolve("time.vtx");
-        var schema = new DType.Struct(List.of(TIME), List.of(DType.I64), false);
+        var schema = new DType.Struct(List.of(TIME), List.of(DTypes.I64), false);
         try (var channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(channel, schema, WriteOptions.defaults().withZoneMaps(false))) {
             sut.writeChunk(Map.of(TIME, times));

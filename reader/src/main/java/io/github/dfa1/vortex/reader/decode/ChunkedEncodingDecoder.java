@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -74,7 +75,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
     /// @param rowCount logical row count the chunk offsets must sum to
     /// @return the `nchunks + 1` monotonic, non-negative offsets spanning exactly `rowCount`
     private static long[] readOffsets(DecodeContext ctx, int nchunks, long rowCount) {
-        MemorySegment offsetsBuf = ctx.decodeChildSegment(0, DType.U64, nchunks + 1L);
+        MemorySegment offsetsBuf = ctx.decodeChildSegment(0, DTypes.U64, nchunks + 1L);
         long[] offsets = new long[nchunks + 1];
         for (int i = 0; i <= nchunks; i++) {
             offsets[i] = offsetsBuf.get(LE_LONG, SegmentBroadcast.elementOffset(offsetsBuf, i, 8));

@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.compute.LongIntMap;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -237,13 +238,13 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         Object distinct = textPool(valueMap.keySet(), data instanceof byte[][]);
 
         // UTF-8 byte order like every other string bound (Rust compares bytes), not String's UTF-16 order
-        MinMax stats = VarBinEncodingEncoder.textMinMax(DType.UTF8, distinct);
+        MinMax stats = VarBinEncodingEncoder.textMinMax(DTypes.UTF8, distinct);
         ProtoScalarValue statsMin = stats != null ? stats.min() : null;
         ProtoScalarValue statsMax = stats != null ? stats.max() : null;
 
         return new CascadeStep(partialRoot, List.of(),
                 List.of(new ChildSlot(new DType.Primitive(codePType, false), codesArr, 0, CODES_EXCLUDED),
-                        new ChildSlot(DType.UTF8, distinct, 1, Set.of(EncodingId.VORTEX_DICT))),
+                        new ChildSlot(DTypes.UTF8, distinct, 1, Set.of(EncodingId.VORTEX_DICT))),
                 statsMin, statsMax, true);
     }
 
@@ -421,7 +422,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 new int[0]);
 
         // UTF-8 byte order like every other string bound (Rust compares bytes), not String's UTF-16 order
-        MinMax stats = VarBinEncodingEncoder.textMinMax(DType.UTF8, textPool(valueMap.keySet(), data instanceof byte[][]));
+        MinMax stats = VarBinEncodingEncoder.textMinMax(DTypes.UTF8, textPool(valueMap.keySet(), data instanceof byte[][]));
         ProtoScalarValue statsMin = stats != null ? stats.min() : null;
         ProtoScalarValue statsMax = stats != null ? stats.max() : null;
         return new EncodeResult(root, List.of(EncodedBuffer.bytes(dictBytesBuf), EncodedBuffer.of(dictOffsetsBuf, PType.I64),

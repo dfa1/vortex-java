@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DTypeExtensionTest {
 
-    private static final DType.Primitive I32 = DType.I32;
+    private static final DType.Primitive I32 = DTypes.I32;
 
     @Test
     void metadataAtCap_accepted() {
@@ -45,7 +45,7 @@ class DTypeExtensionTest {
             meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 3);
 
             // When
-            result = new DType.Extension("vortex.timestamp", DType.I64, meta, false);
+            result = new DType.Extension("vortex.timestamp", DTypes.I64, meta, false);
         }
 
         // Then — the dtype is still readable after the arena (the reader) is closed

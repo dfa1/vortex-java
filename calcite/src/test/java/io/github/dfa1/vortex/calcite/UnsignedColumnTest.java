@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.calcite;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -34,8 +35,8 @@ class UnsignedColumnTest {
     private static final long U64_HIGH = Long.MIN_VALUE;
 
     private static final DType.Struct SCHEMA = DType.structBuilder()
-            .field(ColumnName.of("u32"), DType.U32)
-            .field(ColumnName.of("u64"), DType.U64)
+            .field(ColumnName.of("u32"), DTypes.U32)
+            .field(ColumnName.of("u64"), DTypes.U64)
             .build();
 
     @TempDir

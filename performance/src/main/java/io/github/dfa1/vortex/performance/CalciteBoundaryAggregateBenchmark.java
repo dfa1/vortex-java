@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.performance;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.calcite.VortexTable;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanFilter;
@@ -203,8 +204,8 @@ public class CalciteBoundaryAggregateBenchmark {
     /// the per-zone `SUM` the interior-zone fold reads.
     private static void writeFixture(Path file) throws IOException {
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("val"), DType.I64)
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("val"), DTypes.I64)
                 .build();
         // core2025.10.0 predates Rust's vortex.zoned, so the writer emits the legacy vortex.stats zone
         // map: one zone per batch with the min/max/sum/null-count the interior-zone fold reads. The

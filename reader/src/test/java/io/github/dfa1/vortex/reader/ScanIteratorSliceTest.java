@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DictIntArray;
@@ -34,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ScanIteratorSliceTest {
 
     private static final DType.Decimal DECIMAL = new DType.Decimal((byte) 10, (byte) 2, false);
-    private static final DType.List LIST_OF_I64 = new DType.List(DType.I64, false);
+    private static final DType.List LIST_OF_I64 = new DType.List(DTypes.I64, false);
 
     @Test
     void bufferBackedDecimal_slicesItsBufferToTheWindow() {
@@ -56,10 +57,10 @@ class ScanIteratorSliceTest {
         // Given — a global dict column cached whole: the window must stay a dict (its fold gathers
         // off the pool) whose codes read as a flat segment (the gather's fast path)
         IntArray pool = TestArrays.ints(10, 20, 30);
-        var full = DictIntArray.of(DType.I32, 5, pool, TestArrays.shorts((short) 2, (short) 0, (short) 1, (short) 1, (short) 0));
+        var full = DictIntArray.of(DTypes.I32, 5, pool, TestArrays.shorts((short) 2, (short) 0, (short) 1, (short) 1, (short) 0));
 
         // When
-        var result = (DictIntArray) ScanIterator.sliceArray(full, 1, 3, DType.I32);
+        var result = (DictIntArray) ScanIterator.sliceArray(full, 1, 3, DTypes.I32);
 
         // Then
         assertThat(result.values()).isSameAs(pool);
@@ -99,7 +100,7 @@ class ScanIteratorSliceTest {
     @Test
     void map_slicesItsEntries() {
         // Given — a map whose physical entries are the list view above
-        var mapType = new DType.Map(DType.I64, DType.I64, false, false);
+        var mapType = new DType.Map(DTypes.I64, DTypes.I64, false, false);
         var full = new MapArray(mapType, 3, listView());
 
         // When
@@ -115,12 +116,12 @@ class ScanIteratorSliceTest {
     void union_slicesTypeIdsAndEveryVariantToTheWindow() {
         // Given — a sparse union: type ids and both variants row-aligned, rows pick b, a, b, a
         var unionType = new DType.Union(List.of(ColumnName.of("a"), ColumnName.of("b")),
-                List.of(DType.I64, DType.I64), List.of(0, 1), false);
+                List.of(DTypes.I64, DTypes.I64), List.of(0, 1), false);
         var u8 = new DType.Primitive(PType.U8, false);
         var full = new UnionArray(unionType, 4,
                 new MaterializedByteArray(u8, 4, MemorySegment.ofArray(new byte[]{1, 0, 1, 0})),
-                List.of(new MaterializedLongArray(DType.I64, 4, longs(10, 11, 12, 13)),
-                        new MaterializedLongArray(DType.I64, 4, longs(20, 21, 22, 23))));
+                List.of(new MaterializedLongArray(DTypes.I64, 4, longs(10, 11, 12, 13)),
+                        new MaterializedLongArray(DTypes.I64, 4, longs(20, 21, 22, 23))));
 
         // When
         var result = (UnionArray) ScanIterator.sliceArray(full, 1, 2, unionType);
@@ -132,7 +133,7 @@ class ScanIteratorSliceTest {
     }
 
     private static ListViewArray listView() {
-        var elements = new MaterializedLongArray(DType.I64, 6, longs(1, 2, 3, 4, 5, 6));
+        var elements = new MaterializedLongArray(DTypes.I64, 6, longs(1, 2, 3, 4, 5, 6));
         var offsets = new MaterializedIntArray(new DType.Primitive(PType.I32, false), 3, ints(0, 2, 4));
         var sizes = new MaterializedIntArray(new DType.Primitive(PType.I32, false), 3, ints(2, 2, 2));
         return new ListViewArray(LIST_OF_I64, 3, elements, offsets, sizes);

@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.compute;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -32,9 +33,9 @@ class ValuesTest {
     void unsignedNarrowColumnsZeroExtend() {
         // Given the all-ones bit pattern in u8 / u16 / u32 columns — sign-extended by the raw
         // accessors, so boxing must zero-extend or the value reads back negative
-        Array u8 = byteArray(DType.U8, (byte) 0xFF);
-        Array u16 = shortArray(DType.U16, (short) 0xFFFF);
-        Array u32 = intArray(DType.U32, 0xFFFFFFFF);
+        Array u8 = byteArray(DTypes.U8, (byte) 0xFF);
+        Array u16 = shortArray(DTypes.U16, (short) 0xFFFF);
+        Array u32 = intArray(DTypes.U32, 0xFFFFFFFF);
 
         // When each value is boxed
         Object result8 = Values.valueAt(u8, 0);
@@ -50,8 +51,8 @@ class ValuesTest {
     @Test
     void signedNarrowColumnsSignExtend() {
         // Given the same all-ones bit pattern in the signed narrow columns
-        Array i8 = byteArray(DType.I8, (byte) 0xFF);
-        Array i16 = shortArray(DType.I16, (short) 0xFFFF);
+        Array i8 = byteArray(DTypes.I8, (byte) 0xFF);
+        Array i16 = shortArray(DTypes.I16, (short) 0xFFFF);
 
         // When each value is boxed
         Object result8 = Values.valueAt(i8, 0);
@@ -66,7 +67,7 @@ class ValuesTest {
     void extensionDtypePassesIntegerThrough() {
         // Given an integer column whose dtype is an Extension (not a Primitive) — the unsigned
         // widening must pass the raw value through rather than assume a primitive ptype
-        DType extension = new DType.Extension("test.ext", DType.I32, null, false);
+        DType extension = new DType.Extension("test.ext", DTypes.I32, null, false);
         MemorySegment seg = ARENA.allocate(4, 4);
         seg.setAtIndex(VortexFormat.LE_INT, 0, -7);
         Array column = new MaterializedIntArray(extension, 1, seg);
@@ -96,7 +97,7 @@ class ValuesTest {
     @Test
     void arrayWithoutScalarAccessorFailsFast() {
         // Given a GenericArray — the fallback array type with no scalar accessor for compute
-        Array generic = new GenericArray(DType.I64, 1, ARENA.allocate(8, 8));
+        Array generic = new GenericArray(DTypes.I64, 1, ARENA.allocate(8, 8));
 
         // When a value read is attempted
         // Then the accessor fails fast instead of returning garbage
@@ -108,7 +109,7 @@ class ValuesTest {
     @Test
     void maskedArrayReadsThroughItsPayload() {
         // Given a masked narrow column with one null position
-        Array masked = new MaskedArray(byteArray(DType.U8, (byte) 42, (byte) 7),
+        Array masked = new MaskedArray(byteArray(DTypes.U8, (byte) 42, (byte) 7),
                 ComputeArrays.boolArray(ARENA, true, false));
 
         // When the valid position is boxed and both positions are null-tested
@@ -123,7 +124,7 @@ class ValuesTest {
     @Test
     void aNullArrayIsNullAtEveryRow() {
         // Given an all-null chunk of a type with no masked form (a uuid, a list)
-        Array nulls = new NullArray(DType.I64.asNullable(), 3);
+        Array nulls = new NullArray(DTypes.I64.asNullable(), 3);
 
         // When / Then
         assertThat(Values.isNullAt(nulls, 0)).isTrue();

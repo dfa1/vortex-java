@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.layout;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.PType;
@@ -230,11 +231,11 @@ class DictLayoutDecoderTest {
         // Given — a nullable `vortex.constant` pool with slot 1 dead. Pre-#341 this combination
         // reached the fallback, which cast the still-masked `values` to VarBinArray and blew up
         // with a raw ClassCastException; even unmasked it dropped pool validity on the floor.
-        Array values = new MaskedArray(constantPool(DType.UTF8, "zz", 3), boolArray(true, false, true));
+        Array values = new MaskedArray(constantPool(DTypes.UTF8, "zz", 3), boolArray(true, false, true));
         Array codes = byteCodes(0, 1, 2, 1);
 
         // When
-        Array result = decode(4, DType.UTF8, values, codes);
+        Array result = decode(4, DTypes.UTF8, values, codes);
 
         // Then — rows pointing at the dead slot are null, values still resolve lazily
         MaskedArray masked = assertMasked(result);
@@ -249,11 +250,11 @@ class DictLayoutDecoderTest {
         // claim with no storage behind it, so normalizing it entry by entry would allocate ~8 TB
         // of offsets; the reviewer measured 2^31 at ~18 s / ~19 GB and 2^40 as non-terminating.
         // A ~200-byte crafted file can carry exactly this shape, so decode must not walk the pool.
-        Array values = constantPool(DType.UTF8, "zz", 1L << 40);
+        Array values = constantPool(DTypes.UTF8, "zz", 1L << 40);
         Array codes = byteCodes(0, 7, 3);
 
         // When
-        Array result = decode(3, DType.UTF8, values, codes);
+        Array result = decode(3, DTypes.UTF8, values, codes);
 
         // Then — collapsed to the broadcast constant in O(1): one distinct value, every code hits it
         assertThat(result).isInstanceOf(VarBinConstantArray.class);
@@ -265,11 +266,11 @@ class DictLayoutDecoderTest {
         // Given — a 4-entry StringView pool whose last two entries no code references. The
         // normalization walk is bounded by the highest code, not by the pool's declared length,
         // so entries 2 and 3 are never visited; the rows that are addressed must still be right.
-        Array values = viewPool(DType.UTF8, "a", "bb", "ccc", "dddd");
+        Array values = viewPool(DTypes.UTF8, "a", "bb", "ccc", "dddd");
         Array codes = byteCodes(1, 0, 1);
 
         // When
-        Array result = decode(3, DType.UTF8, values, codes);
+        Array result = decode(3, DTypes.UTF8, values, codes);
 
         // Then
         assertThat(result).isInstanceOf(VarBinDictArray.class);
@@ -281,11 +282,11 @@ class DictLayoutDecoderTest {
         // Given — a constant pool has no offsets table for an out-of-range code to run off, so
         // nothing downstream would catch code 9 against its 3 entries; the values-side guard has
         // to reject it here or the row silently resolves to the constant.
-        Array values = constantPool(DType.UTF8, "zz", 3);
+        Array values = constantPool(DTypes.UTF8, "zz", 3);
         Array codes = byteCodes(0, 9);
 
         // When / Then
-        assertThatThrownBy(() -> decode(2, DType.UTF8, values, codes))
+        assertThatThrownBy(() -> decode(2, DTypes.UTF8, values, codes))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("dict code 9 out of range for a values pool of 3 entries");
     }
@@ -298,7 +299,7 @@ class DictLayoutDecoderTest {
         Array codes = longCodes(0, -5, 1);
 
         // When / Then
-        assertThatThrownBy(() -> decode(3, DType.UTF8, values, codes, PType.I64))
+        assertThatThrownBy(() -> decode(3, DTypes.UTF8, values, codes, PType.I64))
                 .as(name)
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("code -5 out of range");
@@ -308,9 +309,9 @@ class DictLayoutDecoderTest {
     void viewPoolNoLongerThanTheCodes_codePastItThrowsOnAccess() {
         // Given — a pool no longer than the codes is walked whole without reading every code
         // first, so a code past it is left to the carrier, which must still reject it as malformed
-        Array values = viewPool(DType.UTF8, "a", "bb");
+        Array values = viewPool(DTypes.UTF8, "a", "bb");
         Array codes = byteCodes(0, 5, 1);
-        VarBinArray result = (VarBinArray) decode(3, DType.UTF8, values, codes);
+        VarBinArray result = (VarBinArray) decode(3, DTypes.UTF8, values, codes);
 
         // When / Then
         assertThat(result.getString(2)).isEqualTo("bb");
@@ -322,7 +323,7 @@ class DictLayoutDecoderTest {
         // Given — a dict-encoded vortex.uuid-shaped column: the pool is a FixedSizeList(U8, 16),
         // neither VarBin- nor primitive-shaped. The fallback used to blind-cast it to VarBinArray,
         // which breaks the security contract (a raw ClassCastException on untrusted input).
-        DType.FixedSizeList storage = new DType.FixedSizeList(DType.U8, 16, false);
+        DType.FixedSizeList storage = new DType.FixedSizeList(DTypes.U8, 16, false);
         DType uuid = new DType.Extension("vortex.uuid", storage, null, false);
         Array values = new FixedSizeListArray(storage, 2, bytePool(new int[32]));
         Array codes = byteCodes(0, 1, 0);
@@ -336,15 +337,15 @@ class DictLayoutDecoderTest {
     // ── harness ─────────────────────────────────────────────────────────────────
 
     private static Stream<Arguments> varBinPools() {
-        DType utf8Extension = new DType.Extension("ip.address", DType.UTF8, null, false);
+        DType utf8Extension = new DType.Extension("ip.address", DTypes.UTF8, null, false);
         String[] byCode = {"ccc", "a", "bb", "a"};
         String[] broadcast = {"zz", "zz", "zz", "zz"};
         return Stream.of(
-                Arguments.of("utf8 + offsets pool", DType.UTF8, offsetPool(DType.UTF8, "a", "bb", "ccc"),
+                Arguments.of("utf8 + offsets pool", DTypes.UTF8, offsetPool(DTypes.UTF8, "a", "bb", "ccc"),
                         VarBinDictArray.class, byCode),
-                Arguments.of("utf8 + view pool", DType.UTF8, viewPool(DType.UTF8, "a", "bb", "ccc"),
+                Arguments.of("utf8 + view pool", DTypes.UTF8, viewPool(DTypes.UTF8, "a", "bb", "ccc"),
                         VarBinDictArray.class, byCode),
-                Arguments.of("utf8 + constant pool", DType.UTF8, constantPool(DType.UTF8, "zz", 3),
+                Arguments.of("utf8 + constant pool", DTypes.UTF8, constantPool(DTypes.UTF8, "zz", 3),
                         VarBinConstantArray.class, broadcast),
                 Arguments.of("varbin extension + offsets pool", utf8Extension,
                         offsetPool(utf8Extension, "a", "bb", "ccc"), VarBinDictArray.class, byCode),
@@ -398,8 +399,8 @@ class DictLayoutDecoderTest {
 
     private static Stream<Arguments> nullableStringPools() {
         return Stream.of(
-                Arguments.of("offsets pool", new MaskedArray(offsetPool(DType.UTF8, "a", "bb"), boolArray(true, false))),
-                Arguments.of("view pool", new MaskedArray(viewPool(DType.UTF8, "a", "bb"), boolArray(true, false))));
+                Arguments.of("offsets pool", new MaskedArray(offsetPool(DTypes.UTF8, "a", "bb"), boolArray(true, false))),
+                Arguments.of("view pool", new MaskedArray(viewPool(DTypes.UTF8, "a", "bb"), boolArray(true, false))));
     }
 
     private static Array decode(long n, DType dtype, Array values, Array codes) {
@@ -477,7 +478,7 @@ class DictLayoutDecoderTest {
                 bytes[i >>> 3] |= (byte) (1 << (i & 7));
             }
         }
-        return new MaterializedBoolArray(DType.BOOL, valid.length, MemorySegment.ofArray(bytes));
+        return new MaterializedBoolArray(DTypes.BOOL, valid.length, MemorySegment.ofArray(bytes));
     }
 
     private static MaskedArray assertMasked(Array result) {

@@ -9,6 +9,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -51,12 +52,12 @@ class WellKnownExtensionsInteropIntegrationTest {
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     private static final MemorySegment NO_METADATA = MemorySegment.ofArray(new byte[0]);
     private static final DType POINT_STORAGE = new DType.Struct(
-            List.of(ColumnName.of("x"), ColumnName.of("y")), List.of(DType.F64, DType.F64), false);
+            List.of(ColumnName.of("x"), ColumnName.of("y")), List.of(DTypes.F64, DTypes.F64), false);
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("id"), ColumnName.of("j"), ColumnName.of("g"), ColumnName.of("p")),
-            List.of(DType.I64,
-                    new DType.Extension("vortex.json", DType.UTF8, NO_METADATA, false),
-                    new DType.Extension("vortex.st.wkb", DType.BINARY, NO_METADATA, false),
+            List.of(DTypes.I64,
+                    new DType.Extension("vortex.json", DTypes.UTF8, NO_METADATA, false),
+                    new DType.Extension("vortex.st.wkb", DTypes.BINARY, NO_METADATA, false),
                     new DType.Extension("vortex.st.point", POINT_STORAGE, NO_METADATA, false)),
             false);
     private static final int BATCHES = 2;

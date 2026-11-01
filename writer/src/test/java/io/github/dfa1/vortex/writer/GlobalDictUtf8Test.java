@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.MemorySize;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -30,7 +31,7 @@ class GlobalDictUtf8Test {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("status")),
-            List.of(DType.UTF8),
+            List.of(DTypes.UTF8),
             false);
 
     @Test
@@ -79,7 +80,7 @@ class GlobalDictUtf8Test {
         // masked codes. This guards both size (one dict, not N per-chunk dicts) and that null
         // positions round-trip exactly.
         var schema = new DType.Struct(List.of(ColumnName.of("status")),
-                List.of(DType.UTF8.withNullable(true)), false);
+                List.of(DTypes.UTF8.withNullable(true)), false);
         Path file = tmp.resolve("nullable_status.vortex");
         String[] dict = {"a", "b", "c", "d", "e", "f", "g", "h"};
         int rowsPerChunk = 1_000;
@@ -308,7 +309,7 @@ class GlobalDictUtf8Test {
         // asserted end-to-end via the OUTPUT SHAPE (Chunked-of-Flats, not a shared Dict) plus an
         // exact value-and-null round-trip.
         var schema = new DType.Struct(List.of(ColumnName.of("status")),
-                List.of(DType.UTF8.withNullable(true)), false);
+                List.of(DTypes.UTF8.withNullable(true)), false);
         Path file = tmp.resolve("retained_budget_nullable_utf8.vortex");
         String[] dict = {"open", "closed", "delivered"};
         int rowsPerChunk = 2_000;

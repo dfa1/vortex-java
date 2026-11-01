@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -35,7 +35,7 @@ public final class MaskedEncodingDecoder implements EncodingDecoder {
 
         BoolArray validity = null;
         if (numChildren == 2) {
-            Array validityArray = ctx.decodeChild(1, DType.BOOL, ctx.rowCount());
+            Array validityArray = ctx.decodeChild(1, DTypes.BOOL, ctx.rowCount());
             if (!(validityArray instanceof BoolArray ba)) {
                 throw new VortexException(EncodingId.VORTEX_MASKED,
                         "validity child decoded to unexpected type: " + validityArray.getClass().getSimpleName());

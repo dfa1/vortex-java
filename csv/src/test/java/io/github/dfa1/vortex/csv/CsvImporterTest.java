@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.csv;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -49,10 +50,10 @@ class CsvImporterTest {
             DType.Struct schema = (DType.Struct) reader.dtype();
             assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("id", "price", "active", "name");
             // inferred numbers and booleans are nullable, text is not (#592)
-            assertThat(schema.fieldTypes().get(0)).isEqualTo(DType.I64.asNullable());
-            assertThat(schema.fieldTypes().get(1)).isEqualTo(DType.F64.asNullable());
-            assertThat(schema.fieldTypes().get(2)).isEqualTo(DType.BOOL.asNullable());
-            assertThat(schema.fieldTypes().get(3)).isEqualTo(DType.UTF8);
+            assertThat(schema.fieldTypes().get(0)).isEqualTo(DTypes.I64.asNullable());
+            assertThat(schema.fieldTypes().get(1)).isEqualTo(DTypes.F64.asNullable());
+            assertThat(schema.fieldTypes().get(2)).isEqualTo(DTypes.BOOL.asNullable());
+            assertThat(schema.fieldTypes().get(3)).isEqualTo(DTypes.UTF8);
 
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
@@ -111,7 +112,7 @@ class CsvImporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct forcedSchema = new DType.Struct(
                 java.util.List.of(ColumnName.of("value")),
-                java.util.List.of(DType.UTF8),
+                java.util.List.of(DTypes.UTF8),
                 false);
 
         // When
@@ -120,7 +121,7 @@ class CsvImporterTest {
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {
             DType.Struct schema = (DType.Struct) reader.dtype();
-            assertThat(schema.fieldTypes().getFirst()).isEqualTo(DType.UTF8);
+            assertThat(schema.fieldTypes().getFirst()).isEqualTo(DTypes.UTF8);
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk chunk = iter.next()) {
@@ -149,8 +150,8 @@ class CsvImporterTest {
         // again, so the file round-trips where zeros would have read back as "0"
         try (VortexReader reader = VortexReader.open(vortex)) {
             DType.Struct schema = (DType.Struct) reader.dtype();
-            assertThat(schema.fieldTypes()).containsExactly(DType.I64.asNullable(), DType.I64.asNullable(),
-                    DType.BOOL.asNullable(), DType.UTF8, DType.I64.asNullable());
+            assertThat(schema.fieldTypes()).containsExactly(DTypes.I64.asNullable(), DTypes.I64.asNullable(),
+                    DTypes.BOOL.asNullable(), DTypes.UTF8, DTypes.I64.asNullable());
         }
         assertThat(Files.readAllLines(exported)).isEqualTo(text.lines().toList());
     }
@@ -204,7 +205,7 @@ class CsvImporterTest {
         Files.writeString(csv, "id\n1\n2\n");
         Path vortex = tmp.resolve("short.vortex");
         ImportOptions options = ImportOptions.defaults().withSchema(DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("id"), DTypes.I64)
                 .field(ColumnName.of("extra"), type.asNullable())
                 .build());
 
@@ -229,7 +230,7 @@ class CsvImporterTest {
         Path csv = tmp.resolve("short.csv");
         Files.writeString(csv, "id\n1\n2\n");
         ImportOptions options = ImportOptions.defaults().withSchema(DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("id"), DTypes.I64)
                 .field(ColumnName.of("extra"), type)
                 .build());
 
@@ -248,8 +249,8 @@ class CsvImporterTest {
         Files.writeString(csv, "id,name\n1,a\n2,\n");
         Path vortex = tmp.resolve("text.vortex");
         ImportOptions options = ImportOptions.defaults().withSchema(DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("name"), DType.UTF8.asNullable())
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("name"), DTypes.UTF8.asNullable())
                 .build());
 
         // When
@@ -369,15 +370,15 @@ class CsvImporterTest {
                 + "1,,2,0,3,0,4,0,-0.25\n");
         Path vortex = tmp.resolve("narrow.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("a"), DType.I8)
-                .field(ColumnName.of("b"), DType.U8.asNullable())
-                .field(ColumnName.of("c"), DType.I16)
-                .field(ColumnName.of("d"), DType.U16)
-                .field(ColumnName.of("e"), DType.I32)
-                .field(ColumnName.of("f"), DType.U32)
-                .field(ColumnName.of("g"), DType.I64)
-                .field(ColumnName.of("h"), DType.U64)
-                .field(ColumnName.of("i"), DType.F32)
+                .field(ColumnName.of("a"), DTypes.I8)
+                .field(ColumnName.of("b"), DTypes.U8.asNullable())
+                .field(ColumnName.of("c"), DTypes.I16)
+                .field(ColumnName.of("d"), DTypes.U16)
+                .field(ColumnName.of("e"), DTypes.I32)
+                .field(ColumnName.of("f"), DTypes.U32)
+                .field(ColumnName.of("g"), DTypes.I64)
+                .field(ColumnName.of("h"), DTypes.U64)
+                .field(ColumnName.of("i"), DTypes.F32)
                 .build();
         Path exported = tmp.resolve("narrow-exported.csv");
 
@@ -396,8 +397,8 @@ class CsvImporterTest {
     void withSchemaRejectsATypeCsvCannotProduce() {
         // Given: a type no CSV text parses into, refused when the schema is set, not at the first chunk
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("half"), DType.F16)
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("half"), DTypes.F16)
                 .build();
 
         // When
@@ -506,9 +507,9 @@ class CsvImporterTest {
     void buildChunkOnAnExecutorKeepsTheColumnsAndTheirOrder() throws IOException {
         // Given: a column of each kind, so every conversion path runs off the caller thread
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("price"), DType.F64)
-                .field(ColumnName.of("name"), DType.UTF8)
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("price"), DTypes.F64)
+                .field(ColumnName.of("name"), DTypes.UTF8)
                 .build();
         ColumnChunk rows = new ColumnChunk(2);
         try (CsvByteReader reader = new CsvByteReader(
@@ -549,6 +550,6 @@ class CsvImporterTest {
 
     /// The column types that have no stand-in for an empty cell: every type but text.
     private static Stream<DType> numberAndBooleanTypes() {
-        return Stream.of(DType.I64, DType.F64, DType.BOOL);
+        return Stream.of(DTypes.I64, DTypes.F64, DTypes.BOOL);
     }
 }

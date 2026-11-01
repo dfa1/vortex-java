@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
@@ -38,8 +39,8 @@ class DecimalSumTest {
     static void writeFile() throws Exception {
         file = tmp.resolve("decimal.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("s"), DType.UTF8)
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("s"), DTypes.UTF8)
                 .field(ColumnName.of("amount"), new DType.Decimal((byte) 10, (byte) 2, true))
                 .build();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

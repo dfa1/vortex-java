@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,15 +24,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// fixtures are built with [TestSegments] and the `u8Indices`/`u16Indices` helpers below.
 class LazyRleArrayTest {
 
-    private static final DType I64 = DType.I64;
-    private static final DType I32 = DType.I32;
-    private static final DType U8 = DType.U8;
-    private static final DType I8 = DType.I8;
-    private static final DType U16 = DType.U16;
-    private static final DType I16 = DType.I16;
-    private static final DType F64 = DType.F64;
-    private static final DType F32 = DType.F32;
-    private static final DType F16 = DType.F16;
+    private static final DType I64 = DTypes.I64;
+    private static final DType I32 = DTypes.I32;
+    private static final DType U8 = DTypes.U8;
+    private static final DType I8 = DTypes.I8;
+    private static final DType U16 = DTypes.U16;
+    private static final DType I16 = DTypes.I16;
+    private static final DType F64 = DTypes.F64;
+    private static final DType F32 = DTypes.F32;
+    private static final DType F16 = DTypes.F16;
 
     @Nested
     class LongDispatch {
@@ -727,7 +728,7 @@ class LazyRleArrayTest {
         void singleChunkAllSameValue_constantRunFastPath() {
             // Given a single 1024-row chunk with 1 distinct value (true); indices are irrelevant
             // on the constant-run path, which is the common shape for a boolean column.
-            var sut = new LazyRleBoolArray(DType.BOOL, 1024, bits(true), u8Indices(1024), false,
+            var sut = new LazyRleBoolArray(DTypes.BOOL, 1024, bits(true), u8Indices(1024), false,
                     new long[]{0L}, 0L, 1L, 1, 0);
 
             // When / Then
@@ -739,7 +740,7 @@ class LazyRleArrayTest {
         @Test
         void singleChunkWithIndices_perRowLookup() {
             // Given one chunk alternating between the two values a boolean chunk can hold.
-            var sut = new LazyRleBoolArray(DType.BOOL, 4, bits(false, true), u8Indices(1024, 0, 1, 1, 0),
+            var sut = new LazyRleBoolArray(DTypes.BOOL, 4, bits(false, true), u8Indices(1024, 0, 1, 1, 0),
                     false, new long[]{0L}, 0L, 2L, 1, 0);
 
             // When
@@ -755,7 +756,7 @@ class LazyRleArrayTest {
         void u16IndicesPerRowLookupAndForEach() {
             // Given — the same runs addressed by a u16 index table; guards the record's
             // wideIndices branch, which no numeric record's test can cover for it.
-            var sut = new LazyRleBoolArray(DType.BOOL, 4, bits(false, true),
+            var sut = new LazyRleBoolArray(DTypes.BOOL, 4, bits(false, true),
                     u16Indices(1024, 0, 1, 1, 0), true, new long[]{0L}, 0L, 2L, 1, 0);
 
             // When
@@ -771,9 +772,9 @@ class LazyRleArrayTest {
         void multiChunkBoundaryAndOffset() {
             // Given two constant chunks (chunk 0 = false, chunk 1 = true) and an offset that
             // starts the logical array inside chunk 0, the slice shape the writer emits.
-            var sut = new LazyRleBoolArray(DType.BOOL, 1026, bits(false, true), u8Indices(2048), false,
+            var sut = new LazyRleBoolArray(DTypes.BOOL, 1026, bits(false, true), u8Indices(2048), false,
                     new long[]{0L, 1L}, 0L, 2L, 2, 0);
-            var offsetView = new LazyRleBoolArray(DType.BOOL, 2, bits(false, true), u8Indices(2048), false,
+            var offsetView = new LazyRleBoolArray(DTypes.BOOL, 2, bits(false, true), u8Indices(2048), false,
                     new long[]{0L, 1L}, 0L, 2L, 2, 1024);
 
             // When / Then
@@ -786,9 +787,9 @@ class LazyRleArrayTest {
         void indexedClampAndEmptyChunk() {
             // Given an index slot past the chunk's value range → clamps to the last value; and
             // separately a chunk with no values at all → false, never an out-of-bounds read.
-            var clamped = new LazyRleBoolArray(DType.BOOL, 2, bits(false, true), u8Indices(1024, 0, 9),
+            var clamped = new LazyRleBoolArray(DTypes.BOOL, 2, bits(false, true), u8Indices(1024, 0, 9),
                     false, new long[]{0L}, 0L, 2L, 1, 0);
-            var empty = new LazyRleBoolArray(DType.BOOL, 2, bits(), u8Indices(1024), false,
+            var empty = new LazyRleBoolArray(DTypes.BOOL, 2, bits(), u8Indices(1024), false,
                     new long[]{0L}, 0L, 0L, 1, 0);
 
             // When
@@ -812,7 +813,7 @@ class LazyRleArrayTest {
                 seg.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (current | (1 << (i & 7))));
             }
         }
-        return new MaterializedBoolArray(DType.BOOL, values.length, seg);
+        return new MaterializedBoolArray(DTypes.BOOL, values.length, seg);
     }
 
     /// A `u8` index table of `slots` entries with the leading entries set; the remaining

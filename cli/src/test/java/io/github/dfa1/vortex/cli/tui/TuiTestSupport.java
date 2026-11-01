@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -32,9 +33,9 @@ final class TuiTestSupport {
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("c")),
                 List.of(
-                        DType.I64,
-                        DType.I64,
-                        DType.I64),
+                        DTypes.I64,
+                        DTypes.I64,
+                        DTypes.I64),
                 false);
         long[] a = new long[rows];
         long[] b = new long[rows];
@@ -59,10 +60,10 @@ final class TuiTestSupport {
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("i"), ColumnName.of("d"), ColumnName.of("flag"), ColumnName.of("name")),
                 List.of(
-                        DType.I64,
-                        DType.F64,
-                        DType.BOOL,
-                        DType.UTF8),
+                        DTypes.I64,
+                        DTypes.F64,
+                        DTypes.BOOL,
+                        DTypes.UTF8),
                 false);
         // Two chunks for the chunk-boundary tests: the legacy edition keeps one chunk per batch,
         // where the default coalesces small batches as Rust's repartition does (#470).
@@ -94,7 +95,7 @@ final class TuiTestSupport {
         Path file = dir.resolve(name);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("label"), ColumnName.of("n")),
-                List.of(DType.UTF8, DType.I64),
+                List.of(DTypes.UTF8, DTypes.I64),
                 false);
         String[] labels = {"red", "green", "blue"};
         String[] label = new String[rows];

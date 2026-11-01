@@ -10,6 +10,7 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.OhlcData;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
@@ -92,65 +93,65 @@ class JavaWritesRustReadsIntegrationTest {
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("id"), ColumnName.of("value")),
-            List.of(DType.I64,
-                    DType.F64),
+            List.of(DTypes.I64,
+                    DTypes.F64),
             false);
 
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.I32),
+            List.of(DTypes.I32),
             false);
 
     private static final DType.Struct STRING_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("s")),
-            List.of(DType.UTF8),
+            List.of(DTypes.UTF8),
             false);
 
     private static final DType.Struct TS_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("ts")),
-            List.of(DType.I64),
+            List.of(DTypes.I64),
             false);
 
     private static final DType.Struct F32_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.F32),
+            List.of(DTypes.F32),
             false);
 
     private static final DType.Struct F64_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.F64),
+            List.of(DTypes.F64),
             false);
 
     private static final DType.Struct F16_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.F16),
+            List.of(DTypes.F16),
             false);
 
     private static final DType.Struct BOOL_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("b")),
-            List.of(DType.BOOL),
+            List.of(DTypes.BOOL),
             false);
 
     private static final DType.Struct NULL_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("n")),
-            List.of(DType.NULL),
+            List.of(DTypes.NULL),
             false);
 
     private static final DType.Struct LIST_I64_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("items")),
-            List.of(new DType.List(DType.I64, false)),
+            List.of(new DType.List(DTypes.I64, false)),
             false);
 
     private static final DType.Struct OHLC_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("date"), ColumnName.of("symbol"), ColumnName.of("open"), ColumnName.of("high"), ColumnName.of("low"), ColumnName.of("close"), ColumnName.of("volume")),
             List.of(
-                    DType.I32,
-                    DType.UTF8,
-                    DType.F64,
-                    DType.F64,
-                    DType.F64,
-                    DType.F64,
-                    DType.I64),
+                    DTypes.I32,
+                    DTypes.UTF8,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.I64),
             false);
 
     static {
@@ -537,7 +538,7 @@ class JavaWritesRustReadsIntegrationTest {
         // Given — a fixed-step timestamp column, which the cascade writes as vortex.sequence (two
         // scalars, no buffers). Rust must read it whole, with a filter (zone pruning plus a
         // sequence slice) and over a row range that starts and ends mid-chunk.
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("t")), List.of(DType.I64), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("t")), List.of(DTypes.I64), false);
         long[] times = new long[100_000];
         for (int i = 0; i < times.length; i++) {
             times[i] = 1_704_067_200_000L + i * 60_000L;
@@ -572,7 +573,7 @@ class JavaWritesRustReadsIntegrationTest {
         // the cascade writes a dictionary. Its value pool is a cascade child too (Rust compresses
         // both the codes and the values), so vortex-jni must read a dictionary whose values are
         // not a plain primitive
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("p")), List.of(DType.F64), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("p")), List.of(DTypes.F64), false);
         java.util.Random random = new java.util.Random(507);
         double[] pool = new double[500];
         for (int i = 0; i < pool.length; i++) {
@@ -611,7 +612,7 @@ class JavaWritesRustReadsIntegrationTest {
     void javaWriter_jniReader_constantString_fullAndRowRange(@TempDir Path tmp) throws IOException {
         // Given — a string column of one repeated symbol, as the klines `symbol` chunks: the
         // cascade writes it as a vortex.constant holding a string scalar, as Rust does
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("s")), List.of(DTypes.UTF8), false);
         String[] symbols = new String[100_000];
         Arrays.fill(symbols, "ADAUSDT");
         Path file = tmp.resolve("java_constant_string.vtx");
@@ -782,7 +783,7 @@ class JavaWritesRustReadsIntegrationTest {
         // Given — one zone per chunk, holding the values where a total order and IEEE disagree:
         // -0.0 vs 0.0 and NaN (#518). Rust orders floats totally (-inf < -0.0 < 0.0 < inf < NaN, NaN == NaN),
         // so Java must keep exactly the rows vortex-jni keeps, in pruning and in row-level evaluation.
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.F64), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.F64), false);
         Path file = tmp.resolve("java_float_filters.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema,
@@ -870,7 +871,7 @@ class JavaWritesRustReadsIntegrationTest {
     void javaWriter_jniReader_columnEncodingCandidates_readsAndFilters(@TempDir Path tmp) throws IOException {
         // Given — a column restricted to ALP/FoR/bitpacking (#461): the override must still write
         // a file vortex-jni reads and filters correctly, not just a smaller or faster one
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("p")), List.of(DType.F64), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("p")), List.of(DTypes.F64), false);
         WriteOptions options = WriteOptions.defaults().withColumnEncoding(ColumnName.of("p"),
                 io.github.dfa1.vortex.writer.ColumnEncoding.candidates(
                         io.github.dfa1.vortex.core.model.EncodingId.VORTEX_ALP,
@@ -946,7 +947,7 @@ class JavaWritesRustReadsIntegrationTest {
         // Given — sorted keys longer than the 64-byte bounded_max/bounded_min limit (#447), so
         // each zone stores a truncated lower bound and an incremented upper bound. A bound that
         // excluded its own zone's values would make vortex-jni drop the matching row.
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("k")), List.of(DType.UTF8), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("k")), List.of(DTypes.UTF8), false);
         String prefix = "x".repeat(60);
         int batch = 7_000;
         Path file = tmp.resolve("java_long_keys.vtx");
@@ -1584,7 +1585,7 @@ class JavaWritesRustReadsIntegrationTest {
     void javaWriter_jniReader_delta_cascading_withoutEditions(@TempDir Path tmp) throws IOException {
         // Given — 2 equal chunks of ~1s jittered timestamps (delta wins over FoR here)
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("ts")),
-                List.of(DType.I64, DType.I64), false);
+                List.of(DTypes.I64, DTypes.I64), false);
         java.util.Random random = new java.util.Random(7);
         int rows = 16_384;
         long[] ts = new long[rows];
@@ -1839,7 +1840,7 @@ class JavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_nullable_lowcard_utf8.vtx");
         ColumnName id = ColumnName.of("id");
         ColumnName s = ColumnName.of("s");
-        DType.Struct schema = new DType.Struct(List.of(id, s), List.of(DType.I64, new DType.Utf8(true)), false);
+        DType.Struct schema = new DType.Struct(List.of(id, s), List.of(DTypes.I64, new DType.Utf8(true)), false);
         String[] categories = {"alpha", "beta", "gamma", "delta"};
         int n = 4_000;
         long[] ids = new long[n];
@@ -2135,7 +2136,7 @@ class JavaWritesRustReadsIntegrationTest {
         // round-trip passed while the Rust reader rejected the file outright with
         // "failed to decode Protobuf message: invalid tag value: 0".
         Path file = tmp.resolve("java_dict_encoding_i64.vtx");
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
         long[] pool = {-8_000_000_000_000L, 77L, 4_100_000_000_000L, -3L, 9_000_000_000_000L, 12345L, -7_777_777_777L};
         long[] data = new long[4096];
         for (int i = 0; i < data.length; i++) {
@@ -2157,7 +2158,7 @@ class JavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_globaldict_i64.vtx");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")),
-                List.of(DType.I64),
+                List.of(DTypes.I64),
                 false);
         long[] chunk1 = {1L, 2L, 3L, 1L, 2L, 3L, 1L, 2L};
         long[] chunk2 = {3L, 1L, 2L, 3L, 1L, 2L, 3L, 1L};
@@ -2182,7 +2183,7 @@ class JavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_globaldict_f64.vtx");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("v")),
-                List.of(DType.F64),
+                List.of(DTypes.F64),
                 false);
         double[] chunk1 = {1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0};
         double[] chunk2 = {3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0};
@@ -2210,7 +2211,7 @@ class JavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_globaldict_binary.vtx");
         ColumnName id = ColumnName.of("id");
         ColumnName b = ColumnName.of("b");
-        DType.Struct schema = new DType.Struct(List.of(id, b), List.of(DType.I64, new DType.Binary(true)), false);
+        DType.Struct schema = new DType.Struct(List.of(id, b), List.of(DTypes.I64, new DType.Binary(true)), false);
         int rowsPerChunk = 1_000;
         List<byte[]> expected = new ArrayList<>();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -2262,7 +2263,7 @@ class JavaWritesRustReadsIntegrationTest {
         ColumnName id = ColumnName.of("id");
         ColumnName fee = ColumnName.of("fee");
         DType.Struct schema = new DType.Struct(List.of(id, fee),
-                List.of(DType.I64, new DType.Primitive(PType.F64, true)), false);
+                List.of(DTypes.I64, new DType.Primitive(PType.F64, true)), false);
         int rowsPerChunk = 1_000;
         List<Object> expected = new ArrayList<>();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -2332,9 +2333,9 @@ class JavaWritesRustReadsIntegrationTest {
         // field for null, and Rust refuses an absent field ("failed to parse extension metadata")
         // for the whole file, even when only a sibling column is projected.
         Path file = tmp.resolve("java_json_null_metadata.vtx");
-        DType.Extension json = new DType.Extension("vortex.json", DType.UTF8, null, false);
+        DType.Extension json = new DType.Extension("vortex.json", DTypes.UTF8, null, false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("j")),
-                List.of(DType.I64, json), false);
+                List.of(DTypes.I64, json), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
@@ -2365,7 +2366,7 @@ class JavaWritesRustReadsIntegrationTest {
     void invalidBuiltInExtensionDtype_refusedByJavaAndRust(@TempDir Path tmp) throws IOException {
         // Given — vortex.timestamp over I32 storage, which Rust's validate_dtype refuses ("Timestamp
         // storage dtype must be i64"). Java used to write and read it.
-        DType.Extension invalid = new DType.Extension("vortex.timestamp", DType.I32,
+        DType.Extension invalid = new DType.Extension("vortex.timestamp", DTypes.I32,
                 MemorySegment.ofArray(new byte[]{2, 0, 0}), false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("ts")), List.of(invalid), false);
         Path file = tmp.resolve("timestamp_i32.vtx");
@@ -2381,7 +2382,7 @@ class JavaWritesRustReadsIntegrationTest {
         // No Java write path emits it any more, so write the column under a custom id of the same
         // length and rename it in place: a FlatBuffer string is stored verbatim, once.
         DType.Struct disguised = new DType.Struct(List.of(ColumnName.of("ts")), List.of(new DType.Extension(
-                "vortex.timestamq", DType.I32, MemorySegment.ofArray(new byte[]{2, 0, 0}), false)), false);
+                "vortex.timestamq", DTypes.I32, MemorySegment.ofArray(new byte[]{2, 0, 0}), false)), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                 StandardOpenOption.TRUNCATE_EXISTING);
              var writer = VortexWriter.create(ch, disguised, WriteOptions.defaults())) {

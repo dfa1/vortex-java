@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.WriteRegistry;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -34,7 +34,7 @@ class RunLengthVerdictTest {
         }
 
         // When
-        Estimate result = sut.expectedRatio(DType.I64, new ArrayAndStats(DType.I64, data, StatsOptions.defaults()),
+        Estimate result = sut.expectedRatio(DTypes.I64, new ArrayAndStats(DTypes.I64, data, StatsOptions.defaults()),
                 EncodeContext.ofDepth(3, Arena.ofAuto(), WriteRegistry.builder().registerDefaults().build()));
 
         // Then

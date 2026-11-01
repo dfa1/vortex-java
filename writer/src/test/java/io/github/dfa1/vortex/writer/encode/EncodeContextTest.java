@@ -57,7 +57,7 @@ class EncodeContextTest {
     void childSlot_copiesItsExclusionSet() {
         // Given a mutable set handed to a slot
         Set<EncodingId> mutable = new java.util.HashSet<>(Set.of(EncodingId.VORTEX_DICT));
-        ChildSlot sut = new ChildSlot(io.github.dfa1.vortex.core.model.DType.I64, new long[0], 0, mutable);
+        ChildSlot sut = new ChildSlot(io.github.dfa1.vortex.core.model.DTypes.I64, new long[0], 0, mutable);
 
         // When the caller keeps mutating it
         mutable.add(EncodingId.VORTEX_SEQUENCE);

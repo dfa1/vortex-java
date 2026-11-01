@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.demo.fakedata;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 
 import java.util.Arrays;
 import java.util.List;
@@ -53,18 +54,18 @@ public final class DescriptorParser {
 
     private static DType parseType(String type, String descriptor) {
         return switch (type) {
-            case "i8" -> DType.I8;
-            case "i16" -> DType.I16;
-            case "i32" -> DType.I32;
-            case "i64" -> DType.I64;
-            case "u8" -> DType.U8;
-            case "u16" -> DType.U16;
-            case "u32" -> DType.U32;
-            case "u64" -> DType.U64;
-            case "f32" -> DType.F32;
-            case "f64" -> DType.F64;
-            case "utf8" -> DType.UTF8;
-            case "bool" -> DType.BOOL;
+            case "i8" -> DTypes.I8;
+            case "i16" -> DTypes.I16;
+            case "i32" -> DTypes.I32;
+            case "i64" -> DTypes.I64;
+            case "u8" -> DTypes.U8;
+            case "u16" -> DTypes.U16;
+            case "u32" -> DTypes.U32;
+            case "u64" -> DTypes.U64;
+            case "f32" -> DTypes.F32;
+            case "f64" -> DTypes.F64;
+            case "utf8" -> DTypes.UTF8;
+            case "bool" -> DTypes.BOOL;
             default -> throw new IllegalArgumentException(
                     "unknown type '%s' in descriptor '%s'".formatted(type, descriptor));
         };

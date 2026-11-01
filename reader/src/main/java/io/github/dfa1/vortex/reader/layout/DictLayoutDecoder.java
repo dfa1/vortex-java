@@ -5,6 +5,7 @@ import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
@@ -322,7 +323,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
                 bits.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (i & 7))));
             }
         }
-        return new MaterializedBoolArray(DType.BOOL, n, bits.asReadOnly());
+        return new MaterializedBoolArray(DTypes.BOOL, n, bits.asReadOnly());
     }
 
     private static PType readDictLayoutCodesPType(MemorySegment rawMeta) {

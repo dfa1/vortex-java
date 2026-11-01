@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +25,7 @@ class LazyDecimalBytePartsArrayTest {
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 4321L);
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, -100L);
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 16, 0L);
-            LongArray msp = new MaterializedLongArray(DType.I64, 3, mspBuf);
+            LongArray msp = new MaterializedLongArray(DTypes.I64, 3, mspBuf);
             DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, false);
             LazyDecimalBytePartsArray sut = new LazyDecimalBytePartsArray(dec, 3, msp);
 
@@ -46,7 +47,7 @@ class LazyDecimalBytePartsArrayTest {
             mspBuf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, 1234);
             mspBuf.set(ValueLayout.JAVA_INT_UNALIGNED, 4, -50);
             mspBuf.set(ValueLayout.JAVA_INT_UNALIGNED, 8, 0);
-            IntArray msp = new MaterializedIntArray(DType.I32, 3, mspBuf);
+            IntArray msp = new MaterializedIntArray(DTypes.I32, 3, mspBuf);
             DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, false);
             LazyDecimalBytePartsArray sut = new LazyDecimalBytePartsArray(dec, 3, msp);
 
@@ -66,12 +67,12 @@ class LazyDecimalBytePartsArrayTest {
             MemorySegment mspBuf = arena.allocate(16);
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 1234L);
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, 9999L);
-            LongArray msp = new MaterializedLongArray(DType.I64, 2, mspBuf);
+            LongArray msp = new MaterializedLongArray(DTypes.I64, 2, mspBuf);
 
             MemorySegment validityBuf = arena.allocate(1);
             // bit 0 set = index 0 valid; bit 1 clear = index 1 null
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
-            BoolArray validity = new MaterializedBoolArray(DType.BOOL, 2, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(DTypes.BOOL, 2, validityBuf);
 
             MaskedArray masked = new MaskedArray(msp, validity);
             DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, true);
@@ -90,7 +91,7 @@ class LazyDecimalBytePartsArrayTest {
         // Given — explicit bounds check guards against silent garbage reads
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment mspBuf = arena.allocate(8);
-            LongArray msp = new MaterializedLongArray(DType.I64, 1, mspBuf);
+            LongArray msp = new MaterializedLongArray(DTypes.I64, 1, mspBuf);
             DType.Decimal dec = new DType.Decimal((byte) 4, (byte) 0, false);
             LazyDecimalBytePartsArray sut = new LazyDecimalBytePartsArray(dec, 1, msp);
 
@@ -110,9 +111,9 @@ class LazyDecimalBytePartsArrayTest {
         // Given — guards against constructing the record with the wrong parent dtype
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment mspBuf = arena.allocate(8);
-            LongArray msp = new MaterializedLongArray(DType.I64, 1, mspBuf);
+            LongArray msp = new MaterializedLongArray(DTypes.I64, 1, mspBuf);
             LazyDecimalBytePartsArray sut = new LazyDecimalBytePartsArray(
-                    DType.I64, 1, msp);
+                    DTypes.I64, 1, msp);
 
             // When / Then
             assertThatThrownBy(() -> sut.getDecimal(0))

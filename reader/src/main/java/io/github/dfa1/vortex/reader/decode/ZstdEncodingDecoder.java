@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -83,7 +84,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         }
         BoolArray validity = null;
         if (ctx.node().children().length > 0) {
-            Array validityArray = ctx.decodeChild(0, DType.BOOL, ctx.rowCount());
+            Array validityArray = ctx.decodeChild(0, DTypes.BOOL, ctx.rowCount());
             if (!(validityArray instanceof BoolArray ba)) {
                 throw new VortexException(EncodingId.VORTEX_ZSTD,
                         "validity child decoded to unexpected type: " + validityArray.getClass().getSimpleName());

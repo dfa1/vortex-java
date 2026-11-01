@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -18,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// `ClassCastException` instead of a handled [VortexException].
 class ChunkedArrayCombinerTest {
 
-    private static final DType.List LIST_OF_INT = new DType.List(DType.I32, false);
+    private static final DType.List LIST_OF_INT = new DType.List(DTypes.I32, false);
 
     @Test
     void stitchesMultiChunkListIntoOneListArray() {

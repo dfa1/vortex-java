@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -123,7 +124,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         if (children == 2 || !ctx.dtype().nullable()) {
             return MaterializedArrays.of(ctx.dtype(), ptype, rowCount, out.asReadOnly());
         }
-        Array validity = ctx.decodeChild(2, DType.BOOL, rowCount);
+        Array validity = ctx.decodeChild(2, DTypes.BOOL, rowCount);
         return new MaskedArray(MaterializedArrays.of(dtype, ptype, rowCount, out.asReadOnly()),
                 MaskedArray.requireBoolArray(validity, EncodingId.FASTLANES_DELTA, "validity child"));
     }

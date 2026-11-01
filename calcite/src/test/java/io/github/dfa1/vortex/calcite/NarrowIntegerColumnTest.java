@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
@@ -39,9 +40,9 @@ class NarrowIntegerColumnTest {
         // Given
         Path file = tmp.resolve("narrow.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("i16"), DType.I16)
-                .field(ColumnName.of("u8"), DType.U8)
-                .field(ColumnName.of("i8"), DType.I8)
+                .field(ColumnName.of("i16"), DTypes.I16)
+                .field(ColumnName.of("u8"), DTypes.U8)
+                .field(ColumnName.of("i8"), DTypes.I8)
                 .build();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                 StandardOpenOption.TRUNCATE_EXISTING);

@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -395,7 +395,7 @@ class AlpEncodingEncoderTest {
             NullableData data = new NullableData(values, validity);
 
             // When
-            CascadeStep result = ENCODER.encodeCascade(DTypes.F64_N, data, EncodeTestHelper.cascadingCtx());
+            CascadeStep result = ENCODER.encodeCascade(DTypes.F64.asNullable(), data, EncodeTestHelper.cascadingCtx());
 
             // Then
             ChildSlot encoded = result.openChildren().getFirst();

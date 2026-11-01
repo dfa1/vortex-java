@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ import static org.mockito.BDDMockito.given;
 class ScanIteratorMalformedStatsTest {
 
     private static final ColumnName COLUMN = ColumnName.of("v");
-    private static final DType.Struct SCHEMA = new DType.Struct(List.of(COLUMN), List.of(DType.I64), false);
+    private static final DType.Struct SCHEMA = new DType.Struct(List.of(COLUMN), List.of(DTypes.I64), false);
 
     @Mock
     private VortexHandle file;

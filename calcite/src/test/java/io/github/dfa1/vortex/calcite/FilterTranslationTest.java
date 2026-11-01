@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 
@@ -45,8 +46,8 @@ class FilterTranslationTest {
     static void write() throws Exception {
         file = tmp.resolve("translate.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("n"), DType.I64.asNullable())
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("n"), DTypes.I64.asNullable())
                 .build();
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter w = VortexWriter.create(ch, schema, LegacyZoneMaps.OPTIONS)) {
@@ -114,7 +115,7 @@ class FilterTranslationTest {
 
         // When
         var result = RexFilterTranslator.translateStrict(List.of(lessThan),
-                List.of(ColumnName.of("small")), List.of(DType.I16));
+                List.of(ColumnName.of("small")), List.of(DTypes.I16));
 
         // Then
         assertThat(result).contains(io.github.dfa1.vortex.reader.ScanFilter.lt(ColumnName.of("small"), 5L));
@@ -130,7 +131,7 @@ class FilterTranslationTest {
                 REX.makeApproxLiteral(new BigDecimal("1.5"), dbl));
 
         // When
-        var result = RexFilterTranslator.translateStrict(List.of(greater), List.of(ColumnName.of("id")), List.of(DType.I64));
+        var result = RexFilterTranslator.translateStrict(List.of(greater), List.of(ColumnName.of("id")), List.of(DTypes.I64));
 
         // Then
         assertThat(result).isEmpty();

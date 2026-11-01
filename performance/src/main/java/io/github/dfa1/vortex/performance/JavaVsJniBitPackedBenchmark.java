@@ -11,6 +11,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -82,7 +83,7 @@ public class JavaVsJniBitPackedBenchmark {
 
     private static final ColumnName CODE = ColumnName.of("code");
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
-            List.of(CODE), List.of(DType.I64), false);
+            List.of(CODE), List.of(DTypes.I64), false);
     private static final Schema JNI_SCHEMA = new Schema(List.of(
             Field.notNullable("code", new ArrowType.Int(64, true))));
 

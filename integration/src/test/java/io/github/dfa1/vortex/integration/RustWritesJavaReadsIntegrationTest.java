@@ -11,6 +11,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -1045,7 +1046,7 @@ class RustWritesJavaReadsIntegrationTest {
             // Then — correct dtype, correct values
             assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
             assertThat(((DType.Struct) vf.dtype()).field(ColumnName.of("v")))
-                    .isEqualTo(DType.F16);
+                    .isEqualTo(DTypes.F16);
             assertThat(results).hasSize(1);
             // F16 column snapshots as a short[] (raw float16 bits)
             short[] decoded = (short[]) results.getFirst().columns().get("v");

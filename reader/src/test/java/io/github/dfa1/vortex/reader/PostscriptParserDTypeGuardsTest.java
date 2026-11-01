@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.fbs.FbsDType;
@@ -295,7 +296,7 @@ class PostscriptParserDTypeGuardsTest {
         PostscriptParser.ParsedFile result = PostscriptParser.parseBlobs(footer, layout, dtype);
 
         // Then
-        assertThat(result.dtype()).isEqualTo(new DType.Map(DType.UTF8, DType.I64, true, false));
+        assertThat(result.dtype()).isEqualTo(new DType.Map(DTypes.UTF8, DTypes.I64, true, false));
     }
 
     @Test
@@ -310,7 +311,7 @@ class PostscriptParserDTypeGuardsTest {
 
         // Then
         assertThat(result.dtype()).isEqualTo(new DType.Union(List.of(ColumnName.of("n"), ColumnName.of("s")),
-                List.of(DType.I64, DType.UTF8), List.of(0, 200), true));
+                List.of(DTypes.I64, DTypes.UTF8), List.of(0, 200), true));
     }
 
     @Test

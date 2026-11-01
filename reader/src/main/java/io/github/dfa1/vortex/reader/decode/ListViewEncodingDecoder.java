@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -72,7 +73,7 @@ public final class ListViewEncodingDecoder implements EncodingDecoder {
         if (nchildren == 3 || !listDtype.nullable()) {
             return new ListViewArray(listDtype, outerLen, elements, offsets, sizes);
         }
-        Array validityArray = ctx.decodeChild(3, DType.BOOL, outerLen);
+        Array validityArray = ctx.decodeChild(3, DTypes.BOOL, outerLen);
         BoolArray validity = MaskedArray.requireBoolArray(validityArray, EncodingId.VORTEX_LISTVIEW, "validity child");
         DType.List innerDtype = (DType.List) listDtype.withNullable(false);
         return new MaskedArray(new ListViewArray(innerDtype, outerLen, elements, offsets, sizes), validity);

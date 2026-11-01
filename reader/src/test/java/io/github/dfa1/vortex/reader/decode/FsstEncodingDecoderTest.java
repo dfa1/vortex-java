@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
@@ -742,7 +742,7 @@ class FsstEncodingDecoderTest {
         ArrayNode fsstNode = new ArrayNode(EncodingId.VORTEX_FSST, meta,
                 new ArrayNode[]{uncompLensNode, codeOffsetsNode}, new int[]{0, 1, 2});
 
-        DecodeContext ctx = new DecodeContext(fsstNode, DType.UTF8, rowCount, segs, REGISTRY,
+        DecodeContext ctx = new DecodeContext(fsstNode, DTypes.UTF8, rowCount, segs, REGISTRY,
                 Arena.ofAuto());
         return (VarBinArray) SUT.decode(ctx);
     }

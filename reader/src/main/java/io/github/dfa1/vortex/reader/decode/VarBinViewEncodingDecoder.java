@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -52,7 +53,7 @@ public final class VarBinViewEncodingDecoder implements EncodingDecoder {
         if (children == 0 || !ctx.dtype().nullable()) {
             return new VarBinViewArray(ctx.dtype(), ctx.rowCount(), viewsBuf, dataBufs);
         }
-        Array validity = ctx.decodeChild(0, DType.BOOL, ctx.rowCount());
+        Array validity = ctx.decodeChild(0, DTypes.BOOL, ctx.rowCount());
         return new MaskedArray(new VarBinViewArray(ctx.dtype().withNullable(false), ctx.rowCount(), viewsBuf, dataBufs),
                 MaskedArray.requireBoolArray(validity, EncodingId.VORTEX_VARBINVIEW, "validity child"));
     }

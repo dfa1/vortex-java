@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

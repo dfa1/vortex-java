@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
@@ -27,7 +28,7 @@ final class CliTestSupport {
         Path file = dir.resolve(name);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id")),
-                List.of(DType.I64),
+                List.of(DTypes.I64),
                 false);
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -44,10 +45,10 @@ final class CliTestSupport {
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("qty"), ColumnName.of("price"), ColumnName.of("name")),
                 List.of(
-                        DType.I64,
-                        DType.I32,
-                        DType.F64,
-                        DType.UTF8),
+                        DTypes.I64,
+                        DTypes.I32,
+                        DTypes.F64,
+                        DTypes.UTF8),
                 false);
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {

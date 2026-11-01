@@ -7,6 +7,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Element;
@@ -144,7 +145,7 @@ class ListViewInteropIntegrationTest {
         boolean nullableLists = nulls != Nulls.NONE_NULL;
         DType elementType = elementNulls.nullableType() ? element.dtype.asNullable() : element.dtype;
         DType.Struct schema = new DType.Struct(List.of(ID, LISTS),
-                List.of(DType.I64, new DType.List(elementType, nullableLists)), false);
+                List.of(DTypes.I64, new DType.List(elementType, nullableLists)), false);
         WriteOptions options = WriteOptions.defaults().withoutEditions()
                 .withColumnEncoding(LISTS, ColumnEncoding.candidates(EncodingId.VORTEX_LISTVIEW));
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

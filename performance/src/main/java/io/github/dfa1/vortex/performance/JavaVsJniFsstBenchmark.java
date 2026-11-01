@@ -10,6 +10,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -92,7 +93,7 @@ public class JavaVsJniFsstBenchmark {
 
     private static final ColumnName LINE = ColumnName.of("line");
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
-            List.of(LINE), List.of(DType.UTF8), false);
+            List.of(LINE), List.of(DTypes.UTF8), false);
     private static final Schema JNI_SCHEMA = new Schema(List.of(
             Field.notNullable("line", ArrowType.Utf8.INSTANCE)));
 

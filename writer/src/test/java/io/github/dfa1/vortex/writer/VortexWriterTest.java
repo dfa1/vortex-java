@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -27,8 +28,8 @@ class VortexWriterTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("id"), ColumnName.of("value")),
-            List.of(DType.I64,
-                    DType.F64),
+            List.of(DTypes.I64,
+                    DTypes.F64),
             false);
 
     private record ChunkSnapshot(long rowCount, java.util.Set<String> columnNames) {
@@ -271,7 +272,7 @@ class VortexWriterTest {
         var schema = new DType.Struct(
                 List.of(ColumnName.of("birthdays"), ColumnName.of("id")),
                 List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false),
-                        DType.I64),
+                        DTypes.I64),
                 false);
         List<java.time.LocalDate> dates = List.of(
                 java.time.LocalDate.of(1996, 2, 12),
@@ -657,7 +658,7 @@ class VortexWriterTest {
         // encoders like ChunkedEncodingEncoder no longer claim raw primitive dtypes) keep selection
         // both stable across platforms and correct.
         var schema = new DType.Struct(List.of(ColumnName.of("v")),
-                List.of(DType.I64), false);
+                List.of(DTypes.I64), false);
         Path file = tmp.resolve("registry.vortex");
         long[] data = {1L, 2L, 3L, 4L};
 
@@ -782,7 +783,7 @@ class VortexWriterTest {
     private static byte[] writeMixedColumns(WriteOptions options) throws IOException {
         var schema = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("price"), ColumnName.of("symbol"), ColumnName.of("qty")),
-                List.of(DType.I64, DType.F64, DType.UTF8, new DType.Primitive(PType.I32, true)),
+                List.of(DTypes.I64, DTypes.F64, DTypes.UTF8, new DType.Primitive(PType.I32, true)),
                 false);
         var out = new java.io.ByteArrayOutputStream();
         var random = new java.util.Random(42);

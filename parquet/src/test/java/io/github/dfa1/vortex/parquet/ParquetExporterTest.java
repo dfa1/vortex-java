@@ -10,6 +10,7 @@ import dev.hardwood.schema.FileSchema;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimestampDtype;
@@ -216,7 +217,7 @@ class ParquetExporterTest {
         @Test
         void struct_throws() {
             // Given — nested schemas are out of scope for this exporter
-            DType.Struct nested = new DType.Struct(List.of(ColumnName.of("x")), List.of(DType.I32), false);
+            DType.Struct nested = new DType.Struct(List.of(ColumnName.of("x")), List.of(DTypes.I32), false);
 
             // When / Then
             assertThatThrownBy(() -> schemaOf("s", nested)).isInstanceOf(UnsupportedOperationException.class);
@@ -225,7 +226,7 @@ class ParquetExporterTest {
         @Test
         void list_throws() {
             // Given
-            DType.List list = new DType.List(DType.I32, false);
+            DType.List list = new DType.List(DTypes.I32, false);
 
             // When / Then
             assertThatThrownBy(() -> schemaOf("l", list)).isInstanceOf(UnsupportedOperationException.class);
@@ -344,7 +345,7 @@ class ParquetExporterTest {
             // Given — a top-level Struct column, out of scope for this exporter; the schema
             // alone triggers the rejection (at FileSchema-building time, before any chunk is
             // read), so the file needs no rows
-            DType.Struct fieldSchema = new DType.Struct(List.of(ColumnName.of("x")), List.of(DType.I32), false);
+            DType.Struct fieldSchema = new DType.Struct(List.of(ColumnName.of("x")), List.of(DTypes.I32), false);
             DType.Struct schema = new DType.Struct(List.of(ColumnName.of("s")), List.of(fieldSchema), false);
             Path vortex = tmp.resolve("in.vortex");
             try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

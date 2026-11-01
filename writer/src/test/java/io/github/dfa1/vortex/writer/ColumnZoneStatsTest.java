@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -27,12 +28,12 @@ class ColumnZoneStatsTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("id")),
-            List.of(DType.I64),
+            List.of(DTypes.I64),
             false);
 
     private static final DType.Struct F64_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.F64),
+            List.of(DTypes.F64),
             false);
 
     // Three chunks of id: [1..50], [51..100], [101..150]. Per-zone sums are the closed-form

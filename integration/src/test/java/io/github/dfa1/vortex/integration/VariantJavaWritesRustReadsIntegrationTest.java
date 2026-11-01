@@ -6,6 +6,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.proto.ProtoPrimitive;
 import io.github.dfa1.vortex.core.proto.ProtoScalar;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -39,7 +40,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
 
     private static final DType.Struct VARIANT_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.VARIANT),
+            List.of(DTypes.VARIANT),
             false);
 
     static {
@@ -98,7 +99,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_variant_shredded.vtx");
         List<ProtoScalar> values = List.of(i32Variant(10L), i32Variant(20L), i32Variant(30L));
         VariantData data = VariantData.shredded(
-                values, new int[]{10, 20, 30}, DType.I32);
+                values, new int[]{10, 20, 30}, DTypes.I32);
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, VARIANT_SCHEMA, WriteOptions.defaults())) {

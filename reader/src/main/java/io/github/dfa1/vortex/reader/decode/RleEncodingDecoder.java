@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -108,14 +109,14 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         checkChunkOffsets(valuesIdxOffsets, firstOffset, valuesLen, numChunks);
 
         if (ctx.dtype() instanceof DType.Bool) {
-            Array valuesArr = ctx.decodeChild(0, DType.BOOL, valuesLen);
+            Array valuesArr = ctx.decodeChild(0, DTypes.BOOL, valuesLen);
             Array valuesData = MaskedArray.innerOrSelf(valuesArr);
             Array boolResult = new LazyRleBoolArray(ctx.dtype(), rowCount, (BoolArray) valuesData,
                     indices, wideIndices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
             if (indicesValidity == null) {
                 return boolResult;
             }
-            return new MaskedArray(boolResult, new OffsetBoolArray(DType.BOOL, rowCount, indicesValidity, offset));
+            return new MaskedArray(boolResult, new OffsetBoolArray(DTypes.BOOL, rowCount, indicesValidity, offset));
         }
 
         if (!(ctx.dtype() instanceof DType.Primitive p)) {
@@ -148,7 +149,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         if (indicesValidity == null) {
             return result;
         }
-        BoolArray outputValidity = new OffsetBoolArray(DType.BOOL, rowCount, indicesValidity, offset);
+        BoolArray outputValidity = new OffsetBoolArray(DTypes.BOOL, rowCount, indicesValidity, offset);
         return new MaskedArray(result, outputValidity);
     }
 

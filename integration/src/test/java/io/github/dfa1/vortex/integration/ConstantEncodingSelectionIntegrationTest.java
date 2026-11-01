@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -26,7 +27,7 @@ class ConstantEncodingSelectionIntegrationTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.I64),
+            List.of(DTypes.I64),
             false);
 
     @Test

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.layout;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 
 import java.lang.foreign.MemorySegment;
@@ -310,10 +311,10 @@ public final class ZonedStatsSchema {
             types.add(stype.withNullable(true));
             if (stat == Stat.MAX) {
                 names.add(Stat.MAX_IS_TRUNCATED);
-                types.add(DType.BOOL);
+                types.add(DTypes.BOOL);
             } else if (stat == Stat.MIN) {
                 names.add(Stat.MIN_IS_TRUNCATED);
-                types.add(DType.BOOL);
+                types.add(DTypes.BOOL);
             }
         }
         return new DType.Struct(List.copyOf(names), List.copyOf(types), false);
@@ -354,18 +355,18 @@ public final class ZonedStatsSchema {
 
     private static DType statDtypeDirect(Stat stat, DType columnDtype) {
         return switch (stat) {
-            case IS_CONSTANT, IS_SORTED, IS_STRICT_SORTED -> DType.BOOL;
+            case IS_CONSTANT, IS_SORTED, IS_STRICT_SORTED -> DTypes.BOOL;
             case MAX, MIN -> {
                 if (columnDtype instanceof DType.Null) {
                     yield null;
                 }
                 yield columnDtype;
             }
-            case NULL_COUNT -> DType.U64;
-            case UNCOMPRESSED_SIZE_IN_BYTES -> DType.U64;
+            case NULL_COUNT -> DTypes.U64;
+            case UNCOMPRESSED_SIZE_IN_BYTES -> DTypes.U64;
             case NAN_COUNT -> {
                 if (columnDtype instanceof DType.Primitive p && p.ptype().isFloating()) {
-                    yield DType.U64;
+                    yield DTypes.U64;
                 }
                 yield null;
             }
@@ -375,13 +376,13 @@ public final class ZonedStatsSchema {
 
     private static DType sumDtype(DType columnDtype) {
         if (columnDtype instanceof DType.Bool) {
-            return DType.U64;
+            return DTypes.U64;
         }
         if (columnDtype instanceof DType.Primitive p) {
             return switch (p.ptype()) {
-                case U8, U16, U32, U64 -> DType.U64;
-                case I8, I16, I32, I64 -> DType.I64;
-                case F16, F32, F64 -> DType.F64;
+                case U8, U16, U32, U64 -> DTypes.U64;
+                case I8, I16, I32, I64 -> DTypes.I64;
+                case F16, F32, F64 -> DTypes.F64;
             };
         }
         // Decimal sum widening and other types are not handled — falls through to null
@@ -425,7 +426,7 @@ public final class ZonedStatsSchema {
     private static DType boundedMaxStateDtype(DType boundDtype) {
         return new DType.Struct(
                 List.of(BOUND, UNKNOWN),
-                List.of(boundDtype.withNullable(true), DType.BOOL),
+                List.of(boundDtype.withNullable(true), DTypes.BOOL),
                 true);
     }
 

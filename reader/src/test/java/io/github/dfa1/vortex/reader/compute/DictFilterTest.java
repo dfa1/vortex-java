@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.compute;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -81,7 +82,7 @@ class DictFilterTest {
         int[] first = {0, 1, 2, 3, 0, 1};
         int[] second = {3, 3, 0, 3, 1, 3};
         DictLongArray dict = dictWithChunkedCodes(pool, first, second);
-        Array filter = new OffsetLongArray(DType.I64, second.length, dict, first.length);
+        Array filter = new OffsetLongArray(DTypes.I64, second.length, dict, first.length);
         Array agg = longAgg(1, 2, 4, 8, 16, 32);
 
         // When the fused kernel sums over `value == 40` (code 3) in the sliced view
@@ -126,9 +127,9 @@ class DictFilterTest {
         // must scan through the accessor while the first child's run scans its segment
         long[] pool = {5, 6, 7};
         ByteArray flat = byteCodes(0, 1, 2, 1);
-        ByteArray sliced = new OffsetByteArray(DType.U8, 3, byteCodes(9, 2, 0, 2), 1);
-        ChunkedByteArray codes = ChunkedByteArray.of(DType.U8, 7, List.of(flat, sliced));
-        Array filter = DictLongArray.of(DType.I64, 7, longPool(pool), codes);
+        ByteArray sliced = new OffsetByteArray(DTypes.U8, 3, byteCodes(9, 2, 0, 2), 1);
+        ChunkedByteArray codes = ChunkedByteArray.of(DTypes.U8, 7, List.of(flat, sliced));
+        Array filter = DictLongArray.of(DTypes.I64, 7, longPool(pool), codes);
         Array agg = longAgg(1, 2, 4, 8, 16, 32, 64);
 
         // When the fused kernel sums over `value == 7` (code 2)
@@ -146,8 +147,8 @@ class DictFilterTest {
         // than the run — leaving the accessor to apply the wrap
         MemorySegment one = ARENA.allocate(1);
         one.set(ValueLayout.JAVA_BYTE, 0, (byte) 1);
-        ByteArray broadcast = new MaterializedByteArray(DType.U8, 5, one);
-        Array filter = DictLongArray.of(DType.I64, 5, longPool(new long[]{10, 20}), broadcast);
+        ByteArray broadcast = new MaterializedByteArray(DTypes.U8, 5, one);
+        Array filter = DictLongArray.of(DTypes.I64, 5, longPool(new long[]{10, 20}), broadcast);
         Array agg = longAgg(1, 2, 4, 8, 16);
 
         // When the fused kernel sums over `value == 20` (the broadcast code 1)
@@ -196,8 +197,8 @@ class DictFilterTest {
         for (int i = 0; i < codes.length; i++) {
             seg.setAtIndex(VortexFormat.LE_SHORT, i, (short) codes[i]);
         }
-        MaterializedShortArray wide = new MaterializedShortArray(DType.U16, codes.length, seg);
-        Array filter = DictLongArray.of(DType.I64, codes.length, longPool(new long[]{7, 8, 9}), wide);
+        MaterializedShortArray wide = new MaterializedShortArray(DTypes.U16, codes.length, seg);
+        Array filter = DictLongArray.of(DTypes.I64, codes.length, longPool(new long[]{7, 8, 9}), wide);
         Array agg = longAgg(1, 2, 4, 8, 16);
 
         // When the fused kernel sums over `value == 8` (code 1)
@@ -314,8 +315,8 @@ class DictFilterTest {
             codes[i] = random.nextInt(poolSize);
         }
         Array dict = switch (random.nextInt(5)) {
-            case 0 -> dictOfLongs(random, DType.I64, poolSize, codes);
-            case 1 -> dictOfLongs(random, DType.U64, poolSize, codes);
+            case 0 -> dictOfLongs(random, DTypes.I64, poolSize, codes);
+            case 1 -> dictOfLongs(random, DTypes.U64, poolSize, codes);
             case 2 -> dictOfInts(random, poolSize, codes);
             case 3 -> dictOfDoubles(random, poolSize, codes);
             default -> dictOfFloats(random, poolSize, codes);
@@ -357,8 +358,8 @@ class DictFilterTest {
         for (int i = 0; i < poolSize; i++) {
             seg.setAtIndex(VortexFormat.LE_INT, i, random.nextInt(101) - 50);
         }
-        MaterializedIntArray values = new MaterializedIntArray(DType.I32, poolSize, seg);
-        return DictIntArray.of(DType.I32, codes.length, values, randomCodesStructure(random, codes));
+        MaterializedIntArray values = new MaterializedIntArray(DTypes.I32, poolSize, seg);
+        return DictIntArray.of(DTypes.I32, codes.length, values, randomCodesStructure(random, codes));
     }
 
     private static Array dictOfDoubles(Random random, int poolSize, int[] codes) {
@@ -366,8 +367,8 @@ class DictFilterTest {
         for (int i = 0; i < poolSize; i++) {
             seg.setAtIndex(VortexFormat.LE_DOUBLE, i, random.nextInt(101) - 50);
         }
-        MaterializedDoubleArray values = new MaterializedDoubleArray(DType.F64, poolSize, seg);
-        return DictDoubleArray.of(DType.F64, codes.length, values, randomCodesStructure(random, codes));
+        MaterializedDoubleArray values = new MaterializedDoubleArray(DTypes.F64, poolSize, seg);
+        return DictDoubleArray.of(DTypes.F64, codes.length, values, randomCodesStructure(random, codes));
     }
 
     private static Array dictOfFloats(Random random, int poolSize, int[] codes) {
@@ -375,8 +376,8 @@ class DictFilterTest {
         for (int i = 0; i < poolSize; i++) {
             seg.setAtIndex(VortexFormat.LE_FLOAT, i, random.nextInt(101) - 50);
         }
-        MaterializedFloatArray values = new MaterializedFloatArray(DType.F32, poolSize, seg);
-        return DictFloatArray.of(DType.F32, codes.length, values, randomCodesStructure(random, codes));
+        MaterializedFloatArray values = new MaterializedFloatArray(DTypes.F32, poolSize, seg);
+        return DictFloatArray.of(DTypes.F32, codes.length, values, randomCodesStructure(random, codes));
     }
 
     /// Wraps the codes as a flat byte array or a 2–3-child [ChunkedByteArray], the two structures
@@ -391,7 +392,7 @@ class DictFilterTest {
                 byteCodes(slice(codes, 0, firstCut)),
                 byteCodes(slice(codes, firstCut, secondCut)),
                 byteCodes(slice(codes, secondCut, codes.length)));
-        return ChunkedByteArray.of(DType.U8, codes.length, children);
+        return ChunkedByteArray.of(DTypes.U8, codes.length, children);
     }
 
     private static int[] slice(int[] codes, int from, int to) {
@@ -419,7 +420,7 @@ class DictFilterTest {
             for (int i = 0; i < n; i++) {
                 seg.setAtIndex(VortexFormat.LE_DOUBLE, i, random.nextInt(1001) - 500);
             }
-            agg = new MaterializedDoubleArray(DType.F64, n, seg);
+            agg = new MaterializedDoubleArray(DTypes.F64, n, seg);
         }
         return valid == null ? agg : new MaskedArray(agg, ComputeArrays.boolArray(ARENA, valid));
     }
@@ -455,7 +456,7 @@ class DictFilterTest {
     }
 
     private static DictLongArray flatDict(long[] pool, int[] codes) {
-        return DictLongArray.of(DType.I64, codes.length, longPool(pool), byteCodes(codes));
+        return DictLongArray.of(DTypes.I64, codes.length, longPool(pool), byteCodes(codes));
     }
 
     private static DictDoubleArray flatDoubleDict(double[] pool, int[] codes) {
@@ -463,14 +464,14 @@ class DictFilterTest {
         for (int i = 0; i < pool.length; i++) {
             seg.setAtIndex(VortexFormat.LE_DOUBLE, i, pool[i]);
         }
-        MaterializedDoubleArray values = new MaterializedDoubleArray(DType.F64, pool.length, seg);
-        return DictDoubleArray.of(DType.F64, codes.length, values, byteCodes(codes));
+        MaterializedDoubleArray values = new MaterializedDoubleArray(DTypes.F64, pool.length, seg);
+        return DictDoubleArray.of(DTypes.F64, codes.length, values, byteCodes(codes));
     }
 
     private static DictLongArray dictWithChunkedCodes(long[] pool, int[] first, int[] second) {
-        ChunkedByteArray codes = ChunkedByteArray.of(DType.U8, (long) first.length + second.length,
+        ChunkedByteArray codes = ChunkedByteArray.of(DTypes.U8, (long) first.length + second.length,
                 List.of(byteCodes(first), byteCodes(second)));
-        return DictLongArray.of(DType.I64, first.length + second.length, longPool(pool), codes);
+        return DictLongArray.of(DTypes.I64, first.length + second.length, longPool(pool), codes);
     }
 
     private static MaterializedLongArray longPool(long[] pool) {
@@ -478,7 +479,7 @@ class DictFilterTest {
         for (int i = 0; i < pool.length; i++) {
             seg.setAtIndex(VortexFormat.LE_LONG, i, pool[i]);
         }
-        return new MaterializedLongArray(DType.I64, pool.length, seg);
+        return new MaterializedLongArray(DTypes.I64, pool.length, seg);
     }
 
     private static MaterializedLongArray longAgg(long... values) {
@@ -486,7 +487,7 @@ class DictFilterTest {
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
         }
-        return new MaterializedLongArray(DType.I64, values.length, seg);
+        return new MaterializedLongArray(DTypes.I64, values.length, seg);
     }
 
     private static MaterializedByteArray byteCodes(int... codes) {
@@ -494,6 +495,6 @@ class DictFilterTest {
         for (int i = 0; i < codes.length; i++) {
             seg.set(ValueLayout.JAVA_BYTE, i, (byte) codes[i]);
         }
-        return new MaterializedByteArray(DType.U8, codes.length, seg);
+        return new MaterializedByteArray(DTypes.U8, codes.length, seg);
     }
 }

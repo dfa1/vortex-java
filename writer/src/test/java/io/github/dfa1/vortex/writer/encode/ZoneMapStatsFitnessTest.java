@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.WriteRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -174,7 +174,7 @@ class ZoneMapStatsFitnessTest {
                 Arguments.of(EncodingId.VORTEX_PCO, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_ZIGZAG, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_EXT,
-                        new DType.Extension("vortex.timestamp", DType.I64, null, false), ascending),
+                        new DType.Extension("vortex.timestamp", DTypes.I64, null, false), ascending),
                 Arguments.of(EncodingId.VORTEX_SPARSE, DTypes.I64, sparse),
                 Arguments.of(EncodingId.VORTEX_PATCHED, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_DECIMAL, new DType.Decimal((byte) 9, (byte) 2, false),

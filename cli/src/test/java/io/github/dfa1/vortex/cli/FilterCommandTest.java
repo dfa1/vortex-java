@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
@@ -199,7 +200,7 @@ class FilterCommandTest {
     void filtersF16Column_keepsOnlyMatchingRows() throws IOException {
         // Given an F16 column [1.5, 2.5, 3.5] (#515: filter on it threw "filter not supported for column type")
         Path half = tmp.resolve("half.vortex");
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("h")), List.of(DType.F16), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("h")), List.of(DTypes.F16), false);
         try (FileChannel ch = FileChannel.open(half, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             writer.writeChunk(Map.of(ColumnName.of("h"), new short[]{
@@ -221,7 +222,7 @@ class FilterCommandTest {
         // Given a nullable I64 column [1, null, 3], as a CSV import with an empty cell writes it:
         // filtering one threw "filter not supported for column type: MaskedArray"
         Path nullable = tmp.resolve("nullable.vortex");
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64.asNullable()), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I64.asNullable()), false);
         try (FileChannel ch = FileChannel.open(nullable, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             writer.writeChunk(Map.of(ColumnName.of("v"), new Long[]{1L, null, 3L}));
@@ -332,35 +333,35 @@ class FilterCommandTest {
         }
 
         private Array u64(Arena arena, long v) {
-            return new MaterializedLongArray(DType.U64, 1, longSeg(arena, v));
+            return new MaterializedLongArray(DTypes.U64, 1, longSeg(arena, v));
         }
 
         private Array i64(Arena arena, long v) {
-            return new MaterializedLongArray(DType.I64, 1, longSeg(arena, v));
+            return new MaterializedLongArray(DTypes.I64, 1, longSeg(arena, v));
         }
 
         private Array u32(Arena arena, int v) {
             MemorySegment seg = arena.allocate(4, 4);
             seg.set(ValueLayout.JAVA_INT, 0, v);
-            return new MaterializedIntArray(DType.U32, 1, seg.asReadOnly());
+            return new MaterializedIntArray(DTypes.U32, 1, seg.asReadOnly());
         }
 
         private Array u16(Arena arena, short v) {
             MemorySegment seg = arena.allocate(2, 2);
             seg.set(ValueLayout.JAVA_SHORT, 0, v);
-            return new MaterializedShortArray(DType.U16, 1, seg.asReadOnly());
+            return new MaterializedShortArray(DTypes.U16, 1, seg.asReadOnly());
         }
 
         private Array u8(Arena arena, byte v) {
             MemorySegment seg = arena.allocate(1, 1);
             seg.set(ValueLayout.JAVA_BYTE, 0, v);
-            return new MaterializedByteArray(DType.U8, 1, seg.asReadOnly());
+            return new MaterializedByteArray(DTypes.U8, 1, seg.asReadOnly());
         }
 
         private Array i8(Arena arena, byte v) {
             MemorySegment seg = arena.allocate(1, 1);
             seg.set(ValueLayout.JAVA_BYTE, 0, v);
-            return new MaterializedByteArray(DType.I8, 1, seg.asReadOnly());
+            return new MaterializedByteArray(DTypes.I8, 1, seg.asReadOnly());
         }
 
         private MemorySegment longSeg(Arena arena, long v) {

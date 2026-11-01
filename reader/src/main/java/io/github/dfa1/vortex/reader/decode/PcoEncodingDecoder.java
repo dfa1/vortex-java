@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -59,7 +60,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         BoolArray validity = null;
         long validCount = n;
         if (ctx.node().children().length > 0) {
-            Array validityArr = ctx.decodeChild(0, DType.BOOL, n);
+            Array validityArr = ctx.decodeChild(0, DTypes.BOOL, n);
             if (!(validityArr instanceof BoolArray ba)) {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco validity child must be Bool, got: " + validityArr.getClass().getSimpleName());

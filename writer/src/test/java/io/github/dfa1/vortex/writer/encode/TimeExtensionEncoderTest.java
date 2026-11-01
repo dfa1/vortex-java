@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.TimeUnit;
@@ -34,7 +35,7 @@ class TimeExtensionEncoderTest {
 
         // Then
         assertThat(TimeDtype.readUnit(result)).isEqualTo(TimeUnit.Milliseconds);
-        assertThat(result.storageDType()).isEqualTo(DType.I32);
+        assertThat(result.storageDType()).isEqualTo(DTypes.I32);
     }
 
     @Test
@@ -54,7 +55,7 @@ class TimeExtensionEncoderTest {
 
         // Then
         assertThat(TimeDtype.readUnit(result)).isEqualTo(TimeUnit.Nanoseconds);
-        assertThat(result.storageDType()).isEqualTo(DType.I64);
+        assertThat(result.storageDType()).isEqualTo(DTypes.I64);
     }
 
     @Test
@@ -157,7 +158,7 @@ class TimeExtensionEncoderTest {
         // Given a hand-built Days-tagged dtype (TimeDtype.of rejects Days, so build directly)
         MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) TimeUnit.Days.ordinal()});
         DType.Extension dtype = new DType.Extension(
-                ExtensionId.VORTEX_TIME.id(), DType.I32, meta, false);
+                ExtensionId.VORTEX_TIME.id(), DTypes.I32, meta, false);
         List<LocalTime> values = List.of(T);
 
         // When / Then

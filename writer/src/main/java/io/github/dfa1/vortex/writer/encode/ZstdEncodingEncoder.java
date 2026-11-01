@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.zstd.ZstdCompressContext;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
@@ -193,7 +194,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         Frames frames = compressFrames(raw, layout, ctx.arena());
         int frameCount = frames.compressed().size();
 
-        EncodeResult validityResult = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeResult validityResult = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         // The frame payloads own buffer[0..frameCount-1]; the validity child's buffers follow, so
         // shift its buffer indices past them.
         EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), frameCount);

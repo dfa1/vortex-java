@@ -19,7 +19,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -53,8 +53,8 @@ class ConstantEncodingEncoderTest {
         java.util.Arrays.fill(data, "ADAUSDT");
 
         // When
-        EncodeResult encoded = ENCODER.encode(DType.UTF8, data, EncodeTestHelper.testCtx());
-        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DType.UTF8, REGISTRY);
+        EncodeResult encoded = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, REGISTRY);
         Array result = DECODER.decode(ctx);
 
         // Then: one 9-byte buffer (tag, length, 7 characters), whatever the row count
@@ -70,7 +70,7 @@ class ConstantEncodingEncoderTest {
         EncodeContext ctx = EncodeTestHelper.testCtx();
 
         // When / Then
-        assertThatThrownBy(() -> ENCODER.encode(DType.UTF8, data, ctx))
+        assertThatThrownBy(() -> ENCODER.encode(DTypes.UTF8, data, ctx))
                 .isInstanceOf(VortexException.class);
     }
 
@@ -366,8 +366,8 @@ class ConstantEncodingEncoderTest {
         void encodeDecode_isLossless(boolean value) {
             // Given / When
             boolean[] data = {value, value, value};
-            EncodeResult resultEncoded = ENCODER.encode(DType.BOOL, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DType.BOOL, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.BOOL, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.BOOL, REGISTRY);
             Array result = DECODER.decode(ctx);
 
             // Then
@@ -384,7 +384,7 @@ class ConstantEncodingEncoderTest {
 
             // When
             // Then
-            assertThatThrownBy(() -> ENCODER.encode(DType.BOOL, data, ctx))
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.BOOL, data, ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("not a constant array");
         }
@@ -396,7 +396,7 @@ class ConstantEncodingEncoderTest {
             boolean[] data = {true, false};
 
             // When
-            CascadeStep step = ENCODER.encodeCascade(DType.BOOL, data, EncodeTestHelper.testCtx());
+            CascadeStep step = ENCODER.encodeCascade(DTypes.BOOL, data, EncodeTestHelper.testCtx());
 
             // Then
             assertThat(step.applicable()).isFalse();
@@ -467,7 +467,8 @@ class ConstantEncodingEncoderTest {
     class NullScalar {
 
         static Stream<DType> nullableDtypes() {
-            return Stream.of(DTypes.I64_N, DTypes.I32_N, DTypes.F64_N, DTypes.BOOL_N);
+            return Stream.of(DTypes.I64.asNullable(), DTypes.I32.asNullable(), DTypes.F64.asNullable(),
+                    DTypes.BOOL.asNullable());
         }
 
         @ParameterizedTest

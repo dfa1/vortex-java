@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
@@ -72,7 +73,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = primitiveNode(1);
 
         // When
-        Array result = decode(DType.I32, PType.U8, 2, 0, 4, segs, endsNode, valuesNode);
+        Array result = decode(DTypes.I32, PType.U8, 2, 0, 4, segs, endsNode, valuesNode);
 
         // Then
         assertThat(result).isInstanceOf(IntArray.class).isNotInstanceOf(MaskedArray.class);
@@ -93,7 +94,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = primitiveNode(0);
 
         // When / Then
-        assertThatThrownBy(() -> decode(DType.I32, PType.U8, 0, 0, 5, new MemorySegment[0], endsNode, valuesNode))
+        assertThatThrownBy(() -> decode(DTypes.I32, PType.U8, 0, 0, 5, new MemorySegment[0], endsNode, valuesNode))
                 .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                 .hasMessageContaining("zero runs");
     }
@@ -105,7 +106,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = primitiveNode(0);
 
         // When / Then
-        assertThatThrownBy(() -> decode(DType.I32, PType.U8, -1, 0, 5, new MemorySegment[0], endsNode, valuesNode))
+        assertThatThrownBy(() -> decode(DTypes.I32, PType.U8, -1, 0, 5, new MemorySegment[0], endsNode, valuesNode))
                 .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                 .hasMessageContaining("negative num_runs");
     }
@@ -126,7 +127,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = primitiveNode(1);
 
         // When / Then
-        assertThatThrownBy(() -> decode(DType.I32, PType.U8, 3, 0, 8, segs, endsNode, valuesNode))
+        assertThatThrownBy(() -> decode(DTypes.I32, PType.U8, 3, 0, 8, segs, endsNode, valuesNode))
                 .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                 .hasMessageContaining("strictly increasing");
     }
@@ -145,7 +146,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = primitiveNode(1);
 
         // When / Then
-        assertThatThrownBy(() -> decode(DType.I32, PType.U8, 2, 0, 5, segs, endsNode, valuesNode))
+        assertThatThrownBy(() -> decode(DTypes.I32, PType.U8, 2, 0, 5, segs, endsNode, valuesNode))
                 .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                 .hasMessageContaining("does not cover");
     }
@@ -164,7 +165,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = primitiveNode(1);
 
         // When / Then
-        assertThatThrownBy(() -> decode(DType.I32, PType.U8, 2, 10, 5, segs, endsNode, valuesNode))
+        assertThatThrownBy(() -> decode(DTypes.I32, PType.U8, 2, 10, 5, segs, endsNode, valuesNode))
                 .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                 .hasMessageContaining("< offset");
     }
@@ -184,7 +185,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = primitiveNode(1);
 
         // When
-        Array result = decode(DType.I32, PType.U8, 3, 2, 5, segs, endsNode, valuesNode);
+        Array result = decode(DTypes.I32, PType.U8, 3, 2, 5, segs, endsNode, valuesNode);
 
         // Then
         IntArray ints = (IntArray) result;
@@ -212,7 +213,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = varBinNode(1, 2);
 
         // When
-        Array result = decode(DType.UTF8, PType.U8, 3, 0, 5, segs, endsNode, valuesNode);
+        Array result = decode(DTypes.UTF8, PType.U8, 3, 0, 5, segs, endsNode, valuesNode);
 
         // Then
         assertThat(result).isInstanceOf(VarBinRunEndArray.class);
@@ -238,7 +239,7 @@ class RunEndEncodingDecoderTest {
         ArrayNode valuesNode = new ArrayNode(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[]{});
 
         // When / Then
-        assertThatThrownBy(() -> decode(DType.UTF8, PType.U8, 2, 0, 5, segs, endsNode, valuesNode))
+        assertThatThrownBy(() -> decode(DTypes.UTF8, PType.U8, 2, 0, 5, segs, endsNode, valuesNode))
                 .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                 .hasMessageContaining("expected a VarBin values child");
     }
@@ -251,7 +252,7 @@ class RunEndEncodingDecoderTest {
         MemorySegment[] segs = {empty, empty};
 
         // When
-        Array result = decode(DType.I32, PType.U8, 0, 0, 0, segs, primitiveNode(0), primitiveNode(1));
+        Array result = decode(DTypes.I32, PType.U8, 0, 0, 0, segs, primitiveNode(0), primitiveNode(1));
 
         // Then
         assertThat(result.length()).isZero();

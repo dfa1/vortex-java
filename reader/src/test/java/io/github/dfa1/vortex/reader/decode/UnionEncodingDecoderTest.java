@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -28,7 +29,7 @@ class UnionEncodingDecoderTest {
     // Non-consecutive type ids, as Rust allows: a decoder indexing variants by type id would
     // read variant 5 and 7 out of bounds.
     private static final DType.Union UNION = new DType.Union(
-            List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(DType.I64, DType.I64), List.of(5, 7), false);
+            List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(DTypes.I64, DTypes.I64), List.of(5, 7), false);
 
     @Test
     void encodingId_isVortexUnion() {
@@ -162,7 +163,7 @@ class UnionEncodingDecoderTest {
             ArrayNode typeIds = primitiveNode(0);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 1, segs, typeIds))
+            assertThatThrownBy(() -> decode(DTypes.I64, 1, segs, typeIds))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("expected union dtype");
         }

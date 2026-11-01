@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -40,7 +40,7 @@ final class NumericColumns {
     static BoolArray validityOf(Array array) {
         return switch (array) {
             case MaskedArray masked -> masked.validity();
-            case NullArray nulls -> new LazyConstantBoolArray(DType.BOOL, nulls.length(), false);
+            case NullArray nulls -> new LazyConstantBoolArray(DTypes.BOOL, nulls.length(), false);
             default -> null;
         };
     }

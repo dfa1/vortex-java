@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.ListViewArray;
@@ -34,13 +35,13 @@ class MapEncodingEncoderTest {
 
     /// `map<utf8, i64>` — non-nullable string keys, non-nullable long values.
     private static final DType.Map MAP_UTF8_I64 =
-            new DType.Map(DType.UTF8, DType.I64, false, false);
+            new DType.Map(DTypes.UTF8, DTypes.I64, false, false);
 
     /// `map<utf8, i64?>` — a nullable *value type*, which is a different thing from a nullable
     /// map row: the null lives on one entry inside a present map, so it rides the entry struct's
     /// own field validity rather than the entries list-view's validity slot.
     private static final DType.Map MAP_UTF8_NULLABLE_I64 =
-            new DType.Map(DType.UTF8, DType.I64.asNullable(), false, false);
+            new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), false, false);
 
     private static final MapEncodingEncoder ENCODER = new MapEncodingEncoder();
     private static final MapEncodingDecoder DECODER = new MapEncodingDecoder();
@@ -61,7 +62,7 @@ class MapEncodingEncoderTest {
         @Test
         void accepts_listDtype_false() {
             // Given / When / Then
-            assertThat(ENCODER.accepts(new DType.List(DType.I32, false))).isFalse();
+            assertThat(ENCODER.accepts(new DType.List(DTypes.I32, false))).isFalse();
         }
 
         @Test

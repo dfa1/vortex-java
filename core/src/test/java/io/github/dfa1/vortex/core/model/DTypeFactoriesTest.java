@@ -10,7 +10,7 @@ class DTypeFactoriesTest {
     @Test
     void primitiveFactories_areNonNullable() {
         // Given / When
-        DType.Primitive sut = DType.I64;
+        DType.Primitive sut = DTypes.I64;
 
         // Then
         assertThat(sut.ptype()).isEqualTo(PType.I64);
@@ -20,7 +20,7 @@ class DTypeFactoriesTest {
     @Test
     void nullableShortcut_marksType_nullable() {
         // Given
-        DType sut = DType.UTF8;
+        DType sut = DTypes.UTF8;
 
         // When
         DType result = sut.asNullable();
@@ -35,27 +35,27 @@ class DTypeFactoriesTest {
     @Test
     void allPrimitiveFactories_returnExpectedPType() {
         // Given / When / Then
-        assertThat(DType.I8.ptype()).isEqualTo(PType.I8);
-        assertThat(DType.I16.ptype()).isEqualTo(PType.I16);
-        assertThat(DType.I32.ptype()).isEqualTo(PType.I32);
-        assertThat(DType.I64.ptype()).isEqualTo(PType.I64);
-        assertThat(DType.U8.ptype()).isEqualTo(PType.U8);
-        assertThat(DType.U16.ptype()).isEqualTo(PType.U16);
-        assertThat(DType.U32.ptype()).isEqualTo(PType.U32);
-        assertThat(DType.U64.ptype()).isEqualTo(PType.U64);
-        assertThat(DType.F16.ptype()).isEqualTo(PType.F16);
-        assertThat(DType.F32.ptype()).isEqualTo(PType.F32);
-        assertThat(DType.F64.ptype()).isEqualTo(PType.F64);
+        assertThat(DTypes.I8.ptype()).isEqualTo(PType.I8);
+        assertThat(DTypes.I16.ptype()).isEqualTo(PType.I16);
+        assertThat(DTypes.I32.ptype()).isEqualTo(PType.I32);
+        assertThat(DTypes.I64.ptype()).isEqualTo(PType.I64);
+        assertThat(DTypes.U8.ptype()).isEqualTo(PType.U8);
+        assertThat(DTypes.U16.ptype()).isEqualTo(PType.U16);
+        assertThat(DTypes.U32.ptype()).isEqualTo(PType.U32);
+        assertThat(DTypes.U64.ptype()).isEqualTo(PType.U64);
+        assertThat(DTypes.F16.ptype()).isEqualTo(PType.F16);
+        assertThat(DTypes.F32.ptype()).isEqualTo(PType.F32);
+        assertThat(DTypes.F64.ptype()).isEqualTo(PType.F64);
     }
 
     @Test
     void bool_utf8_binary_null_variant_factories_areNonNullable() {
         // Given / When / Then
-        assertThat(DType.BOOL.nullable()).isFalse();
-        assertThat(DType.UTF8.nullable()).isFalse();
-        assertThat(DType.BINARY.nullable()).isFalse();
-        assertThat(DType.NULL.nullable()).isFalse();
-        assertThat(DType.VARIANT.nullable()).isFalse();
+        assertThat(DTypes.BOOL.nullable()).isFalse();
+        assertThat(DTypes.UTF8.nullable()).isFalse();
+        assertThat(DTypes.BINARY.nullable()).isFalse();
+        assertThat(DTypes.NULL.nullable()).isFalse();
+        assertThat(DTypes.VARIANT.nullable()).isFalse();
     }
 
     @Test
@@ -72,10 +72,10 @@ class DTypeFactoriesTest {
     @Test
     void nullableShortcut_equivalentTo_withNullableTrue() {
         // Given
-        DType direct = DType.F64.withNullable(true);
+        DType direct = DTypes.F64.withNullable(true);
 
         // When
-        DType result = DType.F64.asNullable();
+        DType result = DTypes.F64.asNullable();
 
         // Then
         assertThat(result).isEqualTo(direct);

@@ -7,6 +7,7 @@ import de.siegmar.fastcsv.reader.CsvRecord;
 import de.siegmar.fastcsv.writer.CsvWriter;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.CsvImporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
@@ -47,14 +48,14 @@ class LargeCsvRoundTripLoadIntegrationTest {
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("id"), ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("x"), ColumnName.of("y"), ColumnName.of("flag"), ColumnName.of("sym"), ColumnName.of("note")),
             List.of(
-                    DType.I64,
-                    DType.I64,
-                    DType.I64,
-                    DType.F64,
-                    DType.F64,
-                    DType.BOOL,
-                    DType.UTF8,
-                    DType.UTF8),
+                    DTypes.I64,
+                    DTypes.I64,
+                    DTypes.I64,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.BOOL,
+                    DTypes.UTF8,
+                    DTypes.UTF8),
             false);
 
     private static final String[] HEADER = SCHEMA.fieldNames().stream().map(io.github.dfa1.vortex.core.model.ColumnName::value).toArray(String[]::new);

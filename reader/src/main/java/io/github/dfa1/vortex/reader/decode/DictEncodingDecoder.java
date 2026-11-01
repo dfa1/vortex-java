@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -336,7 +337,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 }
             }
         }
-        return new MaterializedBoolArray(DType.BOOL, rowCount, bits.asReadOnly());
+        return new MaterializedBoolArray(DTypes.BOOL, rowCount, bits.asReadOnly());
     }
 
     /// Untrusted-input guard: a malformed file may carry codes outside the pool, and the

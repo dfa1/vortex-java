@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Zone;
 import org.junit.jupiter.api.Nested;
@@ -18,7 +19,7 @@ class ExplorePageTest {
         @Test
         void isSelfContainedAndSaysNothingAboutStorage() {
             // Given
-            ColumnProfile id = new ColumnProfile("id", DType.I64, 1000, 0L, 0L, 1L, 999L, null, List.of());
+            ColumnProfile id = new ColumnProfile("id", DTypes.I64, 1000, 0L, 0L, 1L, 999L, null, List.of());
 
             // When
             String result = ExplorePage.render("data.vortex", 4096L, 1000L, List.of(id));
@@ -40,8 +41,8 @@ class ExplorePageTest {
         @Test
         void everyColumnGetsAnAnalyzeButtonByIndex() {
             // Given — the button names the column by position, never by its (untrusted) name
-            ColumnProfile a = new ColumnProfile("a", DType.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
-            ColumnProfile b = new ColumnProfile("b", DType.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
+            ColumnProfile a = new ColumnProfile("a", DTypes.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
+            ColumnProfile b = new ColumnProfile("b", DTypes.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
 
             // When
             String result = ExplorePage.render("data.vortex", 0L, 1L, List.of(a, b));
@@ -56,8 +57,8 @@ class ExplorePageTest {
         @Test
         void publishedPageCarriesEachAnalysisUnderItsColumn() {
             // Given
-            ColumnProfile a = new ColumnProfile("a", DType.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
-            ColumnProfile b = new ColumnProfile("b", DType.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
+            ColumnProfile a = new ColumnProfile("a", DTypes.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
+            ColumnProfile b = new ColumnProfile("b", DTypes.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
 
             // When
             String result = ExplorePage.render("data.vortex", 0L, 1L, List.of(a, b), List.of("<p>A</p>", "<p>B</p>"));
@@ -75,7 +76,7 @@ class ExplorePageTest {
         @Test
         void publishedPageNeedsOneAnalysisPerColumn() {
             // Given
-            ColumnProfile a = new ColumnProfile("a", DType.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
+            ColumnProfile a = new ColumnProfile("a", DTypes.I64, 1, 0L, 0L, 1L, 1L, null, List.of());
 
             // When / Then — a missing analysis would shift every later one under the wrong column
             org.assertj.core.api.Assertions.assertThatThrownBy(() ->
@@ -87,7 +88,7 @@ class ExplorePageTest {
         @Test
         void profilesShowNullShareAndRange() {
             // Given — 250 of 1000 rows null
-            ColumnProfile id = new ColumnProfile("id", DType.I64, 1000, 250L, 0L, 1L, 999L, null, List.of());
+            ColumnProfile id = new ColumnProfile("id", DTypes.I64, 1000, 250L, 0L, 1L, 999L, null, List.of());
 
             // When
             String result = ExplorePage.render("data.vortex", 4096L, 1000L, List.of(id));
@@ -104,8 +105,8 @@ class ExplorePageTest {
         void meanColumnOnlyWhenSomeColumnHasASum() {
             // Given — Rust's zone map records no sum, so most files have no mean at all: a column of
             // dashes would only be noise
-            ColumnProfile noSum = new ColumnProfile("id", DType.I64, 4, 0L, 0L, 1L, 4L, null, List.of());
-            ColumnProfile withSum = new ColumnProfile("id", DType.I64, 4, 0L, 0L, 1L, 4L, 10L, List.of());
+            ColumnProfile noSum = new ColumnProfile("id", DTypes.I64, 4, 0L, 0L, 1L, 4L, null, List.of());
+            ColumnProfile withSum = new ColumnProfile("id", DTypes.I64, 4, 0L, 0L, 1L, 4L, 10L, List.of());
 
             // When
             String without = ExplorePage.render("data.vortex", 4096L, 1000L, List.of(noSum));
@@ -133,9 +134,9 @@ class ExplorePageTest {
             // Given — one zone is one band: no shape over the rows to show
             ArrayStats a = new ArrayStats(0L, true, 9L, true, null, null, null, null, 0L, null, null);
             ArrayStats b = new ArrayStats(10L, true, 19L, true, null, null, null, null, 0L, null, null);
-            ColumnProfile one = new ColumnProfile("id", DType.I64, 10, 0L, 0L, 0L, 9L, null,
+            ColumnProfile one = new ColumnProfile("id", DTypes.I64, 10, 0L, 0L, 0L, 9L, null,
                     List.of(new Zone(0, 10, a)));
-            ColumnProfile two = new ColumnProfile("id", DType.I64, 20, 0L, 0L, 0L, 19L, null,
+            ColumnProfile two = new ColumnProfile("id", DTypes.I64, 20, 0L, 0L, 0L, 19L, null,
                     List.of(new Zone(0, 10, a), new Zone(10, 10, b)));
 
             // When
@@ -151,7 +152,7 @@ class ExplorePageTest {
         @Test
         void escapesUntrustedProfileValues() {
             // Given — a profile's name and string min/max come off the wire
-            ColumnProfile evil = new ColumnProfile("<i>", DType.UTF8, 1, 0L, 0L, "<b>", "<u>", null, List.of());
+            ColumnProfile evil = new ColumnProfile("<i>", DTypes.UTF8, 1, 0L, 0L, "<b>", "<u>", null, List.of());
 
             // When
             String result = ExplorePage.render("evil.vortex", 4096L, 1000L, List.of(evil));
@@ -165,7 +166,7 @@ class ExplorePageTest {
     class Distribution {
 
         private static final ColumnProfile PRICE =
-                new ColumnProfile("price", DType.F64, 10, 0L, 0L, 0.0, 10.0, null, List.of());
+                new ColumnProfile("price", DTypes.F64, 10, 0L, 0L, 0.0, 10.0, null, List.of());
 
         @Test
         void numericColumnShowsTotalMeanAndHistogram() {
@@ -190,7 +191,7 @@ class ExplorePageTest {
         @Test
         void fewDistinctValuesShowEachWithCountAndShare() {
             // Given — 2 of 8 rows null: shares are of the 6 present values
-            ColumnProfile country = new ColumnProfile("country", DType.UTF8, 8, 2L, 0L, "IT", "US", null, List.of());
+            ColumnProfile country = new ColumnProfile("country", DTypes.UTF8, 8, 2L, 0L, "IT", "US", null, List.of());
             ColumnDistribution dist = new ColumnDistribution(8, 2, null, 2L, List.of(
                     new ColumnDistribution.Bar("IT", null, 4),
                     new ColumnDistribution.Bar("US", null, 2)), false, new ColumnDistribution.Lengths(2, 2, 12));
@@ -212,7 +213,7 @@ class ExplorePageTest {
         @Test
         void topValuesAreLabeledAsSuch() {
             // Given — 500 distinct values, only the most frequent shown
-            ColumnProfile name = new ColumnProfile("name", DType.UTF8, 1000, 0L, 0L, null, null, null, List.of());
+            ColumnProfile name = new ColumnProfile("name", DTypes.UTF8, 1000, 0L, 0L, null, null, null, List.of());
             ColumnDistribution dist = new ColumnDistribution(1000, 0, null, 500L,
                     List.of(new ColumnDistribution.Bar("bob", null, 9)), false, null);
 
@@ -226,7 +227,7 @@ class ExplorePageTest {
         @Test
         void escapesUntrustedValues() {
             // Given — counted values are strings straight from the file
-            ColumnProfile s = new ColumnProfile("s", DType.UTF8, 1, 0L, 0L, null, null, null, List.of());
+            ColumnProfile s = new ColumnProfile("s", DTypes.UTF8, 1, 0L, 0L, null, null, null, List.of());
             ColumnDistribution dist = new ColumnDistribution(1, 0, null, 1L,
                     List.of(new ColumnDistribution.Bar("<img src=x onerror=alert(1)>", null, 1)), false, null);
 

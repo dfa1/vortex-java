@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
@@ -199,7 +199,7 @@ class BitpackedEncodingPatchesTest {
             validity[5] = false;
 
             // When
-            EncodeResult result = ENCODER.encode(DTypes.I32_N, new NullableData(values, validity),
+            EncodeResult result = ENCODER.encode(DTypes.I32.asNullable(), new NullableData(values, validity),
                     EncodeTestHelper.testCtx());
 
             // Then only the validity child, no patches
@@ -225,7 +225,7 @@ class BitpackedEncodingPatchesTest {
             }
 
             // When
-            CascadeStep step = new FrameOfReferenceEncodingEncoder().encodeCascade(DTypes.I32_N,
+            CascadeStep step = new FrameOfReferenceEncodingEncoder().encodeCascade(DTypes.I32.asNullable(),
                     new NullableData(values, validity), EncodeTestHelper.testCtx());
 
             // Then

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -27,9 +28,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// arrays without a terminal or fixture file.
 class GridRenderTest {
 
-    private static final DType I64 = DType.I64;
-    private static final DType F64 = DType.F64;
-    private static final DType BOOL = DType.BOOL;
+    private static final DType I64 = DTypes.I64;
+    private static final DType F64 = DTypes.F64;
+    private static final DType BOOL = DTypes.BOOL;
 
     @Test
     void nullArrayRendersEmpty() {
@@ -70,10 +71,10 @@ class GridRenderTest {
             // Given — the canonical shape is an unsigned integer column (like uci-wine's magnesium,
             // stored unsigned). Here each width carries a high-half value whose two's-complement
             // signed reading is negative; the grid must show the unsigned decimal instead.
-            DType u64 = DType.U64;
-            DType u32 = DType.U32;
-            DType u16 = DType.U16;
-            DType u8 = DType.U8;
+            DType u64 = DTypes.U64;
+            DType u32 = DTypes.U32;
+            DType u16 = DTypes.U16;
+            DType u8 = DTypes.U8;
 
             // When / Then — U64 2^63, U32 3e9, U16 60000, U8 200 all render positive
             assertThat(GridRender.formatCell(ArrayFixtures.ulongs(arena, Long.MIN_VALUE), 0, u64))
@@ -141,7 +142,7 @@ class GridRenderTest {
             DType uuidExt = UuidExtensionDecoder.INSTANCE.dtype(false);
             ByteArray elems = ArrayFixtures.bytes(arena, new byte[16]);
             FixedSizeListArray storage = new FixedSizeListArray(
-                    new DType.FixedSizeList(DType.U8, 16, false), 1, elems);
+                    new DType.FixedSizeList(DTypes.U8, 16, false), 1, elems);
 
             // When / Then
             assertThat(GridRender.formatCell(storage, 0, uuidExt))
@@ -169,8 +170,8 @@ class GridRenderTest {
             Array sut = ArrayFixtures.utf8(arena, "héllo", "x");
 
             // When / Then
-            assertThat(GridRender.formatCell(sut, 0, DType.UTF8)).isEqualTo("héllo");
-            assertThat(GridRender.formatCell(sut, 1, DType.UTF8)).isEqualTo("x");
+            assertThat(GridRender.formatCell(sut, 0, DTypes.UTF8)).isEqualTo("héllo");
+            assertThat(GridRender.formatCell(sut, 1, DTypes.UTF8)).isEqualTo("x");
         }
     }
 
@@ -181,7 +182,7 @@ class GridRenderTest {
             Array sut = ArrayFixtures.binary(arena, new byte[]{0x01, (byte) 0xab, 0x02});
 
             // When / Then
-            assertThat(GridRender.formatCell(sut, 0, DType.BINARY)).isEqualTo("0x01ab02");
+            assertThat(GridRender.formatCell(sut, 0, DTypes.BINARY)).isEqualTo("0x01ab02");
         }
     }
 
@@ -193,7 +194,7 @@ class GridRenderTest {
             Array sut = ArrayFixtures.binary(arena, twenty);
 
             // When
-            String cell = GridRender.formatCell(sut, 0, DType.BINARY);
+            String cell = GridRender.formatCell(sut, 0, DTypes.BINARY);
 
             // Then — "0x" + 16*"00" + "..."
             assertThat(cell).isEqualTo("0x" + "00".repeat(16) + "...");
@@ -205,7 +206,7 @@ class GridRenderTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given — vortex.date declared but storage is F64, which epochInteger rejects
             DType dateExt = new DType.Extension("vortex.date",
-                    DType.I32, null, false);
+                    DTypes.I32, null, false);
             Array badStorage = ArrayFixtures.doubles(arena, 1.5);
 
             // When — the decode throws and is caught
@@ -221,7 +222,7 @@ class GridRenderTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given — an extension id this reader does not know: render the raw storage value
             DType unknownExt = new DType.Extension("custom.thing",
-                    DType.I32, null, false);
+                    DTypes.I32, null, false);
             IntArray storage = ArrayFixtures.ints(arena, 42);
 
             // When / Then — no extension formatting, falls to the IntArray branch

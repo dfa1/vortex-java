@@ -113,22 +113,22 @@ class ExtensionIdTest {
 
         static Stream<Arguments> valid() {
             return Stream.of(
-                    Arguments.of("date days I32", ext(ExtensionId.VORTEX_DATE, DType.I32, 4)),
-                    Arguments.of("date millis I64", ext(ExtensionId.VORTEX_DATE, DType.I64, 2)),
-                    Arguments.of("time seconds I32", ext(ExtensionId.VORTEX_TIME, DType.I32, 3)),
-                    Arguments.of("time millis I32", ext(ExtensionId.VORTEX_TIME, DType.I32, 2)),
-                    Arguments.of("time micros I64", ext(ExtensionId.VORTEX_TIME, DType.I64, 1)),
-                    Arguments.of("time nanos I64", ext(ExtensionId.VORTEX_TIME, DType.I64, 0)),
-                    Arguments.of("timestamp no tz", ext(ExtensionId.VORTEX_TIMESTAMP, DType.I64, 2, 0, 0)),
-                    Arguments.of("timestamp tz", ext(ExtensionId.VORTEX_TIMESTAMP, DType.I64, 2, 3, 0, 'U', 'T', 'C')),
-                    Arguments.of("timestamp days", ext(ExtensionId.VORTEX_TIMESTAMP, DType.I64, 4, 0, 0)),
+                    Arguments.of("date days I32", ext(ExtensionId.VORTEX_DATE, DTypes.I32, 4)),
+                    Arguments.of("date millis I64", ext(ExtensionId.VORTEX_DATE, DTypes.I64, 2)),
+                    Arguments.of("time seconds I32", ext(ExtensionId.VORTEX_TIME, DTypes.I32, 3)),
+                    Arguments.of("time millis I32", ext(ExtensionId.VORTEX_TIME, DTypes.I32, 2)),
+                    Arguments.of("time micros I64", ext(ExtensionId.VORTEX_TIME, DTypes.I64, 1)),
+                    Arguments.of("time nanos I64", ext(ExtensionId.VORTEX_TIME, DTypes.I64, 0)),
+                    Arguments.of("timestamp no tz", ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2, 0, 0)),
+                    Arguments.of("timestamp tz", ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2, 3, 0, 'U', 'T', 'C')),
+                    Arguments.of("timestamp days", ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 4, 0, 0)),
                     Arguments.of("uuid no version", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE)),
                     Arguments.of("uuid v4", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 4)),
                     Arguments.of("uuid max 0x0f", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 0x0f)),
                     Arguments.of("uuid max 0xff", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 0xff)),
-                    Arguments.of("date nullable storage", ext(ExtensionId.VORTEX_DATE, DType.I32.asNullable(), 4)),
-                    Arguments.of("json", ext(ExtensionId.VORTEX_JSON, DType.UTF8)),
-                    Arguments.of("wkb", ext(ExtensionId.VORTEX_ST_WKB, DType.BINARY)),
+                    Arguments.of("date nullable storage", ext(ExtensionId.VORTEX_DATE, DTypes.I32.asNullable(), 4)),
+                    Arguments.of("json", ext(ExtensionId.VORTEX_JSON, DTypes.UTF8)),
+                    Arguments.of("wkb", ext(ExtensionId.VORTEX_ST_WKB, DTypes.BINARY)),
                     Arguments.of("point xy", ext(ExtensionId.VORTEX_ST_POINT, coords("x", "y"))),
                     Arguments.of("point xyzm", ext(ExtensionId.VORTEX_ST_POINT, coords("x", "y", "z", "m"))),
                     Arguments.of("linestring", ext(ExtensionId.VORTEX_ST_LINESTRING, lists(coords("x", "y"), 1))),
@@ -141,30 +141,30 @@ class ExtensionIdTest {
 
         static Stream<Arguments> invalid() {
             return Stream.of(
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DType.I32), "metadata must not be empty"),
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DType.I32, 9), "invalid time unit"),
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DType.I64, 4), "for Days must be I32"),
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DType.I64, 0), "does not support time unit Nanoseconds"),
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DType.UTF8, 4), "must be I32"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIME, DType.I64, 2), "for Milliseconds must be I32"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIME, DType.I32, 4), "does not support time unit Days"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DType.I32, 2, 0, 0), "storage dtype must be I64"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DType.I64, 2), "at least 3 bytes"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DType.I64, 2, 5, 0, 'U'), "truncated"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DType.I64, 2, 1, 0, 0xc3), "not valid UTF-8"),
+                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I32), "metadata must not be empty"),
+                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I32, 9), "invalid time unit"),
+                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I64, 4), "for Days must be I32"),
+                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I64, 0), "does not support time unit Nanoseconds"),
+                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.UTF8, 4), "must be I32"),
+                    Arguments.of(ext(ExtensionId.VORTEX_TIME, DTypes.I64, 2), "for Milliseconds must be I32"),
+                    Arguments.of(ext(ExtensionId.VORTEX_TIME, DTypes.I32, 4), "does not support time unit Days"),
+                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I32, 2, 0, 0), "storage dtype must be I64"),
+                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2), "at least 3 bytes"),
+                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2, 5, 0, 'U'), "truncated"),
+                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2, 1, 0, 0xc3), "not valid UTF-8"),
                     Arguments.of(ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 4, 0), "0 or 1 bytes"),
                     Arguments.of(ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 9), "unknown UUID version"),
-                    Arguments.of(ext(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DType.U8, 8, false)), "FixedSizeList<non-null U8, 16>"),
-                    Arguments.of(ext(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DType.U8.asNullable(), 16, false)), "FixedSizeList<non-null U8, 16>"),
-                    Arguments.of(ext(ExtensionId.VORTEX_UUID, DType.I64), "FixedSizeList<non-null U8, 16>"),
-                    Arguments.of(ext(ExtensionId.VORTEX_JSON, DType.BINARY), "storage dtype must be Utf8"),
-                    Arguments.of(ext(ExtensionId.VORTEX_JSON, DType.UTF8, 1), "metadata must be empty"),
-                    Arguments.of(ext(ExtensionId.VORTEX_ST_WKB, DType.UTF8), "storage dtype must be Binary"),
+                    Arguments.of(ext(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DTypes.U8, 8, false)), "FixedSizeList<non-null U8, 16>"),
+                    Arguments.of(ext(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DTypes.U8.asNullable(), 16, false)), "FixedSizeList<non-null U8, 16>"),
+                    Arguments.of(ext(ExtensionId.VORTEX_UUID, DTypes.I64), "FixedSizeList<non-null U8, 16>"),
+                    Arguments.of(ext(ExtensionId.VORTEX_JSON, DTypes.BINARY), "storage dtype must be Utf8"),
+                    Arguments.of(ext(ExtensionId.VORTEX_JSON, DTypes.UTF8, 1), "metadata must be empty"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_WKB, DTypes.UTF8), "storage dtype must be Binary"),
                     Arguments.of(ext(ExtensionId.VORTEX_ST_POINT, coords("y", "x")), "not a valid GeoArrow dimension"),
                     Arguments.of(ext(ExtensionId.VORTEX_ST_POINT, new DType.Struct(
-                            List.of(ColumnName.of("x"), ColumnName.of("y")), List.of(DType.F64, DType.F32), false)),
+                            List.of(ColumnName.of("x"), ColumnName.of("y")), List.of(DTypes.F64, DTypes.F32), false)),
                             "must be non-nullable F64"),
-                    Arguments.of(ext(ExtensionId.VORTEX_ST_POINT, DType.F64), "must be a Struct"),
+                    Arguments.of(ext(ExtensionId.VORTEX_ST_POINT, DTypes.F64), "must be a Struct"),
                     Arguments.of(ext(ExtensionId.VORTEX_ST_POLYGON, lists(coords("x", "y"), 1)), "must nest 2 List level(s)"),
                     Arguments.of(ext(ExtensionId.VORTEX_ST_MULTIPOLYGON, coords("x", "y")), "must nest 3 List level(s)"),
                     Arguments.of(ext(ExtensionId.VORTEX_ST_BOX, coords("x", "y")), "not a valid GeoArrow dimension"));
@@ -201,12 +201,12 @@ class ExtensionIdTest {
             ExtensionId.VORTEX_UUID.validate(dtype);
         }
 
-        private static final DType UUID_STORAGE = new DType.FixedSizeList(DType.U8, 16, false);
+        private static final DType UUID_STORAGE = new DType.FixedSizeList(DTypes.U8, 16, false);
 
         /// A GeoArrow coordinate (or box) struct of non-nullable F64 fields.
         private static DType coords(String... names) {
             return new DType.Struct(java.util.Arrays.stream(names).map(ColumnName::of).toList(),
-                    java.util.Arrays.stream(names).map(n -> (DType) DType.F64).toList(), false);
+                    java.util.Arrays.stream(names).map(n -> (DType) DTypes.F64).toList(), false);
         }
 
         private static DType lists(DType element, int depth) {

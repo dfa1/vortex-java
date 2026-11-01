@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -67,7 +67,7 @@ class IntArrayTest {
             // Given — constant-encoding: 1-element buffer, logical length 4; all 4 visits yield same value
             MemorySegment seg = Arena.ofAuto().allocate(4, 4);
             seg.setAtIndex(VortexFormat.LE_INT, 0, 7);
-            IntArray sut = new MaterializedIntArray(DType.I32, 4, seg);
+            IntArray sut = new MaterializedIntArray(DTypes.I32, 4, seg);
             List<Integer> collected = new ArrayList<>();
 
             // When

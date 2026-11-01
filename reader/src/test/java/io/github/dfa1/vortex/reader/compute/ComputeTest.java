@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.compute;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -87,7 +88,7 @@ class ComputeTest {
         void onlyIsNullSelectsItsRows(Predicate predicate, boolean selected) {
             // Given
             Chunk chunk = mock(Chunk.class);
-            given(chunk.<Array>column(COL)).willReturn(new NullArray(DType.I64.asNullable(), ROWS));
+            given(chunk.<Array>column(COL)).willReturn(new NullArray(DTypes.I64.asNullable(), ROWS));
             ScanFilter filter = new ScanFilter.Column(COL, predicate);
 
             // When
@@ -121,7 +122,7 @@ class ComputeTest {
                 seconds[r] = r * 397L % 86_400L;
                 subseconds[r] = r * 7_919L % UNITS_PER_SECOND;
             }
-            Array days = new LazyRunEndLongArray(DType.I64, ROWS,
+            Array days = new LazyRunEndLongArray(DTypes.I64, ROWS,
                     ComputeArrays.longArray(ARENA, 19_737L, 19_738L, 19_739L),
                     ComputeArrays.longArray(ARENA, 70L, 140L, 200L), 0L);
             return new LazyDateTimePartsLongArray(TimestampDtype.of(false), ROWS, days,
@@ -292,7 +293,7 @@ class ComputeTest {
             for (int i = 0; i < 6; i++) {
                 rowNumbers.setAtIndex(ValueLayout.JAVA_LONG, i, i);
             }
-            Array column = new MaterializedLongArray(DType.I64, 6, rowNumbers);
+            Array column = new MaterializedLongArray(DTypes.I64, 6, rowNumbers);
 
             // When
             Mask result = sut.toMask(6);
@@ -329,7 +330,7 @@ class ComputeTest {
             VarBinArray dict = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"}, new int[]{0, 0, 1, 0, 1},
                     codesPType);
             Chunk chunk = mock(Chunk.class);
-            given(chunk.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DType.UTF8, 3, dict, 2));
+            given(chunk.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DTypes.UTF8, 3, dict, 2));
             ScanFilter filter = ScanFilter.eq(SYM, "b");
 
             // When
@@ -398,9 +399,9 @@ class ComputeTest {
             VarBinArray shared = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"},
                     new int[]{1, 0, 0, 1}, PType.U16);
             Chunk first = mock(Chunk.class);
-            given(first.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DType.UTF8, 2, shared, 0));
+            given(first.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DTypes.UTF8, 2, shared, 0));
             Chunk second = mock(Chunk.class);
-            given(second.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DType.UTF8, 2, shared, 2));
+            given(second.<Array>column(SYM)).willReturn(new VarBinSlicedArray(DTypes.UTF8, 2, shared, 2));
             Chunk third = mock(Chunk.class);
             given(third.<Array>column(SYM)).willReturn(ComputeArrays.utf8DictArray(ARENA, new String[]{"b", "a"},
                     new int[]{1, 0}, PType.U16));
@@ -642,7 +643,7 @@ class ComputeTest {
         void slicedDictionary_readsCodesAtTheSliceOffset() {
             // Given — rows 2..4 of a, a, b, b, a
             VarBinArray dict = ComputeArrays.utf8DictArray(ARENA, new String[]{"a", "b"}, new int[]{0, 0, 1, 1, 0});
-            Chunk chunk = chunk(new VarBinSlicedArray(DType.UTF8, 3, dict, 2), null);
+            Chunk chunk = chunk(new VarBinSlicedArray(DTypes.UTF8, 3, dict, 2), null);
 
             // When
             Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk, G, null, null).orElseThrow();
@@ -683,7 +684,7 @@ class ComputeTest {
         void codesBufferShorterThanRows_throwsVortexException() {
             // Given — a dictionary array claiming 3 rows over a 1-code buffer
             VarBinDictArray one = (VarBinDictArray) ComputeArrays.utf8DictArray(ARENA, new String[]{"a"}, new int[]{0});
-            Array group = new VarBinDictArray(DType.UTF8, 3, one.bytesSegment(), one.dictValOffsets(),
+            Array group = new VarBinDictArray(DTypes.UTF8, 3, one.bytesSegment(), one.dictValOffsets(),
                     one.dictValOffPType(), one.dictCodesSegs(), one.dictCodesPType());
             Chunk chunk = chunk(group, null);
 

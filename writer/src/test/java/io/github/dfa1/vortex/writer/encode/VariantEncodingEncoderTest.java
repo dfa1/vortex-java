@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoPrimitive;
@@ -20,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class VariantEncodingEncoderTest {
 
     private static final VariantEncodingEncoder SUT = new VariantEncodingEncoder();
-    private static final DType.Variant VARIANT = DType.VARIANT;
+    private static final DType.Variant VARIANT = DTypes.VARIANT;
 
     private static ProtoScalar i32Scalar(long value) {
         // Inner typed scalar carrying its own i32 dtype, wrapped as a variant value

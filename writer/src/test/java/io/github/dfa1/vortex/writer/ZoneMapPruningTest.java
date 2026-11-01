@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanFilter;
@@ -40,12 +41,12 @@ class ZoneMapPruningTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("id")),
-            List.of(DType.I64),
+            List.of(DTypes.I64),
             false);
 
     private static final DType.Struct U64_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("id")),
-            List.of(DType.U64),
+            List.of(DTypes.U64),
             false);
 
     // Three chunks: id in [1..50], [51..100], [101..150]
@@ -103,7 +104,7 @@ class ZoneMapPruningTest {
 
     private static final DType.Struct F32_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.F32),
+            List.of(DTypes.F32),
             false);
 
     /// 2^63 as raw bits: `Long.MIN_VALUE` is the smallest *signed* long but 2^63 *unsigned*.
@@ -474,7 +475,7 @@ class ZoneMapPruningTest {
     class Float16Column {
 
         private static final DType.Struct F16_SCHEMA = new DType.Struct(
-                List.of(ColumnName.of("v")), List.of(DType.F16), false);
+                List.of(ColumnName.of("v")), List.of(DTypes.F16), false);
 
         @ParameterizedTest(name = "{0} on F16 column")
         @MethodSource("io.github.dfa1.vortex.writer.ZoneMapPruningTest$FloatWidths#values")
@@ -641,7 +642,7 @@ class ZoneMapPruningTest {
 
         private static final DType.Struct DICT_SCHEMA = new DType.Struct(
                 List.of(ColumnName.of("s"), ColumnName.of("n")),
-                List.of(DType.UTF8, DType.I64),
+                List.of(DTypes.UTF8, DTypes.I64),
                 false);
 
         /// Four chunks, each holding a single distinct symbol, so a predicate on one symbol must
@@ -700,7 +701,7 @@ class ZoneMapPruningTest {
         private Path writeFourChunksWithANullChunk(Path tmp, boolean globalDict) throws IOException {
             DType.Struct schema = new DType.Struct(
                     List.of(ColumnName.of("s"), ColumnName.of("n")),
-                    List.of(new DType.Utf8(true), DType.I64),
+                    List.of(new DType.Utf8(true), DTypes.I64),
                     false);
             Path file = tmp.resolve("dict_nulls_" + globalDict + ".vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

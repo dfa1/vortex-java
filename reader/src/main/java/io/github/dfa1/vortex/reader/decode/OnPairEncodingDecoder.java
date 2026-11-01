@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoOnPairMetadata;
@@ -136,7 +137,7 @@ public final class OnPairEncodingDecoder implements EncodingDecoder {
 
             Array values = new VarBinOffsetArray(ctx.dtype(), n, bytes, offsets, PType.I64);
             if (numChildren == 5) {
-                Array va = ctx.decodeChild(4, DType.BOOL, n);
+                Array va = ctx.decodeChild(4, DTypes.BOOL, n);
                 return new MaskedArray(values, MaskedArray.requireBoolArray(va, ID, "validity child"));
             }
             return values;

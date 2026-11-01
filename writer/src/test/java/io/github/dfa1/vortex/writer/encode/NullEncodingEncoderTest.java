@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -27,7 +27,7 @@ class NullEncodingEncoderTest {
             var sut = new NullEncodingEncoder();
 
             // When
-            EncodeResult result = sut.encode(DTypes.NULL, null, EncodeTestHelper.testCtx());
+            EncodeResult result = sut.encode(DTypes.NULL.asNullable(), null, EncodeTestHelper.testCtx());
 
             // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_NULL);
@@ -43,9 +43,9 @@ class NullEncodingEncoderTest {
             var decoder = new NullEncodingDecoder();
 
             // When
-            EncodeResult resultEncoded = encoder.encode(DTypes.NULL, null, EncodeTestHelper.testCtx());
+            EncodeResult resultEncoded = encoder.encode(DTypes.NULL.asNullable(), null, EncodeTestHelper.testCtx());
             ArrayNode node = new ArrayNode(resultEncoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0]);
-            DecodeContext ctx = new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0],
+            DecodeContext ctx = new DecodeContext(node, DTypes.NULL.asNullable(), rowCount, new MemorySegment[0],
                     ReadRegistry.empty(), Arena.ofAuto());
             var result = decoder.decode(ctx);
 

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.TestSegments;
@@ -34,7 +35,7 @@ class VarBinEncodingDecoderTest {
         // children[0] = offsets (primitive, segment index 1); bufferIndices[0] -> bytes (index 0)
         ArrayNode offsetsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
         ArrayNode varbinNode = new ArrayNode(EncodingId.VORTEX_VARBIN, meta, new ArrayNode[]{offsetsNode}, new int[]{0});
-        return new DecodeContext(varbinNode, DType.UTF8, n,
+        return new DecodeContext(varbinNode, DTypes.UTF8, n,
                 new MemorySegment[]{bytes, offsets}, REGISTRY, Arena.ofAuto());
     }
 
@@ -87,7 +88,7 @@ class VarBinEncodingDecoderTest {
         ArrayNode offsetsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
         ArrayNode varbinNode = new ArrayNode(EncodingId.VORTEX_VARBIN, i32OffsetsMeta(),
                 new ArrayNode[]{offsetsNode, offsetsNode, offsetsNode}, new int[]{0});
-        DecodeContext ctx = new DecodeContext(varbinNode, DType.UTF8, 1,
+        DecodeContext ctx = new DecodeContext(varbinNode, DTypes.UTF8, 1,
                 new MemorySegment[]{MemorySegment.ofArray(new byte[]{'a'}), TestSegments.leInts(0, 1)},
                 REGISTRY, Arena.ofAuto());
 
@@ -190,7 +191,7 @@ class VarBinEncodingDecoderTest {
             // only possible on a directly built array — this exercises the readOffset guard
             // directly against a short offsets segment.
             MemorySegment data = MemorySegment.ofArray("abc".getBytes(StandardCharsets.UTF_8));
-            VarBinArray array = new VarBinOffsetArray(DType.UTF8, 4, data,
+            VarBinArray array = new VarBinOffsetArray(DTypes.UTF8, 4, data,
                     TestSegments.leInts(0, 1, 2), PType.I32);
 
             // When / Then

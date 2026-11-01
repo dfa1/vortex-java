@@ -14,16 +14,16 @@ class DTypeStructBuilderTest {
     void build_preservesFieldInsertionOrder() {
         // Given / When
         DType.Struct sut = DType.structBuilder()
-                .field(ColumnName.of("timestamp"), DType.I64)
-                .field(ColumnName.of("symbol"), DType.UTF8)
-                .field(ColumnName.of("price"), DType.F64)
+                .field(ColumnName.of("timestamp"), DTypes.I64)
+                .field(ColumnName.of("symbol"), DTypes.UTF8)
+                .field(ColumnName.of("price"), DTypes.F64)
                 .build();
 
         // Then
         assertThat(sut.fieldNames()).containsExactly(
                 ColumnName.of("timestamp"), ColumnName.of("symbol"), ColumnName.of("price"));
         assertThat(sut.fieldTypes()).containsExactly(
-                DType.I64, DType.UTF8, DType.F64);
+                DTypes.I64, DTypes.UTF8, DTypes.F64);
         assertThat(sut.nullable()).isFalse();
     }
 
@@ -31,7 +31,7 @@ class DTypeStructBuilderTest {
     void asNullable_marksTheStructItself() {
         // Given / When
         DType.Struct sut = DType.structBuilder()
-                .field(ColumnName.of("v"), DType.I64)
+                .field(ColumnName.of("v"), DTypes.I64)
                 .asNullable()
                 .build();
 
@@ -53,10 +53,10 @@ class DTypeStructBuilderTest {
     @Test
     void duplicateField_throws_atAddTime() {
         // Given
-        DType.StructBuilder sut = DType.structBuilder().field(ColumnName.of("x"), DType.I64);
+        DType.StructBuilder sut = DType.structBuilder().field(ColumnName.of("x"), DTypes.I64);
 
         // When / Then
-        assertThatThrownBy(() -> sut.field(ColumnName.of("x"), DType.F64))
+        assertThatThrownBy(() -> sut.field(ColumnName.of("x"), DTypes.F64))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("duplicate field name: x");
     }
@@ -65,14 +65,14 @@ class DTypeStructBuilderTest {
     void buildResult_equalsRecordConstructed_struct() {
         // Given
         DType.Struct viaBuilder = DType.structBuilder()
-                .field(ColumnName.of("a"), DType.I32)
-                .field(ColumnName.of("b"), DType.UTF8)
+                .field(ColumnName.of("a"), DTypes.I32)
+                .field(ColumnName.of("b"), DTypes.UTF8)
                 .build();
 
         // When
         DType.Struct result = new DType.Struct(
                 List.of(ColumnName.of("a"), ColumnName.of("b")),
-                List.of(DType.I32, DType.UTF8),
+                List.of(DTypes.I32, DTypes.UTF8),
                 false);
 
         // Then
@@ -82,8 +82,8 @@ class DTypeStructBuilderTest {
     @Test
     void builder_isNotReusable_afterMutation_byField() {
         // Given / When — separate builder instances must produce independent structs
-        DType.Struct resultX = DType.structBuilder().field(ColumnName.of("x"), DType.I64).build();
-        DType.Struct resultY = DType.structBuilder().field(ColumnName.of("y"), DType.UTF8).build();
+        DType.Struct resultX = DType.structBuilder().field(ColumnName.of("x"), DTypes.I64).build();
+        DType.Struct resultY = DType.structBuilder().field(ColumnName.of("y"), DTypes.UTF8).build();
 
         // Then
         assertThat(resultX.fieldNames()).containsExactly(ColumnName.of("x"));
@@ -96,7 +96,7 @@ class DTypeStructBuilderTest {
         // Given — control characters are rejected; blank names are wire-legal and allowed
         var builder = DType.structBuilder();
         // When / Then
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.field(ColumnName.of(name), DType.I64))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.field(ColumnName.of(name), DTypes.I64))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -105,7 +105,7 @@ class DTypeStructBuilderTest {
     void field_blankName_succeeds(String name) {
         // Given — blank names are wire-legal; the Rust reference produces them
         // When
-        DType.Struct result = DType.structBuilder().field(ColumnName.of(name), DType.I64).build();
+        DType.Struct result = DType.structBuilder().field(ColumnName.of(name), DTypes.I64).build();
 
         // Then
         org.assertj.core.api.Assertions.assertThat(result.fieldNames())

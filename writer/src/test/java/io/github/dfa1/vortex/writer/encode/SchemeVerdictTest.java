@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.WriteRegistry;
 import org.junit.jupiter.api.Nested;
@@ -24,7 +24,7 @@ class SchemeVerdictTest {
     private static final StatsOptions ALL_STATS = StatsOptions.defaults().withCountDistinct(true).withTrackMostFrequent(true);
 
     private static ArrayAndStats longs(long... values) {
-        return new ArrayAndStats(DType.I64, values, ALL_STATS);
+        return new ArrayAndStats(DTypes.I64, values, ALL_STATS);
     }
 
     @Nested
@@ -38,7 +38,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(5, 7, 3, -80, 9);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
@@ -50,7 +50,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(5, 7, 3, 0, 9);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.COMPLETE);
@@ -59,10 +59,10 @@ class SchemeVerdictTest {
         @Test
         void neverTreatsAnUnsigned64AboveTwoToThe63AsNegative() {
             // Given: raw bits negative as a signed long, but U64 has no negatives
-            ArrayAndStats data = new ArrayAndStats(DType.U64, new long[]{-1L, 3}, StatsOptions.defaults());
+            ArrayAndStats data = new ArrayAndStats(DTypes.U64, new long[]{-1L, 3}, StatsOptions.defaults());
 
             // When
-            Estimate result = sut.expectedRatio(DType.U64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.U64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.COMPLETE);
@@ -81,11 +81,11 @@ class SchemeVerdictTest {
             ArrayAndStats nonNegative = longs(1, 2, 3);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, negative, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, negative, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.COMPLETE);
-            assertThat(sut.expectedRatio(DType.I64, nonNegative, REAL)).isEqualTo(Estimate.SKIP);
+            assertThat(sut.expectedRatio(DTypes.I64, nonNegative, REAL)).isEqualTo(Estimate.SKIP);
         }
 
         @Test
@@ -94,7 +94,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(1, -2, 3);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, FINISHED);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, FINISHED);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
@@ -108,14 +108,14 @@ class SchemeVerdictTest {
         void skipsOnceCascadingIsFinished() {
             // Given
             AlpEncodingEncoder sut = new AlpEncodingEncoder();
-            ArrayAndStats data = new ArrayAndStats(DType.F64, new double[]{1.5, 2.25}, StatsOptions.defaults());
+            ArrayAndStats data = new ArrayAndStats(DTypes.F64, new double[]{1.5, 2.25}, StatsOptions.defaults());
 
             // When
-            Estimate result = sut.expectedRatio(DType.F64, data, FINISHED);
+            Estimate result = sut.expectedRatio(DTypes.F64, data, FINISHED);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
-            assertThat(sut.expectedRatio(DType.F64, data, REAL)).isEqualTo(Estimate.COMPLETE);
+            assertThat(sut.expectedRatio(DTypes.F64, data, REAL)).isEqualTo(Estimate.COMPLETE);
         }
     }
 
@@ -130,7 +130,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(10, 13, 16, 19, 22, 25);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then: Rust's len / 2
             assertThat(result).isEqualTo(Estimate.ratio(3.0));
@@ -142,7 +142,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(10, 13, 16, 19);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, SAMPLE);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, SAMPLE);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
@@ -154,7 +154,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(10, 13, 17, 19);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
@@ -171,11 +171,11 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(4, 4, 4);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, SAMPLE);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, SAMPLE);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
-            assertThat(sut.expectedRatio(DType.I64, data, REAL)).isEqualTo(Estimate.ALWAYS_USE);
+            assertThat(sut.expectedRatio(DTypes.I64, data, REAL)).isEqualTo(Estimate.ALWAYS_USE);
         }
 
         @Test
@@ -183,11 +183,11 @@ class SchemeVerdictTest {
             // Given: a column whose every row is the same symbol, as the klines `symbol` chunks.
             // Rust's compressor short-circuits any constant leaf, strings included
             ConstantEncodingEncoder sut = new ConstantEncodingEncoder();
-            ArrayAndStats data = new ArrayAndStats(DType.UTF8, new String[]{"BTCUSDT", "BTCUSDT", "BTCUSDT"}, StatsOptions.defaults());
+            ArrayAndStats data = new ArrayAndStats(DTypes.UTF8, new String[]{"BTCUSDT", "BTCUSDT", "BTCUSDT"}, StatsOptions.defaults());
 
             // When
-            Estimate real = sut.expectedRatio(DType.UTF8, data, REAL);
-            Estimate sampled = sut.expectedRatio(DType.UTF8, data, SAMPLE);
+            Estimate real = sut.expectedRatio(DTypes.UTF8, data, REAL);
+            Estimate sampled = sut.expectedRatio(DTypes.UTF8, data, SAMPLE);
 
             // Then
             assertThat(real).isEqualTo(Estimate.ALWAYS_USE);
@@ -198,12 +198,12 @@ class SchemeVerdictTest {
         void skipsStringsThatDifferOrAreEmpty() {
             // Given
             ConstantEncodingEncoder sut = new ConstantEncodingEncoder();
-            ArrayAndStats different = new ArrayAndStats(DType.UTF8, new String[]{"a", "a", "b"}, StatsOptions.defaults());
-            ArrayAndStats empty = new ArrayAndStats(DType.UTF8, new String[0], StatsOptions.defaults());
+            ArrayAndStats different = new ArrayAndStats(DTypes.UTF8, new String[]{"a", "a", "b"}, StatsOptions.defaults());
+            ArrayAndStats empty = new ArrayAndStats(DTypes.UTF8, new String[0], StatsOptions.defaults());
 
             // When / Then
-            assertThat(sut.expectedRatio(DType.UTF8, different, REAL)).isEqualTo(Estimate.SKIP);
-            assertThat(sut.expectedRatio(DType.UTF8, empty, REAL)).isEqualTo(Estimate.SKIP);
+            assertThat(sut.expectedRatio(DTypes.UTF8, different, REAL)).isEqualTo(Estimate.SKIP);
+            assertThat(sut.expectedRatio(DTypes.UTF8, empty, REAL)).isEqualTo(Estimate.SKIP);
         }
     }
 
@@ -218,7 +218,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(1000, 1001, 1002, 1003);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then: Rust's full_width / for_bitwidth = 64 / 2
             assertThat(result).isEqualTo(Estimate.ratio(32.0));
@@ -230,7 +230,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(1, 4, 7);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
@@ -243,11 +243,11 @@ class SchemeVerdictTest {
             ArrayAndStats constant = longs(9, 9, 9);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, zeroMin, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, zeroMin, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
-            assertThat(sut.expectedRatio(DType.I64, constant, REAL)).isEqualTo(Estimate.SKIP);
+            assertThat(sut.expectedRatio(DTypes.I64, constant, REAL)).isEqualTo(Estimate.SKIP);
         }
 
         @Test
@@ -256,7 +256,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(-2, 1);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then: span 3 -> 2 bits
             assertThat(result).isEqualTo(Estimate.ratio(32.0));
@@ -274,7 +274,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(7, 7, 7, 7, 9, 9, 9, 9);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then: before 8*64 = 512 bits; values 64*2 = 128; codes 2 bits wide:
             // min(2*8, (2+32)*2 runs) = 16; 512 / 144
@@ -287,7 +287,7 @@ class SchemeVerdictTest {
             ArrayAndStats data = longs(1, 1, 2, 2, 3);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
@@ -296,10 +296,10 @@ class SchemeVerdictTest {
         @Test
         void floatsDeferToTheSample() {
             // Given: Rust's FloatDictScheme samples rather than estimating
-            ArrayAndStats data = new ArrayAndStats(DType.F64, new double[]{1.5, 1.5, 2.5, 2.5}, ALL_STATS);
+            ArrayAndStats data = new ArrayAndStats(DTypes.F64, new double[]{1.5, 1.5, 2.5, 2.5}, ALL_STATS);
 
             // When
-            Estimate result = sut.expectedRatio(DType.F64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.F64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.COMPLETE);
@@ -323,10 +323,10 @@ class SchemeVerdictTest {
         @Test
         void estimatesANonZeroDominantValue() {
             // Given: 95 of 100 values are 42 — Java used to require the fill to be 0
-            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 5), ALL_STATS);
+            ArrayAndStats data = new ArrayAndStats(DTypes.I64, dominated(42, 100, 5), ALL_STATS);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then: Rust's value_count / (value_count - top) = 100 / 5
             assertThat(result).isEqualTo(Estimate.ratio(20.0));
@@ -335,10 +335,10 @@ class SchemeVerdictTest {
         @Test
         void skipsBelowNinetyPercent() {
             // Given: 89 of 100
-            ArrayAndStats data = new ArrayAndStats(DType.I64, dominated(42, 100, 11), ALL_STATS);
+            ArrayAndStats data = new ArrayAndStats(DTypes.I64, dominated(42, 100, 11), ALL_STATS);
 
             // When
-            Estimate result = sut.expectedRatio(DType.I64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.I64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);
@@ -349,10 +349,10 @@ class SchemeVerdictTest {
             // Given: Rust's float sparse scheme only takes null-dominated arrays
             double[] values = new double[100];
             values[3] = 1.5;
-            ArrayAndStats data = new ArrayAndStats(DType.F64, values, ALL_STATS);
+            ArrayAndStats data = new ArrayAndStats(DTypes.F64, values, ALL_STATS);
 
             // When
-            Estimate result = sut.expectedRatio(DType.F64, data, REAL);
+            Estimate result = sut.expectedRatio(DTypes.F64, data, REAL);
 
             // Then
             assertThat(result).isEqualTo(Estimate.SKIP);

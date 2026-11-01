@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -51,7 +52,7 @@ class AggregateRuleBranchTest {
         // globalDict disabled, so the test covers the plain per-chunk Utf8 shape. The shared OHLC
         // fixture's globalDict "symbol" column covers the other shape in the same test (issue #409).
         Path stringsFile = tmp.resolve("strings.vortex");
-        DType.Struct stringsSchema = DType.structBuilder().field(ColumnName.of("symbol"), DType.UTF8).build();
+        DType.Struct stringsSchema = DType.structBuilder().field(ColumnName.of("symbol"), DTypes.UTF8).build();
         WriteOptions stringsOpts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         try (var ch = FileChannel.open(stringsFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, stringsSchema, stringsOpts)) {

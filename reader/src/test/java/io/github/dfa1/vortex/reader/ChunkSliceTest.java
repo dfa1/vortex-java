@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 
@@ -69,7 +69,7 @@ class ChunkSliceTest {
             segment.setAtIndex(VortexFormat.LE_LONG, i, i);
         }
         SequencedMap<ColumnName, Chunk.Column> columns = new LinkedHashMap<>();
-        columns.put(ID, new Chunk.Column(new MaterializedLongArray(DType.I64, rows, segment), DType.I64));
+        columns.put(ID, new Chunk.Column(new MaterializedLongArray(DTypes.I64, rows, segment), DTypes.I64));
         return new Chunk(rows, columns, ARENA, ReadRegistry.loadAll(), _ -> { });
     }
 }

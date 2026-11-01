@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -45,7 +46,7 @@ class ValuesCodegenLimitTest {
         file = tmp.resolve("wide.vortex");
         DType.Struct schema = DType.structBuilder()
                 .field(ColumnName.of("k"), new DType.Utf8(false))
-                .field(ColumnName.of("v"), DType.I64)
+                .field(ColumnName.of("v"), DTypes.I64)
                 .field(ColumnName.of("a"), new DType.Primitive(PType.F64, false))
                 .field(ColumnName.of("b"), new DType.Primitive(PType.F64, false))
                 .field(ColumnName.of("c"), new DType.Primitive(PType.F64, false))

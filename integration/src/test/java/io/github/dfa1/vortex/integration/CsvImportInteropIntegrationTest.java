@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.csv.CsvImporter;
 import io.github.dfa1.vortex.csv.ImportOptions;
 import org.apache.arrow.memory.BufferAllocator;
@@ -132,14 +133,14 @@ class CsvImportInteropIntegrationTest {
         Files.writeString(csvFile, csv);
         Path vortex = tmp.resolve("types.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("i8"), DType.I8)
-                .field(ColumnName.of("u8"), DType.U8.asNullable())
-                .field(ColumnName.of("i16"), DType.I16)
-                .field(ColumnName.of("u16"), DType.U16)
-                .field(ColumnName.of("u32"), DType.U32)
-                .field(ColumnName.of("u64"), DType.U64)
-                .field(ColumnName.of("f32"), DType.F32)
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("i8"), DTypes.I8)
+                .field(ColumnName.of("u8"), DTypes.U8.asNullable())
+                .field(ColumnName.of("i16"), DTypes.I16)
+                .field(ColumnName.of("u16"), DTypes.U16)
+                .field(ColumnName.of("u32"), DTypes.U32)
+                .field(ColumnName.of("u64"), DTypes.U64)
+                .field(ColumnName.of("f32"), DTypes.F32)
                 .build();
         String[] columns = {"id", "i8", "u8", "i16", "u16", "u32", "u64", "f32"};
 

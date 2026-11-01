@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.extension;
 
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.ExtensionId;
@@ -44,7 +45,7 @@ class TimestampExtensionDecoderTest {
         DType.Extension dtype = sut.dtype(false);
 
         // Then — byte 0 = ms ordinal, bytes 1..3 = 0 (tz_len = 0)
-        assertThat(dtype.storageDType()).isEqualTo(DType.I64);
+        assertThat(dtype.storageDType()).isEqualTo(DTypes.I64);
         assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) TimeUnit.Milliseconds.ordinal());
         assertThat(dtype.metadata().get(io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT, 1)).isEqualTo((short) 0);
     }
@@ -104,7 +105,7 @@ class TimestampExtensionDecoderTest {
             LongArray inner = new MaterializedLongArray(I64, 2, buf);
             MemorySegment validityBuf = arena.allocate(1);
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
-            BoolArray validity = new MaterializedBoolArray(DType.BOOL, 2, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(DTypes.BOOL, 2, validityBuf);
             DType.Extension dtype = sut.dtype(true);
 
             // When

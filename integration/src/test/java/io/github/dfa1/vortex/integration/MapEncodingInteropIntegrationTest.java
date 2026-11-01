@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -69,7 +70,7 @@ class MapEncodingInteropIntegrationTest {
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
 
     private static final DType.Map MAP_UTF8_I64 =
-            new DType.Map(DType.UTF8, DType.I64.asNullable(), false, false);
+            new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), false, false);
 
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("attrs")), List.of(MAP_UTF8_I64), false);
@@ -192,9 +193,9 @@ class MapEncodingInteropIntegrationTest {
         // Then
         assertThat(result).isInstanceOf(DType.Map.class);
         DType.Map mapDtype = (DType.Map) result;
-        assertThat(mapDtype.keyType()).isEqualTo(DType.UTF8);
+        assertThat(mapDtype.keyType()).isEqualTo(DTypes.UTF8);
         assertThat(mapDtype.keyType().nullable()).isFalse();
-        assertThat(mapDtype.valueType()).isEqualTo(DType.I64.asNullable());
+        assertThat(mapDtype.valueType()).isEqualTo(DTypes.I64.asNullable());
         assertThat(mapDtype.nullable()).isFalse();
         assertThat(mapDtype.keysSorted()).isFalse();
     }

@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 
@@ -105,7 +105,7 @@ class ChunkLazyDecodeTest {
             for (int r = 0; r < ROWS; r++) {
                 segment.setAtIndex(VortexFormat.LE_LONG, r, i * 100L + r);
             }
-            return new Chunk.Column(new MaterializedLongArray(DType.I64, ROWS, segment), DType.I64);
+            return new Chunk.Column(new MaterializedLongArray(DTypes.I64, ROWS, segment), DTypes.I64);
         }, Arena.ofConfined(), ReadRegistry.loadAll(), _ -> { });
     }
 }

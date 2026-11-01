@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -17,8 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// specific indices.
 class LazyAlpRdArrayTest {
 
-    private static final DType F64 = DType.F64;
-    private static final DType F32 = DType.F32;
+    private static final DType F64 = DTypes.F64;
+    private static final DType F32 = DTypes.F32;
 
     @Nested
     class DoubleDispatch {
@@ -176,7 +177,7 @@ class LazyAlpRdArrayTest {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_SHORT, i, vs[i]);
         }
-        return new MaterializedShortArray(DType.U16, vs.length, seg.asReadOnly());
+        return new MaterializedShortArray(DTypes.U16, vs.length, seg.asReadOnly());
     }
 
     private static IntArray intArray(Arena arena, int... vs) {
@@ -184,7 +185,7 @@ class LazyAlpRdArrayTest {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_INT, i, vs[i]);
         }
-        return new MaterializedIntArray(DType.I32, vs.length, seg.asReadOnly());
+        return new MaterializedIntArray(DTypes.I32, vs.length, seg.asReadOnly());
     }
 
     private static LongArray longArray(Arena arena, long... vs) {
@@ -192,6 +193,6 @@ class LazyAlpRdArrayTest {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_LONG, i, vs[i]);
         }
-        return new MaterializedLongArray(DType.I64, vs.length, seg.asReadOnly());
+        return new MaterializedLongArray(DTypes.I64, vs.length, seg.asReadOnly());
     }
 }

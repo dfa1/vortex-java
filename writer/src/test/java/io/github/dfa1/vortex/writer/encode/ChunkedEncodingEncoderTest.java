@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -49,7 +50,7 @@ class ChunkedEncodingEncoderTest {
             // Given
             long[] chunk0 = {10L, 20L, 30L};
             long[] chunk1 = {40L, 50L};
-            DType i64 = DType.I64;
+            DType i64 = DTypes.I64;
             ChunkedData data = new ChunkedData(List.of(chunk0, chunk1), new long[]{3, 2});
 
             // When
@@ -71,7 +72,7 @@ class ChunkedEncodingEncoderTest {
         void encodeNode_hasNoDirectBuffers_offsetsAsFirstChild() {
             // Given
             long[] chunk0 = {1L, 2L};
-            DType i64 = DType.I64;
+            DType i64 = DTypes.I64;
             ChunkedData data = new ChunkedData(List.of(chunk0), new long[]{2});
 
             // When
@@ -102,8 +103,8 @@ class ChunkedEncodingEncoderTest {
             // Given
             long[] chunk0 = {10L, 20L, 30L};
             long[] chunk1 = {40L, 50L};
-            DType i64 = DType.I64;
-            DType u64 = DType.U64;
+            DType i64 = DTypes.I64;
+            DType u64 = DTypes.U64;
 
             EncodeResult offsetsResult = PRIM_ENCODER.encode(u64, new long[]{0L, 3L, 5L}, EncodeTestHelper.testCtx());
             EncodeResult chunk0Result = PRIM_ENCODER.encode(i64, chunk0, EncodeTestHelper.testCtx());
@@ -142,8 +143,8 @@ class ChunkedEncodingEncoderTest {
         void singleChunk_returnsSameValues() {
             // Given
             long[] data = {1L, 2L, 3L};
-            DType i64 = DType.I64;
-            DType u64 = DType.U64;
+            DType i64 = DTypes.I64;
+            DType u64 = DTypes.U64;
 
             EncodeResult offsetsResult = PRIM_ENCODER.encode(u64, new long[]{0L, 3L}, EncodeTestHelper.testCtx());
             EncodeResult chunkResult = PRIM_ENCODER.encode(i64, data, EncodeTestHelper.testCtx());
@@ -174,7 +175,7 @@ class ChunkedEncodingEncoderTest {
         @Test
         void noChildren_throws() {
             // Given
-            DType i64 = DType.I64;
+            DType i64 = DTypes.I64;
             ArrayNode root = new ArrayNode(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{});
             DecodeContext ctx = new DecodeContext(root, i64, 0L, new MemorySegment[]{}, REGISTRY, Arena.ofAuto());
 

@@ -18,6 +18,7 @@ import java.util.stream.Stream;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.writer.ColumnEncoding;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -57,20 +58,20 @@ class SeedCorpusGenerator {
         Random random = new Random(42);
         double[] noise = random.doubles(ROWS).toArray();
         return Stream.of(
-                seed(DType.I32, i -> (int) (i % 100), EncodingId.FASTLANES_BITPACKED),
-                seed(DType.I64, i -> 1_000_000L + i % 100, EncodingId.FASTLANES_FOR),
-                seed(DType.I64, i -> i * 3 + i % 2, EncodingId.FASTLANES_DELTA),
-                seed(DType.I32, i -> (int) (i / 50), EncodingId.FASTLANES_RLE),
-                seed(DType.I64, i -> i / 100, EncodingId.VORTEX_RUNEND),
-                seed(DType.I32, i -> (int) (i % 2 == 0 ? i % 50 : -(i % 50)), EncodingId.VORTEX_ZIGZAG),
-                seed(DType.I64, i -> i % 97 == 0 ? i : 0L, EncodingId.VORTEX_SPARSE),
-                seed(DType.I64, i -> (i * 2_654_435_761L) % 1_000_003, EncodingId.VORTEX_PCO),
-                seed(DType.F64, i -> (i % 1000) / 100.0, EncodingId.VORTEX_ALP),
-                seed(DType.F64, i -> noise[(int) i], EncodingId.VORTEX_ALPRD, EncodingId.FASTLANES_BITPACKED),
-                seed(DType.UTF8, i -> "category-" + i % 5, EncodingId.VORTEX_DICT),
-                seed(DType.UTF8, i -> "https://example.com/items/" + i % 300 + "/detail", EncodingId.VORTEX_FSST),
-                seed(DType.UTF8, i -> "https://example.com/items/" + i % 300 + "/detail", EncodingId.VORTEX_ONPAIR),
-                seed(DType.UTF8, i -> "row " + i % 40 + " of the zstd seed", EncodingId.VORTEX_ZSTD));
+                seed(DTypes.I32, i -> (int) (i % 100), EncodingId.FASTLANES_BITPACKED),
+                seed(DTypes.I64, i -> 1_000_000L + i % 100, EncodingId.FASTLANES_FOR),
+                seed(DTypes.I64, i -> i * 3 + i % 2, EncodingId.FASTLANES_DELTA),
+                seed(DTypes.I32, i -> (int) (i / 50), EncodingId.FASTLANES_RLE),
+                seed(DTypes.I64, i -> i / 100, EncodingId.VORTEX_RUNEND),
+                seed(DTypes.I32, i -> (int) (i % 2 == 0 ? i % 50 : -(i % 50)), EncodingId.VORTEX_ZIGZAG),
+                seed(DTypes.I64, i -> i % 97 == 0 ? i : 0L, EncodingId.VORTEX_SPARSE),
+                seed(DTypes.I64, i -> (i * 2_654_435_761L) % 1_000_003, EncodingId.VORTEX_PCO),
+                seed(DTypes.F64, i -> (i % 1000) / 100.0, EncodingId.VORTEX_ALP),
+                seed(DTypes.F64, i -> noise[(int) i], EncodingId.VORTEX_ALPRD, EncodingId.FASTLANES_BITPACKED),
+                seed(DTypes.UTF8, i -> "category-" + i % 5, EncodingId.VORTEX_DICT),
+                seed(DTypes.UTF8, i -> "https://example.com/items/" + i % 300 + "/detail", EncodingId.VORTEX_FSST),
+                seed(DTypes.UTF8, i -> "https://example.com/items/" + i % 300 + "/detail", EncodingId.VORTEX_ONPAIR),
+                seed(DTypes.UTF8, i -> "row " + i % 40 + " of the zstd seed", EncodingId.VORTEX_ZSTD));
     }
 
     /// Derives the other targets' corpora from the scan seeds once they are all written, in one
@@ -134,9 +135,9 @@ class SeedCorpusGenerator {
 
     private static Arguments seed(DType dtype, LongFunction<Object> value, EncodingId... candidates) {
         Object[] values = switch (dtype) {
-            case DType.Primitive p when p.equals(DType.I32) -> new Integer[ROWS];
-            case DType.Primitive p when p.equals(DType.I64) -> new Long[ROWS];
-            case DType.Primitive p when p.equals(DType.F64) -> new Double[ROWS];
+            case DType.Primitive p when p.equals(DTypes.I32) -> new Integer[ROWS];
+            case DType.Primitive p when p.equals(DTypes.I64) -> new Long[ROWS];
+            case DType.Primitive p when p.equals(DTypes.F64) -> new Double[ROWS];
             default -> new String[ROWS];
         };
         for (int i = 0; i < ROWS; i++) {

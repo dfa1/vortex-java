@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
@@ -309,7 +310,7 @@ class DeltaEncodingDecoderTest {
         // Given a Utf8 column whose segment claims delta encoding: a crafted file, which escaped
         // as a raw ClassCastException before the dtype was checked
         ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA, null, new ArrayNode[0], new int[0]);
-        DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0, new MemorySegment[0], REGISTRY, Arena.ofAuto());
+        DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 0, new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
         // When / Then
         assertThatThrownBy(() -> SUT.decode(ctx))

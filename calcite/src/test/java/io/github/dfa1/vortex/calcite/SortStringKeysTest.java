@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -50,8 +51,8 @@ class SortStringKeysTest {
         // multiple of 7, so a run straddles every chunk edge
         events = tmp.resolve("events.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("t"), DType.UTF8)
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("t"), DTypes.UTF8)
                 .build();
         try (var ch = FileChannel.open(events, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, schema, LegacyZoneMaps.OPTIONS)) {
@@ -79,7 +80,7 @@ class SortStringKeysTest {
         // rows 0..4 hold u64 values past BIGINT, which fail when read; rows 5..9 hold 95..91
         unsigned = tmp.resolve("unsigned.vortex");
         DType.Struct unsignedSchema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
+                .field(ColumnName.of("id"), DTypes.I64)
                 .field(ColumnName.of("u"), new DType.Primitive(PType.U64, false))
                 .build();
         long[] u = new long[10];

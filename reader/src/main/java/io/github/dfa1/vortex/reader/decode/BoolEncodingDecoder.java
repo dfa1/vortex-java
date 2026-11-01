@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoBoolMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -61,7 +61,7 @@ public final class BoolEncodingDecoder implements EncodingDecoder {
             }
             Array values = new MaterializedBoolArray(ctx.dtype(), n, bits);
             if (ctx.node().children().length == 1) {
-                Array va = ctx.decodeChild(0, DType.BOOL, n);
+                Array va = ctx.decodeChild(0, DTypes.BOOL, n);
                 BoolArray validity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_BOOL, "validity child");
                 return new MaskedArray(values, validity);
             }

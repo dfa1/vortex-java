@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -276,7 +276,7 @@ class ComputeFilteredAggregateTest {
         seg.setAtIndex(VortexFormat.LE_LONG, 0, Long.MIN_VALUE);
         seg.setAtIndex(VortexFormat.LE_LONG, 1, 7L);
         seg.setAtIndex(VortexFormat.LE_LONG, 2, 5L);
-        Array agg = new MaterializedLongArray(DType.U64, 3, seg);
+        Array agg = new MaterializedLongArray(DTypes.U64, 3, seg);
         Chunk chunk = chunk(3, Map.of("f0", filter, "v", agg));
 
         // When the kernel folds the u64 aggregate over the rows where the dict value is 2 (rows 0, 2)
@@ -570,16 +570,16 @@ class ComputeFilteredAggregateTest {
         for (int i = 0; i < pool.size(); i++) {
             poolSeg.setAtIndex(VortexFormat.LE_LONG, i, pool.get(i));
         }
-        MaterializedLongArray poolArray = new MaterializedLongArray(DType.I64, pool.size(), poolSeg);
+        MaterializedLongArray poolArray = new MaterializedLongArray(DTypes.I64, pool.size(), poolSeg);
         ByteArray codesArray;
         if (codes.length < 2 || random.nextBoolean()) {
             codesArray = byteArray(codes, 0, codes.length);
         } else {
             int cut = 1 + random.nextInt(codes.length - 1);
-            codesArray = ChunkedByteArray.of(DType.U8, codes.length,
+            codesArray = ChunkedByteArray.of(DTypes.U8, codes.length,
                     List.of(byteArray(codes, 0, cut), byteArray(codes, cut, codes.length)));
         }
-        Array dict = DictLongArray.of(DType.I64, values.length, poolArray, codesArray);
+        Array dict = DictLongArray.of(DTypes.I64, values.length, poolArray, codesArray);
         if (reference.valid() == null) {
             return dict;
         }
@@ -592,8 +592,8 @@ class ComputeFilteredAggregateTest {
         for (int i = 0; i < pool.length; i++) {
             poolSeg.setAtIndex(VortexFormat.LE_LONG, i, pool[i]);
         }
-        MaterializedLongArray poolArray = new MaterializedLongArray(DType.I64, pool.length, poolSeg);
-        return DictLongArray.of(DType.I64, codes.length, poolArray, byteArray(codes, 0, codes.length));
+        MaterializedLongArray poolArray = new MaterializedLongArray(DTypes.I64, pool.length, poolSeg);
+        return DictLongArray.of(DTypes.I64, codes.length, poolArray, byteArray(codes, 0, codes.length));
     }
 
     /// Builds a flat-coded double-valued dict column for the double-domain dict-lane case.
@@ -602,8 +602,8 @@ class ComputeFilteredAggregateTest {
         for (int i = 0; i < pool.length; i++) {
             poolSeg.setAtIndex(VortexFormat.LE_DOUBLE, i, pool[i]);
         }
-        MaterializedDoubleArray poolArray = new MaterializedDoubleArray(DType.F64, pool.length, poolSeg);
-        return DictDoubleArray.of(DType.F64, codes.length, poolArray, byteArray(codes, 0, codes.length));
+        MaterializedDoubleArray poolArray = new MaterializedDoubleArray(DTypes.F64, pool.length, poolSeg);
+        return DictDoubleArray.of(DTypes.F64, codes.length, poolArray, byteArray(codes, 0, codes.length));
     }
 
     private static MaterializedByteArray byteArray(int[] codes, int from, int to) {
@@ -611,7 +611,7 @@ class ComputeFilteredAggregateTest {
         for (int i = from; i < to; i++) {
             segment.set(ValueLayout.JAVA_BYTE, (long) i - from, (byte) codes[i]);
         }
-        return new MaterializedByteArray(DType.U8, (long) to - from, segment);
+        return new MaterializedByteArray(DTypes.U8, (long) to - from, segment);
     }
 
     private static Array floatArray(float... values) {
@@ -619,7 +619,7 @@ class ComputeFilteredAggregateTest {
         for (int i = 0; i < values.length; i++) {
             segment.setAtIndex(VortexFormat.LE_FLOAT, i, values[i]);
         }
-        return new MaterializedFloatArray(DType.F32, values.length, segment);
+        return new MaterializedFloatArray(DTypes.F32, values.length, segment);
     }
 
     private static Chunk chunk(long rows, Map<String, Array> columns) {
@@ -639,13 +639,13 @@ class ComputeFilteredAggregateTest {
             for (int i = 0; i < values.length; i++) {
                 segment.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
             }
-            data = new MaterializedLongArray(DType.I64, values.length, segment);
+            data = new MaterializedLongArray(DTypes.I64, values.length, segment);
         } else {
             MemorySegment segment = ARENA.allocate(Math.max(4L, values.length * 4L), 4);
             for (int i = 0; i < values.length; i++) {
                 segment.setAtIndex(VortexFormat.LE_INT, i, (int) values[i]);
             }
-            data = new MaterializedIntArray(DType.I32, values.length, segment);
+            data = new MaterializedIntArray(DTypes.I32, values.length, segment);
         }
         if (reference.valid() == null && !nullable) {
             return data;
@@ -659,7 +659,7 @@ class ComputeFilteredAggregateTest {
         for (int i = 0; i < values.length; i++) {
             segment.setAtIndex(VortexFormat.LE_DOUBLE, i, values[i]);
         }
-        return new MaterializedDoubleArray(DType.F64, values.length, segment);
+        return new MaterializedDoubleArray(DTypes.F64, values.length, segment);
     }
 
     private static Array float16Array(float[] values) {
@@ -667,7 +667,7 @@ class ComputeFilteredAggregateTest {
         for (int i = 0; i < values.length; i++) {
             segment.setAtIndex(VortexFormat.LE_SHORT, i, Float.floatToFloat16(values[i]));
         }
-        return new MaterializedFloat16Array(DType.F16, values.length, segment);
+        return new MaterializedFloat16Array(DTypes.F16, values.length, segment);
     }
 
     private static boolean[] allValid(int n) {
@@ -688,7 +688,7 @@ class ComputeFilteredAggregateTest {
                 segment.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) (existing | (1 << (i & 7))));
             }
         }
-        return new MaterializedBoolArray(DType.BOOL, values.length, segment);
+        return new MaterializedBoolArray(DTypes.BOOL, values.length, segment);
     }
 
     /// The brute-force reference column: raw values plus an optional validity bitmap (`null` when

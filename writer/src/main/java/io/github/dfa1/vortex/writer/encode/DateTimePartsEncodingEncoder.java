@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -56,12 +57,12 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         long[] seconds = parts.seconds();
         long[] subseconds = parts.subseconds();
 
-        DType daysDtype = d.nullable() ? DType.I64.asNullable() : DType.I64;
+        DType daysDtype = d.nullable() ? DTypes.I64.asNullable() : DTypes.I64;
 
         EncodingEncoder primEnc = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE);
         EncodeResult daysResult = primEnc.encode(daysDtype, days, ctx);
-        EncodeResult secondsResult = primEnc.encode(DType.I64, seconds, ctx);
-        EncodeResult subsecondsResult = primEnc.encode(DType.I64, subseconds, ctx);
+        EncodeResult secondsResult = primEnc.encode(DTypes.I64, seconds, ctx);
+        EncodeResult subsecondsResult = primEnc.encode(DTypes.I64, subseconds, ctx);
 
         List<EncodedBuffer> allBuffers = new ArrayList<>();
         allBuffers.addAll(daysResult.encodedBuffers());
@@ -110,11 +111,11 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[3],
                 new int[0]);
 
-        DType daysDtype = d.nullable() ? DType.I64.asNullable() : DType.I64;
+        DType daysDtype = d.nullable() ? DTypes.I64.asNullable() : DTypes.I64;
         List<ChildSlot> children = List.of(
                 new ChildSlot(daysDtype, days, 0, SELF),
-                new ChildSlot(DType.I64, seconds, 1, SELF),
-                new ChildSlot(DType.I64, subseconds, 2, SELF));
+                new ChildSlot(DTypes.I64, seconds, 1, SELF),
+                new ChildSlot(DTypes.I64, subseconds, 2, SELF));
 
         MinMax stats = PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps());
         return new CascadeStep(partialRoot, List.of(), children,

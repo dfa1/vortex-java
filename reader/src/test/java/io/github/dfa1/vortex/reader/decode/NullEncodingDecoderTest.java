@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.reader.array.NullArray;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +19,7 @@ class NullEncodingDecoderTest {
         // Given
         long rowCount = 42L;
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0]);
-        DecodeContext ctx = new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0],
+        DecodeContext ctx = new DecodeContext(node, DTypes.NULL.asNullable(), rowCount, new MemorySegment[0],
                 ReadRegistry.empty(), Arena.ofAuto());
         var sut = new NullEncodingDecoder();
 
@@ -29,6 +29,6 @@ class NullEncodingDecoderTest {
         // Then
         assertThat(result).isInstanceOf(NullArray.class);
         assertThat(result.length()).isEqualTo(rowCount);
-        assertThat(result.dtype()).isEqualTo(DTypes.NULL);
+        assertThat(result.dtype()).isEqualTo(DTypes.NULL.asNullable());
     }
 }

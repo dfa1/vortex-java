@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoListViewMetadata;
@@ -21,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// while these inputs only ever arrive crafted or corrupt.
 class ListViewEncodingDecoderTest {
 
-    private static final DType.List LIST_I32 = new DType.List(DType.I32, false);
+    private static final DType.List LIST_I32 = new DType.List(DTypes.I32, false);
 
     private final ListViewEncodingDecoder sut = new ListViewEncodingDecoder();
 

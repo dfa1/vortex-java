@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -68,7 +69,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             if (placeholder == null) {
                 return new NullArray(dtype, n);
             }
-            return new MaskedArray(placeholder, new LazyConstantBoolArray(DType.BOOL, n, false));
+            return new MaskedArray(placeholder, new LazyConstantBoolArray(DTypes.BOOL, n, false));
         }
         if (dtype instanceof DType.Variant) {
             // A constant variant wraps a typed inner scalar (Scalar::variant(inner)); the

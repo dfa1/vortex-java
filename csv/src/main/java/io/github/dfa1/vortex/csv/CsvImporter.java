@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.csv;
 import io.github.dfa1.vortex.core.compute.Utf8Validation;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -371,15 +372,15 @@ public final class CsvImporter {
 
     private static DType resolveType(boolean canBeLong, boolean canBeDouble, boolean canBeBool) {
         if (canBeLong) {
-            return DType.I64;
+            return DTypes.I64;
         }
         if (canBeDouble) {
-            return DType.F64;
+            return DTypes.F64;
         }
         if (canBeBool) {
-            return DType.BOOL;
+            return DTypes.BOOL;
         }
-        return DType.UTF8;
+        return DTypes.UTF8;
     }
 
     /// Converts the text of each column on `executor`: the columns are independent, and with the

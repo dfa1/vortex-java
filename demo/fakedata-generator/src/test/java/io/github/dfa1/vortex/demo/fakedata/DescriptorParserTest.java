@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.demo.fakedata;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -25,7 +26,7 @@ class DescriptorParserTest {
 
             // Then
             assertThat(result.name()).isEqualTo(ColumnName.of("timestamp"));
-            assertThat(result.dtype()).isEqualTo(DType.I64);
+            assertThat(result.dtype()).isEqualTo(DTypes.I64);
             assertThat(result.generator()).isEqualTo(new GeneratorSpec.Series(1_700_000_000_000.0, 1000.0));
         }
 
@@ -38,7 +39,7 @@ class DescriptorParserTest {
             ColumnDescriptor result = DescriptorParser.parse(descriptor);
 
             // Then
-            assertThat(result.dtype()).isEqualTo(DType.F64);
+            assertThat(result.dtype()).isEqualTo(DTypes.F64);
             assertThat(result.generator()).isEqualTo(new GeneratorSpec.Range(50.0, 150.0));
         }
 
@@ -63,7 +64,7 @@ class DescriptorParserTest {
             ColumnDescriptor result = DescriptorParser.parse(descriptor);
 
             // Then
-            assertThat(result.dtype()).isEqualTo(DType.UTF8);
+            assertThat(result.dtype()).isEqualTo(DTypes.UTF8);
             assertThat(result.generator()).isEqualTo(new GeneratorSpec.EnumLabels("SYM", 30));
         }
 
@@ -88,7 +89,7 @@ class DescriptorParserTest {
             ColumnDescriptor result = DescriptorParser.parse(descriptor);
 
             // Then
-            assertThat(result.dtype()).isEqualTo(DType.BOOL);
+            assertThat(result.dtype()).isEqualTo(DTypes.BOOL);
             assertThat(result.generator()).isEqualTo(new GeneratorSpec.RandomBool());
         }
 

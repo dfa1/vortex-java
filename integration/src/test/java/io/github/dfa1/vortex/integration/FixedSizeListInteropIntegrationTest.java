@@ -12,6 +12,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -83,11 +84,11 @@ class FixedSizeListInteropIntegrationTest {
 
     /// The element types a list is checked with: 4-, 8- and 8-byte lanes, the second a float.
     enum Element {
-        INT(DType.I32, new ArrowType.Int(32, true)),
-        DOUBLE(DType.F64, new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-        LONG(DType.I64, new ArrowType.Int(64, true)),
-        BOOL(DType.BOOL, ArrowType.Bool.INSTANCE),
-        UTF8(DType.UTF8, ArrowType.Utf8.INSTANCE);
+        INT(DTypes.I32, new ArrowType.Int(32, true)),
+        DOUBLE(DTypes.F64, new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
+        LONG(DTypes.I64, new ArrowType.Int(64, true)),
+        BOOL(DTypes.BOOL, ArrowType.Bool.INSTANCE),
+        UTF8(DTypes.UTF8, ArrowType.Utf8.INSTANCE);
 
         final DType dtype;
         final ArrowType arrowType;
@@ -486,7 +487,7 @@ class FixedSizeListInteropIntegrationTest {
                                       ElementNulls elementNulls, int chunks, int chunkRows) throws IOException {
         DType elementType = elementNulls.nullableType() ? element.dtype.asNullable() : element.dtype;
         DType.Struct schema = new DType.Struct(List.of(ID, LISTS),
-                List.of(DType.I64, new DType.FixedSizeList(elementType, size, nullable)), false);
+                List.of(DTypes.I64, new DType.FixedSizeList(elementType, size, nullable)), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             for (int chunk = 0; chunk < chunks; chunk++) {
@@ -531,7 +532,7 @@ class FixedSizeListInteropIntegrationTest {
 
     private static DType.Struct schema(Element element, int size) {
         return new DType.Struct(List.of(ID, LISTS),
-                List.of(DType.I64, new DType.FixedSizeList(element.dtype, size, false)), false);
+                List.of(DTypes.I64, new DType.FixedSizeList(element.dtype, size, false)), false);
     }
 
     private static List<Object> list(Element element, int size, long row) {

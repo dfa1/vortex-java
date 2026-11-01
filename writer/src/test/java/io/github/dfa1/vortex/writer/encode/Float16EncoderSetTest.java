@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.writer.WriteRegistry;
 import org.junit.jupiter.api.Test;
@@ -20,10 +21,10 @@ class Float16EncoderSetTest {
     @Test
     void everyEncoderThatTakesF32TakesF16_exceptAlpAndAlpRd() {
         // Given
-        Set<String> f32 = accepting(DType.F32);
+        Set<String> f32 = accepting(DTypes.F32);
 
         // When
-        Set<String> result = accepting(DType.F16);
+        Set<String> result = accepting(DTypes.F16);
 
         // Then
         Set<String> expected = new TreeSet<>(f32);

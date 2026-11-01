@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -243,9 +243,9 @@ class PatchedEncodingEncoderTest {
             // child 0: inner (same dtype), child 1: laneOffsets (U32), child 2: patchIdx (U16), child 3: patchVal (same dtype)
             assertThat(step.openChildren().get(0).childDtype()).isEqualTo(DTypes.I64);
             assertThat(step.openChildren().get(1).childDtype())
-                    .isEqualTo(DType.U32);
+                    .isEqualTo(DTypes.U32);
             assertThat(step.openChildren().get(2).childDtype())
-                    .isEqualTo(DType.U16);
+                    .isEqualTo(DTypes.U16);
             assertThat(step.openChildren().get(3).childDtype()).isEqualTo(DTypes.I64);
         }
 

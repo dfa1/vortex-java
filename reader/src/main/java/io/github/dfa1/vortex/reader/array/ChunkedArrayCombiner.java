@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 
 import java.lang.foreign.MemorySegment;
@@ -155,7 +156,7 @@ public final class ChunkedArrayCombiner {
             }
             outRow += localRows;
         }
-        Array offsetsArray = new MaterializedLongArray(DType.I64, totalRows + 1, offsets.asReadOnly());
+        Array offsetsArray = new MaterializedLongArray(DTypes.I64, totalRows + 1, offsets.asReadOnly());
         return new ListArray(dtype, totalRows, combinedElements, offsetsArray);
     }
 
@@ -223,6 +224,6 @@ public final class ChunkedArrayCombiner {
             }
             row += chunkLen;
         }
-        return new MaterializedBoolArray(DType.BOOL, totalRows, bits.asReadOnly());
+        return new MaterializedBoolArray(DTypes.BOOL, totalRows, bits.asReadOnly());
     }
 }

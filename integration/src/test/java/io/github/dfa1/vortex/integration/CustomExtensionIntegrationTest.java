@@ -6,6 +6,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -260,7 +261,7 @@ class CustomExtensionIntegrationTest {
         void create_rejectsDtypeTheEncoderRefuses(@TempDir Path tmp) throws IOException {
             // Given — metadata says 4 dimensions, storage holds 3
             DType.Extension invalid = new DType.Extension(VECTOR.id(),
-                    new DType.FixedSizeList(DType.F32, DIM, false), dimensionMetadata(4), false);
+                    new DType.FixedSizeList(DTypes.F32, DIM, false), dimensionMetadata(4), false);
             Path file = tmp.resolve("invalid.vortex");
 
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
@@ -275,7 +276,7 @@ class CustomExtensionIntegrationTest {
         void open_rejectsDtypeTheDecoderRefuses(@TempDir Path tmp) throws IOException {
             // Given — a file from a writer that had no encoder, so nothing validated the dtype
             DType.Extension invalid = new DType.Extension(VECTOR.id(),
-                    new DType.FixedSizeList(DType.F32, 2, false), dimensionMetadata(5), false);
+                    new DType.FixedSizeList(DTypes.F32, 2, false), dimensionMetadata(5), false);
             Path file = tmp.resolve("invalid.vortex");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var writer = VortexWriter.create(ch, schema(invalid), WriteOptions.defaults())) {
@@ -307,7 +308,7 @@ class CustomExtensionIntegrationTest {
 
     /// The `example.vector` dtype: `FixedSizeList<F32, dim>` storage, dimension also in metadata.
     static DType.Extension vectorDtype(int dim, boolean nullable) {
-        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DType.F32, dim, nullable),
+        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, dim, nullable),
                 dimensionMetadata(dim), nullable);
     }
 
@@ -432,7 +433,7 @@ class CustomExtensionIntegrationTest {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static DType.Struct schema(DType.Extension vectorDtype) {
-        return new DType.Struct(List.of(ID, EMBEDDING), List.of(DType.I64, vectorDtype), false);
+        return new DType.Struct(List.of(ID, EMBEDDING), List.of(DTypes.I64, vectorDtype), false);
     }
 
     /// Every seventh row is null in a nullable column; values differ per row and per dimension, with

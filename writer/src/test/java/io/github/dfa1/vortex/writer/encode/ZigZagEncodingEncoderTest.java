@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -115,7 +115,7 @@ class ZigZagEncodingEncoderTest {
         // Given / When / Then
         assertThat(ENCODER.accepts(DTypes.U32)).isFalse();
         assertThat(ENCODER.accepts(DTypes.F64)).isFalse();
-        assertThat(ENCODER.accepts(DType.UTF8)).isFalse();
+        assertThat(ENCODER.accepts(DTypes.UTF8)).isFalse();
     }
 
     @Nested

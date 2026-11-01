@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -53,8 +54,8 @@ class AggregateWhereBoundaryTest {
     static void write() throws Exception {
         file = tmp.resolve("clustered.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("val"), DType.I64)
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("val"), DTypes.I64)
                 .build();
         // enableZoneMaps=true emits the per-chunk min/max/sum/null-count the tier-1 fold reads and the
         // classify() step uses to find the boundary zones.

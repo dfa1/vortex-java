@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -27,14 +28,14 @@ class PcoEncodingEncoderTest {
     private static final PcoEncodingDecoder DECODER = new PcoEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER);
 
-    private static final DType I64 = DType.I64;
-    private static final DType U64 = DType.U64;
-    private static final DType I32 = DType.I32;
-    private static final DType U32 = DType.U32;
-    private static final DType I16 = DType.I16;
-    private static final DType U16 = DType.U16;
-    private static final DType F32 = DType.F32;
-    private static final DType F64 = DType.F64;
+    private static final DType I64 = DTypes.I64;
+    private static final DType U64 = DTypes.U64;
+    private static final DType I32 = DTypes.I32;
+    private static final DType U32 = DTypes.U32;
+    private static final DType I16 = DTypes.I16;
+    private static final DType U16 = DTypes.U16;
+    private static final DType F32 = DTypes.F32;
+    private static final DType F64 = DTypes.F64;
 
     static Stream<Arguments> i64Arrays() {
         return Stream.of(

@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -206,7 +207,7 @@ class ZigZagEncodingDecoderTest {
     void decode_nonPrimitiveDtype_throws() {
         // Given a non-primitive logical type on the context
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[0], new int[]{});
-        DecodeContext ctx = new DecodeContext(node, DType.BOOL, 1,
+        DecodeContext ctx = new DecodeContext(node, DTypes.BOOL, 1,
                 new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
         // When / Then

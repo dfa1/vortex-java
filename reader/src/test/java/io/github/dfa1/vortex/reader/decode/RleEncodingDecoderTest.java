@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
@@ -57,7 +58,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0);
 
             // When
-            Array result = decodeRle(DType.F64, 3, 4, indices, offsets, values, 0);
+            Array result = decodeRle(DTypes.F64, 3, 4, indices, offsets, values, 0);
 
             // Then — the run boundary (row 1 -> row 2) resolves to the correct pool entries
             assertThat(result).isInstanceOf(LazyRleDoubleArray.class);
@@ -78,7 +79,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0);
 
             // When
-            Array result = decodeRle(DType.F64, 3, 4, indices, ProtoPType.U16, offsets, values, 0);
+            Array result = decodeRle(DTypes.F64, 3, 4, indices, ProtoPType.U16, offsets, values, 0);
 
             // Then
             assertThat(result).isInstanceOf(LazyRleDoubleArray.class);
@@ -99,7 +100,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0);
 
             // When
-            Array result = decodeRle(DType.F64, 1, 0, indices, offsets, values, 0);
+            Array result = decodeRle(DTypes.F64, 1, 0, indices, offsets, values, 0);
 
             // Then — a length-0 constant array, not an RLE array
             assertThat(result).isInstanceOf(LazyConstantDoubleArray.class);
@@ -119,7 +120,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0);
 
             // When
-            Array result = decodeRle(DType.F32, 2, 3, indices, offsets, values, 0);
+            Array result = decodeRle(DTypes.F32, 2, 3, indices, offsets, values, 0);
 
             // Then
             assertThat(result).isInstanceOf(LazyRleFloatArray.class);
@@ -137,7 +138,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0);
 
             // When
-            Array result = decodeRle(DType.F32, 1, 0, indices, offsets, values, 0);
+            Array result = decodeRle(DTypes.F32, 1, 0, indices, offsets, values, 0);
 
             // Then
             assertThat(result).isInstanceOf(LazyConstantFloatArray.class);
@@ -279,7 +280,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0);
 
             // When / Then
-            assertThatThrownBy(() -> decodeRle(DType.F64, 4096, 4, indices, offsets, values, 0))
+            assertThatThrownBy(() -> decodeRle(DTypes.F64, 4096, 4, indices, offsets, values, 0))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("exceeds indices_len");
         }
@@ -293,7 +294,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0);
 
             // When / Then
-            assertThatThrownBy(() -> decodeRle(DType.F64, 1L << 40, 4, indices, offsets, values, 0))
+            assertThatThrownBy(() -> decodeRle(DTypes.F64, 1L << 40, 4, indices, offsets, values, 0))
                     .isInstanceOf(VortexException.class);
         }
 
@@ -306,7 +307,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0, 99);
 
             // When / Then
-            assertThatThrownBy(() -> decodeRle(DType.F64, 3, 1025, indices, offsets, values, 0))
+            assertThatThrownBy(() -> decodeRle(DTypes.F64, 3, 1025, indices, offsets, values, 0))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("values pool");
         }
@@ -320,7 +321,7 @@ class RleEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0);
 
             // When / Then
-            assertThatThrownBy(() -> decodeRle(DType.F64, 2, 1025, indices, offsets, values, 0))
+            assertThatThrownBy(() -> decodeRle(DTypes.F64, 2, 1025, indices, offsets, values, 0))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("values_idx_offsets holds 1 entries");
         }
@@ -335,7 +336,7 @@ class RleEncodingDecoderTest {
 
             // When / Then
             assertThatThrownBy(() ->
-                    decodeRle(DType.F64, 1, 4, indices, ProtoPType.U32, offsets, values, 0))
+                    decodeRle(DTypes.F64, 1, 4, indices, ProtoPType.U32, offsets, values, 0))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unsupported indices ptype");
         }
@@ -351,7 +352,7 @@ class RleEncodingDecoderTest {
             MemorySegment empty = MemorySegment.ofArray(new byte[0]);
 
             // When
-            Array result = decodeRle(DType.BOOL, 0, 0, empty, empty, empty, 0);
+            Array result = decodeRle(DTypes.BOOL, 0, 0, empty, empty, empty, 0);
 
             // Then
             assertThat(result.length()).isZero();
@@ -363,7 +364,7 @@ class RleEncodingDecoderTest {
             MemorySegment empty = MemorySegment.ofArray(new byte[0]);
 
             // When / Then
-            assertThatThrownBy(() -> decodeRle(DType.UTF8, 0, 0, empty, empty, empty, 0))
+            assertThatThrownBy(() -> decodeRle(DTypes.UTF8, 0, 0, empty, empty, empty, 0))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("expected Primitive dtype");
         }

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -30,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class DateExtensionDecoderTest {
 
     private static final DType.Extension DAYS = DateExtensionDecoder.INSTANCE.dtype(false);
-    private static final DType.Extension MILLIS = dateDtype(TimeUnit.Milliseconds, DType.I64);
+    private static final DType.Extension MILLIS = dateDtype(TimeUnit.Milliseconds, DTypes.I64);
 
     private final DateExtensionDecoder sut = DateExtensionDecoder.INSTANCE;
 
@@ -48,7 +49,7 @@ class DateExtensionDecoderTest {
 
         // Then
         assertThat(dtype.extensionId()).isEqualTo("vortex.date");
-        assertThat(dtype.storageDType()).isEqualTo(DType.I32);
+        assertThat(dtype.storageDType()).isEqualTo(DTypes.I32);
         assertThat(dtype.metadata()).isNotNull();
         assertThat(dtype.metadata().byteSize()).isEqualTo(1);
         assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) 4); // TimeUnit.Days ordinal
@@ -93,7 +94,7 @@ class DateExtensionDecoderTest {
             IntArray inner = new MaterializedIntArray(I32, 3, buf);
             MemorySegment validityBuf = arena.allocate(1);
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0101);
-            BoolArray validity = new MaterializedBoolArray(DType.BOOL, 3, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(DTypes.BOOL, 3, validityBuf);
 
             // When
             List<LocalDate> out = sut.decodeAll(DAYS, new MaskedArray(inner, validity));
@@ -123,7 +124,7 @@ class DateExtensionDecoderTest {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment buf = arena.allocate(8);
             buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, millis);
-            LongArray storage = new MaterializedLongArray(DType.I64, 1, buf);
+            LongArray storage = new MaterializedLongArray(DTypes.I64, 1, buf);
 
             // When
             LocalDate result = sut.decode(MILLIS, storage, 0);
@@ -140,7 +141,7 @@ class DateExtensionDecoderTest {
             MemorySegment buf = arena.allocate(16);
             buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 0L);
             buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, 824_083_200_000L);
-            LongArray storage = new MaterializedLongArray(DType.I64, 2, buf);
+            LongArray storage = new MaterializedLongArray(DTypes.I64, 2, buf);
 
             // When
             List<LocalDate> result = sut.decodeAll(MILLIS, storage);
@@ -153,7 +154,7 @@ class DateExtensionDecoderTest {
     @Test
     void date_unsupportedUnit_throws() {
         // Given — Rust's Date supports only Days and Milliseconds
-        DType.Extension seconds = dateDtype(TimeUnit.Seconds, DType.I64);
+        DType.Extension seconds = dateDtype(TimeUnit.Seconds, DTypes.I64);
 
         // When / Then
         assertThatThrownBy(() -> sut.date(seconds, 1L))

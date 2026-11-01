@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 
 import java.lang.foreign.MemorySegment;
@@ -375,8 +376,8 @@ public final class SelectedArrays {
             sizes.setAtIndex(VortexFormat.LE_LONG, k, offsetAt(list.offsets(), row + 1) - start);
         }
         return new ListViewArray((DType.List) list.dtype(), n, list.elements(),
-                new MaterializedLongArray(DType.I64, n, starts),
-                new MaterializedLongArray(DType.I64, n, sizes));
+                new MaterializedLongArray(DTypes.I64, n, starts),
+                new MaterializedLongArray(DTypes.I64, n, sizes));
     }
 
     private static long offsetAt(Array offsets, long i) {

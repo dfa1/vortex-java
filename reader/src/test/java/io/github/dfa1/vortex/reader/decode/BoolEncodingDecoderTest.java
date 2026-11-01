@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoBoolMetadata;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -54,7 +54,7 @@ class BoolEncodingDecoderTest {
         ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[]{validityNode}, new int[]{0});
         ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
-        return new DecodeContext(node, DTypes.BOOL_N, values.length,
+        return new DecodeContext(node, DTypes.BOOL.asNullable(), values.length,
                 new MemorySegment[]{bits, validBits}, registry, Arena.ofAuto());
     }
 
@@ -149,7 +149,7 @@ class BoolEncodingDecoderTest {
         ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[]{validityNode}, new int[]{0});
         ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
-        DecodeContext ctx = new DecodeContext(node, DTypes.BOOL_N, 9,
+        DecodeContext ctx = new DecodeContext(node, DTypes.BOOL.asNullable(), 9,
                 new MemorySegment[]{bits, validBits}, registry, Arena.ofAuto());
         var sut = new BoolEncodingDecoder();
 
