@@ -135,7 +135,8 @@ class CurrencyExtensionIntegrationTest {
         }
 
         // Then
-        assertThat(firstCode).isEqualTo(currency(1).getCurrencyCode());
+        // row 1 is the second of the four cycling currencies
+        assertThat(firstCode).isEqualTo("USD");
     }
 
     @Test
