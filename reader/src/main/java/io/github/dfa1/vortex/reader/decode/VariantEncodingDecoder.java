@@ -6,8 +6,10 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VariantArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.proto.ProtoVariantMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.extension.ExtensionMetadataParser;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -71,9 +73,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
     /// @throws VortexException if an extension id is unregistered (without allow-unknown) or its
     ///         decoder rejects the dtype
     static DType dtypeFromProto(io.github.dfa1.vortex.core.proto.ProtoDType proto, ReadRegistry registry) {
-        DType dtype = dtypeFromProto(proto);
-        registry.validateExtensions(dtype);
-        return dtype;
+        return registry.resolveExtensions(dtypeFromProto(proto));
     }
 
     static DType dtypeFromProto(io.github.dfa1.vortex.core.proto.ProtoDType proto) {
@@ -126,10 +126,17 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         if (proto.extension() != null) {
             // an extension's nullability is its storage's, as the file-schema parser has it
             DType storage = dtypeFromProto(proto.extension().storage_dtype());
+            ExtensionId id;
+            try {
+                id = ExtensionId.parse(proto.extension().id());
+            } catch (IllegalArgumentException | NullPointerException e) {
+                throw new VortexException("invalid extension id in variant metadata: " + e.getMessage());
+            }
+            byte[] metadata = proto.extension().metadata() != null ? proto.extension().metadata() : new byte[0];
             return new DType.Extension(
-                    proto.extension().id(),
+                    id.id(),
                     storage,
-                    MemorySegment.ofArray(proto.extension().metadata() != null ? proto.extension().metadata() : new byte[0]).asReadOnly(),
+                    ExtensionMetadataParser.parse(id, MemorySegment.ofArray(metadata)),
                     storage.nullable());
         }
         if (proto.variant() != null) {

@@ -50,9 +50,7 @@ class DateExtensionDecoderTest {
         // Then
         assertThat(dtype.extensionId()).isEqualTo("vortex.date");
         assertThat(dtype.storageDType()).isEqualTo(DTypes.I32);
-        assertThat(dtype.metadata()).isNotNull();
-        assertThat(dtype.metadata().byteSize()).isEqualTo(1);
-        assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) 4); // TimeUnit.Days ordinal
+        assertThat(dtype.metadata()).isEqualTo(new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Days));
     }
 
     @Test
@@ -164,6 +162,6 @@ class DateExtensionDecoderTest {
 
     private static DType.Extension dateDtype(TimeUnit unit, DType storage) {
         return new DType.Extension("vortex.date", storage,
-                MemorySegment.ofArray(new byte[]{(byte) unit.ordinal()}), false);
+                new io.github.dfa1.vortex.core.model.TimeUnitMetadata(unit), false);
     }
 }

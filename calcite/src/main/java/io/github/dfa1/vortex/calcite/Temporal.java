@@ -4,12 +4,12 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.TimeUnit;
-import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
+import io.github.dfa1.vortex.reader.extension.ExtensionStorage;
 
 /// A `vortex.date`, `vortex.time` or `vortex.timestamp` column's conversion from its raw storage
 /// integer to Calcite's internal form: `DATE` as epoch days (`Integer`), `TIME` as milliseconds of
@@ -36,8 +36,8 @@ record Temporal(ExtensionId.WellKnown kind, TimeUnit unit) {
                 && kind != ExtensionId.WellKnown.VORTEX_TIMESTAMP) {
             return null;
         }
-        // the unit byte leads every temporal extension's metadata
-        TimeUnit unit = TimestampDtype.readUnit(ext);
+        // date and time carry a TimeUnitMetadata, timestamp a TimestampMetadata: both have the unit
+        TimeUnit unit = ExtensionStorage.readUnit(ext);
         boolean valid = switch (kind) {
             case VORTEX_DATE -> unit == TimeUnit.Days || unit == TimeUnit.Milliseconds;
             default -> unit != TimeUnit.Days;

@@ -201,7 +201,8 @@ class ColumnBuilderTest {
         void extensionDtype_rejectedAtConstruction() {
             // Given — nested Extension (timestamp) columns are unsupported; see class javadoc
             DType.Extension extensionDtype = new DType.Extension(
-                    "vortex.date", new DType.Primitive(PType.I32, false), null, false);
+                    "vortex.date", new DType.Primitive(PType.I32, false),
+                    new io.github.dfa1.vortex.core.model.TimeUnitMetadata(io.github.dfa1.vortex.core.model.TimeUnit.Days), false);
 
             // When / Then
             assertThatThrownBy(() -> ColumnBuilder.forType(extensionDtype))

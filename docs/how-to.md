@@ -1009,29 +1009,47 @@ own id, writes domain values through an `ExtensionEncoder` and reads them back t
 `validate_dtype`), run on every dtype with that id when the writer is created and when a file is
 opened.
 
-The example is a money column with one currency per column: amounts are `I64` minor units
-(cents for EUR), and the ISO 4217 code is the extension metadata, as a timestamp keeps its zone.
-Never store money as a float.
+An extension's metadata is a record implementing `ExtensionMetadata`, so a dtype compares by
+value. The encoder's `serializeMetadata` writes it as the bytes a file stores and the decoder's
+`parseMetadata` reads it back when the file opens (Rust's `serialize_metadata` and
+`deserialize_metadata`); nothing else sees the bytes. Without a decoder (with `allowUnknown()`) the
+metadata reads back as `OpaqueMetadata`, the raw bytes.
 
-**Write side:**
+The example is a money column with one currency per column: amounts are `I64` minor units
+(cents for EUR), and the currency is the extension metadata, as a timestamp keeps its zone.
+Never store money as a float.
 
 ```java
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionMetadata;
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
 import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Currency;
 
+// the metadata: the column's currency, stored as its ISO 4217 code
+record MoneyMetadata(Currency currency) implements ExtensionMetadata {
+}
+
+// write side
 final class MoneyEncoder implements ExtensionEncoder {
     static final ExtensionId ID = ExtensionId.parse("acme.money");
 
     static DType.Extension dtype(Currency currency) {
-        byte[] code = currency.getCurrencyCode().getBytes(StandardCharsets.US_ASCII);
-        return new DType.Extension(ID.id(), DTypes.I64, MemorySegment.ofArray(code), false);
+        return new DType.Extension(ID.id(), DTypes.I64, new MoneyMetadata(currency), false);
+    }
+
+    @Override
+    public byte[] serializeMetadata(ExtensionMetadata metadata) {
+        return ((MoneyMetadata) metadata).currency().getCurrencyCode().getBytes(StandardCharsets.US_ASCII);
     }
 
     @Override
@@ -1049,12 +1067,11 @@ final class MoneyEncoder implements ExtensionEncoder {
         if (!dtype.storageDType().equals(DTypes.I64)) {
             throw new VortexException("acme.money storage must be non-nullable I64");
         }
-        currency(dtype); // rejects a code that is not ISO 4217
     }
 
     @Override
     public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        int digits = currency(dtype).getDefaultFractionDigits();
+        int digits = ((MoneyMetadata) dtype.metadata()).currency().getDefaultFractionDigits();
         long[] minorUnits = new long[values.size()];
         int i = 0;
         for (Object value : values) {
@@ -1062,11 +1079,6 @@ final class MoneyEncoder implements ExtensionEncoder {
             minorUnits[i++] = ((BigDecimal) value).movePointRight(digits).longValueExact();
         }
         return minorUnits;
-    }
-
-    static Currency currency(DType.Extension dtype) {
-        return Currency.getInstance(new String(dtype.metadata().toArray(ValueLayout.JAVA_BYTE),
-                StandardCharsets.US_ASCII));
     }
 }
 
@@ -1079,17 +1091,8 @@ try (var ch = FileChannel.open(Path.of("prices.vortex"), StandardOpenOption.CREA
     writer.writeChunk(chunk -> chunk.put(ColumnName.of("price"),
             List.of(new BigDecimal("9.99"), new BigDecimal("120.50"))));
 }
-```
 
-**Read side:**
-
-```java
-import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
-
-import java.util.ArrayList;
-
+// read side
 final class MoneyDecoder implements ExtensionDecoder<BigDecimal> {
     static final ExtensionId ID = ExtensionId.parse("acme.money");
 
@@ -1100,8 +1103,14 @@ final class MoneyDecoder implements ExtensionDecoder<BigDecimal> {
 
     @Override
     public DType.Extension dtype(boolean nullable) {
-        byte[] code = "EUR".getBytes(StandardCharsets.US_ASCII);
-        return new DType.Extension(ID.id(), DTypes.I64, MemorySegment.ofArray(code), false);
+        return MoneyEncoder.dtype(Currency.getInstance("EUR"));
+    }
+
+    @Override
+    public ExtensionMetadata parseMetadata(MemorySegment metadata) {
+        // an unknown code throws, refusing the file as Rust's deserialize_metadata would
+        return new MoneyMetadata(Currency.getInstance(
+                new String(metadata.toArray(ValueLayout.JAVA_BYTE), StandardCharsets.US_ASCII)));
     }
 
     @Override
@@ -1111,8 +1120,7 @@ final class MoneyDecoder implements ExtensionDecoder<BigDecimal> {
 
     @Override
     public List<BigDecimal> decodeAll(DType.Extension dtype, Array storage) {
-        Currency currency = Currency.getInstance(new String(dtype.metadata().toArray(ValueLayout.JAVA_BYTE),
-                StandardCharsets.US_ASCII));
+        Currency currency = ((MoneyMetadata) dtype.metadata()).currency();
         LongArray minorUnits = (LongArray) storage;
         List<BigDecimal> out = new ArrayList<>();
         for (long i = 0; i < minorUnits.length(); i++) {

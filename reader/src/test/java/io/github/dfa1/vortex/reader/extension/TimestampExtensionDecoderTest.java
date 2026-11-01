@@ -44,20 +44,17 @@ class TimestampExtensionDecoderTest {
         // Given — default factory yields ms storage with empty tz_len
         DType.Extension dtype = sut.dtype(false);
 
-        // Then — byte 0 = ms ordinal, bytes 1..3 = 0 (tz_len = 0)
+        // Then — milliseconds, no timezone
         assertThat(dtype.storageDType()).isEqualTo(DTypes.I64);
-        assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) TimeUnit.Milliseconds.ordinal());
-        assertThat(dtype.metadata().get(io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT, 1)).isEqualTo((short) 0);
+        assertThat(dtype.metadata()).isEqualTo(new io.github.dfa1.vortex.core.model.TimestampMetadata(TimeUnit.Milliseconds, null));
     }
 
     @Test
-    void dtype_withTimezoneEncodesIanaName() {
-        // Given — timezone bytes are appended after the 3-byte header so decode can pull them back
+    void dtype_withTimezoneRecordsIt() {
+        // Given
         DType.Extension dtype = sut.dtype(TimeUnit.Microseconds, ZoneId.of("Europe/Paris"), false);
 
-        // Then — header tz_len matches the UTF-8 length; the actual bytes follow
-        int tzLen = Short.toUnsignedInt(dtype.metadata().get(io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT, 1));
-        assertThat(tzLen).isEqualTo("Europe/Paris".getBytes().length);
+        // Then — the zone the decoder reads back is the one the dtype was built with
         assertThat(sut.timezone(dtype)).contains(ZoneId.of("Europe/Paris"));
     }
 
@@ -117,13 +114,12 @@ class TimestampExtensionDecoderTest {
     }
 
     @Test
-    void timezone_truncatedMetadata_throws() {
+    void truncatedMetadata_refusedWhenParsed() {
         // Given — declared tz_len longer than buffer can carry
         MemorySegment meta = MemorySegment.ofArray(new byte[]{2, 5, 0, (byte) 0x55, (byte) 0x54, (byte) 0x43});
-        DType.Extension truncated = ext("vortex.timestamp", I64, meta);
 
-        // When / Then
-        assertThatThrownBy(() -> sut.timezone(truncated))
+        // When / Then — refused when the file's dtype is parsed, before any decoder reads the zone
+        assertThatThrownBy(() -> ext("vortex.timestamp", I64, meta))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("truncated");
     }

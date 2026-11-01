@@ -307,6 +307,8 @@ public final class VortexWriter implements Closeable {
 
     /// Runs [ExtensionEncoder#validate(DType.Extension)] on every extension dtype in `dtype`, nested
     /// ones included, that has a registered encoder — Rust validates each extension dtype it builds.
+    /// Also serializes each one's metadata once, so metadata no encoder can serialize fails here
+    /// rather than when the file is closed, after its data is written.
     private void validateExtensions(DType dtype) {
         switch (dtype) {
             case DType.Extension ext -> {
@@ -319,6 +321,7 @@ public final class VortexWriter implements Closeable {
                     // written from its storage array; still held to Rust's rules for the id
                     wellKnown.validate(ext);
                 }
+                new DTypeFbsSerializer(extensionRegistry).metadataBytes(ext);
                 validateExtensions(ext.storageDType());
             }
             case DType.Struct struct -> struct.fieldTypes().forEach(this::validateExtensions);
@@ -760,7 +763,7 @@ public final class VortexWriter implements Closeable {
         long footerOff = bytesWritten;
         write(footerBuf);
 
-        ByteBuffer dtypeBuf = DTypeFbsSerializer.buildDType(schema);
+        ByteBuffer dtypeBuf = new DTypeFbsSerializer(extensionRegistry).buildDType(schema);
         long dtypeOff = bytesWritten;
         write(dtypeBuf);
 

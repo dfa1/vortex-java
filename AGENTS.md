@@ -302,9 +302,16 @@ When stuck on encode/decode behavior, consult **in this order**:
 
 - **DType is pluggable only via `Extension`.** `DType` is a sealed interface; downstream code must
   not add variants. Use `new DType.Extension("ip.address", new DType.Primitive(PType.I32, false),
-  null, false)` and register an `ExtensionDecoder`/`ExtensionEncoder` on `ReadRegistry`/`WriteRegistry`.
-  Mirrors Rust's `ExtVTable` (`vortex.date`, `vortex.uuid`, …): an unregistered id fails the read
-  unless `allowUnknown()`, then reads as storage. No SPI for DType variants planned.
+  OpaqueMetadata.EMPTY, false)` and register an `ExtensionDecoder`/`ExtensionEncoder` on
+  `ReadRegistry`/`WriteRegistry`. Mirrors Rust's `ExtVTable` (`vortex.date`, `vortex.uuid`, …): an
+  unregistered id fails the read unless `allowUnknown()`, then reads as storage. No SPI for DType
+  variants planned.
+- **Extension metadata is typed, bytes exist only at the wire.** `DType.Extension#metadata()` is an
+  `ExtensionMetadata`, an open interface whose implementations must be records (checked by
+  `DType.Extension`), so dtypes compare by value. As Rust's `ExtVTable::{de,}serialize_metadata`,
+  the reader parses (`ExtensionMetadataParser` for the well-known ids, `ExtensionDecoder#parseMetadata`
+  for the rest, at open) and the writer serializes (`DTypeFbsSerializer`, `ExtensionEncoder#serializeMetadata`);
+  `core` holds only the types. Bytes nothing parses stay `OpaqueMetadata` (Rust's `ForeignExtMetadata`).
 - **Encoding and layout decode are both pluggable via builder-only registries** — no
   `ServiceLoader`. Encodings register on `ReadRegistry`/`WriteRegistry`
   (`ReadRegistry.builder().registerDefaults().register(custom).build()`); layouts register on

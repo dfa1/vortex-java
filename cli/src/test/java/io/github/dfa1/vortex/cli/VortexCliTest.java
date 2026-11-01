@@ -161,7 +161,8 @@ class VortexCliTest {
         Path file = dir.resolve("money.vortex");
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("price")),
                 List.of(new DType.Extension("acme.money", DTypes.I64,
-                        java.lang.foreign.MemorySegment.ofArray("EUR".getBytes(StandardCharsets.US_ASCII)), false)),
+                        new io.github.dfa1.vortex.core.model.OpaqueMetadata(
+                                java.lang.foreign.MemorySegment.ofArray("EUR".getBytes(StandardCharsets.US_ASCII))), false)),
                 false);
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {

@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.TestSegments;
@@ -324,7 +325,7 @@ class DictLayoutDecoderTest {
         // neither VarBin- nor primitive-shaped. The fallback used to blind-cast it to VarBinArray,
         // which breaks the security contract (a raw ClassCastException on untrusted input).
         DType.FixedSizeList storage = new DType.FixedSizeList(DTypes.U8, 16, false);
-        DType uuid = new DType.Extension("vortex.uuid", storage, null, false);
+        DType uuid = new DType.Extension("vortex.uuid", storage, OpaqueMetadata.EMPTY, false);
         Array values = new FixedSizeListArray(storage, 2, bytePool(new int[32]));
         Array codes = byteCodes(0, 1, 0);
 
@@ -337,7 +338,7 @@ class DictLayoutDecoderTest {
     // ── harness ─────────────────────────────────────────────────────────────────
 
     private static Stream<Arguments> varBinPools() {
-        DType utf8Extension = new DType.Extension("ip.address", DTypes.UTF8, null, false);
+        DType utf8Extension = new DType.Extension("ip.address", DTypes.UTF8, OpaqueMetadata.EMPTY, false);
         String[] byCode = {"ccc", "a", "bb", "a"};
         String[] broadcast = {"zz", "zz", "zz", "zz"};
         return Stream.of(

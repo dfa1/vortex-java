@@ -5,7 +5,11 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimeUnitMetadata;
+import io.github.dfa1.vortex.core.model.TimestampMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoNullValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -103,13 +107,14 @@ class ConstantEncodingDecoderTest {
             cases.add(Arguments.of(DTypes.UTF8.asNullable(), VarBinArray.class));
             cases.add(Arguments.of(DTypes.BINARY.asNullable(), VarBinArray.class));
             cases.add(Arguments.of(new DType.Decimal((byte) 10, (byte) 2, true), DecimalArray.class));
-            cases.add(Arguments.of(new DType.Extension("vortex.date", DTypes.I32, MemorySegment.ofArray(new byte[]{0}), true),
-                    IntArray.class));
-            cases.add(Arguments.of(new DType.Extension("vortex.time", DTypes.I32, MemorySegment.ofArray(new byte[]{1}), true),
-                    IntArray.class));
+            cases.add(Arguments.of(new DType.Extension("vortex.date", DTypes.I32,
+                    new TimeUnitMetadata(TimeUnit.Nanoseconds), true), IntArray.class));
+            cases.add(Arguments.of(new DType.Extension("vortex.time", DTypes.I32,
+                    new TimeUnitMetadata(TimeUnit.Microseconds), true), IntArray.class));
             cases.add(Arguments.of(new DType.Extension("vortex.timestamp", DTypes.I64,
-                    MemorySegment.ofArray(new byte[]{1, 0, 0}), true), LongArray.class));
-            cases.add(Arguments.of(new DType.Extension("acme.custom", DTypes.U16, null, true), ShortArray.class));
+                    new TimestampMetadata(TimeUnit.Microseconds, null), true), LongArray.class));
+            cases.add(Arguments.of(new DType.Extension("acme.custom", DTypes.U16, OpaqueMetadata.EMPTY, true),
+                    ShortArray.class));
             return cases.stream();
         }
 
@@ -150,7 +155,7 @@ class ConstantEncodingDecoderTest {
                     new DType.Struct(List.of(ColumnName.of("a")), List.of(DTypes.I64), true),
                     new DType.Map(DTypes.I64, DTypes.I64, false, true),
                     new DType.Variant(true),
-                    new DType.Extension("vortex.uuid", new DType.FixedSizeList(DTypes.U8, 16, false), null, true));
+                    new DType.Extension("vortex.uuid", new DType.FixedSizeList(DTypes.U8, 16, false), OpaqueMetadata.EMPTY, true));
         }
 
         @Test

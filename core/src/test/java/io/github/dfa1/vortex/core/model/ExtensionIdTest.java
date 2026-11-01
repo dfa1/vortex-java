@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.MemorySegment;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -113,20 +114,20 @@ class ExtensionIdTest {
 
         static Stream<Arguments> valid() {
             return Stream.of(
-                    Arguments.of("date days I32", ext(ExtensionId.VORTEX_DATE, DTypes.I32, 4)),
-                    Arguments.of("date millis I64", ext(ExtensionId.VORTEX_DATE, DTypes.I64, 2)),
-                    Arguments.of("time seconds I32", ext(ExtensionId.VORTEX_TIME, DTypes.I32, 3)),
-                    Arguments.of("time millis I32", ext(ExtensionId.VORTEX_TIME, DTypes.I32, 2)),
-                    Arguments.of("time micros I64", ext(ExtensionId.VORTEX_TIME, DTypes.I64, 1)),
-                    Arguments.of("time nanos I64", ext(ExtensionId.VORTEX_TIME, DTypes.I64, 0)),
-                    Arguments.of("timestamp no tz", ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2, 0, 0)),
-                    Arguments.of("timestamp tz", ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2, 3, 0, 'U', 'T', 'C')),
-                    Arguments.of("timestamp days", ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 4, 0, 0)),
+                    Arguments.of("date days I32", unit(ExtensionId.VORTEX_DATE, DTypes.I32, TimeUnit.Days)),
+                    Arguments.of("date millis I64", unit(ExtensionId.VORTEX_DATE, DTypes.I64, TimeUnit.Milliseconds)),
+                    Arguments.of("time seconds I32", unit(ExtensionId.VORTEX_TIME, DTypes.I32, TimeUnit.Seconds)),
+                    Arguments.of("time millis I32", unit(ExtensionId.VORTEX_TIME, DTypes.I32, TimeUnit.Milliseconds)),
+                    Arguments.of("time micros I64", unit(ExtensionId.VORTEX_TIME, DTypes.I64, TimeUnit.Microseconds)),
+                    Arguments.of("time nanos I64", unit(ExtensionId.VORTEX_TIME, DTypes.I64, TimeUnit.Nanoseconds)),
+                    Arguments.of("timestamp no tz", timestamp(DTypes.I64, TimeUnit.Milliseconds, null)),
+                    Arguments.of("timestamp tz", timestamp(DTypes.I64, TimeUnit.Milliseconds, ZoneId.of("UTC"))),
+                    Arguments.of("timestamp days", timestamp(DTypes.I64, TimeUnit.Days, null)),
                     Arguments.of("uuid no version", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE)),
                     Arguments.of("uuid v4", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 4)),
                     Arguments.of("uuid max 0x0f", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 0x0f)),
                     Arguments.of("uuid max 0xff", ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 0xff)),
-                    Arguments.of("date nullable storage", ext(ExtensionId.VORTEX_DATE, DTypes.I32.asNullable(), 4)),
+                    Arguments.of("date nullable storage", unit(ExtensionId.VORTEX_DATE, DTypes.I32.asNullable(), TimeUnit.Days)),
                     Arguments.of("json", ext(ExtensionId.VORTEX_JSON, DTypes.UTF8)),
                     Arguments.of("wkb", ext(ExtensionId.VORTEX_ST_WKB, DTypes.BINARY)),
                     Arguments.of("point xy", ext(ExtensionId.VORTEX_ST_POINT, coords("x", "y"))),
@@ -141,17 +142,17 @@ class ExtensionIdTest {
 
         static Stream<Arguments> invalid() {
             return Stream.of(
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I32), "metadata must not be empty"),
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I32, 9), "invalid time unit"),
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I64, 4), "for Days must be I32"),
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I64, 0), "does not support time unit Nanoseconds"),
-                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.UTF8, 4), "must be I32"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIME, DTypes.I64, 2), "for Milliseconds must be I32"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIME, DTypes.I32, 4), "does not support time unit Days"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I32, 2, 0, 0), "storage dtype must be I64"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2), "at least 3 bytes"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2, 5, 0, 'U'), "truncated"),
-                    Arguments.of(ext(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, 2, 1, 0, 0xc3), "not valid UTF-8"),
+                    // the wire-format errors (empty, bad tag, truncated, not UTF-8) are the reader's
+                    // ExtensionMetadataParser's: here the metadata is already typed
+                    Arguments.of(ext(ExtensionId.VORTEX_DATE, DTypes.I32, 4), "must be TimeUnitMetadata"),
+                    Arguments.of(unit(ExtensionId.VORTEX_DATE, DTypes.I64, TimeUnit.Days), "for Days must be I32"),
+                    Arguments.of(unit(ExtensionId.VORTEX_DATE, DTypes.I64, TimeUnit.Nanoseconds), "does not support time unit Nanoseconds"),
+                    Arguments.of(unit(ExtensionId.VORTEX_DATE, DTypes.UTF8, TimeUnit.Days), "must be I32"),
+                    Arguments.of(unit(ExtensionId.VORTEX_TIME, DTypes.I64, TimeUnit.Milliseconds), "for Milliseconds must be I32"),
+                    Arguments.of(unit(ExtensionId.VORTEX_TIME, DTypes.I32, TimeUnit.Days), "does not support time unit Days"),
+                    Arguments.of(timestamp(DTypes.I32, TimeUnit.Milliseconds, null), "storage dtype must be I64"),
+                    Arguments.of(unit(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, TimeUnit.Milliseconds), "must be TimestampMetadata"),
+                    Arguments.of(unit(ExtensionId.VORTEX_UUID, UUID_STORAGE, TimeUnit.Days), "must be OpaqueMetadata"),
                     Arguments.of(ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 4, 0), "0 or 1 bytes"),
                     Arguments.of(ext(ExtensionId.VORTEX_UUID, UUID_STORAGE, 9), "unknown UUID version"),
                     Arguments.of(ext(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DTypes.U8, 8, false)), "FixedSizeList<non-null U8, 16>"),
@@ -192,15 +193,6 @@ class ExtensionIdTest {
                     .hasMessageContaining(message);
         }
 
-        @Test
-        void validate_nullMetadata_isTreatedAsEmpty() {
-            // Given — Java callers may pass null; it means "no metadata", which uuid allows
-            DType.Extension dtype = new DType.Extension("vortex.uuid", UUID_STORAGE, null, false);
-
-            // When / Then
-            ExtensionId.VORTEX_UUID.validate(dtype);
-        }
-
         private static final DType UUID_STORAGE = new DType.FixedSizeList(DTypes.U8, 16, false);
 
         /// A GeoArrow coordinate (or box) struct of non-nullable F64 fields.
@@ -222,7 +214,17 @@ class ExtensionIdTest {
             for (int i = 0; i < meta.length; i++) {
                 bytes[i] = (byte) meta[i];
             }
-            return new DType.Extension(id.id(), storage, MemorySegment.ofArray(bytes), storage.nullable());
+            return new DType.Extension(id.id(), storage, new OpaqueMetadata(MemorySegment.ofArray(bytes)),
+                    storage.nullable());
+        }
+
+        private static DType.Extension unit(ExtensionId id, DType storage, TimeUnit unit) {
+            return new DType.Extension(id.id(), storage, new TimeUnitMetadata(unit), storage.nullable());
+        }
+
+        private static DType.Extension timestamp(DType storage, TimeUnit unit, ZoneId zone) {
+            return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP.id(), storage, new TimestampMetadata(unit, zone),
+                    storage.nullable());
         }
     }
 }

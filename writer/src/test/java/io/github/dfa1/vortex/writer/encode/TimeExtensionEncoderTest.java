@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.TimeDtype;
 import org.junit.jupiter.api.Test;
 
-import java.lang.foreign.MemorySegment;
 import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.List;
@@ -156,9 +155,9 @@ class TimeExtensionEncoderTest {
     @Test
     void encodeAll_daysUnit_throws() {
         // Given a hand-built Days-tagged dtype (TimeDtype.of rejects Days, so build directly)
-        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) TimeUnit.Days.ordinal()});
         DType.Extension dtype = new DType.Extension(
-                ExtensionId.VORTEX_TIME.id(), DTypes.I32, meta, false);
+                ExtensionId.VORTEX_TIME.id(), DTypes.I32,
+                new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Days), false);
         List<LocalTime> values = List.of(T);
 
         // When / Then

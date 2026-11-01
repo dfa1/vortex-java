@@ -2328,12 +2328,13 @@ class JavaWritesRustReadsIntegrationTest {
 
     @Test
     void javaWriter_rustReader_extensionWithNullMetadata(@TempDir Path tmp) throws IOException {
-        // Given — an extension dtype with null metadata, here vortex.json (Utf8 storage, no
-        // metadata), which the vortex-jni session registers. The writer used to omit the metadata
-        // field for null, and Rust refuses an absent field ("failed to parse extension metadata")
-        // for the whole file, even when only a sibling column is projected.
+        // Given — an extension dtype with no metadata, here vortex.json (Utf8 storage), which the
+        // vortex-jni session registers. The writer used to omit the metadata field when there was
+        // none, and Rust refuses an absent field ("failed to parse extension metadata") for the
+        // whole file, even when only a sibling column is projected.
         Path file = tmp.resolve("java_json_null_metadata.vtx");
-        DType.Extension json = new DType.Extension("vortex.json", DTypes.UTF8, null, false);
+        DType.Extension json = new DType.Extension("vortex.json", DTypes.UTF8,
+                io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("j")),
                 List.of(DTypes.I64, json), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -2367,7 +2368,8 @@ class JavaWritesRustReadsIntegrationTest {
         // Given — vortex.timestamp over I32 storage, which Rust's validate_dtype refuses ("Timestamp
         // storage dtype must be i64"). Java used to write and read it.
         DType.Extension invalid = new DType.Extension("vortex.timestamp", DTypes.I32,
-                MemorySegment.ofArray(new byte[]{2, 0, 0}), false);
+                new io.github.dfa1.vortex.core.model.TimestampMetadata(io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null),
+                false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("ts")), List.of(invalid), false);
         Path file = tmp.resolve("timestamp_i32.vtx");
 
@@ -2382,7 +2384,9 @@ class JavaWritesRustReadsIntegrationTest {
         // No Java write path emits it any more, so write the column under a custom id of the same
         // length and rename it in place: a FlatBuffer string is stored verbatim, once.
         DType.Struct disguised = new DType.Struct(List.of(ColumnName.of("ts")), List.of(new DType.Extension(
-                "vortex.timestamq", DTypes.I32, MemorySegment.ofArray(new byte[]{2, 0, 0}), false)), false);
+                "vortex.timestamq", DTypes.I32,
+                new io.github.dfa1.vortex.core.model.OpaqueMetadata(MemorySegment.ofArray(new byte[]{2, 0, 0})), false)),
+                false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                 StandardOpenOption.TRUNCATE_EXISTING);
              var writer = VortexWriter.create(ch, disguised, WriteOptions.defaults())) {

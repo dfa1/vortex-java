@@ -207,7 +207,7 @@ class ZonedStatsSchemaTest {
         void resolvesExtensionViaStorageDType() {
             // Given — ext over i32 storage; sum should widen using storage dtype (i32 → i64)
             DType columnDtype = new DType.Extension("ip.address",
-                    DTypes.I32, null, false);
+                    DTypes.I32, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MIN, ZonedStatsSchema.Stat.SUM);
 

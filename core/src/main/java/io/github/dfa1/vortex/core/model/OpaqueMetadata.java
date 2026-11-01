@@ -1,0 +1,65 @@
+package io.github.dfa1.vortex.core.model;
+
+import io.github.dfa1.vortex.core.error.VortexException;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.util.Arrays;
+import java.util.HexFormat;
+
+/// Extension metadata kept as the bytes a file stores, for an id nothing parses: Rust's
+/// `ForeignExtMetadata`.
+///
+/// Why bytes and not `null`: a file can carry metadata Java does not interpret, and a dtype read
+/// from it must keep that metadata so writing it back loses nothing, as Rust keeps it. That covers
+/// the `vortex.uuid` version byte, the `vortex.st.*` geometries' SpatialMetadata protobuf (CRS,
+/// edges), any custom id read with `allowUnknown()` or by a decoder that does not parse its
+/// metadata, and a writer with no encoder for the id, for which these bytes are the only metadata
+/// it can supply. A `null` would drop them: the file would read back in Rust as a different dtype
+/// (a geometry without its CRS). [#EMPTY] is the metadata of an extension that has none, written
+/// as the empty field Rust requires.
+///
+/// @param bytes the wire bytes, read-only, at most [#MAX_SIZE]
+public record OpaqueMetadata(MemorySegment bytes) implements ExtensionMetadata {
+
+    /// Hard cap on extension metadata size. Spec-defined extensions use 0–3 bytes (e.g. timestamp
+    /// = TimeUnit tag + tz length + tz UTF-8); 64 KiB is generous for custom extensions while
+    /// blocking attacker-supplied multi-megabyte blobs that would inflate parser allocations.
+    public static final MemorySize MAX_SIZE = MemorySize.ofKiB(64);
+
+    /// No metadata.
+    public static final OpaqueMetadata EMPTY = new OpaqueMetadata(MemorySegment.ofArray(new byte[0]));
+
+    /// Bounds the bytes, which may arrive from an untrusted file, and keeps them read-only.
+    ///
+    /// @param bytes the wire bytes
+    /// @throws VortexException if `bytes` is longer than [#MAX_SIZE]
+    public OpaqueMetadata {
+        if (bytes.byteSize() > MAX_SIZE.bytes()) {
+            throw new VortexException("extension metadata too large: " + bytes.byteSize() + " > " + MAX_SIZE.bytes());
+        }
+        // A dtype outlives the reader that parsed it (callers keep reader.dtype()), but a slice of
+        // the file mapping fails once the reader closes: copy that one onto the heap. Small, as the
+        // cap above bounds it; a heap segment is kept as it is.
+        if (bytes.isNative()) {
+            bytes = MemorySegment.ofArray(bytes.toArray(ValueLayout.JAVA_BYTE));
+        }
+        bytes = bytes.asReadOnly();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return o instanceof OpaqueMetadata(MemorySegment other)
+                && bytes.byteSize() == other.byteSize() && bytes.mismatch(other) == -1;
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(bytes.toArray(ValueLayout.JAVA_BYTE));
+    }
+
+    @Override
+    public String toString() {
+        return "OpaqueMetadata[" + HexFormat.of().formatHex(bytes.toArray(ValueLayout.JAVA_BYTE)) + "]";
+    }
+}

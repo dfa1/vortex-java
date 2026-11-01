@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimestampMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
 
 import java.lang.foreign.MemorySegment;
@@ -46,11 +47,6 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         if (d == null) {
             throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
                     "expected timestamp storage, got " + (data == null ? "null" : data.getClass().getSimpleName()));
-        }
-        MemorySegment extMeta = ext.metadata();
-        if (extMeta == null || extMeta.byteSize() < 3) {
-            throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
-                    "extension metadata missing or too short");
         }
         Parts parts = split(d.timestamps(), unitOf(ext));
         long[] days = parts.days();
@@ -145,16 +141,19 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         }
         if (!(data instanceof long[] storage) || !(dtype instanceof DType.Extension ext)
                 || !ExtensionId.VORTEX_TIMESTAMP.id().equals(ext.extensionId())
-                || ext.metadata() == null || ext.metadata().byteSize() < 3
-                || TimeUnit.fromTag(ext.metadata().toArray(java.lang.foreign.ValueLayout.JAVA_BYTE)[0])
-                        == TimeUnit.Days) {
+                || !(ext.metadata() instanceof TimestampMetadata(TimeUnit unit, var _))
+                || unit == TimeUnit.Days) {
             return null;
         }
         return new DateTimePartsData(storage, false);
     }
 
     private static TimeUnit unitOf(DType.Extension ext) {
-        return TimeUnit.fromTag(ext.metadata().toArray(java.lang.foreign.ValueLayout.JAVA_BYTE)[0]);
+        if (!(ext.metadata() instanceof TimestampMetadata(TimeUnit unit, var _))) {
+            throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
+                    "extension metadata is not timestamp metadata: " + ext.metadata());
+        }
+        return unit;
     }
 
     /// Splits epoch ticks into whole days, seconds within the day, and sub-second ticks, the three

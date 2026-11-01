@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -120,7 +119,9 @@ class ZoneMapStatCodecTest {
     class ExtensionType {
 
         private static final DType TIMESTAMP_MS =
-                new DType.Extension("vortex.timestamp", DTypes.I64, MemorySegment.ofArray(new byte[]{0, 0, 0}), false);
+                new DType.Extension("vortex.timestamp", DTypes.I64,
+                        new io.github.dfa1.vortex.core.model.TimestampMetadata(
+                                io.github.dfa1.vortex.core.model.TimeUnit.Nanoseconds, null), false);
 
         @Test
         void plainPrimitiveStorage_unwrapsToStoragePrimitive() throws IOException {

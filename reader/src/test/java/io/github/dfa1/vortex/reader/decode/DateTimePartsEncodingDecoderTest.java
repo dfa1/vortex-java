@@ -35,9 +35,9 @@ class DateTimePartsEncodingDecoderTest {
     }
 
     private static DType timestampDType(TimeUnit unit, boolean nullable) {
-        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) unit.ordinal(), 0, 0});
         return new DType.Extension("vortex.timestamp",
-                new DType.Primitive(PType.I64, nullable), meta, nullable);
+                new DType.Primitive(PType.I64, nullable),
+                new io.github.dfa1.vortex.core.model.TimestampMetadata(unit, null), nullable);
     }
 
     /// Builds a context with three I64 part-children backed by the given segments.
@@ -110,9 +110,9 @@ class DateTimePartsEncodingDecoderTest {
 
     @Test
     void decode_extensionMissingTimeUnitMetadata_throws() {
-        // Given an extension whose metadata byte is absent
+        // Given an extension whose metadata records no time unit
         DType noUnit = new DType.Extension("vortex.timestamp",
-                DTypes.I64, null, false);
+                DTypes.I64, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
         DecodeContext c = ctx(i64Meta(), noUnit, 1,
                 TestSegments.leLongs(0L), TestSegments.leLongs(0L), TestSegments.leLongs(0L));
 

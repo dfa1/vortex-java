@@ -4,9 +4,9 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
-import java.lang.foreign.MemorySegment;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -34,12 +34,11 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
     @Override
     public DType.Extension dtype(boolean nullable) {
         DType.Primitive u8 = DTypes.U8;
-        // Rust vortex.uuid metadata: 0 bytes means "no specific version" — but the field
-        // must be present in the flatbuffer or the Rust reader's ok_or_else() check fails.
+        // Rust vortex.uuid metadata: 0 bytes means "no specific version"
         return new DType.Extension(
                 ExtensionId.VORTEX_UUID.id(),
                 new DType.FixedSizeList(u8, 16, nullable),
-                MemorySegment.ofArray(new byte[0]),
+                OpaqueMetadata.EMPTY,
                 nullable);
     }
 

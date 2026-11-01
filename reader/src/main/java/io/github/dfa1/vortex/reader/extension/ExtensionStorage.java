@@ -44,18 +44,19 @@ public final class ExtensionStorage {
         };
     }
 
-    /// Reads the [TimeUnit] metadata byte at the buffer's current position;
-    /// throws if the buffer is null or empty.
+    /// Returns the [TimeUnit] a temporal extension's metadata records.
     ///
     /// @param ext declared extension dtype
-    /// @return decoded time unit
-    /// @throws VortexException if the metadata is missing
+    /// @return the time unit
+    /// @throws VortexException if the metadata is neither a
+    ///         [io.github.dfa1.vortex.core.model.TimeUnitMetadata] nor a
+    ///         [io.github.dfa1.vortex.core.model.TimestampMetadata]
     public static TimeUnit readUnit(DType.Extension ext) {
-        java.lang.foreign.MemorySegment meta = ext.metadata();
-        if (meta == null || meta.byteSize() == 0) {
-            throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
-        }
-        return TimeUnit.fromTag(meta.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
+        return switch (ext.metadata()) {
+            case io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit unit) -> unit;
+            case io.github.dfa1.vortex.core.model.TimestampMetadata(TimeUnit unit, var _) -> unit;
+            default -> throw new VortexException("missing TimeUnit metadata for " + ext.extensionId());
+        };
     }
 
     /// Constructs an [Instant] from a signed epoch count in the given unit.

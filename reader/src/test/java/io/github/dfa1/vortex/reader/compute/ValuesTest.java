@@ -67,7 +67,7 @@ class ValuesTest {
     void extensionDtypePassesIntegerThrough() {
         // Given an integer column whose dtype is an Extension (not a Primitive) — the unsigned
         // widening must pass the raw value through rather than assume a primitive ptype
-        DType extension = new DType.Extension("test.ext", DTypes.I32, null, false);
+        DType extension = new DType.Extension("test.ext", DTypes.I32, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
         MemorySegment seg = ARENA.allocate(4, 4);
         seg.setAtIndex(VortexFormat.LE_INT, 0, -7);
         Array column = new MaterializedIntArray(extension, 1, seg);

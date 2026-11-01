@@ -34,9 +34,8 @@ class DateTimePartsEncodingEncoderTest {
     private static final DType EXT_TIMESTAMP_NS = timestampDType(TimeUnit.Nanoseconds);
 
     private static DType timestampDType(TimeUnit unit) {
-        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) unit.ordinal(), 0, 0});
         return new DType.Extension("vortex.timestamp",
-                DTypes.I64, meta, false);
+                DTypes.I64, new io.github.dfa1.vortex.core.model.TimestampMetadata(unit, null), false);
     }
 
     private static ArrayNode toArrayNode(EncodeNode node) {
@@ -89,12 +88,12 @@ class DateTimePartsEncodingEncoderTest {
         void encode_missingMetadata_throws() {
             // Given
             DType noMeta = new DType.Extension("vortex.timestamp",
-                    DTypes.I64, null, false);
+                    DTypes.I64, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
             DateTimePartsData data = new DateTimePartsData(new long[]{0L}, false);
 
             // When / Then
             assertThatThrownBy(() -> ENCODER.encode(noMeta, data, EncodeTestHelper.testCtx()))
-                    .hasMessageContaining("extension metadata missing");
+                    .hasMessageContaining("extension metadata is not timestamp metadata");
         }
     }
 

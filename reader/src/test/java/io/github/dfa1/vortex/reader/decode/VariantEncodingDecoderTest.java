@@ -273,12 +273,13 @@ class VariantEncodingDecoderTest {
             DType.Extension ext = (DType.Extension) result;
             assertThat(ext.extensionId()).isEqualTo("ip.address");
             assertThat(ext.storageDType()).isEqualTo(DTypes.I32);
-            assertThat(ext.metadata().byteSize()).isEqualTo(3);
+            assertThat(ext.metadata()).isInstanceOf(io.github.dfa1.vortex.core.model.OpaqueMetadata.class);
+            assertThat(((io.github.dfa1.vortex.core.model.OpaqueMetadata) ext.metadata()).bytes().byteSize()).isEqualTo(3);
         }
 
         @Test
         void extension_nullMetadata_becomesEmptyBuffer() {
-            // Given null metadata — must not NPE, maps to an empty read-only buffer
+            // Given null metadata — must not NPE, maps to empty opaque metadata
             var proto = io.github.dfa1.vortex.core.proto.ProtoDType.ofExtension(new io.github.dfa1.vortex.core.proto.ProtoExtension(
                     "uuid", prim(io.github.dfa1.vortex.core.proto.ProtoPType.I64, false), null));
 
@@ -286,7 +287,7 @@ class VariantEncodingDecoderTest {
             DType.Extension result = (DType.Extension) VariantEncodingDecoder.dtypeFromProto(proto);
 
             // Then
-            assertThat(result.metadata().byteSize()).isZero();
+            assertThat(result.metadata()).isEqualTo(io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY);
         }
 
         @Test

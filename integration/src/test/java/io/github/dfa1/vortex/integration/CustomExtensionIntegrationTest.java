@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionMetadata;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -107,13 +109,16 @@ class CustomExtensionIntegrationTest {
             DType.Extension written = vectorDtype(DIM, true);
             writeVectors(file, written);
 
+            DType result;
             try (VortexReader reader = VortexReader.open(file, READ_REGISTRY)) {
-                // When — the metadata is a view of the mapped file, so compare before closing
-                DType result = ((DType.Struct) reader.dtype()).fieldTypes().get(1);
-
-                // Then — Extension.equals compares the metadata bytes, so the dimension survived too
-                assertThat(result).isEqualTo(written);
+                // When
+                result = ((DType.Struct) reader.dtype()).fieldTypes().get(1);
             }
+
+            // Then — the encoder serialized the typed metadata and the decoder parsed it back, so
+            // the dimension survived as a VectorMetadata, still readable after the reader closed
+            assertThat(result).isEqualTo(written);
+            assertThat(((DType.Extension) result).metadata()).isEqualTo(new VectorMetadata(DIM));
         }
 
         @Test
@@ -152,10 +157,10 @@ class CustomExtensionIntegrationTest {
 
         @Test
         void storageArray_withoutEncoder_isWrittenAsIs(@TempDir Path tmp) throws IOException {
-            // Given — no encoder registered: the caller passes the storage shape itself, as for any
-            // extension id the writer does not know
+            // Given — no encoder registered: the caller passes the storage shape itself and the
+            // metadata as the bytes a file stores, as for any extension id the writer does not know
             Path file = tmp.resolve("raw.vortex");
-            DType.Struct schema = schema(vectorDtype(2, false));
+            DType.Struct schema = schema(opaqueVectorDtype(2, 2));
             float[] flat = {1f, 2f, 3f, 4f};
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -258,10 +263,24 @@ class CustomExtensionIntegrationTest {
     class Validation {
 
         @Test
+        void create_withoutEncoder_rejectsTypedMetadata(@TempDir Path tmp) throws IOException {
+            // Given — no encoder to serialize a VectorMetadata: refused when the writer is created,
+            // not when it closes after the data is written
+            Path file = tmp.resolve("unserializable.vortex");
+
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                // When / Then
+                assertThatThrownBy(() -> VortexWriter.create(ch, schema(vectorDtype(DIM, false)), WriteOptions.defaults()))
+                        .isInstanceOf(VortexException.class)
+                        .hasMessageContaining("no extension encoder registered for example.vector");
+            }
+        }
+
+        @Test
         void create_rejectsDtypeTheEncoderRefuses(@TempDir Path tmp) throws IOException {
             // Given — metadata says 4 dimensions, storage holds 3
             DType.Extension invalid = new DType.Extension(VECTOR.id(),
-                    new DType.FixedSizeList(DTypes.F32, DIM, false), dimensionMetadata(4), false);
+                    new DType.FixedSizeList(DTypes.F32, DIM, false), new VectorMetadata(4), false);
             Path file = tmp.resolve("invalid.vortex");
 
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
@@ -275,8 +294,7 @@ class CustomExtensionIntegrationTest {
         @Test
         void open_rejectsDtypeTheDecoderRefuses(@TempDir Path tmp) throws IOException {
             // Given — a file from a writer that had no encoder, so nothing validated the dtype
-            DType.Extension invalid = new DType.Extension(VECTOR.id(),
-                    new DType.FixedSizeList(DTypes.F32, 2, false), dimensionMetadata(5), false);
+            DType.Extension invalid = opaqueVectorDtype(2, 5);
             Path file = tmp.resolve("invalid.vortex");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var writer = VortexWriter.create(ch, schema(invalid), WriteOptions.defaults())) {
@@ -306,13 +324,26 @@ class CustomExtensionIntegrationTest {
 
     // ── the custom extension type ────────────────────────────────────────────
 
+    /// The `example.vector` metadata: the vector dimension, also the storage's fixed size. Its wire
+    /// form is a u32 LE, written by [VectorEncoder] and parsed back by [VectorDecoder].
+    ///
+    /// @param dimension the number of elements per vector
+    record VectorMetadata(int dimension) implements ExtensionMetadata {
+    }
+
     /// The `example.vector` dtype: `FixedSizeList<F32, dim>` storage, dimension also in metadata.
     static DType.Extension vectorDtype(int dim, boolean nullable) {
         return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, dim, nullable),
-                dimensionMetadata(dim), nullable);
+                new VectorMetadata(dim), nullable);
     }
 
-    static MemorySegment dimensionMetadata(int dim) {
+    /// The dtype as a writer without the encoder writes it: metadata as the bytes a file stores.
+    static DType.Extension opaqueVectorDtype(int storageDim, int metadataDim) {
+        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, storageDim, false),
+                new OpaqueMetadata(dimensionBytes(metadataDim)), false);
+    }
+
+    static MemorySegment dimensionBytes(int dim) {
         MemorySegment metadata = MemorySegment.ofArray(new byte[4]);
         metadata.set(ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN), 0, dim);
         return metadata;
@@ -325,11 +356,9 @@ class CustomExtensionIntegrationTest {
             throw new VortexException("example.vector storage must be FixedSizeList<non-null F32>, got "
                     + dtype.storageDType());
         }
-        MemorySegment metadata = dtype.metadata();
-        if (metadata == null || metadata.byteSize() != 4) {
-            throw new VortexException("example.vector metadata must be a u32 dimension");
+        if (!(dtype.metadata() instanceof VectorMetadata(int dim))) {
+            throw new VortexException("example.vector metadata must be a VectorMetadata, got " + dtype.metadata());
         }
-        int dim = metadata.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN), 0);
         if (dim != list.fixedSize()) {
             throw new VortexException("example.vector metadata dimension " + dim
                     + " != storage size " + list.fixedSize());
@@ -351,6 +380,11 @@ class CustomExtensionIntegrationTest {
         @Override
         public void validate(DType.Extension dtype) {
             validateVector(dtype);
+        }
+
+        @Override
+        public byte[] serializeMetadata(ExtensionMetadata metadata) {
+            return dimensionBytes(((VectorMetadata) metadata).dimension()).toArray(ValueLayout.JAVA_BYTE);
         }
 
         @Override
@@ -405,6 +439,14 @@ class CustomExtensionIntegrationTest {
         @Override
         public void validate(DType.Extension dtype) {
             validateVector(dtype);
+        }
+
+        @Override
+        public ExtensionMetadata parseMetadata(MemorySegment metadata) {
+            if (metadata.byteSize() != 4) {
+                throw new VortexException("example.vector metadata must be a u32 dimension");
+            }
+            return new VectorMetadata(metadata.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN), 0));
         }
 
         @Override

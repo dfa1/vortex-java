@@ -1,7 +1,9 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionMetadata;
 
 import java.util.Collection;
 
@@ -35,6 +37,23 @@ public interface ExtensionEncoder {
     /// @param values domain-typed values to encode
     /// @return packed storage array
     Object encodeAll(DType.Extension dtype, Collection<?> values);
+
+    /// Serializes this extension's metadata to the bytes a file stores, Rust's `serialize_metadata`:
+    /// the inverse of the reader's `ExtensionDecoder.parseMetadata`. Called for metadata the writer
+    /// does not serialize itself, which is anything but
+    /// [io.github.dfa1.vortex.core.model.TimeUnitMetadata],
+    /// [io.github.dfa1.vortex.core.model.TimestampMetadata] and
+    /// [io.github.dfa1.vortex.core.model.OpaqueMetadata].
+    ///
+    /// The default refuses it.
+    ///
+    /// @param metadata the metadata of an extension dtype with this id
+    /// @return the wire bytes
+    /// @throws VortexException if this encoder cannot serialize `metadata`
+    default byte[] serializeMetadata(ExtensionMetadata metadata) {
+        throw new VortexException(extensionId() + " cannot serialize metadata of type "
+                + metadata.getClass().getName() + "; override ExtensionEncoder#serializeMetadata");
+    }
 
     /// Rejects a dtype this extension cannot represent — Rust's `validate_dtype`. Called for every
     /// extension dtype with this id in the schema when the writer is created.

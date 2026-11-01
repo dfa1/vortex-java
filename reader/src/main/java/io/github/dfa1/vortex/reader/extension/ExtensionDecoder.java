@@ -2,8 +2,11 @@ package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionMetadata;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 
 /// Read-side contract for a Vortex extension type, the Java side of Rust's `ExtVTable`.
@@ -42,6 +45,20 @@ public interface ExtensionDecoder<T> {
     ///                [io.github.dfa1.vortex.reader.array.MaskedArray]
     /// @return decoded values in row order, `null` at null rows
     List<T> decodeAll(DType.Extension dtype, Array storage);
+
+    /// Parses this extension's metadata from the bytes a file stores, Rust's
+    /// `deserialize_metadata`: the inverse of the writer's `ExtensionEncoder.serializeMetadata`.
+    /// Called when a file is opened, for every extension dtype with this id in its schema whose
+    /// metadata the reader does not parse itself (it does for the well-known temporal ids).
+    ///
+    /// The default keeps the bytes as [OpaqueMetadata].
+    ///
+    /// @param metadata the wire bytes, from an untrusted file
+    /// @return the metadata, a record
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if the bytes are malformed
+    default ExtensionMetadata parseMetadata(MemorySegment metadata) {
+        return new OpaqueMetadata(metadata);
+    }
 
     /// Rejects a dtype this extension cannot represent — Rust's `validate_dtype`. Called for every
     /// extension dtype with this id in a file's schema when the file is opened.

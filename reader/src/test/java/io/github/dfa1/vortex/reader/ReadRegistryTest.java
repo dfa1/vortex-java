@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionMetadata;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -228,83 +230,133 @@ class ReadRegistryTest {
     }
 
     @Test
-    void validateExtensions_unregisteredNestedId_throwsUnlessAllowUnknown() {
+    void resolveExtensions_unregisteredNestedId_throwsUnlessAllowUnknown() {
         // Given — the unknown id sits inside a list inside a struct: Rust checks every extension
         // dtype it deserializes, not only top-level columns
         DType schema = new DType.Struct(List.of(ColumnName.of("c")),
-                List.of(new DType.List(new DType.Extension("acme.geopoint", DTypes.I32, null, false), false)), false);
+                List.of(new DType.List(geopoint(OpaqueMetadata.EMPTY), false)), false);
         ReadRegistry strict = ReadRegistry.loadAll();
         ReadRegistry lenient = ReadRegistry.builder().registerDefaults().allowUnknown().build();
 
-        // When / Then
-        assertThatThrownBy(() -> strict.validateExtensions(schema))
+        // When
+        DType result = lenient.resolveExtensions(schema);
+
+        // Then — allowed, an unknown id keeps its bytes (Rust's ForeignExtDType)
+        assertThat(result).isEqualTo(schema);
+        assertThatThrownBy(() -> strict.resolveExtensions(schema))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("no extension decoder registered for acme.geopoint");
-        lenient.validateExtensions(schema);
     }
 
     @Test
-    void validateExtensions_registeredDecoder_runsItsValidate() {
+    void resolveExtensions_registeredDecoder_parsesItsMetadata() {
+        // Given — a decoder that parses its bytes into a record, nested in a list in a struct so
+        // the resolved dtype has to be rebuilt around it
+        ExtensionDecoder<?> decoder = extension("acme.geopoint");
+        // will…given form: given(decoder.parseMetadata(any())) would run the previous stub with null
+        org.mockito.BDDMockito.willAnswer(inv -> new Srid(((MemorySegment) inv.getArgument(0)).get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)))
+                .given(decoder).parseMetadata(org.mockito.ArgumentMatchers.any());
+        ReadRegistry sut = ReadRegistry.builder().register(decoder).build();
+        DType schema = new DType.Struct(List.of(ColumnName.of("c")), List.of(new DType.List(
+                geopoint(new OpaqueMetadata(MemorySegment.ofArray(new byte[]{42}))), false)), false);
+
+        // When
+        DType result = sut.resolveExtensions(schema);
+
+        // Then — the column now carries the decoder's typed metadata
+        assertThat(result).isEqualTo(new DType.Struct(List.of(ColumnName.of("c")),
+                List.of(new DType.List(geopoint(new Srid(42)), false)), false));
+    }
+
+    @Test
+    void resolveExtensions_parserReturnsNonRecord_wrapsInVortexException() {
+        // Given — a third-party parser returning metadata without value equality
+        ExtensionDecoder<?> decoder = extension("acme.geopoint");
+        org.mockito.BDDMockito.willReturn(new ExtensionMetadata() {
+        }).given(decoder).parseMetadata(org.mockito.ArgumentMatchers.any());
+        ReadRegistry sut = ReadRegistry.builder().register(decoder).build();
+
+        // When / Then — reading a file only ever fails with VortexException
+        assertThatThrownBy(() -> sut.resolveExtensions(geopoint(OpaqueMetadata.EMPTY)))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("acme.geopoint rejected its metadata")
+                .hasCauseInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void resolveExtensions_registeredDecoder_runsItsValidate() {
         // Given — a decoder whose validate refuses every dtype
         ExtensionDecoder<?> refusing = extension("acme.geopoint");
         org.mockito.BDDMockito.willThrow(new VortexException("bad geopoint")).given(refusing).validate(org.mockito.ArgumentMatchers.any());
         ReadRegistry sut = ReadRegistry.builder().register(refusing).build();
-        DType schema = new DType.Struct(List.of(ColumnName.of("c")),
-                List.of(new DType.Extension("acme.geopoint", DTypes.I32, null, false)), false);
+        DType schema = new DType.Struct(List.of(ColumnName.of("c")), List.of(geopoint(OpaqueMetadata.EMPTY)), false);
 
         // When / Then
-        assertThatThrownBy(() -> sut.validateExtensions(schema))
+        assertThatThrownBy(() -> sut.resolveExtensions(schema))
                 .isInstanceOf(VortexException.class)
                 .hasMessage("bad geopoint");
     }
 
     @Test
-    void validateExtensions_noDtype_passes() {
+    void resolveExtensions_noDtype_passes() {
         // Given — a file without a dtype blob parses with a null schema (PostscriptParserBlobBoundsTest);
         // the walk's switch used to throw NullPointerException on it
         ReadRegistry sut = ReadRegistry.loadAll();
 
-        // When / Then
-        sut.validateExtensions(null);
+        // When
+        DType result = sut.resolveExtensions(null);
+
+        // Then
+        assertThat(result).isNull();
     }
 
     @Test
-    void validateExtensions_validateThrowsRuntimeException_wrapsInVortexException() {
+    void resolveExtensions_validateThrowsRuntimeException_wrapsInVortexException() {
         // Given — a third-party validate that trips over malformed metadata from the file
         ExtensionDecoder<?> fragile = extension("acme.geopoint");
         IndexOutOfBoundsException cause = new IndexOutOfBoundsException("metadata too short");
         org.mockito.BDDMockito.willThrow(cause).given(fragile).validate(org.mockito.ArgumentMatchers.any());
         ReadRegistry sut = ReadRegistry.builder().register(fragile).build();
-        DType schema = new DType.Extension("acme.geopoint", DTypes.I32, null, false);
 
         // When / Then — reading a file only ever fails with VortexException
-        assertThatThrownBy(() -> sut.validateExtensions(schema))
+        assertThatThrownBy(() -> sut.resolveExtensions(geopoint(OpaqueMetadata.EMPTY)))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("acme.geopoint")
                 .hasCause(cause);
     }
 
     @Test
-    void validateExtensions_wellKnownIdWithoutDecoder_passesStrictMode() {
+    void resolveExtensions_wellKnownIdWithoutDecoder_passesStrictMode() {
         // Given — vortex.json is in the vortex-jni default session, so a strict reader must open it
         // (reading the column as its Utf8 storage) though Java registers no decoder for it
-        DType schema = new DType.Extension("vortex.json", DTypes.UTF8, MemorySegment.ofArray(new byte[0]), false);
+        DType schema = new DType.Extension("vortex.json", DTypes.UTF8, OpaqueMetadata.EMPTY, false);
         ReadRegistry sut = ReadRegistry.loadAll();
 
-        // When / Then
-        sut.validateExtensions(schema);
+        // When
+        DType result = sut.resolveExtensions(schema);
+
+        // Then
+        assertThat(result).isEqualTo(schema);
     }
 
     @Test
-    void validateExtensions_wellKnownIdWithoutDecoder_stillValidated() {
+    void resolveExtensions_wellKnownIdWithoutDecoder_stillValidated() {
         // Given — no decoder, but Rust's rules for the id still apply
-        DType schema = new DType.Extension("vortex.json", DTypes.I32, MemorySegment.ofArray(new byte[0]), false);
+        DType schema = new DType.Extension("vortex.json", DTypes.I32, OpaqueMetadata.EMPTY, false);
         ReadRegistry sut = ReadRegistry.loadAll();
 
         // When / Then
-        assertThatThrownBy(() -> sut.validateExtensions(schema))
+        assertThatThrownBy(() -> sut.resolveExtensions(schema))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("storage dtype must be Utf8");
+    }
+
+    /// A third-party extension's typed metadata.
+    private record Srid(int srid) implements ExtensionMetadata {
+    }
+
+    private static DType.Extension geopoint(ExtensionMetadata metadata) {
+        return new DType.Extension("acme.geopoint", DTypes.I32, metadata, false);
     }
 
     private static EncodingDecoder decoder(EncodingId id) {
@@ -313,9 +365,13 @@ class ReadRegistryTest {
         return decoder;
     }
 
+    /// A mocked decoder; its `parseMetadata` keeps the bytes, as the interface's default does
+    /// (a mock would return `null`).
     private static ExtensionDecoder<?> extension(String id) {
         ExtensionDecoder<?> decoder = mock(ExtensionDecoder.class);
         given(decoder.extensionId()).willReturn(ExtensionId.parse(id));
+        given(decoder.parseMetadata(org.mockito.ArgumentMatchers.any()))
+                .willAnswer(inv -> new OpaqueMetadata(inv.getArgument(0)));
         return decoder;
     }
 }

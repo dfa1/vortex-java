@@ -46,7 +46,7 @@ class TimeExtensionDecoderTest {
 
         // Then — storage width is I32 for s/ms, metadata byte 0 = TimeUnit.Milliseconds.ordinal()
         assertThat(dtype.storageDType()).isEqualTo(new DType.Primitive(PType.I32, true));
-        assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) TimeUnit.Milliseconds.ordinal());
+        assertThat(dtype.metadata()).isEqualTo(new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Milliseconds));
     }
 
     @Test
@@ -56,7 +56,7 @@ class TimeExtensionDecoderTest {
 
         // Then
         assertThat(dtype.storageDType()).isEqualTo(DTypes.I64);
-        assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) TimeUnit.Nanoseconds.ordinal());
+        assertThat(dtype.metadata()).isEqualTo(new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Nanoseconds));
     }
 
     @Test

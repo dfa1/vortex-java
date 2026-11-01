@@ -20,6 +20,7 @@ import io.github.dfa1.vortex.core.fbs.FbsStruct;
 import io.github.dfa1.vortex.core.fbs.FbsType;
 import io.github.dfa1.vortex.core.fbs.FbsUtf8;
 import io.github.dfa1.vortex.core.fbs.FbsVariant;
+import io.github.dfa1.vortex.reader.extension.ExtensionMetadataParser;
 import io.github.dfa1.vortex.reader.layout.Layout;
 
 import java.lang.foreign.MemorySegment;
@@ -339,10 +340,11 @@ final class PostscriptParser {
                 if (metadata == null) {
                     throw new VortexException("extension dtype missing metadata");
                 }
+                ExtensionId id = parseExtensionId(e.id());
                 yield new DType.Extension(
-                        parseExtensionId(e.id()).id(),
+                        id.id(),
                         storage,
-                        metadata,
+                        ExtensionMetadataParser.parse(id, metadata),
                         storage.nullable());
             }
             case FbsType.FbsVariant -> new DType.Variant(fbs.type(new FbsVariant()).nullable());

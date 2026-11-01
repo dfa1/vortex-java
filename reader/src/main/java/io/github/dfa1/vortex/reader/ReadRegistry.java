@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -142,47 +143,67 @@ public final class ReadRegistry {
         return extensions.get(extensionId);
     }
 
-    /// Checks every extension dtype in `dtype`, nested ones included, as Rust does when it
-    /// deserializes one: a registered decoder validates it; a [ExtensionId.WellKnown] id without a
-    /// decoder is validated by [ExtensionId.WellKnown#validate(DType.Extension)] and reads as its
-    /// storage; any other id is refused unless [Builder#allowUnknown()] is set, when it reads as its
-    /// storage (Rust's `ForeignExtDType`).
+    /// Resolves every extension dtype in `dtype`, nested ones included, as Rust does when it
+    /// deserializes one: a registered decoder parses metadata the reader kept as [OpaqueMetadata]
+    /// ([ExtensionDecoder#parseMetadata(MemorySegment)]) and validates the dtype; a
+    /// [ExtensionId.WellKnown] id without a decoder is validated by
+    /// [ExtensionId.WellKnown#validate(DType.Extension)] and reads as its storage; any other id is
+    /// refused unless [Builder#allowUnknown()] is set, when it reads as its storage with its bytes
+    /// (Rust's `ForeignExtDType`).
     /// Run on a file's schema at open, and on the dtypes embedded in Variant metadata at decode.
     ///
     /// @param dtype a file's schema, or `null` when the file carries no dtype blob
-    /// @throws VortexException if a registered decoder rejects its dtype, or an extension id has no
-    ///         decoder and unknown ids are not allowed
-    public void validateExtensions(DType dtype) {
-        switch (dtype) {
-            case null -> {
-                // a file without a dtype blob parses with no schema: nothing to check
-            }
+    /// @return `dtype` with each registered extension's metadata parsed by its decoder
+    /// @throws VortexException if a registered decoder rejects its metadata or dtype, or an
+    ///         extension id has no decoder and unknown ids are not allowed
+    public DType resolveExtensions(DType dtype) {
+        return switch (dtype) {
+            case null -> null;
             case DType.Extension ext -> {
                 ExtensionId id = parseId(ext.extensionId());
                 ExtensionDecoder<?> decoder = extensions.get(id);
+                DType.Extension resolved = new DType.Extension(ext.extensionId(),
+                        resolveExtensions(ext.storageDType()), ext.metadata(), ext.nullable());
                 if (decoder != null) {
-                    validate(decoder, ext);
+                    resolved = parseMetadata(decoder, resolved);
+                    validate(decoder, resolved);
                 } else if (id instanceof ExtensionId.WellKnown wellKnown) {
                     // the reference session knows it: no decoder needed, the column reads as storage
-                    wellKnown.validate(ext);
+                    wellKnown.validate(resolved);
                 } else if (!allowUnknown) {
                     throw new VortexException("no extension decoder registered for " + ext.extensionId()
                             + "; register one or enable ReadRegistry.Builder#allowUnknown()");
                 }
-                validateExtensions(ext.storageDType());
+                yield resolved;
             }
-            case DType.Struct struct -> struct.fieldTypes().forEach(this::validateExtensions);
-            case DType.List list -> validateExtensions(list.elementType());
-            case DType.FixedSizeList list -> validateExtensions(list.elementType());
-            case DType.Map map -> {
-                validateExtensions(map.keyType());
-                validateExtensions(map.valueType());
-            }
-            case DType.Union union -> union.variantTypes().forEach(this::validateExtensions);
+            case DType.Struct(var names, var types, var nullable) ->
+                    new DType.Struct(names, types.stream().map(this::resolveExtensions).toList(), nullable);
+            case DType.List(var element, var nullable) -> new DType.List(resolveExtensions(element), nullable);
+            case DType.FixedSizeList(var element, var size, var nullable) ->
+                    new DType.FixedSizeList(resolveExtensions(element), size, nullable);
+            case DType.Map(var key, var value, var keysSorted, var nullable) ->
+                    new DType.Map(resolveExtensions(key), resolveExtensions(value), keysSorted, nullable);
+            case DType.Union(var names, var types, var typeIds, var nullable) ->
+                    new DType.Union(names, types.stream().map(this::resolveExtensions).toList(), typeIds, nullable);
             case DType.Null _, DType.Bool _, DType.Primitive _, DType.Decimal _, DType.Utf8 _,
-                 DType.Binary _, DType.Variant _ -> {
-                // no nested dtype
-            }
+                 DType.Binary _, DType.Variant _ -> dtype;
+        };
+    }
+
+    /// Parses metadata the reader kept as bytes with the extension's decoder. A third-party parser
+    /// may trip over malformed bytes with any runtime exception, or return metadata that is not a
+    /// record; reading a file must only ever fail with [VortexException].
+    private static DType.Extension parseMetadata(ExtensionDecoder<?> decoder, DType.Extension ext) {
+        if (!(ext.metadata() instanceof OpaqueMetadata(MemorySegment bytes))) {
+            return ext;
+        }
+        try {
+            return new DType.Extension(ext.extensionId(), ext.storageDType(), decoder.parseMetadata(bytes),
+                    ext.nullable());
+        } catch (VortexException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new VortexException("extension " + ext.extensionId() + " rejected its metadata", e);
         }
     }
 

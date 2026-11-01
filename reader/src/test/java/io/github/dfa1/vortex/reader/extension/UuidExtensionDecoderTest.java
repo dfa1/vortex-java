@@ -42,8 +42,7 @@ class UuidExtensionDecoderTest {
         // Then
         DType.Primitive u8 = DTypes.U8;
         assertThat(dtype.storageDType()).isEqualTo(new DType.FixedSizeList(u8, 16, true));
-        assertThat(dtype.metadata()).isNotNull();
-        assertThat(dtype.metadata().byteSize()).isZero();
+        assertThat(dtype.metadata()).isEqualTo(io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY);
     }
 
     @Test
