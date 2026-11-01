@@ -1149,6 +1149,13 @@ the file, as Rust does for an extension id its session has no vtable for; with
 for an extension column needs a registered encoder; the storage array itself (`long[]` here) can
 always be written. Auto-routing a `Collection` applies to top-level columns only.
 
+The complete, tested example is
+[`CustomExtensionIntegrationTest`](../integration/src/test/java/io/github/dfa1/vortex/integration/CustomExtensionIntegrationTest.java):
+an `example.vector` embedding type with the same pieces as this recipe (a typed metadata record,
+`serializeMetadata`, `parseMetadata`, `validate` on both sides), written and read back through full,
+filtered and limited scans, plus the unknown-id and validation failures. The recipe and the test
+change together.
+
 ---
 
 ## Read files with unknown encodings

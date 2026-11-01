@@ -57,10 +57,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// "adding a new logical type" (an `ExtVTable` registered on the session).
 ///
 /// The type is a fixed-dimension `float[]` embedding over `FixedSizeList<F32, dim>` storage, with
-/// the dimension also recorded in the metadata (u32 LE), so the test covers non-primitive storage,
+/// the dimension also recorded in a typed `VectorMetadata` (a u32 LE on the wire), so the test covers non-primitive storage,
 /// metadata round-trip, nulls and the `validate` hook on both sides. Reads go through a full scan, a
 /// filter on a sibling column and a limit: a full scan never prunes or slices, and a sliced
 /// fixed-size list must keep each vector's floats with its row.
+///
+/// The documented counterpart is the "Add a custom extension type" recipe in `docs/how-to.md`,
+/// which links here as the complete example: both show the same extension SPI (a typed metadata
+/// record, `serializeMetadata`, `parseMetadata`, `validate`), so a change to one changes the other.
 class CustomExtensionIntegrationTest {
 
     static {
