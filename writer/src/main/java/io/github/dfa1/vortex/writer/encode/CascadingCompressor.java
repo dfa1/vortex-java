@@ -261,8 +261,7 @@ public final class CascadingCompressor {
         // splice through it so its cascaded children (e.g. datetimeparts → days/seconds/
         // subseconds) are recursively compressed rather than stored as raw primitives. Honor the
         // excluded set so spliceResult's notApplicable retry can rotate to the next accepting
-        // encoding (e.g. DateTimePartsEncoding → ExtEncoding when the input is raw storage rather
-        // than DateTimePartsData).
+        // encoding (e.g. DateTimePartsEncoding → ExtEncoding for a date, or an all-null chunk).
         if (!(dtype instanceof DType.Primitive)) {
             return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
