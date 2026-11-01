@@ -81,7 +81,7 @@ class TimestampExtensionDecoderTest {
         // Given — pre-epoch micros exercise the floorDiv / floorMod path
         long micros = -1_500_001L; // -1.500001s
         try (Arena arena = Arena.ofConfined()) {
-            DType.Extension dtype = ext("vortex.timestamp", I64, tzMeta((byte) 1, null));
+            DType.Extension dtype = ext(ExtensionId.VORTEX_TIMESTAMP, I64, tzMeta((byte) 1, null));
 
             // When
             Instant got = sut.instant(dtype, i64(arena, micros), 0);
@@ -119,7 +119,7 @@ class TimestampExtensionDecoderTest {
         MemorySegment meta = MemorySegment.ofArray(new byte[]{2, 5, 0, (byte) 0x55, (byte) 0x54, (byte) 0x43});
 
         // When / Then — refused when the file's dtype is parsed, before any decoder reads the zone
-        assertThatThrownBy(() -> ext("vortex.timestamp", I64, meta))
+        assertThatThrownBy(() -> ext(ExtensionId.VORTEX_TIMESTAMP, I64, meta))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("truncated");
     }

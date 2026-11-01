@@ -26,9 +26,8 @@ final class ExtensionTestSupport {
     }
 
     /// An extension dtype whose metadata is parsed from `meta` as a file's would be.
-    static DType.Extension ext(String id, DType storage, MemorySegment meta) {
-        ExtensionId extensionId = ExtensionId.parse(id);
-        return new DType.Extension(extensionId, storage, ExtensionMetadataParser.parse(extensionId, meta), false);
+    static DType.Extension ext(ExtensionId id, DType storage, MemorySegment meta) {
+        return new DType.Extension(id, storage, ExtensionMetadataParser.parse(id, meta), false);
     }
 
     static MemorySegment unitByte(byte tag) {

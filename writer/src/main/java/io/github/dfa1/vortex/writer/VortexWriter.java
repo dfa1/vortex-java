@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.core.model.Edition;
 import io.github.dfa1.vortex.core.model.EditionFamily;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
 import io.github.dfa1.vortex.writer.encode.EncodeNode;
@@ -315,11 +316,11 @@ public final class VortexWriter implements Closeable {
     private void validateExtensions(DType dtype) {
         switch (dtype) {
             case DType.Extension ext -> {
-                io.github.dfa1.vortex.core.model.ExtensionId id = ext.extensionId();
+                ExtensionId id = ext.extensionId();
                 ExtensionEncoder encoder = extensionRegistry.lookup(id);
                 if (encoder != null) {
                     encoder.validate(ext);
-                } else if (id instanceof io.github.dfa1.vortex.core.model.ExtensionId.WellKnown wellKnown) {
+                } else if (id instanceof ExtensionId.WellKnown wellKnown) {
                     // written from its storage array; still held to Rust's rules for the id
                     wellKnown.validate(ext);
                 }
