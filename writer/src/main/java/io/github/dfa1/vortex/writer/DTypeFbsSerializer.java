@@ -30,13 +30,17 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.time.ZoneId;
+import java.util.IdentityHashMap;
+import java.util.Map;
 
 /// Serializes a [DType] tree to its FlatBuffer wire encoding (the file's DType blob, pointed to
 /// by the postscript).
 final class DTypeFbsSerializer {
 
     private final WriteRegistry extensions;
+    /// Each extension node's bytes, so the check at `VortexWriter.create` and the write at close
+    /// serialize a third-party record once, and the bytes written are the bytes checked.
+    private final Map<DType.Extension, byte[]> serialized = new IdentityHashMap<>();
 
     /// @param extensions the extension encoders, which serialize metadata of their own types
     DTypeFbsSerializer(WriteRegistry extensions) {
@@ -55,34 +59,54 @@ final class DTypeFbsSerializer {
     }
 
     /// Serializes an extension's metadata, as Rust's `serialize_metadata`: the inverse of the
-    /// reader's `ExtensionMetadataParser`. The built-in records and [OpaqueMetadata] are written
-    /// here; any other record by the extension's registered encoder.
+    /// reader's `ExtensionMetadataParser`. [OpaqueMetadata], and the built-in records under their
+    /// own ids, are written here; any other metadata by the id's registered encoder, so a custom id
+    /// using a built-in record reads back through its own decoder.
     ///
     /// @param ext an extension dtype
     /// @return the metadata's wire bytes
-    /// @throws VortexException if the metadata is a record no registered encoder serializes, or a
-    ///         timezone longer than the wire's u16 length
+    /// @throws VortexException if no registered encoder serializes the metadata, the encoder
+    ///         returns `null`, the bytes exceed [OpaqueMetadata#MAX_SIZE] (the reader would refuse
+    ///         them), or a timezone is longer than the wire's u16 length
     byte[] metadataBytes(DType.Extension ext) {
-        return switch (ext.metadata()) {
-            case TimeUnitMetadata(TimeUnit unit) -> new byte[]{(byte) unit.ordinal()};
-            case TimestampMetadata(TimeUnit unit, ZoneId zone) -> timestampBytes(unit, zone);
-            case OpaqueMetadata(MemorySegment bytes) -> bytes.toArray(ValueLayout.JAVA_BYTE);
-            case ExtensionMetadata other -> {
-                ExtensionEncoder encoder = extensions.lookup(ExtensionId.parse(ext.extensionId()));
-                if (encoder == null) {
-                    throw new VortexException("no extension encoder registered for " + ext.extensionId()
-                            + " to serialize its metadata of type " + other.getClass().getName());
-                }
-                yield encoder.serializeMetadata(other);
-            }
+        return serialized.computeIfAbsent(ext, this::serialize);
+    }
+
+    private byte[] serialize(DType.Extension ext) {
+        ExtensionId id = ExtensionId.parse(ext.extensionId());
+        byte[] bytes = switch (ext.metadata()) {
+            case OpaqueMetadata(MemorySegment opaque) -> opaque.toArray(ValueLayout.JAVA_BYTE);
+            case TimeUnitMetadata(TimeUnit unit) when id == ExtensionId.VORTEX_DATE || id == ExtensionId.VORTEX_TIME ->
+                    new byte[]{(byte) unit.ordinal()};
+            case TimestampMetadata(TimeUnit unit, String timezone) when id == ExtensionId.VORTEX_TIMESTAMP ->
+                    timestampBytes(unit, timezone);
+            case ExtensionMetadata other -> encoderBytes(ext, id, other);
         };
+        if (bytes.length > OpaqueMetadata.MAX_SIZE.bytes()) {
+            throw new VortexException(ext.extensionId() + " metadata serializes to " + bytes.length
+                    + " bytes, over the " + OpaqueMetadata.MAX_SIZE.bytes() + " a reader accepts");
+        }
+        return bytes;
+    }
+
+    private byte[] encoderBytes(DType.Extension ext, ExtensionId id, ExtensionMetadata metadata) {
+        ExtensionEncoder encoder = extensions.lookup(id);
+        if (encoder == null) {
+            throw new VortexException("no extension encoder registered for " + ext.extensionId()
+                    + " to serialize its metadata of type " + metadata.getClass().getName());
+        }
+        byte[] bytes = encoder.serializeMetadata(metadata);
+        if (bytes == null) {
+            throw new VortexException(ext.extensionId() + " encoder serialized its metadata to null");
+        }
+        return bytes;
     }
 
     /// `byte[0] = TimeUnit tag, bytes[1..3] = tz_len (u16 LE), bytes[3..3+tz_len] = tz UTF-8`.
-    private static byte[] timestampBytes(TimeUnit unit, ZoneId zone) {
-        byte[] tz = zone == null ? new byte[0] : zone.getId().getBytes(StandardCharsets.UTF_8);
+    private static byte[] timestampBytes(TimeUnit unit, String timezone) {
+        byte[] tz = timezone == null ? new byte[0] : timezone.getBytes(StandardCharsets.UTF_8);
         if (tz.length > 0xFFFF) {
-            throw new VortexException("timestamp timezone longer than 65535 bytes: " + zone);
+            throw new VortexException("timestamp timezone longer than 65535 bytes: " + timezone);
         }
         byte[] out = new byte[3 + tz.length];
         out[0] = (byte) unit.ordinal();

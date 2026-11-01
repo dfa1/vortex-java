@@ -126,12 +126,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         if (proto.extension() != null) {
             // an extension's nullability is its storage's, as the file-schema parser has it
             DType storage = dtypeFromProto(proto.extension().storage_dtype());
-            ExtensionId id;
-            try {
-                id = ExtensionId.parse(proto.extension().id());
-            } catch (IllegalArgumentException | NullPointerException e) {
-                throw new VortexException("invalid extension id in variant metadata: " + e.getMessage());
-            }
+            ExtensionId id = ExtensionMetadataParser.parseId(proto.extension().id());
             byte[] metadata = proto.extension().metadata() != null ? proto.extension().metadata() : new byte[0];
             return new DType.Extension(
                     id.id(),

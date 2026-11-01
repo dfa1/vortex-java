@@ -322,8 +322,9 @@ built-ins apply Rust's `deserialize_metadata` + `validate_dtype` rules
 UTF-8 zone and `I64` storage; `vortex.uuid` 0–1 metadata bytes (a known version) over
 `FixedSizeList(non-null U8, 16)`. An extension dtype must carry its metadata field, empty when
 there is none, as Rust requires; the writer always emits it. As in Rust, the metadata is parsed when
-the file opens (a malformed one, or a timestamp zone `java.time.ZoneId` cannot parse, refuses the
-file) and kept typed; an id nothing parses keeps its bytes (`OpaqueMetadata`, Rust's
+the file opens (a malformed one refuses the file) and kept typed; a timestamp's zone is kept as the
+string the file stores, so a zone this JDK's database does not know still opens and round-trips,
+and only `TimestampMetadata#zone()` parses it; an id nothing parses keeps its bytes (`OpaqueMetadata`, Rust's
 `ForeignExtMetadata`).
 
 `ExtensionId` is a sealed `WellKnown`/`Custom` type like `EncodingId`: the spec ids

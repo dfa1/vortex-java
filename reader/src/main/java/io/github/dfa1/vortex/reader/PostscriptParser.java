@@ -164,23 +164,6 @@ final class PostscriptParser {
         return EncodingId.parse(raw);
     }
 
-    /// Parses an extension dtype's wire id at the schema boundary, so every [DType.Extension] read
-    /// from a file carries an id [ExtensionId#parse] accepts. A missing, blank or control-character
-    /// id is untrusted-input corruption that would otherwise surface as an [IllegalArgumentException].
-    ///
-    /// @param raw the wire string from the extension dtype, or `null` when the field is absent
-    /// @return the typed [ExtensionId]
-    private static ExtensionId parseExtensionId(String raw) {
-        if (raw == null) {
-            throw new VortexException("extension dtype missing id");
-        }
-        try {
-            return ExtensionId.parse(raw);
-        } catch (IllegalArgumentException ex) {
-            throw new VortexException("invalid extension id in file schema: " + ex.getMessage());
-        }
-    }
-
     /// Parses one layout-spec wire string to its [LayoutId] at the footer boundary. A blank id
     /// is untrusted-input corruption; [LayoutId#parse] would reject it with an
     /// [IllegalArgumentException], so surface it as a [VortexException] with the spec index.
@@ -340,7 +323,7 @@ final class PostscriptParser {
                 if (metadata == null) {
                     throw new VortexException("extension dtype missing metadata");
                 }
-                ExtensionId id = parseExtensionId(e.id());
+                ExtensionId id = ExtensionMetadataParser.parseId(e.id());
                 yield new DType.Extension(
                         id.id(),
                         storage,

@@ -12,7 +12,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.MemorySegment;
-import java.time.ZoneId;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,10 +27,13 @@ class ExtensionMetadataParserTest {
                 Arguments.of(ExtensionId.VORTEX_TIME, bytes(0), new TimeUnitMetadata(TimeUnit.Nanoseconds)),
                 Arguments.of(ExtensionId.VORTEX_TIMESTAMP, bytes(2, 0, 0), new TimestampMetadata(TimeUnit.Milliseconds, null)),
                 Arguments.of(ExtensionId.VORTEX_TIMESTAMP, bytes(1, 3, 0, 'U', 'T', 'C'),
-                        new TimestampMetadata(TimeUnit.Microseconds, ZoneId.of("UTC"))),
+                        new TimestampMetadata(TimeUnit.Microseconds, "UTC")),
                 // trailing bytes past the declared timezone are ignored, as Rust slices to tz_len
                 Arguments.of(ExtensionId.VORTEX_TIMESTAMP, bytes(1, 3, 0, 'U', 'T', 'C', 0),
-                        new TimestampMetadata(TimeUnit.Microseconds, ZoneId.of("UTC"))),
+                        new TimestampMetadata(TimeUnit.Microseconds, "UTC")),
+                // a zone this JDK does not know still opens, kept as stored, as Rust keeps it
+                Arguments.of(ExtensionId.VORTEX_TIMESTAMP, bytes(2, 3, 0, 'X', '/', 'Y'),
+                        new TimestampMetadata(TimeUnit.Milliseconds, "X/Y")),
                 Arguments.of(ExtensionId.VORTEX_UUID, bytes(4), new OpaqueMetadata(bytes(4))),
                 Arguments.of(ExtensionId.parse("acme.geopoint"), bytes(1, 2, 3), new OpaqueMetadata(bytes(1, 2, 3))));
     }
@@ -43,7 +45,6 @@ class ExtensionMetadataParserTest {
                 Arguments.of(ExtensionId.VORTEX_TIMESTAMP, bytes(2), "at least 3 bytes"),
                 Arguments.of(ExtensionId.VORTEX_TIMESTAMP, bytes(2, 5, 0, 'U'), "truncated"),
                 Arguments.of(ExtensionId.VORTEX_TIMESTAMP, bytes(2, 1, 0, 0xc3), "not valid UTF-8"),
-                Arguments.of(ExtensionId.VORTEX_TIMESTAMP, bytes(2, 3, 0, 'X', '/', 'Y'), "not a valid zone id"),
                 Arguments.of(ExtensionId.parse("acme.big"), MemorySegment.ofArray(new byte[(int) OpaqueMetadata.MAX_SIZE.bytes() + 1]),
                         "metadata too large"));
     }

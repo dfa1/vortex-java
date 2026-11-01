@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionMetadata;
 import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
@@ -52,6 +53,7 @@ import io.github.dfa1.vortex.reader.decode.ZstdBuffersEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ZstdEncodingDecoder;
 import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.ExtensionMetadataParser;
 import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
@@ -157,13 +159,18 @@ public final class ReadRegistry {
     /// @throws VortexException if a registered decoder rejects its metadata or dtype, or an
     ///         extension id has no decoder and unknown ids are not allowed
     public DType resolveExtensions(DType dtype) {
+        // A node is rebuilt only when something under it changed: the Variant and Constant
+        // decoders run this on every chunk, and nearly always nothing does.
         return switch (dtype) {
             case null -> null;
             case DType.Extension ext -> {
-                ExtensionId id = parseId(ext.extensionId());
+                ExtensionId id = ExtensionMetadataParser.parseId(ext.extensionId());
                 ExtensionDecoder<?> decoder = extensions.get(id);
-                DType.Extension resolved = new DType.Extension(ext.extensionId(),
-                        resolveExtensions(ext.storageDType()), ext.metadata(), ext.nullable());
+                DType storage = resolveExtensions(ext.storageDType());
+                DType.Extension resolved = ext;
+                if (storage != ext.storageDType()) {
+                    resolved = new DType.Extension(ext.extensionId(), storage, ext.metadata(), ext.nullable());
+                }
                 if (decoder != null) {
                     resolved = parseMetadata(decoder, resolved);
                     validate(decoder, resolved);
@@ -176,18 +183,49 @@ public final class ReadRegistry {
                 }
                 yield resolved;
             }
-            case DType.Struct(var names, var types, var nullable) ->
-                    new DType.Struct(names, types.stream().map(this::resolveExtensions).toList(), nullable);
-            case DType.List(var element, var nullable) -> new DType.List(resolveExtensions(element), nullable);
-            case DType.FixedSizeList(var element, var size, var nullable) ->
-                    new DType.FixedSizeList(resolveExtensions(element), size, nullable);
-            case DType.Map(var key, var value, var keysSorted, var nullable) ->
-                    new DType.Map(resolveExtensions(key), resolveExtensions(value), keysSorted, nullable);
-            case DType.Union(var names, var types, var typeIds, var nullable) ->
-                    new DType.Union(names, types.stream().map(this::resolveExtensions).toList(), typeIds, nullable);
+            case DType.Struct struct -> {
+                java.util.List<DType> types = resolveAll(struct.fieldTypes());
+                yield types == struct.fieldTypes() ? struct
+                        : new DType.Struct(struct.fieldNames(), types, struct.nullable());
+            }
+            case DType.List list -> {
+                DType element = resolveExtensions(list.elementType());
+                yield element == list.elementType() ? list : new DType.List(element, list.nullable());
+            }
+            case DType.FixedSizeList list -> {
+                DType element = resolveExtensions(list.elementType());
+                yield element == list.elementType() ? list
+                        : new DType.FixedSizeList(element, list.fixedSize(), list.nullable());
+            }
+            case DType.Map map -> {
+                DType key = resolveExtensions(map.keyType());
+                DType value = resolveExtensions(map.valueType());
+                yield key == map.keyType() && value == map.valueType() ? map
+                        : new DType.Map(key, value, map.keysSorted(), map.nullable());
+            }
+            case DType.Union union -> {
+                java.util.List<DType> types = resolveAll(union.variantTypes());
+                yield types == union.variantTypes() ? union
+                        : new DType.Union(union.names(), types, union.typeIds(), union.nullable());
+            }
             case DType.Null _, DType.Bool _, DType.Primitive _, DType.Decimal _, DType.Utf8 _,
                  DType.Binary _, DType.Variant _ -> dtype;
         };
+    }
+
+    /// Resolves each of `types`, returning `types` itself when none changed.
+    private java.util.List<DType> resolveAll(java.util.List<DType> types) {
+        java.util.List<DType> out = null;
+        for (int i = 0; i < types.size(); i++) {
+            DType resolved = resolveExtensions(types.get(i));
+            if (out == null && resolved != types.get(i)) {
+                out = new java.util.ArrayList<>(types.subList(0, i));
+            }
+            if (out != null) {
+                out.add(resolved);
+            }
+        }
+        return out == null ? types : java.util.List.copyOf(out);
     }
 
     /// Parses metadata the reader kept as bytes with the extension's decoder. A third-party parser
@@ -198,24 +236,15 @@ public final class ReadRegistry {
             return ext;
         }
         try {
-            return new DType.Extension(ext.extensionId(), ext.storageDType(), decoder.parseMetadata(bytes),
-                    ext.nullable());
+            ExtensionMetadata parsed = decoder.parseMetadata(bytes);
+            if (ext.metadata().equals(parsed)) {
+                return ext; // a decoder keeping the bytes, as the default does
+            }
+            return new DType.Extension(ext.extensionId(), ext.storageDType(), parsed, ext.nullable());
         } catch (VortexException e) {
             throw e;
         } catch (RuntimeException e) {
             throw new VortexException("extension " + ext.extensionId() + " rejected its metadata", e);
-        }
-    }
-
-    /// Parses an extension id read from a file; an id [ExtensionId#parse] refuses is corrupt input.
-    private static ExtensionId parseId(String raw) {
-        if (raw == null) {
-            throw new VortexException("extension dtype missing id");
-        }
-        try {
-            return ExtensionId.parse(raw);
-        } catch (IllegalArgumentException e) {
-            throw new VortexException("invalid extension id: " + e.getMessage());
         }
     }
 

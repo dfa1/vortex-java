@@ -101,6 +101,21 @@ class DTypeExtensionTest {
         }
 
         @Test
+        void callerArray_changedLater_doesNotChangeTheValue() {
+            // Given metadata built from a caller's array
+            byte[] caller = {1};
+            OpaqueMetadata sut = new OpaqueMetadata(MemorySegment.ofArray(caller));
+            int hash = sut.hashCode();
+
+            // When the caller reuses its array
+            caller[0] = 2;
+
+            // Then — a dtype holding it keeps its equality and hash, so a map holding it still finds it
+            assertThat(sut).isEqualTo(new OpaqueMetadata(MemorySegment.ofArray(new byte[]{1})));
+            assertThat(sut.hashCode()).isEqualTo(hash);
+        }
+
+        @Test
         void bytes_areReadOnly() {
             // Given
             OpaqueMetadata sut = new OpaqueMetadata(MemorySegment.ofArray(new byte[]{1}));
