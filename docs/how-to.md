@@ -1154,7 +1154,10 @@ The complete, tested example is
 an `example.vector` embedding type with the same pieces as this recipe (a typed metadata record,
 `serializeMetadata`, `parseMetadata`, `validate` on both sides), written and read back through full,
 filtered and limited scans, plus the unknown-id and validation failures. The recipe and the test
-change together.
+change together. A second one,
+[`CurrencyExtensionIntegrationTest`](../integration/src/test/java/io/github/dfa1/vortex/integration/CurrencyExtensionIntegrationTest.java),
+stores one `java.util.Currency` per row as its ISO 4217 code over `Utf8`, with no metadata, and
+refuses a code that is not ISO 4217 when it decodes.
 
 ---
 
