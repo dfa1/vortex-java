@@ -473,14 +473,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
             for (OhlcData.Batch b : batches) {
-                sut.writeChunk(Map.of(
-                        ColumnName.of("date"), b.date(),
-                        ColumnName.of("symbol"), b.symbol(),
-                        ColumnName.of("open"), b.open(),
-                        ColumnName.of("high"), b.high(),
-                        ColumnName.of("low"), b.low(),
-                        ColumnName.of("close"), b.close(),
-                        ColumnName.of("volume"), b.volume()));
+                sut.writeChunk(b.columns());
             }
         }
 
@@ -509,14 +502,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
             for (OhlcData.Batch b : batches) {
-                sut.writeChunk(Map.of(
-                        ColumnName.of("date"), b.date(),
-                        ColumnName.of("symbol"), b.symbol(),
-                        ColumnName.of("open"), b.open(),
-                        ColumnName.of("high"), b.high(),
-                        ColumnName.of("low"), b.low(),
-                        ColumnName.of("close"), b.close(),
-                        ColumnName.of("volume"), b.volume()));
+                sut.writeChunk(b.columns());
             }
         }
         int begin = 1_501;
@@ -1349,10 +1335,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
             for (OhlcData.Batch b : batches) {
-                sut.writeChunk(Map.of(
-                        ColumnName.of("date"), b.date(), ColumnName.of("symbol"), b.symbol(),
-                        ColumnName.of("open"), b.open(), ColumnName.of("high"), b.high(),
-                        ColumnName.of("low"), b.low(), ColumnName.of("close"), b.close(), ColumnName.of("volume"), b.volume()));
+                sut.writeChunk(b.columns());
             }
         }
 
