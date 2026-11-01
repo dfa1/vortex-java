@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.io.MemorySize;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.util.Arrays;
 import java.util.HexFormat;
 
 /// Extension metadata kept as the bytes a file stores, for an id nothing parses: Rust's
@@ -31,6 +30,9 @@ public record OpaqueMetadata(MemorySegment bytes) implements ExtensionMetadata {
     /// No metadata.
     public static final OpaqueMetadata EMPTY = new OpaqueMetadata(MemorySegment.ofArray(new byte[0]));
 
+    /// How many bytes [#toString()] shows.
+    private static final int TO_STRING_BYTES = 16;
+
     /// Bounds the bytes, which may arrive from an untrusted file, and keeps them read-only.
     ///
     /// @param bytes the wire bytes
@@ -52,13 +54,23 @@ public record OpaqueMetadata(MemorySegment bytes) implements ExtensionMetadata {
                 && bytes.byteSize() == other.byteSize() && bytes.mismatch(other) == -1;
     }
 
+    /// The `Arrays.hashCode` of the bytes, read in place rather than copied out per call.
     @Override
     public int hashCode() {
-        return Arrays.hashCode(bytes.toArray(ValueLayout.JAVA_BYTE));
+        int hash = 1;
+        for (long i = 0; i < bytes.byteSize(); i++) {
+            hash = 31 * hash + bytes.get(ValueLayout.JAVA_BYTE, i);
+        }
+        return hash;
     }
 
+    /// The size and at most the first [#TO_STRING_BYTES] bytes in hex: the bytes can be 64 KiB and
+    /// this string ends up in exception messages.
     @Override
     public String toString() {
-        return "OpaqueMetadata[" + HexFormat.of().formatHex(bytes.toArray(ValueLayout.JAVA_BYTE)) + "]";
+        long shown = Math.min(bytes.byteSize(), TO_STRING_BYTES);
+        String hex = HexFormat.of().formatHex(bytes.asSlice(0, shown).toArray(ValueLayout.JAVA_BYTE));
+        return "OpaqueMetadata[" + bytes.byteSize() + " bytes: " + hex
+                + (shown < bytes.byteSize() ? "…" : "") + "]";
     }
 }

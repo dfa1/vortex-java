@@ -116,6 +116,42 @@ class DTypeExtensionTest {
         }
 
         @Test
+        void toString_ofLargeMetadata_showsSizeAndAPrefixOnly() {
+            // Given metadata at the 64 KiB cap, which ends up in exception messages via toString
+            OpaqueMetadata sut = new OpaqueMetadata(MemorySegment.ofArray(new byte[(int) OpaqueMetadata.MAX_SIZE.bytes()]));
+
+            // When
+            String result = sut.toString();
+
+            // Then — not a 128 K-character hex dump
+            assertThat(result).isEqualTo("OpaqueMetadata[65536 bytes: 00000000000000000000000000000000…]");
+        }
+
+        @Test
+        void toString_ofSmallMetadata_showsEveryByte() {
+            // Given
+            OpaqueMetadata sut = new OpaqueMetadata(MemorySegment.ofArray(new byte[]{'C', 'R', 'S'}));
+
+            // When
+            String result = sut.toString();
+
+            // Then
+            assertThat(result).isEqualTo("OpaqueMetadata[3 bytes: 435253]");
+        }
+
+        @Test
+        void hashCode_isTheArraysHashOfTheBytes() {
+            // Given — read in place rather than copied out, it must still match the array hash
+            byte[] bytes = {1, -2, 3, 127, -128};
+
+            // When
+            int result = new OpaqueMetadata(MemorySegment.ofArray(bytes)).hashCode();
+
+            // Then
+            assertThat(result).isEqualTo(java.util.Arrays.hashCode(bytes));
+        }
+
+        @Test
         void bytes_areReadOnly() {
             // Given
             OpaqueMetadata sut = new OpaqueMetadata(MemorySegment.ofArray(new byte[]{1}));
