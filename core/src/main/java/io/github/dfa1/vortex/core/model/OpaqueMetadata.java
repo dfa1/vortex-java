@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.core.model;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.MemorySize;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;

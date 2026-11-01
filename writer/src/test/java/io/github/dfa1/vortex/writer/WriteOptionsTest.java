@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.core.model.MemorySize;
+import io.github.dfa1.vortex.core.io.MemorySize;
 
 import org.junit.jupiter.api.Test;
 

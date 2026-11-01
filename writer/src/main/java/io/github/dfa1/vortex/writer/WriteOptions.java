@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.Edition;
 import io.github.dfa1.vortex.core.model.EditionFamily;
 import io.github.dfa1.vortex.core.model.Editions;
-import io.github.dfa1.vortex.core.model.MemorySize;
+import io.github.dfa1.vortex.core.io.MemorySize;
 
 import java.util.HashMap;
 import java.util.Map;

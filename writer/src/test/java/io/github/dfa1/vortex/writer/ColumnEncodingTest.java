@@ -150,7 +150,7 @@ class ColumnEncodingTest {
 
         // When
         WriteOptions result = base.withZoneMaps(false).withGlobalDict(false).withoutEditions()
-                .withGlobalDictMaxRetainedBytes(new io.github.dfa1.vortex.core.model.MemorySize(1));
+                .withGlobalDictMaxRetainedBytes(new io.github.dfa1.vortex.core.io.MemorySize(1));
 
         // Then
         assertThat(result.columnEncodings()).containsEntry(PRICE, ALP_CASCADE);

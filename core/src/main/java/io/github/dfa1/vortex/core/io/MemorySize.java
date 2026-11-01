@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.core.model;
+package io.github.dfa1.vortex.core.io;
 
 /// A validated, non-negative byte count.
 ///

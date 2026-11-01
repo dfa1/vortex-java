@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.core.model;
+package io.github.dfa1.vortex.core.io;
 
 import org.junit.jupiter.api.Test;
 
