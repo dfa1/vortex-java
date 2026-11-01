@@ -118,6 +118,9 @@ Tag-excluded from a routine local build, even when named with `-Dit.test`/`-Dtes
 - **Integration fuzz targets** (`@Tag("fuzz")` in `integration`, failsafe): replaying them floods
   the log with Jazzer instrumentation output. Clear the exclusion with
   `-Dvortex.it.excludedGroups=`. Not run by the `ci` profile; the weekly `Fuzz` workflow runs them.
+- **Large integration tests** (`@Tag("large")`, failsafe): data past 2 GiB in one chunk, several GB
+  of memory, too big for CI runners. Clear the exclusion with `-Dvortex.it.excludedGroups=`. Not
+  run by the `ci` profile.
 
 Jazzer fuzz targets in the `fuzz` module (`@FuzzTest`, ADR 0020) are **not** excluded: without
 `JAZZER_FUZZ=1` each replays its saved inputs (`*Inputs/<method>/`: seeds plus every past finding)

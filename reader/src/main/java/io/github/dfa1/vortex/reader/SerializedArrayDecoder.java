@@ -49,7 +49,8 @@ final class SerializedArrayDecoder {
     /// @return the decoded [Array] for this segment
     public Array decode(MemorySegment seg, List<EncodingId> encodingSpecs,
             DType dtype, long rowCount, SegmentAllocator arena) {
-        int segLen = IoBounds.toIntSize(seg.byteSize());
+        // long: a segment's length is a u32 on the wire, so it may pass 2 GiB (#629)
+        long segLen = seg.byteSize();
 
         // The trailing u32 length field must itself be in range before we read it.
         IoBounds.checkRange(segLen - 4L, 4, segLen);

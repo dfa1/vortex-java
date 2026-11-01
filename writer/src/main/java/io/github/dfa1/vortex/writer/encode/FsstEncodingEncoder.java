@@ -128,7 +128,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         Fsst c = compress(data, rows, ctx.arena());
         MinMax stats = VarBinEncodingEncoder.textMinMax(dtype, data, rows);
         Object uncompLens = PrimitiveArrays.fromIntsArray(c.uncompLens(), c.uncompLenPType(), EncodingId.VORTEX_FSST);
-        Object codesOffsets = PrimitiveArrays.fromIntsArray(c.codesOffsets(), c.codesOffPType(), EncodingId.VORTEX_FSST);
+        Object codesOffsets = PrimitiveArrays.fromLongsArray(c.codesOffsets(), c.codesOffPType(), EncodingId.VORTEX_FSST);
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_FSST,
                 MemorySegment.ofArray(c.metaBytes()),
@@ -143,12 +143,12 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     }
 
     /// The FSST-specific product of compression: the symbol-table buffers, the wire code stream, the
-    /// [ProtoFSSTMetadata] bytes, and the per-row uncompressed lengths / cumulative code offsets as
-    /// plain `int[]` (the two offset children, in narrowest-unsigned ptypes).
+    /// [ProtoFSSTMetadata] bytes, the per-row uncompressed lengths as `int[]` and the cumulative code
+    /// offsets as `long[]` (the two offset children, in narrowest-unsigned ptypes).
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record Fsst(
             MemorySegment symBuf, MemorySegment symLenBuf, MemorySegment compBuf,
-            byte[] metaBytes, int[] uncompLens, int[] codesOffsets,
+            byte[] metaBytes, int[] uncompLens, long[] codesOffsets,
             PType uncompLenPType, PType codesOffPType, int n) {
     }
 
@@ -254,11 +254,13 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         // Written directly at wire position: codesOffsets[0] stays its default 0, and each row's
         // end lands at codesOffsets[i + 1] as it compresses, so no separate rowEnds array (and no
         // copy into a codesOffsets array afterward) is needed.
-        int[] codesOffsets = new int[n + 1];
+        // long, as Rust's fsst_compress takes i64 offsets once the codes may pass i32::MAX (#629):
+        // a chunk of large, barely compressible rows (audio, images) does.
+        long[] codesOffsets = new long[n + 1];
         long totalCompressed = 0;
         for (int i = 0; i < n; i++) {
             totalCompressed = rowCompressor.compress(compressor, i, scratch, totalCompressed);
-            codesOffsets[i + 1] = Math.toIntExact(totalCompressed);
+            codesOffsets[i + 1] = totalCompressed;
         }
 
         // A slice, not a copy: scratch is already arena-owned, so trimming the worst-case 2x
