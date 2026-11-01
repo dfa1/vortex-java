@@ -269,6 +269,21 @@ class ReadRegistryTest {
     }
 
     @Test
+    void resolveExtensions_nothingToParse_returnsTheSameInstance() {
+        // Given — a schema whose extension's decoder keeps the bytes, as the default does. The
+        // Variant and Constant decoders resolve per chunk, so an unchanged tree must not be rebuilt.
+        ReadRegistry sut = ReadRegistry.builder().register(extension("acme.geopoint")).build();
+        DType schema = new DType.Struct(List.of(ColumnName.of("c"), ColumnName.of("d")),
+                List.of(DTypes.I64, new DType.List(geopoint(OpaqueMetadata.EMPTY), false)), false);
+
+        // When
+        DType result = sut.resolveExtensions(schema);
+
+        // Then
+        assertThat(result).isSameAs(schema);
+    }
+
+    @Test
     void resolveExtensions_parserReturnsNonRecord_wrapsInVortexException() {
         // Given — a third-party parser returning metadata without value equality
         ExtensionDecoder<?> decoder = extension("acme.geopoint");

@@ -30,7 +30,7 @@ public final class TimestampDtype {
         return new DType.Extension(
                 ExtensionId.VORTEX_TIMESTAMP.id(),
                 new DType.Primitive(PType.I64, nullable),
-                new TimestampMetadata(unit, zone),
+                TimestampMetadata.of(unit, zone),
                 nullable);
     }
 
@@ -48,8 +48,9 @@ public final class TimestampDtype {
     /// @param ext declared extension dtype
     /// @return parsed zone id, or empty when no timezone is recorded
     /// @throws VortexException if the metadata is not a [TimestampMetadata]
+    /// @throws java.time.DateTimeException if the stored timezone is not a zone id this JDK knows
     public static Optional<ZoneId> timezone(DType.Extension ext) {
-        return Optional.ofNullable(metadata(ext).zone());
+        return metadata(ext).zone();
     }
 
     private static TimestampMetadata metadata(DType.Extension ext) {

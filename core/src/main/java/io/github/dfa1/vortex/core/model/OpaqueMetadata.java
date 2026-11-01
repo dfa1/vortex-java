@@ -39,13 +39,11 @@ public record OpaqueMetadata(MemorySegment bytes) implements ExtensionMetadata {
         if (bytes.byteSize() > MAX_SIZE.bytes()) {
             throw new VortexException("extension metadata too large: " + bytes.byteSize() + " > " + MAX_SIZE.bytes());
         }
-        // A dtype outlives the reader that parsed it (callers keep reader.dtype()), but a slice of
-        // the file mapping fails once the reader closes: copy that one onto the heap. Small, as the
-        // cap above bounds it; a heap segment is kept as it is.
-        if (bytes.isNative()) {
-            bytes = MemorySegment.ofArray(bytes.toArray(ValueLayout.JAVA_BYTE));
-        }
-        bytes = bytes.asReadOnly();
+        // Always a copy: a slice of the file mapping fails once the reader closes, though a dtype
+        // outlives it (callers keep reader.dtype()); and a caller's heap array, changed later,
+        // would change this value and its hash under a map holding the dtype. Small, as the cap
+        // above bounds it.
+        bytes = MemorySegment.ofArray(bytes.toArray(ValueLayout.JAVA_BYTE)).asReadOnly();
     }
 
     @Override

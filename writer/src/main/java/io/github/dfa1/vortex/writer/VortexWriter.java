@@ -132,6 +132,8 @@ public final class VortexWriter implements Closeable {
     private final WriteRegistry defaultRegistry;
     // Extension encoders for the Collection auto-route: the built-ins, or the caller's registry.
     private final WriteRegistry extensionRegistry;
+    /// Serializes the schema at close, reusing the extension metadata bytes checked at create.
+    private final DTypeFbsSerializer dtypeSerializer;
     private final List<EncodingEncoder> cascadeCodecs;
     private final WriteRegistry cascadeRegistry;
     // The dict-layout probe's codecs: the cascade with the integer dictionary back in, as Rust's
@@ -226,6 +228,7 @@ public final class VortexWriter implements Closeable {
         this.encodings = encodings;
         this.defaultRegistry = buildRegistry(encodings);
         this.extensionRegistry = extensionRegistry;
+        this.dtypeSerializer = new DTypeFbsSerializer(extensionRegistry);
         validateExtensions(schema);
         // A custom encoder list is the whole candidate set, cascade included: emitting a built-in
         // the caller left out would produce a file their own read registry may not decode.
@@ -321,7 +324,7 @@ public final class VortexWriter implements Closeable {
                     // written from its storage array; still held to Rust's rules for the id
                     wellKnown.validate(ext);
                 }
-                new DTypeFbsSerializer(extensionRegistry).metadataBytes(ext);
+                dtypeSerializer.metadataBytes(ext);
                 validateExtensions(ext.storageDType());
             }
             case DType.Struct struct -> struct.fieldTypes().forEach(this::validateExtensions);
@@ -763,7 +766,7 @@ public final class VortexWriter implements Closeable {
         long footerOff = bytesWritten;
         write(footerBuf);
 
-        ByteBuffer dtypeBuf = new DTypeFbsSerializer(extensionRegistry).buildDType(schema);
+        ByteBuffer dtypeBuf = dtypeSerializer.buildDType(schema);
         long dtypeOff = bytesWritten;
         write(dtypeBuf);
 

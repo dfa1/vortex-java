@@ -223,7 +223,7 @@ class ExtensionIdTest {
         }
 
         private static DType.Extension timestamp(DType storage, TimeUnit unit, ZoneId zone) {
-            return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP.id(), storage, new TimestampMetadata(unit, zone),
+            return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP.id(), storage, TimestampMetadata.of(unit, zone),
                     storage.nullable());
         }
     }

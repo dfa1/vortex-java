@@ -41,9 +41,10 @@ public interface ExtensionEncoder {
     /// Serializes this extension's metadata to the bytes a file stores, Rust's `serialize_metadata`:
     /// the inverse of the reader's `ExtensionDecoder.parseMetadata`. Called for metadata the writer
     /// does not serialize itself, which is anything but
-    /// [io.github.dfa1.vortex.core.model.TimeUnitMetadata],
-    /// [io.github.dfa1.vortex.core.model.TimestampMetadata] and
-    /// [io.github.dfa1.vortex.core.model.OpaqueMetadata].
+    /// [io.github.dfa1.vortex.core.model.OpaqueMetadata] and the built-in temporal records under
+    /// their own well-known ids: a custom id's metadata, even a built-in record, comes here, so it
+    /// reads back through the id's own decoder. The bytes may be at most 64 KiB, what a reader
+    /// accepts.
     ///
     /// The default refuses it.
     ///

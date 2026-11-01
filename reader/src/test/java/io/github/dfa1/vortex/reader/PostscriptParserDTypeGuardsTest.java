@@ -211,7 +211,7 @@ class PostscriptParserDTypeGuardsTest {
         MemorySegment layout = flatLayout();
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("invalid extension id in file schema");
+                .hasMessageContaining("invalid extension id");
     }
 
     @Test
