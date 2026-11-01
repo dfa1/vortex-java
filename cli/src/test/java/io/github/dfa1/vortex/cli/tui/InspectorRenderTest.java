@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -146,7 +147,7 @@ class InspectorRenderTest {
         void dateExtensionDecodeFailureFallsThroughToGeneric() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — vortex.date declared but storage is F64; the decode throws and is swallowed
-                DType dateExt = new DType.Extension("vortex.date",
+                DType dateExt = new DType.Extension(ExtensionId.VORTEX_DATE,
                         DTypes.I32, new io.github.dfa1.vortex.core.model.TimeUnitMetadata(
                                 io.github.dfa1.vortex.core.model.TimeUnit.Days), false);
                 Array badStorage = ArrayFixtures.doubles(arena, 1.5);

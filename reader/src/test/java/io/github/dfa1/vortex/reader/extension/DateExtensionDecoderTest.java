@@ -48,7 +48,7 @@ class DateExtensionDecoderTest {
         DType.Extension dtype = sut.dtype(false);
 
         // Then
-        assertThat(dtype.extensionId()).isEqualTo("vortex.date");
+        assertThat(dtype.extensionId().id()).isEqualTo("vortex.date");
         assertThat(dtype.storageDType()).isEqualTo(DTypes.I32);
         assertThat(dtype.metadata()).isEqualTo(new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Days));
     }
@@ -161,7 +161,7 @@ class DateExtensionDecoderTest {
     }
 
     private static DType.Extension dateDtype(TimeUnit unit, DType storage) {
-        return new DType.Extension("vortex.date", storage,
+        return new DType.Extension(ExtensionId.VORTEX_DATE, storage,
                 new io.github.dfa1.vortex.core.model.TimeUnitMetadata(unit), false);
     }
 }

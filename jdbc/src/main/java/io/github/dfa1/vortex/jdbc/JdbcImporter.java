@@ -218,7 +218,7 @@ public final class JdbcImporter {
     @SuppressWarnings("unchecked")
     private static void fillExtensionCell(List<Object> buffer, ResultSet rs, int colIdx,
             DType.Extension ext) throws SQLException {
-        if (!(ExtensionId.parse(ext.extensionId()) instanceof ExtensionId.WellKnown id)) {
+        if (!(ext.extensionId() instanceof ExtensionId.WellKnown id)) {
             throw new UnsupportedOperationException("unsupported extension: " + ext.extensionId());
         }
         // SQL NULL → null in the buffer. Nullable extension columns round-trip through the

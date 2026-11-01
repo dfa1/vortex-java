@@ -10,6 +10,7 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.OhlcData;
@@ -2333,7 +2334,7 @@ class JavaWritesRustReadsIntegrationTest {
         // none, and Rust refuses an absent field ("failed to parse extension metadata") for the
         // whole file, even when only a sibling column is projected.
         Path file = tmp.resolve("java_json_null_metadata.vtx");
-        DType.Extension json = new DType.Extension("vortex.json", DTypes.UTF8,
+        DType.Extension json = new DType.Extension(ExtensionId.VORTEX_JSON, DTypes.UTF8,
                 io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("j")),
                 List.of(DTypes.I64, json), false);
@@ -2367,7 +2368,7 @@ class JavaWritesRustReadsIntegrationTest {
     void invalidBuiltInExtensionDtype_refusedByJavaAndRust(@TempDir Path tmp) throws IOException {
         // Given — vortex.timestamp over I32 storage, which Rust's validate_dtype refuses ("Timestamp
         // storage dtype must be i64"). Java used to write and read it.
-        DType.Extension invalid = new DType.Extension("vortex.timestamp", DTypes.I32,
+        DType.Extension invalid = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I32,
                 new io.github.dfa1.vortex.core.model.TimestampMetadata(io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null),
                 false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("ts")), List.of(invalid), false);
@@ -2384,7 +2385,7 @@ class JavaWritesRustReadsIntegrationTest {
         // No Java write path emits it any more, so write the column under a custom id of the same
         // length and rename it in place: a FlatBuffer string is stored verbatim, once.
         DType.Struct disguised = new DType.Struct(List.of(ColumnName.of("ts")), List.of(new DType.Extension(
-                "vortex.timestamq", DTypes.I32,
+                ExtensionId.parse("vortex.timestamq"), DTypes.I32,
                 new io.github.dfa1.vortex.core.model.OpaqueMetadata(MemorySegment.ofArray(new byte[]{2, 0, 0})), false)),
                 false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE,

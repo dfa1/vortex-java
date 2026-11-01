@@ -156,7 +156,7 @@ class TimeExtensionEncoderTest {
     void encodeAll_daysUnit_throws() {
         // Given a hand-built Days-tagged dtype (TimeDtype.of rejects Days, so build directly)
         DType.Extension dtype = new DType.Extension(
-                ExtensionId.VORTEX_TIME.id(), DTypes.I32,
+                ExtensionId.VORTEX_TIME, DTypes.I32,
                 new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Days), false);
         List<LocalTime> values = List.of(T);
 

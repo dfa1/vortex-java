@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.WriteRegistry;
@@ -174,7 +175,7 @@ class ZoneMapStatsFitnessTest {
                 Arguments.of(EncodingId.VORTEX_PCO, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_ZIGZAG, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_EXT,
-                        new DType.Extension("vortex.timestamp", DTypes.I64, new io.github.dfa1.vortex.core.model.TimestampMetadata(
+                        new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, new io.github.dfa1.vortex.core.model.TimestampMetadata(
                                 io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null), false), ascending),
                 Arguments.of(EncodingId.VORTEX_SPARSE, DTypes.I64, sparse),
                 Arguments.of(EncodingId.VORTEX_PATCHED, DTypes.I64, ascending),

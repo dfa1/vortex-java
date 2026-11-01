@@ -1044,7 +1044,7 @@ final class MoneyEncoder implements ExtensionEncoder {
     static final ExtensionId ID = ExtensionId.parse("acme.money");
 
     static DType.Extension dtype(Currency currency) {
-        return new DType.Extension(ID.id(), DTypes.I64, new MoneyMetadata(currency), false);
+        return new DType.Extension(ID, DTypes.I64, new MoneyMetadata(currency), false);
     }
 
     @Override

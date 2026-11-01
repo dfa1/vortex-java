@@ -140,7 +140,7 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
             return parts;
         }
         if (!(data instanceof long[] storage) || !(dtype instanceof DType.Extension ext)
-                || !ExtensionId.VORTEX_TIMESTAMP.id().equals(ext.extensionId())
+                || ext.extensionId() != ExtensionId.VORTEX_TIMESTAMP
                 || !(ext.metadata() instanceof TimestampMetadata(TimeUnit unit, var _))
                 || unit == TimeUnit.Days) {
             return null;

@@ -32,7 +32,7 @@ public final class TimeDtype {
             case Days -> throw new IllegalArgumentException("Days unit not valid for vortex.time");
         };
         return new DType.Extension(
-                ExtensionId.VORTEX_TIME.id(),
+                ExtensionId.VORTEX_TIME,
                 new DType.Primitive(storage, nullable),
                 new TimeUnitMetadata(unit),
                 nullable);

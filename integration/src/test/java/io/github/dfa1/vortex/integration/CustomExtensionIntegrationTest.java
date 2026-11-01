@@ -303,7 +303,7 @@ class CustomExtensionIntegrationTest {
         @Test
         void create_rejectsDtypeTheEncoderRefuses(@TempDir Path tmp) throws IOException {
             // Given — metadata says 4 dimensions, storage holds 3
-            DType.Extension invalid = new DType.Extension(VECTOR.id(),
+            DType.Extension invalid = new DType.Extension(VECTOR,
                     new DType.FixedSizeList(DTypes.F32, DIM, false), new VectorMetadata(4), false);
             Path file = tmp.resolve("invalid.vortex");
 
@@ -357,14 +357,14 @@ class CustomExtensionIntegrationTest {
 
     /// The `example.vector` dtype: `FixedSizeList<F32, DIM>` storage, dimension also in metadata.
     static DType.Extension vectorDtype(boolean nullable) {
-        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, DIM, nullable),
+        return new DType.Extension(VECTOR, new DType.FixedSizeList(DTypes.F32, DIM, nullable),
                 new VectorMetadata(DIM), nullable);
     }
 
     /// The dtype as a writer without the encoder writes it, over 2-element vectors: metadata as the
     /// bytes a file stores, here declaring `metadataDim` dimensions.
     static DType.Extension opaqueVectorDtype(int metadataDim) {
-        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, 2, false),
+        return new DType.Extension(VECTOR, new DType.FixedSizeList(DTypes.F32, 2, false),
                 new OpaqueMetadata(dimensionBytes(metadataDim)), false);
     }
 

@@ -175,7 +175,7 @@ class ExtensionIdTest {
         @MethodSource("valid")
         void validate_validDtype_passes(String name, DType.Extension dtype) {
             // Given a dtype Rust accepts
-            ExtensionId.WellKnown sut = (ExtensionId.WellKnown) ExtensionId.parse(dtype.extensionId());
+            ExtensionId.WellKnown sut = (ExtensionId.WellKnown) dtype.extensionId();
 
             // When / Then
             sut.validate(dtype);
@@ -185,7 +185,7 @@ class ExtensionIdTest {
         @MethodSource("invalid")
         void validate_invalidDtype_throws(DType.Extension dtype, String message) {
             // Given a dtype Rust refuses
-            ExtensionId.WellKnown sut = (ExtensionId.WellKnown) ExtensionId.parse(dtype.extensionId());
+            ExtensionId.WellKnown sut = (ExtensionId.WellKnown) dtype.extensionId();
 
             // When / Then
             assertThatThrownBy(() -> sut.validate(dtype))
@@ -214,16 +214,16 @@ class ExtensionIdTest {
             for (int i = 0; i < meta.length; i++) {
                 bytes[i] = (byte) meta[i];
             }
-            return new DType.Extension(id.id(), storage, new OpaqueMetadata(MemorySegment.ofArray(bytes)),
+            return new DType.Extension(id, storage, new OpaqueMetadata(MemorySegment.ofArray(bytes)),
                     storage.nullable());
         }
 
         private static DType.Extension unit(ExtensionId id, DType storage, TimeUnit unit) {
-            return new DType.Extension(id.id(), storage, new TimeUnitMetadata(unit), storage.nullable());
+            return new DType.Extension(id, storage, new TimeUnitMetadata(unit), storage.nullable());
         }
 
         private static DType.Extension timestamp(DType storage, TimeUnit unit, ZoneId zone) {
-            return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP.id(), storage, TimestampMetadata.of(unit, zone),
+            return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, storage, TimestampMetadata.of(unit, zone),
                     storage.nullable());
         }
     }

@@ -344,7 +344,7 @@ class ReadRegistryTest {
     void resolveExtensions_wellKnownIdWithoutDecoder_passesStrictMode() {
         // Given — vortex.json is in the vortex-jni default session, so a strict reader must open it
         // (reading the column as its Utf8 storage) though Java registers no decoder for it
-        DType schema = new DType.Extension("vortex.json", DTypes.UTF8, OpaqueMetadata.EMPTY, false);
+        DType schema = new DType.Extension(ExtensionId.VORTEX_JSON, DTypes.UTF8, OpaqueMetadata.EMPTY, false);
         ReadRegistry sut = ReadRegistry.loadAll();
 
         // When
@@ -357,7 +357,7 @@ class ReadRegistryTest {
     @Test
     void resolveExtensions_wellKnownIdWithoutDecoder_stillValidated() {
         // Given — no decoder, but Rust's rules for the id still apply
-        DType schema = new DType.Extension("vortex.json", DTypes.I32, OpaqueMetadata.EMPTY, false);
+        DType schema = new DType.Extension(ExtensionId.VORTEX_JSON, DTypes.I32, OpaqueMetadata.EMPTY, false);
         ReadRegistry sut = ReadRegistry.loadAll();
 
         // When / Then
@@ -371,7 +371,7 @@ class ReadRegistryTest {
     }
 
     private static DType.Extension geopoint(ExtensionMetadata metadata) {
-        return new DType.Extension("acme.geopoint", DTypes.I32, metadata, false);
+        return new DType.Extension(ExtensionId.parse("acme.geopoint"), DTypes.I32, metadata, false);
     }
 
     private static EncodingDecoder decoder(EncodingId id) {

@@ -10,6 +10,7 @@ import dev.hardwood.schema.FileSchema;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.TimeUnit;
@@ -208,7 +209,7 @@ class ParquetExporterTest {
         @Test
         void nonTimestampExtension_throws() {
             // Given — a made-up extension id this exporter has no mapping for
-            DType.Extension ext = new DType.Extension("vortex.uuid", new DType.Primitive(PType.I64, false),
+            DType.Extension ext = new DType.Extension(ExtensionId.VORTEX_UUID, new DType.Primitive(PType.I64, false),
                     io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
 
             // When / Then

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.core.model.PType;
@@ -91,8 +92,8 @@ class SchemaCommandTest {
                 arguments(new DType.Map(DTypes.UTF8, i64, true, false), "map<utf8, I64, keys_sorted=true>"),
                 arguments(new DType.Map(DTypes.UTF8, new DType.Primitive(PType.I64, true), false, false),
                         "map<utf8, I64?, keys_sorted=false>"),
-                arguments(new DType.Extension("vortex.uuid", i64, OpaqueMetadata.EMPTY, false), "ext<vortex.uuid>"),
-                arguments(new DType.Extension("vortex.uuid", i64, OpaqueMetadata.EMPTY, true), "ext<vortex.uuid>?"),
+                arguments(new DType.Extension(ExtensionId.VORTEX_UUID, i64, OpaqueMetadata.EMPTY, false), "ext<vortex.uuid>"),
+                arguments(new DType.Extension(ExtensionId.VORTEX_UUID, i64, OpaqueMetadata.EMPTY, true), "ext<vortex.uuid>?"),
                 arguments(DTypes.VARIANT, "variant"),
                 arguments(new DType.Variant(true), "variant?"),
                 arguments(new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(i64, DTypes.UTF8), false),

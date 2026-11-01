@@ -302,7 +302,7 @@ When stuck on encode/decode behavior, consult **in this order**:
 ## Design decisions
 
 - **DType is pluggable only via `Extension`.** `DType` is a sealed interface; downstream code must
-  not add variants. Use `new DType.Extension("ip.address", new DType.Primitive(PType.I32, false),
+  not add variants. Use `new DType.Extension(ExtensionId.parse("ip.address"), new DType.Primitive(PType.I32, false),
   OpaqueMetadata.EMPTY, false)` and register an `ExtensionDecoder`/`ExtensionEncoder` on
   `ReadRegistry`/`WriteRegistry`. Mirrors Rust's `ExtVTable` (`vortex.date`, `vortex.uuid`, …): an
   unregistered id fails the read unless `allowUnknown()`, then reads as storage. No SPI for DType

@@ -105,7 +105,7 @@ final class GridRender {
     }
 
     private static Optional<String> formatExtension(DType.Extension ext, Array storage, long i) {
-        if (!(ExtensionId.parse(ext.extensionId()) instanceof ExtensionId.WellKnown id)) {
+        if (!(ext.extensionId() instanceof ExtensionId.WellKnown id)) {
             return Optional.empty();
         }
         return switch (id) {

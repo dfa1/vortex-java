@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -160,7 +161,7 @@ class VortexCliTest {
     private static Path writeCustomExtensionVortex(Path dir) throws IOException {
         Path file = dir.resolve("money.vortex");
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("price")),
-                List.of(new DType.Extension("acme.money", DTypes.I64,
+                List.of(new DType.Extension(ExtensionId.parse("acme.money"), DTypes.I64,
                         new io.github.dfa1.vortex.core.model.OpaqueMetadata(
                                 java.lang.foreign.MemorySegment.ofArray("EUR".getBytes(StandardCharsets.US_ASCII))), false)),
                 false);

@@ -38,8 +38,8 @@ class DTypeFbsSerializerTest {
         DTypeFbsSerializer sut = new DTypeFbsSerializer(WriteRegistry.builder().build());
 
         // When
-        byte[] date = sut.metadataBytes(extension("vortex.date", new TimeUnitMetadata(TimeUnit.Days)));
-        byte[] timestamp = sut.metadataBytes(extension("vortex.timestamp",
+        byte[] date = sut.metadataBytes(extension(ExtensionId.VORTEX_DATE, new TimeUnitMetadata(TimeUnit.Days)));
+        byte[] timestamp = sut.metadataBytes(extension(ExtensionId.VORTEX_TIMESTAMP,
                 new TimestampMetadata(TimeUnit.Milliseconds, "UTC")));
 
         // Then — the unit tag; then for a timestamp the u16 LE zone length and the zone as stored
@@ -56,7 +56,7 @@ class DTypeFbsSerializerTest {
         DTypeFbsSerializer sut = new DTypeFbsSerializer(WriteRegistry.builder().register(encoder).build());
 
         // When
-        byte[] result = sut.metadataBytes(extension(GEOPOINT.id(), new TimeUnitMetadata(TimeUnit.Seconds)));
+        byte[] result = sut.metadataBytes(extension(GEOPOINT, new TimeUnitMetadata(TimeUnit.Seconds)));
 
         // Then
         assertThat(result).containsExactly(7);
@@ -68,7 +68,7 @@ class DTypeFbsSerializerTest {
         ExtensionEncoder encoder = encoder(GEOPOINT);
         given(encoder.serializeMetadata(any())).willReturn(new byte[]{1});
         DTypeFbsSerializer sut = new DTypeFbsSerializer(WriteRegistry.builder().register(encoder).build());
-        DType.Extension ext = extension(GEOPOINT.id(), new Srid(4326));
+        DType.Extension ext = extension(GEOPOINT, new Srid(4326));
 
         // When
         sut.metadataBytes(ext);
@@ -87,7 +87,7 @@ class DTypeFbsSerializerTest {
         DTypeFbsSerializer sut = new DTypeFbsSerializer(WriteRegistry.builder().register(encoder).build());
 
         // When / Then
-        assertThatThrownBy(() -> sut.metadataBytes(extension(GEOPOINT.id(), new Srid(1))))
+        assertThatThrownBy(() -> sut.metadataBytes(extension(GEOPOINT, new Srid(1))))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("acme.geopoint metadata serializes to 65537 bytes");
     }
@@ -100,7 +100,7 @@ class DTypeFbsSerializerTest {
         DTypeFbsSerializer sut = new DTypeFbsSerializer(WriteRegistry.builder().register(encoder).build());
 
         // When / Then — a VortexException naming the extension, not an NPE inside the FlatBuffer builder
-        assertThatThrownBy(() -> sut.metadataBytes(extension(GEOPOINT.id(), new Srid(1))))
+        assertThatThrownBy(() -> sut.metadataBytes(extension(GEOPOINT, new Srid(1))))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("acme.geopoint encoder serialized its metadata to null");
     }
@@ -111,7 +111,7 @@ class DTypeFbsSerializerTest {
         DTypeFbsSerializer sut = new DTypeFbsSerializer(WriteRegistry.builder().build());
 
         // When / Then
-        assertThatThrownBy(() -> sut.metadataBytes(extension(GEOPOINT.id(), new Srid(1))))
+        assertThatThrownBy(() -> sut.metadataBytes(extension(GEOPOINT, new Srid(1))))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("no extension encoder registered for acme.geopoint");
     }
@@ -123,13 +123,13 @@ class DTypeFbsSerializerTest {
         byte[] bytes = "crs".getBytes(StandardCharsets.US_ASCII);
 
         // When
-        byte[] result = sut.metadataBytes(extension("vortex.st.wkb", new OpaqueMetadata(MemorySegment.ofArray(bytes))));
+        byte[] result = sut.metadataBytes(extension(ExtensionId.VORTEX_ST_WKB, new OpaqueMetadata(MemorySegment.ofArray(bytes))));
 
         // Then
         assertThat(result).isEqualTo(bytes);
     }
 
-    private static DType.Extension extension(String id, ExtensionMetadata metadata) {
+    private static DType.Extension extension(ExtensionId id, ExtensionMetadata metadata) {
         return new DType.Extension(id, DTypes.I64, metadata, false);
     }
 

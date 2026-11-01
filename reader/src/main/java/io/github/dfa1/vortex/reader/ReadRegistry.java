@@ -53,7 +53,6 @@ import io.github.dfa1.vortex.reader.decode.ZstdBuffersEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ZstdEncodingDecoder;
 import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
-import io.github.dfa1.vortex.reader.extension.ExtensionMetadataParser;
 import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
@@ -164,7 +163,7 @@ public final class ReadRegistry {
         return switch (dtype) {
             case null -> null;
             case DType.Extension ext -> {
-                ExtensionId id = ExtensionMetadataParser.parseId(ext.extensionId());
+                ExtensionId id = ext.extensionId();
                 ExtensionDecoder<?> decoder = extensions.get(id);
                 DType storage = resolveExtensions(ext.storageDType());
                 DType.Extension resolved = ext;

@@ -31,7 +31,7 @@ final class InspectorRender {
     /// @return formatted value, or an angle-bracketed fallback for unknown shapes
     static String formatValue(Array array, int i, DType declared) {
         if (declared instanceof DType.Extension ext
-                && ExtensionId.parse(ext.extensionId()) == ExtensionId.VORTEX_DATE) {
+                && ext.extensionId() == ExtensionId.VORTEX_DATE) {
             try {
                 return DateExtensionDecoder.INSTANCE.decode(ext, array, i).toString();
             } catch (RuntimeException _) {
