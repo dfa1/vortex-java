@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.compute.Utf8Order;
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -40,18 +39,34 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         // values child of a masked/nullable layout, where validity carries nullity) contributes a
         // zero-length slot.
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
-        if (rows == null) {
-            throw new VortexException(EncodingId.VORTEX_VARBIN, "chunk exceeds 2 GB of row bytes");
-        }
-        int n = rows.count();
-        int totalBytes = rows.offsets()[n];
-
         Arena arena = ctx.arena();
-        MemorySegment bytesBuf = arena.allocate(totalBytes > 0 ? totalBytes : 1);
-        MemorySegment.copy(rows.bytes(), 0, bytesBuf, ValueLayout.JAVA_BYTE, 0, totalBytes);
-        MemorySegment offsetsBuf = arena.allocate((long) (n + 1) * Long.BYTES, Long.BYTES);
-        for (int i = 0; i <= n; i++) {
-            offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i, rows.offsets()[i]);
+        MemorySegment bytesBuf;
+        MemorySegment offsetsBuf;
+        if (rows != null) {
+            int n = rows.count();
+            int totalBytes = rows.offsets()[n];
+            bytesBuf = arena.allocate(totalBytes > 0 ? totalBytes : 1);
+            MemorySegment.copy(rows.bytes(), 0, bytesBuf, ValueLayout.JAVA_BYTE, 0, totalBytes);
+            offsetsBuf = arena.allocate((long) (n + 1) * Long.BYTES, Long.BYTES);
+            for (int i = 0; i <= n; i++) {
+                offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i, rows.offsets()[i]);
+            }
+        } else {
+            // Past 2 GB of row bytes no byte[] holds them contiguously, but the off-heap buffer and
+            // its i64 offsets do (#633): copy the rows straight into it
+            byte[][] perRow = VarBinBytes.toByteArrays(data);
+            long totalBytes = 0;
+            for (byte[] row : perRow) {
+                totalBytes += row.length;
+            }
+            bytesBuf = arena.allocate(totalBytes);
+            offsetsBuf = arena.allocate((long) (perRow.length + 1) * Long.BYTES, Long.BYTES);
+            long at = 0;
+            for (int i = 0; i < perRow.length; i++) {
+                MemorySegment.copy(perRow[i], 0, bytesBuf, ValueLayout.JAVA_BYTE, at, perRow[i].length);
+                at += perRow[i].length;
+                offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i + 1, at);
+            }
         }
 
         byte[] metaBytes = new ProtoVarBinMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal())).encode();

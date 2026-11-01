@@ -109,10 +109,14 @@ public record VarBinOffsetArray(DType dtype, long length, MemorySegment bytesSeg
     /// `IndexOutOfBoundsException` (ADR 0003).
     ///
     /// @param i zero-based offset index, in `[0, length]`
-    /// @return the offset value widened to a signed long
+    /// @return the offset value widened to a long, unsigned for `U32`
     private long readOffset(long i) {
         try {
-            if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
+            if (offsetsPtype == PType.U32) {
+                // a u32 offset passes Integer.MAX_VALUE once the data buffer does (#633)
+                return Integer.toUnsignedLong(offsetsSegment.getAtIndex(VortexFormat.LE_INT, i));
+            }
+            if (offsetsPtype == PType.I32) {
                 return offsetsSegment.getAtIndex(VortexFormat.LE_INT, i);
             }
             return offsetsSegment.getAtIndex(VortexFormat.LE_LONG, i);

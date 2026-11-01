@@ -10,6 +10,8 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.reader.decode.VarBinViewEncodingDecoder;
+import java.util.List;
+import java.util.ArrayList;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -200,6 +202,81 @@ class VarBinViewEncodingEncoderTest {
                 String decoded = varBinArray.getString(i);
                 assertThat(decoded).as("index %d", i).isEqualTo(values[i]);
             }
+        }
+    }
+
+    /// Out-of-line rows fill data buffers up to a cap (`Integer.MAX_VALUE` by default, Rust's
+    /// `MAX_BUFFER_LEN`), so a chunk past 2 GiB still addresses every row (#633). A 26-byte cap
+    /// reaches the split here.
+    @Nested
+    class DataBufferCap {
+
+        private final VarBinViewEncodingEncoder sut = new VarBinViewEncodingEncoder(26);
+
+        @Test
+        void rowsPastTheCap_openANewBufferAndRoundTrip() {
+            // Given — 13-byte rows (out of line), an inlined row between them: a + b fill the first
+            // buffer exactly, c starts the second at offset 0
+            String a = "aaaaaaaaaaaaa";
+            String b = "bbbbbbbbbbbbb";
+            String c = "ccccccccccccc";
+            String[] values = {a, "short", b, c};
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
+
+            // Then — two data buffers then the views, and every row decodes
+            List<MemorySegment> buffers = result.buffers();
+            assertThat(buffers).hasSize(3);
+            assertThat(buffers.get(0).byteSize()).isEqualTo(26);
+            assertThat(buffers.get(1).byteSize()).isEqualTo(13);
+            MemorySegment views = buffers.get(2);
+            assertThat(views.get(VortexFormat.LE_INT, 3 * 16L + 8)).as("c's buffer index").isEqualTo(1);
+            assertThat(views.get(VortexFormat.LE_INT, 3 * 16L + 12)).as("c's offset").isZero();
+            assertThat(decode(result, values.length)).containsExactly(values);
+        }
+
+        @Test
+        void rowLargerThanTheCap_takesABufferOfItsOwn() {
+            // Given
+            String big = "x".repeat(40);
+            String[] values = {"aaaaaaaaaaaaa", big};
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.buffers()).hasSize(3);
+            assertThat(result.buffers().get(1).byteSize()).isEqualTo(40);
+            assertThat(decode(result, values.length)).containsExactly(values);
+        }
+
+        @Test
+        void allInlinedOrEmpty_writesNoDataBuffer() {
+            // Given
+            String[] inlined = {"a", "bc", ""};
+
+            // When
+            EncodeResult inlinedResult = sut.encode(DTypes.UTF8, inlined, EncodeTestHelper.testCtx());
+            EncodeResult emptyResult = sut.encode(DTypes.UTF8, new String[0], EncodeTestHelper.testCtx());
+
+            // Then — only the views buffer
+            assertThat(inlinedResult.buffers()).hasSize(1);
+            assertThat(decode(inlinedResult, inlined.length)).containsExactly(inlined);
+            assertThat(emptyResult.buffers()).hasSize(1);
+        }
+
+        private static List<String> decode(EncodeResult result, int n) {
+            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0],
+                    result.rootNode().bufferIndices());
+            DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, n, bufs, REGISTRY, Arena.ofAuto());
+            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+            List<String> out = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                out.add(decoded.getString(i));
+            }
+            return out;
         }
     }
 }

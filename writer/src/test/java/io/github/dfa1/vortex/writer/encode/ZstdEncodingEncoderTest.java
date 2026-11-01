@@ -676,4 +676,74 @@ class ZstdEncodingEncoderTest {
             assertThat(child.getInt(6)).isEqualTo(50);
         }
     }
+
+    /// A varbin frame closes before its payload passes a cap (1 GiB by default), so every frame stays
+    /// within the 2 GiB a reader takes (#633). Each 10-byte value is a 14-byte length-prefixed
+    /// payload; small caps reach the split here.
+    @Nested
+    class FrameByteCap {
+
+        private static final String[] VALUES = {"aaaaaaaaaa", "bbbbbbbbbb", "cccccccccc", "dddddddddd", "eeeeeeeeee"};
+
+        @Test
+        void payloadPastTheCap_splitsOnValueBoundariesAndRoundTrips() throws Exception {
+            // Given — 40 bytes hold two values (28), not three (42)
+            var sut = new ZstdEncodingEncoder(0, true, 40);
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, VALUES, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(frameValueCounts(result)).containsExactly(2L, 2L, 1L);
+            assertThat(roundTrip(result)).containsExactly(VALUES);
+        }
+
+        @Test
+        void valuesPerFrame_andByteCap_closeAtWhicheverComesFirst() throws Exception {
+            // Given — at most 3 values a frame, at most 40 bytes: the byte cap closes first
+            var sut = new ZstdEncodingEncoder(3, true, 40);
+            // at most 2 values a frame, a cap no frame reaches: the count closes first
+            var byCount = new ZstdEncodingEncoder(2, true, 1_000);
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, VALUES, EncodeTestHelper.testCtx());
+            EncodeResult countResult = byCount.encode(DTypes.UTF8, VALUES, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(frameValueCounts(result)).containsExactly(2L, 2L, 1L);
+            assertThat(frameValueCounts(countResult)).containsExactly(2L, 2L, 1L);
+            assertThat(roundTrip(result)).containsExactly(VALUES);
+        }
+
+        @Test
+        void valueLargerThanTheCap_isAFrameOfItsOwn() throws Exception {
+            // Given
+            var sut = new ZstdEncodingEncoder(0, true, 10);
+            String[] values = {"x".repeat(20), "y"};
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(frameValueCounts(result)).containsExactly(1L, 1L);
+            assertThat(roundTrip(result)).containsExactly(values);
+        }
+
+        private static List<Long> frameValueCounts(EncodeResult result) throws Exception {
+            var metaSeg = result.rootNode().metadata();
+            return ProtoZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize()).frames().stream()
+                    .map(ProtoZstdFrameMetadata::n_values).toList();
+        }
+
+        private static List<String> roundTrip(EncodeResult result) throws Exception {
+            int n = Math.toIntExact(frameValueCounts(result).stream().mapToLong(Long::longValue).sum());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, n, DTypes.UTF8, ReadRegistry.empty());
+            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+            List<String> out = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                out.add(decoded.getString(i));
+            }
+            return out;
+        }
+    }
 }
