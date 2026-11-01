@@ -59,6 +59,12 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         }
     }
 
+    /// Largest uncompressed payload of one varbin frame: half the 2 GiB a reader takes per frame.
+    private static final long MAX_FRAME_BYTES = 1L << 30;
+
+    /// The varbin frame cap in use: [#MAX_FRAME_BYTES], smaller in tests.
+    private final long maxFrameBytes;
+
     /// Values per zstd frame; `0` (or any non-positive value) means a single frame for the whole array.
     private final long valuesPerFrame;
 
@@ -87,8 +93,18 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     }
 
     private ZstdEncodingEncoder(long valuesPerFrame, boolean textOnly) {
+        this(valuesPerFrame, textOnly, MAX_FRAME_BYTES);
+    }
+
+    /// Creates an encoder with a smaller varbin frame cap, so tests reach the split without 1 GiB.
+    ///
+    /// @param valuesPerFrame values per frame; non-positive means no count limit
+    /// @param textOnly       whether only strings and binary are accepted
+    /// @param maxFrameBytes  the largest uncompressed varbin frame payload
+    ZstdEncodingEncoder(long valuesPerFrame, boolean textOnly, long maxFrameBytes) {
         this.valuesPerFrame = valuesPerFrame;
         this.textOnly = textOnly;
+        this.maxFrameBytes = maxFrameBytes;
     }
 
     @Override
@@ -276,27 +292,38 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     /// Frame layout for a length-prefixed varbin payload: `valuesPerFrame` values per frame, with
     /// each frame's byte span found by walking the 4-byte length prefixes to a value boundary.
+    ///
+    /// A frame is also closed before its payload passes [#MAX_FRAME_BYTES] (#633): the reader
+    /// caps a frame's declared size at 2 GiB until ADR 0004's resource limits exist, so a frame this
+    /// writer emits stays readable. A payload under the cap keeps the plain layout. A single value
+    /// larger than the cap is a frame of its own; past 2 GiB it would not read back, but no Java
+    /// array holds such a row.
     private FrameLayout varBinLayout(MemorySegment raw, long nValues) {
-        if (valuesPerFrame <= 0 || nValues <= valuesPerFrame) {
+        boolean fitsOneFrame = valuesPerFrame <= 0 || nValues <= valuesPerFrame;
+        if (fitsOneFrame && raw.byteSize() <= maxFrameBytes) {
             return new FrameLayout(new long[]{raw.byteSize()}, new long[]{nValues});
         }
-        int frameCount = (int) ((nValues + valuesPerFrame - 1) / valuesPerFrame);
-        long[] byteLengths = new long[frameCount];
-        long[] valueCounts = new long[frameCount];
+        List<Long> byteLengths = new ArrayList<>();
+        List<Long> valueCounts = new ArrayList<>();
         long pos = 0;
-        long valueIdx = 0;
-        for (int f = 0; f < frameCount; f++) {
-            long count = Math.min(valuesPerFrame, nValues - valueIdx);
-            long start = pos;
-            for (long k = 0; k < count; k++) {
-                int len = raw.get(VortexFormat.LE_INT, pos);
-                pos += 4L + len;
+        long frameStart = 0;
+        long count = 0;
+        for (long v = 0; v < nValues; v++) {
+            long valueBytes = 4L + raw.get(VortexFormat.LE_INT, pos);
+            boolean full = valuesPerFrame > 0 && count == valuesPerFrame;
+            if (count > 0 && (full || pos - frameStart + valueBytes > maxFrameBytes)) {
+                byteLengths.add(pos - frameStart);
+                valueCounts.add(count);
+                frameStart = pos;
+                count = 0;
             }
-            byteLengths[f] = pos - start;
-            valueCounts[f] = count;
-            valueIdx += count;
+            pos += valueBytes;
+            count++;
         }
-        return new FrameLayout(byteLengths, valueCounts);
+        byteLengths.add(pos - frameStart);
+        valueCounts.add(count);
+        return new FrameLayout(byteLengths.stream().mapToLong(Long::longValue).toArray(),
+                valueCounts.stream().mapToLong(Long::longValue).toArray());
     }
 
     private static Frames compressFrames(MemorySegment raw, FrameLayout layout, Arena arena) {
@@ -371,7 +398,8 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     }
 
     private static MemorySegment buildLengthPrefixed(byte[][] encoded, Arena arena) {
-        int total = 0;
+        // long: a chunk's rows may pass 2 GiB, which an int total wraps negative (#633)
+        long total = 0;
         for (byte[] bytes : encoded) {
             total += 4 + bytes.length;
         }

@@ -42,6 +42,48 @@ class VarBinArrayTest {
         return new VarBinOffsetArray(UTF8, values.length, bytes, offsetsSeg, PType.I32);
     }
 
+    /// `U32` offsets reach past 2 GiB once the data buffer does, as in Rust-written files (#633).
+    @Nested
+    class U32Offsets {
+
+        @Test
+        @SuppressWarnings("restricted") // reinterpret sizes a segment over no memory; never read
+        void getByteLength_offsetsPastTwoGibibytes_readUnsigned() {
+            // Given — offsets straddling 2^31; only the data buffer's size is read, so it is a
+            // 3 GiB view over no memory rather than an allocation (reading its bytes would crash
+            // the JVM: keep this to getByteLength)
+            long start = Integer.MAX_VALUE - 9L;
+            long end = Integer.MAX_VALUE + 11L;
+            ByteBuffer bb = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+            bb.putInt((int) start).putInt((int) end);
+            MemorySegment bytes = MemorySegment.NULL.reinterpret(3L << 30);
+            var sut = new VarBinOffsetArray(DTypes.BINARY, 1, bytes, MemorySegment.ofArray(bb.array()), PType.U32);
+
+            // When
+            int result = sut.getByteLength(0);
+
+            // Then
+            assertThat(result).isEqualTo(20);
+        }
+
+        @Test
+        void getByteLength_unsignedOffsetPastTheDataBuffer_throwsVortexException() {
+            // Given — 0xFFFFFFF0 used to read as negative; unsigned it is ~4 GiB, past a 16-byte buffer
+            ByteBuffer bb = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN);
+            bb.putInt(0).putInt(0xFFFF_FFF0).putInt(0xFFFF_FFF0);
+            MemorySegment bytes = MemorySegment.ofArray(new byte[16]);
+            var sut = new VarBinOffsetArray(DTypes.BINARY, 2, bytes, MemorySegment.ofArray(bb.array()), PType.U32);
+
+            // When / Then — the row read and the row-range slice both reject it
+            assertThatThrownBy(() -> sut.getByteLength(0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range");
+            assertThatThrownBy(() -> sut.limited(1))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range");
+        }
+    }
+
     @Nested
     class Regular {
 

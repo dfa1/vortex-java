@@ -23,8 +23,9 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -39,17 +40,25 @@ import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// An FSST column whose compressed codes pass 2 GiB in one chunk writes and reads back (#629): the
-/// code offsets go 64-bit, as Rust's `fsst_compress` switches to `i64` offsets past `i32::MAX`; the
-/// segment, whose length is a `u32` on the wire, is written past a `ByteBuffer`'s 2 GiB and read
-/// back as one. Found on Raincloud's `peoples-speech-clean-validation`, whose audio column is
-/// ~2.3 GB in one 8192-row block.
+/// A binary column whose bytes pass 2 GiB in one chunk writes and reads back in every encoding that
+/// can hold it: FSST's code offsets go 64-bit as Rust's `fsst_compress` does past `i32::MAX`, and the
+/// segment, a `u32` length on the wire, is written and read past a `ByteBuffer`'s 2 GiB (#629);
+/// `vortex.varbin` copies its rows per row past 2 GiB, with `i64` offsets; `vortex.varbinview`
+/// spreads its rows over data buffers below 2 GiB each; `vortex.zstd` sums its length-prefixed
+/// payload in a `long` and closes a frame before 1 GiB (#633). Found on Raincloud's
+/// `peoples-speech-clean-validation` (2.3 GB of audio in one 8192-row block) and `mmmu` (2.95 GB of
+/// images).
 ///
-/// FSST only wins on bytes it can shrink, so the rows compress slightly (a repeated word in a tenth
-/// of their 8-byte slots, the rest bytes FSST codes one for one) and ~2.46 GB of input is needed;
-/// every row shares one array to keep the heap small. Tagged `large`: several GB of memory.
+/// Not covered here: reading Rust's `u32` varbin offsets past 2 GiB (`mmmu`). Java writes `i64`
+/// offsets, and a Rust-written fixture that size is too big to commit, so `VarBinArrayTest` pins the
+/// unsigned read and Raincloud's `mmmu` is its cross-check.
+///
+/// Each case forces one encoding on ~2.46 GB of slightly compressible rows (a repeated word in a tenth
+/// of their 8-byte slots, the rest bytes FSST codes one for one), so FSST and zstd both win and keep
+/// their encoding; every row shares one array to keep the heap small. Tagged `large`: several GB of
+/// memory.
 @Tag("large")
-class FsstLargeChunkInteropIntegrationTest {
+class LargeChunkInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
@@ -62,15 +71,16 @@ class FsstLargeChunkInteropIntegrationTest {
         NativeLoader.loadJni();
     }
 
-    @Test
-    void codesPastTwoGibibytes_roundTripAndJniReads(@TempDir Path tmp) throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"vortex.fsst", "vortex.varbin", "vortex.varbinview", "vortex.zstd"})
+    void chunkPastTwoGibibytes_roundTripsAndJniReads(String encoding, @TempDir Path tmp) throws Exception {
         // Given
         byte[] row = slightlyCompressibleRow();
         byte[][] rows = new byte[ROWS][];
         Arrays.fill(rows, row);
-        Path file = tmp.resolve("fsst.vortex");
-        WriteOptions options = WriteOptions.defaults()
-                .withColumnEncoding(BLOB, ColumnEncoding.candidates(EncodingId.VORTEX_FSST));
+        Path file = tmp.resolve("large.vortex");
+        EncodingId id = EncodingId.parse(encoding);
+        WriteOptions options = WriteOptions.defaults().withColumnEncoding(BLOB, ColumnEncoding.candidates(id));
 
         // When
         DType.Struct schema = new DType.Struct(List.of(BLOB), List.of(new DType.Binary(false)), false);
@@ -79,9 +89,13 @@ class FsstLargeChunkInteropIntegrationTest {
             writer.writeChunk(Map.of(BLOB, rows));
         }
 
-        // Then — FSST was kept and its codes passed 2 GiB; the last rows, whose codes start past it,
+        // Then — the forced encoding was kept, and the last rows, whose bytes start past 2 GiB,
         // decode to the input in vortex-jni and vortex-java
-        assertThat(file.toFile().length()).isGreaterThan(Integer.MAX_VALUE).isLessThan((long) ROWS * ROW_BYTES);
+        assertThat(dataEncoding(file)).isEqualTo(encoding);
+        if (id != EncodingId.VORTEX_ZSTD) {
+            // zstd shrinks the repeated row to almost nothing; its 2 GiB is the payload it compresses
+            assertThat(file.toFile().length()).isGreaterThan(Integer.MAX_VALUE);
+        }
         assertThat(readTailWithJni(file, ROWS - 4, ROWS)).hasSize(4).allSatisfy(b -> assertThat(b).isEqualTo(row));
         assertThat(readLastWithJava(file)).isEqualTo(row);
     }
@@ -100,6 +114,14 @@ class FsstLargeChunkInteropIntegrationTest {
             }
         }
         return row;
+    }
+
+    /// The root encoding of the blob column's data: the array under its zoned layout's first flat.
+    private static String dataEncoding(Path file) throws IOException {
+        List<String> tree = EncodingTrees.of(file);
+        int flat = tree.indexOf("    vortex.flat");
+        assertThat(flat).as("the blob column's data flat in %s", tree).isPositive();
+        return tree.get(flat + 1).strip();
     }
 
     private static List<byte[]> readTailWithJni(Path file, long begin, long end) throws IOException {

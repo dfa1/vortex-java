@@ -161,8 +161,8 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         }
 
         MemorySegment values = ctx.arena().allocate(totalDataBytes > 0 ? totalDataBytes : 1);
-        MemorySegment offsets = ctx.arena().allocate((rowCount + 1) * 4L, 4);
-        offsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
+        PType offsetsPtype = offsetsPtype(totalDataBytes);
+        MemorySegment offsets = ctx.arena().allocate((rowCount + 1) * offsetsPtype.byteSize(), offsetsPtype.byteSize());
 
         // Second pass reads the same positions the first pass already bounds-checked via
         // readVarBinLen, so a raw get/copy here cannot overrun; values is sized to the validated
@@ -177,10 +177,10 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
                 readPos += len;
                 dataPos += len;
             }
-            offsets.setAtIndex(VortexFormat.LE_INT, i + 1, (int) dataPos);
+            setOffset(offsets, offsetsPtype, i + 1, dataPos);
         }
 
-        return new VarBinOffsetArray(dtype.withNullable(false), rowCount, values, offsets, PType.I32);
+        return new VarBinOffsetArray(dtype.withNullable(false), rowCount, values, offsets, offsetsPtype);
     }
 
     private static MemorySegment decompressFrames(
@@ -313,8 +313,8 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         }
 
         MemorySegment values = ctx.arena().allocate(totalDataBytes);
-        MemorySegment offsets = ctx.arena().allocate((n + 1) * 4L, 4);
-        offsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
+        PType offsetsPtype = offsetsPtype(totalDataBytes);
+        MemorySegment offsets = ctx.arena().allocate((n + 1) * offsetsPtype.byteSize(), offsetsPtype.byteSize());
 
         // Second pass reads the same positions the first pass already bounds-checked via
         // readVarBinLen, so a raw get/copy here cannot overrun; values is sized to the validated
@@ -327,9 +327,22 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
             MemorySegment.copy(decompressed, pos, values, dataPos, len);
             pos += len;
             dataPos += len;
-            offsets.setAtIndex(VortexFormat.LE_INT, i + 1, (int) dataPos);
+            setOffset(offsets, offsetsPtype, i + 1, dataPos);
         }
 
-        return new VarBinOffsetArray(dtype, n, values, offsets, PType.I32);
+        return new VarBinOffsetArray(dtype, n, values, offsets, offsetsPtype);
+    }
+
+    /// `I32` offsets, as before, unless the rows' bytes pass 2 GiB, which only `I64` reaches (#633).
+    private static PType offsetsPtype(long totalDataBytes) {
+        return totalDataBytes > Integer.MAX_VALUE ? PType.I64 : PType.I32;
+    }
+
+    private static void setOffset(MemorySegment offsets, PType ptype, long index, long value) {
+        if (ptype == PType.I64) {
+            offsets.setAtIndex(VortexFormat.LE_LONG, index, value);
+        } else {
+            offsets.setAtIndex(VortexFormat.LE_INT, index, (int) value);
+        }
     }
 }
