@@ -5,7 +5,7 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.19.0] — 2026-11-01
 
 ### Performance
 - A filter on a timestamp column compares each chunk's values in one pass instead of row by row, about 7× faster on a one-hour window over the NYC taxi pickups. ([#616](https://github.com/dfa1/vortex-java/pull/616), [#620](https://github.com/dfa1/vortex-java/pull/620))
