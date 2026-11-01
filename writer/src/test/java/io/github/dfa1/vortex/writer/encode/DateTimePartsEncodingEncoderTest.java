@@ -12,6 +12,8 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.model.TimestampMetadata;
 import io.github.dfa1.vortex.reader.decode.DateTimePartsEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -36,7 +38,7 @@ class DateTimePartsEncodingEncoderTest {
 
     private static DType timestampDType(TimeUnit unit) {
         return new DType.Extension(ExtensionId.VORTEX_TIMESTAMP,
-                DTypes.I64, new io.github.dfa1.vortex.core.model.TimestampMetadata(unit, null), false);
+                DTypes.I64, new TimestampMetadata(unit, null), false);
     }
 
     private static ArrayNode toArrayNode(EncodeNode node) {
@@ -95,6 +97,102 @@ class DateTimePartsEncodingEncoderTest {
             // When / Then
             assertThatThrownBy(() -> ENCODER.encode(noMeta, data, EncodeTestHelper.testCtx()))
                     .hasMessageContaining("extension metadata is not timestamp metadata");
+        }
+    }
+
+    /// A nullable timestamp's validity goes on the days child, as Rust's `split_temporal` keeps it.
+    @Nested
+    class Nullable {
+
+        private static final DType NULLABLE_MS = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP,
+                DTypes.I64.asNullable(), new TimestampMetadata(TimeUnit.Milliseconds, null),
+                true);
+
+        @Test
+        void encodeCascade_withNulls_putsValidityOnDaysChildOnly() {
+            // Given
+            boolean[] validity = {true, false, true};
+            NullableData data = new NullableData(new long[]{86_400_000L, 0L, 2 * 86_400_000L}, validity);
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(NULLABLE_MS, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.openChildren().get(0).childDtype()).isEqualTo(DTypes.I64.asNullable());
+            assertThat(result.openChildren().get(0).childData()).isInstanceOfSatisfying(NullableData.class, days -> {
+                assertThat((long[]) days.values()).containsExactly(1L, 0L, 2L);
+                assertThat(days.validity()).containsExactly(validity);
+            });
+            assertThat(result.openChildren().get(1).childData()).isInstanceOf(long[].class);
+            assertThat(result.openChildren().get(2).childData()).isInstanceOf(long[].class);
+        }
+
+        @Test
+        void encodeCascade_withNulls_takesBoundsOverValidRowsOnly() {
+            // Given — the invalid slot's 0 placeholder is below every valid value
+            NullableData data = new NullableData(new long[]{5_000L, 0L, 9_000L}, new boolean[]{true, false, true});
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(NULLABLE_MS, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.statsMin()).isEqualTo(ProtoScalarValue.ofInt64Value(5_000L));
+            assertThat(result.statsMax()).isEqualTo(ProtoScalarValue.ofInt64Value(9_000L));
+        }
+
+        @Test
+        void encodeCascade_allValid_writesNoValidity() {
+            // Given — Rust's AllValid carries no bitmap
+            NullableData data = new NullableData(new long[]{1L, 2L}, new boolean[]{true, true});
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(NULLABLE_MS, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.openChildren().get(0).childDtype()).isEqualTo(DTypes.I64.asNullable());
+            assertThat(result.openChildren().get(0).childData()).isInstanceOf(long[].class);
+        }
+
+        @Test
+        void encodeCascade_allNull_isNotApplicable() {
+            // Given — vortex.ext writes an all-null chunk as the null constant
+            NullableData data = new NullableData(new long[]{0L, 0L}, new boolean[]{false, false});
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(NULLABLE_MS, data, EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.applicable()).isFalse();
+        }
+
+        @Test
+        void encode_withNulls_keepsValidityUnderDaysChild() {
+            // Given
+            NullableData data = new NullableData(new long[]{86_400_000L, 0L}, new boolean[]{true, false});
+
+            // When
+            EncodeResult result = ENCODER.encode(NULLABLE_MS, data, EncodeTestHelper.testCtx());
+
+            // Then — a bool validity under days, none under seconds or subseconds
+            EncodeNode[] children = result.rootNode().children();
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS);
+            assertThat(children).hasSize(3);
+            assertThat(contains(children[0], EncodingId.VORTEX_BOOL)).isTrue();
+            assertThat(contains(children[1], EncodingId.VORTEX_BOOL)).isFalse();
+            assertThat(contains(children[2], EncodingId.VORTEX_BOOL)).isFalse();
+        }
+
+        private static boolean contains(EncodeNode node, EncodingId id) {
+            if (node.encodingId() == id) {
+                return true;
+            }
+            for (EncodeNode child : node.children()) {
+                if (contains(child, id)) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

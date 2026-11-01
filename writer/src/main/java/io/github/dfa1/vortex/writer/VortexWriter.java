@@ -357,11 +357,11 @@ public final class VortexWriter implements Closeable {
     private static List<EncodingEncoder> buildCascadeCodecs(WriteOptions options) {
         List<EncodingEncoder> codecs = new ArrayList<>();
         // FbsExtension-dtype dispatch order matters: findPrimitiveEncoding picks the first
-        // accepting codec. DateTimePartsEncoding goes first because it consumes
-        // pre-decomposed DateTimePartsData (Parquet importer path); when the data is
-        // raw primitive storage (JDBC's long[] via TimestampExtension.encodeAll) it
-        // returns notApplicable and spliceResult excludes it, falling back to
-        // ExtEncoding which cascades the storage child through FoR/Bitpacked/RLE/ALP.
+        // accepting codec. DateTimePartsEncoding goes first: it splits any vortex.timestamp
+        // storage (DateTimePartsData, long[], or NullableData over long[] with its validity on
+        // the days child); for other extensions, Days units or an all-null chunk it returns
+        // notApplicable and spliceResult excludes it, falling back to ExtEncoding, which
+        // cascades the storage child through FoR/Bitpacked/RLE/ALP.
         // FixedSizeListEncoding handles UUID-style fixed-size byte storage downstream
         // of ExtEncoding.
         codecs.add(new DateTimePartsEncodingEncoder());

@@ -93,9 +93,8 @@ class TimestampFilterInteropIntegrationTest {
                 }
             }
         }
-        // As the Parquet importer writes a timestamp column: a nullable column handed over as
-        // DateTimePartsData, the only input the writer stores as datetimeparts (which has no null
-        // rows on this path; the unit tests cover nulls).
+        // As the Parquet importer writes a timestamp column without nulls: a nullable column
+        // handed over as DateTimePartsData, which the writer stores as datetimeparts.
         partsFile = write("timestamp-parts.vtx", WriteOptions.defaults(), ids,
                 b -> new DateTimePartsData(ts[b], true));
         // The same values as i64 storage under the extension: the default cascade would pick
@@ -154,12 +153,21 @@ class TimestampFilterInteropIntegrationTest {
     void timestampColumnsAreStoredAsPartsAndAsFlatLongs() throws IOException {
         // Given the files written above
         // When
-        try (VortexReader parts = VortexReader.open(partsFile);
-             VortexReader flat = VortexReader.open(flatFile)) {
-            // Then the filters run over both storages the fast path reads
-            assertThat(parts.footer().arraySpecs()).contains(EncodingId.VORTEX_DATETIMEPARTS);
-            assertThat(flat.footer().arraySpecs()).doesNotContain(EncodingId.VORTEX_DATETIMEPARTS);
-        }
+        String partsData = tsDataEncoding(partsFile);
+        String flatData = tsDataEncoding(flatFile);
+
+        // Then the filters run over both storages the fast path reads. Only the data column is
+        // checked: the zone-stats table of a nullable timestamp is datetimeparts in both files.
+        assertThat(partsData).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS.id());
+        assertThat(flatData).isEqualTo(EncodingId.VORTEX_EXT.id());
+    }
+
+    /// The root encoding of the ts column's data: the array under the first flat of its zoned layout.
+    private static String tsDataEncoding(Path file) throws IOException {
+        List<String> tree = EncodingTrees.of(file);
+        int tsZoned = tree.lastIndexOf("  vortex.zoned");
+        assertThat(tsZoned).as("the ts column's zoned layout in %s", tree).isPositive();
+        return tree.get(tree.subList(tsZoned, tree.size()).indexOf("    vortex.flat") + tsZoned + 1).strip();
     }
 
     @ParameterizedTest(name = "{0}: {1}")

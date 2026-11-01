@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
@@ -43,20 +44,20 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         DType.Extension ext = (DType.Extension) dtype;
-        DateTimePartsData d = asParts(dtype, data);
-        if (d == null) {
+        Input in = asParts(dtype, data);
+        if (in == null) {
             throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
-                    "expected timestamp storage, got " + (data == null ? "null" : data.getClass().getSimpleName()));
+                    "expected non-Days vortex.timestamp storage with a valid row, got "
+                            + (data == null ? "null" : data.getClass().getSimpleName()));
         }
-        Parts parts = split(d.timestamps(), unitOf(ext));
-        long[] days = parts.days();
+        Parts parts = split(in.timestamps(), unitOf(ext));
         long[] seconds = parts.seconds();
         long[] subseconds = parts.subseconds();
 
-        DType daysDtype = d.nullable() ? DTypes.I64.asNullable() : DTypes.I64;
-
         EncodingEncoder primEnc = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE);
-        EncodeResult daysResult = primEnc.encode(daysDtype, days, ctx);
+        EncodeResult daysResult = in.validity() == null
+                ? primEnc.encode(in.daysDtype(), parts.days(), ctx)
+                : new MaskedEncodingEncoder().encode(in.daysDtype(), in.days(parts), ctx);
         EncodeResult secondsResult = primEnc.encode(DTypes.I64, seconds, ctx);
         EncodeResult subsecondsResult = primEnc.encode(DTypes.I64, subseconds, ctx);
 
@@ -82,20 +83,19 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         // Bounds come from the undivided timestamps, in storage space: the split children are
         // days/seconds/subseconds and none of them orders the column. Without this, choosing
         // datetimeparts over vortex.ext would trade the column's zone map for its size.
-        MinMax stats = PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps());
+        MinMax stats = in.stats();
         return new EncodeResult(root, List.copyOf(allBuffers),
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats));
     }
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
-        DateTimePartsData d = asParts(dtype, data);
-        if (d == null) {
+        Input in = asParts(dtype, data);
+        if (in == null) {
             return CascadeStep.notApplicable();
         }
         DType.Extension ext = (DType.Extension) dtype;
-        Parts parts = split(d.timestamps(), unitOf(ext));
-        long[] days = parts.days();
+        Parts parts = split(in.timestamps(), unitOf(ext));
         long[] seconds = parts.seconds();
         long[] subseconds = parts.subseconds();
 
@@ -107,13 +107,12 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[3],
                 new int[0]);
 
-        DType daysDtype = d.nullable() ? DTypes.I64.asNullable() : DTypes.I64;
         List<ChildSlot> children = List.of(
-                new ChildSlot(daysDtype, days, 0, SELF),
+                new ChildSlot(in.daysDtype(), in.days(parts), 0, SELF),
                 new ChildSlot(DTypes.I64, seconds, 1, SELF),
                 new ChildSlot(DTypes.I64, subseconds, 2, SELF));
 
-        MinMax stats = PrimitiveEncodingEncoder.minMaxStats(PType.I64, d.timestamps());
+        MinMax stats = in.stats();
         return new CascadeStep(partialRoot, List.of(), children,
                 PrimitiveEncodingEncoder.minOf(stats), PrimitiveEncodingEncoder.maxOf(stats), true);
     }
@@ -129,23 +128,46 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     /// Restricted to `vortex.timestamp`: a date is already whole days, a time-of-day has no day
     /// component worth splitting out, and [TimeUnit#Days] cannot be subdivided.
     ///
-    /// A nullable column arrives as [NullableData] and is declined here, leaving it on the
-    /// existing `vortex.ext` path rather than silently dropping its validity.
+    /// A nullable column with nulls arrives as [NullableData] over `long[]` storage. Its validity
+    /// goes on the days child, as Rust's `split_temporal` keeps it there (seconds and subseconds
+    /// stay non-nullable); an all-valid validity is dropped. An all-null chunk is declined: Rust
+    /// checks for all-null before the extension's schemes, so the cascade writes it as the null
+    /// constant through `vortex.ext`. The days child takes the column's nullability, as Rust's
+    /// does, whichever shape the storage arrives in.
     ///
     /// @param dtype the column dtype
     /// @param data  the values being encoded
     /// @return the timestamps to split, or `null` when this encoder does not apply
-    private static DateTimePartsData asParts(DType dtype, Object data) {
+    private static Input asParts(DType dtype, Object data) {
         if (data instanceof DateTimePartsData parts) {
-            return parts;
+            return new Input(parts.timestamps(), dtype.nullable(), null);
         }
-        if (!(data instanceof long[] storage) || !(dtype instanceof DType.Extension ext)
+        if (!(dtype instanceof DType.Extension ext)
                 || ext.extensionId() != ExtensionId.VORTEX_TIMESTAMP
                 || !(ext.metadata() instanceof TimestampMetadata(TimeUnit unit, var _))
                 || unit == TimeUnit.Days) {
             return null;
         }
-        return new DateTimePartsData(storage, false);
+        return switch (data) {
+            case long[] storage -> new Input(storage, ext.nullable(), null);
+            case NullableData(long[] storage, boolean[] validity) -> nullableInput(storage, validity);
+            default -> null;
+        };
+    }
+
+    /// An all-valid validity is dropped, as Rust's `AllValid` writes no bitmap; an all-null one
+    /// declines the chunk.
+    private static Input nullableInput(long[] storage, boolean[] validity) {
+        int valid = 0;
+        for (boolean v : validity) {
+            if (v) {
+                valid++;
+            }
+        }
+        if (valid == 0) {
+            return null;
+        }
+        return new Input(storage, true, valid == validity.length ? null : validity);
     }
 
     private static TimeUnit unitOf(DType.Extension ext) {
@@ -186,6 +208,27 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
             subseconds[i] = rem % divisor;
         }
         return new Parts(days, seconds, subseconds);
+    }
+
+    /// The timestamps to split, whether the column is nullable, and the validity when the chunk
+    /// holds nulls (`null` when every row is valid).
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
+    private record Input(long[] timestamps, boolean nullable, boolean[] validity) {
+
+        DType daysDtype() {
+            return nullable ? DTypes.I64.asNullable() : DTypes.I64;
+        }
+
+        /// The days child: the plain part, or the part under this chunk's validity.
+        Object days(Parts parts) {
+            return validity == null ? parts.days() : new NullableData(parts.days(), validity);
+        }
+
+        /// Bounds over the valid rows only: an invalid slot's placeholder is not a value.
+        MinMax stats() {
+            Object values = validity == null ? timestamps : PrimitiveArrays.compact(PType.I64, timestamps, validity);
+            return PrimitiveEncodingEncoder.minMaxStats(PType.I64, values);
+        }
     }
 
     /// One timestamp column split into its three `vortex.datetimeparts` children.
