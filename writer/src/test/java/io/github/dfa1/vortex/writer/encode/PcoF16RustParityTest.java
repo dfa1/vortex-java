@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -38,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// shape tried.
 class PcoF16RustParityTest {
 
-    private static final DType F16 = DType.F16;
+    private static final DType F16 = DTypes.F16;
     private final PcoEncodingEncoder encoder = new PcoEncodingEncoder();
     private final PcoEncodingDecoder decoder = new PcoEncodingDecoder();
 

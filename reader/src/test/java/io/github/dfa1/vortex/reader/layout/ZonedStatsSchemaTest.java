@@ -5,6 +5,7 @@ import java.lang.foreign.MemorySegment;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -115,7 +116,7 @@ class ZonedStatsSchemaTest {
         @Test
         void buildsStructWithMinMaxAndTruncationFlags() {
             // Given — i64 column with Min, Max, Sum
-            DType columnDtype = DType.I64;
+            DType columnDtype = DTypes.I64;
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MAX,
                     ZonedStatsSchema.Stat.MIN,
@@ -132,9 +133,9 @@ class ZonedStatsSchemaTest {
             // i64 sum widens to nullable i64; min/max stay i64 but nullable; truncation flags are non-null Bool
             assertThat(schema.fieldTypes()).containsExactly(
                     new DType.Primitive(PType.I64, true),
-                    DType.BOOL,
+                    DTypes.BOOL,
                     new DType.Primitive(PType.I64, true),
-                    DType.BOOL,
+                    DTypes.BOOL,
                     new DType.Primitive(PType.I64, true));
             assertThat(schema.nullable()).isFalse();
         }
@@ -158,7 +159,7 @@ class ZonedStatsSchemaTest {
         @Test
         void dropsSumForUnsupportedColumnDtype() {
             // Given — Utf8 column has no sum (Rust returns None)
-            DType columnDtype = DType.UTF8;
+            DType columnDtype = DTypes.UTF8;
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MIN,
                     ZonedStatsSchema.Stat.SUM,
@@ -174,7 +175,7 @@ class ZonedStatsSchemaTest {
         @Test
         void dropsNanCountForNonFloatColumn() {
             // Given — nan_count only makes sense for floats
-            DType columnDtype = DType.I32;
+            DType columnDtype = DTypes.I32;
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MAX,
                     ZonedStatsSchema.Stat.NAN_COUNT,
@@ -190,7 +191,7 @@ class ZonedStatsSchemaTest {
         @Test
         void keepsNanCountForFloatColumn() {
             // Given — float column → nan_count is u64
-            DType columnDtype = DType.F64;
+            DType columnDtype = DTypes.F64;
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MAX, ZonedStatsSchema.Stat.NAN_COUNT);
 
@@ -206,7 +207,7 @@ class ZonedStatsSchemaTest {
         void resolvesExtensionViaStorageDType() {
             // Given — ext over i32 storage; sum should widen using storage dtype (i32 → i64)
             DType columnDtype = new DType.Extension("ip.address",
-                    DType.I32, null, false);
+                    DTypes.I32, null, false);
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MIN, ZonedStatsSchema.Stat.SUM);
 
@@ -222,7 +223,7 @@ class ZonedStatsSchemaTest {
         @Test
         void allStatsTogetherForI32() {
             // Given — sanity that every stat slots correctly into i32 column
-            DType columnDtype = DType.I32;
+            DType columnDtype = DTypes.I32;
             List<ZonedStatsSchema.Stat> present = List.copyOf(EnumSet.allOf(ZonedStatsSchema.Stat.class));
 
             // When
@@ -249,7 +250,7 @@ class ZonedStatsSchemaTest {
                     "vortex.max", "vortex.min", "vortex.sum", "vortex.nan_count", "vortex.null_count");
 
             // When
-            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DTypes.I64, meta);
 
             // Then — no `_is_truncated` fields (the new format has none) and nan_count is dropped
             assertThat(result.fieldNames().stream().map(ColumnName::value).toList())
@@ -268,7 +269,7 @@ class ZonedStatsSchemaTest {
             MemorySegment meta = aggregateMeta(1024, "vortex.max", "vortex.nan_count");
 
             // When
-            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.F64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DTypes.F64, meta);
 
             // Then
             assertThat(result.fieldNames().stream().map(ColumnName::value).toList())
@@ -283,7 +284,7 @@ class ZonedStatsSchemaTest {
             MemorySegment meta = aggregateMeta(4096, "vortex.approx_distinct", "vortex.null_count");
 
             // When
-            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.UTF8, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DTypes.UTF8, meta);
 
             // Then
             assertThat(result).isNull();
@@ -297,17 +298,17 @@ class ZonedStatsSchemaTest {
                     "vortex.bounded_max", "vortex.bounded_min", "vortex.nan_count", "vortex.null_count");
 
             // When
-            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.UTF8, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DTypes.UTF8, meta);
 
             // Then — bounded_max is a nullable {bound, unknown} struct, bounded_min the plain
             // nullable bound (a prefix is always a lower bound, so it has no unknown flag);
             // nan_count dropped for a non-float column as Rust drops it
             DType.Struct maxState = new DType.Struct(
                     List.of(ColumnName.of("bound"), ColumnName.of("unknown")),
-                    List.of(DType.UTF8.withNullable(true), DType.BOOL), true);
+                    List.of(DTypes.UTF8.withNullable(true), DTypes.BOOL), true);
             assertThat(result).isEqualTo(new DType.Struct(
                     List.of(ColumnName.of("bounded_max"), ColumnName.of("bounded_min"), ColumnName.of("null_count")),
-                    List.of(maxState, DType.UTF8.withNullable(true), DType.U64.withNullable(true)), false));
+                    List.of(maxState, DTypes.UTF8.withNullable(true), DTypes.U64.withNullable(true)), false));
         }
 
         @Test
@@ -334,7 +335,7 @@ class ZonedStatsSchemaTest {
             meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 0, (byte) 2);
 
             // When
-            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DTypes.I64, meta);
 
             // Then
             assertThat(result).isNull();
@@ -343,7 +344,7 @@ class ZonedStatsSchemaTest {
         @Test
         void bailsOnNullMetadata() {
             // Given / When — a zoned layout with no metadata cannot be reconstructed
-            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, null);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DTypes.I64, null);
 
             // Then
             assertThat(result).isNull();
@@ -355,7 +356,7 @@ class ZonedStatsSchemaTest {
             MemorySegment meta = aggregateMeta(8192);
 
             // When
-            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DTypes.I64, meta);
 
             // Then — an empty (non-null) struct; the caller falls back to per-chunk stats
             assertThat(result).isNotNull();
@@ -372,17 +373,17 @@ class ZonedStatsSchemaTest {
                     "vortex.uncompressed_size_in_bytes");
 
             // When
-            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DType.I64, meta);
+            DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(DTypes.I64, meta);
 
             // Then
             assertThat(result.fieldNames().stream().map(ColumnName::value).toList())
                     .containsExactly("is_constant", "is_sorted", "is_strict_sorted",
                             "uncompressed_size_in_bytes");
             assertThat(result.fieldTypes()).containsExactly(
-                    DType.BOOL.withNullable(true),
-                    DType.BOOL.withNullable(true),
-                    DType.BOOL.withNullable(true),
-                    DType.U64.withNullable(true));
+                    DTypes.BOOL.withNullable(true),
+                    DTypes.BOOL.withNullable(true),
+                    DTypes.BOOL.withNullable(true),
+                    DTypes.U64.withNullable(true));
         }
 
         @Test
@@ -407,7 +408,7 @@ class ZonedStatsSchemaTest {
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
 
             // Then — the fixed-width fields are skipped and only the max spec survives
             assertThat(result.fieldNames().stream().map(ColumnName::value).toList())
@@ -431,7 +432,7 @@ class ZonedStatsSchemaTest {
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
 
             // Then
             assertThat(result).isNull();
@@ -454,7 +455,7 @@ class ZonedStatsSchemaTest {
 
             // When / Then — must not throw NegativeArraySizeException
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
             assertThat(result).isNull();
         }
 
@@ -470,7 +471,7 @@ class ZonedStatsSchemaTest {
 
             // When / Then — must not throw IndexOutOfBoundsException
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
             assertThat(result).isNull();
         }
 
@@ -483,7 +484,7 @@ class ZonedStatsSchemaTest {
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
 
             // Then
             assertThat(result).isNull();
@@ -502,7 +503,7 @@ class ZonedStatsSchemaTest {
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
 
             // Then
             assertThat(result).isNull();
@@ -524,7 +525,7 @@ class ZonedStatsSchemaTest {
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
 
             // Then
             assertThat(result).isNull();
@@ -545,7 +546,7 @@ class ZonedStatsSchemaTest {
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
 
             // Then
             assertThat(result).isNull();
@@ -567,7 +568,7 @@ class ZonedStatsSchemaTest {
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
 
             // Then
             assertThat(result).isNull();
@@ -584,7 +585,7 @@ class ZonedStatsSchemaTest {
 
             // When
             DType.Struct result = ZonedStatsSchema.aggregateStatsTableDtype(
-                    DType.I64, MemorySegment.ofArray(out.toByteArray()));
+                    DTypes.I64, MemorySegment.ofArray(out.toByteArray()));
 
             // Then
             assertThat(result).isNull();

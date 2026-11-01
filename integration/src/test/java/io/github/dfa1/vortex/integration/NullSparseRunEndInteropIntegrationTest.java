@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder;
@@ -296,20 +297,20 @@ class NullSparseRunEndInteropIntegrationTest {
     static Stream<Arguments> allNullColumns() {
         List<Object> noValues = java.util.Collections.nCopies(ROWS, null);
         return Stream.of(
-                Arguments.of(new ArrowType.Int(8, true), DType.I8.asNullable(), new Byte[ROWS]),
-                Arguments.of(new ArrowType.Int(16, true), DType.I16.asNullable(), new Short[ROWS]),
-                Arguments.of(new ArrowType.Int(32, true), DType.I32.asNullable(), new Integer[ROWS]),
-                Arguments.of(new ArrowType.Int(64, true), DType.I64.asNullable(), new Long[ROWS]),
-                Arguments.of(new ArrowType.Int(8, false), DType.U8.asNullable(), new Byte[ROWS]),
-                Arguments.of(new ArrowType.Int(32, false), DType.U32.asNullable(), new Integer[ROWS]),
-                Arguments.of(new ArrowType.Int(64, false), DType.U64.asNullable(), new Long[ROWS]),
-                Arguments.of(new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE), DType.F32.asNullable(),
+                Arguments.of(new ArrowType.Int(8, true), DTypes.I8.asNullable(), new Byte[ROWS]),
+                Arguments.of(new ArrowType.Int(16, true), DTypes.I16.asNullable(), new Short[ROWS]),
+                Arguments.of(new ArrowType.Int(32, true), DTypes.I32.asNullable(), new Integer[ROWS]),
+                Arguments.of(new ArrowType.Int(64, true), DTypes.I64.asNullable(), new Long[ROWS]),
+                Arguments.of(new ArrowType.Int(8, false), DTypes.U8.asNullable(), new Byte[ROWS]),
+                Arguments.of(new ArrowType.Int(32, false), DTypes.U32.asNullable(), new Integer[ROWS]),
+                Arguments.of(new ArrowType.Int(64, false), DTypes.U64.asNullable(), new Long[ROWS]),
+                Arguments.of(new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE), DTypes.F32.asNullable(),
                         new Float[ROWS]),
-                Arguments.of(new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE), DType.F64.asNullable(),
+                Arguments.of(new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE), DTypes.F64.asNullable(),
                         new Double[ROWS]),
-                Arguments.of(ArrowType.Bool.INSTANCE, DType.BOOL.asNullable(), new Boolean[ROWS]),
-                Arguments.of(ArrowType.Utf8.INSTANCE, DType.UTF8.asNullable(), new String[ROWS]),
-                Arguments.of(ArrowType.Binary.INSTANCE, DType.BINARY.asNullable(), new byte[ROWS][]),
+                Arguments.of(ArrowType.Bool.INSTANCE, DTypes.BOOL.asNullable(), new Boolean[ROWS]),
+                Arguments.of(ArrowType.Utf8.INSTANCE, DTypes.UTF8.asNullable(), new String[ROWS]),
+                Arguments.of(ArrowType.Binary.INSTANCE, DTypes.BINARY.asNullable(), new byte[ROWS][]),
                 Arguments.of(new ArrowType.Decimal(10, 2, 128), new DType.Decimal((byte) 10, (byte) 2, true),
                         new java.math.BigDecimal[ROWS]),
                 Arguments.of(new ArrowType.Date(org.apache.arrow.vector.types.DateUnit.DAY),

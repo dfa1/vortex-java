@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.integration;
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
@@ -59,7 +60,7 @@ class JavaRoundTripIntegrationTest {
 
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("v")),
-            List.of(DType.I32),
+            List.of(DTypes.I32),
             false);
 
     @Test

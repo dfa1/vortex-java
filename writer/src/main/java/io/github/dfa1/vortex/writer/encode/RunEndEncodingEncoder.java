@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -89,7 +90,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < numRuns; i++) {
             valuesArr[i] = values.get(i);
         }
-        EncodeResult valuesResult = new BoolEncodingEncoder().encode(DType.BOOL, valuesArr, ctx);
+        EncodeResult valuesResult = new BoolEncodingEncoder().encode(DTypes.BOOL, valuesArr, ctx);
 
         byte[] metaBytes = new ProtoRunEndMetadata(
                 io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U32.ordinal()),

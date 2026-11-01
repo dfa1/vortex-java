@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoNullValue;
@@ -56,7 +57,7 @@ class ConstantEncodingDecoderTest {
         ProtoScalarValue scalar = new ProtoScalarValue(null, null, null, null, null, null, null, null, null, null, null);
 
         // When
-        Array result = decode(scalar, DType.I64, 3);
+        Array result = decode(scalar, DTypes.I64, 3);
 
         // Then
         LongArray longs = (LongArray) result;
@@ -98,17 +99,17 @@ class ConstantEncodingDecoderTest {
             for (PType ptype : PType.values()) {
                 cases.add(Arguments.of(new DType.Primitive(ptype, true), payloadOf(ptype)));
             }
-            cases.add(Arguments.of(DType.BOOL.asNullable(), BoolArray.class));
-            cases.add(Arguments.of(DType.UTF8.asNullable(), VarBinArray.class));
-            cases.add(Arguments.of(DType.BINARY.asNullable(), VarBinArray.class));
+            cases.add(Arguments.of(DTypes.BOOL.asNullable(), BoolArray.class));
+            cases.add(Arguments.of(DTypes.UTF8.asNullable(), VarBinArray.class));
+            cases.add(Arguments.of(DTypes.BINARY.asNullable(), VarBinArray.class));
             cases.add(Arguments.of(new DType.Decimal((byte) 10, (byte) 2, true), DecimalArray.class));
-            cases.add(Arguments.of(new DType.Extension("vortex.date", DType.I32, MemorySegment.ofArray(new byte[]{0}), true),
+            cases.add(Arguments.of(new DType.Extension("vortex.date", DTypes.I32, MemorySegment.ofArray(new byte[]{0}), true),
                     IntArray.class));
-            cases.add(Arguments.of(new DType.Extension("vortex.time", DType.I32, MemorySegment.ofArray(new byte[]{1}), true),
+            cases.add(Arguments.of(new DType.Extension("vortex.time", DTypes.I32, MemorySegment.ofArray(new byte[]{1}), true),
                     IntArray.class));
-            cases.add(Arguments.of(new DType.Extension("vortex.timestamp", DType.I64,
+            cases.add(Arguments.of(new DType.Extension("vortex.timestamp", DTypes.I64,
                     MemorySegment.ofArray(new byte[]{1, 0, 0}), true), LongArray.class));
-            cases.add(Arguments.of(new DType.Extension("acme.custom", DType.U16, null, true), ShortArray.class));
+            cases.add(Arguments.of(new DType.Extension("acme.custom", DTypes.U16, null, true), ShortArray.class));
             return cases.stream();
         }
 
@@ -144,18 +145,18 @@ class ConstantEncodingDecoderTest {
         static Stream<DType> unmaskableTypes() {
             return Stream.of(
                     new DType.Null(true),
-                    new DType.List(DType.I64, true),
-                    new DType.FixedSizeList(DType.I32, 3, true),
-                    new DType.Struct(List.of(ColumnName.of("a")), List.of(DType.I64), true),
-                    new DType.Map(DType.I64, DType.I64, false, true),
+                    new DType.List(DTypes.I64, true),
+                    new DType.FixedSizeList(DTypes.I32, 3, true),
+                    new DType.Struct(List.of(ColumnName.of("a")), List.of(DTypes.I64), true),
+                    new DType.Map(DTypes.I64, DTypes.I64, false, true),
                     new DType.Variant(true),
-                    new DType.Extension("vortex.uuid", new DType.FixedSizeList(DType.U8, 16, false), null, true));
+                    new DType.Extension("vortex.uuid", new DType.FixedSizeList(DTypes.U8, 16, false), null, true));
         }
 
         @Test
         void aZeroRowNullConstantIsAnEmptyMaskedArray() {
             // When
-            Array result = decode(NULL, DType.I64.asNullable(), 0);
+            Array result = decode(NULL, DTypes.I64.asNullable(), 0);
 
             // Then
             assertThat(result).isInstanceOf(MaskedArray.class);
@@ -167,7 +168,7 @@ class ConstantEncodingDecoderTest {
             // Given: a crafted file declaring a non-nullable column but storing a null constant;
             // every row is still null, as the scalar says
             // When
-            Array result = decode(NULL, DType.I64, ROWS);
+            Array result = decode(NULL, DTypes.I64, ROWS);
 
             // Then
             assertThat(result).isInstanceOf(MaskedArray.class);
@@ -224,7 +225,7 @@ class ConstantEncodingDecoderTest {
                 null, null, null, null, null, null, "hi", null, null, null, null);
 
         // When
-        Array result = decode(scalar, DType.UTF8, 3);
+        Array result = decode(scalar, DTypes.UTF8, 3);
 
         // Then — VarBinConstantArray, not an eagerly materialized VarBinOffsetArray
         assertThat(result).isInstanceOf(VarBinConstantArray.class);
@@ -246,7 +247,7 @@ class ConstantEncodingDecoderTest {
         long hugeRowCount = Long.MAX_VALUE / 2;
 
         // When
-        Array result = decode(scalar, DType.UTF8, hugeRowCount);
+        Array result = decode(scalar, DTypes.UTF8, hugeRowCount);
 
         // Then
         assertThat(result.length()).isEqualTo(hugeRowCount);

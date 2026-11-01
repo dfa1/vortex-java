@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -43,7 +44,7 @@ class ColumnEncodingTest {
         WriteOptions options = WriteOptions.defaults().withZoneMaps(false).withColumnEncoding(PRICE, ALP_CASCADE);
 
         // When
-        Path file = write(DType.F64, prices, options);
+        Path file = write(DTypes.F64, prices, options);
 
         // Then
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
@@ -66,7 +67,7 @@ class ColumnEncodingTest {
         WriteOptions options = WriteOptions.defaults().withZoneMaps(false).withColumnEncoding(PRICE, ALP_CASCADE);
 
         // When
-        Path file = write(DType.F64.withNullable(true), new NullableData(values, validity), options);
+        Path file = write(DTypes.F64.withNullable(true), new NullableData(values, validity), options);
 
         // Then
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
@@ -88,7 +89,7 @@ class ColumnEncodingTest {
                 ColumnEncoding.candidates(EncodingId.FASTLANES_BITPACKED));
 
         // When
-        Path file = write(DType.I64, codes, options);
+        Path file = write(DTypes.I64, codes, options);
 
         // Then
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
@@ -112,7 +113,7 @@ class ColumnEncodingTest {
         // Given an override naming a column the schema does not have — a typo would otherwise
         // silently leave the real column on the default cascade
         WriteOptions options = WriteOptions.defaults().withColumnEncoding(ColumnName.of("prcie"), ALP_CASCADE);
-        var schema = new DType.Struct(List.of(PRICE), List.of(DType.F64), false);
+        var schema = new DType.Struct(List.of(PRICE), List.of(DTypes.F64), false);
 
         // When / Then
         assertThatIllegalArgumentException()
@@ -127,7 +128,7 @@ class ColumnEncodingTest {
         // create rather than silently leaving the column on its canonical encoding
         WriteOptions options = WriteOptions.defaults().withColumnEncoding(PRICE,
                 ColumnEncoding.candidates(EncodingId.VORTEX_ZSTD_BUFFERS));
-        var schema = new DType.Struct(List.of(PRICE), List.of(DType.F64), false);
+        var schema = new DType.Struct(List.of(PRICE), List.of(DTypes.F64), false);
 
         // When / Then
         assertThatIllegalArgumentException()

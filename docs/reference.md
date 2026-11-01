@@ -41,13 +41,13 @@ new code — the record constructors stay available for pattern matching and tes
 
 | Record                | Constant / factory                                     | Record constructor                                          |
 |-----------------------|--------------------------------------------------------|-------------------------------------------------------------|
-| `DType.Null`          | `DType.NULL`                                           | `new DType.Null(nullable)`                                  |
-| `DType.Bool`          | `DType.BOOL`                                           | `new DType.Bool(nullable)`                                  |
-| `DType.Primitive`     | `DType.I8` … `DType.I64`, `DType.U8` … `DType.U64`, `DType.F16`, `DType.F32`, `DType.F64` (constants) | `DType.I64.asNullable()` / `new DType.Primitive(PType, nullable)` |
+| `DType.Null`          | `DTypes.NULL`                                           | `new DType.Null(nullable)`                                  |
+| `DType.Bool`          | `DTypes.BOOL`                                           | `new DType.Bool(nullable)`                                  |
+| `DType.Primitive`     | `DTypes.I8` … `DTypes.I64`, `DTypes.U8` … `DTypes.U64`, `DTypes.F16`, `DTypes.F32`, `DTypes.F64` (constants) | `DTypes.I64.asNullable()` / `new DType.Primitive(PType, nullable)` |
 | `DType.Decimal`       | `DType.decimal(precision, scale)`                      | `new DType.Decimal(precision, scale, nullable)`             |
-| `DType.Utf8`          | `DType.UTF8`                                           | `new DType.Utf8(nullable)`                                  |
-| `DType.Binary`        | `DType.BINARY`                                         | `new DType.Binary(nullable)`                                |
-| `DType.Variant`       | `DType.VARIANT`                                        | `new DType.Variant(nullable)`                               |
+| `DType.Utf8`          | `DTypes.UTF8`                                           | `new DType.Utf8(nullable)`                                  |
+| `DType.Binary`        | `DTypes.BINARY`                                         | `new DType.Binary(nullable)`                                |
+| `DType.Variant`       | `DTypes.VARIANT`                                        | `new DType.Variant(nullable)`                               |
 | `DType.Struct`        | `DType.structBuilder().field(name, type)…build()`      | `new DType.Struct(fieldNames, fieldTypes, nullable)`        |
 | `DType.List`          | —                                                      | `new DType.List(elementType, nullable)`                     |
 | `DType.FixedSizeList` | —                                                      | `new DType.FixedSizeList(elementType, fixedSize, nullable)` |

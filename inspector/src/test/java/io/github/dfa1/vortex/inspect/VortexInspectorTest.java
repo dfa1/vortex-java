@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
@@ -74,7 +75,7 @@ class VortexInspectorTest {
         InspectorTree.Node root = new InspectorTree.Node(leaf, Optional.empty(), Set.of(), ArrayStats.empty(), List.of());
         InspectorTree sut = new InspectorTree(
                 1, 256L,
-                DType.I32,
+                DTypes.I32,
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 256, (byte) 0, CompressionScheme.NONE)),
                 100L, Map.of(), root);
@@ -115,7 +116,7 @@ class VortexInspectorTest {
 
         InspectorTree sut = new InspectorTree(
                 1, 1024L,
-                new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I32), false),
+                new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I32), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(), 1000L, Map.of(), rootN);
 
@@ -144,7 +145,7 @@ class VortexInspectorTest {
                 Set.of("vortex.flat"), ArrayStats.empty(), List.of(chunkedN));
 
         InspectorTree sut = new InspectorTree(1, 1024L,
-                new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false),
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(DTypes.I64), false),
                 List.of("vortex.flat"), Set.of(), List.of(), 1000L, Map.of(), rootN);
 
         // When
@@ -193,7 +194,7 @@ class VortexInspectorTest {
 
         DType dtype = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("value")),
-                List.of(DType.I64, DType.F64),
+                List.of(DTypes.I64, DTypes.F64),
                 false);
 
         return new InspectorTree(version, fileSize, dtype,

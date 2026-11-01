@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Nested;
@@ -186,7 +187,7 @@ class ChunkImplTest {
 
         @Test
         void stringArrayAccepted() {
-            assertThat(putGet(DType.UTF8, new String[]{"a", "b"})).isInstanceOf(String[].class);
+            assertThat(putGet(DTypes.UTF8, new String[]{"a", "b"})).isInstanceOf(String[].class);
         }
 
         @Test
@@ -202,13 +203,13 @@ class ChunkImplTest {
 
         @Test
         void nonNullableRejectsNullElement() {
-            assertThatThrownBy(() -> putGet(DType.UTF8, new String[]{"a", null}))
+            assertThatThrownBy(() -> putGet(DTypes.UTF8, new String[]{"a", null}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("null at row 1");
         }
 
         @Test
         void wrongTypeRejected() {
-            assertThatThrownBy(() -> putGet(DType.UTF8, new int[]{1}))
+            assertThatThrownBy(() -> putGet(DTypes.UTF8, new int[]{1}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("expects String[]");
         }
     }
@@ -219,7 +220,7 @@ class ChunkImplTest {
         @Test
         void byteArrayArrayAccepted() {
             byte[][] value = {{1, 2}, {3}};
-            assertThat(putGet(DType.BINARY, value)).isInstanceOf(byte[][].class);
+            assertThat(putGet(DTypes.BINARY, value)).isInstanceOf(byte[][].class);
         }
 
         @Test
@@ -238,13 +239,13 @@ class ChunkImplTest {
 
         @Test
         void nonNullableRejectsNullElement() {
-            assertThatThrownBy(() -> putGet(DType.BINARY, new byte[][]{{1}, null}))
+            assertThatThrownBy(() -> putGet(DTypes.BINARY, new byte[][]{{1}, null}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("null at row 1");
         }
 
         @Test
         void wrongTypeRejected() {
-            assertThatThrownBy(() -> putGet(DType.BINARY, new int[]{1}))
+            assertThatThrownBy(() -> putGet(DTypes.BINARY, new int[]{1}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("expects byte[][]");
         }
     }
@@ -254,7 +255,7 @@ class ChunkImplTest {
 
         @Test
         void boolArrayAccepted() {
-            assertThat(putGet(DType.BOOL, new boolean[]{true, false})).isInstanceOf(boolean[].class);
+            assertThat(putGet(DTypes.BOOL, new boolean[]{true, false})).isInstanceOf(boolean[].class);
         }
 
         @Test
@@ -269,13 +270,13 @@ class ChunkImplTest {
 
         @Test
         void boxedRejectedOnNonNullableColumn() {
-            assertThatThrownBy(() -> putGet(DType.BOOL, new Boolean[]{true}))
+            assertThatThrownBy(() -> putGet(DTypes.BOOL, new Boolean[]{true}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("rejects Boolean[]");
         }
 
         @Test
         void wrongTypeRejected() {
-            assertThatThrownBy(() -> putGet(DType.BOOL, new int[]{1}))
+            assertThatThrownBy(() -> putGet(DTypes.BOOL, new int[]{1}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("expects boolean[]");
         }
     }

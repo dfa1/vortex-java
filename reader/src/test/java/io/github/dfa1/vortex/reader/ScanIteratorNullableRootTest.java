@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ class ScanIteratorNullableRootTest {
     @Test
     void columnsSkipTheRootValidityChild() {
         // Given — layout children [validity (segment 0), a (segment 1), b (segment 2)]
-        DType.Struct schema = new DType.Struct(List.of(A, B), List.of(DType.I64, DType.I64), true);
+        DType.Struct schema = new DType.Struct(List.of(A, B), List.of(DTypes.I64, DTypes.I64), true);
         List<Layout> children = List.of(flat(0), flat(1), flat(2));
         SegmentSpec bSegment = new SegmentSpec(200, 8, (byte) 0, CompressionScheme.NONE);
         given(file.dtype()).willReturn(schema);

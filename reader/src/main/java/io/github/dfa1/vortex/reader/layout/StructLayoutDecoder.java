@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.layout;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -44,7 +45,7 @@ final class StructLayoutDecoder implements LayoutDecoder {
 
         BoolArray validity = null;
         if (hasValidity) {
-            Array decoded = ctx.decodeChild(children.getFirst(), DType.BOOL);
+            Array decoded = ctx.decodeChild(children.getFirst(), DTypes.BOOL);
             if (!(decoded instanceof BoolArray boolArray)) {
                 throw new VortexException("vortex.struct validity decoded to unexpected type: "
                         + decoded.getClass().getSimpleName());

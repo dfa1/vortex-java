@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -36,7 +36,7 @@ class DateTimePartsEncodingEncoderTest {
     private static DType timestampDType(TimeUnit unit) {
         MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) unit.ordinal(), 0, 0});
         return new DType.Extension("vortex.timestamp",
-                DType.I64, meta, false);
+                DTypes.I64, meta, false);
     }
 
     private static ArrayNode toArrayNode(EncodeNode node) {
@@ -89,7 +89,7 @@ class DateTimePartsEncodingEncoderTest {
         void encode_missingMetadata_throws() {
             // Given
             DType noMeta = new DType.Extension("vortex.timestamp",
-                    DType.I64, null, false);
+                    DTypes.I64, null, false);
             DateTimePartsData data = new DateTimePartsData(new long[]{0L}, false);
 
             // When / Then

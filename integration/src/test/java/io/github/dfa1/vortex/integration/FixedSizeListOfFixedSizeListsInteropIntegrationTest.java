@@ -11,6 +11,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Element;
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.ElementNulls;
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Nulls;
@@ -163,7 +164,7 @@ class FixedSizeListOfFixedSizeListsInteropIntegrationTest {
                                       Nulls inner, ElementNulls elements, List<List<List<Object>>> model)
             throws IOException {
         DType elementType = elements.nullableType() ? element.dtype.asNullable() : element.dtype;
-        DType.Struct schema = new DType.Struct(List.of(ID, LISTS), List.of(DType.I64,
+        DType.Struct schema = new DType.Struct(List.of(ID, LISTS), List.of(DTypes.I64,
                 new DType.FixedSizeList(new DType.FixedSizeList(elementType, innerSize, inner != Nulls.NONE_NULL),
                         outerSize, outer != Nulls.NONE_NULL)), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

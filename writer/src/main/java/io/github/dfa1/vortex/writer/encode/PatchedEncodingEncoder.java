@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -83,8 +84,8 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_PATCHED,
                     MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, null, null, null}, new int[]{});
 
-            DType u32Dtype = DType.U32;
-            DType u16Dtype = DType.U16;
+            DType u32Dtype = DTypes.U32;
+            DType u16Dtype = DTypes.U16;
 
             return new CascadeStep(partialRoot, List.of(),
                     List.of(

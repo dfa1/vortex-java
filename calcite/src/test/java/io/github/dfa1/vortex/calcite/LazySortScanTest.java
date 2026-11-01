@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
@@ -207,9 +208,9 @@ class LazySortScanTest {
     private static Path write(String name, int rows) throws Exception {
         Path file = tmp.resolve(name);
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("k"), DType.I64)
-                .field(ColumnName.of("n"), DType.I64.asNullable())
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("k"), DTypes.I64)
+                .field(ColumnName.of("n"), DTypes.I64.asNullable())
                 .field(ColumnName.of("s"), new DType.Utf8(false))
                 .build();
         long[] id = new long[rows];

@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// nodes are `depth + 2` tables.
 class ArrayNodeDepthBombSecurityTest {
 
-    private static final DType DTYPE = DType.I32;
+    private static final DType DTYPE = DTypes.I32;
 
     private final SerializedArrayDecoder sut = new SerializedArrayDecoder(ReadRegistry.empty());
 

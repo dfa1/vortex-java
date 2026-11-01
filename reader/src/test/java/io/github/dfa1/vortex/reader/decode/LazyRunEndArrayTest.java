@@ -17,11 +17,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 
-import static io.github.dfa1.vortex.core.testing.DTypes.BOOL;
-import static io.github.dfa1.vortex.core.testing.DTypes.I8;
-import static io.github.dfa1.vortex.core.testing.DTypes.I16;
-import static io.github.dfa1.vortex.core.testing.DTypes.I32;
-import static io.github.dfa1.vortex.core.testing.DTypes.I64;
+import static io.github.dfa1.vortex.core.model.DTypes.BOOL;
+import static io.github.dfa1.vortex.core.model.DTypes.I8;
+import static io.github.dfa1.vortex.core.model.DTypes.I16;
+import static io.github.dfa1.vortex.core.model.DTypes.I32;
+import static io.github.dfa1.vortex.core.model.DTypes.I64;
 import static io.github.dfa1.vortex.reader.array.TestArrays.bools;
 import static io.github.dfa1.vortex.reader.array.TestArrays.bytes;
 import static io.github.dfa1.vortex.reader.array.TestArrays.doubles;

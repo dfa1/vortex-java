@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -40,7 +41,7 @@ class VarBinViewEncodingDecoderTest {
         writeInlineView(views, 1, b);
 
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[]{0});
-        DecodeContext ctx = new DecodeContext(node, DType.BINARY, 2,
+        DecodeContext ctx = new DecodeContext(node, DTypes.BINARY, 2,
                 new MemorySegment[]{views}, ReadRegistry.empty(), arena);
 
         // When
@@ -69,7 +70,7 @@ class VarBinViewEncodingDecoderTest {
     void decode_noBuffers_throws() {
         // Given a node with zero buffer indices
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[0]);
-        DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0,
+        DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 0,
                 new MemorySegment[0], ReadRegistry.empty(), Arena.ofAuto());
 
         // When / Then
@@ -188,7 +189,7 @@ class VarBinViewEncodingDecoderTest {
                 bufferIndices[i] = i;
             }
             ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], bufferIndices);
-            DecodeContext ctx = new DecodeContext(node, DType.UTF8, rowCount, segs, ReadRegistry.empty(), arena);
+            DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, rowCount, segs, ReadRegistry.empty(), arena);
             return (VarBinArray) SUT.decode(ctx);
         }
     }

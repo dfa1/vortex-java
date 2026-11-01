@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
@@ -35,7 +36,7 @@ class Float32ColumnSqlTest {
     void selectAndFilterOnAnF32Column_runEndToEnd() throws Exception {
         // Given
         Path file = tmp.resolve("f32.vortex");
-        DType.Struct schema = DType.structBuilder().field(ColumnName.of("r"), DType.F32).build();
+        DType.Struct schema = DType.structBuilder().field(ColumnName.of("r"), DTypes.F32).build();
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             writer.writeChunk(Map.of(ColumnName.of("r"), new float[]{1.5f, 2.5f, 3.5f}));

@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoOnPairMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
@@ -134,7 +134,7 @@ class OnPairEncodingDecoderTest {
         }
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(meta.encode()),
                 children, new int[]{0});
-        return SUT.decode(new DecodeContext(node, DType.UTF8, lengths.length, segments, REGISTRY, Arena.ofAuto()));
+        return SUT.decode(new DecodeContext(node, DTypes.UTF8, lengths.length, segments, REGISTRY, Arena.ofAuto()));
     }
 
     private static String[] strings(VarBinArray arr) {

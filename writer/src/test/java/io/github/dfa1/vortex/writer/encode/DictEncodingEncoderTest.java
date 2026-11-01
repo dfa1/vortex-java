@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
@@ -293,11 +293,11 @@ class DictEncodingEncoderTest {
         DictEncodingEncoder sut = DictEncodingEncoder.forDataCascade();
 
         // When / Then
-        assertThat(sut.accepts(DType.F64)).isTrue();
-        assertThat(sut.accepts(DType.UTF8)).isTrue();
-        assertThat(sut.accepts(DType.I64)).isFalse();
+        assertThat(sut.accepts(DTypes.F64)).isTrue();
+        assertThat(sut.accepts(DTypes.UTF8)).isTrue();
+        assertThat(sut.accepts(DTypes.I64)).isFalse();
         assertThat(sut.accepts(DTypes.I32)).isFalse();
-        assertThat(ENCODER.accepts(DType.I64)).isTrue();
+        assertThat(ENCODER.accepts(DTypes.I64)).isTrue();
     }
 
     @Test
@@ -306,7 +306,7 @@ class DictEncodingEncoderTest {
         String[] data = {"a", "b", "a", "b", "a", "b"};
 
         // When
-        CascadeStep result = ENCODER.encodeCascade(DType.UTF8, data, EncodeTestHelper.testCtx());
+        CascadeStep result = ENCODER.encodeCascade(DTypes.UTF8, data, EncodeTestHelper.testCtx());
 
         // Then — codes bar sequence as above, while the values pool only bars a second dict: the
         // per-slot exclusion exists precisely because two children of one encoding differ here

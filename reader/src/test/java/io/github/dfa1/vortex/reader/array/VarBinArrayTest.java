@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VarBinArrayTest {
 
-    private static final DType UTF8 = DType.UTF8;
+    private static final DType UTF8 = DTypes.UTF8;
 
     private static VarBinOffsetArray of(String... values) {
         byte[] allBytes = String.join("", values).getBytes(StandardCharsets.UTF_8);

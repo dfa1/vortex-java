@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
@@ -42,11 +43,11 @@ class FilterPushDownTest {
 
     // Two chunks of three rows so the pushed ScanFilter has chunks to (potentially) prune.
     private static final DType.Struct SCHEMA = DType.structBuilder()
-            .field(ColumnName.of("i64"), DType.I64)
-            .field(ColumnName.of("i32"), DType.I32)
-            .field(ColumnName.of("f64"), DType.F64)
-            .field(ColumnName.of("s"), DType.UTF8)
-            .field(ColumnName.of("b"), DType.BOOL)
+            .field(ColumnName.of("i64"), DTypes.I64)
+            .field(ColumnName.of("i32"), DTypes.I32)
+            .field(ColumnName.of("f64"), DTypes.F64)
+            .field(ColumnName.of("s"), DTypes.UTF8)
+            .field(ColumnName.of("b"), DTypes.BOOL)
             .build();
 
     @TempDir

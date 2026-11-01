@@ -46,18 +46,19 @@ A Vortex file is a typed struct — every column has a declared type before any 
 
 ```java
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.ColumnName;
 
 DType.Struct schema = DType.structBuilder()
-    .field(ColumnName.of("timestamp"), DType.I64)                     // unix epoch millis
-    .field(ColumnName.of("symbol"),    DType.UTF8)                    // ticker symbol
-    .field(ColumnName.of("price"),     DType.F64)                     // trade price
-    .field(ColumnName.of("volume"),    DType.I64.asNullable())        // shares traded, may be null
+    .field(ColumnName.of("timestamp"), DTypes.I64)                     // unix epoch millis
+    .field(ColumnName.of("symbol"),    DTypes.UTF8)                    // ticker symbol
+    .field(ColumnName.of("price"),     DTypes.F64)                     // trade price
+    .field(ColumnName.of("volume"),    DTypes.I64.asNullable())        // shares traded, may be null
     .build();
 ```
 
-`DType.I8` … `DType.F64`, plus `DType.BOOL`, `DType.UTF8`, `DType.BINARY`,
-`DType.NULL`, `DType.VARIANT`, are non-nullable canonical constants. Chain
+`DTypes.I8` … `DTypes.F64`, plus `DTypes.BOOL`, `DTypes.UTF8`, `DTypes.BINARY`,
+`DTypes.NULL`, `DTypes.VARIANT`, are non-nullable canonical constants. Chain
 `.asNullable()` to opt into nulls.
 See [reference.md#core-types](reference.md#core-types) for the full list.
 

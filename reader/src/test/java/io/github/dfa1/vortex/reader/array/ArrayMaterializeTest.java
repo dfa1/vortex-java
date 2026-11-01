@@ -14,8 +14,8 @@ import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static io.github.dfa1.vortex.core.testing.DTypes.F64;
-import static io.github.dfa1.vortex.core.testing.DTypes.I64;
+import static io.github.dfa1.vortex.core.model.DTypes.F64;
+import static io.github.dfa1.vortex.core.model.DTypes.I64;
 import static io.github.dfa1.vortex.reader.array.TestArrays.bools;
 import static io.github.dfa1.vortex.reader.array.TestArrays.bytes;
 import static io.github.dfa1.vortex.reader.array.TestArrays.doubles;

@@ -9,6 +9,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimestampDtype;
@@ -107,7 +108,7 @@ class TimestampFilterInteropIntegrationTest {
             throws IOException {
         Path path = tmp.resolve(name);
         DType.Struct schema = DType.structBuilder()
-                .field(ID, DType.I64)
+                .field(ID, DTypes.I64)
                 .field(TS, TimestampDtype.of(TimeUnit.Microseconds, null, true))
                 .build();
         try (var channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -35,7 +36,7 @@ class PatchedEncodingDecoderTest {
 
 
     private static Array decode(int n, int[] innerI32, int[] laneOffsets, short[] patchIndices, int[] patchValues) {
-        return decode(DType.I32, n,
+        return decode(DTypes.I32, n,
                 TestSegments.leInts(innerI32), TestSegments.leInts(laneOffsets),
                 TestSegments.leShorts(patchIndices), TestSegments.leInts(patchValues),
                 (laneOffsets.length - 1) / Math.max(1, (n + 1023) / 1024));
@@ -136,7 +137,7 @@ class PatchedEncodingDecoderTest {
     }
 
     private static Array decodeNoPatches(MemorySegment inner, int n) {
-        return decode(DType.I32, n, inner, TestSegments.leInts(0, 0),
+        return decode(DTypes.I32, n, inner, TestSegments.leInts(0, 0),
                 TestSegments.leShorts(), TestSegments.leInts(), 1);
     }
 
@@ -186,7 +187,7 @@ class PatchedEncodingDecoderTest {
     @Test
     void decode_i64_singlePatch() {
         // Given
-        DType dtype = DType.I64;
+        DType dtype = DTypes.I64;
 
         // When
         Array result = decode(dtype, 3, TestSegments.leLongs(100L, 200L, 300L), TestSegments.leInts(0, 1),
@@ -204,7 +205,7 @@ class PatchedEncodingDecoderTest {
     void decode_f16_singlePatch() {
         // Given — Rust's Patched accepts every native ptype (match_each_native_ptype), F16 included;
         // this decoder used to reject F16. 0x3c00 = 1.0, 0x4000 = 2.0, 0x4200 = 3.0, 0x4900 = 10.0.
-        DType dtype = DType.F16;
+        DType dtype = DTypes.F16;
 
         // When
         Array result = decode(dtype, 3,
@@ -226,7 +227,7 @@ class PatchedEncodingDecoderTest {
         ArrayNode patchedNode = new ArrayNode(EncodingId.VORTEX_PATCHED, null,
                 new ArrayNode[]{innerNode, innerNode, innerNode, innerNode}, new int[]{});
         MemorySegment seg = TestSegments.leInts(1, 2, 3);
-        DecodeContext ctx = new DecodeContext(patchedNode, DType.I32, 3,
+        DecodeContext ctx = new DecodeContext(patchedNode, DTypes.I32, 3,
                 new MemorySegment[]{seg}, ReadRegistry.empty(), Arena.ofAuto());
 
         // When / Then

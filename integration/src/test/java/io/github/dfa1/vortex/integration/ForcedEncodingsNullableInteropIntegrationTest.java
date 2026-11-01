@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Element;
@@ -122,7 +123,7 @@ class ForcedEncodingsNullableInteropIntegrationTest {
         }
         Path file = tmp.resolve("forced.vtx");
         DType.Struct schema = new DType.Struct(List.of(ID, VALUE),
-                List.of(DType.I64, element.dtype.asNullable()), false);
+                List.of(DTypes.I64, element.dtype.asNullable()), false);
         WriteOptions options = WriteOptions.defaults().withoutEditions()
                 .withColumnEncoding(VALUE, ColumnEncoding.candidates(candidates(encoding)));
         long[] ids = new long[ROWS];

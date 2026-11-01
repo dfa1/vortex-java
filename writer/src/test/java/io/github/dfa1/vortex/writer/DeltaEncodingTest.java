@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -24,7 +25,7 @@ class DeltaEncodingTest {
 
     private static final DType.Struct I64_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("ts")),
-            List.of(DType.I64),
+            List.of(DTypes.I64),
             false);
 
     private static ReadRegistry deltaRegistry() {

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoDType;
@@ -109,7 +110,7 @@ class ParquetVariantEncodingDecoderTest {
         void nonVariantDtype_throws() {
             // Given
             ArrayNode node = parquetVariant(meta(true, null, false), metadataNode(), valueNode());
-            DecodeContext ctx = new DecodeContext(node, DType.BINARY, N, SEGMENTS, REGISTRY, Arena.ofAuto());
+            DecodeContext ctx = new DecodeContext(node, DTypes.BINARY, N, SEGMENTS, REGISTRY, Arena.ofAuto());
 
             // When / Then
             assertThatThrownBy(() -> SUT.decode(ctx))
@@ -194,7 +195,7 @@ class ParquetVariantEncodingDecoderTest {
     }
 
     private static DecodeContext ctx(ArrayNode node) {
-        return new DecodeContext(node, DType.VARIANT, N, SEGMENTS, REGISTRY, Arena.ofAuto());
+        return new DecodeContext(node, DTypes.VARIANT, N, SEGMENTS, REGISTRY, Arena.ofAuto());
     }
 
     private static MemorySegment meta(boolean hasValue, ProtoDType typedValueDtype, boolean valueNullable) {

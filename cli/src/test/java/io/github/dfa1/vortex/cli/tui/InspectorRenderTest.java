@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.GenericArray;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// in-memory arrays — no terminal, worker, or encoded fixture required.
 class InspectorRenderTest {
 
-    private static final DType I64 = DType.I64;
+    private static final DType I64 = DTypes.I64;
 
     @Nested
     class FormatValue {
@@ -59,13 +60,13 @@ class InspectorRenderTest {
                 // Given — an unsigned integer column (uci-wine's magnesium is stored unsigned); the
                 // detail view must not surface the two's-complement negative for high-half values.
                 // When / Then — U64 2^63, U32 3e9, U16 60000, U8 200 render as unsigned decimals
-                assertThat(InspectorRender.formatValue(ArrayFixtures.ulongs(arena, Long.MIN_VALUE), 0, DType.U64))
+                assertThat(InspectorRender.formatValue(ArrayFixtures.ulongs(arena, Long.MIN_VALUE), 0, DTypes.U64))
                         .isEqualTo("9223372036854775808");
-                assertThat(InspectorRender.formatValue(ArrayFixtures.uints(arena, (int) 3_000_000_000L), 0, DType.U32))
+                assertThat(InspectorRender.formatValue(ArrayFixtures.uints(arena, (int) 3_000_000_000L), 0, DTypes.U32))
                         .isEqualTo("3000000000");
-                assertThat(InspectorRender.formatValue(ArrayFixtures.ushorts(arena, (short) 60_000), 0, DType.U16))
+                assertThat(InspectorRender.formatValue(ArrayFixtures.ushorts(arena, (short) 60_000), 0, DTypes.U16))
                         .isEqualTo("60000");
-                assertThat(InspectorRender.formatValue(ArrayFixtures.ubytes(arena, (byte) 200), 0, DType.U8))
+                assertThat(InspectorRender.formatValue(ArrayFixtures.ubytes(arena, (byte) 200), 0, DTypes.U8))
                         .isEqualTo("200");
             }
         }
@@ -126,7 +127,7 @@ class InspectorRenderTest {
                 Array sut = ArrayFixtures.utf8(arena, "hi");
 
                 // When / Then
-                assertThat(InspectorRender.formatValue(sut, 0, DType.UTF8)).isEqualTo("\"hi\"");
+                assertThat(InspectorRender.formatValue(sut, 0, DTypes.UTF8)).isEqualTo("\"hi\"");
             }
         }
 
@@ -137,7 +138,7 @@ class InspectorRenderTest {
                 Array sut = ArrayFixtures.binary(arena, new byte[]{0x01, (byte) 0xab});
 
                 // When / Then
-                assertThat(InspectorRender.formatValue(sut, 0, DType.BINARY)).isEqualTo("0x01ab");
+                assertThat(InspectorRender.formatValue(sut, 0, DTypes.BINARY)).isEqualTo("0x01ab");
             }
         }
 
@@ -146,7 +147,7 @@ class InspectorRenderTest {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — vortex.date declared but storage is F64; the decode throws and is swallowed
                 DType dateExt = new DType.Extension("vortex.date",
-                        DType.I32, null, false);
+                        DTypes.I32, null, false);
                 Array badStorage = ArrayFixtures.doubles(arena, 1.5);
 
                 // When / Then — falls through to the generic DoubleArray rendering

@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.model.ColumnName;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.Test;
@@ -24,9 +25,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TypedChunkBuilderTest {
 
     private static final DType.Struct SCHEMA = DType.structBuilder()
-            .field(ColumnName.of("timestamp"), DType.I64)
-            .field(ColumnName.of("symbol"), DType.UTF8)
-            .field(ColumnName.of("price"), DType.F64)
+            .field(ColumnName.of("timestamp"), DTypes.I64)
+            .field(ColumnName.of("symbol"), DTypes.UTF8)
+            .field(ColumnName.of("price"), DTypes.F64)
             .build();
 
     @Test
@@ -100,7 +101,7 @@ class TypedChunkBuilderTest {
         // Given
         Path file = tmp.resolve("nullable.vortex");
         DType.Struct nullableSchema = DType.structBuilder()
-                .field(ColumnName.of("v"), DType.I64.asNullable())
+                .field(ColumnName.of("v"), DTypes.I64.asNullable())
                 .build();
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

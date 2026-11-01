@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -18,9 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// unsigned-widening `getInt` path, and fold reduction over the sliced range.
 class OffsetArrayTest {
 
-    private static final DType U8 = DType.U8;
-    private static final DType U16 = DType.U16;
-    private static final DType F32 = DType.F32;
+    private static final DType U8 = DTypes.U8;
+    private static final DType U16 = DTypes.U16;
+    private static final DType F32 = DTypes.F32;
 
     @Nested
     class Byte {
@@ -179,7 +180,7 @@ class OffsetArrayTest {
         void getBooleanShiftsByOffset() {
             // Given — bits [F, T, T, F]
             BoolArray inner = TestArrays.bools(false, true, true, false);
-            var sut = new OffsetBoolArray(DType.BOOL, 2, inner, 1L);
+            var sut = new OffsetBoolArray(DTypes.BOOL, 2, inner, 1L);
 
             // When / Then
             assertThat(sut.getBoolean(0)).isTrue();  // inner[1]
@@ -202,9 +203,9 @@ class OffsetArrayTest {
             BoolArray inner = TestArrays.bools(values);
             long offset = random.nextInt(17);
             long length = random.nextInt((int) (values.length - offset) + 1);
-            var sut = new OffsetBoolArray(DType.BOOL, length, inner, offset);
+            var sut = new OffsetBoolArray(DTypes.BOOL, length, inner, offset);
             // the same window through a non-flat inner takes the forEachBoolean default
-            var reference = new OffsetBoolArray(DType.BOOL, length, new OffsetBoolArray(DType.BOOL, values.length, inner, 0), offset);
+            var reference = new OffsetBoolArray(DTypes.BOOL, length, new OffsetBoolArray(DTypes.BOOL, values.length, inner, 0), offset);
 
             // When
             MemorySegment result = sut.materialize(Arena.ofAuto());
@@ -232,7 +233,7 @@ class OffsetArrayTest {
         void materialize_flatInner_returnsZeroCopyWindow() {
             // Given
             LongArray inner = TestArrays.longs(5L, 6L, 7L, 8L);
-            var sut = new OffsetLongArray(DType.I64, 2, inner, 1L);
+            var sut = new OffsetLongArray(DTypes.I64, 2, inner, 1L);
 
             // When
             MemorySegment result = sut.materialize(Arena.ofAuto());
@@ -251,8 +252,8 @@ class OffsetArrayTest {
             // window, so a zero-copy slice would read past it; the per-row path broadcasts instead
             MemorySegment one = Arena.ofAuto().allocate(4, 4);
             one.setAtIndex(ValueLayout.JAVA_INT_UNALIGNED, 0, 42);
-            IntArray inner = new MaterializedIntArray(DType.I32, 4, one);
-            var sut = new OffsetIntArray(DType.I32, 2, inner, 2L);
+            IntArray inner = new MaterializedIntArray(DTypes.I32, 4, one);
+            var sut = new OffsetIntArray(DTypes.I32, 2, inner, 2L);
 
             // When
             MemorySegment result = sut.materialize(Arena.ofAuto());
@@ -269,7 +270,7 @@ class OffsetArrayTest {
         void getIntShiftsByOffset() {
             // Given
             IntArray inner = TestArrays.ints(10, 20, 30, 40);
-            var sut = new OffsetIntArray(DType.I32, 2, inner, 2L);
+            var sut = new OffsetIntArray(DTypes.I32, 2, inner, 2L);
 
             // When / Then
             assertThat(sut.getInt(0)).isEqualTo(30);
@@ -280,7 +281,7 @@ class OffsetArrayTest {
         void fold_flatInner_foldsTheWindowInOrder() {
             // Given — an order-sensitive operator, so folding outside the window or out of order fails
             IntArray inner = TestArrays.ints(1, 2, 3, 4, 5);
-            var sut = new OffsetIntArray(DType.I32, 3, inner, 1L);
+            var sut = new OffsetIntArray(DTypes.I32, 3, inner, 1L);
 
             // When
             int result = sut.fold(0, (acc, v) -> acc * 10 + v);
@@ -294,7 +295,7 @@ class OffsetArrayTest {
             // Given a one-element buffer standing for 4 rows: a window read off it would overrun
             MemorySegment one = Arena.ofAuto().allocate(4, 4);
             one.setAtIndex(ValueLayout.JAVA_INT_UNALIGNED, 0, 7);
-            var sut = new OffsetIntArray(DType.I32, 3, new MaterializedIntArray(DType.I32, 4, one), 1L);
+            var sut = new OffsetIntArray(DTypes.I32, 3, new MaterializedIntArray(DTypes.I32, 4, one), 1L);
 
             // When
             int result = sut.fold(0, Integer::sum);
@@ -310,7 +311,7 @@ class OffsetArrayTest {
         void getLongShiftsByOffset() {
             // Given
             LongArray inner = TestArrays.longs(5L, 6L, 7L, 8L);
-            var sut = new OffsetLongArray(DType.I64, 2, inner, 1L);
+            var sut = new OffsetLongArray(DTypes.I64, 2, inner, 1L);
 
             // When / Then
             assertThat(sut.getLong(0)).isEqualTo(6L);
@@ -324,7 +325,7 @@ class OffsetArrayTest {
         void getDoubleShiftsByOffset() {
             // Given
             DoubleArray inner = TestArrays.doubles(1.5, 2.5, 3.5);
-            var sut = new OffsetDoubleArray(DType.F64, 2, inner, 1L);
+            var sut = new OffsetDoubleArray(DTypes.F64, 2, inner, 1L);
 
             // When / Then
             assertThat(sut.getDouble(0)).isEqualTo(2.5);
@@ -335,7 +336,7 @@ class OffsetArrayTest {
         void fold_flatInner_foldsTheWindowInOrder() {
             // Given — an order-sensitive operator, so folding outside the window or out of order fails
             DoubleArray inner = TestArrays.doubles(1.0, 2.0, 3.0, 4.0);
-            var sut = new OffsetDoubleArray(DType.F64, 2, inner, 1L);
+            var sut = new OffsetDoubleArray(DTypes.F64, 2, inner, 1L);
 
             // When
             double result = sut.fold(0.0, (acc, v) -> acc * 10 + v);
@@ -349,7 +350,7 @@ class OffsetArrayTest {
             // Given a one-element buffer standing for 4 rows: a window read off it would overrun
             MemorySegment one = Arena.ofAuto().allocate(8, 8);
             one.setAtIndex(ValueLayout.JAVA_DOUBLE_UNALIGNED, 0, 1.5);
-            var sut = new OffsetDoubleArray(DType.F64, 3, new MaterializedDoubleArray(DType.F64, 4, one), 1L);
+            var sut = new OffsetDoubleArray(DTypes.F64, 3, new MaterializedDoubleArray(DTypes.F64, 4, one), 1L);
 
             // When
             double result = sut.fold(0.0, java.lang.Double::sum);

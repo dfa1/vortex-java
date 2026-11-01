@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -59,7 +60,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         // left_parts child's validity. Decode the child as an Array so a nullable
         // left_parts surfaces its MaskedArray; capture the mask and re-wrap the decoded
         // result rather than flattening it (which silently dropped nulls — #234).
-        Array leftRaw = ctx.decodeChild(0, DType.U16, n);
+        Array leftRaw = ctx.decodeChild(0, DTypes.U16, n);
         MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(leftRaw);
         ShortArray leftArr = (ShortArray) unwrapped.inner();
 
@@ -67,13 +68,13 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
 
         Array decoded = switch (ptype) {
             case F64 -> {
-                Array rightRaw = ctx.decodeChild(1, DType.U64, n);
+                Array rightRaw = ctx.decodeChild(1, DTypes.U64, n);
                 LongArray rightArr = (LongArray) MaskedArray.innerOrSelf(rightRaw);
                 yield new LazyAlpRdDoubleArray(ctx.dtype(), n, dict, rightBitWidth,
                         leftArr, rightArr, patches.indices, patches.leftValues, patches.offset);
             }
             case F32 -> {
-                Array rightRaw = ctx.decodeChild(1, DType.U32, n);
+                Array rightRaw = ctx.decodeChild(1, DTypes.U32, n);
                 IntArray rightArr = (IntArray) MaskedArray.innerOrSelf(rightRaw);
                 yield new LazyAlpRdFloatArray(ctx.dtype(), n, dict, rightBitWidth,
                         leftArr, rightArr, patches.indices, patches.leftValues, patches.offset);
@@ -104,7 +105,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
 
         // Pull the small left-values table into a short[] so lookups don't pay an
         // Array-dispatch per patch hit. Patches are typically <1% of rows.
-        MemorySegment valSeg = ctx.decodeChildSegment(3, DType.U16, numPatches);
+        MemorySegment valSeg = ctx.decodeChildSegment(3, DTypes.U16, numPatches);
         long valCap = SegmentBroadcast.capacity(valSeg, 2, numPatches);
         short[] leftValues = new short[(int) numPatches];
         for (int j = 0; j < numPatches; j++) {

@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -1027,7 +1028,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 BoolArray validity = m.validity();
                 BoolArray validitySlice = validity == null
                         ? null
-                        : (BoolArray) sliceArray(validity, offset, length, DType.BOOL);
+                        : (BoolArray) sliceArray(validity, offset, length, DTypes.BOOL);
                 yield new MaskedArray(innerSlice, validitySlice);
             }
             case LongArray a -> new OffsetLongArray(dtype, length, a, offset);

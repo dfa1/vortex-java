@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.inspect;
 
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +16,7 @@ class ColumnProfileTest {
         List<ArrayStats> zones = List.of(stats(3L, 9L, 30L, 0L), stats(1L, 5L, 15L, 1L));
 
         // When
-        ColumnProfile result = ColumnProfile.fold("x", DType.I64, 10, zones, List.of());
+        ColumnProfile result = ColumnProfile.fold("x", DTypes.I64, 10, zones, List.of());
 
         // Then
         assertThat(result.min()).isEqualTo(1L);
@@ -34,7 +34,7 @@ class ColumnProfileTest {
         List<ArrayStats> zones = List.of(stats(2L, 7L, 9L, 0L), allNull);
 
         // When
-        ColumnProfile result = ColumnProfile.fold("x", DType.I64, 6, zones, List.of());
+        ColumnProfile result = ColumnProfile.fold("x", DTypes.I64, 6, zones, List.of());
 
         // Then
         assertThat(result.min()).isEqualTo(2L);
@@ -48,7 +48,7 @@ class ColumnProfileTest {
         ArrayStats bounded = new ArrayStats("ab", false, "zz", true, null, null, null, null, 0L, null, null);
 
         // When
-        ColumnProfile result = ColumnProfile.fold("s", DType.UTF8, 3, List.of(bounded), List.of());
+        ColumnProfile result = ColumnProfile.fold("s", DTypes.UTF8, 3, List.of(bounded), List.of());
 
         // Then
         assertThat(result.min()).isNull();
@@ -61,7 +61,7 @@ class ColumnProfileTest {
         List<ArrayStats> zones = List.of(stats(1L, 2L, 3L, 0L), stats(1L, 2L, null, 0L));
 
         // When
-        ColumnProfile result = ColumnProfile.fold("x", DType.I64, 4, zones, List.of());
+        ColumnProfile result = ColumnProfile.fold("x", DTypes.I64, 4, zones, List.of());
 
         // Then
         assertThat(result.sum()).isNull();
@@ -74,7 +74,7 @@ class ColumnProfileTest {
         List<ArrayStats> zones = List.of(stats(0L, 1L, Long.MAX_VALUE, 0L), stats(0L, 1L, 1L, 0L));
 
         // When
-        ColumnProfile result = ColumnProfile.fold("x", DType.I64, 2, zones, List.of());
+        ColumnProfile result = ColumnProfile.fold("x", DTypes.I64, 2, zones, List.of());
 
         // Then
         assertThat(result.sum()).isNull();
@@ -83,7 +83,7 @@ class ColumnProfileTest {
     @Test
     void fold_noStatsAtAllMeansEveryAggregateUnknown() {
         // Given / When
-        ColumnProfile result = ColumnProfile.fold("x", DType.I64, 0, List.of(), List.of());
+        ColumnProfile result = ColumnProfile.fold("x", DTypes.I64, 0, List.of(), List.of());
 
         // Then — not "0 nulls": nothing was recorded
         assertThat(result.nullCount()).isNull();
@@ -94,7 +94,7 @@ class ColumnProfileTest {
     @Test
     void mean_excludesNullsAndNans() {
         // Given — 10 rows, 2 null, 3 NaN: the sum covers the other 5
-        ColumnProfile sut = new ColumnProfile("f", DType.F64, 10, 2L, 3L, 1.0, 4.0, 10.0, List.of());
+        ColumnProfile sut = new ColumnProfile("f", DTypes.F64, 10, 2L, 3L, 1.0, 4.0, 10.0, List.of());
 
         // When
         Double result = sut.mean();
@@ -106,7 +106,7 @@ class ColumnProfileTest {
     @Test
     void mean_allNullColumnHasNoMean() {
         // Given
-        ColumnProfile sut = new ColumnProfile("f", DType.F64, 3, 3L, 0L, null, null, 0.0, List.of());
+        ColumnProfile sut = new ColumnProfile("f", DTypes.F64, 3, 3L, 0L, null, null, 0.0, List.of());
 
         // When
         Double result = sut.mean();

@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.ComparableValues;
@@ -169,7 +170,7 @@ final class ZoneAccumulator {
             types.add(switch (id) {
                 case "vortex.bounded_max" -> new DType.Struct(
                         List.of(ColumnName.of("bound"), ColumnName.of("unknown")),
-                        List.of(value, DType.BOOL), true);
+                        List.of(value, DTypes.BOOL), true);
                 case "vortex.max", "vortex.min", "vortex.bounded_min" -> value;
                 default -> new DType.Primitive(PType.U64, true);
             });

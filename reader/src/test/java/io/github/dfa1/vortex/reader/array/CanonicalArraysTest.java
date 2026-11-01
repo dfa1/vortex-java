@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 
-import static io.github.dfa1.vortex.core.testing.DTypes.I64;
+import static io.github.dfa1.vortex.core.model.DTypes.I64;
 import static io.github.dfa1.vortex.reader.array.TestArrays.bools;
 import static io.github.dfa1.vortex.reader.array.TestArrays.ints;
 import static io.github.dfa1.vortex.reader.array.TestArrays.longs;

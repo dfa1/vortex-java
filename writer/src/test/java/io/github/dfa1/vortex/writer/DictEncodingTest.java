@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -28,7 +29,7 @@ class DictEncodingTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of(ColumnName.of("category")),
-            List.of(DType.I32),
+            List.of(DTypes.I32),
             false);
 
     private static ReadRegistry dictRegistry() {

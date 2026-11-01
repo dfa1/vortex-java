@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -50,7 +51,7 @@ public final class FixedSizeListEncodingDecoder implements EncodingDecoder {
         if (nchildren == 1 || !fsl.nullable()) {
             return new FixedSizeListArray(fsl, outerLen, elements);
         }
-        Array validityArray = ctx.decodeChild(1, DType.BOOL, outerLen);
+        Array validityArray = ctx.decodeChild(1, DTypes.BOOL, outerLen);
         BoolArray validity = MaskedArray.requireBoolArray(validityArray, EncodingId.VORTEX_FIXED_SIZE_LIST,
                 "validity child");
         DType.FixedSizeList innerDtype = (DType.FixedSizeList) fsl.withNullable(false);

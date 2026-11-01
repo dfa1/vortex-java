@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.performance;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -53,11 +54,11 @@ public class LazyArrayWalkBenchmark {
     private static final int NUM_CHUNKS = (ROWS + 1023) / 1024;
     private static final int SPARSE_PATCHES = 1_000;
 
-    private static final DType I32 = DType.I32;
-    private static final DType I64 = DType.I64;
-    private static final DType I8 = DType.I8;
-    private static final DType F64 = DType.F64;
-    private static final DType F32 = DType.F32;
+    private static final DType I32 = DTypes.I32;
+    private static final DType I64 = DTypes.I64;
+    private static final DType I8 = DTypes.I8;
+    private static final DType F64 = DTypes.F64;
+    private static final DType F32 = DTypes.F32;
 
     private Arena arena;
 

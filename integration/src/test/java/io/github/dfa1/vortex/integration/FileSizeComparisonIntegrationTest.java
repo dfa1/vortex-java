@@ -5,6 +5,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.testing.OhlcData;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -54,13 +55,13 @@ class FileSizeComparisonIntegrationTest {
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("symbol"), ColumnName.of("date"), ColumnName.of("open"), ColumnName.of("high"), ColumnName.of("low"), ColumnName.of("close"), ColumnName.of("volume")),
             List.of(
-                    DType.UTF8,
-                    DType.I32,
-                    DType.F64,
-                    DType.F64,
-                    DType.F64,
-                    DType.F64,
-                    DType.I64
+                    DTypes.UTF8,
+                    DTypes.I32,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.F64,
+                    DTypes.I64
             ),
             false
     );
@@ -290,7 +291,7 @@ class FileSizeComparisonIntegrationTest {
         }
 
         DType.Struct javaSchema = new DType.Struct(
-                List.of(ColumnName.of("v")), List.of(DType.I64), false);
+                List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
         Schema jniSchema = new Schema(List.of(
                 Field.notNullable("v", new ArrowType.Int(64, true))));
 
@@ -351,7 +352,7 @@ class FileSizeComparisonIntegrationTest {
             data[i] = (i % 10 == 0) ? null : categories[rng.nextInt(categories.length)];
         }
         DType.Struct javaSchema = new DType.Struct(
-                List.of(ColumnName.of("s")), List.of(DType.UTF8.withNullable(true)), false);
+                List.of(ColumnName.of("s")), List.of(DTypes.UTF8.withNullable(true)), false);
         Schema jniSchema = new Schema(List.of(
                 Field.nullable("s", new ArrowType.Utf8())));
 
@@ -434,7 +435,7 @@ class FileSizeComparisonIntegrationTest {
             chunks[c] = chunk;
         }
         DType.Struct schema = new DType.Struct(
-                List.of(ColumnName.of("s")), List.of(DType.UTF8.withNullable(true)), false);
+                List.of(ColumnName.of("s")), List.of(DTypes.UTF8.withNullable(true)), false);
 
         // When
         Path globalDictFile = writeNullableUtf8Chunks(tmp, "gdict-on.vtx", schema, chunks, true);
@@ -476,7 +477,7 @@ class FileSizeComparisonIntegrationTest {
             data[i] = (i % 10 == 0) ? null : categories[rng.nextInt(categories.length)];
         }
         DType.Struct javaSchema = new DType.Struct(
-                List.of(ColumnName.of("s")), List.of(DType.UTF8.withNullable(true)), false);
+                List.of(ColumnName.of("s")), List.of(DTypes.UTF8.withNullable(true)), false);
         Schema jniSchema = new Schema(List.of(
                 Field.nullable("s", new ArrowType.Utf8())));
 
@@ -589,7 +590,7 @@ class FileSizeComparisonIntegrationTest {
             data[i] = new String(bytes, StandardCharsets.UTF_8);
         }
         DType.Struct javaSchema = new DType.Struct(
-                List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
+                List.of(ColumnName.of("s")), List.of(DTypes.UTF8), false);
         Schema jniSchema = new Schema(List.of(
                 Field.notNullable("s", new ArrowType.Utf8())));
 

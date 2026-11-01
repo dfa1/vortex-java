@@ -6,6 +6,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -147,7 +148,7 @@ class VortexInspectorIntegrationTest {
         // edition before core2026.08.0) zones per batch; default vortex.zoned zones per 8192 rows.
         Path file = tmp.resolve("dict.vtx");
         ColumnName fruit = ColumnName.of("fruit");
-        var schema = new DType.Struct(List.of(fruit), List.of(DType.UTF8), false);
+        var schema = new DType.Struct(List.of(fruit), List.of(DTypes.UTF8), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema,
                      WriteOptions.cascading(3).withEdition(io.github.dfa1.vortex.core.model.Editions.CORE_2025_10_0))) {
@@ -208,7 +209,7 @@ class VortexInspectorIntegrationTest {
         // must not leak in: four distinct values against 2,000 rows
         Path file = tmp.resolve("dict.vtx");
         ColumnName fruit = ColumnName.of("fruit");
-        var schema = new DType.Struct(List.of(fruit), List.of(DType.UTF8), false);
+        var schema = new DType.Struct(List.of(fruit), List.of(DTypes.UTF8), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
             writer.writeChunk(Map.of(fruit, repeat(1_000, "apple", "banana")));
@@ -268,7 +269,7 @@ class VortexInspectorIntegrationTest {
         // rows, not its code's or another chunk's
         Path file = tmp.resolve("dict.vtx");
         ColumnName fruit = ColumnName.of("fruit");
-        var schema = new DType.Struct(List.of(fruit), List.of(DType.UTF8), false);
+        var schema = new DType.Struct(List.of(fruit), List.of(DTypes.UTF8), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
             writer.writeChunk(Map.of(fruit, repeat(1_000, "apple", "banana")));

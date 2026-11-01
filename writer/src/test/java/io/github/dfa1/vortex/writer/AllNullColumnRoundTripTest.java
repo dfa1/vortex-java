@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -150,19 +151,19 @@ class AllNullColumnRoundTripTest {
     static Stream<Column> columns() {
         // values start above the placeholder (0, false, "") so a placeholder read as a value shows
         return Stream.of(
-                new Column("I8", DType.I8.asNullable(), v -> fill(new Byte[ROWS], v, i -> (byte) (1 + i % 100)), (byte) 1),
-                new Column("U8", DType.U8.asNullable(), v -> fill(new Byte[ROWS], v, i -> (byte) (1 + i % 200)), (byte) 1),
-                new Column("I16", DType.I16.asNullable(), v -> fill(new Short[ROWS], v, i -> (short) (1 + i)), (short) 1),
-                new Column("U16", DType.U16.asNullable(), v -> fill(new Short[ROWS], v, i -> (short) (1 + i)), (short) 1),
-                new Column("I32", DType.I32.asNullable(), v -> fill(new Integer[ROWS], v, i -> 1 + i), 1),
-                new Column("U32", DType.U32.asNullable(), v -> fill(new Integer[ROWS], v, i -> 1 + i), 1),
-                new Column("I64", DType.I64.asNullable(), v -> fill(new Long[ROWS], v, i -> 1L + i), 1L),
-                new Column("U64", DType.U64.asNullable(), v -> fill(new Long[ROWS], v, i -> 1L + i), 1L),
-                new Column("F32", DType.F32.asNullable(), v -> fill(new Float[ROWS], v, i -> 1.5f + i), 1.5f),
-                new Column("F64", DType.F64.asNullable(), v -> fill(new Double[ROWS], v, i -> 1.5 + i), 1.5),
-                new Column("Bool", DType.BOOL.asNullable(), v -> fill(new Boolean[ROWS], v, i -> true), true),
-                new Column("Utf8", DType.UTF8.asNullable(), v -> fill(new String[ROWS], v, i -> "v" + i), "v"),
-                new Column("Binary", DType.BINARY.asNullable(),
+                new Column("I8", DTypes.I8.asNullable(), v -> fill(new Byte[ROWS], v, i -> (byte) (1 + i % 100)), (byte) 1),
+                new Column("U8", DTypes.U8.asNullable(), v -> fill(new Byte[ROWS], v, i -> (byte) (1 + i % 200)), (byte) 1),
+                new Column("I16", DTypes.I16.asNullable(), v -> fill(new Short[ROWS], v, i -> (short) (1 + i)), (short) 1),
+                new Column("U16", DTypes.U16.asNullable(), v -> fill(new Short[ROWS], v, i -> (short) (1 + i)), (short) 1),
+                new Column("I32", DTypes.I32.asNullable(), v -> fill(new Integer[ROWS], v, i -> 1 + i), 1),
+                new Column("U32", DTypes.U32.asNullable(), v -> fill(new Integer[ROWS], v, i -> 1 + i), 1),
+                new Column("I64", DTypes.I64.asNullable(), v -> fill(new Long[ROWS], v, i -> 1L + i), 1L),
+                new Column("U64", DTypes.U64.asNullable(), v -> fill(new Long[ROWS], v, i -> 1L + i), 1L),
+                new Column("F32", DTypes.F32.asNullable(), v -> fill(new Float[ROWS], v, i -> 1.5f + i), 1.5f),
+                new Column("F64", DTypes.F64.asNullable(), v -> fill(new Double[ROWS], v, i -> 1.5 + i), 1.5),
+                new Column("Bool", DTypes.BOOL.asNullable(), v -> fill(new Boolean[ROWS], v, i -> true), true),
+                new Column("Utf8", DTypes.UTF8.asNullable(), v -> fill(new String[ROWS], v, i -> "v" + i), "v"),
+                new Column("Binary", DTypes.BINARY.asNullable(),
                         v -> fill(new byte[ROWS][], v, i -> new byte[]{1, (byte) i}), null),
                 new Column("Decimal", new DType.Decimal((byte) 10, (byte) 2, true),
                         v -> fill(new BigDecimal[ROWS], v, i -> BigDecimal.valueOf(100 + i, 2)), BigDecimal.ONE),
@@ -178,7 +179,7 @@ class AllNullColumnRoundTripTest {
 
     private Path write(Column column, Shape shape) throws IOException {
         Path file = tmp.resolve(column.name() + "-" + shape + ".vtx");
-        DType.Struct schema = DType.structBuilder().field(ID, DType.I64).field(COLUMN, column.dtype()).build();
+        DType.Struct schema = DType.structBuilder().field(ID, DTypes.I64).field(COLUMN, column.dtype()).build();
         try (var channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
             for (int batch = 0; batch < shape.valued.length; batch++) {

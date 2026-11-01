@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.proto.ProtoNullValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -148,9 +149,9 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
     /// @return the encoded validity child
     static EncodeResult encodeValidity(boolean[] validity, EncodeContext ctx) {
         if (SimdOperationsSupport.preferred().allEqual(validity)) {
-            return new ConstantEncodingEncoder().encode(DType.BOOL, validity, ctx);
+            return new ConstantEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         }
-        EncodeResult best = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeResult best = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         if (ctx.allowedCascading() <= 0) {
             return best;
         }
@@ -197,7 +198,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         if (constant.buffers().getFirst().byteSize() >= (long) validity.length * ptype.byteSize()) {
             return new PrimitiveEncodingEncoder().encode(dtype, data, ctx);
         }
-        EncodeResult bool = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         EncodeNode validityNode = EncodeNode.remapBufferIndices(bool.rootNode(), constant.buffers().size());
         List<EncodedBuffer> buffers = new ArrayList<>(constant.encodedBuffers());
         buffers.addAll(bool.encodedBuffers());

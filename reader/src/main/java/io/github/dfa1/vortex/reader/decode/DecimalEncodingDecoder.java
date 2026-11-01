@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -53,7 +53,7 @@ public final class DecimalEncodingDecoder implements EncodingDecoder {
         if (children == 0 || !ctx.dtype().nullable()) {
             return new LazyDecimalArray(ctx.dtype(), ctx.rowCount(), buffer, byteWidth);
         }
-        Array validity = ctx.decodeChild(0, DType.BOOL, ctx.rowCount());
+        Array validity = ctx.decodeChild(0, DTypes.BOOL, ctx.rowCount());
         return new MaskedArray(
                 new LazyDecimalArray(ctx.dtype().withNullable(false), ctx.rowCount(), buffer, byteWidth),
                 MaskedArray.requireBoolArray(validity, EncodingId.VORTEX_DECIMAL, "validity child"));

@@ -5,6 +5,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.arrow.c.ArrowArray;
@@ -131,14 +132,14 @@ class CascadeDepthGainIntegrationTest {
         }
 
         return Stream.of(
-                new Pattern("i64-big-runs", DType.I64, bigRuns, 2),
-                new Pattern("i64-lowcard-big", DType.I64, lowCardBig, 1),
-                new Pattern("i64-offset-small", DType.I64, offsetSmall, 1),
-                new Pattern("i64-signed-small", DType.I64, signedSmall, 1),
-                new Pattern("f64-price-2dp", DType.F64, price2dp, 1),
-                new Pattern("f64-runs", DType.F64, doubleRuns, 3),
-                new Pattern("utf8-lowcard", DType.UTF8, lowCardText, 1),
-                new Pattern("utf8-urls", DType.UTF8, urls, 1));
+                new Pattern("i64-big-runs", DTypes.I64, bigRuns, 2),
+                new Pattern("i64-lowcard-big", DTypes.I64, lowCardBig, 1),
+                new Pattern("i64-offset-small", DTypes.I64, offsetSmall, 1),
+                new Pattern("i64-signed-small", DTypes.I64, signedSmall, 1),
+                new Pattern("f64-price-2dp", DTypes.F64, price2dp, 1),
+                new Pattern("f64-runs", DTypes.F64, doubleRuns, 3),
+                new Pattern("utf8-lowcard", DTypes.UTF8, lowCardText, 1),
+                new Pattern("utf8-urls", DTypes.UTF8, urls, 1));
     }
 
     @ParameterizedTest

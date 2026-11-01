@@ -11,6 +11,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -80,7 +81,7 @@ public class JavaVsJniRunEndBenchmark {
 
     private static final ColumnName LEVEL = ColumnName.of("level");
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
-            List.of(LEVEL), List.of(DType.I64), false);
+            List.of(LEVEL), List.of(DTypes.I64), false);
     private static final Schema JNI_SCHEMA = new Schema(List.of(
             Field.notNullable("level", new ArrowType.Int(64, true))));
 

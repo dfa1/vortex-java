@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsBuffer;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
@@ -44,7 +44,7 @@ class SerializedArrayDecoderDecodeTest {
 
             // When — encoding index 0 maps to an id no decoder handles
             Array result = sut.decode(seg, List.of(EncodingId.parse("vortex.nonexistent")),
-                    DType.I32, 0, arena);
+                    DTypes.I32, 0, arena);
 
             // Then — the allow-unknown path produced an UnknownArray (proves both the +padding
             // walk and the unknown-id passthrough ran)

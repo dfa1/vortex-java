@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Test;
@@ -58,7 +59,7 @@ class SelectedArraysTest {
         assertThat(List.of(halves.getFloat(1), halves.getFloat(2))).isEqualTo(List.of(2.5f, 4.5f));
         assertThat(List.of(bools.getBoolean(0), bools.getBoolean(1), bools.getBoolean(2)))
                 .isEqualTo(List.of(false, true, true));
-        assertThat(longs.dtype()).isEqualTo(DType.I64);
+        assertThat(longs.dtype()).isEqualTo(DTypes.I64);
         assertThat(List.of(longs, ints, shorts, bytes, doubles, floats, halves, bools))
                 .allMatch(a -> a.segmentIfPresent().isPresent());
     }
@@ -94,7 +95,7 @@ class SelectedArraysTest {
         // would read past the buffer's single element
         MemorySegment one = ARENA.allocate(8, 8);
         one.set(ValueLayout.JAVA_LONG, 0, 42L);
-        Array constant = new MaterializedLongArray(DType.I64, 4, one);
+        Array constant = new MaterializedLongArray(DTypes.I64, 4, one);
 
         // When
         LongArray result = (LongArray) select(constant, rows(1, 2, 3), ARENA);
@@ -201,8 +202,8 @@ class SelectedArraysTest {
     void primitiveDictionary_staysADictionaryWithFlatCodes() {
         // Given: codes in a chunked array, which the selection flattens for the code-scan lane
         LongArray pool = TestArrays.longs(100, 200);
-        Array codes = ChunkedByteArray.of(DType.U8, 4, List.of(codes((byte) 0, (byte) 1), codes((byte) 1, (byte) 0)));
-        Array dict = DictLongArray.of(DType.I64, 4, pool, codes);
+        Array codes = ChunkedByteArray.of(DTypes.U8, 4, List.of(codes((byte) 0, (byte) 1), codes((byte) 1, (byte) 0)));
+        Array dict = DictLongArray.of(DTypes.I64, 4, pool, codes);
 
         // When
         Array result = select(dict, rows(2, 3), ARENA);
@@ -218,9 +219,9 @@ class SelectedArraysTest {
     void offsetSlice_selectsFromTheArrayItSlicesSoADictionaryStaysOne() {
         // Given: a slice starting at row 1 of a four-row dictionary; keeping slice rows 0 and 2
         // reads dictionary rows 1 and 3 only if the slice offset is applied
-        Array dict = DictLongArray.of(DType.I64, 4, TestArrays.longs(100, 200),
+        Array dict = DictLongArray.of(DTypes.I64, 4, TestArrays.longs(100, 200),
                 codes((byte) 0, (byte) 1, (byte) 0, (byte) 1));
-        Array slice = new OffsetLongArray(DType.I64, 3, (LongArray) dict, 1);
+        Array slice = new OffsetLongArray(DTypes.I64, 3, (LongArray) dict, 1);
 
         // When
         Array result = select(slice, rows(0, 2), ARENA);
@@ -294,8 +295,8 @@ class SelectedArraysTest {
     void offsetSliceOfAFlatArray_copiesFromItsShiftedRows() {
         // Given: a slice starting at row 1, under a mask, so the slice offset has to reach the
         // flat copy of both the values and the validity
-        Array values = new OffsetIntArray(DType.I32, 3, TestArrays.ints(10, 11, 12, 13), 1);
-        BoolArray validity = new OffsetBoolArray(DType.BOOL, 3, TestArrays.bools(true, true, false, true), 1);
+        Array values = new OffsetIntArray(DTypes.I32, 3, TestArrays.ints(10, 11, 12, 13), 1);
+        BoolArray validity = new OffsetBoolArray(DTypes.BOOL, 3, TestArrays.bools(true, true, false, true), 1);
         Array masked = new MaskedArray(values, validity);
 
         // When
@@ -310,7 +311,7 @@ class SelectedArraysTest {
     @Test
     void struct_selectsEveryField() {
         // Given
-        DType.Struct dtype = DType.structBuilder().field(ColumnName.of("a"), DType.I64).field(ColumnName.of("b"), DType.UTF8).build();
+        DType.Struct dtype = DType.structBuilder().field(ColumnName.of("a"), DTypes.I64).field(ColumnName.of("b"), DTypes.UTF8).build();
         Array struct = new StructArray(dtype, 3, List.of(TestArrays.longs(1, 2, 3), strings("p", "q", "r")));
 
         // When
@@ -326,7 +327,7 @@ class SelectedArraysTest {
     void fixedSizeListOfNoElements_keepsTheSelectedRowCount() {
         // Given: three rows of zero elements each, which Rust accepts; the element mask keeps
         // nothing, so a copy that assumed some kept elements would fail
-        DType.FixedSizeList dtype = new DType.FixedSizeList(DType.I64, 0, false);
+        DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I64, 0, false);
         Array list = new FixedSizeListArray(dtype, 3, TestArrays.longs());
 
         // When
@@ -340,7 +341,7 @@ class SelectedArraysTest {
     @Test
     void fixedSizeList_selectsEachRowsElements() {
         // Given: three rows of two elements: [1,2] [3,4] [5,6]
-        DType.FixedSizeList dtype = new DType.FixedSizeList(DType.I64, 2, false);
+        DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I64, 2, false);
         Array list = new FixedSizeListArray(dtype, 3, TestArrays.longs(1, 2, 3, 4, 5, 6));
 
         // When
@@ -356,7 +357,7 @@ class SelectedArraysTest {
     @Test
     void list_becomesAListViewOverTheSameElements() {
         // Given: rows [10] [20, 21] [30, 31, 32], offsets 0, 1, 3, 6
-        DType.List dtype = new DType.List(DType.I64, false);
+        DType.List dtype = new DType.List(DTypes.I64, false);
         Array list = new ListArray(dtype, 3, TestArrays.longs(10, 20, 21, 30, 31, 32), TestArrays.ints(0, 1, 3, 6));
 
         // When
@@ -419,10 +420,10 @@ class SelectedArraysTest {
     @Test
     void nullArray_keepsItsTypeWithTheSelectedLength() {
         // When
-        Array result = select(new NullArray(DType.I64.asNullable(), 10), ROWS, ARENA);
+        Array result = select(new NullArray(DTypes.I64.asNullable(), 10), ROWS, ARENA);
 
         // Then
-        assertThat(result).isEqualTo(new NullArray(DType.I64.asNullable(), 3));
+        assertThat(result).isEqualTo(new NullArray(DTypes.I64.asNullable(), 3));
     }
 
     @Test
@@ -437,7 +438,7 @@ class SelectedArraysTest {
     @Test
     void anArrayWithoutRows_failsAsVortexException() {
         // Given: raw undecoded bytes have no rows to select
-        Array unknown = new UnknownArray(EncodingId.parse("acme.unknown"), DType.BINARY, 2, null,
+        Array unknown = new UnknownArray(EncodingId.parse("acme.unknown"), DTypes.BINARY, 2, null,
                 new MemorySegment[0], new Array[0]);
 
         // When / Then
@@ -464,12 +465,12 @@ class SelectedArraysTest {
             at += values[i].getBytes(StandardCharsets.UTF_8).length;
         }
         offsets.setAtIndex(ValueLayout.JAVA_INT, values.length, at);
-        return new VarBinOffsetArray(DType.UTF8, values.length, MemorySegment.ofArray(all), offsets, PType.I32);
+        return new VarBinOffsetArray(DTypes.UTF8, values.length, MemorySegment.ofArray(all), offsets, PType.I32);
     }
 
     private static Array stringDict(String[] pool, byte[] codes) {
         VarBinOffsetArray values = (VarBinOffsetArray) strings(pool);
-        return VarBinArray.ofDict(DType.UTF8, codes.length, values.bytesSegment(), values.offsetsSegment(),
+        return VarBinArray.ofDict(DTypes.UTF8, codes.length, values.bytesSegment(), values.offsetsSegment(),
                 PType.I32, MemorySegment.ofArray(codes), PType.U8);
     }
 
@@ -478,6 +479,6 @@ class SelectedArraysTest {
         for (int i = 0; i < codes.length; i++) {
             seg.set(ValueLayout.JAVA_BYTE, i, codes[i]);
         }
-        return new MaterializedByteArray(DType.U8, codes.length, seg);
+        return new MaterializedByteArray(DTypes.U8, codes.length, seg);
     }
 }

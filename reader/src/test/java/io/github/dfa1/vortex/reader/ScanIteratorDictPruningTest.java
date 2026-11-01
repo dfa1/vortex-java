@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.testing.TestSegments;
@@ -71,7 +72,7 @@ class ScanIteratorDictPruningTest {
     @Test
     void nullDictionaryValues_satisfyNoValuePredicate() {
         // Given — the values a and a null: rows coding the null value are null, so only a can match
-        Array values = new MaskedArray(strings("a", "b"), new MaterializedBoolArray(DType.BOOL, 2,
+        Array values = new MaskedArray(strings("a", "b"), new MaterializedBoolArray(DTypes.BOOL, 2,
                 MemorySegment.ofArray(new byte[]{0b01})));
 
         // When

@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoOnPairMetadata;
@@ -62,7 +62,7 @@ class OnPairEncodingEncoderTest {
         EncodeContext ctx = EncodeContext.ofDepth(0, Arena.ofAuto(), WriteRegistry.loadAll());
 
         // When
-        EncodeResult result = SUT.encode(DType.UTF8, data, ctx);
+        EncodeResult result = SUT.encode(DTypes.UTF8, data, ctx);
 
         // Then
         VarBinArray decoded = (VarBinArray) decode(result, data.length);
@@ -81,7 +81,7 @@ class OnPairEncodingEncoderTest {
         EncodeContext ctx = EncodeContext.ofDepth(0, Arena.ofAuto(), WriteRegistry.loadAll());
 
         // When
-        EncodeResult result = SUT.encode(DType.UTF8, data, ctx);
+        EncodeResult result = SUT.encode(DTypes.UTF8, data, ctx);
 
         // Then
         MemorySegment metaSeg = result.rootNode().metadata();
@@ -121,7 +121,7 @@ class OnPairEncodingEncoderTest {
         EncodeContext ctx = EncodeContext.ofDepth(0, Arena.ofAuto(), WriteRegistry.loadAll());
 
         // When
-        EncodeResult result = SUT.encode(DType.UTF8, data, ctx);
+        EncodeResult result = SUT.encode(DTypes.UTF8, data, ctx);
 
         // Then
         MemorySegment metaSeg = result.rootNode().metadata();
@@ -144,6 +144,6 @@ class OnPairEncodingEncoderTest {
                 .toArray(ArrayNode[]::new);
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_ONPAIR, root.metadata(), children, root.bufferIndices());
         MemorySegment[] segments = result.buffers().toArray(new MemorySegment[0]);
-        return DECODER.decode(new DecodeContext(node, DType.UTF8, n, segments, REGISTRY, Arena.ofAuto()));
+        return DECODER.decode(new DecodeContext(node, DTypes.UTF8, n, segments, REGISTRY, Arena.ofAuto()));
     }
 }

@@ -11,6 +11,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -80,7 +81,7 @@ public class JavaVsJniAlpBenchmark {
 
     private static final ColumnName PRICE = ColumnName.of("price");
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
-            List.of(PRICE), List.of(DType.F64), false);
+            List.of(PRICE), List.of(DTypes.F64), false);
     private static final ArrowType F64_TYPE = new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
     private static final Schema JNI_SCHEMA = new Schema(List.of(
             Field.notNullable("price", F64_TYPE)));

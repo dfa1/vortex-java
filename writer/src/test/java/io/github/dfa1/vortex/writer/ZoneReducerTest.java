@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.compute.ZoneReducer;
@@ -23,10 +24,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ZoneReducerTest {
 
     private static final DType.Struct I64_SCHEMA = new DType.Struct(
-            List.of(ColumnName.of("id")), List.of(DType.I64), false);
+            List.of(ColumnName.of("id")), List.of(DTypes.I64), false);
 
     private static final DType.Struct F64_SCHEMA = new DType.Struct(
-            List.of(ColumnName.of("v")), List.of(DType.F64), false);
+            List.of(ColumnName.of("v")), List.of(DTypes.F64), false);
 
     private static ReadRegistry registry() {
         return ReadRegistry.builder().registerDefaults().build();

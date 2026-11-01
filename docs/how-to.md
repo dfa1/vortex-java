@@ -769,12 +769,13 @@ looks like this and how the two independent nullability slots (map row vs. entry
 ```java
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.encode.ListViewData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
 
 // map<utf8, i64?> — non-nullable string keys, nullable long values
-DType.Map mapType = new DType.Map(DType.UTF8, DType.I64.asNullable(), false, false);
+DType.Map mapType = new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), false, false);
 DType.Struct schema = new DType.Struct(List.of(ColumnName.of("attrs")), List.of(mapType), false);
 
 // 3 rows: {a:1, b:2}, {} (empty map), {c:null}
@@ -853,10 +854,11 @@ with ALP/FoR/bit-packing as the only candidates, to the same bytes.
 ```java
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.writer.ColumnEncoding;
 
-DType.Struct schema = new DType.Struct(List.of(ColumnName.of("price")), List.of(DType.F64), false);
+DType.Struct schema = new DType.Struct(List.of(ColumnName.of("price")), List.of(DTypes.F64), false);
 double[] prices = {19.99, 4.50, 120.00};
 
 WriteOptions options = WriteOptions.defaults().withColumnEncoding(ColumnName.of("price"),
@@ -888,6 +890,7 @@ module, reads it back — writer and reader never share code, only the wire id.
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
@@ -924,7 +927,7 @@ final class XorI64EncodingEncoder implements EncodingEncoder {
     }
 }
 
-DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false);
+DType.Struct schema = new DType.Struct(List.of(ColumnName.of("id")), List.of(DTypes.I64), false);
 
 // a registry containing only this encoder, at cascade depth 0 so every I64 column takes the
 // first accepting encoder; under the default cascade it must measure smaller than the canonical
@@ -1028,7 +1031,7 @@ final class MoneyEncoder implements ExtensionEncoder {
 
     static DType.Extension dtype(Currency currency) {
         byte[] code = currency.getCurrencyCode().getBytes(StandardCharsets.US_ASCII);
-        return new DType.Extension(ID.id(), DType.I64, MemorySegment.ofArray(code), false);
+        return new DType.Extension(ID.id(), DTypes.I64, MemorySegment.ofArray(code), false);
     }
 
     @Override
@@ -1043,7 +1046,7 @@ final class MoneyEncoder implements ExtensionEncoder {
 
     @Override
     public void validate(DType.Extension dtype) {
-        if (!dtype.storageDType().equals(DType.I64)) {
+        if (!dtype.storageDType().equals(DTypes.I64)) {
             throw new VortexException("acme.money storage must be non-nullable I64");
         }
         currency(dtype); // rejects a code that is not ISO 4217
@@ -1098,7 +1101,7 @@ final class MoneyDecoder implements ExtensionDecoder<BigDecimal> {
     @Override
     public DType.Extension dtype(boolean nullable) {
         byte[] code = "EUR".getBytes(StandardCharsets.US_ASCII);
-        return new DType.Extension(ID.id(), DType.I64, MemorySegment.ofArray(code), false);
+        return new DType.Extension(ID.id(), DTypes.I64, MemorySegment.ofArray(code), false);
     }
 
     @Override

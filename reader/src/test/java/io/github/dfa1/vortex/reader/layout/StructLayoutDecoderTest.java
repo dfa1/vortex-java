@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.layout;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
@@ -70,7 +71,7 @@ class StructLayoutDecoderTest {
         Array field0 = sentinel();
         Array field1 = sentinel();
         LayoutDecodeContext ctx = mock(LayoutDecodeContext.class);
-        given(ctx.decodeChild(validityChild, DType.BOOL)).willReturn(validity);
+        given(ctx.decodeChild(validityChild, DTypes.BOOL)).willReturn(validity);
         given(ctx.decodeChild(fieldChild0, intType())).willReturn(field0);
         given(ctx.decodeChild(fieldChild1, intType())).willReturn(field1);
 
@@ -152,7 +153,7 @@ class StructLayoutDecoderTest {
 
             @Override
             public DType dtype() {
-                return DType.BOOL;
+                return DTypes.BOOL;
             }
         };
     }

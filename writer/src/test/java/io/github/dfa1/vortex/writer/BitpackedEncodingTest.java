@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
@@ -25,7 +26,7 @@ class BitpackedEncodingTest {
 
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
             List.of(ColumnName.of("value")),
-            List.of(DType.I32),
+            List.of(DTypes.I32),
             false);
 
     private static ReadRegistry bitpackedRegistry() {

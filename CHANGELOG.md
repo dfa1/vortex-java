@@ -23,8 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** a filtered scan returns only the rows that match, and a limit counts those rows, as Rust's scan does; the filter only skipped whole chunks before, so a scan returned their non-matching rows too and a limit could cut matching ones. ([#598](https://github.com/dfa1/vortex-java/pull/598))
 - **Breaking:** `ScanOptions.filter()` and `limit()` return `Optional<ScanFilter>` and `Optional<ScanLimit>`, as Rust's `ScanBuilder` holds them; `withLimit` takes a `ScanLimit`, and `NO_LIMIT`, `ScanOptions.limit(long)`, `rowFilter()`, `hasFilter()` and `hasLimit()` are gone. ([#598](https://github.com/dfa1/vortex-java/pull/598))
 - **Breaking:** CSV import stores an empty cell in a number or boolean column as null instead of `0` or `false`, so inferred number and boolean columns are now nullable (read through `MaskedArray`), and an empty cell or a missing column fails the import where the schema declares the column non-nullable. ([#592](https://github.com/dfa1/vortex-java/issues/592))
+- **Breaking:** the shared non-nullable dtypes move from `DType` to the new `DTypes` class: `DTypes.I64`, `DTypes.UTF8`, … ([#624](https://github.com/dfa1/vortex-java/pull/624))
 
 ### Fixed
+- Two threads first using `DType` at the same time no longer deadlock the JVM, as they could when, for example, two Parquet imports started together. ([#624](https://github.com/dfa1/vortex-java/pull/624))
 - ALP writes patch values that are all equal as a `vortex.constant`, as Rust does. ([#619](https://github.com/dfa1/vortex-java/pull/619))
 - Bit-packing writes its patches as Rust does: indices and per-1024-value chunk offsets narrowed to the smallest unsigned type that holds them, and equal values as a `vortex.constant`. ([#619](https://github.com/dfa1/vortex-java/pull/619))
 - The cascade tries encodings in Rust's registration order, so a tie between two equally small encodings goes the way Rust breaks it. ([#604](https://github.com/dfa1/vortex-java/issues/604))

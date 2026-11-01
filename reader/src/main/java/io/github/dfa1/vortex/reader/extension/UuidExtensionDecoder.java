@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -45,7 +46,7 @@ public final class UuidExtensionDecoder implements ExtensionDecoder<UUID> {
 
     @Override
     public DType.Extension dtype(boolean nullable) {
-        DType.Primitive u8 = DType.U8;
+        DType.Primitive u8 = DTypes.U8;
         // Rust vortex.uuid metadata: 0 bytes means "no specific version" — but the field
         // must be present in the flatbuffer or the Rust reader's ok_or_else() check fails.
         return new DType.Extension(

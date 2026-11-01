@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -31,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DictValuesPoolCompressionIntegrationTest {
 
     private static final ColumnName COL = ColumnName.of("desc");
-    private static final DType.Struct SCHEMA = new DType.Struct(List.of(COL), List.of(DType.UTF8), false);
+    private static final DType.Struct SCHEMA = new DType.Struct(List.of(COL), List.of(DTypes.UTF8), false);
 
     /// Builds a low-cardinality column whose distinct values share a long common prefix, so FSST
     /// beats raw varbin on the values pool decisively. `distinct * 2 < rows` keeps it inside the

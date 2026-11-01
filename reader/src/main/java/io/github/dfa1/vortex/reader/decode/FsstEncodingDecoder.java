@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -108,7 +109,7 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
         if (numChildren == 2 || !ctx.dtype().nullable()) {
             return strings;
         }
-        Array validity = ctx.decodeChild(2, DType.BOOL, n);
+        Array validity = ctx.decodeChild(2, DTypes.BOOL, n);
         return new MaskedArray(strings, MaskedArray.requireBoolArray(validity, EncodingId.VORTEX_FSST,
                 "validity child"));
     }

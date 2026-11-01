@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.encode.ComparableValues;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Nested;
@@ -120,7 +120,7 @@ class ZoneMapStatCodecTest {
     class ExtensionType {
 
         private static final DType TIMESTAMP_MS =
-                new DType.Extension("vortex.timestamp", DType.I64, MemorySegment.ofArray(new byte[]{0, 0, 0}), false);
+                new DType.Extension("vortex.timestamp", DTypes.I64, MemorySegment.ofArray(new byte[]{0, 0, 0}), false);
 
         @Test
         void plainPrimitiveStorage_unwrapsToStoragePrimitive() throws IOException {

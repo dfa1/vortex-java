@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -191,7 +192,7 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_nullMetadata_throwsMissingMeta() {
-            DecodeContext ctx = ctxWith(null, DType.I64, 0, new MemorySegment[0]);
+            DecodeContext ctx = ctxWith(null, DTypes.I64, 0, new MemorySegment[0]);
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing ProtoPcoMetadata");
@@ -201,7 +202,7 @@ class PcoEncodingDecoderTest {
         void decode_invalidHeaderVersion_throwsUnsupported() {
             ProtoPcoMetadata meta = new ProtoPcoMetadata(new byte[]{0x03, 0x00}, java.util.List.of());
             DecodeContext ctx = ctxWith(MemorySegment.ofArray(meta.encode()),
-                    DType.I64, 0, new MemorySegment[0]);
+                    DTypes.I64, 0, new MemorySegment[0]);
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unsupported pco format version 03.00");
@@ -209,7 +210,7 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_nonPrimitiveDtype_throws() {
-            DecodeContext ctx = ctxWith(validMetaBuffer(), DType.UTF8, 0, new MemorySegment[0]);
+            DecodeContext ctx = ctxWith(validMetaBuffer(), DTypes.UTF8, 0, new MemorySegment[0]);
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("Primitive dtype");
@@ -218,7 +219,7 @@ class PcoEncodingDecoderTest {
         @Test
         void decode_unsupportedPtype_throws() {
             // pco has no 8-bit number type (it did not have an F16 one here until #515)
-            DecodeContext ctx = ctxWith(validMetaBuffer(), DType.I8, 0,
+            DecodeContext ctx = ctxWith(validMetaBuffer(), DTypes.I8, 0,
                     new MemorySegment[0]);
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -235,7 +236,7 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_consecutiveDelta_order1_singleValue_decodes() {
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{chunkMetaConsecutive(1), pageWithMoments(42L)});
             var result = SUT.decode(ctx);
             assertThat(result.length()).isEqualTo(1);
@@ -244,7 +245,7 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_consecutiveDelta_order2_twoValues_decodes() {
-            DecodeContext ctx = ctxWith(metaWithOneChunk(2), DType.U64, 2,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(2), DTypes.U64, 2,
                     new MemorySegment[]{chunkMetaConsecutive(2), pageWithMoments(10L, 7L)});
             var result = SUT.decode(ctx);
             assertThat(result.length()).isEqualTo(2);
@@ -257,7 +258,7 @@ class PcoEncodingDecoderTest {
             ProtoPcoMetadata meta = new ProtoPcoMetadata(
                     new byte[]{PcoEncodingDecoder.PCO_FORMAT_MAJOR, PcoEncodingDecoder.PCO_FORMAT_MINOR},
                     java.util.List.of(new ProtoPcoChunkInfo(java.util.List.of(new ProtoPcoPageInfo(1), new ProtoPcoPageInfo(1)))));
-            DecodeContext ctx = ctxWith(MemorySegment.ofArray(meta.encode()), DType.U64, 2,
+            DecodeContext ctx = ctxWith(MemorySegment.ofArray(meta.encode()), DTypes.U64, 2,
                     new MemorySegment[]{chunkMetaConsecutive(1), pageWithMoments(10L), pageWithMoments(20L)});
             var result = SUT.decode(ctx);
             assertThat(result.length()).isEqualTo(2);
@@ -273,7 +274,7 @@ class PcoEncodingDecoderTest {
                     java.util.List.of(
                             new ProtoPcoChunkInfo(java.util.List.of(new ProtoPcoPageInfo(1))),
                             new ProtoPcoChunkInfo(java.util.List.of(new ProtoPcoPageInfo(1)))));
-            DecodeContext ctx = ctxWith(MemorySegment.ofArray(meta.encode()), DType.U64, 2,
+            DecodeContext ctx = ctxWith(MemorySegment.ofArray(meta.encode()), DTypes.U64, 2,
                     new MemorySegment[]{chunkMetaConsecutive(1), chunkMetaConsecutive(1),
                             pageWithMoments(100L), pageWithMoments(200L)});
             var result = SUT.decode(ctx);
@@ -346,7 +347,7 @@ class PcoEncodingDecoderTest {
             long weightLatent = 0x80000000L;
             MemorySegment chunkMeta = chunkMetaConv1(0, biasLatent, 1, new long[]{weightLatent});
             MemorySegment page = segmentOf((byte) 0x05, (byte) 0x00, (byte) 0x00, (byte) 0x80);
-            DecodeContext ctx = ctxWith(metaWithOneChunk(2), DType.I32, 2,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(2), DTypes.I32, 2,
                     new MemorySegment[]{chunkMeta, page});
             var result = SUT.decode(ctx);
 
@@ -361,7 +362,7 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_lookback_corruptIndexZero_throwsVortexException() {
-            DecodeContext ctx = ctxWith(metaWithOneChunk(2), DType.U64, 2,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(2), DTypes.U64, 2,
                     new MemorySegment[]{chunkMetaLookback(), lookbackPage(0L)});
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -372,7 +373,7 @@ class PcoEncodingDecoderTest {
         void decode_lookback_stateNExceedsPageN_throwsVortexException() {
             MemorySegment chunkMeta = segmentOf(
                     (byte) 0x20, (byte) 0x20, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00);
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{chunkMeta, segmentOf((byte) 0x00)});
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -381,7 +382,7 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_lookback_singleInitialValue_returnsIt() {
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{chunkMetaLookback(), lookbackPage(42L)});
             var result = SUT.decode(ctx);
             assertThat(result.length()).isEqualTo(1);
@@ -394,7 +395,7 @@ class PcoEncodingDecoderTest {
         @Test
         void lookback_decodeNExceedsMax_throwsVortexException() {
             int pageN = (1 << 23) + 2;
-            DecodeContext ctx = ctxWith(metaWithOneChunk(pageN), DType.U64, pageN,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(pageN), DTypes.U64, pageN,
                     new MemorySegment[]{chunkMetaLookback(), segmentOf(new byte[8])});
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -409,7 +410,7 @@ class PcoEncodingDecoderTest {
             MemorySegment chunkMeta = segmentOf(
                     (byte) 0x20, (byte) 0x40, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00);
             MemorySegment page = segmentOf(new byte[32]);
-            DecodeContext ctx = ctxWith(metaWithOneChunk(4), DType.U64, 4,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(4), DTypes.U64, 4,
                     new MemorySegment[]{chunkMeta, page});
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -423,7 +424,7 @@ class PcoEncodingDecoderTest {
         void lookback_windowNLogExceedsMax_throwsVortexException() {
             MemorySegment chunkMeta = segmentOf(
                     (byte) 0x20, (byte) 0x18, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00);
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{chunkMeta, segmentOf((byte) 0x00)});
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -436,7 +437,7 @@ class PcoEncodingDecoderTest {
         @Test
         void dict_nUniqueExceedsMax_throwsVortexException() {
             MemorySegment chunkMeta = segmentOf((byte) 0x14, (byte) 0x00, (byte) 0x10, (byte) 0x00, (byte) 0x00);
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{chunkMeta, segmentOf((byte) 0x00)});
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -468,7 +469,7 @@ class PcoEncodingDecoderTest {
         @ParameterizedTest
         @MethodSource("chunkMetaBytesProvider")
         void randomChunkMetaBytes_neverThrowsJvmException(byte[] chunkMetaBytes) {
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{segmentOf(chunkMetaBytes), segmentOf((byte) 0x00)});
             // VortexException is acceptable; NPE/AIOOBE/etc. are not
             assertThatCode(() -> {
@@ -482,7 +483,7 @@ class PcoEncodingDecoderTest {
         @ParameterizedTest
         @MethodSource("pageBytesProvider")
         void randomPageBytes_classicMode_neverThrowsJvmException(byte[] pageBytes) {
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{segmentOf((byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00),
                             segmentOf(pageBytes)});
             // VortexException is acceptable; NPE/AIOOBE/etc. are not
@@ -498,7 +499,7 @@ class PcoEncodingDecoderTest {
         @ValueSource(ints = {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
         void invalidModeNibble_throwsVortexException(int modeNibble) {
             byte modeByte = (byte) (modeNibble & 0x0F);
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{segmentOf(modeByte, (byte) 0x00, (byte) 0x00, (byte) 0x00),
                             segmentOf((byte) 0x00)});
             assertThatThrownBy(() -> SUT.decode(ctx))
@@ -510,7 +511,7 @@ class PcoEncodingDecoderTest {
         @ValueSource(ints = {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
         void invalidDeltaVariant_throwsVortexException(int deltaVariant) {
             byte modeDeltaByte = (byte) ((deltaVariant & 0x0F) << 4);
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{segmentOf(modeDeltaByte, (byte) 0x00, (byte) 0x00, (byte) 0x00),
                             segmentOf((byte) 0x00)});
             assertThatThrownBy(() -> SUT.decode(ctx))
@@ -540,7 +541,7 @@ class PcoEncodingDecoderTest {
             byte[] chunkMeta = packBitsLsbFirst(
                     new int[]{4, 4, 4, 15, 64, 7},
                     new long[]{0, 0, 0, 1, 0, 100});
-            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DType.U64, 1,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(1), DTypes.U64, 1,
                     new MemorySegment[]{segmentOf(chunkMeta), segmentOf((byte) 0x00)});
 
             // When / Then
@@ -552,7 +553,7 @@ class PcoEncodingDecoderTest {
         @Test
         void pageValuesTotalMismatchesRowCount_throwsVortexException() {
             // Given — one page declares 5 values but the context row count is 3
-            DecodeContext ctx = ctxWith(metaWithOneChunk(5), DType.U64, 3,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(5), DTypes.U64, 3,
                     new MemorySegment[]{segmentOf((byte) 0x00), segmentOf((byte) 0x00)});
 
             // When / Then
@@ -564,7 +565,7 @@ class PcoEncodingDecoderTest {
         @Test
         void negativePageNValues_throwsVortexException() {
             // Given — a page whose n_values decodes to -1 (a valid varint32 on the wire)
-            DecodeContext ctx = ctxWith(metaWithOneChunk(-1), DType.U64, 0,
+            DecodeContext ctx = ctxWith(metaWithOneChunk(-1), DTypes.U64, 0,
                     new MemorySegment[]{segmentOf((byte) 0x00), segmentOf((byte) 0x00)});
 
             // When / Then

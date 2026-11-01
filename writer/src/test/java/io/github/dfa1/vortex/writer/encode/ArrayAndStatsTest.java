@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,7 +15,7 @@ class ArrayAndStatsTest {
     @Test
     void stats_computedOnce_andSharedByEveryCaller() {
         // Given
-        ArrayAndStats sut = new ArrayAndStats(DType.I64, new long[]{7, 7, 9}, ALL_STATS);
+        ArrayAndStats sut = new ArrayAndStats(DTypes.I64, new long[]{7, 7, 9}, ALL_STATS);
 
         // When
         ArrayStats result = sut.stats();
@@ -33,7 +33,7 @@ class ArrayAndStatsTest {
         // Rust's stats see them only as gaps: a null continues the run before it
         long[] values = {5, 0, 5, 9, 0, 9, 9};
         boolean[] validity = {true, false, true, true, false, true, true};
-        ArrayAndStats sut = new ArrayAndStats(DType.I64, new NullableData(values, validity), ALL_STATS);
+        ArrayAndStats sut = new ArrayAndStats(DTypes.I64, new NullableData(values, validity), ALL_STATS);
 
         // When
         ArrayStats result = sut.stats();
@@ -51,7 +51,7 @@ class ArrayAndStatsTest {
     @Test
     void stats_nonPrimitive_isEmpty() {
         // Given: strings go through the same competition, but no stats consumer reads them
-        ArrayAndStats sut = new ArrayAndStats(DType.UTF8, new String[]{"a", "b"}, ALL_STATS);
+        ArrayAndStats sut = new ArrayAndStats(DTypes.UTF8, new String[]{"a", "b"}, ALL_STATS);
 
         // When
         ArrayStats result = sut.stats();

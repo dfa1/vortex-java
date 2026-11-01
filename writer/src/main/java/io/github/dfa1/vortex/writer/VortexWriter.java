@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.ListViewData;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.io.VortexFormat;
@@ -86,8 +87,8 @@ import java.util.stream.Collectors;
 /// Usage:
 /// ```java
 /// var schema = DType.structBuilder()
-///         .field(ColumnName.of("id"), DType.I64)
-///         .field(ColumnName.of("value"), DType.F64)
+///         .field(ColumnName.of("id"), DTypes.I64)
+///         .field(ColumnName.of("value"), DTypes.F64)
 ///         .build();
 /// try (var channel = FileChannel.open(path, CREATE, WRITE);
 ///      var writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
@@ -1245,7 +1246,7 @@ public final class VortexWriter implements Closeable {
             types.add(minMaxDtype);
             fields.add(new NullableData(maxValues, maxValid));
             names.add("max_is_truncated");
-            types.add(DType.BOOL);
+            types.add(DTypes.BOOL);
             fields.add(notTruncated);
             boolean[] minValid = new boolean[nZones];
             Object minValues = ZoneMapStatCodec.zoneStatValues(minMaxDtype, minBytes, minValid);
@@ -1253,7 +1254,7 @@ public final class VortexWriter implements Closeable {
             types.add(minMaxDtype);
             fields.add(new NullableData(minValues, minValid));
             names.add("min_is_truncated");
-            types.add(DType.BOOL);
+            types.add(DTypes.BOOL);
             fields.add(notTruncated.clone());
         }
         if (sumDtype != null) {

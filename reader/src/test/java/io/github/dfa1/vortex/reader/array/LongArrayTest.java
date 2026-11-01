@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -67,7 +67,7 @@ class LongArrayTest {
             // Given — constant-encoding: 1-element buffer, logical length 4; all 4 visits yield same value
             MemorySegment seg = Arena.ofAuto().allocate(8, 8);
             seg.setAtIndex(VortexFormat.LE_LONG, 0, 42L);
-            LongArray sut = new MaterializedLongArray(DType.I64, 4, seg);
+            LongArray sut = new MaterializedLongArray(DTypes.I64, 4, seg);
             List<Long> collected = new ArrayList<>();
 
             // When

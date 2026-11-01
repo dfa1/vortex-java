@@ -9,6 +9,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanLimit;
@@ -69,7 +70,7 @@ class ScanFilterLimitInteropIntegrationTest {
         // id ascending, qty = id % 50 with every 7th row null, name "n<id>"
         file = tmp.resolve("filter-limit.vtx");
         DType.Struct schema = DType.structBuilder()
-                .field(ID, DType.I64).field(QTY, DType.I64.asNullable()).field(NAME, DType.UTF8).build();
+                .field(ID, DTypes.I64).field(QTY, DTypes.I64.asNullable()).field(NAME, DTypes.UTF8).build();
         try (var channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
             for (int b = 0; b < BATCHES; b++) {

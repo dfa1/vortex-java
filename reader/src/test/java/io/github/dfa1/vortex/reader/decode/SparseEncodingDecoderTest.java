@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoNullValue;
@@ -110,7 +111,7 @@ class SparseEncodingDecoderTest {
         ArrayNode valNode = primitiveNode(2);
 
         // When
-        Array result = decode(DType.F64, 2, 0, PType.U32, 5, segs, idxNode, valNode);
+        Array result = decode(DTypes.F64, 2, 0, PType.U32, 5, segs, idxNode, valNode);
 
         // Then
         assertThat(result).isInstanceOf(DoubleArray.class).isNotInstanceOf(MaskedArray.class);
@@ -186,7 +187,7 @@ class SparseEncodingDecoderTest {
         ArrayNode valNode = varBinNode(2, 3);
 
         // When
-        Array result = decode(DType.UTF8, 2, 0, PType.U32, 5, segs, idxNode, valNode);
+        Array result = decode(DTypes.UTF8, 2, 0, PType.U32, 5, segs, idxNode, valNode);
 
         // Then
         assertThat(result).isInstanceOf(VarBinArray.class).isNotInstanceOf(MaskedArray.class);
@@ -212,7 +213,7 @@ class SparseEncodingDecoderTest {
         ArrayNode valNode = varBinNode(2, 3);
 
         // When
-        Array result = decode(DType.UTF8, 2, 0, PType.U32, 5, segs, idxNode, valNode);
+        Array result = decode(DTypes.UTF8, 2, 0, PType.U32, 5, segs, idxNode, valNode);
 
         // Then — rows 0, 2, 4 are the fill; the patched rows keep their own values.
         assertThat(result).isInstanceOf(VarBinSparseArray.class);
@@ -239,7 +240,7 @@ class SparseEncodingDecoderTest {
         List<Integer> lengths = new ArrayList<>();
 
         // When
-        Array result = decode(DType.UTF8, 2, 0, PType.U32, 5, segs, primitiveNode(1), varBinNode(2, 3));
+        Array result = decode(DTypes.UTF8, 2, 0, PType.U32, 5, segs, primitiveNode(1), varBinNode(2, 3));
         ((VarBinArray) result).forEachByteLength(lengths::add);
 
         // Then
@@ -281,7 +282,7 @@ class SparseEncodingDecoderTest {
         ArrayNode valNode = varBinNode(2, 3);
 
         // When
-        Array result = decode(DType.UTF8, 0, 0, PType.U32, 5, segs, idxNode, valNode);
+        Array result = decode(DTypes.UTF8, 0, 0, PType.U32, 5, segs, idxNode, valNode);
 
         // Then — every row is the fill, with no buffer behind it.
         assertThat(result).isInstanceOf(VarBinConstantArray.class).isNotInstanceOf(MaskedArray.class);
@@ -323,7 +324,7 @@ class SparseEncodingDecoderTest {
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_SPARSE, meta,
                 new ArrayNode[]{dummy, dummy, dummy}, new int[]{0});
         MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(0, 1)};
-        DecodeContext ctx = new DecodeContext(node, DType.F64, 2, segs, REGISTRY, Arena.ofAuto());
+        DecodeContext ctx = new DecodeContext(node, DTypes.F64, 2, segs, REGISTRY, Arena.ofAuto());
 
         // When / Then — must reject rather than silently ignoring the extra child
         assertThatThrownBy(() -> SUT.decode(ctx))
@@ -354,7 +355,7 @@ class SparseEncodingDecoderTest {
             ArrayNode node = new ArrayNode(EncodingId.VORTEX_SPARSE, meta,
                     new ArrayNode[]{primitiveNode(1), primitiveNode(2)}, new int[]{0});
             MemorySegment[] segs = {f64Fill(0.0), TestSegments.leInts(0), TestSegments.leDoubles(1.0)};
-            DecodeContext ctx = new DecodeContext(node, DType.F64, 1, segs, REGISTRY, Arena.ofAuto());
+            DecodeContext ctx = new DecodeContext(node, DTypes.F64, 1, segs, REGISTRY, Arena.ofAuto());
 
             // When / Then
             assertThatThrownBy(() -> SUT.decode(ctx))
@@ -375,7 +376,7 @@ class SparseEncodingDecoderTest {
             ArrayNode indicesNode = primitiveNode(1);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 1, 0, PType.U32, 5, segs,
+            assertThatThrownBy(() -> decode(DTypes.I64, 1, 0, PType.U32, 5, segs,
                     indicesNode, boolValuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("child holds 0 element(s)");
@@ -392,7 +393,7 @@ class SparseEncodingDecoderTest {
             ArrayNode valuesNode = primitiveNode(2);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.F64, 2, 0, PType.U32, 5, segs,
+            assertThatThrownBy(() -> decode(DTypes.F64, 2, 0, PType.U32, 5, segs,
                     indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("child holds 0 element(s)");
@@ -407,7 +408,7 @@ class SparseEncodingDecoderTest {
             ArrayNode valuesNode = primitiveNode(2);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.F64, 2, 0, PType.U32, 5, segs,
+            assertThatThrownBy(() -> decode(DTypes.F64, 2, 0, PType.U32, 5, segs,
                     indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("child holds 0 element(s)");
@@ -442,7 +443,7 @@ class SparseEncodingDecoderTest {
             ArrayNode valuesNode = primitiveNode(2);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.F64, -1, 0, PType.U32, 5, segs,
+            assertThatThrownBy(() -> decode(DTypes.F64, -1, 0, PType.U32, 5, segs,
                     indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("patch count");
@@ -540,7 +541,7 @@ class SparseEncodingDecoderTest {
             ArrayNode valuesNode = varBinNode(2, 3);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.UTF8, 1, Long.MAX_VALUE - 2, PType.U32, 6, segs,
+            assertThatThrownBy(() -> decode(DTypes.UTF8, 1, Long.MAX_VALUE - 2, PType.U32, 6, segs,
                     indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("patch offset");
@@ -555,7 +556,7 @@ class SparseEncodingDecoderTest {
             ArrayNode valuesNode = varBinNode(2, 3);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.UTF8, 1, -1, PType.U32, 6, segs,
+            assertThatThrownBy(() -> decode(DTypes.UTF8, 1, -1, PType.U32, 6, segs,
                     indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("patch offset");
@@ -575,7 +576,7 @@ class SparseEncodingDecoderTest {
             ArrayNode valuesNode = varBinNode(2, 3);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.UTF8, 1, 0, PType.U32, 3, segs,
+            assertThatThrownBy(() -> decode(DTypes.UTF8, 1, 0, PType.U32, 3, segs,
                     indicesNode, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("no string or bytes value");

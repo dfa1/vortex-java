@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.reader.array.ListArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -29,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ListEncodingEncoderTest {
 
+    private static final DType LIST_I32 = new DType.List(DTypes.I32, false);
     private static final ListEncodingEncoder ENCODER = new ListEncodingEncoder();
     private static final ListEncodingDecoder DECODER = new ListEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder());
@@ -48,7 +49,7 @@ class ListEncodingEncoderTest {
         void accepts_listDtype_true() {
             // Given
             // When
-            boolean result = ENCODER.accepts(DTypes.LIST_I32);
+            boolean result = ENCODER.accepts(LIST_I32);
 
             // Then
             assertThat(result).isTrue();
@@ -72,7 +73,7 @@ class ListEncodingEncoderTest {
             ListData data = new ListData(elements, offsets, 2);
 
             // When
-            EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            EncodeResult result = ENCODER.encode(LIST_I32, data, EncodeTestHelper.testCtx());
 
             // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_LIST);
@@ -90,10 +91,10 @@ class ListEncodingEncoderTest {
             int[] elements = {10, 20, 30, 40, 50};
             long[] offsets = {0, 2, 3, 5};
             ListData data = new ListData(elements, offsets, 3);
-            EncodeResult encoded = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            EncodeResult encoded = ENCODER.encode(LIST_I32, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(encoded.rootNode()), DTypes.LIST_I32, 3, bufs, REGISTRY, Arena.global());
+                    toArrayNode(encoded.rootNode()), LIST_I32, 3, bufs, REGISTRY, Arena.global());
 
             // When
             ListArray result = (ListArray) DECODER.decode(ctx);
@@ -118,10 +119,10 @@ class ListEncodingEncoderTest {
             int[] elements = {};
             long[] offsets = {0, 0, 0};
             ListData data = new ListData(elements, offsets, 2);
-            EncodeResult encoded = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            EncodeResult encoded = ENCODER.encode(LIST_I32, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(encoded.rootNode()), DTypes.LIST_I32, 2, bufs, REGISTRY, Arena.global());
+                    toArrayNode(encoded.rootNode()), LIST_I32, 2, bufs, REGISTRY, Arena.global());
 
             // When
             ListArray result = (ListArray) DECODER.decode(ctx);
@@ -138,10 +139,10 @@ class ListEncodingEncoderTest {
             int[] elements = {7, 8, 9};
             long[] offsets = {0, 3};
             ListData data = new ListData(elements, offsets, 1);
-            EncodeResult encoded = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            EncodeResult encoded = ENCODER.encode(LIST_I32, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(encoded.rootNode()), DTypes.LIST_I32, 1, bufs, REGISTRY, Arena.global());
+                    toArrayNode(encoded.rootNode()), LIST_I32, 1, bufs, REGISTRY, Arena.global());
 
             // When
             ListArray result = (ListArray) DECODER.decode(ctx);
@@ -206,7 +207,7 @@ class ListEncodingEncoderTest {
             ArrayNode node = new ArrayNode(EncodingId.VORTEX_LIST,
                     MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[]{child}, new int[0]);
-            DecodeContext ctx = new DecodeContext(node, DTypes.LIST_I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
+            DecodeContext ctx = new DecodeContext(node, LIST_I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
 
             // When / Then
             assertThatThrownBy(() -> DECODER.decode(ctx)).hasMessageContaining("expected 2 or 3 children");
@@ -224,7 +225,7 @@ class ListEncodingEncoderTest {
             ListData data = new ListData(elements, offsets, 2);
 
             // When
-            EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            EncodeResult result = ENCODER.encode(LIST_I32, data, EncodeTestHelper.testCtx());
 
             // Then
             var metaSeg = result.rootNode().metadata();

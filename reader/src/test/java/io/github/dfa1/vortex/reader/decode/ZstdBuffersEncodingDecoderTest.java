@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoZstdBuffersMetadata;
 import io.github.dfa1.vortex.core.testing.TestSegments;
@@ -175,7 +175,7 @@ class ZstdBuffersEncodingDecoderTest {
     }
 
     private static DecodeContext ctx(ArrayNode node, byte[] frame) {
-        return new DecodeContext(node, DType.I32, 3, new MemorySegment[]{MemorySegment.ofArray(frame)},
+        return new DecodeContext(node, DTypes.I32, 3, new MemorySegment[]{MemorySegment.ofArray(frame)},
                 REGISTRY, Arena.ofAuto());
     }
 

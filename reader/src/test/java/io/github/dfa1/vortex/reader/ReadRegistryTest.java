@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -288,7 +288,7 @@ class ReadRegistryTest {
     void validateExtensions_wellKnownIdWithoutDecoder_passesStrictMode() {
         // Given — vortex.json is in the vortex-jni default session, so a strict reader must open it
         // (reading the column as its Utf8 storage) though Java registers no decoder for it
-        DType schema = new DType.Extension("vortex.json", DType.UTF8, MemorySegment.ofArray(new byte[0]), false);
+        DType schema = new DType.Extension("vortex.json", DTypes.UTF8, MemorySegment.ofArray(new byte[0]), false);
         ReadRegistry sut = ReadRegistry.loadAll();
 
         // When / Then
@@ -298,7 +298,7 @@ class ReadRegistryTest {
     @Test
     void validateExtensions_wellKnownIdWithoutDecoder_stillValidated() {
         // Given — no decoder, but Rust's rules for the id still apply
-        DType schema = new DType.Extension("vortex.json", DType.I32, MemorySegment.ofArray(new byte[0]), false);
+        DType schema = new DType.Extension("vortex.json", DTypes.I32, MemorySegment.ofArray(new byte[0]), false);
         ReadRegistry sut = ReadRegistry.loadAll();
 
         // When / Then

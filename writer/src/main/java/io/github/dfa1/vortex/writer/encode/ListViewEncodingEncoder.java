@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -90,7 +91,7 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
             children = new EncodeNode[]{elemNode, offsetsNode, sizesNode};
         } else {
             EncodeResult validityResult = new BoolEncodingEncoder()
-                    .encode(DType.BOOL, outerNullable.validity(), ctx);
+                    .encode(DTypes.BOOL, outerNullable.validity(), ctx);
             EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), allBuffers.size());
             allBuffers.addAll(validityResult.encodedBuffers());
             children = new EncodeNode[]{elemNode, offsetsNode, sizesNode, validityNode};

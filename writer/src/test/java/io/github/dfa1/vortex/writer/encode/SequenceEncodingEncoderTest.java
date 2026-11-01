@@ -12,7 +12,7 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.core.testing.DTypes;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -86,7 +86,7 @@ class SequenceEncodingEncoderTest {
         @Test
         void accepts_nonPrimitive_false() {
             // Given / When / Then
-            assertThat(ENCODER.accepts(DType.UTF8)).isFalse();
+            assertThat(ENCODER.accepts(DTypes.UTF8)).isFalse();
         }
 
         @Test
@@ -268,7 +268,7 @@ class SequenceEncodingEncoderTest {
             EncodeContext ctx = EncodeTestHelper.testCtx();
 
             // When / Then
-            assertThatThrownBy(() -> ENCODER.encode(DType.UTF8, new long[]{1L}, ctx))
+            assertThatThrownBy(() -> ENCODER.encode(DTypes.UTF8, new long[]{1L}, ctx))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -405,7 +405,7 @@ class SequenceEncodingEncoderTest {
 
         @Test
         void decode_nonPrimitiveDtype_throwsVortexException() {
-            DType utf8 = DType.UTF8;
+            DType utf8 = DTypes.UTF8;
             DecodeContext ctx = makeCtx(intMeta(0, 1), utf8, 3);
             assertThatThrownBy(() -> DECODER.decode(ctx)).isInstanceOf(VortexException.class);
         }

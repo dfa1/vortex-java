@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -46,7 +47,7 @@ class OnPairInteropIntegrationTest {
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
+            List.of(ColumnName.of("s")), List.of(DTypes.UTF8), false);
 
     static {
         NativeLoader.loadJni();

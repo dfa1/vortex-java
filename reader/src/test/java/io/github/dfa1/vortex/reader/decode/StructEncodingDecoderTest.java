@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -101,7 +102,7 @@ class StructEncodingDecoderTest {
             ArrayNode child = primitiveNode(0);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 2, segs, child, child, child))
+            assertThatThrownBy(() -> decode(DTypes.I64, 2, segs, child, child, child))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unexpected child count 3");
         }
@@ -118,7 +119,7 @@ class StructEncodingDecoderTest {
             ArrayNode valuesNode = primitiveNode(1);
 
             // When / Then
-            assertThatThrownBy(() -> decode(DType.I64, 2, segs, notBool, valuesNode))
+            assertThatThrownBy(() -> decode(DTypes.I64, 2, segs, notBool, valuesNode))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("validity decoded to unexpected type");
         }
@@ -153,7 +154,7 @@ class StructEncodingDecoderTest {
 
         @Override
         public Array decode(DecodeContext ctx) {
-            return new MaterializedLongArray(DType.I64, ctx.rowCount(), TestSegments.leLongs(1, 2));
+            return new MaterializedLongArray(DTypes.I64, ctx.rowCount(), TestSegments.leLongs(1, 2));
         }
     }
 
@@ -164,7 +165,7 @@ class StructEncodingDecoderTest {
 
     private static DType.Struct structOf(String... names) {
         List<ColumnName> fieldNames = List.of(names).stream().map(ColumnName::of).toList();
-        List<DType> fieldTypes = fieldNames.stream().<DType>map(n -> DType.I64).toList();
+        List<DType> fieldTypes = fieldNames.stream().<DType>map(n -> DTypes.I64).toList();
         return new DType.Struct(fieldNames, fieldTypes, false);
     }
 

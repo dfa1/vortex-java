@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -65,35 +66,35 @@ class SchemaCommandTest {
     }
 
     static Stream<Arguments> dtypeCases() {
-        DType i64 = DType.I64;
+        DType i64 = DTypes.I64;
         return Stream.of(
-                arguments(DType.I64, "I64"),
+                arguments(DTypes.I64, "I64"),
                 arguments(new DType.Primitive(PType.I32, true), "I32?"),
-                arguments(DType.UTF8, "utf8"),
+                arguments(DTypes.UTF8, "utf8"),
                 arguments(new DType.Utf8(true), "utf8?"),
-                arguments(DType.BINARY, "binary"),
+                arguments(DTypes.BINARY, "binary"),
                 arguments(new DType.Binary(true), "binary?"),
-                arguments(DType.BOOL, "bool"),
+                arguments(DTypes.BOOL, "bool"),
                 arguments(new DType.Bool(true), "bool?"),
-                arguments(DType.NULL, "null"),
+                arguments(DTypes.NULL, "null"),
                 arguments(new DType.Decimal((byte) 10, (byte) 2, false), "decimal(10,2)"),
                 arguments(new DType.Decimal((byte) 10, (byte) 2, true), "decimal(10,2)?"),
                 arguments(new DType.List(i64, false), "list<I64>"),
                 arguments(new DType.List(i64, true), "list<I64>?"),
                 arguments(new DType.FixedSizeList(i64, 4, false), "list<I64>[4]"),
                 arguments(new DType.FixedSizeList(i64, 4, true), "list<I64>[4]?"),
-                arguments(new DType.Map(DType.UTF8, i64, false, false), "map<utf8, I64, keys_sorted=false>"),
-                arguments(new DType.Map(DType.UTF8, i64, false, true), "map<utf8, I64, keys_sorted=false>?"),
+                arguments(new DType.Map(DTypes.UTF8, i64, false, false), "map<utf8, I64, keys_sorted=false>"),
+                arguments(new DType.Map(DTypes.UTF8, i64, false, true), "map<utf8, I64, keys_sorted=false>?"),
                 // keys_sorted is part of a map's identity, so two maps differing only in it must
                 // not render identically
-                arguments(new DType.Map(DType.UTF8, i64, true, false), "map<utf8, I64, keys_sorted=true>"),
-                arguments(new DType.Map(DType.UTF8, new DType.Primitive(PType.I64, true), false, false),
+                arguments(new DType.Map(DTypes.UTF8, i64, true, false), "map<utf8, I64, keys_sorted=true>"),
+                arguments(new DType.Map(DTypes.UTF8, new DType.Primitive(PType.I64, true), false, false),
                         "map<utf8, I64?, keys_sorted=false>"),
                 arguments(new DType.Extension("vortex.uuid", i64, null, false), "ext<vortex.uuid>"),
                 arguments(new DType.Extension("vortex.uuid", i64, null, true), "ext<vortex.uuid>?"),
-                arguments(DType.VARIANT, "variant"),
+                arguments(DTypes.VARIANT, "variant"),
                 arguments(new DType.Variant(true), "variant?"),
-                arguments(new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(i64, DType.UTF8), false),
+                arguments(new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(i64, DTypes.UTF8), false),
                         "struct<a: I64, b: utf8>"));
     }
 

@@ -27,6 +27,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -78,8 +79,8 @@ class WriteReadFuzzIntegrationTest {
     }
 
     private static final List<DType> TYPES = List.of(
-            DType.I8, DType.I16, DType.I32, DType.I64, DType.U8, DType.U16, DType.U32, DType.U64,
-            DType.F32, DType.F64, DType.BOOL, DType.UTF8, DType.BINARY,
+            DTypes.I8, DTypes.I16, DTypes.I32, DTypes.I64, DTypes.U8, DTypes.U16, DTypes.U32, DTypes.U64,
+            DTypes.F32, DTypes.F64, DTypes.BOOL, DTypes.UTF8, DTypes.BINARY,
             // One per decimal physical width Rust picks: i32, i64, i128
             DType.decimal(9, 2), DType.decimal(18, 4), DType.decimal(38, 0));
 

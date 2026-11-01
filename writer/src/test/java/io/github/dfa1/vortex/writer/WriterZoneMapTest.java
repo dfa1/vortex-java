@@ -8,6 +8,7 @@ import java.lang.foreign.ValueLayout;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.layout.Layout;
@@ -41,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WriterZoneMapTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of(ColumnName.of("v")), List.of(DType.I64), false);
+            List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
 
     // Three zones of four rows: [0..3], [4..7], [8..11].
     private static Path write(Path tmp, boolean zoneMaps) throws IOException {
@@ -223,7 +224,7 @@ class WriterZoneMapTest {
         // #378 fix: a single stats-less chunk (e.g. all-null) must not blank out zone-map pruning
         // for every other chunk in the column.
         DType.Struct schema = new DType.Struct(
-                List.of(ColumnName.of("v")), List.of(DType.I64), false);
+                List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
         WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("partial.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -262,7 +263,7 @@ class WriterZoneMapTest {
         // zone 1 = ["cherry", "date"]. vortex.varbin records full string min/max per chunk, so
         // the zone-map carries MAX+MIN+NULL_COUNT (string min/max), not null_count alone.
         DType.Struct schema = new DType.Struct(
-                List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
+                List.of(ColumnName.of("s")), List.of(DTypes.UTF8), false);
         WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("utf8.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -299,7 +300,7 @@ class WriterZoneMapTest {
         // two zones of two rows: zone 0 = [10, 11], zone 1 = [20, 21]. ExtEncoding propagates the
         // storage primitive's min/max, so the zone-map carries MAX+MIN+NULL_COUNT — same as I64.
         DType ext = new DType.Extension(
-                "test.ext", DType.I64, null, false);
+                "test.ext", DTypes.I64, null, false);
         DType.Struct schema = new DType.Struct(List.of(ColumnName.of("t")), List.of(ext), false);
         WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("ext.vtx");
@@ -339,7 +340,7 @@ class WriterZoneMapTest {
         // computed on the logical Utf8 values, independent of the dict encoding: zone 0 = a..b,
         // zone 1 = a..c → MAX+MIN+NULL_COUNT, with the column wrapped as vortex.stats over the dict.
         DType.Struct schema = new DType.Struct(
-                List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
+                List.of(ColumnName.of("s")), List.of(DTypes.UTF8), false);
         WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("dict.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -376,7 +377,7 @@ class WriterZoneMapTest {
         // Given a low-cardinality I64 column across 2 chunks of 6 with heavy repeats → vortex.dict.
         // Zone-map min/max are computed on the logical I64 values: zone 0 = 1..2, zone 1 = 1..3.
         DType.Struct schema = new DType.Struct(
-                List.of(ColumnName.of("v")), List.of(DType.I64), false);
+                List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
         WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("primdict.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -416,7 +417,7 @@ class WriterZoneMapTest {
         // the float stat path — scalarDouble plus the F64 arms of statColumn/sumColumn — is untested:
         // a decode that returned 0.0 or read the wrong scalar field would slip through. Fractional
         // .5 values also make a truncating (int) decode observable.
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.F64), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.F64), false);
         WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(true).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("zoned-f64.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -531,7 +532,7 @@ class WriterZoneMapTest {
         };
         return new DType.Struct(
                 List.of(ColumnName.of("max"), ColumnName.of("max_is_truncated"), ColumnName.of("min"), ColumnName.of("min_is_truncated"), ColumnName.of("sum"), ColumnName.of("null_count")),
-                List.of(minMax, DType.BOOL, minMax, DType.BOOL, sum, new DType.Primitive(PType.U64, true)),
+                List.of(minMax, DTypes.BOOL, minMax, DTypes.BOOL, sum, new DType.Primitive(PType.U64, true)),
                 false);
     }
 
@@ -554,7 +555,7 @@ class WriterZoneMapTest {
         DType nullableI64 = new DType.Primitive(PType.I64, true);
         return new DType.Struct(
                 List.of(ColumnName.of("max"), ColumnName.of("max_is_truncated"), ColumnName.of("min"), ColumnName.of("min_is_truncated"), ColumnName.of("null_count")),
-                List.of(nullableI64, DType.BOOL, nullableI64, DType.BOOL,
+                List.of(nullableI64, DTypes.BOOL, nullableI64, DTypes.BOOL,
                         new DType.Primitive(PType.U64, true)),
                 false);
     }
@@ -564,7 +565,7 @@ class WriterZoneMapTest {
         DType nullableI64 = new DType.Primitive(PType.I64, true);
         return new DType.Struct(
                 List.of(ColumnName.of("max"), ColumnName.of("max_is_truncated"), ColumnName.of("min"), ColumnName.of("min_is_truncated"), ColumnName.of("sum"), ColumnName.of("null_count")),
-                List.of(nullableI64, DType.BOOL, nullableI64, DType.BOOL,
+                List.of(nullableI64, DTypes.BOOL, nullableI64, DTypes.BOOL,
                         nullableI64, new DType.Primitive(PType.U64, true)),
                 false);
     }
@@ -574,7 +575,7 @@ class WriterZoneMapTest {
         DType nullableF64 = new DType.Primitive(PType.F64, true);
         return new DType.Struct(
                 List.of(ColumnName.of("max"), ColumnName.of("max_is_truncated"), ColumnName.of("min"), ColumnName.of("min_is_truncated"), ColumnName.of("sum"), ColumnName.of("null_count")),
-                List.of(nullableF64, DType.BOOL, nullableF64, DType.BOOL,
+                List.of(nullableF64, DTypes.BOOL, nullableF64, DTypes.BOOL,
                         nullableF64, new DType.Primitive(PType.U64, true)),
                 false);
     }
@@ -584,7 +585,7 @@ class WriterZoneMapTest {
         DType nullableUtf8 = new DType.Utf8(true);
         return new DType.Struct(
                 List.of(ColumnName.of("max"), ColumnName.of("max_is_truncated"), ColumnName.of("min"), ColumnName.of("min_is_truncated"), ColumnName.of("null_count")),
-                List.of(nullableUtf8, DType.BOOL, nullableUtf8, DType.BOOL,
+                List.of(nullableUtf8, DTypes.BOOL, nullableUtf8, DTypes.BOOL,
                         new DType.Primitive(PType.U64, true)),
                 false);
     }

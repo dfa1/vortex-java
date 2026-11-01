@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 
@@ -37,9 +38,9 @@ class ZonedAggregateFoldTest {
     static void write() throws Exception {
         file = tmp.resolve("zoned.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I64)
-                .field(ColumnName.of("val"), DType.I64)
-                .field(ColumnName.of("s"), DType.UTF8)
+                .field(ColumnName.of("id"), DTypes.I64)
+                .field(ColumnName.of("val"), DTypes.I64)
+                .field(ColumnName.of("s"), DTypes.UTF8)
                 .build();
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {

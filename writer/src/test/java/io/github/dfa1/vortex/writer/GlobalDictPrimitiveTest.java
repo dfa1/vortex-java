@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -32,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GlobalDictPrimitiveTest {
 
     private static DType.Struct i64Schema() {
-        return new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
+        return new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
     }
 
     private static long[] writeI64(Path file, long[][] chunks, WriteOptions options) throws IOException {
@@ -161,7 +162,7 @@ class GlobalDictPrimitiveTest {
         // ingest and demotes IMMEDIATELY. We can't assert on memory in a unit test, but the OUTPUT
         // SHAPE proves the demotion happened: a Chunked-of-Flats layout (one Flat per chunk), NOT a
         // single shared Dict layout. A Dict here would mean the whole column was still buffered.
-        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
         Path file = tmp.resolve("card_grows_i64.vortex");
         int chunkCount = 6;
         int rowsPerChunk = 1_000;
@@ -260,7 +261,7 @@ class GlobalDictPrimitiveTest {
         // first value seen, so with first-seen codes (Rust's dict builder, #471) it gets code 1, not
         // 0. The codes child must still compress: Sparse fills with the most frequent code, as
         // Rust's does, so a Sparse that assumed fill=0 would balloon the file.
-        var schema = new DType.Struct(List.of(ColumnName.of("rate")), List.of(DType.F64), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("rate")), List.of(DTypes.F64), false);
         Path file = tmp.resolve("dominant_not_first_f64.vortex");
         double[] rare = {7.0, 8.0, 9.0, 10.0, 11.0};
         int rowsPerChunk = 5_000;
@@ -305,7 +306,7 @@ class GlobalDictPrimitiveTest {
         for (int i = 0; i < data.length; i++) {
             data[i] = wide(i % 200);
         }
-        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
         Path file = tmp.resolve("wide_dict_i64.vortex");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
@@ -333,7 +334,7 @@ class GlobalDictPrimitiveTest {
         // Given — a low-cardinality I32 column drives the global dict build through the int[]
         // unique-array and codes paths (the narrower I8/I16 carriers are NOT round-tripped here:
         // the reader's lazy dict rejects them — see lowCardinality_i16_globalDict_readerRejects).
-        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I32), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I32), false);
         int[] data = {10, 20, 30, 10, 20, 30, 10, 20};
         Path file = tmp.resolve("i32.vortex");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -358,7 +359,7 @@ class GlobalDictPrimitiveTest {
         // excluded from dict candidacy — matching the Rust compressor, which does not dict narrow
         // ints (RustWritesJavaReadsIntegrationTest#jniWriter_javaReader_lowCardinalityI16) — so a
         // low-card I16 column encodes via the cascade and round-trips cleanly.
-        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I16), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I16), false);
         short[] data = {1, 2, 3, 1, 2, 3, 1, 2};
         Path file = tmp.resolve("i16.vortex");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -391,7 +392,7 @@ class GlobalDictPrimitiveTest {
     void lowCardinality_f64_usesGlobalDict(@TempDir Path tmp) throws IOException {
         // Given — F64 is admitted to the dict path (unlike F16/F32); a low-card float column must
         // round-trip through the float dict build.
-        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.F64), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.F64), false);
         double[] dictVals = {1.5, 2.5, 3.5};
         int rows = 900;
         double[] data = new double[rows];
@@ -421,7 +422,7 @@ class GlobalDictPrimitiveTest {
         // matches the boxed-key semantics this path used to have: every NaN payload collapses to
         // one entry, while -0.0 stays a separate entry from 0.0. `doubleToRawLongBits` would split
         // the NaNs, and comparing as `double` would merge -0.0 into 0.0 and lose the sign on read.
-        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.F64), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.F64), false);
         double otherNaN = Double.longBitsToDouble(0x7FF8_0000_0000_0001L);
         double[] pattern = {0.0, -0.0, Double.NaN, otherNaN, 1.5};
         double[] data = new double[1000];

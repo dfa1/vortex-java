@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.VariantArray;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VariantEncodingDecoderTest {
 
-    private static final DType VARIANT_DTYPE = DType.VARIANT;
+    private static final DType VARIANT_DTYPE = DTypes.VARIANT;
     private static final int N = 3;
 
     private static final VariantEncodingDecoder SUT = new VariantEncodingDecoder();
@@ -90,7 +91,7 @@ class VariantEncodingDecoderTest {
         assertThat(result).isInstanceOf(VariantArray.class);
         VariantArray va = (VariantArray) result;
         assertThat(va.shredded()).isNotNull();
-        assertThat(va.shredded().dtype()).isEqualTo(DType.I32);
+        assertThat(va.shredded().dtype()).isEqualTo(DTypes.I32);
         assertThat(va.shredded().length()).isEqualTo(N);
     }
 
@@ -183,7 +184,7 @@ class VariantEncodingDecoderTest {
             DType result = VariantEncodingDecoder.dtypeFromProto(prim(io.github.dfa1.vortex.core.proto.ProtoPType.I64, false));
 
             // Then
-            assertThat(result).isEqualTo(DType.I64);
+            assertThat(result).isEqualTo(DTypes.I64);
         }
 
         @Test
@@ -213,7 +214,7 @@ class VariantEncodingDecoderTest {
                     io.github.dfa1.vortex.core.proto.ProtoDType.ofBinary(new io.github.dfa1.vortex.core.proto.ProtoBinary(false)));
 
             // Then
-            assertThat(result).isEqualTo(DType.BINARY);
+            assertThat(result).isEqualTo(DTypes.BINARY);
         }
 
         @Test
@@ -231,7 +232,7 @@ class VariantEncodingDecoderTest {
             // Then
             assertThat(result).isEqualTo(new DType.Struct(
                     List.of(ColumnName.of("a"), ColumnName.of("b")),
-                    List.of(DType.I32, new DType.Utf8(true)),
+                    List.of(DTypes.I32, new DType.Utf8(true)),
                     false));
         }
 
@@ -243,7 +244,7 @@ class VariantEncodingDecoderTest {
                             prim(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false), true)));
 
             // Then
-            assertThat(result).isEqualTo(new DType.List(DType.I32, true));
+            assertThat(result).isEqualTo(new DType.List(DTypes.I32, true));
         }
 
         @Test
@@ -255,7 +256,7 @@ class VariantEncodingDecoderTest {
 
             // Then size is carried through
             assertThat(result).isEqualTo(
-                    new DType.FixedSizeList(DType.F64, 4, false));
+                    new DType.FixedSizeList(DTypes.F64, 4, false));
         }
 
         @Test
@@ -271,7 +272,7 @@ class VariantEncodingDecoderTest {
             assertThat(result).isInstanceOf(DType.Extension.class);
             DType.Extension ext = (DType.Extension) result;
             assertThat(ext.extensionId()).isEqualTo("ip.address");
-            assertThat(ext.storageDType()).isEqualTo(DType.I32);
+            assertThat(ext.storageDType()).isEqualTo(DTypes.I32);
             assertThat(ext.metadata().byteSize()).isEqualTo(3);
         }
 
@@ -350,7 +351,7 @@ class VariantEncodingDecoderTest {
                     io.github.dfa1.vortex.core.proto.ProtoDType.ofVariant(new io.github.dfa1.vortex.core.proto.ProtoVariant(false)));
 
             // Then
-            assertThat(result).isEqualTo(DType.VARIANT);
+            assertThat(result).isEqualTo(DTypes.VARIANT);
         }
 
         @Test

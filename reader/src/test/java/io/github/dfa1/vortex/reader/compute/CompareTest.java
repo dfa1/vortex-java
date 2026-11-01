@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.compute;
 
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,7 +18,7 @@ class CompareTest {
         String emoji = "\uD83D\uDE00";
 
         // When
-        int result = Compare.values(emoji, "\uE000", DType.UTF8);
+        int result = Compare.values(emoji, "\uE000", DTypes.UTF8);
 
         // Then
         assertThat(result).isPositive();
@@ -28,7 +28,7 @@ class CompareTest {
     void signedColumnOrdersByValue() {
         // Given a signed I64 column
         // When comparing a smaller against a larger value
-        int result = Compare.values(1L, 2L, DType.I64);
+        int result = Compare.values(1L, 2L, DTypes.I64);
 
         // Then the natural signed order holds
         assertThat(result).isNegative();
@@ -42,7 +42,7 @@ class CompareTest {
         long small = 1L;
 
         // When comparing the high-bit value against the small one under unsigned semantics
-        int result = Compare.values(highBit, small, DType.U64);
+        int result = Compare.values(highBit, small, DTypes.U64);
 
         // Then the high-bit value is the larger
         assertThat(result).isPositive();
@@ -52,7 +52,7 @@ class CompareTest {
     void signedColumnTreatsHighBitAsNegative() {
         // Given the same raw bits but a *signed* I64 column
         // When compared
-        int result = Compare.values(Long.MIN_VALUE, 1L, DType.I64);
+        int result = Compare.values(Long.MIN_VALUE, 1L, DTypes.I64);
 
         // Then the high-bit value is the smaller (negative) — proving the column dtype, not the
         // boxed operand, drives the mode
@@ -63,7 +63,7 @@ class CompareTest {
     void floatColumnComparesAsDouble() {
         // Given an F64 column
         // When comparing two doubles
-        int result = Compare.values(1.5, 1.25, DType.F64);
+        int result = Compare.values(1.5, 1.25, DTypes.F64);
 
         // Then double order holds
         assertThat(result).isPositive();
@@ -76,7 +76,7 @@ class CompareTest {
         long b = (1L << 53) + 2;
 
         // When compared as an integer column
-        int result = Compare.values(a, b, DType.I64);
+        int result = Compare.values(a, b, DTypes.I64);
 
         // Then the integer path keeps the distinction a double-compare would lose
         assertThat(result).isNegative();
@@ -86,7 +86,7 @@ class CompareTest {
     void stringColumnUsesNaturalOrder() {
         // Given a Utf8 column
         // When comparing two strings
-        int result = Compare.values("apple", "banana", DType.UTF8);
+        int result = Compare.values("apple", "banana", DTypes.UTF8);
 
         // Then lexicographic order holds
         assertThat(result).isNegative();
@@ -97,7 +97,7 @@ class CompareTest {
         // Given a string value against a numeric operand with no resolved primitive column
         // When compared
         // Then the mismatch surfaces rather than silently passing
-        assertThatThrownBy(() -> Compare.values("x", 1L, DType.UTF8))
+        assertThatThrownBy(() -> Compare.values("x", 1L, DTypes.UTF8))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("not comparable");
     }

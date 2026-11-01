@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.TimeDtype;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimestampDtype;
@@ -55,15 +56,15 @@ class ColumnTypesSqlTest {
     static void write() throws Exception {
         file = tmp.resolve("types.vortex");
         DType.Struct schema = DType.structBuilder()
-                .field(ColumnName.of("id"), DType.I32)
+                .field(ColumnName.of("id"), DTypes.I32)
                 .field(ColumnName.of("amount"), DType.decimal(10, 2))
-                .field(ColumnName.of("blob"), DType.BINARY)
+                .field(ColumnName.of("blob"), DTypes.BINARY)
                 .field(ColumnName.of("day"), DateExtensionEncoder.INSTANCE.dtype(false))
                 .field(ColumnName.of("at"), TimeDtype.of(TimeUnit.Milliseconds, false))
                 .field(ColumnName.of("wall"), TimestampDtype.of(TimeUnit.Microseconds, null, false))
                 .field(ColumnName.of("instant"), TimestampDtype.of(TimeUnit.Microseconds, ZoneId.of("UTC"), false))
                 .field(ColumnName.of("uuid"), UuidExtensionEncoder.INSTANCE.dtype(false))
-                .field(ColumnName.of("tags"), new DType.List(DType.I64, false))
+                .field(ColumnName.of("tags"), new DType.List(DTypes.I64, false))
                 .build();
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {

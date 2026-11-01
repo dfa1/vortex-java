@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Nested;
@@ -16,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VarBinChunkedArrayTest {
 
-    private static final DType UTF8 = DType.UTF8;
+    private static final DType UTF8 = DTypes.UTF8;
 
     @Nested
     class Construction {
@@ -48,7 +49,7 @@ class VarBinChunkedArrayTest {
                 MemorySegment seg = arena.allocate(8L);
                 seg.setAtIndex(ValueLayout.JAVA_LONG, 0, 42L);
                 LongArray notVarBin = new MaterializedLongArray(
-                        DType.I64, 1, seg.asReadOnly());
+                        DTypes.I64, 1, seg.asReadOnly());
                 List<LongArray> chunks = List.of(notVarBin);
 
                 // When / Then

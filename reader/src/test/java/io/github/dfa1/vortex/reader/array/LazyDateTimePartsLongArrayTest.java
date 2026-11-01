@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
-import static io.github.dfa1.vortex.core.testing.DTypes.I64;
+import static io.github.dfa1.vortex.core.model.DTypes.I64;
 import static io.github.dfa1.vortex.reader.array.TestArrays.ints;
 import static io.github.dfa1.vortex.reader.array.TestArrays.longs;
 import static org.assertj.core.api.Assertions.assertThat;

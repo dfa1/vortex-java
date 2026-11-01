@@ -19,11 +19,11 @@ class DTypeMapTest {
         @Test
         void nonNullableKey_isAccepted() {
             // Given / When
-            DType.Map result = new DType.Map(DType.UTF8, DType.I64, false, false);
+            DType.Map result = new DType.Map(DTypes.UTF8, DTypes.I64, false, false);
 
             // Then
-            assertThat(result.keyType()).isEqualTo(DType.UTF8);
-            assertThat(result.valueType()).isEqualTo(DType.I64);
+            assertThat(result.keyType()).isEqualTo(DTypes.UTF8);
+            assertThat(result.valueType()).isEqualTo(DTypes.I64);
             assertThat(result.keysSorted()).isFalse();
             assertThat(result.nullable()).isFalse();
         }
@@ -34,7 +34,7 @@ class DTypeMapTest {
             // parse site) but the record is public API, so it must not NPE from inside the
             // nullability check with no context
             // When / Then
-            assertThatThrownBy(() -> new DType.Map(null, DType.I64, false, false))
+            assertThatThrownBy(() -> new DType.Map(null, DTypes.I64, false, false))
                     .isInstanceOf(NullPointerException.class)
                     .hasMessageContaining("keyType");
         }
@@ -43,7 +43,7 @@ class DTypeMapTest {
         void nullableValue_isAccepted() {
             // Given a nullable value type — legal, unlike a nullable key
             // When
-            DType.Map result = new DType.Map(DType.UTF8, DType.I64.asNullable(), false, false);
+            DType.Map result = new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), false, false);
 
             // Then
             assertThat(result.valueType().nullable()).isTrue();
@@ -54,10 +54,10 @@ class DTypeMapTest {
             // Given a nullable key type — rejected because this constructor also runs while
             // parsing an untrusted file's DType blob, where a raw exception would breach the
             // security contract
-            DType nullableKey = DType.UTF8.asNullable();
+            DType nullableKey = DTypes.UTF8.asNullable();
 
             // When / Then
-            assertThatThrownBy(() -> new DType.Map(nullableKey, DType.I64, false, false))
+            assertThatThrownBy(() -> new DType.Map(nullableKey, DTypes.I64, false, false))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("map key dtype must be non-nullable");
         }
@@ -65,10 +65,10 @@ class DTypeMapTest {
         @Test
         void nestedMapValue_isAccepted() {
             // Given a map whose values are themselves maps
-            DType.Map inner = new DType.Map(DType.UTF8, DType.I32, false, false);
+            DType.Map inner = new DType.Map(DTypes.UTF8, DTypes.I32, false, false);
 
             // When
-            DType.Map result = new DType.Map(DType.I64, inner, false, true);
+            DType.Map result = new DType.Map(DTypes.I64, inner, false, true);
 
             // Then
             assertThat(result.valueType()).isEqualTo(inner);
@@ -77,10 +77,10 @@ class DTypeMapTest {
         @Test
         void equality_isByValue() {
             // Given two independently built maps with identical components
-            DType.Map sut = new DType.Map(DType.UTF8, DType.I64, true, false);
+            DType.Map sut = new DType.Map(DTypes.UTF8, DTypes.I64, true, false);
 
             // When
-            DType.Map result = new DType.Map(DType.UTF8, DType.I64, true, false);
+            DType.Map result = new DType.Map(DTypes.UTF8, DTypes.I64, true, false);
 
             // Then
             assertThat(result).isEqualTo(sut).hasSameHashCodeAs(sut);
@@ -89,10 +89,10 @@ class DTypeMapTest {
         @Test
         void equality_keysSortedIsPartOfIdentity() {
             // Given a producer assertion that differs between two otherwise identical maps
-            DType.Map sut = new DType.Map(DType.UTF8, DType.I64, true, false);
+            DType.Map sut = new DType.Map(DTypes.UTF8, DTypes.I64, true, false);
 
             // When
-            DType.Map result = new DType.Map(DType.UTF8, DType.I64, false, false);
+            DType.Map result = new DType.Map(DTypes.UTF8, DTypes.I64, false, false);
 
             // Then
             assertThat(result).isNotEqualTo(sut);
@@ -106,19 +106,19 @@ class DTypeMapTest {
         @ValueSource(booleans = {true, false})
         void withNullable_flipsOnlyOuterNullability(boolean nullable) {
             // Given
-            DType.Map sut = new DType.Map(DType.UTF8, DType.I64.asNullable(), true, !nullable);
+            DType.Map sut = new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), true, !nullable);
 
             // When
             DType result = sut.withNullable(nullable);
 
             // Then
-            assertThat(result).isEqualTo(new DType.Map(DType.UTF8, DType.I64.asNullable(), true, nullable));
+            assertThat(result).isEqualTo(new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), true, nullable));
         }
 
         @Test
         void asNullable_returnsNullableCopy() {
             // Given
-            DType.Map sut = new DType.Map(DType.UTF8, DType.I64, false, false);
+            DType.Map sut = new DType.Map(DTypes.UTF8, DTypes.I64, false, false);
 
             // When
             DType result = sut.asNullable();
@@ -130,7 +130,7 @@ class DTypeMapTest {
         @Test
         void isUnsigned_isFalse() {
             // Given a map of unsigned keys and values — the map itself is never an unsigned integer
-            DType.Map sut = new DType.Map(DType.U64, DType.U32, false, false);
+            DType.Map sut = new DType.Map(DTypes.U64, DTypes.U32, false, false);
 
             // When
             boolean result = sut.isUnsigned();
@@ -146,7 +146,7 @@ class DTypeMapTest {
         @Test
         void entriesDtype_isNonNullableKeyValueStruct() {
             // Given
-            DType.Map sut = new DType.Map(DType.UTF8, DType.I64.asNullable(), false, false);
+            DType.Map sut = new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), false, false);
 
             // When
             DType.Struct result = sut.entriesDtype();
@@ -154,14 +154,14 @@ class DTypeMapTest {
             // Then
             assertThat(result.nullable()).isFalse();
             assertThat(result.fieldNames()).containsExactly(ColumnName.of("key"), ColumnName.of("value"));
-            assertThat(result.fieldTypes()).containsExactly(DType.UTF8, DType.I64.asNullable());
+            assertThat(result.fieldTypes()).containsExactly(DTypes.UTF8, DTypes.I64.asNullable());
         }
 
         @Test
         void entriesDtype_ignoresOuterNullability() {
             // Given a nullable map — the entries struct itself stays non-nullable, because a
             // null map row is a null *entries list* row, not a null entry struct
-            DType.Map sut = new DType.Map(DType.UTF8, DType.I64, false, true);
+            DType.Map sut = new DType.Map(DTypes.UTF8, DTypes.I64, false, true);
 
             // When
             DType.Struct result = sut.entriesDtype();
@@ -169,7 +169,7 @@ class DTypeMapTest {
             // Then
             assertThat(result).isEqualTo(new DType.Struct(
                     List.of(ColumnName.of("key"), ColumnName.of("value")),
-                    List.of(DType.UTF8, DType.I64),
+                    List.of(DTypes.UTF8, DTypes.I64),
                     false));
         }
     }

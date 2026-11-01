@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -123,7 +124,7 @@ class SequenceEncodingDecoderTest {
     void missingMetadata_throwsVortexException() {
         // Given
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_SEQUENCE, null, new ArrayNode[0], new int[]{});
-        DecodeContext ctx = new DecodeContext(node, DType.I32, 5, new MemorySegment[0], REGISTRY, Arena.ofAuto());
+        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 5, new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
         // When / Then
         assertThatThrownBy(() -> SUT.decode(ctx))
@@ -138,7 +139,7 @@ class SequenceEncodingDecoderTest {
         ProtoScalarValue step = ProtoScalarValue.ofInt64Value(1L);
 
         // When / Then
-        assertThatThrownBy(() -> decode(DType.UTF8, base, step, 5))
+        assertThatThrownBy(() -> decode(DTypes.UTF8, base, step, 5))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected primitive dtype");
     }

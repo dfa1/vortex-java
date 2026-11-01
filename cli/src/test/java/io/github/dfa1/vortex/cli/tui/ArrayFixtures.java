@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -39,7 +40,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_LONG, i, vs[i]);
         }
-        return new MaterializedLongArray(DType.I64, vs.length, seg.asReadOnly());
+        return new MaterializedLongArray(DTypes.I64, vs.length, seg.asReadOnly());
     }
 
     static IntArray ints(Arena arena, int... vs) {
@@ -47,7 +48,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_INT, i, vs[i]);
         }
-        return new MaterializedIntArray(DType.I32, vs.length, seg.asReadOnly());
+        return new MaterializedIntArray(DTypes.I32, vs.length, seg.asReadOnly());
     }
 
     /// Builds a `U64` [LongArray]; high-half values (bit 63 set) exercise unsigned rendering.
@@ -56,7 +57,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_LONG, i, vs[i]);
         }
-        return new MaterializedLongArray(DType.U64, vs.length, seg.asReadOnly());
+        return new MaterializedLongArray(DTypes.U64, vs.length, seg.asReadOnly());
     }
 
     /// Builds a `U32` [IntArray]; values with bit 31 set exercise unsigned rendering.
@@ -65,7 +66,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_INT, i, vs[i]);
         }
-        return new MaterializedIntArray(DType.U32, vs.length, seg.asReadOnly());
+        return new MaterializedIntArray(DTypes.U32, vs.length, seg.asReadOnly());
     }
 
     /// Builds a `U16` [ShortArray]; values with bit 15 set exercise unsigned zero-extension.
@@ -74,7 +75,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_SHORT, i, vs[i]);
         }
-        return new MaterializedShortArray(DType.U16, vs.length, seg.asReadOnly());
+        return new MaterializedShortArray(DTypes.U16, vs.length, seg.asReadOnly());
     }
 
     /// Builds a `U8` [ByteArray]; values with bit 7 set exercise unsigned zero-extension.
@@ -83,7 +84,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.set(ValueLayout.JAVA_BYTE, i, vs[i]);
         }
-        return new MaterializedByteArray(DType.U8, vs.length, seg.asReadOnly());
+        return new MaterializedByteArray(DTypes.U8, vs.length, seg.asReadOnly());
     }
 
     static ShortArray shorts(Arena arena, short... vs) {
@@ -91,7 +92,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_SHORT, i, vs[i]);
         }
-        return new MaterializedShortArray(DType.I16, vs.length, seg.asReadOnly());
+        return new MaterializedShortArray(DTypes.I16, vs.length, seg.asReadOnly());
     }
 
     static ByteArray bytes(Arena arena, byte... vs) {
@@ -99,7 +100,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.set(ValueLayout.JAVA_BYTE, i, vs[i]);
         }
-        return new MaterializedByteArray(DType.I8, vs.length, seg.asReadOnly());
+        return new MaterializedByteArray(DTypes.I8, vs.length, seg.asReadOnly());
     }
 
     static DoubleArray doubles(Arena arena, double... vs) {
@@ -107,7 +108,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_DOUBLE, i, vs[i]);
         }
-        return new MaterializedDoubleArray(DType.F64, vs.length, seg.asReadOnly());
+        return new MaterializedDoubleArray(DTypes.F64, vs.length, seg.asReadOnly());
     }
 
     static FloatArray floats(Arena arena, float... vs) {
@@ -115,7 +116,7 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_FLOAT, i, vs[i]);
         }
-        return new MaterializedFloatArray(DType.F32, vs.length, seg.asReadOnly());
+        return new MaterializedFloatArray(DTypes.F32, vs.length, seg.asReadOnly());
     }
 
     /// An F16 array from raw half-precision bits.
@@ -124,7 +125,7 @@ final class ArrayFixtures {
         for (int i = 0; i < bits.length; i++) {
             seg.setAtIndex(ValueLayout.JAVA_SHORT, i, bits[i]);
         }
-        return new MaterializedFloat16Array(DType.F16, bits.length, seg.asReadOnly());
+        return new MaterializedFloat16Array(DTypes.F16, bits.length, seg.asReadOnly());
     }
 
     static BoolArray bools(Arena arena, boolean... vs) {
@@ -137,7 +138,7 @@ final class ArrayFixtures {
                 seg.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i & 7))));
             }
         }
-        return new MaterializedBoolArray(DType.BOOL, vs.length, seg.asReadOnly());
+        return new MaterializedBoolArray(DTypes.BOOL, vs.length, seg.asReadOnly());
     }
 
     /// Builds a UTF-8 [VarBinArray] (`VarBinOffsetArray`, I64 offsets) from the given strings.
@@ -146,12 +147,12 @@ final class ArrayFixtures {
         for (int i = 0; i < vs.length; i++) {
             rows[i] = vs[i].getBytes(StandardCharsets.UTF_8);
         }
-        return varbin(arena, DType.UTF8, rows);
+        return varbin(arena, DTypes.UTF8, rows);
     }
 
     /// Builds a binary [VarBinArray] (`VarBinOffsetArray`, I64 offsets) from the given byte rows.
     static VarBinArray binary(Arena arena, byte[]... rows) {
-        return varbin(arena, DType.BINARY, rows);
+        return varbin(arena, DTypes.BINARY, rows);
     }
 
     private static VarBinArray varbin(Arena arena, DType dtype, byte[]... rows) {

@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -15,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// Covers the decoded list container arrays (variable-length and fixed-size).
 class ListArraysTest {
 
-    private static final DType ELEM = DType.I32;
+    private static final DType ELEM = DTypes.I32;
 
     @Nested
     class VariableLength {

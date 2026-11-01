@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.csv;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -37,7 +38,7 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("name")),
-                List.of(DType.I64, DType.UTF8),
+                List.of(DTypes.I64, DTypes.UTF8),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -62,7 +63,7 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("x")),
-                List.of(DType.F64),
+                List.of(DTypes.F64),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -89,7 +90,7 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("empty")),
-                List.of(DType.I64, DType.NULL),
+                List.of(DTypes.I64, DTypes.NULL),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              // explicit encoder list: the default cascading set has no DType.Null codec
@@ -111,7 +112,7 @@ class CsvExporterTest {
     void rendersF16AsDecimal(@TempDir Path tmp) throws Exception {
         // Given an F16 column (#515: the exporter threw "unsupported array type"): 1.5, -0.0, +Inf, NaN
         Path vortex = tmp.resolve("data.vortex");
-        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("h")), List.of(DType.F16), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("h")), List.of(DTypes.F16), false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             writer.writeChunk(Map.of(ColumnName.of("h"), new short[]{
@@ -132,7 +133,7 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id")),
-                List.of(DType.I64),
+                List.of(DTypes.I64),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -295,11 +296,11 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("nested.vortex");
         DType.Struct inner = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("name"), ColumnName.of("score")),
-                List.of(DType.I64, DType.UTF8, DType.F64),
+                List.of(DTypes.I64, DTypes.UTF8, DTypes.F64),
                 false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("region"), ColumnName.of("data")),
-                List.of(DType.UTF8, inner),
+                List.of(DTypes.UTF8, inner),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              // Struct columns route through the recursive cascade (the flat first-match path has
@@ -338,11 +339,11 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("nullfield.vortex");
         DType.Struct inner = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("label")),
-                List.of(DType.I64, new DType.Primitive(PType.I64, true)),
+                List.of(DTypes.I64, new DType.Primitive(PType.I64, true)),
                 false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("region"), ColumnName.of("data")),
-                List.of(DType.UTF8, inner),
+                List.of(DTypes.UTF8, inner),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults(),
@@ -384,7 +385,7 @@ class CsvExporterTest {
                 false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("region"), ColumnName.of("data")),
-                List.of(DType.UTF8, inner),
+                List.of(DTypes.UTF8, inner),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults(),
@@ -421,11 +422,11 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("escape.vortex");
         DType.Struct inner = new DType.Struct(
                 List.of(ColumnName.of("note"), ColumnName.of("rank")),
-                List.of(DType.UTF8, DType.I64),
+                List.of(DTypes.UTF8, DTypes.I64),
                 false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("label"), ColumnName.of("data")),
-                List.of(DType.UTF8, inner),
+                List.of(DTypes.UTF8, inner),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
@@ -456,15 +457,15 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("deep.vortex");
         DType.Struct innermost = new DType.Struct(
                 List.of(ColumnName.of("lat"), ColumnName.of("lon")),
-                List.of(DType.F64, DType.F64),
+                List.of(DTypes.F64, DTypes.F64),
                 false);
         DType.Struct inner = new DType.Struct(
                 List.of(ColumnName.of("name"), ColumnName.of("coord")),
-                List.of(DType.UTF8, innermost),
+                List.of(DTypes.UTF8, innermost),
                 false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("region"), ColumnName.of("data")),
-                List.of(DType.UTF8, inner),
+                List.of(DTypes.UTF8, inner),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
@@ -491,10 +492,10 @@ class CsvExporterTest {
         // Given a FixedSizeList of type F32 and size 3 column — the glove vector shape (issue #257);
         // each row is 3 consecutive floats from the flat elements array.
         Path vortex = tmp.resolve("fsl.vortex");
-        DType.FixedSizeList vecDtype = new DType.FixedSizeList(DType.F32, 3, false);
+        DType.FixedSizeList vecDtype = new DType.FixedSizeList(DTypes.F32, 3, false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("label"), ColumnName.of("vec")),
-                List.of(DType.UTF8, vecDtype),
+                List.of(DTypes.UTF8, vecDtype),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -521,10 +522,10 @@ class CsvExporterTest {
         // Given a List[I64] column with variable-length rows — tests both the offset
         // reading path and the empty-list edge case (issue #257).
         Path vortex = tmp.resolve("list.vortex");
-        DType.List listDtype = new DType.List(DType.I64, false);
+        DType.List listDtype = new DType.List(DTypes.I64, false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("tag"), ColumnName.of("ids")),
-                List.of(DType.UTF8, listDtype),
+                List.of(DTypes.UTF8, listDtype),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -557,7 +558,7 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("listoflists.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("ids")),
-                List.of(new DType.List(new DType.List(DType.I64, false), false)),
+                List.of(new DType.List(new DType.List(DTypes.I64, false), false)),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -587,12 +588,12 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("listofstruct.vortex");
         DType.Struct memberDtype = new DType.Struct(
                 List.of(ColumnName.of("ref"), ColumnName.of("role")),
-                List.of(DType.I64, DType.UTF8),
+                List.of(DTypes.I64, DTypes.UTF8),
                 false);
         DType.List listDtype = new DType.List(memberDtype, false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("members")),
-                List.of(DType.I64, listDtype),
+                List.of(DTypes.I64, listDtype),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
@@ -634,7 +635,7 @@ class CsvExporterTest {
         DType.List listDtype = new DType.List(memberDtype, false);
         DType.Struct schema = new DType.Struct(
                 List.of(ColumnName.of("id"), ColumnName.of("members")),
-                List.of(DType.I64, listDtype),
+                List.of(DTypes.I64, listDtype),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults(),

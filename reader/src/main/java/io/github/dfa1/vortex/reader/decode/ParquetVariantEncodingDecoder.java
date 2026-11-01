@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoParquetVariantMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -62,7 +63,7 @@ public final class ParquetVariantEncodingDecoder implements EncodingDecoder {
 
         long n = ctx.rowCount();
         int child = 0;
-        Array validity = numChildren == expected ? null : ctx.decodeChild(child++, DType.BOOL, n);
+        Array validity = numChildren == expected ? null : ctx.decodeChild(child++, DTypes.BOOL, n);
 
         List<ColumnName> names = new ArrayList<>(3);
         List<DType> types = new ArrayList<>(3);

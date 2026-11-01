@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -198,7 +199,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             return result;
         }
         BoolArray patchBits = patchValidity != null ? patchValidity : allValid(ctx, numPatches);
-        BoolArray rowValidity = new LazySparseBoolArray(DType.BOOL, n, fillValid, patchBits, idxData, offset);
+        BoolArray rowValidity = new LazySparseBoolArray(DTypes.BOOL, n, fillValid, patchBits, idxData, offset);
         return new MaskedArray(result, rowValidity);
     }
 
@@ -208,7 +209,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
     private static BoolArray allValid(DecodeContext ctx, long len) {
         MemorySegment bits = ctx.arena().allocate(Math.max(1, (len + 7) >>> 3));
         bits.fill((byte) 0xFF);
-        return new MaterializedBoolArray(DType.BOOL, len, bits.asReadOnly());
+        return new MaterializedBoolArray(DTypes.BOOL, len, bits.asReadOnly());
     }
 
     /// Rejects a patch child whose physical buffer holds no elements at all while the

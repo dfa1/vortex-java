@@ -12,6 +12,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -64,7 +65,7 @@ class Float16InteropIntegrationTest {
     private static final Schema ARROW_SCHEMA = new Schema(List.of(
             Field.notNullable("v", new ArrowType.FloatingPoint(FloatingPointPrecision.HALF))));
     private static final ColumnName COLUMN = ColumnName.of("v");
-    private static final DType.Struct SCHEMA = new DType.Struct(List.of(COLUMN), List.of(DType.F16), false);
+    private static final DType.Struct SCHEMA = new DType.Struct(List.of(COLUMN), List.of(DTypes.F16), false);
     private static final int ROWS = 3000;
 
     static {
@@ -243,7 +244,7 @@ class Float16InteropIntegrationTest {
         }
         Path file = tmp.resolve(writer + "_f16_sorted.vtx");
         if (writer.equals("java")) {
-            DType.Struct schema = new DType.Struct(List.of(COLUMN), List.of(DType.F16), false);
+            DType.Struct schema = new DType.Struct(List.of(COLUMN), List.of(DTypes.F16), false);
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema,
                          WriteOptions.defaults().withEdition(io.github.dfa1.vortex.core.model.Editions.CORE_2025_10_0))) {

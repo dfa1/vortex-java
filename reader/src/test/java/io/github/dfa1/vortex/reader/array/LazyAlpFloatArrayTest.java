@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -13,7 +14,7 @@ import static org.assertj.core.api.Assertions.offset;
 class LazyAlpFloatArrayTest {
 
 
-    private static final DType F32 = DType.F32;
+    private static final DType F32 = DTypes.F32;
 
     private static LazyAlpFloatArray of(float scale, int... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 4, 4);

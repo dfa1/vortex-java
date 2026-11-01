@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.calcite.VortexSchema;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -191,8 +192,8 @@ public class DictStringBenchmark {
         ColumnName sym = ColumnName.of("sym");
         ColumnName val = ColumnName.of("val");
         DType.Struct schema = DType.structBuilder()
-                .field(sym, DType.UTF8)
-                .field(val, DType.I64)
+                .field(sym, DTypes.UTF8)
+                .field(val, DTypes.I64)
                 .build();
         Random rng = new Random(42L);
         try (FileChannel ch = FileChannel.open(file,

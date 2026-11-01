@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -133,7 +134,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         if (valuesValidity == null) {
             return result;
         }
-        BoolArray rowValidity = new LazyRunEndBoolArray(DType.BOOL, n, valuesValidity, endsData, offset);
+        BoolArray rowValidity = new LazyRunEndBoolArray(DTypes.BOOL, n, valuesValidity, endsData, offset);
         return new MaskedArray(result, rowValidity);
     }
 

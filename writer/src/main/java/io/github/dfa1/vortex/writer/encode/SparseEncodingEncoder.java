@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -277,7 +278,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
 
         DType idxDtype = new DType.Primitive(idxPtype, false);
         EncodeResult idxResult = new CascadingCompressor(INDEX_CASCADE_CANDIDATES).encode(idxDtype, idxArr, ctx);
-        EncodeResult valResult = new BoolEncodingEncoder().encode(DType.BOOL, patchVals, ctx);
+        EncodeResult valResult = new BoolEncodingEncoder().encode(DTypes.BOOL, patchVals, ctx);
 
         List<EncodedBuffer> buffers = new ArrayList<>();
         buffers.add(EncodedBuffer.bytes(fillBuf));

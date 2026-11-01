@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Test;
@@ -115,9 +116,9 @@ class RepartitionerTest {
         boolean[] bools = new boolean[1024 * 8192 + 1];
         return Stream.of(
                 // a value of at most 12 bytes lives in its 16-byte view: 16 B/row
-                Arguments.of("inlined strings", DType.UTF8, inlined, 65_536),
+                Arguments.of("inlined strings", DTypes.UTF8, inlined, 65_536),
                 // 16 + 13 = 29 B/row: 5 blocks are 1 187 840 B, 4 fall short
-                Arguments.of("out-of-line strings", DType.UTF8, outOfLine, 40_960),
+                Arguments.of("out-of-line strings", DTypes.UTF8, outOfLine, 40_960),
                 Arguments.of("inlined binaries", new DType.Binary(false), inlinedBinary, 65_536),
                 Arguments.of("out-of-line binaries", new DType.Binary(false), outOfLineBinary, 40_960),
                 // an all-valid block has no bitmap: 2 B/row
@@ -158,7 +159,7 @@ class RepartitionerTest {
         // Given — 3 whole blocks of inlined strings pending (384 KiB) and 100 rows of 10 000-byte
         // strings: the partial block tips the total over 1 MiB, so Rust's coalescer emits the whole
         // blocks, then flushes the rest on its own
-        var sut = new Repartitioner(DType.UTF8);
+        var sut = new Repartitioner(DTypes.UTF8);
         String[] blocks = new String[3 * 8192];
         Arrays.fill(blocks, "short");
         String[] tail = new String[100];
@@ -217,8 +218,8 @@ class RepartitionerTest {
         // and a 3000-row batch ahead of it, so its pieces start mid-block
         String[] head = new String[3000];
         Arrays.fill(head, "a string longer than twelve bytes");
-        Repartitioner direct = new Repartitioner(DType.UTF8);
-        Repartitioner presized = new Repartitioner(DType.UTF8);
+        Repartitioner direct = new Repartitioner(DTypes.UTF8);
+        Repartitioner presized = new Repartitioner(DTypes.UTF8);
         direct.add(head, head.length);
         presized.add(head, head.length);
         long[] sizes = Repartitioner.sizePieces(batch, batch.length, presized.rows());

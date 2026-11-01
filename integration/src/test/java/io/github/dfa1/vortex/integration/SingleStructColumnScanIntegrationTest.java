@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -41,7 +42,7 @@ class SingleStructColumnScanIntegrationTest {
             List.of(ColumnName.of("point")),
             List.of(new DType.Struct(
                     List.of(ColumnName.of("x"), ColumnName.of("y")),
-                    List.of(DType.I32, DType.I32),
+                    List.of(DTypes.I32, DTypes.I32),
                     false)),
             false);
 

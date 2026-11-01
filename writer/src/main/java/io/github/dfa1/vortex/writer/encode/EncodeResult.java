@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
 import java.lang.foreign.MemorySegment;
@@ -70,7 +70,7 @@ public record EncodeResult(
     /// @param ctx      the encode context
     /// @return a copy of this result with the validity child and its buffer
     EncodeResult withValidity(boolean[] validity, EncodeContext ctx) {
-        EncodeResult bool = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         EncodeNode[] children = Arrays.copyOf(rootNode.children(), rootNode.children().length + 1);
         children[children.length - 1] = EncodeNode.remapBufferIndices(bool.rootNode(), encodedBuffers.size());
         List<EncodedBuffer> buffers = new ArrayList<>(encodedBuffers);

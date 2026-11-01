@@ -12,6 +12,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Element;
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.ElementNulls;
 import io.github.dfa1.vortex.integration.FixedSizeListInteropIntegrationTest.Nulls;
@@ -162,7 +163,7 @@ class ListInteropIntegrationTest {
         boolean nullableLists = nulls != Nulls.NONE_NULL;
         DType elementType = elementNulls.nullableType() ? element.dtype.asNullable() : element.dtype;
         DType.Struct schema = new DType.Struct(List.of(ID, LISTS),
-                List.of(DType.I64, new DType.List(elementType, nullableLists)), false);
+                List.of(DTypes.I64, new DType.List(elementType, nullableLists)), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             long flat = 0;

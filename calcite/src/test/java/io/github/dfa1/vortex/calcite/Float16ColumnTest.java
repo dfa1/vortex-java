@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -130,7 +131,7 @@ class Float16ColumnTest {
         // Given two chunks (one zone each) [1.5, 1.5] and [2.5, 3.5]; the predicate translator
         // coerces the literal to the Double the zone-map stats compare as, so chunk one can be pruned
         Path file = tmp.resolve("sql.vortex");
-        DType.Struct schema = DType.structBuilder().field(H, DType.F16).build();
+        DType.Struct schema = DType.structBuilder().field(H, DTypes.F16).build();
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema,
                      WriteOptions.cascading(0).withZoneMaps(true).withEdition(Editions.CORE_2025_10_0))) {
@@ -158,7 +159,7 @@ class Float16ColumnTest {
 
     private Path write(String name, WriteOptions options, boolean nullable) throws Exception {
         Path file = tmp.resolve(name);
-        DType.Struct schema = DType.structBuilder().field(H, nullable ? new DType.Primitive(io.github.dfa1.vortex.core.model.PType.F16, true) : DType.F16).build();
+        DType.Struct schema = DType.structBuilder().field(H, nullable ? new DType.Primitive(io.github.dfa1.vortex.core.model.PType.F16, true) : DTypes.F16).build();
         short[] values = {ONE_AND_A_HALF, TWO_AND_A_HALF, ONE_AND_A_HALF};
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, options)) {

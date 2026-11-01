@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.calcite;
 import io.github.dfa1.vortex.core.model.ColumnName;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -34,18 +35,18 @@ class VortexAdapterCoverageTest {
 
     // One column per logical type the adapter maps; three rows.
     private static final DType.Struct SCHEMA = DType.structBuilder()
-            .field(ColumnName.of("i8"), DType.I8)
-            .field(ColumnName.of("i16"), DType.I16)
-            .field(ColumnName.of("i32"), DType.I32)
-            .field(ColumnName.of("i64"), DType.I64)
-            .field(ColumnName.of("u8"), DType.U8)
-            .field(ColumnName.of("u16"), DType.U16)
-            .field(ColumnName.of("u32"), DType.U32)
-            .field(ColumnName.of("u64"), DType.U64)
-            .field(ColumnName.of("f32"), DType.F32)
-            .field(ColumnName.of("f64"), DType.F64)
-            .field(ColumnName.of("s"), DType.UTF8)
-            .field(ColumnName.of("b"), DType.BOOL)
+            .field(ColumnName.of("i8"), DTypes.I8)
+            .field(ColumnName.of("i16"), DTypes.I16)
+            .field(ColumnName.of("i32"), DTypes.I32)
+            .field(ColumnName.of("i64"), DTypes.I64)
+            .field(ColumnName.of("u8"), DTypes.U8)
+            .field(ColumnName.of("u16"), DTypes.U16)
+            .field(ColumnName.of("u32"), DTypes.U32)
+            .field(ColumnName.of("u64"), DTypes.U64)
+            .field(ColumnName.of("f32"), DTypes.F32)
+            .field(ColumnName.of("f64"), DTypes.F64)
+            .field(ColumnName.of("s"), DTypes.UTF8)
+            .field(ColumnName.of("b"), DTypes.BOOL)
             .build();
 
     @TempDir

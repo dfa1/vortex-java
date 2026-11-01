@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -37,7 +38,7 @@ public final class PrimitiveEncodingDecoder implements EncodingDecoder {
         PType ptype = primitiveDt.ptype();
         Array values = MaterializedArrays.of(dt, ptype, n, buf);
         if (ctx.node().children().length == 1) {
-            Array va = ctx.decodeChild(0, DType.BOOL, n);
+            Array va = ctx.decodeChild(0, DTypes.BOOL, n);
             BoolArray validity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_PRIMITIVE, "validity child");
             return new MaskedArray(values, validity);
         }

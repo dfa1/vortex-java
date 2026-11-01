@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.compute.LongIntMap;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
@@ -68,7 +69,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     private static EncodeResult encodeF64(double[] values, boolean[] validity, EncodeContext ctx) {
         int n = values.length;
         if (n == 0) {
-            return emptyResult(DType.U64, ctx);
+            return emptyResult(DTypes.U64, ctx);
         }
 
         // Rust's SamplePlan::subsample: contiguous runs spread over the whole array, so a periodic
@@ -108,7 +109,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, validity, rightParts,
-            DType.U64, exceptions, scalarF64(min), scalarF64(max), ctx);
+            DTypes.U64, exceptions, scalarF64(min), scalarF64(max), ctx);
     }
 
     /// Rust's `SamplePlan::subsample` (`alp` crate): the whole input when it has at most
@@ -198,7 +199,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     private static EncodeResult encodeF32(float[] values, boolean[] validity, EncodeContext ctx) {
         int n = values.length;
         if (n == 0) {
-            return emptyResult(DType.U32, ctx);
+            return emptyResult(DTypes.U32, ctx);
         }
 
         // Same sample plan as encodeF64.
@@ -236,7 +237,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, validity, rightParts,
-            DType.U32, exceptions, scalarF32(min), scalarF32(max), ctx);
+            DTypes.U32, exceptions, scalarF32(min), scalarF32(max), ctx);
     }
 
     private static Dictionary32 findBestDictionaryF32(float[] values, int sampleLen) {
@@ -327,7 +328,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         // the right bit width. A narrower pack measured ALP-RD smaller than Rust measures it.
         Object left = validity == null ? leftCodes : new NullableData(leftCodes, validity);
         int leftBitWidth = Math.max(1, Integer.SIZE - Integer.numberOfLeadingZeros(dict.length - 1));
-        EncodeResult leftResult = BitpackedEncodingEncoder.encodeAtWidth(DType.U16, left, leftBitWidth, ctx);
+        EncodeResult leftResult = BitpackedEncodingEncoder.encodeAtWidth(DTypes.U16, left, leftBitWidth, ctx);
         EncodeResult rightResult = BitpackedEncodingEncoder.encodeAtWidth(rightDtype, rightPartsData, rightBitWidth,
                 ctx);
 
@@ -410,9 +411,9 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
     private static EncodeResult emptyResult(DType rightDtype, EncodeContext ctx) {
         EncodingEncoder bp = ctx.lookupEncoder(EncodingId.FASTLANES_BITPACKED);
-        EncodeResult leftResult = bp.encode(DType.U16, new short[0], ctx);
+        EncodeResult leftResult = bp.encode(DTypes.U16, new short[0], ctx);
         EncodeResult rightResult = bp.encode(rightDtype,
-            rightDtype.equals(DType.U32) ? new int[0] : new long[0], ctx);
+            rightDtype.equals(DTypes.U32) ? new int[0] : new long[0], ctx);
 
         List<EncodedBuffer> allBuffers = new ArrayList<>(leftResult.encodedBuffers());
         int leftBufCount = allBuffers.size();

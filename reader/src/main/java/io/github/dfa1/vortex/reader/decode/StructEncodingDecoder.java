@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -40,7 +41,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             BoolArray structValidity = null;
             if (hasValidity) {
                 ArrayNode validityNode = ctx.node().children()[0];
-                var validityCtx = new DecodeContext(validityNode, DType.BOOL,
+                var validityCtx = new DecodeContext(validityNode, DTypes.BOOL,
                         ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
                 Array va = ctx.registry().decode(validityCtx);
                 structValidity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_STRUCT, "struct validity");
@@ -75,7 +76,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             return ctx.registry().decode(valuesCtx);
         } else if (numChildren == 2) {
             ArrayNode validityNode = ctx.node().children()[0];
-            var validityCtx = new DecodeContext(validityNode, DType.BOOL,
+            var validityCtx = new DecodeContext(validityNode, DTypes.BOOL,
                     ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
             Array va = ctx.registry().decode(validityCtx);
             BoolArray validity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_STRUCT, "scalar wrapper validity");

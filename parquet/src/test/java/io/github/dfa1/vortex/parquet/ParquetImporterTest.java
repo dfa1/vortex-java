@@ -10,6 +10,7 @@ import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.SchemaNode;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -53,7 +54,7 @@ class ParquetImporterTest {
         void boolean_mapsToBool_carryingNullability() {
             // Given / When / Then — REQUIRED is non-null, OPTIONAL is nullable
             assertThat(ParquetImporter.mapDType(col("b", PhysicalType.BOOLEAN, RepetitionType.REQUIRED, null)))
-                    .isEqualTo(DType.BOOL);
+                    .isEqualTo(DTypes.BOOL);
             assertThat(ParquetImporter.mapDType(col("b", PhysicalType.BOOLEAN, RepetitionType.OPTIONAL, null)))
                     .isEqualTo(new DType.Bool(true));
         }
@@ -64,7 +65,7 @@ class ParquetImporterTest {
             DType result = ParquetImporter.mapDType(col("i", PhysicalType.INT32, RepetitionType.REQUIRED, null));
 
             // Then
-            assertThat(result).isEqualTo(DType.I32);
+            assertThat(result).isEqualTo(DTypes.I32);
         }
 
         @ParameterizedTest
@@ -92,11 +93,11 @@ class ParquetImporterTest {
         void int64_signedAndUnsigned_mapToI64AndU64() {
             // Given / When / Then
             assertThat(ParquetImporter.mapDType(col("l", PhysicalType.INT64, RepetitionType.REQUIRED, null)))
-                    .isEqualTo(DType.I64);
+                    .isEqualTo(DTypes.I64);
             assertThat(ParquetImporter.mapDType(col("l", PhysicalType.INT64, RepetitionType.REQUIRED,
-                    new LogicalType.IntType(64, true)))).isEqualTo(DType.I64);
+                    new LogicalType.IntType(64, true)))).isEqualTo(DTypes.I64);
             assertThat(ParquetImporter.mapDType(col("l", PhysicalType.INT64, RepetitionType.REQUIRED,
-                    new LogicalType.IntType(64, false)))).isEqualTo(DType.U64);
+                    new LogicalType.IntType(64, false)))).isEqualTo(DTypes.U64);
         }
 
         @ParameterizedTest
@@ -121,9 +122,9 @@ class ParquetImporterTest {
         void float_and_double_mapToF32AndF64() {
             // Given / When / Then
             assertThat(ParquetImporter.mapDType(col("f", PhysicalType.FLOAT, RepetitionType.REQUIRED, null)))
-                    .isEqualTo(DType.F32);
+                    .isEqualTo(DTypes.F32);
             assertThat(ParquetImporter.mapDType(col("d", PhysicalType.DOUBLE, RepetitionType.REQUIRED, null)))
-                    .isEqualTo(DType.F64);
+                    .isEqualTo(DTypes.F64);
         }
 
         @Test
@@ -347,7 +348,7 @@ class ParquetImporterTest {
             // genuinely null, which real-world files can violate their own schema and hit — found
             // on several Raincloud bi-* slugs (schema says REQUIRED, data has a null anyway).
             List<ColumnName> names = List.of(ColumnName.of("id"));
-            List<DType> types = List.of(DType.I64);
+            List<DType> types = List.of(DTypes.I64);
             Object[] buffers = {new long[1]};
             ColumnBuilder[] nestedBuilders = new ColumnBuilder[1];
             String source = "malformed.parquet";

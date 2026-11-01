@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
 import org.junit.jupiter.api.Nested;
@@ -21,7 +22,7 @@ class ZoneAccumulatorTest {
         void zonesFollowTheRowStrideNotTheBatches() {
             // Given batches that do not divide 8192: zone 0 straddles batches 1-2, zone 1 batches
             // 2-3. Rust zones by row (r / 8192), so a zone must close mid-batch and carry over.
-            ZoneAccumulator sut = new ZoneAccumulator(DType.I64);
+            ZoneAccumulator sut = new ZoneAccumulator(DTypes.I64);
             long next = 0;
             for (int len : new int[]{5000, 5000, 7000}) {
                 long[] batch = new long[len];
@@ -45,7 +46,7 @@ class ZoneAccumulatorTest {
         @Test
         void allNullZoneHasNullMinMaxAndCountsItsNulls() {
             // Given one zone of nulls only: Rust stores a null min/max partial and the null count
-            ZoneAccumulator sut = new ZoneAccumulator(DType.I64.withNullable(true));
+            ZoneAccumulator sut = new ZoneAccumulator(DTypes.I64.withNullable(true));
             sut.add(new NullableData(new long[3], new boolean[3]), 3);
 
             // When
@@ -60,7 +61,7 @@ class ZoneAccumulatorTest {
         @Test
         void floatsSkipNanInMinMaxAndCountIt() {
             // Given a leading NaN — Rust's max/min skip NaN and record them in nan_count
-            ZoneAccumulator sut = new ZoneAccumulator(DType.F64);
+            ZoneAccumulator sut = new ZoneAccumulator(DTypes.F64);
             sut.add(new double[]{Double.NaN, 2.0, -1.0, Double.NaN}, 4);
 
             // When
@@ -76,7 +77,7 @@ class ZoneAccumulatorTest {
         @Test
         void listColumnRecordsOnlyNullCount() {
             // Given a dtype with no min/max: Rust records just null_count
-            DType list = new DType.List(DType.I32, true);
+            DType list = new DType.List(DTypes.I32, true);
             ZoneAccumulator sut = new ZoneAccumulator(list);
             sut.add(new NullableData(new Object(), new boolean[]{true, false}), 2);
 
@@ -99,7 +100,7 @@ class ZoneAccumulatorTest {
                     + "120a10766f727465782e6e616e5f636f756e7412130a11766f727465782e6e756c6c5f636f756e74";
 
             // When
-            byte[] result = new ZoneAccumulator(DType.F64).metadata();
+            byte[] result = new ZoneAccumulator(DTypes.F64).metadata();
 
             // Then
             assertThat(HexFormat.of().formatHex(result)).isEqualTo(jni);
@@ -113,7 +114,7 @@ class ZoneAccumulatorTest {
                     + "5f636f756e74";
 
             // When
-            byte[] result = new ZoneAccumulator(DType.UTF8).metadata();
+            byte[] result = new ZoneAccumulator(DTypes.UTF8).metadata();
 
             // Then
             assertThat(HexFormat.of().formatHex(result)).isEqualTo(jni);

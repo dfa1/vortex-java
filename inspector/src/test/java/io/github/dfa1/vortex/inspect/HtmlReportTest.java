@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.TimestampDtype;
@@ -131,7 +132,7 @@ class HtmlReportTest {
         Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of());
         InspectorTree.Node root = new InspectorTree.Node(leaf, Optional.empty(), Set.of(),
                 ArrayStats.empty(), List.of());
-        InspectorTree sut = new InspectorTree(1, 0L, DType.I32, List.of(), Set.of(), List.of(), 0L, Map.of(), root);
+        InspectorTree sut = new InspectorTree(1, 0L, DTypes.I32, List.of(), Set.of(), List.of(), 0L, Map.of(), root);
 
         // When
         String result = HtmlReport.render(sut, "empty.vortex");
@@ -154,7 +155,7 @@ class HtmlReportTest {
         InspectorTree.Node root = new InspectorTree.Node(structLayout, Optional.empty(), Set.of(),
                 ArrayStats.empty(), List.of(leafNode));
         InspectorTree sut = new InspectorTree(1, 128L,
-                new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I32), false),
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(DTypes.I32), false),
                 List.of(), Set.of(),
                 List.of(new SegmentSpec(0, 64, (byte) 0, CompressionScheme.NONE)),
                 10L, Map.of(), root);
@@ -208,7 +209,7 @@ class HtmlReportTest {
                 ArrayStats.empty(), List.of(col));
 
         InspectorTree sut = new InspectorTree(2, 4096L,
-                new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false),
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(DTypes.I64), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE),
@@ -288,7 +289,7 @@ class HtmlReportTest {
                 ArrayStats.empty(), List.of(wholeNode, splitNode));
         InspectorTree sut = new InspectorTree(2, 8192L,
                 new DType.Struct(List.of(ColumnName.of("whole"), ColumnName.of("split")),
-                        List.of(DType.I64, DType.I64), false),
+                        List.of(DTypes.I64, DTypes.I64), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 512, (byte) 0, CompressionScheme.NONE),
@@ -328,7 +329,7 @@ class HtmlReportTest {
                 ArrayStats.empty(), List.of(col));
 
         InspectorTree sut = new InspectorTree(2, 8192L,
-                new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false),
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(DTypes.I64), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 4096, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(4096, 1024, (byte) 0, CompressionScheme.NONE)),
@@ -371,7 +372,7 @@ class HtmlReportTest {
         InspectorTree.Node rootNode = new InspectorTree.Node(root, Optional.empty(), Set.of(),
                 ArrayStats.empty(), List.of(leafNode));
         InspectorTree sut = new InspectorTree(1, 256L,
-                new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I32), false),
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(DTypes.I32), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 256, (byte) 0, CompressionScheme.NONE)),
                 10L, Map.of(), rootNode);
@@ -402,7 +403,7 @@ class HtmlReportTest {
                 ArrayStats.empty(), List.of(an, bn));
         InspectorTree sut = new InspectorTree(1, 4096L,
                 new DType.Struct(List.of(ColumnName.of("x"), ColumnName.of("y")),
-                        List.of(DType.I32, DType.I32), false),
+                        List.of(DTypes.I32, DTypes.I32), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(2048, 1024, (byte) 0, CompressionScheme.NONE)),
@@ -428,7 +429,7 @@ class HtmlReportTest {
                 ArrayStats.empty(), List.of());
         InspectorTree sut = new InspectorTree(1, 24576L,
                 new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("nullable_val")),
-                        List.of(DType.U32, new DType.Primitive(PType.I64, true)), false),
+                        List.of(DTypes.U32, new DType.Primitive(PType.I64, true)), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 20480, (byte) 0, CompressionScheme.NONE)),
                 1750L, Map.of(), root);
@@ -463,7 +464,7 @@ class HtmlReportTest {
                 ArrayStats.empty(), List.of(n0, n1));
         InspectorTree sut = new InspectorTree(1, 4096L,
                 new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("c")),
-                        List.of(DType.I32, DType.I32, DType.I32), false),
+                        List.of(DTypes.I32, DTypes.I32, DTypes.I32), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE)),
@@ -610,7 +611,7 @@ class HtmlReportTest {
 
         return new InspectorTree(2, 4096L,
                 new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("value")),
-                        List.of(DType.I64, DType.F64), false),
+                        List.of(DTypes.I64, DTypes.F64), false),
                 List.of("vortex.flat"), Set.of("fastlanes.bitpacked"),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE)),
@@ -633,7 +634,7 @@ class HtmlReportTest {
                 ArrayStats.empty(), List.of(col));
 
         return new InspectorTree(2, 4096L,
-                new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false),
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(DTypes.I64), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.NONE),
                         new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.NONE)),

@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -97,7 +98,7 @@ class ExtensionStorageTest {
         }
 
         private DType.Extension ext(java.lang.foreign.MemorySegment meta) {
-            return new DType.Extension("vortex.timestamp", DType.I64, meta, false);
+            return new DType.Extension("vortex.timestamp", DTypes.I64, meta, false);
         }
     }
 

@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -17,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MapEncodingDecoderTest {
 
-    private static final DType.Map MAP_UTF8_I64 = new DType.Map(DType.UTF8, DType.I64, false, false);
+    private static final DType.Map MAP_UTF8_I64 = new DType.Map(DTypes.UTF8, DTypes.I64, false, false);
 
     private final MapEncodingDecoder sut = new MapEncodingDecoder();
 
@@ -38,7 +39,7 @@ class MapEncodingDecoderTest {
     void decode_nonMapDtype_throws() {
         // Given a map node handed a list dtype
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_MAP, null, new ArrayNode[0], new int[0]);
-        DecodeContext ctx = TestDecodeContexts.of(node, new DType.List(DType.I32, false))
+        DecodeContext ctx = TestDecodeContexts.of(node, new DType.List(DTypes.I32, false))
                                               .registry(registry).build();
 
         // When / Then
@@ -136,9 +137,9 @@ class MapEncodingDecoderTest {
         public Array decode(DecodeContext ctx) {
             DType.Struct swapped = new DType.Struct(
                     List.of(ColumnName.of("key"), ColumnName.of("value")),
-                    List.of(DType.I64, DType.UTF8),
+                    List.of(DTypes.I64, DTypes.UTF8),
                     false);
-            Array empty = new NullArray(DType.NULL, ctx.rowCount());
+            Array empty = new NullArray(DTypes.NULL, ctx.rowCount());
             return new ListViewArray(new DType.List(swapped, false), ctx.rowCount(), empty, empty, empty);
         }
     }

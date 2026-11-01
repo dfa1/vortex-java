@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -13,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LazyZigZagByteArrayTest {
 
-    private static final DType I8 = DType.I8;
+    private static final DType I8 = DTypes.I8;
 
     private static LazyZigZagByteArray of(byte... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate(encoded.length);

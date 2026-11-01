@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
@@ -66,7 +66,7 @@ class AlpRdEncodingDecoderTest {
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(meta),
                 new ArrayNode[]{leftNode, rightNode}, new int[0]);
         MemorySegment[] segs = {leShorts(new short[]{0}), leLongs(new long[]{0})};
-        DecodeContext ctx = new DecodeContext(node, DType.F64, 1, segs, REGISTRY, Arena.ofAuto());
+        DecodeContext ctx = new DecodeContext(node, DTypes.F64, 1, segs, REGISTRY, Arena.ofAuto());
 
         // When / Then
         assertThatThrownBy(() -> SUT.decode(ctx))
@@ -99,7 +99,7 @@ class AlpRdEncodingDecoderTest {
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALPRD, metaSegment(),
                 new ArrayNode[]{leftNode, rightNode}, new int[0]);
         MemorySegment[] segs = {leShorts(leftCodes), leLongs(rightBits), validity};
-        return new DecodeContext(node, DType.F64, leftCodes.length, segs, REGISTRY, Arena.ofAuto());
+        return new DecodeContext(node, DTypes.F64, leftCodes.length, segs, REGISTRY, Arena.ofAuto());
     }
 
     private static DecodeContext plainContext(short[] leftCodes, long[] rightBits) {
@@ -109,7 +109,7 @@ class AlpRdEncodingDecoderTest {
         ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALPRD, metaSegment(),
                 new ArrayNode[]{leftNode, rightNode}, new int[0]);
         MemorySegment[] segs = {leShorts(leftCodes), leLongs(rightBits)};
-        return new DecodeContext(node, DType.F64, leftCodes.length, segs, REGISTRY, Arena.ofAuto());
+        return new DecodeContext(node, DTypes.F64, leftCodes.length, segs, REGISTRY, Arena.ofAuto());
     }
 
     private static MemorySegment metaSegment() {

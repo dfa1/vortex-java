@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyByteBoolArray;
@@ -45,7 +45,7 @@ public final class ByteBoolEncodingDecoder implements EncodingDecoder {
         if (children == 0 || !ctx.dtype().nullable()) {
             return new LazyByteBoolArray(ctx.dtype(), n, bytes);
         }
-        Array validity = ctx.decodeChild(0, DType.BOOL, n);
+        Array validity = ctx.decodeChild(0, DTypes.BOOL, n);
         return new MaskedArray(new LazyByteBoolArray(ctx.dtype().withNullable(false), n, bytes),
                 MaskedArray.requireBoolArray(validity, EncodingId.VORTEX_BYTEBOOL, "validity child"));
     }

@@ -6,6 +6,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanFilter;
@@ -294,7 +295,7 @@ class DictFilterInteropIntegrationTest {
     /// Writes `s` and `id` (the row number) with vortex-java in [#BATCHES] chunks.
     private static List<String> writeWithJava(Path path, String[] symbols, WriteOptions options) throws IOException {
         List<String> values = symbolsByRow(symbols);
-        DType.Struct schema = new DType.Struct(List.of(S, ID), List.of(new DType.Utf8(true), DType.I64), false);
+        DType.Struct schema = new DType.Struct(List.of(S, ID), List.of(new DType.Utf8(true), DTypes.I64), false);
         try (var channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = io.github.dfa1.vortex.writer.VortexWriter.create(channel, schema, options)) {
             for (int batch = 0; batch < BATCHES; batch++) {
