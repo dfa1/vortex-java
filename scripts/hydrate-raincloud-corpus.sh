@@ -60,8 +60,9 @@ if [[ ! -d "$VENV" ]]; then
     # install does not fetch; without them those builds fail
     "$VENV/bin/python" -c "import duckdb; duckdb.execute('INSTALL tpch'); duckdb.execute('INSTALL tpcds')"
 fi
-# tpcgen-rs-* datasets also need tpcgen-cli, built from a tpcgen-rs checkout
-# (python -m raincloud.pipeline.generators.install_tpcgen --source CHECKOUT); without it their local builds fail
+# tpcgen-rs-tpcds-* datasets also need tpcgen-cli, built from a tpcgen-rs checkout
+# (python -m raincloud.pipeline.generators.install_tpcgen --source CHECKOUT); without it their local builds fail.
+# The tpcgen-rs-tpch-* ones need nothing extra: raincloud[all] installs tpchgen-cli.
 
 if [[ $# -gt 0 ]]; then
     SLUGS=("$@")
