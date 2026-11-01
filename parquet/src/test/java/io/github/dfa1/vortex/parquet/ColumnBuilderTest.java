@@ -28,6 +28,17 @@ class ColumnBuilderTest {
     class Leaf {
 
         @Test
+        void nestedDecimal_throwsAtConstruction() {
+            // Given — a DECIMAL field inside a STRUCT/LIST (#628 maps it to DType.Decimal)
+            DType.Decimal decimal = DType.Decimal.of(15, 2, true);
+
+            // When / Then
+            assertThatThrownBy(() -> ColumnBuilder.forType(decimal))
+                    .isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining("DECIMAL");
+        }
+
+        @Test
         void nullablePrimitive_wrapsInNullableData_withDefaultsAtNullPositions() {
             // Given — Raincloud-style nullable int leaf; Hardwood decodes INT32 as Integer
             ColumnBuilder sut = ColumnBuilder.forType(new DType.Primitive(PType.I32, true));

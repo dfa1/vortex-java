@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Parquet import reads a `DECIMAL` column as a Vortex decimal with its precision and scale, in all four physical encodings; `INT32`/`INT64` ones lost their scale and the byte-array ones failed. ([#628](https://github.com/dfa1/vortex-java/issues/628))
 - Parquet import keeps the nulls of a nullable `TIMESTAMP` column instead of failing as if the column were `REQUIRED`. ([#627](https://github.com/dfa1/vortex-java/issues/627))
 
 ## [0.19.0] — 2026-11-01

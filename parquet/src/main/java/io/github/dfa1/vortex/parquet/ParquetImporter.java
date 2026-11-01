@@ -20,6 +20,7 @@ import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.writer.VortexWriter;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -229,6 +230,12 @@ public final class ParquetImporter {
     }
 
     private static DType mapLeafDType(PhysicalType type, LogicalType logical, boolean nullable, String name) {
+        // DECIMAL annotates any of INT32, INT64, FIXED_LEN_BYTE_ARRAY or BYTE_ARRAY (the unscaled
+        // value, big-endian for the byte forms); each maps to Vortex's decimal, as Arrow's
+        // decimal128/256 does in Rust's Arrow import, never to the bare integer that drops the scale
+        if (logical instanceof LogicalType.DecimalType(int precision, int scale)) {
+            return DType.Decimal.of(precision, scale, nullable);
+        }
         return switch (type) {
             case BOOLEAN -> new DType.Bool(nullable);
             case INT32 -> mapInt32(logical, nullable);
@@ -337,6 +344,7 @@ public final class ParquetImporter {
             case DType.Utf8 _ -> new String[chunkSize];
             case DType.Binary _ -> new byte[chunkSize][];
             case DType.Extension _ -> nullable ? new Long[chunkSize] : new long[chunkSize]; // timestamp storage
+            case DType.Decimal _ -> new BigDecimal[chunkSize];
             case DType.Primitive p -> switch (p.ptype()) {
                 case I8, U8 -> nullable ? new Byte[chunkSize] : new byte[chunkSize];
                 case I16, U16 -> nullable ? new Short[chunkSize] : new short[chunkSize];
@@ -387,6 +395,7 @@ public final class ParquetImporter {
                     case byte[] arr -> arr[pos] = (byte) reader.getInt(name);
                     case Byte[] arr -> arr[pos] = isNull ? null : (byte) reader.getInt(name);
                     case String[] arr -> arr[pos] = isNull ? null : reader.getString(name);
+                    case BigDecimal[] arr -> arr[pos] = isNull ? null : reader.getDecimal(name);
                     case byte[][] arr -> arr[pos] = isNull ? null : reader.getBinary(name);
                     default -> throw new UnsupportedOperationException(
                             "unexpected buffer type: " + buffers[c].getClass().getSimpleName());
@@ -497,6 +506,7 @@ public final class ParquetImporter {
             case byte[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case Byte[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case String[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
+            case BigDecimal[] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             case byte[][] arr -> size == arr.length ? arr : Arrays.copyOf(arr, size);
             default -> throw new UnsupportedOperationException(
                     "unexpected buffer type: " + buffer.getClass().getSimpleName());

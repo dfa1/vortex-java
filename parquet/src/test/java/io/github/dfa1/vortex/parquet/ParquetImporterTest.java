@@ -7,6 +7,9 @@ import dev.hardwood.metadata.LogicalType;
 import dev.hardwood.metadata.PhysicalType;
 import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.reader.RowReader;
+import dev.hardwood.OutputFile;
+import dev.hardwood.schema.FileSchema;
+import dev.hardwood.writer.ParquetFileWriter;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.SchemaNode;
 import io.github.dfa1.vortex.core.model.DType;
@@ -16,6 +19,8 @@ import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -28,7 +33,11 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -156,10 +165,10 @@ class ParquetImporterTest {
 
         @Test
         void byteArray_unsupportedAnnotation_stillThrows() {
-            // Given — a BYTE_ARRAY annotation that is neither string-like nor absent (e.g.
-            // DECIMAL) must not be silently downgraded to raw Binary, losing its semantic
+            // Given — a BYTE_ARRAY annotation that is neither string-like, DECIMAL nor absent (e.g.
+            // BSON) must not be silently downgraded to raw Binary, losing its semantic
             ColumnSchema schema = col("amount", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED,
-                    new LogicalType.DecimalType(10, 2));
+                    new LogicalType.BsonType());
 
             // When / Then
             assertThatThrownBy(() -> ParquetImporter.mapDType(schema))
@@ -365,6 +374,98 @@ class ParquetImporterTest {
                     .hasMessageContaining("row 0")
                     .hasMessageContaining("malformed.parquet")
                     .hasCauseInstanceOf(NullPointerException.class);
+        }
+    }
+
+    @Nested
+    class Decimals {
+
+        private static final List<BigDecimal> VALUES = Arrays.asList(
+                new BigDecimal("17.00"), null, new BigDecimal("-0.05"), new BigDecimal("1234567.89"), null);
+
+        @ParameterizedTest(name = "{0}")
+        @CsvSource({
+                // physical type, fixed length, precision, scale
+                "INT32, 0, 9, 2",
+                "INT64, 0, 18, 2",
+                "FIXED_LEN_BYTE_ARRAY, 7, 15, 2", // TPC-H lineitem as parquet-cpp writes it (#628)
+                "BYTE_ARRAY, 0, 30, 2",
+        })
+        void decimalColumn_importsAsDecimalWithItsScale(PhysicalType type, int length, int precision, int scale,
+                @TempDir Path tmp) throws Exception {
+            // Given — an OPTIONAL DECIMAL column holding nulls, a negative and a fractional value
+            Path parquet = writeDecimalParquet(tmp, type, length, precision, scale);
+            Path vortex = tmp.resolve("out.vortex");
+
+            // When
+            ParquetImporter.importParquet(parquet, vortex);
+
+            // Then
+            try (VortexReader reader = VortexReader.open(vortex);
+                 ScanIterator iter = reader.scan(ScanOptions.all())) {
+                DType.Struct schema = (DType.Struct) reader.dtype();
+                assertThat(schema.fieldTypes().getFirst())
+                        .isEqualTo(DType.Decimal.of(precision, scale, true));
+                try (Chunk chunk = iter.next()) {
+                    assertThat(decimals(chunk.column(ColumnName.of("d")), VALUES.size()))
+                            .containsExactlyElementsOf(VALUES);
+                }
+            }
+        }
+
+        private static Path writeDecimalParquet(Path tmp, PhysicalType type, int length, int precision, int scale)
+                throws Exception {
+            FileSchema.Builder builder = FileSchema.builder("schema");
+            LogicalType decimal = new LogicalType.DecimalType(precision, scale);
+            if (length > 0) {
+                builder.addColumn("d", type, RepetitionType.OPTIONAL, length, decimal);
+            } else {
+                builder.addColumn("d", type, RepetitionType.OPTIONAL, decimal);
+            }
+            int n = VALUES.size();
+            boolean[] nulls = new boolean[n];
+            BigInteger[] unscaled = new BigInteger[n];
+            for (int i = 0; i < n; i++) {
+                nulls[i] = VALUES.get(i) == null;
+                unscaled[i] = nulls[i] ? BigInteger.ZERO : VALUES.get(i).setScale(scale).unscaledValue();
+            }
+            Path parquet = tmp.resolve("decimal.parquet");
+            try (ParquetFileWriter writer = ParquetFileWriter.create(OutputFile.of(parquet), builder.build())) {
+                writer.columnWriter().writeBatch(batch -> {
+                    switch (type) {
+                        case INT32 -> batch.ints(0, Arrays.stream(unscaled).mapToInt(BigInteger::intValueExact).toArray(), nulls);
+                        case INT64 -> batch.longs(0, Arrays.stream(unscaled).mapToLong(BigInteger::longValueExact).toArray(), nulls);
+                        case FIXED_LEN_BYTE_ARRAY -> batch.fixed(0, Arrays.stream(unscaled).map(v -> bigEndian(v, length))
+                                .toArray(byte[][]::new), nulls);
+                        case BYTE_ARRAY -> batch.bytes(0, Arrays.stream(unscaled).map(BigInteger::toByteArray)
+                                .toArray(byte[][]::new), nulls);
+                        default -> throw new IllegalArgumentException(type.toString());
+                    }
+                });
+            }
+            return parquet;
+        }
+
+        /// `value` as `length` big-endian two's-complement bytes, sign-extended, as Parquet stores a
+        /// fixed-length DECIMAL.
+        private static byte[] bigEndian(BigInteger value, int length) {
+            byte[] minimal = value.toByteArray();
+            byte[] out = new byte[length];
+            Arrays.fill(out, 0, length - minimal.length, (byte) (value.signum() < 0 ? 0xFF : 0));
+            System.arraycopy(minimal, 0, out, length - minimal.length, minimal.length);
+            return out;
+        }
+
+        private static List<BigDecimal> decimals(Array column, int n) {
+            List<BigDecimal> out = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                if (column instanceof MaskedArray masked) {
+                    out.add(masked.isValid(i) ? ((DecimalArray) masked.inner()).getDecimal(i) : null);
+                } else {
+                    out.add(((DecimalArray) column).getDecimal(i));
+                }
+            }
+            return out;
         }
     }
 
