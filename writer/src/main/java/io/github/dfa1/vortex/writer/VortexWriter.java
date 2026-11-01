@@ -110,6 +110,9 @@ public final class VortexWriter implements Closeable {
     // values() clones its array on every call; the edition filter reads it once per writer.
     private static final List<EncodingId.WellKnown> WELL_KNOWN_IDS = List.of(EncodingId.WellKnown.values());
 
+    /// Largest slice of a segment written at once: a ByteBuffer holds at most 2 GiB.
+    private static final long MAX_WRITE_SLICE = 1L << 30;
+
     private static final int LAYOUT_FLAT = 0;
     private static final int LAYOUT_CHUNKED = 1;
     private static final int LAYOUT_STRUCT = 2;
@@ -1047,11 +1050,16 @@ public final class VortexWriter implements Closeable {
     }
 
     private void write(MemorySegment seg) throws IOException {
-        ByteBuffer buf = seg.asByteBuffer();
-        while (buf.hasRemaining()) {
-            channel.write(buf);
+        // A segment may pass 2 GiB (a u32 length on the wire, #629) but a ByteBuffer cannot, so the
+        // segment is written in slices that each fit one
+        long size = seg.byteSize();
+        for (long at = 0; at < size; at += MAX_WRITE_SLICE) {
+            ByteBuffer buf = seg.asSlice(at, Math.min(MAX_WRITE_SLICE, size - at)).asByteBuffer();
+            while (buf.hasRemaining()) {
+                channel.write(buf);
+            }
         }
-        bytesWritten += seg.byteSize();
+        bytesWritten += size;
     }
 
     private void write(ByteBuffer buf) throws IOException {

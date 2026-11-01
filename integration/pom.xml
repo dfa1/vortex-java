@@ -21,9 +21,11 @@
              - `fuzz`: the Jazzer write->read targets (WriteReadFuzzIntegrationTest). Replaying
                their saved inputs floods the log with Jazzer instrumentation output, so they run
                only when asked for, and in the weekly Fuzz workflow.
+             - `large`: tests whose data passes 2 GiB in one chunk (several GB of memory), too big
+               for CI runners, so they run only when asked for.
              Override on the CLI, e.g. `-Dvortex.it.excludedGroups=` (empty) runs every tag;
              a literal pom value could not be cleared this way. -->
-        <vortex.it.excludedGroups>raincloud,slow,fuzz</vortex.it.excludedGroups>
+        <vortex.it.excludedGroups>raincloud,slow,fuzz,large</vortex.it.excludedGroups>
     </properties>
 
     <dependencies>
@@ -143,7 +145,7 @@
                 </property>
             </activation>
             <properties>
-                <vortex.it.excludedGroups>raincloud,fuzz</vortex.it.excludedGroups>
+                <vortex.it.excludedGroups>raincloud,fuzz,large</vortex.it.excludedGroups>
             </properties>
         </profile>
         <profile>
