@@ -158,11 +158,11 @@ public final class VortexHttpReader implements VortexHandle {
         // Range request from them. The local-file path runs this inside PostscriptParser.parse;
         // the HTTP path calls parseBlobs directly and must validate here too.
         PostscriptParser.validateSegmentSpecs(parsed.footer().segmentSpecs(), fileSize);
-        registry.validateExtensions(parsed.dtype());
+        DType dtype = registry.resolveExtensions(parsed.dtype());
 
         return new VortexHttpReader(
             uri, client, fileSize, trailer.version(),
-            parsed.footer(), parsed.dtype(), parsed.layout(),
+            parsed.footer(), dtype, parsed.layout(),
             registry, layoutRegistry
         );
     }

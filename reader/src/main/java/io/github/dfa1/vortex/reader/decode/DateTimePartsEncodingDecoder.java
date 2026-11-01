@@ -9,10 +9,10 @@ import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDateTimePartsLongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.extension.ExtensionStorage;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.datetimeparts`.
 ///
@@ -77,12 +77,7 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
     /// `1` when the unit is [TimeUnit#Days] (days carry no sub-second
     /// component; seconds and subseconds children are expected to be zero).
     private static long readUnitsPerSecond(DType.Extension ext) {
-        MemorySegment extMeta = ext.metadata();
-        if (extMeta == null || extMeta.byteSize() == 0) {
-            throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
-                    "extension " + ext.extensionId() + " missing TimeUnit metadata byte");
-        }
-        TimeUnit unit = TimeUnit.fromTag(extMeta.get(ValueLayout.JAVA_BYTE, 0));
+        TimeUnit unit = ExtensionStorage.readUnit(ext);
         return unit == TimeUnit.Days ? 1L : unit.divisor();
     }
 }

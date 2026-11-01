@@ -208,7 +208,8 @@ class ParquetExporterTest {
         @Test
         void nonTimestampExtension_throws() {
             // Given — a made-up extension id this exporter has no mapping for
-            DType.Extension ext = new DType.Extension("vortex.uuid", new DType.Primitive(PType.I64, false), null, false);
+            DType.Extension ext = new DType.Extension("vortex.uuid", new DType.Primitive(PType.I64, false),
+                    io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
 
             // When / Then
             assertThatThrownBy(() -> schemaOf("u", ext)).isInstanceOf(UnsupportedOperationException.class);

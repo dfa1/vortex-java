@@ -206,7 +206,8 @@ class GridRenderTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given — vortex.date declared but storage is F64, which epochInteger rejects
             DType dateExt = new DType.Extension("vortex.date",
-                    DTypes.I32, null, false);
+                    DTypes.I32, new io.github.dfa1.vortex.core.model.TimeUnitMetadata(
+                            io.github.dfa1.vortex.core.model.TimeUnit.Days), false);
             Array badStorage = ArrayFixtures.doubles(arena, 1.5);
 
             // When — the decode throws and is caught
@@ -222,7 +223,7 @@ class GridRenderTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given — an extension id this reader does not know: render the raw storage value
             DType unknownExt = new DType.Extension("custom.thing",
-                    DTypes.I32, null, false);
+                    DTypes.I32, io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
             IntArray storage = ArrayFixtures.ints(arena, 42);
 
             // When / Then — no extension formatting, falls to the IntArray branch

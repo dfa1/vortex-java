@@ -10,6 +10,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -30,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -50,7 +50,7 @@ class WellKnownExtensionsInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
-    private static final MemorySegment NO_METADATA = MemorySegment.ofArray(new byte[0]);
+    private static final OpaqueMetadata NO_METADATA = OpaqueMetadata.EMPTY;
     private static final DType POINT_STORAGE = new DType.Struct(
             List.of(ColumnName.of("x"), ColumnName.of("y")), List.of(DTypes.F64, DTypes.F64), false);
     private static final DType.Struct SCHEMA = new DType.Struct(

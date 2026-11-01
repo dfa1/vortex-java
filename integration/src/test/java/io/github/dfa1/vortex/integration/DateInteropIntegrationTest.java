@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimeUnitMetadata;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanFilter;
@@ -32,7 +33,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
-import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -104,9 +104,9 @@ class DateInteropIntegrationTest {
             // When
             DType.Extension result = (DType.Extension) ((DType.Struct) reader.dtype()).fieldTypes().get(1);
 
-            // Then — the unit byte and storage width Rust chose, which the decoder must honor
+            // Then — the unit and storage width Rust chose, which the decoder must honor
             TimeUnit expectedUnit = unit == DateUnit.DAY ? TimeUnit.Days : TimeUnit.Milliseconds;
-            assertThat(TimeUnit.fromTag(result.metadata().get(ValueLayout.JAVA_BYTE, 0))).isEqualTo(expectedUnit);
+            assertThat(result.metadata()).isEqualTo(new TimeUnitMetadata(expectedUnit));
             assertThat(result.storageDType()).isEqualTo(unit == DateUnit.DAY ? DTypes.I32.asNullable() : DTypes.I64.asNullable());
         }
     }
@@ -124,9 +124,10 @@ class DateInteropIntegrationTest {
             result = (DType.Extension) ((DType.Struct) reader.dtype()).fieldTypes().get(1);
         }
 
-        // Then — the metadata was a slice of the closed file mapping, so this threw "Already closed"
+        // Then — the metadata was once a slice of the closed file mapping, and this threw
+        // "Already closed"; now it is parsed when the file opens
         TimeUnit expectedUnit = unit == DateUnit.DAY ? TimeUnit.Days : TimeUnit.Milliseconds;
-        assertThat(TimeUnit.fromTag(result.metadata().get(ValueLayout.JAVA_BYTE, 0))).isEqualTo(expectedUnit);
+        assertThat(result.metadata()).isEqualTo(new TimeUnitMetadata(expectedUnit));
     }
 
     /// Every ninth row is null; the rest step 37 days from 1915, so a quarter of them precede the

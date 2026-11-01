@@ -4,10 +4,10 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimeUnitMetadata;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
-import java.lang.foreign.MemorySegment;
 import java.time.LocalDate;
 import java.util.Collection;
 
@@ -34,12 +34,10 @@ public final class DateExtensionEncoder implements ExtensionEncoder {
 
     @Override
     public DType.Extension dtype(boolean nullable) {
-        // Rust vortex.date metadata: 1 byte = TimeUnit tag (Days = 4), required by Rust reader.
-        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) TimeUnit.Days.ordinal()});
         return new DType.Extension(
                 ExtensionId.VORTEX_DATE.id(),
                 new DType.Primitive(PType.I32, nullable),
-                meta,
+                new TimeUnitMetadata(TimeUnit.Days),
                 nullable);
     }
 

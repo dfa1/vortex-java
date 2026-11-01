@@ -16,28 +16,80 @@ import io.github.dfa1.vortex.core.fbs.FbsType;
 import io.github.dfa1.vortex.core.fbs.FbsUtf8;
 import io.github.dfa1.vortex.core.fbs.FbsUnion;
 import io.github.dfa1.vortex.core.fbs.FbsVariant;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionMetadata;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimeUnitMetadata;
+import io.github.dfa1.vortex.core.model.TimestampMetadata;
 
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.time.ZoneId;
 
 /// Serializes a [DType] tree to its FlatBuffer wire encoding (the file's DType blob, pointed to
 /// by the postscript).
 final class DTypeFbsSerializer {
 
-    private DTypeFbsSerializer() {
+    private final WriteRegistry extensions;
+
+    /// @param extensions the extension encoders, which serialize metadata of their own types
+    DTypeFbsSerializer(WriteRegistry extensions) {
+        this.extensions = extensions;
     }
 
     /// Serializes `dtype` to a standalone, finished FlatBuffer.
     ///
     /// @param dtype the schema (or nested type) to serialize
     /// @return the finished FlatBuffer bytes, little-endian
-    static ByteBuffer buildDType(DType dtype) {
+    ByteBuffer buildDType(DType dtype) {
         var fbb = new FbsBuilder(128);
         int off = serializeDType(fbb, dtype);
         FbsDType.finishFbsDTypeBuffer(fbb, off);
         return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+    }
+
+    /// Serializes an extension's metadata, as Rust's `serialize_metadata`: the inverse of the
+    /// reader's `ExtensionMetadataParser`. The built-in records and [OpaqueMetadata] are written
+    /// here; any other record by the extension's registered encoder.
+    ///
+    /// @param ext an extension dtype
+    /// @return the metadata's wire bytes
+    /// @throws VortexException if the metadata is a record no registered encoder serializes, or a
+    ///         timezone longer than the wire's u16 length
+    byte[] metadataBytes(DType.Extension ext) {
+        return switch (ext.metadata()) {
+            case TimeUnitMetadata(TimeUnit unit) -> new byte[]{(byte) unit.ordinal()};
+            case TimestampMetadata(TimeUnit unit, ZoneId zone) -> timestampBytes(unit, zone);
+            case OpaqueMetadata(MemorySegment bytes) -> bytes.toArray(ValueLayout.JAVA_BYTE);
+            case ExtensionMetadata other -> {
+                ExtensionEncoder encoder = extensions.lookup(ExtensionId.parse(ext.extensionId()));
+                if (encoder == null) {
+                    throw new VortexException("no extension encoder registered for " + ext.extensionId()
+                            + " to serialize its metadata of type " + other.getClass().getName());
+                }
+                yield encoder.serializeMetadata(other);
+            }
+        };
+    }
+
+    /// `byte[0] = TimeUnit tag, bytes[1..3] = tz_len (u16 LE), bytes[3..3+tz_len] = tz UTF-8`.
+    private static byte[] timestampBytes(TimeUnit unit, ZoneId zone) {
+        byte[] tz = zone == null ? new byte[0] : zone.getId().getBytes(StandardCharsets.UTF_8);
+        if (tz.length > 0xFFFF) {
+            throw new VortexException("timestamp timezone longer than 65535 bytes: " + zone);
+        }
+        byte[] out = new byte[3 + tz.length];
+        out[0] = (byte) unit.ordinal();
+        out[1] = (byte) tz.length;
+        out[2] = (byte) (tz.length >>> 8);
+        System.arraycopy(tz, 0, out, 3, tz.length);
+        return out;
     }
 
     /// Serializes `dtype` into `fbb`, returning the offset of the resulting `FbsDType` table.
@@ -47,7 +99,7 @@ final class DTypeFbsSerializer {
     /// @param fbb   the builder to serialize into
     /// @param dtype the type to serialize
     /// @return the offset of the written `FbsDType` table
-    static int serializeDType(FbsBuilder fbb, DType dtype) {
+    int serializeDType(FbsBuilder fbb, DType dtype) {
         return switch (dtype) {
             case DType.Null _ -> {
                 FbsNull.startFbsNull(fbb);
@@ -110,8 +162,7 @@ final class DTypeFbsSerializer {
                 int storageDtypeOff = serializeDType(fbb, e.storageDType());
                 // Always present, empty when there is none: Rust refuses an extension dtype whose
                 // metadata field is absent ("failed to parse extension metadata"), failing the file.
-                byte[] metaBytes = e.metadata() == null ? new byte[0] : e.metadata().toArray(ValueLayout.JAVA_BYTE);
-                int metaOff = FbsExtension.createMetadataVector(fbb, metaBytes);
+                int metaOff = FbsExtension.createMetadataVector(fbb, metadataBytes(e));
                 int inner = FbsExtension.createFbsExtension(fbb, idOff, storageDtypeOff, metaOff);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsExtension, inner);
             }

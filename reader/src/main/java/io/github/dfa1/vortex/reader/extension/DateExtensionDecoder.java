@@ -43,12 +43,10 @@ public final class DateExtensionDecoder implements ExtensionDecoder<LocalDate> {
 
     @Override
     public DType.Extension dtype(boolean nullable) {
-        // Rust vortex.date metadata: 1 byte = TimeUnit tag (Days = 4), required by Rust reader.
-        java.lang.foreign.MemorySegment meta = java.lang.foreign.MemorySegment.ofArray(new byte[]{(byte) TimeUnit.Days.ordinal()});
         return new DType.Extension(
                 ExtensionId.VORTEX_DATE.id(),
                 new DType.Primitive(PType.I32, nullable),
-                meta,
+                new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Days),
                 nullable);
     }
 

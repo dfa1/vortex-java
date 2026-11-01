@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.lang.foreign.MemorySegment;
 import java.time.Instant;
 
 import static io.github.dfa1.vortex.reader.array.TestArrays.bools;
@@ -69,36 +68,41 @@ class ExtensionStorageTest {
     class ReadUnit {
 
         @Test
-        void readsTagByte() {
-            // Given — tag 3 = Seconds (ordinal)
-            DType.Extension ext = ext(java.lang.foreign.MemorySegment.ofArray(new byte[]{3}));
+        void timeUnitMetadata_readsItsUnit() {
+            // Given
+            DType.Extension ext = ext(new io.github.dfa1.vortex.core.model.TimeUnitMetadata(TimeUnit.Seconds));
 
-            // When / Then
-            assertThat(ExtensionStorage.readUnit(ext)).isEqualTo(TimeUnit.Seconds);
+            // When
+            TimeUnit result = ExtensionStorage.readUnit(ext);
+
+            // Then
+            assertThat(result).isEqualTo(TimeUnit.Seconds);
         }
 
         @Test
-        void nullMetadata_throws() {
-            // Given
-            DType.Extension ext = ext(null);
+        void timestampMetadata_readsItsUnit() {
+            // Given — a timestamp carries its unit alongside the timezone
+            DType.Extension ext = ext(new io.github.dfa1.vortex.core.model.TimestampMetadata(TimeUnit.Microseconds, null));
+
+            // When
+            TimeUnit result = ExtensionStorage.readUnit(ext);
+
+            // Then
+            assertThat(result).isEqualTo(TimeUnit.Microseconds);
+        }
+
+        @Test
+        void opaqueMetadata_throws() {
+            // Given metadata that records no unit
+            DType.Extension ext = ext(io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY);
 
             // When / Then
             assertThatThrownBy(() -> ExtensionStorage.readUnit(ext))
                     .isInstanceOf(VortexException.class).hasMessageContaining("missing TimeUnit");
         }
 
-        @Test
-        void emptyMetadata_throws() {
-            // Given
-            DType.Extension ext = ext(MemorySegment.ofArray(new byte[0]));
-
-            // When / Then
-            assertThatThrownBy(() -> ExtensionStorage.readUnit(ext))
-                    .isInstanceOf(VortexException.class).hasMessageContaining("missing TimeUnit");
-        }
-
-        private DType.Extension ext(java.lang.foreign.MemorySegment meta) {
-            return new DType.Extension("vortex.timestamp", DTypes.I64, meta, false);
+        private DType.Extension ext(io.github.dfa1.vortex.core.model.ExtensionMetadata metadata) {
+            return new DType.Extension("vortex.timestamp", DTypes.I64, metadata, false);
         }
     }
 

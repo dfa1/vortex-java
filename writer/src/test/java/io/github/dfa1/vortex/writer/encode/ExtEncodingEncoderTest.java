@@ -7,6 +7,9 @@ import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimestampMetadata;
 import io.github.dfa1.vortex.writer.WriteRegistry;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
@@ -32,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ExtEncodingEncoderTest {
 
+    private static final TimestampMetadata TIMESTAMP_MS = new TimestampMetadata(TimeUnit.Milliseconds, null);
     private static final ExtEncodingEncoder ENCODER = new ExtEncodingEncoder();
     private static final ExtEncodingDecoder DECODER = new ExtEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(new PrimitiveEncodingDecoder(), DECODER);
@@ -45,7 +49,7 @@ class ExtEncodingEncoderTest {
         // pruning and MIN/MAX push-down purely for being a timestamp rather than a bare i64.
 
         private static final DType.Extension TIMESTAMP =
-                new DType.Extension("vortex.timestamp", DTypes.I64, null, false);
+                new DType.Extension("vortex.timestamp", DTypes.I64, TIMESTAMP_MS, false);
 
         @Test
         void encode_extensionColumn_reportsStorageSpaceBounds() throws Exception {
@@ -95,7 +99,7 @@ class ExtEncodingEncoderTest {
         void accepts_extensionDtype_returnsTrue() {
             // Given
             DType extDType = new DType.Extension("vortex.timestamp",
-                    DTypes.I64, null, false);
+                    DTypes.I64, TIMESTAMP_MS, false);
 
             // When / Then
             assertThat(ENCODER.accepts(extDType)).isTrue();
@@ -112,7 +116,7 @@ class ExtEncodingEncoderTest {
             // Given
             long[] data = {100L, 200L, 300L, 400L};
             DType storageDType = DTypes.I64;
-            DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
+            DType extDType = new DType.Extension("vortex.timestamp", storageDType, TIMESTAMP_MS, false);
 
             // When
             EncodeResult resultEncoded = ENCODER.encode(extDType, data, EncodeTestHelper.testCtx());
@@ -153,7 +157,7 @@ class ExtEncodingEncoderTest {
             // Given
             long[] data = {100L, 200L, 300L, 400L};
             DType storageDType = DTypes.I64;
-            DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
+            DType extDType = new DType.Extension("vortex.timestamp", storageDType, TIMESTAMP_MS, false);
 
             // When
             CascadeStep result = ENCODER.encodeCascade(extDType, data, EncodeTestHelper.testCtx());
@@ -191,7 +195,7 @@ class ExtEncodingEncoderTest {
             MemorySegment buf = TestSegments.leLongs(values);
 
             DType storageDType = DTypes.I64;
-            DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
+            DType extDType = new DType.Extension("vortex.timestamp", storageDType, TIMESTAMP_MS, false);
 
             ArrayNode primitiveNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
             ArrayNode extNode = new ArrayNode(EncodingId.VORTEX_EXT, null, new ArrayNode[]{primitiveNode}, new int[0]);
@@ -257,7 +261,7 @@ class ExtEncodingEncoderTest {
                                     nulls)),
                     Arguments.of(UuidExtensionEncoder.INSTANCE.dtype(true),
                             UuidExtensionEncoder.INSTANCE.encodeAll(UuidExtensionEncoder.INSTANCE.dtype(true), nulls)),
-                    Arguments.of(new DType.Extension("acme.custom", DTypes.U16, null, true),
+                    Arguments.of(new DType.Extension("acme.custom", DTypes.U16, OpaqueMetadata.EMPTY, true),
                             new NullableData(new short[ROWS], new boolean[ROWS])));
         }
 

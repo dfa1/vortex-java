@@ -2,13 +2,10 @@ package io.github.dfa1.vortex.core.model;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-
 /// Static factories and metadata accessors for `vortex.time` extension dtypes.
 ///
-/// Wire format: a single byte holding the [TimeUnit] tag. Storage width is
-/// derived from the unit (I32 for s/ms, I64 for μs/ns).
+/// The metadata is a [TimeUnitMetadata]. Storage width is derived from the unit (I32 for s/ms, I64
+/// for μs/ns).
 public final class TimeDtype {
 
     private TimeDtype() {
@@ -34,24 +31,22 @@ public final class TimeDtype {
             case Microseconds, Nanoseconds -> PType.I64;
             case Days -> throw new IllegalArgumentException("Days unit not valid for vortex.time");
         };
-        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) unit.ordinal()});
         return new DType.Extension(
                 ExtensionId.VORTEX_TIME.id(),
                 new DType.Primitive(storage, nullable),
-                meta,
+                new TimeUnitMetadata(unit),
                 nullable);
     }
 
-    /// Reads the [TimeUnit] tag from the metadata's first byte.
+    /// Returns the [TimeUnit] the dtype's metadata records.
     ///
     /// @param ext declared extension dtype
     /// @return the recorded time unit
-    /// @throws VortexException if metadata is missing or empty
+    /// @throws VortexException if the metadata is not a [TimeUnitMetadata]
     public static TimeUnit readUnit(DType.Extension ext) {
-        MemorySegment meta = ext.metadata();
-        if (meta == null || meta.byteSize() == 0) {
-            throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
+        if (!(ext.metadata() instanceof TimeUnitMetadata(TimeUnit unit))) {
+            throw new VortexException("missing TimeUnit metadata for " + ext.extensionId());
         }
-        return TimeUnit.fromTag(meta.get(ValueLayout.JAVA_BYTE, 0));
+        return unit;
     }
 }

@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.core.model;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 
-import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Objects;
@@ -338,78 +337,25 @@ public sealed interface DType
     ///
     /// @param extensionId  unique string identifier for the extension type (e.g. `"vortex.timestamp"`)
     /// @param storageDType underlying storage dtype used for physical encoding
-    /// @param metadata     opaque extension-specific metadata bytes, or `null`
+    /// @param metadata     the extension's metadata, [OpaqueMetadata#EMPTY] for none
     /// @param nullable     whether null values are permitted
     record Extension(
             String extensionId,
             DType storageDType,
-            MemorySegment metadata,
+            ExtensionMetadata metadata,
             boolean nullable
     ) implements DType {
 
-        /// Hard cap on extension metadata size. Spec-defined extensions use 0–3 bytes
-        /// (e.g. timestamp = TimeUnit tag + tz length + tz UTF-8); 64 KiB is generous
-        /// for custom extensions while blocking attacker-supplied multi-megabyte blobs
-        /// that would inflate parser allocations.
-        public static final MemorySize MAX_METADATA_SIZE = MemorySize.ofKiB(64);
-
-        /// Bounds the metadata blob, which arrives from an untrusted file.
+        /// Requires metadata that is a record, so the dtype compares and hashes by value.
         ///
-        /// @throws VortexException if `metadata` carries more than
-        ///         [#MAX_METADATA_SIZE] readable bytes
+        /// @throws NullPointerException     if `metadata` is `null`
+        /// @throws IllegalArgumentException if `metadata` is not a record
         public Extension {
-            if (metadata != null && metadata.byteSize() > MAX_METADATA_SIZE.bytes()) {
-                throw new VortexException("extension metadata too large: "
-                        + metadata.byteSize() + " > " + MAX_METADATA_SIZE.bytes());
+            Objects.requireNonNull(metadata, "metadata");
+            if (!metadata.getClass().isRecord()) {
+                throw new IllegalArgumentException(
+                        "extension metadata must be a record, got " + metadata.getClass().getName());
             }
-            // A dtype outlives the reader that parsed it (callers keep reader.dtype()), but a slice
-            // of the file mapping fails once the reader closes: copy it onto the heap. Small, as
-            // the cap above bounds it.
-            if (metadata != null && metadata.isNative()) {
-                metadata = MemorySegment.ofArray(metadata.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE))
-                        .asReadOnly();
-            }
-        }
-
-        /// Value equality with content-based metadata comparison.
-        ///
-        /// [MemorySegment] uses identity equality, so the default record `equals` would
-        /// treat a heap-built dtype and the same dtype read back from a mapped file as
-        /// unequal. Extension is a value type (compared in schema round-trips and as a
-        /// component of [Struct]/[List] dtypes), so metadata is compared by bytes —
-        /// matching the content semantics the previous `ByteBuffer` component had.
-        ///
-        /// @param o other object
-        /// @return whether `o` is an Extension with equal id, storage, nullability and metadata bytes
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof Extension(String id, DType dType, MemorySegment metadata1, boolean nullable1))) {
-                return false;
-            }
-            return nullable == nullable1
-                    && extensionId.equals(id)
-                    && storageDType.equals(dType)
-                    && metadataEquals(metadata, metadata1);
-        }
-
-        /// @return a hash consistent with [#equals(Object)] (metadata hashed by content)
-        @Override
-        public int hashCode() {
-            int h = java.util.Objects.hash(extensionId, storageDType, nullable);
-            if (metadata != null) {
-                h = 31 * h + java.util.Arrays.hashCode(metadata.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE));
-            }
-            return h;
-        }
-
-        private static boolean metadataEquals(MemorySegment a, MemorySegment b) {
-            if (a == null || b == null) {
-                return a == b;
-            }
-            return a.byteSize() == b.byteSize() && a.mismatch(b) == -1;
         }
     }
 

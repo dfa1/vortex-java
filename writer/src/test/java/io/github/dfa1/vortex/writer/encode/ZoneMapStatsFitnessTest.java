@@ -174,7 +174,8 @@ class ZoneMapStatsFitnessTest {
                 Arguments.of(EncodingId.VORTEX_PCO, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_ZIGZAG, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_EXT,
-                        new DType.Extension("vortex.timestamp", DTypes.I64, null, false), ascending),
+                        new DType.Extension("vortex.timestamp", DTypes.I64, new io.github.dfa1.vortex.core.model.TimestampMetadata(
+                                io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null), false), ascending),
                 Arguments.of(EncodingId.VORTEX_SPARSE, DTypes.I64, sparse),
                 Arguments.of(EncodingId.VORTEX_PATCHED, DTypes.I64, ascending),
                 Arguments.of(EncodingId.VORTEX_DECIMAL, new DType.Decimal((byte) 9, (byte) 2, false),

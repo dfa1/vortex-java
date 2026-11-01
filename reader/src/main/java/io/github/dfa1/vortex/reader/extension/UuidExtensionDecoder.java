@@ -47,12 +47,11 @@ public final class UuidExtensionDecoder implements ExtensionDecoder<UUID> {
     @Override
     public DType.Extension dtype(boolean nullable) {
         DType.Primitive u8 = DTypes.U8;
-        // Rust vortex.uuid metadata: 0 bytes means "no specific version" — but the field
-        // must be present in the flatbuffer or the Rust reader's ok_or_else() check fails.
+        // Rust vortex.uuid metadata: 0 bytes means "no specific version"
         return new DType.Extension(
                 ExtensionId.VORTEX_UUID.id(),
                 new DType.FixedSizeList(u8, 16, nullable),
-                java.lang.foreign.MemorySegment.ofArray(new byte[0]),
+                io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY,
                 nullable);
     }
 

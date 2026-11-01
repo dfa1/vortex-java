@@ -52,7 +52,7 @@ new code — the record constructors stay available for pattern matching and tes
 | `DType.List`          | —                                                      | `new DType.List(elementType, nullable)`                     |
 | `DType.FixedSizeList` | —                                                      | `new DType.FixedSizeList(elementType, fixedSize, nullable)` |
 | `DType.Map`           | —                                                      | `new DType.Map(keyType, valueType, keysSorted, nullable)`   |
-| `DType.Extension`     | —                                                      | `new DType.Extension(id, storageDType, metadata, nullable)` |
+| `DType.Extension`     | —                                                      | `new DType.Extension(id, storageDType, metadata, nullable)`; `metadata` is an `ExtensionMetadata` record (`TimeUnitMetadata`, `TimestampMetadata`, a third-party record, or `OpaqueMetadata.EMPTY` for none) |
 | `DType.Union`         | — (read only: no union is written)                     | `new DType.Union(names, variantTypes, typeIds, nullable)`; `variantIndex(typeId)` |
 
 Helpers: `nullable()` (boolean accessor on every record), `asNullable()` (fluent
@@ -309,9 +309,13 @@ Immutable after construction. Build via `ReadRegistry.builder()` or the static c
 
 Register custom encoding and extension decoders programmatically via `register(...)` — there is no
 `ServiceLoader` discovery. `Chunk.as(name, Class)` decodes an extension column through the
-`ExtensionDecoder` registered for its id. Opening a file runs each registered decoder's
-`validate(DType.Extension)` on its dtypes, and refuses an extension id with no decoder unless
-`allowUnknown()` is set — Rust's behavior for an id its session has no vtable for.
+`ExtensionDecoder` registered for its id. Opening a file parses each extension's metadata
+(`ExtensionDecoder#parseMetadata(MemorySegment)` for a registered id the reader does not parse
+itself), runs each registered decoder's `validate(DType.Extension)` on its dtypes, and refuses an
+extension id with no decoder unless `allowUnknown()` is set — Rust's behavior for an id its session
+has no vtable for. The writer serializes metadata it does not know with the id's
+`ExtensionEncoder#serializeMetadata(ExtensionMetadata)`, and refuses at `create` a record no
+encoder serializes.
 
 ### `WriteRegistry` (`io.github.dfa1.vortex.writer.WriteRegistry`)
 
