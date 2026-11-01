@@ -40,8 +40,8 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,7 +96,7 @@ class CustomExtensionIntegrationTest {
         void fullScan_decodesEveryVectorAndNull(@TempDir Path tmp) throws IOException {
             // Given — three batches of nullable vectors written from float[] values
             Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(DIM, true));
+            writeVectors(file, vectorDtype(true));
 
             // When
             SequencedMap<Long, float[]> result = readVectors(file, ScanOptions.all());
@@ -107,10 +107,29 @@ class CustomExtensionIntegrationTest {
         }
 
         @Test
+        void nullRows_readBackAsNull(@TempDir Path tmp) throws IOException {
+            // Given — a nullable column written with a null vector at every seventh row (3, 10, 17, …)
+            Path file = tmp.resolve("vectors.vortex");
+            writeVectors(file, vectorDtype(true));
+
+            // When
+            SequencedMap<Long, float[]> result = readVectors(file, ScanOptions.all());
+
+            // Then — the null rows, listed by id rather than compared with vector(): a fixture that
+            // stops writing nulls still agrees with vector() and passes assertEachVectorMatchesItsId,
+            // so only this catches it; an encoder or decoder losing the validity fails here too
+            List<Long> nullRows = result.entrySet().stream()
+                    .filter(row -> row.getValue() == null)
+                    .map(Map.Entry::getKey)
+                    .toList();
+            assertThat(nullRows).isEqualTo(LongStream.range(0, ROWS).filter(row -> row % 7 == 3).boxed().toList());
+        }
+
+        @Test
         void schema_keepsIdStorageAndMetadata(@TempDir Path tmp) throws IOException {
             // Given
             Path file = tmp.resolve("vectors.vortex");
-            DType.Extension written = vectorDtype(DIM, true);
+            DType.Extension written = vectorDtype(true);
             writeVectors(file, written);
 
             DType result;
@@ -131,7 +150,7 @@ class CustomExtensionIntegrationTest {
             // cannot match, so the result is a superset of the matching rows; every vector must
             // still sit next to its own id.
             Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(DIM, true));
+            writeVectors(file, vectorDtype(true));
             long threshold = CHUNK_ROWS + CHUNK_ROWS / 2;
 
             // When
@@ -148,7 +167,7 @@ class CustomExtensionIntegrationTest {
         void limitedScan_returnsTheFirstRows(@TempDir Path tmp) throws IOException {
             // Given
             Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(DIM, true));
+            writeVectors(file, vectorDtype(true));
             int limit = CHUNK_ROWS + 7;
 
             // When
@@ -164,7 +183,7 @@ class CustomExtensionIntegrationTest {
             // Given — no encoder registered: the caller passes the storage shape itself and the
             // metadata as the bytes a file stores, as for any extension id the writer does not know
             Path file = tmp.resolve("raw.vortex");
-            DType.Struct schema = schema(opaqueVectorDtype(2, 2));
+            DType.Struct schema = schema(opaqueVectorDtype(2));
             float[] flat = {1f, 2f, 3f, 4f};
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -186,11 +205,11 @@ class CustomExtensionIntegrationTest {
             // Given — a reader with only the built-ins. Rust refuses an extension id its session
             // has no vtable for ("No such DType extension ID") unless unknown ids are allowed.
             Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(DIM, false));
+            writeVectors(file, vectorDtype(false));
             ReadRegistry builtInsOnly = ReadRegistry.loadAll();
 
             // When / Then
-            assertThatThrownBy(() -> VortexReader.open(file, builtInsOnly))
+            assertThatThrownBy(() -> VortexReader.open(file, builtInsOnly).close())
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("no extension decoder registered for example.vector");
         }
@@ -200,7 +219,7 @@ class CustomExtensionIntegrationTest {
             // Given — with unknown ids allowed the column reads as its fixed-size-list storage,
             // Rust's ForeignExtDType
             Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(DIM, false));
+            writeVectors(file, vectorDtype(false));
             ReadRegistry allowUnknown = ReadRegistry.builder().registerDefaults().allowUnknown().build();
 
             // When
@@ -208,19 +227,20 @@ class CustomExtensionIntegrationTest {
             try (VortexReader reader = VortexReader.open(file, allowUnknown);
                  var iter = reader.scan(ScanOptions.all().withLimit(ScanLimit.of(2)));
                  Chunk chunk = iter.next()) {
-                FixedSizeListArray storage = (FixedSizeListArray) chunk.column(EMBEDDING);
+                FixedSizeListArray storage = chunk.column(EMBEDDING);
                 firstElementOfRow1 = ((FloatArray) storage.elements()).getFloat(DIM);
             }
 
             // Then
-            assertThat(firstElementOfRow1).isEqualTo(vector(1)[0]);
+            // row 1's vector is (1, -1.25, 1.5): its first element is the row number
+            assertThat(firstElementOfRow1).isEqualTo(1f);
         }
 
         @Test
         void as_withoutDecoder_throws(@TempDir Path tmp) throws IOException {
             // Given
             Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(DIM, false));
+            writeVectors(file, vectorDtype(false));
             ReadRegistry allowUnknown = ReadRegistry.builder().registerDefaults().allowUnknown().build();
 
             try (VortexReader reader = VortexReader.open(file, allowUnknown);
@@ -237,7 +257,7 @@ class CustomExtensionIntegrationTest {
         void as_wrongDomainType_throws(@TempDir Path tmp) throws IOException {
             // Given
             Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(DIM, false));
+            writeVectors(file, vectorDtype(false));
 
             try (VortexReader reader = VortexReader.open(file, READ_REGISTRY);
                  var iter = reader.scan(ScanOptions.all().withLimit(ScanLimit.of(2)));
@@ -254,7 +274,7 @@ class CustomExtensionIntegrationTest {
             // Given — the Rust reference, which has no example.vector vtable and whose JNI session
             // exposes no allow_unknown: the behavior the strict default above mirrors
             Path file = tmp.resolve("vectors.vortex");
-            writeVectors(file, vectorDtype(DIM, false));
+            writeVectors(file, vectorDtype(false));
             String uri = file.toAbsolutePath().toUri().toString();
 
             // When / Then
@@ -274,7 +294,7 @@ class CustomExtensionIntegrationTest {
 
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
                 // When / Then
-                assertThatThrownBy(() -> VortexWriter.create(ch, schema(vectorDtype(DIM, false)), WriteOptions.defaults()))
+                assertThatThrownBy(() -> VortexWriter.create(ch, schema(vectorDtype(false)), WriteOptions.defaults()))
                         .isInstanceOf(VortexException.class)
                         .hasMessageContaining("no extension encoder registered for example.vector");
             }
@@ -298,7 +318,7 @@ class CustomExtensionIntegrationTest {
         @Test
         void open_rejectsDtypeTheDecoderRefuses(@TempDir Path tmp) throws IOException {
             // Given — a file from a writer that had no encoder, so nothing validated the dtype
-            DType.Extension invalid = opaqueVectorDtype(2, 5);
+            DType.Extension invalid = opaqueVectorDtype(5);
             Path file = tmp.resolve("invalid.vortex");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var writer = VortexWriter.create(ch, schema(invalid), WriteOptions.defaults())) {
@@ -306,7 +326,7 @@ class CustomExtensionIntegrationTest {
             }
 
             // When / Then — Rust validates an extension dtype when it deserializes it
-            assertThatThrownBy(() -> VortexReader.open(file, READ_REGISTRY))
+            assertThatThrownBy(() -> VortexReader.open(file, READ_REGISTRY).close())
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("example.vector metadata dimension 5 != storage size 2");
         }
@@ -316,10 +336,10 @@ class CustomExtensionIntegrationTest {
             // Given
             Path file = tmp.resolve("nonnull.vortex");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 var sut = VortexWriter.create(ch, schema(vectorDtype(DIM, false)), WriteOptions.defaults(), WRITE_REGISTRY)) {
+                 var sut = VortexWriter.create(ch, schema(vectorDtype(false)), WriteOptions.defaults(), WRITE_REGISTRY)) {
                 // When / Then
                 assertThatThrownBy(() -> sut.writeChunk(Map.of(ID, new long[]{0L},
-                        EMBEDDING, Arrays.asList((float[]) null))))
+                        EMBEDDING, Collections.singletonList((float[]) null))))
                         .isInstanceOf(VortexException.class)
                         .hasMessageContaining("null element in non-nullable example.vector column");
             }
@@ -335,15 +355,16 @@ class CustomExtensionIntegrationTest {
     record VectorMetadata(int dimension) implements ExtensionMetadata {
     }
 
-    /// The `example.vector` dtype: `FixedSizeList<F32, dim>` storage, dimension also in metadata.
-    static DType.Extension vectorDtype(int dim, boolean nullable) {
-        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, dim, nullable),
-                new VectorMetadata(dim), nullable);
+    /// The `example.vector` dtype: `FixedSizeList<F32, DIM>` storage, dimension also in metadata.
+    static DType.Extension vectorDtype(boolean nullable) {
+        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, DIM, nullable),
+                new VectorMetadata(DIM), nullable);
     }
 
-    /// The dtype as a writer without the encoder writes it: metadata as the bytes a file stores.
-    static DType.Extension opaqueVectorDtype(int storageDim, int metadataDim) {
-        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, storageDim, false),
+    /// The dtype as a writer without the encoder writes it, over 2-element vectors: metadata as the
+    /// bytes a file stores, here declaring `metadataDim` dimensions.
+    static DType.Extension opaqueVectorDtype(int metadataDim) {
+        return new DType.Extension(VECTOR.id(), new DType.FixedSizeList(DTypes.F32, 2, false),
                 new OpaqueMetadata(dimensionBytes(metadataDim)), false);
     }
 
@@ -355,18 +376,17 @@ class CustomExtensionIntegrationTest {
 
     /// Shared by encoder and decoder, as one Rust `ExtVTable::validate_dtype` serves both directions.
     static void validateVector(DType.Extension dtype) {
-        if (!(dtype.storageDType() instanceof DType.FixedSizeList list)
-                || !(list.elementType() instanceof DType.Primitive p && p.ptype() == PType.F32 && !p.nullable())) {
-            throw new VortexException("example.vector storage must be FixedSizeList<non-null F32>, got "
-                    + dtype.storageDType());
+        // the one accepted shape; anything else falls through to the error
+        if (dtype.storageDType() instanceof DType.FixedSizeList(DType.Primitive(PType ptype, boolean nullable), int size, var _)
+                && ptype == PType.F32 && !nullable
+                && dtype.metadata() instanceof VectorMetadata(int dim)) {
+            if (dim != size) {
+                throw new VortexException("example.vector metadata dimension " + dim + " != storage size " + size);
+            }
+            return;
         }
-        if (!(dtype.metadata() instanceof VectorMetadata(int dim))) {
-            throw new VortexException("example.vector metadata must be a VectorMetadata, got " + dtype.metadata());
-        }
-        if (dim != list.fixedSize()) {
-            throw new VortexException("example.vector metadata dimension " + dim
-                    + " != storage size " + list.fixedSize());
-        }
+        throw new VortexException("example.vector must be FixedSizeList<non-null F32> storage with a VectorMetadata, got "
+                + dtype.storageDType() + " and " + dtype.metadata());
     }
 
     static final class VectorEncoder implements ExtensionEncoder {
@@ -378,7 +398,7 @@ class CustomExtensionIntegrationTest {
 
         @Override
         public DType.Extension dtype(boolean nullable) {
-            return vectorDtype(DIM, nullable);
+            return vectorDtype(nullable);
         }
 
         @Override
@@ -432,7 +452,7 @@ class CustomExtensionIntegrationTest {
 
         @Override
         public DType.Extension dtype(boolean nullable) {
-            return vectorDtype(DIM, nullable);
+            return vectorDtype(nullable);
         }
 
         @Override
@@ -505,6 +525,7 @@ class CustomExtensionIntegrationTest {
                     long row = (long) chunk * CHUNK_ROWS + i;
                     ids[i] = row;
                     float[] vector = vector(row);
+                    // a non-nullable column has no null rows: give them a zero vector
                     vectors.add(vector == null && !vectorDtype.nullable() ? new float[DIM] : vector);
                 }
                 writer.writeChunk(Map.of(ID, ids, EMBEDDING, vectors));
@@ -521,7 +542,7 @@ class CustomExtensionIntegrationTest {
             while (iter.hasNext()) {
                 try (Chunk chunk = iter.next()) {
                     List<float[]> vectors = chunk.as(EMBEDDING, float[].class);
-                    LongArray ids = (LongArray) chunk.column(ID);
+                    LongArray ids = chunk.column(ID);
                     for (int i = 0; i < vectors.size(); i++) {
                         out.put(ids.getLong(i), vectors.get(i));
                     }
