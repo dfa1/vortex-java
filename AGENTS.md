@@ -34,9 +34,10 @@ fsst    — io.github.dfa1.vortex.fsst: standalone FSST (Fast Static Symbol Tabl
           Zero dependency on core/reader/writer/FFM-wire-concerns beyond the JDK's own
           java.lang.foreign; writer/reader depend on it, not the other way around.
 core    — everything lives under `io.github.dfa1.vortex.core.*`:
-          core.model    DType, PType, TimeUnit, EncodingId, LayoutId, ColumnName, ExtensionId, TimeDtype, TimestampDtype,
-                        EditionId, Edition, EditionFamily, Editions, MemorySize
-          core.io       IoBounds, PTypeIO, VortexFormat
+          core.model    DType, DTypes, PType, TimeUnit, EncodingId, LayoutId, ColumnName, ExtensionId, TimeDtype, TimestampDtype,
+                        ExtensionMetadata, OpaqueMetadata, TimeUnitMetadata, TimestampMetadata,
+                        EditionId, Edition, EditionFamily, Editions
+          core.io       IoBounds, PTypeIO, VortexFormat, MemorySize
           core.error    VortexException
           core.compute  FastLanes, PrimitiveArrays, Utf8Order, Utf8Validation
           core.simd     SimdOperations (kernels shared by reader+writer, all eleven ptypes),
