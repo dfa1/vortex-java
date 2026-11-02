@@ -38,7 +38,10 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
     public Array decode(DecodeContext ctx) {
         // Every part narrowed to U8 (ordinal 0) is the all-default proto, which encodes to no bytes
         // at all; prost decodes that as the defaults, so an absent metadata is U8/U8/U8 too (#634)
-        MemorySegment meta = ctx.metadata() == null ? MemorySegment.NULL : ctx.metadata();
+        MemorySegment meta = ctx.metadata();
+        if (meta == null) {
+            meta = MemorySegment.NULL;
+        }
         ProtoDateTimePartsMetadata decoded;
         try {
             decoded = ProtoDateTimePartsMetadata.decode(meta, 0, meta.byteSize());

@@ -3,6 +3,8 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -633,6 +635,69 @@ class CascadingCompressorTest {
             assertThat(values.getString(0)).isEqualTo("a");
             assertThat(field.isValid(1)).isFalse();
             assertThat(values.getString(2)).isEqualTo("c");
+        }
+    }
+
+    /// Rust's `compress_canonical` keeps an extension scheme only when it is strictly smaller than
+    /// the storage compressed under `vortex.ext` (#634): a timestamp splits into datetimeparts on a
+    /// real chunk but stays plain storage on a few rows, such as a zone-stats table's bounds.
+    @Nested
+    class Extension {
+
+        private static final DType.Extension TS = TimestampDtype.of(TimeUnit.Microseconds, null, false);
+        private static final List<EncodingEncoder> CODECS = List.of(
+                new DateTimePartsEncodingEncoder(), new ExtEncodingEncoder(), new ConstantEncodingEncoder(),
+                new FrameOfReferenceEncodingEncoder(), new BitpackedEncodingEncoder(), new PrimitiveEncodingEncoder());
+
+        /// Four zone bounds a day apart, late in the day and with sub-second jitter: U16 days plus
+        /// U32 seconds and U32 microseconds are 40 B against 32 B of i64 storage.
+        private static final long[] ZONE_BOUNDS = {
+                1_704_067_200_000_000L + 80_000_000_123L, 1_704_153_600_000_000L + 80_001_456_789L,
+                1_704_240_000_000_000L + 80_002_789_012L, 1_704_326_400_000_000L + 80_003_999_999L};
+
+        private static EncodeContext extCtx() {
+            return EncodeContext.ofDepth(3, Arena.ofAuto(), toRegistry(CODECS));
+        }
+
+        @Test
+        void manyRowsInOneDay_keepsDatetimeparts() {
+            // Given — one row a second over 4096 s: constant days and subseconds, 12-bit seconds,
+            // against 32-bit offsets of i64 storage
+            long[] micros = new long[4096];
+            for (int i = 0; i < micros.length; i++) {
+                micros[i] = 1_704_067_200_000_000L + i * 1_000_000L;
+            }
+            CascadingCompressor sut = new CascadingCompressor(CODECS);
+
+            // When
+            EncodeResult result = sut.encode(TS, micros, extCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS);
+        }
+
+        @Test
+        void zoneBounds_keepPlainStorage() {
+            // Given
+            CascadingCompressor sut = new CascadingCompressor(CODECS);
+
+            // When
+            EncodeResult result = sut.encode(TS, ZONE_BOUNDS, extCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
+        }
+
+        @Test
+        void preSplitCarrier_comparesAgainstItsTimestamps() {
+            // Given — the Parquet importer's carrier, which vortex.ext cannot take as storage
+            CascadingCompressor sut = new CascadingCompressor(CODECS);
+
+            // When
+            EncodeResult result = sut.encode(TS, new DateTimePartsData(ZONE_BOUNDS, false), extCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
         }
     }
 }

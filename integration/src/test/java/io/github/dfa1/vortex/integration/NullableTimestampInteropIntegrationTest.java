@@ -114,7 +114,7 @@ class NullableTimestampInteropIntegrationTest {
         ParquetImporter.importParquet(parquet, imported, ImportOptions.defaults().withChunkSize(4096));
 
         // Then
-        assertDataColumnMatches(EncodingTrees.of(imported), EncodingTrees.of(jniFile));
+        assertThat(EncodingTrees.of(imported)).isEqualTo(EncodingTrees.of(jniFile));
     }
 
     /// Timestamps within the epoch's first minutes narrow every datetimeparts part to U8, the

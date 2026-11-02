@@ -157,7 +157,7 @@ class TimestampFilterInteropIntegrationTest {
         String flatData = tsDataEncoding(flatFile);
 
         // Then the filters run over both storages the fast path reads. Only the data column is
-        // checked: the zone-stats table of a nullable timestamp is datetimeparts in both files.
+        // checked: the zone-stats table keeps its bounds as plain storage in both files.
         assertThat(partsData).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS.id());
         assertThat(flatData).isEqualTo(EncodingId.VORTEX_EXT.id());
     }

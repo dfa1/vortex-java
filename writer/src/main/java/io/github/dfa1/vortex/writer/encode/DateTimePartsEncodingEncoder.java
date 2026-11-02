@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimestampMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
@@ -252,8 +253,8 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
             return new DType.Primitive(ptype, nullable);
         }
 
-        io.github.dfa1.vortex.core.proto.ProtoPType protoPtype() {
-            return io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(ptype.ordinal());
+        ProtoPType protoPtype() {
+            return ProtoPType.fromValue(ptype.ordinal());
         }
     }
 

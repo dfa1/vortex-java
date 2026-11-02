@@ -283,7 +283,7 @@ public final class CascadingCompressor {
         EncodeResult scheme = spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         EncodingId root = scheme.rootNode().encodingId();
         if (root.equals(EncodingId.VORTEX_EXT) || root.equals(EncodingId.VORTEX_CONSTANT)
-                || root.equals(EncodingId.VORTEX_MASKED) || ctx.excluded().contains(EncodingId.VORTEX_EXT)) {
+                || ctx.excluded().contains(EncodingId.VORTEX_EXT)) {
             return scheme;
         }
         // the Parquet importer's pre-split carrier holds the plain i64 storage

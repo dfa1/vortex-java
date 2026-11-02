@@ -14,6 +14,8 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.TestArrays;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -57,19 +59,22 @@ class DateTimePartsEncodingDecoderTest {
         assertThat(SUT.encodingId()).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS);
     }
 
-    @Test
-    void decode_emptyMetadata_readsEveryPartAsU8() {
-        // Given — parts all narrowed to U8 are the all-default proto, which Rust writes as no
-        // bytes: day 1, second 2, millisecond 3, one byte each
-        MemorySegment days = MemorySegment.ofArray(new byte[]{1});
-        MemorySegment seconds = MemorySegment.ofArray(new byte[]{2});
+    /// Parts all narrowed to U8 are the all-default proto, which Rust writes as no bytes, or as no
+    /// metadata at all. Day 200 and second 250 have the high bit set, so reading them as I8 (or
+    /// sign-extending a U8) would come out negative.
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void decode_emptyOrAbsentMetadata_readsEveryPartAsU8(boolean absent) {
+        // Given
+        MemorySegment days = MemorySegment.ofArray(new byte[]{(byte) 200});
+        MemorySegment seconds = MemorySegment.ofArray(new byte[]{(byte) 250});
         MemorySegment millis = MemorySegment.ofArray(new byte[]{3});
         ArrayNode[] children = {
                 new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}),
                 new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1}),
                 new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2})};
-        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DATETIMEPARTS, MemorySegment.ofArray(new byte[0]),
-                children, new int[0]);
+        MemorySegment metadata = absent ? null : MemorySegment.ofArray(new byte[0]);
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DATETIMEPARTS, metadata, children, new int[0]);
         DecodeContext c = new DecodeContext(node, timestampDType(TimeUnit.Milliseconds, false), 1,
                 new MemorySegment[]{days, seconds, millis}, REGISTRY, Arena.ofAuto());
 
@@ -77,7 +82,7 @@ class DateTimePartsEncodingDecoderTest {
         LongArray result = (LongArray) SUT.decode(c);
 
         // Then
-        assertThat(result.getLong(0)).isEqualTo(86_400_000L + 2_000L + 3L);
+        assertThat(result.getLong(0)).isEqualTo(200 * 86_400_000L + 250_000L + 3L);
     }
 
     @Test
