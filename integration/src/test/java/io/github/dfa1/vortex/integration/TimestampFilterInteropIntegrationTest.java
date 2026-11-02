@@ -65,11 +65,17 @@ class TimestampFilterInteropIntegrationTest {
     private static final ColumnName TS = ColumnName.of("ts");
     private static final Instant START = Instant.parse("2024-01-01T00:00:00Z");
     private static final long MICROS_PER_SECOND = 1_000_000L;
+    /// Moves the data 60 years back, 2024 to 1964 and the outliers to 1949: every timestamp before
+    /// the epoch, where Rust's `split_with_divisor` truncates toward zero and gives negative seconds
+    /// and subseconds. Java's split used to floor instead, and vortex-jni, which compares the parts
+    /// as Rust splits them, filtered such a file wrongly (#634).
+    private static final long PRE_EPOCH_SHIFT = micros(START) - micros(Instant.parse("1964-01-01T00:00:00Z"));
 
     @TempDir
     static Path tmp;
     private static Path partsFile;
     private static Path flatFile;
+    private static Path preEpochFile;
 
     static {
         NativeLoader.loadJni();
@@ -101,6 +107,13 @@ class TimestampFilterInteropIntegrationTest {
         // datetimeparts for them too, as Rust's does, so the column is limited to FoR + bit-packing.
         flatFile = write("timestamp-flat.vtx", WriteOptions.defaults().withColumnEncoding(TS,
                 ColumnEncoding.candidates(EncodingId.FASTLANES_FOR, EncodingId.FASTLANES_BITPACKED)), ids, b -> ts[b]);
+        preEpochFile = write("timestamp-pre-epoch.vtx", WriteOptions.defaults(), ids, b -> {
+            long[] shifted = new long[ROWS];
+            for (int i = 0; i < ROWS; i++) {
+                shifted[i] = ts[b][i] - PRE_EPOCH_SHIFT;
+            }
+            return shifted;
+        });
     }
 
     private static Path write(String name, WriteOptions options, long[][] ids, IntFunction<Object> ts)
@@ -122,8 +135,10 @@ class TimestampFilterInteropIntegrationTest {
 
     /// The two storages of the timestamp column, each case run against both.
     static Stream<Arguments> filesAndCases() {
-        return Stream.of(Named.of("datetimeparts", partsFile), Named.of("flat i64", flatFile))
-                .flatMap(f -> cases().map(c -> Arguments.of(f, c)));
+        return Stream.concat(
+                Stream.of(Named.of("datetimeparts", partsFile), Named.of("flat i64", flatFile))
+                        .flatMap(f -> cases(0).map(c -> Arguments.of(f, c))),
+                cases(PRE_EPOCH_SHIFT).map(c -> Arguments.of(Named.of("pre-epoch datetimeparts", preEpochFile), c)));
     }
 
     record Case(String name, ScanFilter javaFilter, Expression jniFilter) {
@@ -133,20 +148,22 @@ class TimestampFilterInteropIntegrationTest {
         }
     }
 
-    static Stream<Case> cases() {
-        long from = micros(START.plusSeconds(1_000_000));
-        long to = micros(START.plusSeconds(1_003_600));
-        long exact = exactTimestamp();
+    /// The filter cases over a file whose timestamps were moved `shift` microseconds back.
+    static Stream<Case> cases(long shift) {
+        long from = micros(START.plusSeconds(1_000_000)) - shift;
+        long to = micros(START.plusSeconds(1_003_600)) - shift;
+        long exact = exactTimestamp() - shift;
+        long start = micros(START) - shift;
+        long lastDay = micros(START.plusSeconds(2_690_000)) - shift;
+        long future = micros(Instant.parse("2030-01-01T00:00:00Z")) - shift;
         return Stream.of(
                 new Case("one-hour window", ScanFilter.and(ScanFilter.gte(TS, from), ScanFilter.lt(TS, to)),
                         Expression.and(binary(Expression.BinaryOp.GTE, from), binary(Expression.BinaryOp.LT, to))),
                 new Case("eq an existing timestamp", ScanFilter.eq(TS, exact), binary(Expression.BinaryOp.EQ, exact)),
                 new Case("neq an existing timestamp", ScanFilter.neq(TS, exact), binary(Expression.BinaryOp.NOT_EQ, exact)),
-                new Case("before 2024 (the outliers)", ScanFilter.lt(TS, micros(START)), binary(Expression.BinaryOp.LT, micros(START))),
-                new Case("gt the last day", ScanFilter.gt(TS, micros(START.plusSeconds(2_690_000))),
-                        binary(Expression.BinaryOp.GT, micros(START.plusSeconds(2_690_000)))),
-                new Case("no row matches", ScanFilter.gt(TS, micros(Instant.parse("2030-01-01T00:00:00Z"))),
-                        binary(Expression.BinaryOp.GT, micros(Instant.parse("2030-01-01T00:00:00Z")))));
+                new Case("before the start (the outliers)", ScanFilter.lt(TS, start), binary(Expression.BinaryOp.LT, start)),
+                new Case("gt the last day", ScanFilter.gt(TS, lastDay), binary(Expression.BinaryOp.GT, lastDay)),
+                new Case("no row matches", ScanFilter.gt(TS, future), binary(Expression.BinaryOp.GT, future)));
     }
 
     @Test
@@ -155,11 +172,13 @@ class TimestampFilterInteropIntegrationTest {
         // When
         String partsData = tsDataEncoding(partsFile);
         String flatData = tsDataEncoding(flatFile);
+        String preEpochData = tsDataEncoding(preEpochFile);
 
         // Then the filters run over both storages the fast path reads. Only the data column is
         // checked: the zone-stats table keeps its bounds as plain storage in both files.
         assertThat(partsData).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS.id());
         assertThat(flatData).isEqualTo(EncodingId.VORTEX_EXT.id());
+        assertThat(preEpochData).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS.id());
     }
 
     /// The root encoding of the ts column's data: the array under the first flat of its zoned layout.

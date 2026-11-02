@@ -180,7 +180,7 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     /// Splits epoch ticks into whole days, seconds within the day, and sub-second ticks, the three
     /// arrays the `vortex.datetimeparts` wire format stores. Each part compresses far better on its
     /// own than the interleaved timestamp does: days is a short dense run, seconds spans a fixed
-    /// 0..86399, and subseconds is frequently constant.
+    /// 0..86399 (-86399..0 before the epoch), and subseconds is frequently constant.
     ///
     /// @param timestamps epoch ticks in `unit`
     /// @param unit       the resolution `timestamps` is expressed in
@@ -193,18 +193,16 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         long[] seconds = new long[n];
         long[] subseconds = new long[n];
         for (int i = 0; i < n; i++) {
+            // Rust's split_with_divisor: every division truncates toward zero, so a pre-epoch
+            // timestamp has negative seconds and subseconds. Readers reassemble either split, but
+            // a Rust reader filters on the parts as Rust splits them: flooring here made vortex-jni
+            // return the wrong rows for a pre-epoch column (#634).
             long ts = timestamps[i];
-            long dval = ts / ticksPerDay;
-            long rem = ts % ticksPerDay;
-            // Java truncates division toward zero, so a pre-epoch timestamp lands one day late
-            // with a positive remainder; carry it back so days stays monotonic with the value.
-            if (rem < 0) {
-                rem += ticksPerDay;
-                dval--;
-            }
-            days[i] = dval;
-            seconds[i] = rem / divisor;
-            subseconds[i] = rem % divisor;
+            long dayCount = ts / ticksPerDay;
+            long totalSeconds = ts / divisor;
+            days[i] = dayCount;
+            seconds[i] = totalSeconds - dayCount * SECONDS_PER_DAY;
+            subseconds[i] = ts - totalSeconds * divisor;
         }
         return new Parts(days, seconds, subseconds);
     }

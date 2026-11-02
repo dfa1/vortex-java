@@ -298,9 +298,11 @@ class DateTimePartsEncodingEncoderTest {
 
         @Test
         void encode_metadata_namesEachPartsNarrowedPtype() throws Exception {
-            // Given — Rust narrows each part before compressing it: days 19723 fits U16, seconds
-            // 86399 needs U32, and a pre-epoch day is negative, so days go signed in the second row
-            long[] timestamps = {19_723L * 86_400_000L + 86_399_000L + 999L, -86_400_000L};
+            // Given — Rust narrows each part before compressing it: days 19723 fits U16 and seconds
+            // 86399 needs U32. One millisecond before the epoch truncates to day 0, second 0,
+            // subsecond -1, as Rust splits it, so only subseconds go signed; flooring would have
+            // made it day -1 and the days signed instead
+            long[] timestamps = {19_723L * 86_400_000L + 86_399_000L + 999L, -1L};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
 
             // When
@@ -310,9 +312,29 @@ class DateTimePartsEncodingEncoderTest {
             var metaSeg = result.rootNode().metadata();
             ProtoDateTimePartsMetadata meta = ProtoDateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
-            assertThat(PType.fromOrdinal(meta.days_ptype().value())).isEqualTo(PType.I16);
+            assertThat(PType.fromOrdinal(meta.days_ptype().value())).isEqualTo(PType.U16);
             assertThat(PType.fromOrdinal(meta.seconds_ptype().value())).isEqualTo(PType.U32);
-            assertThat(PType.fromOrdinal(meta.subseconds_ptype().value())).isEqualTo(PType.U16);
+            assertThat(PType.fromOrdinal(meta.subseconds_ptype().value())).isEqualTo(PType.I16);
+        }
+
+        @Test
+        void encode_preEpoch_roundTripsTheNegativeParts() {
+            // Given — pre-epoch values whose truncated parts are all negative, including one that
+            // is not a whole second
+            long[] timestamps = {-1L, -1_000L, -86_400_001L, -1_704_067_200_123L};
+            DateTimePartsData data = new DateTimePartsData(timestamps, false);
+            EncodeResult encoded = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
+            DecodeContext ctx = new DecodeContext(toArrayNode(encoded.rootNode()), EXT_TIMESTAMP_MS,
+                    timestamps.length, bufs, REGISTRY, Arena.global());
+
+            // When
+            LongArray result = (LongArray) DECODER.decode(ctx);
+
+            // Then
+            for (int i = 0; i < timestamps.length; i++) {
+                assertThat(result.getLong(i)).isEqualTo(timestamps[i]);
+            }
         }
     }
 }
