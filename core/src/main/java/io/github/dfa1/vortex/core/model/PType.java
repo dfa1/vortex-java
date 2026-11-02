@@ -130,4 +130,27 @@ public enum PType {
         }
         return U32;
     }
+
+    /// Returns the narrowest integer ptype holding every value in `min..max`, as Rust's
+    /// `PrimitiveArray::narrow`: unsigned when `min` is not negative, signed otherwise, and `I64`
+    /// when neither a 32-bit signed nor unsigned type fits.
+    ///
+    /// @param min the smallest value
+    /// @param max the largest value, `>= min`
+    /// @return the narrowest fitting type, at most `I64`
+    public static PType narrowest(long min, long max) {
+        if (min >= 0) {
+            return max <= 0xFFFF_FFFFL ? narrowestUnsigned(max) : I64;
+        }
+        if (min >= Byte.MIN_VALUE && max <= Byte.MAX_VALUE) {
+            return I8;
+        }
+        if (min >= Short.MIN_VALUE && max <= Short.MAX_VALUE) {
+            return I16;
+        }
+        if (min >= Integer.MIN_VALUE && max <= Integer.MAX_VALUE) {
+            return I32;
+        }
+        return I64;
+    }
 }

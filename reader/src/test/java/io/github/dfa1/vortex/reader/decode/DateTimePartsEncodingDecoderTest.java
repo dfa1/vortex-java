@@ -58,14 +58,26 @@ class DateTimePartsEncodingDecoderTest {
     }
 
     @Test
-    void decode_missingMetadata_throws() {
-        // Given a node with no metadata
-        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DATETIMEPARTS, null, new ArrayNode[0], new int[0]);
+    void decode_emptyMetadata_readsEveryPartAsU8() {
+        // Given — parts all narrowed to U8 are the all-default proto, which Rust writes as no
+        // bytes: day 1, second 2, millisecond 3, one byte each
+        MemorySegment days = MemorySegment.ofArray(new byte[]{1});
+        MemorySegment seconds = MemorySegment.ofArray(new byte[]{2});
+        MemorySegment millis = MemorySegment.ofArray(new byte[]{3});
+        ArrayNode[] children = {
+                new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}),
+                new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1}),
+                new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2})};
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DATETIMEPARTS, MemorySegment.ofArray(new byte[0]),
+                children, new int[0]);
         DecodeContext c = new DecodeContext(node, timestampDType(TimeUnit.Milliseconds, false), 1,
-                new MemorySegment[0], REGISTRY, Arena.ofAuto());
+                new MemorySegment[]{days, seconds, millis}, REGISTRY, Arena.ofAuto());
 
-        // When / Then
-        assertThatThrownBy(() -> SUT.decode(c)).hasMessageContaining("missing metadata");
+        // When
+        LongArray result = (LongArray) SUT.decode(c);
+
+        // Then
+        assertThat(result.getLong(0)).isEqualTo(86_400_000L + 2_000L + 3L);
     }
 
     @Test

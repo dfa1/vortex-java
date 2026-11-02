@@ -11,6 +11,12 @@ import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.parquet.ImportOptions;
 import io.github.dfa1.vortex.parquet.ParquetExporter;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -37,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.function.IntPredicate;
+import java.util.function.IntToLongFunction;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,8 +53,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// row is valid. The Java side used to decline datetimeparts for any chunk holding a null, writing
 /// `vortex.ext` over a masked i64, so the column's encoding changed with where its nulls fell.
 ///
-/// Only the data column's root encoding and where its validity sits are compared: the cascade under
-/// the days child and the zone-stats table still differ from Rust with or without nulls (#634).
+/// The whole encoding tree is compared, the zone-stats table included: unnarrowed 64-bit days made
+/// FoR beat run-length encoding, and the 4-row stats min/max were split into datetimeparts where
+/// Rust keeps the smaller plain storage (#634).
 class NullableTimestampInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -85,7 +93,7 @@ class NullableTimestampInteropIntegrationTest {
 
         // Then
         assertThat(dataColumn(expected).getFirst()).contains("vortex.datetimeparts");
-        assertDataColumnMatches(EncodingTrees.of(javaFile), expected);
+        assertThat(EncodingTrees.of(javaFile)).isEqualTo(expected);
     }
 
     /// The Parquet import path hands the writer batches with and without nulls, which its
@@ -107,6 +115,42 @@ class NullableTimestampInteropIntegrationTest {
 
         // Then
         assertDataColumnMatches(EncodingTrees.of(imported), EncodingTrees.of(jniFile));
+    }
+
+    /// Timestamps within the epoch's first minutes narrow every datetimeparts part to U8, the
+    /// all-default metadata Rust writes as no bytes; Java read that as missing metadata (#634).
+    @Test
+    void jniWritesPartsThatAllFitAByte_javaReadsThem(@TempDir Path tmp) throws Exception {
+        // Given — day 0, second i, microsecond i: every part at most 255
+        Path jniFile = tmp.resolve("jni.vortex");
+        IntToLongFunction micros = i -> (i % 256) * 1_000_000L + i % 256;
+        writeWithJni(jniFile, i -> i % 7 == 0, micros);
+
+        // When
+        List<Long> result = new ArrayList<>(ROWS);
+        try (VortexReader reader = VortexReader.open(jniFile);
+             var iter = reader.scan(ScanOptions.columns(TS))) {
+            while (iter.hasNext()) {
+                try (Chunk chunk = iter.next()) {
+                    Array ts = chunk.column(TS);
+                    for (long i = 0; i < chunk.rowCount(); i++) {
+                        Long value = null;
+                        if (!(ts instanceof MaskedArray masked) || masked.isValid(i)) {
+                            value = ((LongArray) MaskedArray.innerOrSelf(ts)).getLong(i);
+                        }
+                        result.add(value);
+                    }
+                }
+            }
+        }
+
+        // Then
+        assertThat(dataColumn(EncodingTrees.of(jniFile)).getFirst()).contains("vortex.datetimeparts");
+        List<Long> expected = new ArrayList<>(ROWS);
+        for (int i = 0; i < ROWS; i++) {
+            expected.add(i % 7 == 0 ? null : micros.applyAsLong(i));
+        }
+        assertThat(result).isEqualTo(expected);
     }
 
     /// Same root encoding for the data column, and a validity (`vortex.bool`) in its days child
@@ -148,6 +192,10 @@ class NullableTimestampInteropIntegrationTest {
     }
 
     private static void writeWithJni(Path path, IntPredicate isNull) throws Exception {
+        writeWithJni(path, isNull, NullableTimestampInteropIntegrationTest::micros);
+    }
+
+    private static void writeWithJni(Path path, IntPredicate isNull, IntToLongFunction micros) throws Exception {
         Schema schema = new Schema(List.of(Field.nullable("ts",
                 new ArrowType.Timestamp(org.apache.arrow.vector.types.TimeUnit.MICROSECOND, null))));
         try (VortexWriter writer = VortexWriter.builder(SESSION, path.toAbsolutePath().toUri().toString(), schema,
@@ -160,7 +208,7 @@ class NullableTimestampInteropIntegrationTest {
                 if (isNull.test(i)) {
                     vector.setNull(i);
                 } else {
-                    vector.setSafe(i, micros(i));
+                    vector.setSafe(i, micros.applyAsLong(i));
                 }
             }
             vector.setValueCount(ROWS);

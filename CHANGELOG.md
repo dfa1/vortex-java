@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A nullable timestamp column holding nulls is written as `vortex.datetimeparts` with the validity on its days part, as Rust writes it, instead of `vortex.ext` over a masked i64. ([#627](https://github.com/dfa1/vortex-java/issues/627))
+- A timestamp column picks the encodings Rust picks: its `vortex.datetimeparts` parts are narrowed first, so runny days with nulls run-length encode (9% smaller files), and its zone-stats bounds stay plain storage when splitting them is no smaller. ([#634](https://github.com/dfa1/vortex-java/issues/634))
+- A Rust-written timestamp column whose `vortex.datetimeparts` parts all fit in a byte, such as times in the epoch's first minutes, reads instead of failing with missing metadata. ([#634](https://github.com/dfa1/vortex-java/issues/634))
 - A string or binary column whose FSST codes pass 2 GiB in one chunk, such as large audio blobs, writes and reads back instead of failing with an integer overflow. ([#629](https://github.com/dfa1/vortex-java/issues/629))
 - A string or binary chunk past 2 GiB writes and reads back as `vortex.varbin`, `vortex.varbinview` and compact `vortex.zstd` too, and Rust-written `varbin` columns with `u32` offsets past 2 GiB read instead of failing as out of range. ([#633](https://github.com/dfa1/vortex-java/issues/633))
 - Parquet import reads a `DECIMAL` column as a Vortex decimal with its precision and scale, in all four physical encodings, and names the column of one wider than Vortex's 76 digits; `INT32`/`INT64` ones lost their scale and the byte-array ones failed. ([#628](https://github.com/dfa1/vortex-java/issues/628))

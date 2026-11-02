@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.model.TimeUnit;
@@ -119,13 +120,13 @@ class DateTimePartsEncodingEncoderTest {
 
             // Then
             assertThat(result.applicable()).isTrue();
-            assertThat(result.openChildren().get(0).childDtype()).isEqualTo(DTypes.I64.asNullable());
+            assertThat(result.openChildren().get(0).childDtype()).isEqualTo(DTypes.U8.asNullable());
             assertThat(result.openChildren().get(0).childData()).isInstanceOfSatisfying(NullableData.class, days -> {
-                assertThat((long[]) days.values()).containsExactly(1L, 0L, 2L);
+                assertThat((byte[]) days.values()).containsExactly(1, 0, 2);
                 assertThat(days.validity()).containsExactly(validity);
             });
-            assertThat(result.openChildren().get(1).childData()).isInstanceOf(long[].class);
-            assertThat(result.openChildren().get(2).childData()).isInstanceOf(long[].class);
+            assertThat(result.openChildren().get(1).childDtype().nullable()).isFalse();
+            assertThat(result.openChildren().get(2).childDtype().nullable()).isFalse();
         }
 
         @Test
@@ -150,8 +151,8 @@ class DateTimePartsEncodingEncoderTest {
             CascadeStep result = ENCODER.encodeCascade(NULLABLE_MS, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(result.openChildren().get(0).childDtype()).isEqualTo(DTypes.I64.asNullable());
-            assertThat(result.openChildren().get(0).childData()).isInstanceOf(long[].class);
+            assertThat(result.openChildren().get(0).childDtype()).isEqualTo(DTypes.U8.asNullable());
+            assertThat(result.openChildren().get(0).childData()).isInstanceOf(byte[].class);
         }
 
         @Test
@@ -296,9 +297,10 @@ class DateTimePartsEncodingEncoderTest {
         }
 
         @Test
-        void encode_metadata_ptypes_areI64() throws Exception {
-            // Given
-            long[] timestamps = {0L, 86_400_000L};
+        void encode_metadata_namesEachPartsNarrowedPtype() throws Exception {
+            // Given — Rust narrows each part before compressing it: days 19723 fits U16, seconds
+            // 86399 needs U32, and a pre-epoch day is negative, so days go signed in the second row
+            long[] timestamps = {19_723L * 86_400_000L + 86_399_000L + 999L, -86_400_000L};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
 
             // When
@@ -308,9 +310,9 @@ class DateTimePartsEncodingEncoderTest {
             var metaSeg = result.rootNode().metadata();
             ProtoDateTimePartsMetadata meta = ProtoDateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
-            assertThat(meta.days_ptype().value()).isEqualTo(7);
-            assertThat(meta.seconds_ptype().value()).isEqualTo(7);
-            assertThat(meta.subseconds_ptype().value()).isEqualTo(7);
+            assertThat(PType.fromOrdinal(meta.days_ptype().value())).isEqualTo(PType.I16);
+            assertThat(PType.fromOrdinal(meta.seconds_ptype().value())).isEqualTo(PType.U32);
+            assertThat(PType.fromOrdinal(meta.subseconds_ptype().value())).isEqualTo(PType.U16);
         }
     }
 }

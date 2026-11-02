@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -10,6 +9,7 @@ import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimestampMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
+import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Set;
@@ -24,8 +24,6 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_DATETIMEPARTS);
 
     private static final long SECONDS_PER_DAY = 86_400L;
-    private static final io.github.dfa1.vortex.core.proto.ProtoPType I64_PROTO =
-            io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal());
 
     /// Creates the encoder.
     public DateTimePartsEncodingEncoder() {
@@ -51,15 +49,16 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                             + (data == null ? "null" : data.getClass().getSimpleName()));
         }
         Parts parts = split(in.timestamps(), unitOf(ext));
-        long[] seconds = parts.seconds();
-        long[] subseconds = parts.subseconds();
+        Part days = Part.narrowed(parts.days(), in.validity());
+        Part seconds = Part.narrowed(parts.seconds(), null);
+        Part subseconds = Part.narrowed(parts.subseconds(), null);
 
         EncodingEncoder primEnc = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE);
         EncodeResult daysResult = in.validity() == null
-                ? primEnc.encode(in.daysDtype(), parts.days(), ctx)
-                : new MaskedEncodingEncoder().encode(in.daysDtype(), in.days(parts), ctx);
-        EncodeResult secondsResult = primEnc.encode(DTypes.I64, seconds, ctx);
-        EncodeResult subsecondsResult = primEnc.encode(DTypes.I64, subseconds, ctx);
+                ? primEnc.encode(days.dtype(in.nullable()), days.values(), ctx)
+                : new MaskedEncodingEncoder().encode(days.dtype(true), in.days(days.values()), ctx);
+        EncodeResult secondsResult = primEnc.encode(seconds.dtype(false), seconds.values(), ctx);
+        EncodeResult subsecondsResult = primEnc.encode(subseconds.dtype(false), subseconds.values(), ctx);
 
         List<EncodedBuffer> allBuffers = new ArrayList<>();
         allBuffers.addAll(daysResult.encodedBuffers());
@@ -73,7 +72,7 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         EncodeNode secondsNode = EncodeNode.remapBufferIndices(secondsResult.rootNode(), off1);
         EncodeNode subsecondsNode = EncodeNode.remapBufferIndices(subsecondsResult.rootNode(), off2);
 
-        byte[] metaBytes = new ProtoDateTimePartsMetadata(I64_PROTO, I64_PROTO, I64_PROTO).encode();
+        byte[] metaBytes = metadata(days, seconds, subseconds);
 
         EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_DATETIMEPARTS,
@@ -96,21 +95,20 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         }
         DType.Extension ext = (DType.Extension) dtype;
         Parts parts = split(in.timestamps(), unitOf(ext));
-        long[] seconds = parts.seconds();
-        long[] subseconds = parts.subseconds();
-
-        byte[] metaBytes = new ProtoDateTimePartsMetadata(I64_PROTO, I64_PROTO, I64_PROTO).encode();
+        Part days = Part.narrowed(parts.days(), in.validity());
+        Part seconds = Part.narrowed(parts.seconds(), null);
+        Part subseconds = Part.narrowed(parts.subseconds(), null);
 
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_DATETIMEPARTS,
-                MemorySegment.ofArray(metaBytes),
+                MemorySegment.ofArray(metadata(days, seconds, subseconds)),
                 new EncodeNode[3],
                 new int[0]);
 
         List<ChildSlot> children = List.of(
-                new ChildSlot(in.daysDtype(), in.days(parts), 0, SELF),
-                new ChildSlot(DTypes.I64, seconds, 1, SELF),
-                new ChildSlot(DTypes.I64, subseconds, 2, SELF));
+                new ChildSlot(days.dtype(in.nullable()), in.days(days.values()), 0, SELF),
+                new ChildSlot(seconds.dtype(false), seconds.values(), 1, SELF),
+                new ChildSlot(subseconds.dtype(false), subseconds.values(), 2, SELF));
 
         MinMax stats = in.stats();
         return new CascadeStep(partialRoot, List.of(), children,
@@ -215,13 +213,9 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Input(long[] timestamps, boolean nullable, boolean[] validity) {
 
-        DType daysDtype() {
-            return nullable ? DTypes.I64.asNullable() : DTypes.I64;
-        }
-
         /// The days child: the plain part, or the part under this chunk's validity.
-        Object days(Parts parts) {
-            return validity == null ? parts.days() : new NullableData(parts.days(), validity);
+        Object days(Object days) {
+            return validity == null ? days : new NullableData(days, validity);
         }
 
         /// Bounds over the valid rows only: an invalid slot's placeholder is not a value.
@@ -234,5 +228,42 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     /// One timestamp column split into its three `vortex.datetimeparts` children.
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Parts(long[] days, long[] seconds, long[] subseconds) {
+    }
+
+    private static byte[] metadata(Part days, Part seconds, Part subseconds) {
+        return new ProtoDateTimePartsMetadata(days.protoPtype(), seconds.protoPtype(), subseconds.protoPtype())
+                .encode();
+    }
+
+    /// One part narrowed as Rust's `compress_temporal` narrows each part before compressing it
+    /// (`PrimitiveArray::narrow`). The width decides the cascade: 64-bit days scored FoR at 64/6
+    /// bits and beat run-length encoding that wins on 16-bit days (#634).
+    ///
+    /// @param ptype  the narrowed type
+    /// @param values the part in `ptype`'s carrier array
+    private record Part(PType ptype, Object values) {
+
+        static Part narrowed(long[] values, boolean[] validity) {
+            PType ptype = narrowest(values, validity);
+            return new Part(ptype, PrimitiveArrays.fromLongsArray(values, ptype, EncodingId.VORTEX_DATETIMEPARTS));
+        }
+
+        DType dtype(boolean nullable) {
+            return new DType.Primitive(ptype, nullable);
+        }
+
+        io.github.dfa1.vortex.core.proto.ProtoPType protoPtype() {
+            return io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(ptype.ordinal());
+        }
+    }
+
+    /// Rust's `PrimitiveArray::narrow` over the valid rows; an empty part is `U8`, as Rust zeroes it.
+    private static PType narrowest(long[] values, boolean[] validity) {
+        if (values.length == 0) {
+            return PType.U8;
+        }
+        Object valid = validity == null ? values : PrimitiveArrays.compact(PType.I64, values, validity);
+        long[] minMax = SimdOperationsSupport.preferred().minMax(valid, PType.I64);
+        return PType.narrowest(minMax[0], minMax[1]);
     }
 }

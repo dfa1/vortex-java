@@ -126,4 +126,31 @@ class PTypeTest {
         // Then
         assertThat(result).isSameAs(expected);
     }
+
+    @ParameterizedTest
+    @CsvSource({
+            // Rust's PrimitiveArray::narrow test cases (test_downcast_signed/unsigned), plus the
+            // tiers past 32 bits that keep I64
+            "0,           127,         U8",
+            "0,           255,         U8",
+            "0,           256,         U16",
+            "0,           65536,       U32",
+            "0,           4294967295,  U32",
+            "0,           4294967296,  I64",
+            "-128,        127,         I8",
+            "-129,        127,         I16",
+            "-128,        128,         I16",
+            "-32768,      32767,       I16",
+            "-32769,      32767,       I32",
+            "-32768,      32768,       I32",
+            "-1,          200,         I16",
+            "-2147483648, 2147483647,  I32",
+            "-2147483649, 0,           I64",
+    })
+    void narrowest_picksRustsNarrowType(long min, long max, PType expected) {
+        // Given / When
+        PType result = PType.narrowest(min, max);
+        // Then
+        assertThat(result).isSameAs(expected);
+    }
 }

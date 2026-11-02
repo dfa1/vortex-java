@@ -227,7 +227,9 @@ public final class CascadingCompressor {
         // A column without nulls has no validity to store, as Rust imports an Arrow array whose
         // null count is zero (`Validity::AllValid`). Deeper down a NullableData keeps its bitmap
         // even when every bit is set, as a filtered or sampled Rust array does.
-        if (keepsValidity(dtype) && data instanceof NullableData nullable && nullable.nullCount() == 0) {
+        // An extension's storage is that array too.
+        if ((keepsValidity(dtype) || dtype instanceof DType.Extension)
+                && data instanceof NullableData nullable && nullable.nullCount() == 0) {
             return encodeWithCtx(dtype, nullable.values(), ctx);
         }
         return encodeWithCtx(dtype, data, ctx);
@@ -262,12 +264,32 @@ public final class CascadingCompressor {
         // subseconds) are recursively compressed rather than stored as raw primitives. Honor the
         // excluded set so spliceResult's notApplicable retry can rotate to the next accepting
         // encoding (e.g. DateTimePartsEncoding → ExtEncoding for a date, or an all-null chunk).
+        if (dtype instanceof DType.Extension) {
+            return encodeExtension(dtype, data, ctx);
+        }
         if (!(dtype instanceof DType.Primitive)) {
             return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
 
         return competeAndEncode(dtype, withStats(dtype, data, ctx), ctx,
                 sampleSize -> primitiveBytes(dtype, sampleSize));
+    }
+
+    /// Rust's `compress_canonical` for an extension array (`compressor/cascade.rs`): an extension
+    /// scheme such as `vortex.datetimeparts` is kept only when it comes out strictly smaller than
+    /// the storage compressed as `vortex.ext`. On a few rows, as in a zone-stats table, the split
+    /// parts cost more than the plain storage (#634). A constant needs no comparison.
+    private EncodeResult encodeExtension(DType dtype, Object data, EncodeContext ctx) {
+        EncodeResult scheme = spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
+        EncodingId root = scheme.rootNode().encodingId();
+        if (root.equals(EncodingId.VORTEX_EXT) || root.equals(EncodingId.VORTEX_CONSTANT)
+                || root.equals(EncodingId.VORTEX_MASKED) || ctx.excluded().contains(EncodingId.VORTEX_EXT)) {
+            return scheme;
+        }
+        // the Parquet importer's pre-split carrier holds the plain i64 storage
+        Object storageData = data instanceof DateTimePartsData parts ? parts.timestamps() : data;
+        EncodeResult storage = encodeExtension(dtype, storageData, ctx.withExcluded(root));
+        return totalBytes(scheme) < totalBytes(storage) ? scheme : storage;
     }
 
     /// Bundles `data` with stats under the [StatsOptions] merged from every eligible encoder,
