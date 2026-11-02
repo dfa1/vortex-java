@@ -402,8 +402,9 @@ public final class VortexWriter implements Closeable {
         if (allowed.isEmpty() || allowed.contains(EncodingId.FASTLANES_DELTA)) {
             codecs.add(new DeltaEncodingEncoder());
         }
-        // Decimals: byte-parts (precision <= 18) cascades its i64 mantissa through FoR/bit-packing;
-        // plain vortex.decimal covers every width. The competition keeps the smaller.
+        // Decimals: byte-parts (precision <= 18) narrows its mantissa and cascades it through
+        // FoR/bit-packing, as Rust's DecimalScheme always does (AlwaysUse); it is found first, and
+        // plain vortex.decimal takes what it declines (wider precisions, chunks under two values).
         codecs.add(new DecimalBytePartsEncodingEncoder());
         codecs.add(new DecimalEncodingEncoder());
         // FsstEncodingEncoder sits between Dict and VarBin. Utf8 goes through
