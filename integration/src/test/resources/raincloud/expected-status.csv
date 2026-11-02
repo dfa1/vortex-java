@@ -49,7 +49,7 @@ bi-arade,ok
 bi-bimbo,ok
 bi-citymaxcapita,ok
 bi-cmsprovider,ok
-bi-commongovernment,untriaged
+bi-commongovernment,ok
 bi-corporations,ok
 bi-eixo,ok
 bi-euro2016,ok
@@ -166,7 +166,7 @@ finemath-4plus,ok
 finepdfs-en-test,ok
 finetranslations-swedish,ok
 fineweb-2-swedish,ok
-fineweb-sample-10bt,untriaged
+fineweb-sample-10bt,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 fitbit,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
@@ -218,7 +218,7 @@ insurance,ok
 international-football-results-from-1872-to-2017,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 iowa-liquor-sales,missing_auth
-jsonbench-bluesky-100m,untriaged
+jsonbench-bluesky-100m,ok
 kepler-exoplanet-search-results,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 kepler-labelled-time-series-data,missing_auth
@@ -286,7 +286,7 @@ squad-v2,ok
 stack-overflow-2018-developer-survey,ok
 stackoverflow-badges,ok
 stackoverflow-postlinks,ok
-stackoverflow-posts,untriaged
+stackoverflow-posts,ok
 stackoverflow-tags,ok
 stackoverflow-users,ok
 synthetic-text-to-sql,ok
@@ -407,7 +407,7 @@ tpcgen-rs-tpch-sf10-partsupp,ok
 tpcgen-rs-tpch-sf10-region,ok
 tpcgen-rs-tpch-sf10-supplier,ok
 tpcgen-rs-tpch-sf100-customer,ok
-tpcgen-rs-tpch-sf100-lineitem,untriaged
+tpcgen-rs-tpch-sf100-lineitem,ok
 tpcgen-rs-tpch-sf100-nation,ok
 tpcgen-rs-tpch-sf100-orders,ok
 tpcgen-rs-tpch-sf100-part,ok
@@ -483,7 +483,7 @@ walmart-dataset,missing_auth
 waxal-dagbani-asr-test,ok
 # fails to hydrate on raincloud v0.3.0: the World Bank replaced WDI_CSV.zip, so the recipe sha256 pin no longer matches
 wdi,ok
-websight-v01,untriaged
+websight-v01,ok
 wikipedia-en,ok
 world-energy-consumption,ok
 yellow_tripdata_2025,ok
