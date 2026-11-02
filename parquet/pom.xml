@@ -37,6 +37,11 @@
             <groupId>com.github.luben</groupId>
             <artifactId>zstd-jni</artifactId>
         </dependency>
+        <dependency>
+            <!-- Required by hardwood-core for SNAPPY-compressed Parquet files (optional upstream). -->
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+        </dependency>
         <!-- testing -->
         <!-- reader declares the zstd bindings optional; pull it in so the test can decode ZSTD chunks -->
         <dependency>

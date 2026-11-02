@@ -41,6 +41,12 @@
             <artifactId>zstd-jni</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- ... and snappy-java for SNAPPY-compressed pages -->
+        <dependency>
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.github.dfa1.vortex</groupId>
             <artifactId>vortex-writer</artifactId>
