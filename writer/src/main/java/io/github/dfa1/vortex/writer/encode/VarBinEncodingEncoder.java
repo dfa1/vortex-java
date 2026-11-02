@@ -65,7 +65,7 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
             for (int i = 0; i < perRow.length; i++) {
                 MemorySegment.copy(perRow[i], 0, bytesBuf, ValueLayout.JAVA_BYTE, at, perRow[i].length);
                 at += perRow[i].length;
-                offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i + 1, at);
+                offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i + 1L, at);
             }
         }
 
