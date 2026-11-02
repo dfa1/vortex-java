@@ -721,6 +721,29 @@ class ParquetImporterTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("does_not_exist");
         }
+
+        @Test
+        void snappyCompressedFile_isImported(@TempDir Path tmp) throws Exception {
+            // Given — pages compressed with SNAPPY, the codec of Spark, parquet-rs and DuckDB (#645)
+            Path vortex = tmp.resolve("out.vortex");
+            Path parquet = Path.of(ParquetImporterTest.class
+                    .getResource("/fixtures/snappy_compressed.parquet").toURI());
+
+            // When
+            ParquetImporter.importParquet(parquet, vortex);
+
+            // Then
+            try (VortexReader reader = VortexReader.open(vortex);
+                 ScanIterator iter = reader.scan(ScanOptions.all())) {
+                long rows = 0;
+                while (iter.hasNext()) {
+                    try (Chunk c = iter.next()) {
+                        rows += c.rowCount();
+                    }
+                }
+                assertThat(rows).isEqualTo(1000L);
+            }
+        }
     }
 
     private static Path fixture() throws Exception {

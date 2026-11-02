@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Parquet import reads Snappy-compressed files, the default of Spark, parquet-rs and DuckDB, instead of failing for lack of `snappy-java`. ([#645](https://github.com/dfa1/vortex-java/issues/645))
 - A decimal column's values are narrowed and compressed under `vortex.decimal_byte_parts`, as Rust does, instead of stored as plain 64-bit integers: TPC-H's decimal columns are 2.5 to 16 times smaller. ([#644](https://github.com/dfa1/vortex-java/issues/644))
 - A nullable timestamp column holding nulls is written as `vortex.datetimeparts` with the validity on its days part, as Rust writes it, instead of `vortex.ext` over a masked i64. ([#627](https://github.com/dfa1/vortex-java/issues/627))
 - A timestamp column's `vortex.datetimeparts` parts are narrowed as Rust narrows them, so runny days with nulls run-length encode (9% smaller files), and its zone-stats bounds stay plain storage when splitting them is no smaller. ([#634](https://github.com/dfa1/vortex-java/issues/634))

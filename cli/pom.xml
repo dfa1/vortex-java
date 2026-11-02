@@ -55,6 +55,11 @@
             <artifactId>zstd-jni</artifactId>
         </dependency>
         <dependency>
+            <!-- Same for SNAPPY-compressed Parquet files. -->
+            <groupId>org.xerial.snappy</groupId>
+            <artifactId>snappy-java</artifactId>
+        </dependency>
+        <dependency>
             <!-- ImportCommand calls {@code options.writeOptions().allowedCascading()} via the
                  csv / parquet importers' API surface; that transitively reaches
                  {@link io.github.dfa1.vortex.writer.WriteOptions}. Required at compile scope
