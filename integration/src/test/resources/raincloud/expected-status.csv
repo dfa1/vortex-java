@@ -105,7 +105,7 @@ cardiovascular-diseases-risk-prediction-dataset,ok
 # as their regression test in #1381), so the bump to Beta2 should make this slug assert for real
 # again — drop this comment then, and if it still aborts, the blocker is a new one.
 chess,ok
-clickbench-hits,untriaged
+clickbench-hits,ok
 cnn-dailymail,ok
 codeparrot-clean-valid,ok
 cohere-wikipedia-simple-embed,ok
@@ -120,7 +120,7 @@ covid19-data-from-john-hopkins-university,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
 crimes-in-boston,missing_auth
 databricks-dolly-15k,ok
-dbpedia-embeddings,untriaged
+dbpedia-embeddings,ok
 diabetes-health-indicators-dataset,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 disease-symptom-description-dataset,missing_auth
@@ -161,8 +161,8 @@ duckdb-tpch-sf1-supplier,ok
 electric-motor-temperature,missing_auth
 emotions-dataset-for-nlp,ok
 fhv_tripdata_2025,ok
-fhvhv_tripdata_2025,untriaged
-finemath-4plus,untriaged
+fhvhv_tripdata_2025,ok
+finemath-4plus,ok
 finepdfs-en-test,ok
 finetranslations-swedish,ok
 fineweb-2-swedish,ok
@@ -172,7 +172,7 @@ fitbit,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
 formula-1-world-championship-1950-2020,missing_auth
 frames-benchmark,ok
-ghcn-daily,untriaged
+ghcn-daily,ok
 glass,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 global-fossil-co2-emissions-by-country-2002-2022,missing_auth
@@ -184,7 +184,7 @@ google-cluster-trace-2011-machine-events,ok
 green_tripdata_2025,ok
 gsm8k,ok
 gtsrb-german-traffic-sign,ok
-hacker-news,untriaged
+hacker-news,ok
 heart-disease-health-indicators-dataset,ok
 hellaswag,ok
 helpsteer2,ok
@@ -250,15 +250,15 @@ nyc-parking-tickets,ok
 nyc-property-sales,ok
 nypd-complaints,ok
 oasst1,ok
-open-food-facts,untriaged
+open-food-facts,ok
 openlibrary-authors,ok
-openlibrary-editions,untriaged
-openlibrary-works,untriaged
+openlibrary-editions,ok
+openlibrary-works,ok
 openorca,ok
 openpowerlifting,ok
-osm-germany-nodes,untriaged
+osm-germany-nodes,ok
 osm-germany-relations,ok
-osm-germany-ways,untriaged
+osm-germany-ways,ok
 # kaggle auth login / KAGGLE_API_TOKEN
 osmi-mental-health-in-tech-2016,missing_auth
 # kaggle auth login / KAGGLE_API_TOKEN
@@ -281,7 +281,7 @@ personal-key-indicators-of-heart-disease,ok
 pleias-synth,ok
 pubmedqa-labeled,ok
 sf-salaries,ok
-slimpajama-6b,untriaged
+slimpajama-6b,ok
 squad-v2,ok
 stack-overflow-2018-developer-survey,ok
 stackoverflow-badges,ok
@@ -484,7 +484,7 @@ waxal-dagbani-asr-test,ok
 # fails to hydrate on raincloud v0.3.0: the World Bank replaced WDI_CSV.zip, so the recipe sha256 pin no longer matches
 wdi,ok
 websight-v01,untriaged
-wikipedia-en,untriaged
+wikipedia-en,ok
 world-energy-consumption,ok
 yellow_tripdata_2025,ok
 youtube-commons-sample,ok
