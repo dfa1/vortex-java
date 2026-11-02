@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
@@ -10,7 +11,12 @@ import io.github.dfa1.vortex.core.proto.ProtoDecimalBytePartsMetadata;
 import io.github.dfa1.vortex.reader.decode.DecimalBytePartsEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.ParameterizedTest;
+import io.github.dfa1.vortex.core.model.EncodingId;
 
+import java.lang.foreign.MemorySegment;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,10 +62,21 @@ class DecimalBytePartsEncodingEncoderTest {
         assertThat(result.buffers()).hasSize(1);
     }
 
-    @Test
-    void metadata_zerothChildPtype_isI64_lowerPartCountIsZero() throws Exception {
-        // Given
-        long[] values = {42L};
+    @ParameterizedTest(name = "[{0}, {1}] -> {2}")
+    @CsvSource({
+            "0, 127, I8",
+            "-128, 0, I8",
+            "0, 128, I16",
+            "-129, 0, I16",
+            "-32768, 32767, I16",
+            "0, 32768, I32",
+            "-2147483648, 2147483647, I32",
+            "0, 2147483648, I64",
+            "-9223372036854775808, 0, I64",
+    })
+    void metadata_zerothChildPtype_isTheNarrowestSignedType(long min, long max, PType expected) throws Exception {
+        // Given — Rust's narrowed_decimal picks among i8/i16/i32/i64, never an unsigned type (#644)
+        long[] values = {min, max};
         DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
         var sut = new DecimalBytePartsEncodingEncoder();
 
@@ -67,18 +84,53 @@ class DecimalBytePartsEncodingEncoderTest {
         EncodeResult result = sut.encode(dtype, values, EncodeTestHelper.testCtx());
 
         // Then
-        java.lang.foreign.MemorySegment metaSeg = result.rootNode().metadata();
+        MemorySegment metaSeg = result.rootNode().metadata();
         ProtoDecimalBytePartsMetadata meta =
                 ProtoDecimalBytePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
-        assertThat(meta.zeroth_child_ptype().value()).isEqualTo(7); // I64 ordinal
+        assertThat(meta.zeroth_child_ptype().value()).isEqualTo(expected.ordinal());
         assertThat(meta.lower_part_count()).isZero();
+    }
+
+    @ParameterizedTest(name = "{0} values")
+    @ValueSource(ints = {0, 1})
+    void encodeCascade_underTwoValues_isNotApplicable(int n) {
+        // Given — Rust's try_downcast leaves such an array un-narrowed, a canonical vortex.decimal
+        long[] values = new long[n];
+        DType dtype = DType.Decimal.of(15, 2, false);
+        var sut = new DecimalBytePartsEncodingEncoder();
+
+        // When
+        CascadeStep result = sut.encodeCascade(dtype, values, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.applicable()).isFalse();
+    }
+
+    @Test
+    void encodeCascade_opensTheNarrowedValueChildForTheCascade() {
+        // Given — l_quantity-like values: 1.00..50.00 at scale 2, an i16 child
+        BigDecimal[] values = {new BigDecimal("1.00"), new BigDecimal("50.00"), new BigDecimal("17.00")};
+        DType dtype = DType.Decimal.of(15, 2, false);
+        var sut = new DecimalBytePartsEncodingEncoder();
+
+        // When
+        CascadeStep result = sut.encodeCascade(dtype, values, EncodeTestHelper.testCtx());
+
+        // Then — one open child for the cascade to compress, not a terminal primitive
+        assertThat(result.applicable()).isTrue();
+        assertThat(result.openChildren()).singleElement().satisfies(child -> {
+            assertThat(child.childDtype()).isEqualTo(new DType.Primitive(PType.I16, false));
+            assertThat((short[]) child.childData()).containsExactly((short) 100, (short) 5000, (short) 1700);
+            assertThat(child.excluded()).contains(EncodingId.VORTEX_DECIMAL_BYTE_PARTS);
+        });
+        assertThat(result.statsMin()).isEqualTo(ZoneMapStats.ofDecimal(new long[]{100L, 5000L, 1700L}).min());
     }
 
     /// The byte-parts layout stores the whole unscaled value in one i64 mantissa (no low parts), so
     /// it must not offer itself for a precision whose values overflow a long: the cascade would
     /// pick it and fail (or truncate) on a decimal(19+) column.
-    @org.junit.jupiter.params.ParameterizedTest(name = "precision {0} accepted={1}")
-    @org.junit.jupiter.params.provider.CsvSource({"1, true", "18, true", "19, false", "38, false", "76, false"})
+    @ParameterizedTest(name = "precision {0} accepted={1}")
+    @CsvSource({"1, true", "18, true", "19, false", "38, false", "76, false"})
     void accepts_onlyPrecisionsThatFitAnI64(int precision, boolean expected) {
         // Given
         var sut = new DecimalBytePartsEncodingEncoder();
