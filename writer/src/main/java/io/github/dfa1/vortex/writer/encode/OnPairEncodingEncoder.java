@@ -54,7 +54,14 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        VarBinBytes.Rows rows = Encoder.rows(data);
+        VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
+        if (rows == null) {
+            throw new UnsupportedOperationException("vortex.onpair: chunk exceeds 2 GB of row bytes");
+        }
+        return encode(dtype, data, rows, ctx);
+    }
+
+    private static EncodeResult encode(DType dtype, Object data, VarBinBytes.Rows rows, EncodeContext ctx) {
         OnPair c = Encoder.compress(rows);
         Arena arena = ctx.arena();
         PType[] ptypes = c.childPTypes();
@@ -77,13 +84,17 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
     }
 
     /// Leaves the four integer children open, so the cascade can bit-pack, frame-of-reference or
-    /// constant-fold them, as Rust's compressor does.
+    /// constant-fold them, as Rust's compressor does. Steps aside past 2 GB of row bytes, which cannot
+    /// share one array: varbin, varbinview, fsst and zstd all take such a chunk.
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
-        if (ctx.allowedCascading() == 0) {
-            return CascadeStep.terminal(encode(dtype, data, ctx));
+        VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
+        if (rows == null) {
+            return CascadeStep.notApplicable();
         }
-        VarBinBytes.Rows rows = Encoder.rows(data);
+        if (ctx.allowedCascading() == 0) {
+            return CascadeStep.terminal(encode(dtype, data, rows, ctx));
+        }
         OnPair c = Encoder.compress(rows);
         PType[] ptypes = c.childPTypes();
         long[][] values = c.childValues();
@@ -145,14 +156,6 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         static final int DICT_CAPACITY = 1 << 12;
         static final double SAMPLE_FRACTION = 0.15;
         static final long SEED = 42;
-
-        static VarBinBytes.Rows rows(Object data) {
-            VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
-            if (rows == null) {
-                throw new UnsupportedOperationException("vortex.onpair: chunk exceeds 2 GB of row bytes");
-            }
-            return rows;
-        }
 
         static OnPair compress(VarBinBytes.Rows rows) {
             Trie trained = train(rows);

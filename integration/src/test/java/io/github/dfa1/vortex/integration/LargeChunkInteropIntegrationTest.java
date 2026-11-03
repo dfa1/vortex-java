@@ -23,6 +23,7 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -96,6 +97,31 @@ class LargeChunkInteropIntegrationTest {
             // zstd shrinks the repeated row to almost nothing; its 2 GiB is the payload it compresses
             assertThat(file.toFile().length()).isGreaterThan(Integer.MAX_VALUE);
         }
+        assertThat(readTailWithJni(file, ROWS - 4, ROWS)).hasSize(4).allSatisfy(b -> assertThat(b).isEqualTo(row));
+        assertThat(readLastWithJava(file)).isEqualTo(row);
+    }
+
+    /// `vortex.onpair` lays its rows out in one array, so past 2 GiB it steps aside and the cascade falls
+    /// back to an encoding that can hold the chunk, instead of aborting the write (#643).
+    @Test
+    void onPairStepsAsideForChunkPastTwoGibibytes(@TempDir Path tmp) throws Exception {
+        // Given
+        byte[] row = slightlyCompressibleRow();
+        byte[][] rows = new byte[ROWS][];
+        Arrays.fill(rows, row);
+        Path file = tmp.resolve("large.vortex");
+        WriteOptions options = WriteOptions.defaults()
+                .withColumnEncoding(BLOB, ColumnEncoding.candidates(EncodingId.VORTEX_ONPAIR));
+
+        // When
+        DType.Struct schema = new DType.Struct(List.of(BLOB), List.of(new DType.Binary(false)), false);
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(channel, schema, options)) {
+            writer.writeChunk(Map.of(BLOB, rows));
+        }
+
+        // Then
+        assertThat(dataEncoding(file)).isNotEqualTo("vortex.onpair");
         assertThat(readTailWithJni(file, ROWS - 4, ROWS)).hasSize(4).allSatisfy(b -> assertThat(b).isEqualTo(row));
         assertThat(readLastWithJava(file)).isEqualTo(row);
     }
