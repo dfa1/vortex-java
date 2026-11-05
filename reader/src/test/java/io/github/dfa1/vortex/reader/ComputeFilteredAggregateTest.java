@@ -476,8 +476,8 @@ class ComputeFilteredAggregateTest {
         assertThat(result.selectedRows()).as("selectedRows").isEqualTo(selected);
         assertThat(result.aggNonNullCount()).as("aggNonNullCount").isEqualTo(nonNull);
         assertThat(result.sum()).as("sum").isEqualTo(sum);
-        assertThat(result.min()).as("min").isEqualTo(found ? Long.valueOf(min) : null);
-        assertThat(result.max()).as("max").isEqualTo(found ? Long.valueOf(max) : null);
+        assertThat(result.min()).as("min").isEqualTo(found ? min : null);
+        assertThat(result.max()).as("max").isEqualTo(found ? max : null);
     }
 
     private static boolean allLeavesAccept(List<ScanFilter> leaves, Map<String, Reference> references, int i) {

@@ -240,7 +240,7 @@ class CalciteInteropIntegrationTest {
         // the query; the answer must be the strings Rust wrote, however it is computed
         Path file = tmp.resolve("jni_greek.vortex");
         Schema schema = new Schema(List.of(Field.notNullable("s", new ArrowType.Utf8())));
-        String[] values = {"MSFT", "\u03A9mega", "AAPL"};
+        String[] values = {"MSFT", "Ωmega", "AAPL"};
         try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
                 ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
@@ -270,7 +270,7 @@ class CalciteInteropIntegrationTest {
 
         // Then
         assertThat(min).isEqualTo("AAPL");
-        assertThat(max).isEqualTo("\u03A9mega");
+        assertThat(max).isEqualTo("Ωmega");
     }
 
     @ParameterizedTest(name = "{0}")
@@ -280,7 +280,7 @@ class CalciteInteropIntegrationTest {
         // Given — Rust dict-encodes a low-cardinality string column with nulls. GROUP BY on it folds
         // per dictionary code into a Values row per group; every group's aggregates must equal the
         // ones computed from the rows written
-        assertGroupBy(where, new String[]{"AAPL", "MSFT", "NVDA", "caf\u00E9", "AMZN", "META", "TSLA", null},
+        assertGroupBy(where, new String[]{"AAPL", "MSFT", "NVDA", "café", "AMZN", "META", "TSLA", null},
                 true, tmp);
     }
 
@@ -288,7 +288,7 @@ class CalciteInteropIntegrationTest {
     void jniWriter_groupByStringOutsideLatin1_answersThroughTheScan(@TempDir Path tmp) throws Exception {
         // Given — a group key Latin-1 cannot hold has no VARCHAR literal, so the fold leaves the query
         // to the scan; the answer must not change
-        assertGroupBy("", new String[]{"AAPL", "\u03A9mega", null}, false, tmp);
+        assertGroupBy("", new String[]{"AAPL", "Ωmega", null}, false, tmp);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -403,7 +403,7 @@ class CalciteInteropIntegrationTest {
         // Given — a prefix LIKE is pushed into the scan as a string range; "s || ''" keeps it out,
         // so Calcite evaluates the pattern over the same Rust-written rows itself
         Path file = tmp.resolve("jni_like.vortex");
-        writeGroupsWithJni(file, new String[]{"AAPL", "MSFT", "NVDA", "caf\u00E9", "AMZN", null});
+        writeGroupsWithJni(file, new String[]{"AAPL", "MSFT", "NVDA", "café", "AMZN", null});
 
         try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file))) {
             // When

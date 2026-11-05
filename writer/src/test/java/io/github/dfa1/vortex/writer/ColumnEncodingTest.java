@@ -168,7 +168,7 @@ class ColumnEncodingTest {
         return file;
     }
 
-    private static double[] readDoubles(VortexReader vf) throws IOException {
+    private static double[] readDoubles(VortexReader vf) {
         List<Double> out = new ArrayList<>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {

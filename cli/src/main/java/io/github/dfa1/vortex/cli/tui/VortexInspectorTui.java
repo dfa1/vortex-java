@@ -168,7 +168,7 @@ public final class VortexInspectorTui {
                 statsParentOf.put(statsChild, node);
             } else if (layout.isChunked() && hasLeadingStats(layout) && !node.children().isEmpty()) {
                 // Chunked with metadata[0] == 1: child[0] is the stats payload
-                InspectorTree.Node statsChild = node.children().get(0);
+                InspectorTree.Node statsChild = node.children().getFirst();
                 statsChildren.add(statsChild);
                 statsParentOf.put(statsChild, node);
             }
@@ -584,7 +584,7 @@ public final class VortexInspectorTui {
 
         private void runDictLoad(InspectorTree.Node dictNode) {
             try {
-                Layout values = dictNode.layout().children().get(0);
+                Layout values = dictNode.layout().children().getFirst();
                 DType dtype = columnDtypeFor(dictNode);
                 if (dtype == null) {
                     dictCache.put(dictNode, new DataState.Loaded(List.of()));

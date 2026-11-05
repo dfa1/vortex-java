@@ -157,9 +157,9 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         PType ptype = ((DType.Primitive) dtype).ptype();
         boolean[] validity = null;
         Object raw = data;
-        if (data instanceof NullableData nullable) {
-            validity = nullable.validity();
-            raw = nullable.values();
+        if (data instanceof NullableData(Object values1, boolean[] validity1)) {
+            validity = validity1;
+            raw = values1;
         }
         long[] longs = toLongs(raw, ptype);
         if (longs.length == 0) {

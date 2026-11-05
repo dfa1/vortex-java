@@ -151,8 +151,8 @@ class DateTimePartsEncodingEncoderTest {
             CascadeStep result = ENCODER.encodeCascade(NULLABLE_MS, data, EncodeTestHelper.testCtx());
 
             // Then
-            assertThat(result.openChildren().get(0).childDtype()).isEqualTo(DTypes.U8.asNullable());
-            assertThat(result.openChildren().get(0).childData()).isInstanceOf(byte[].class);
+            assertThat(result.openChildren().getFirst().childDtype()).isEqualTo(DTypes.U8.asNullable());
+            assertThat(result.openChildren().getFirst().childData()).isInstanceOf(byte[].class);
         }
 
         @Test

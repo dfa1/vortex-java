@@ -156,7 +156,9 @@ public sealed interface ExtensionId extends Serializable permits ExtensionId.Wel
                         throw new VortexException("unknown UUID version discriminant: " + Byte.toUnsignedInt(version));
                     }
                     if (!(storage instanceof DType.FixedSizeList list && list.fixedSize() == 16
-                            && list.elementType() instanceof DType.Primitive p && p.ptype() == PType.U8 && !p.nullable())) {
+                            && list.elementType() instanceof DType.Primitive(
+                        PType ptype, boolean nullable
+                    ) && ptype == PType.U8 && !nullable)) {
                         throw new VortexException(id + " storage dtype must be FixedSizeList<non-null U8, 16>, got " + storage);
                     }
                 }
@@ -203,7 +205,9 @@ public sealed interface ExtensionId extends Serializable permits ExtensionId.Wel
                 throw new VortexException(id + " coordinates must be a Struct, got " + dtype);
             }
             for (DType field : struct.fieldTypes()) {
-                if (!(field instanceof DType.Primitive p && p.ptype() == PType.F64 && !p.nullable())) {
+                if (!(field instanceof DType.Primitive(
+                    PType ptype, boolean nullable
+                ) && ptype == PType.F64 && !nullable)) {
                     throw new VortexException(id + " coordinate fields must be non-nullable F64, got " + field);
                 }
             }

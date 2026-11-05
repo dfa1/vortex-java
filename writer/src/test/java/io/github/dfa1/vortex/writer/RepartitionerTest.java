@@ -235,7 +235,7 @@ class RepartitionerTest {
         // Given: strings long enough that a batch crosses the 1 MiB block target, so cuts depend on the sizes
         String[] batch = new String[50_000];
         for (int i = 0; i < batch.length; i++) {
-            batch[i] = "x".repeat(10 + i % 40) + (i % 7 == 0 ? "\u20ac" : "");
+            batch[i] = "x".repeat(10 + i % 40) + (i % 7 == 0 ? "€" : "");
         }
         // and a 3000-row batch ahead of it, so its pieces start mid-block
         String[] head = new String[3000];

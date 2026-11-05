@@ -22,9 +22,7 @@ final class VortexReads {
     static int[] readAllInts(VortexReader vf, String col) {
         var collected = new ArrayList<Integer>();
         try (var iter = vf.scan(ScanOptions.all())) {
-            iter.forEachRemaining(c -> {
-                ((IntArray) c.column(ColumnName.of(col))).forEachInt(collected::add);
-            });
+            iter.forEachRemaining(c -> ((IntArray) c.column(ColumnName.of(col))).forEachInt(collected::add));
         }
         return collected.stream().mapToInt(Integer::intValue).toArray();
     }
@@ -32,9 +30,7 @@ final class VortexReads {
     static long[] readAllLongs(VortexReader vf, String col) {
         var collected = new ArrayList<Long>();
         try (var iter = vf.scan(ScanOptions.all())) {
-            iter.forEachRemaining(c -> {
-                ((LongArray) c.column(ColumnName.of(col))).forEachLong(collected::add);
-            });
+            iter.forEachRemaining(c -> ((LongArray) c.column(ColumnName.of(col))).forEachLong(collected::add));
         }
         return collected.stream().mapToLong(Long::longValue).toArray();
     }

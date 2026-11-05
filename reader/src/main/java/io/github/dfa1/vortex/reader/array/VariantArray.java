@@ -13,6 +13,7 @@ import java.lang.foreign.SegmentAllocator;
 /// - Buffers: none.
 /// - Child 0: `core_storage` — logical variant array preserving the full value per row.
 /// - Child 1 (optional): `shredded` — row-aligned typed array for selected paths.
+@SuppressWarnings("ClassCanBeRecord")
 public final class VariantArray implements Array {
 
     private final DType dtype;

@@ -1,30 +1,27 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.model.DTypes;
-import io.github.dfa1.vortex.reader.decode.DecodeContext;
-
-import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
+import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.DictEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.reader.decode.VarBinEncodingDecoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.stream.Stream;
-
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,37 +34,37 @@ class DictEncodingEncoderTest {
 
     static Stream<int[]> i32Arrays() {
         return Stream.of(
-                new int[]{0},
-                new int[]{1, 2, 3},
-                new int[]{0, 1, 2, 0, 1, 2, 0, 1, 2},
-                new int[]{42, 42, 42, 42, 42},
-                new int[]{Integer.MIN_VALUE, Integer.MAX_VALUE, 0, Integer.MIN_VALUE, Integer.MAX_VALUE}
+            new int[]{0},
+            new int[]{1, 2, 3},
+            new int[]{0, 1, 2, 0, 1, 2, 0, 1, 2},
+            new int[]{42, 42, 42, 42, 42},
+            new int[]{Integer.MIN_VALUE, Integer.MAX_VALUE, 0, Integer.MIN_VALUE, Integer.MAX_VALUE}
         );
     }
 
     static Stream<long[]> i64Arrays() {
         return Stream.of(
-                new long[]{0L},
-                new long[]{Long.MIN_VALUE, Long.MAX_VALUE, 0L, Long.MIN_VALUE},
-                new long[]{1L, 2L, 1L, 2L, 1L, 2L, 1L, 2L}
+            new long[]{0L},
+            new long[]{Long.MIN_VALUE, Long.MAX_VALUE, 0L, Long.MIN_VALUE},
+            new long[]{1L, 2L, 1L, 2L, 1L, 2L, 1L, 2L}
         );
     }
 
     static Stream<Arguments> repetitiveI32Arrays() {
         return Stream.of(
-                Arguments.of("binary-100", repeat(new int[]{0, 1}, 50)),
-                Arguments.of("single-value-50", repeat(new int[]{42}, 50)),
-                Arguments.of("three-values-60", repeat(new int[]{10, 20, 30}, 20))
+            Arguments.of("binary-100", repeat(new int[]{0, 1}, 50)),
+            Arguments.of("single-value-50", repeat(new int[]{42}, 50)),
+            Arguments.of("three-values-60", repeat(new int[]{10, 20, 30}, 20))
         );
     }
 
     static Stream<Arguments> utf8Arrays() {
         return Stream.of(
-                Arguments.of("single", new String[]{"hello"}),
-                Arguments.of("all-unique", new String[]{"a", "b", "c"}),
-                Arguments.of("repeated", new String[]{"AAPL", "GOOG", "AAPL", "MSFT", "GOOG", "AAPL"}),
-                Arguments.of("unicode", new String[]{"café", "naïve", "café", "résumé", "naïve"}),
-                Arguments.of("empty-string", new String[]{"", "x", "", "y", ""})
+            Arguments.of("single", new String[]{"hello"}),
+            Arguments.of("all-unique", new String[]{"a", "b", "c"}),
+            Arguments.of("repeated", new String[]{"AAPL", "GOOG", "AAPL", "MSFT", "GOOG", "AAPL"}),
+            Arguments.of("unicode", new String[]{"café", "naïve", "café", "résumé", "naïve"}),
+            Arguments.of("empty-string", new String[]{"", "x", "", "y", ""})
         );
     }
 
@@ -221,7 +218,7 @@ class DictEncodingEncoderTest {
     }
 
     @Test
-    void encode_primitive_statsCarryMinAndMaxOfLogicalValues() throws IOException {
+    void encode_primitive_statsCarryMinAndMaxOfLogicalValues() {
         // Given — low-cardinality so dict encoding is a plausible pick; unordered so a broken
         // scan (e.g. reading dict-code range instead of logical values) would surface a wrong
         // min/max. Regression for #379: the primitive branch previously hardcoded null stats,
@@ -238,7 +235,7 @@ class DictEncodingEncoderTest {
     }
 
     @Test
-    void encodeCascade_primitive_statsCarryMinAndMaxOfLogicalValues() throws IOException {
+    void encodeCascade_primitive_statsCarryMinAndMaxOfLogicalValues() {
         // Given — same #379 regression as encode_primitive_statsCarryMinAndMaxOfLogicalValues, but
         // for the cascade entry point (CascadingCompressor), the one the "better compression"
         // option actually drives.
@@ -253,7 +250,7 @@ class DictEncodingEncoderTest {
     }
 
     @Test
-    void encode_primitive_unsignedU32_statsUseUnsignedField() throws IOException {
+    void encode_primitive_unsignedU32_statsUseUnsignedField() {
         // Given
         int[] data = {300, 100, 200};
 
@@ -281,9 +278,9 @@ class DictEncodingEncoderTest {
         assertThat(result.ownedBytes()).isZero();
         assertThat(result.openChildren()).hasSize(2);
         assertThat(result.openChildren().get(0).excluded())
-                .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
+            .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
         assertThat(result.openChildren().get(1).excluded())
-                .containsExactly(EncodingId.VORTEX_DICT);
+            .containsExactly(EncodingId.VORTEX_DICT);
         assertThat((int[]) result.openChildren().get(1).childData()).containsExactly(10, 20, 30);
     }
 
@@ -311,8 +308,8 @@ class DictEncodingEncoderTest {
         // Then — codes bar sequence as above, while the values pool only bars a second dict: the
         // per-slot exclusion exists precisely because two children of one encoding differ here
         assertThat(result.openChildren().get(0).excluded())
-                .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
+            .containsExactlyInAnyOrder(EncodingId.VORTEX_DICT, EncodingId.VORTEX_SEQUENCE);
         assertThat(result.openChildren().get(1).excluded())
-                .containsExactly(EncodingId.VORTEX_DICT);
+            .containsExactly(EncodingId.VORTEX_DICT);
     }
 }

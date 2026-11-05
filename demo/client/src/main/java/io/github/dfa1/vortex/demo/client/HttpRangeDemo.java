@@ -171,7 +171,7 @@ public final class HttpRangeDemo {
     /// printing just the final line.
     private static long scanWithLiveDownloadCounter(HttpClient client, URI statsUri, URI objectUri,
             long bytesServedBefore, long fileSize, String filterColumn, long filterMin, long filterMax,
-            String projectColumn) throws IOException, InterruptedException {
+            String projectColumn) throws IOException {
         AtomicBoolean scanning = new AtomicBoolean(true);
         Thread poller = Thread.ofVirtual().name("download-progress").start(() -> {
             while (scanning.get()) {

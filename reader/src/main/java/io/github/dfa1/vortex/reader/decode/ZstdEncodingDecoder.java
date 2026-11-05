@@ -201,10 +201,9 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         MemorySegment out = ctx.arena().allocate(totalUncompressed);
         try (ZstdDecompressContext dctx = new ZstdDecompressContext();
              Arena scratch = Arena.ofConfined()) {
-            ZstdDecompressDictionary dictionary = hasDictionary
-                    ? digestDictionary(asNative(ctx.buffer(0), scratch), meta.dictionary_size())
-                    : null;
-            try {
+            try (ZstdDecompressDictionary dictionary = hasDictionary
+                                                           ? digestDictionary(asNative(ctx.buffer(0), scratch), meta.dictionary_size())
+                                                           : null) {
                 long outOffset = 0;
                 for (int i = 0; i < frameCount; i++) {
                     MemorySegment src = asNative(ctx.buffer(frameBufferBase + i), scratch);
@@ -212,10 +211,6 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
                     MemorySegment dst = out.asSlice(outOffset, uncompSize);
                     decompressFrame(dctx, dst, src, dictionary, EncodingId.VORTEX_ZSTD, i);
                     outOffset += uncompSize;
-                }
-            } finally {
-                if (dictionary != null) {
-                    dictionary.close();
                 }
             }
         }

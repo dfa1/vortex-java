@@ -110,14 +110,12 @@ public final class VortexServer implements AutoCloseable {
     }
 
     private void handle(HttpExchange exchange) throws IOException {
-        try {
+        try (exchange) {
             switch (exchange.getRequestMethod()) {
                 case "GET", "HEAD" -> handleGet(exchange);
                 case "PUT" -> handlePut(exchange);
                 default -> exchange.sendResponseHeaders(405, -1);
             }
-        } finally {
-            exchange.close();
         }
     }
 

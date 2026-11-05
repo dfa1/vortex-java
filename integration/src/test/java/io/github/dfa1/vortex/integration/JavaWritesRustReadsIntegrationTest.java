@@ -647,7 +647,7 @@ class JavaWritesRustReadsIntegrationTest {
                                    .rowRangeBegin(begin)
                                    .rowRangeEnd(end)
                                    .build();
-        var values = new ArrayList<Object>();
+        var values = new ArrayList<>();
         DataSource ds = DataSource.open(SESSION, uri);
         Scan scan = ds.scan(opts);
         while (scan.hasNext()) {
@@ -1089,7 +1089,7 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     private static List<Object> readJavaDecimals(Path file, String column) throws IOException {
-        var values = new ArrayList<Object>();
+        var values = new ArrayList<>();
         try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file);
              var chunks = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             chunks.forEachRemaining(chunk -> {
@@ -1113,7 +1113,7 @@ class JavaWritesRustReadsIntegrationTest {
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .filter(filter)
                                    .build();
-        var values = new ArrayList<Object>();
+        var values = new ArrayList<>();
         DataSource ds = DataSource.open(SESSION, uri);
         Scan scan = ds.scan(opts);
         while (scan.hasNext()) {

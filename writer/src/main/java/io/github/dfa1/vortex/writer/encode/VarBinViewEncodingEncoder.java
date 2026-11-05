@@ -51,8 +51,8 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
         // it past 2 GiB, the most a view's offset reaches here, so a chunk of any size fits (#633)
         List<Long> bufferSizes = new ArrayList<>();
         long current = 0;
-        for (int i = 0; i < n; i++) {
-            int len = bytes[i].length;
+        for (byte[] aByte : bytes) {
+            int len = aByte.length;
             if (len > MAX_INLINED_SIZE) {
                 if (current > 0 && current + len > maxDataBufferBytes) {
                     bufferSizes.add(current);

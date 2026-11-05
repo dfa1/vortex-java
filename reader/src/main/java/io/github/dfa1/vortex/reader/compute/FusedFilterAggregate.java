@@ -252,8 +252,8 @@ final class FusedFilterAggregate {
                 }
             }
         }
-        return new FilteredAggregate(selected, nonNull, Long.valueOf(sum),
-                found ? Long.valueOf(min) : null, found ? Long.valueOf(max) : null);
+        return new FilteredAggregate(selected, nonNull, sum,
+                found ? min : null, found ? max : null);
     }
 
     /// The double-domain lane: reads each selected non-null row through the hoisted `f32`/`f64` accessor
@@ -298,7 +298,7 @@ final class FusedFilterAggregate {
                 }
             }
         }
-        return new FilteredAggregate(selected, nonNull, Double.valueOf(sum),
+        return new FilteredAggregate(selected, nonNull, sum,
                 boxDouble(found, min, isFloat), boxDouble(found, max, isFloat));
     }
 
@@ -348,7 +348,7 @@ final class FusedFilterAggregate {
             }
         }
         // The additive identity (0.0) over zero non-null rows for a numeric primitive; null sum otherwise.
-        return new FilteredAggregate(selected, nonNull, numericPrimitive ? Double.valueOf(sum) : null, min, max);
+        return new FilteredAggregate(selected, nonNull, numericPrimitive ? sum : null, min, max);
     }
 
     /// Reports whether `a` orders before `b` in the long domain, unsigned-aware so a `u64` value past
@@ -379,9 +379,9 @@ final class FusedFilterAggregate {
         // back to Double — silently violating the Float contract above.
         if (isFloat) {
             // (float) round-trips a value that already came from a float accessor without loss.
-            return Float.valueOf((float) value);
+            return (float) value;
         }
-        return Double.valueOf(value);
+        return value;
     }
 
     /// Reports whether every leaf accepts row `i` (the n-ary `AND`), short-circuiting on the first

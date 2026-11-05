@@ -78,8 +78,8 @@ class ColumnZoneStatsTest {
 
         // Then — one zone per chunk, each carrying that chunk's stats (no data decoded)
         assertThat(result).hasSize(3);
-        assertThat(result.get(0).min()).isEqualTo(1L);
-        assertThat(result.get(0).max()).isEqualTo(50L);
+        assertThat(result.getFirst().min()).isEqualTo(1L);
+        assertThat(result.getFirst().max()).isEqualTo(50L);
         assertThat(result.get(0).sum()).isEqualTo(1275L);   // 1+..+50
         assertThat(result.get(0).nullCount()).isZero();
         assertThat(result.get(1).min()).isEqualTo(51L);

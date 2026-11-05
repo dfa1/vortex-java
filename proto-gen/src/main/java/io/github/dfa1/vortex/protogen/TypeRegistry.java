@@ -100,7 +100,7 @@ public final class TypeRegistry {
             }
         }
         if (matches.size() == 1) {
-            return matches.get(0).getValue();
+            return matches.getFirst().getValue();
         }
         if (matches.size() > 1) {
             List<String> fqns = new ArrayList<>(matches.size());

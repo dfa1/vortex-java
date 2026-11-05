@@ -158,7 +158,7 @@ class AggregatePushDownTest {
                 .withEdition(Editions.CORE_2025_10_0);
         try (var ch = FileChannel.open(stringsFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, stringsSchema, stringsOpts)) {
-            writer.writeChunk(Map.of(ColumnName.of("s"), new String[]{"MSFT", "\u03A9mega", "AAPL"}));
+            writer.writeChunk(Map.of(ColumnName.of("s"), new String[]{"MSFT", "Ωmega", "AAPL"}));
         }
 
         // When
@@ -174,7 +174,7 @@ class AggregatePushDownTest {
 
         // Then
         assertThat(min).isEqualTo("AAPL");
-        assertThat(max).isEqualTo("\u03A9mega");
+        assertThat(max).isEqualTo("Ωmega");
     }
 
     @Test

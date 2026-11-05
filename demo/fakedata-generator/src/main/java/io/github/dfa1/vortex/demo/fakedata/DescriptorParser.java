@@ -76,8 +76,8 @@ public final class DescriptorParser {
             case "series" -> new GeneratorSpec.Series(argAsDouble(args, 0, descriptor), argAsDouble(args, 1, descriptor));
             case "range" -> new GeneratorSpec.Range(argAsDouble(args, 0, descriptor), argAsDouble(args, 1, descriptor));
             case "normal" -> new GeneratorSpec.Normal(argAsDouble(args, 0, descriptor), argAsDouble(args, 1, descriptor));
-            case "enum" -> new GeneratorSpec.EnumLabels(args.get(0), (int) argAsDouble(args, 1, descriptor));
-            case "constant" -> new GeneratorSpec.Constant(args.isEmpty() ? "" : args.get(0));
+            case "enum" -> new GeneratorSpec.EnumLabels(args.getFirst(), (int) argAsDouble(args, 1, descriptor));
+            case "constant" -> new GeneratorSpec.Constant(args.isEmpty() ? "" : args.getFirst());
             case "bool" -> new GeneratorSpec.RandomBool();
             default -> throw new IllegalArgumentException(
                     "unknown generator '%s' in descriptor '%s'".formatted(function, descriptor));

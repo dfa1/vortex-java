@@ -43,13 +43,11 @@ public interface Terminal extends AutoCloseable {
     /// Writes a string of bytes (ASCII / UTF-8) verbatim to the terminal.
     ///
     /// @param s text to send (may contain ANSI escapes)
-    /// @throws IOException if the write fails
-    void write(String s) throws IOException;
+    void write(String s);
 
     /// Flushes any buffered output.
     ///
-    /// @throws IOException if flush fails
-    void flush() throws IOException;
+    void flush();
 
     /// Blocks until a key is available, then returns the decoded event.
     ///

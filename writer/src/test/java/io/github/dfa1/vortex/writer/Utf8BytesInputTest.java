@@ -18,6 +18,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.function.IntFunction;
 import java.util.stream.Stream;
@@ -80,7 +81,7 @@ class Utf8BytesInputTest {
             }
             chunks.add(rows);
         }
-        boolean nullable = chunks.stream().flatMap(Stream::of).anyMatch(s -> s == null);
+        boolean nullable = chunks.stream().flatMap(Stream::of).anyMatch(Objects::isNull);
         Path expected = write("strings.vortex", nullable, options, chunks.stream().map(r -> (Object) r).toList());
 
         // When
@@ -91,7 +92,7 @@ class Utf8BytesInputTest {
     }
 
     @Test
-    void malformedUtf8_isRejected() throws IOException {
+    void malformedUtf8_isRejected() {
         // Given: an overlong encoding of '/', which Rust's Utf8 validation rejects
         byte[][] rows = {"ok".getBytes(StandardCharsets.UTF_8), {(byte) 0xc0, (byte) 0xaf}};
 

@@ -50,13 +50,12 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
             }
         }
 
-        if (!(ctx.dtype() instanceof DType.Primitive p)) {
+        if (!(ctx.dtype() instanceof DType.Primitive(PType ptype, boolean nullable))) {
             throw new VortexException(EncodingId.VORTEX_ALP, "expected primitive dtype, got " + ctx.dtype());
         }
 
         int expE = meta.exp_e();
         int expF = meta.exp_f();
-        PType ptype = p.ptype();
         long n = ctx.rowCount();
 
         // Validity mirrors the Rust reference (`ValidityChild<ALP>`): an ALP array's
@@ -65,7 +64,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         // nullable primitive surfaces its MaskedArray instead of being flattened to a
         // raw segment (which silently dropped nulls — #210).
         DType.Primitive encodedDtype = new DType.Primitive(
-                ptype == PType.F64 ? PType.I64 : PType.I32, p.nullable());
+                ptype == PType.F64 ? PType.I64 : PType.I32, nullable);
         Array encoded = ctx.decodeChild(0, encodedDtype, n);
         MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(encoded);
         MemorySegment src = ctx.materialize(unwrapped.inner());

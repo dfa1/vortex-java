@@ -59,7 +59,7 @@ public final class VarBinDictArray implements VarBinArray {
         this.dictCodesSegs = dictCodesSegs;
         this.dictCodesPType = dictCodesPType;
         long dictSize = dictValOffsets.byteSize() / dictValOffPType.byteSize() - 1;
-        this.cacheSize = (int) Math.max(0, Math.min(Math.min(dictSize, length), MAX_CACHED_STRINGS));
+        this.cacheSize = (int) Math.clamp(dictSize, 0, Math.min(length, MAX_CACHED_STRINGS));
     }
 
     @Override

@@ -114,7 +114,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
             if (chunks.isEmpty()) {
                 throw new VortexException(EncodingId.VORTEX_CHUNKED, "chunked variant has no chunks");
             }
-            DType innerDtype = chunks.get(0).dtype();
+            DType innerDtype = chunks.getFirst().dtype();
             if (innerDtype instanceof DType.Primitive innerPt) {
                 return ChunkedArrayCombiner.combinePrimitive(innerPt.ptype(), innerDtype, totalRows, chunks);
             }

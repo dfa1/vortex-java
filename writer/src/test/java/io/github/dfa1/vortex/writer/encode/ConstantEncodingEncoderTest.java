@@ -409,7 +409,7 @@ class ConstantEncodingEncoderTest {
     class Stats {
 
         @Test
-        void encode_i64_reportsValueAsMinAndMax() throws java.io.IOException {
+        void encode_i64_reportsValueAsMinAndMax() {
             // Given
             long constant = -12345L;
 
@@ -422,7 +422,7 @@ class ConstantEncodingEncoderTest {
         }
 
         @Test
-        void encode_f64_reportsValueAsMinAndMax() throws java.io.IOException {
+        void encode_f64_reportsValueAsMinAndMax() {
             // Given
             double constant = 3.5;
 
@@ -435,7 +435,7 @@ class ConstantEncodingEncoderTest {
         }
 
         @Test
-        void encode_f16_reportsValueAsF16MinAndMax() throws java.io.IOException {
+        void encode_f16_reportsValueAsF16MinAndMax() {
             // Given — Rust types an F16 column's min/max as F16 scalars; an f32 one is rejected on read
             short[] data = {Float.floatToFloat16(2.5f), Float.floatToFloat16(2.5f)};
 

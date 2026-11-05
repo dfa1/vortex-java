@@ -66,7 +66,7 @@ class RustWritesNullableExoticColumnsInteropIntegrationTest {
     /// A value per row for one element type, shaped for an encoding.
     enum Exotic {
         // mantissas no decimal scaling reaches: ALP gives up, ALP-RD splits the bits
-        DOUBLE_SINE(Element.DOUBLE, row -> Math.sin(row)),
+        DOUBLE_SINE(Element.DOUBLE, Math::sin),
         DOUBLE_DECIMALS(Element.DOUBLE, row -> row / 100.0),
         DOUBLE_RANDOM_BITS(Element.DOUBLE, row -> Double.longBitsToDouble(new Random(row).nextLong() & 0x7FEFFFFFFFFFFFFFL)),
         INT_SIGNED_SMALL(Element.INT, row -> (int) (row % 7) - 3),

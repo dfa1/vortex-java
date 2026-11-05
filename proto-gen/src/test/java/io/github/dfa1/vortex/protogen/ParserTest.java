@@ -35,10 +35,10 @@ class ParserTest {
             assertThat(sut.protoPackage()).isEqualTo("vortex.test");
             assertThat(sut.javaPackage()).isEqualTo("io.github.dfa1.vortex.core.proto");
             assertThat(sut.decls()).hasSize(1);
-            Ast.MessageDecl foo = (Ast.MessageDecl) sut.decls().get(0);
+            Ast.MessageDecl foo = (Ast.MessageDecl) sut.decls().getFirst();
             assertThat(foo.name()).isEqualTo("Foo");
             assertThat(foo.members()).hasSize(3);
-            Ast.FieldDecl f0 = (Ast.FieldDecl) foo.members().get(0);
+            Ast.FieldDecl f0 = (Ast.FieldDecl) foo.members().getFirst();
             assertThat(f0.name()).isEqualTo("bit_width");
             assertThat(f0.type()).isEqualTo(Ast.Scalar.UINT32);
             assertThat(f0.rule()).isEqualTo(Ast.Rule.SINGLE);
@@ -69,8 +69,8 @@ class ParserTest {
             Ast.ProtoFile sut = new Parser(new Lexer(src).tokenize()).parseFile();
 
             // Then
-            Ast.MessageDecl msg = (Ast.MessageDecl) sut.decls().get(0);
-            Ast.OneOfDecl one = (Ast.OneOfDecl) msg.members().get(0);
+            Ast.MessageDecl msg = (Ast.MessageDecl) sut.decls().getFirst();
+            Ast.OneOfDecl one = (Ast.OneOfDecl) msg.members().getFirst();
             assertThat(one.name()).isEqualTo("kind");
             assertThat(one.fields()).hasSize(3);
             assertThat(one.fields().get(1).type()).isEqualTo(Ast.Scalar.SINT64);
@@ -91,11 +91,11 @@ class ParserTest {
             Ast.ProtoFile sut = new Parser(new Lexer(src).tokenize()).parseFile();
 
             // Then
-            Ast.EnumDecl e = (Ast.EnumDecl) sut.decls().get(0);
+            Ast.EnumDecl e = (Ast.EnumDecl) sut.decls().getFirst();
             assertThat(e.values()).extracting(Ast.EnumValue::name).containsExactly("U8", "I64");
             assertThat(e.values()).extracting(Ast.EnumValue::number).containsExactly(0, 7);
             Ast.MessageDecl m = (Ast.MessageDecl) sut.decls().get(1);
-            Ast.FieldDecl f = (Ast.FieldDecl) m.members().get(0);
+            Ast.FieldDecl f = (Ast.FieldDecl) m.members().getFirst();
             assertThat(((Ast.Ref) f.type()).typeName()).isEqualTo("vortex.dtype.PType");
         }
 

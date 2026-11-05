@@ -81,7 +81,7 @@ class HtmlReportTest {
 
         // Then — each column is half the file, and the widest bar is full width
         assertThat(result)
-                .contains("1.0 KB \u00b7 25.0% of file")
+                .contains("1.0 KB · 25.0% of file")
                 .contains("width:100.0000%");
     }
 

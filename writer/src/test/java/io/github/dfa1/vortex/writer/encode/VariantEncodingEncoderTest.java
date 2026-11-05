@@ -69,7 +69,7 @@ class VariantEncodingEncoderTest {
             assertThat(child.encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
             assertThat(child.bufferIndices()).containsExactly(0);
             assertThat(result.buffers()).hasSize(1);
-            assertThat(innerInt(result.buffers().get(0))).isEqualTo(7L);
+            assertThat(innerInt(result.buffers().getFirst())).isEqualTo(7L);
         }
 
         @Test
@@ -86,7 +86,7 @@ class VariantEncodingEncoderTest {
     class VaryingColumn {
 
         @Test
-        void distinctValues_emitChunkedOfConstants() throws Exception {
+        void distinctValues_emitChunkedOfConstants() {
             // Given three distinct per-row values
             VariantData data = new VariantData(List.of(i32Scalar(7L), i32Scalar(8L), i32Scalar(9L)));
 
@@ -112,7 +112,7 @@ class VariantEncodingEncoderTest {
 
             EncodeResult result = SUT.encode(VARIANT, data, EncodeTestHelper.testCtx());
 
-            MemorySegment offsets = result.buffers().get(0);
+            MemorySegment offsets = result.buffers().getFirst();
             var bb = offsets.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
             assertThat(bb.getLong(0)).isZero();
             assertThat(bb.getLong(8)).isEqualTo(1L);
@@ -131,7 +131,7 @@ class VariantEncodingEncoderTest {
             assertThat(chunked.children()).hasSize(3); // offsets + 2 constants
             assertThat(result.buffers()).hasSize(3);
 
-            MemorySegment offsets = result.buffers().get(0);
+            MemorySegment offsets = result.buffers().getFirst();
             var bb = offsets.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
             assertThat(bb.getLong(0)).isZero();
             assertThat(bb.getLong(8)).isEqualTo(2L);

@@ -154,10 +154,10 @@ final class ZoneMapStatCodec {
     }
 
     private static Object compactIfNullable(PType ptype, Object data) {
-        if (!(data instanceof NullableData nd)) {
+        if (!(data instanceof NullableData(Object values, boolean[] validity))) {
             return data;
         }
-        return PrimitiveArrays.compact(ptype, nd.values(), nd.validity());
+        return PrimitiveArrays.compact(ptype, values, validity);
     }
 
     /// Builds the per-zone min (or max) values array for the resolved min/max `dtype`, decoding each

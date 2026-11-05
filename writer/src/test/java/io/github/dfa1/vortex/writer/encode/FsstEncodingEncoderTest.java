@@ -46,7 +46,7 @@ class FsstEncodingEncoderTest {
         // sensor id had bounds and a 400k-value timestamp string did not.
 
         @Test
-        void encode_utf8_reportsLexicographicMinMax() throws Exception {
+        void encode_utf8_reportsLexicographicMinMax() {
             // Given — not in sorted order, so the encoder has to actually compare
             String[] data = {"pear", "apple", "quince", "banana"};
 
@@ -60,7 +60,7 @@ class FsstEncodingEncoderTest {
         }
 
         @Test
-        void encode_utf8_matchesWhatVarBinWouldReport() throws Exception {
+        void encode_utf8_matchesWhatVarBinWouldReport() {
             // Given — the same column encoded either way must zone-map identically, otherwise the
             // bounds a reader prunes on depend on which encoding the compressor happened to pick
             String[] data = {"2024-03-10T11:00:00", "2024-01-01T00:00:00", "2024-12-31T23:59:59"};
@@ -78,7 +78,7 @@ class FsstEncodingEncoderTest {
         }
 
         @Test
-        void encodeCascade_utf8_carriesTheSameStats() throws Exception {
+        void encodeCascade_utf8_carriesTheSameStats() {
             // Given — the cascading path builds its own CascadeStep rather than going through
             // encode(), so it needs the stats wired separately
             String[] data = {"pear", "apple", "quince"};
@@ -601,7 +601,7 @@ class FsstEncodingEncoderTest {
 
             // Then — the open uncompressed-length child (index 0) carries a plain int[], not the
             // byte[]/short[] the U8/U16 tiers would produce.
-            assertThat(result.openChildren().get(0).childData()).isInstanceOf(int[].class);
+            assertThat(result.openChildren().getFirst().childData()).isInstanceOf(int[].class);
         }
 
         @Test

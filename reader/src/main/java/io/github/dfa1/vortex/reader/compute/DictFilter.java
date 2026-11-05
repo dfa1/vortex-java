@@ -506,8 +506,8 @@ final class DictFilter {
             if (aggData == null) {
                 return new FilteredAggregate(selected, 0L, null, null, null);
             }
-            return new FilteredAggregate(selected, nonNull, Long.valueOf(sum),
-                    found ? Long.valueOf(min) : null, found ? Long.valueOf(max) : null);
+            return new FilteredAggregate(selected, nonNull, sum,
+                    found ? min : null, found ? max : null);
         }
     }
 
@@ -581,7 +581,7 @@ final class DictFilter {
         /// @return the fold: selected count, non-null count, the [Double] sum, and the boxed
         ///         `MIN` / `MAX` (`null` when no selected row is non-null)
         FilteredAggregate box() {
-            return new FilteredAggregate(selected, nonNull, Double.valueOf(sum),
+            return new FilteredAggregate(selected, nonNull, sum,
                     FusedFilterAggregate.boxDouble(found, min, aggIsFloat),
                     FusedFilterAggregate.boxDouble(found, max, aggIsFloat));
         }

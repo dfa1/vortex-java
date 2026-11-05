@@ -173,7 +173,7 @@ class DeltaEncodingEncoderTest {
     }
 
     @Test
-    void encode_signedI64_statsCarryMinAndMax() throws Exception {
+    void encode_signedI64_statsCarryMinAndMax() {
         // Given — unordered; min/max are interior so a broken scan (negated compare) picks a wrong value
         long[] data = {30L, -10L, 50L, 20L, 40L};
 
@@ -187,7 +187,7 @@ class DeltaEncodingEncoderTest {
     }
 
     @Test
-    void encode_unsignedU64_statsUseUnsignedOrderingAndField() throws Exception {
+    void encode_unsignedU64_statsUseUnsignedOrderingAndField() {
         // Given — -1L is the max value under unsigned ordering but the min under signed ordering, so this
         // pins both the unsigned compare (lines 57/60) and the unsigned stats field (isUnsigned/statsBytes)
         long[] data = {1L, -1L, 5L};

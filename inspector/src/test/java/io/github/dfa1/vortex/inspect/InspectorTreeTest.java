@@ -210,7 +210,7 @@ class InspectorTreeTest {
         assertThat(sut.root().children().get(1).fieldName()).contains("value");
         assertThat(sut.usedEncodings()).isEmpty();
         assertThat(sut.root().children().get(0).usedEncodings()).isEmpty();
-        assertThat(sut.root().children().get(0).stats()).isEqualTo(io.github.dfa1.vortex.reader.ArrayStats.empty());
+        assertThat(sut.root().children().getFirst().stats()).isEqualTo(io.github.dfa1.vortex.reader.ArrayStats.empty());
         // rawSegment is reserved for lazy peek; shallow build must never call it
         org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).rawSegment(
                 org.mockito.Mockito.any());

@@ -69,7 +69,7 @@ class WriterZoneMapTest {
 
         // When
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout column = reader.layout().children().get(0);
+            Layout column = reader.layout().children().getFirst();
 
             // Then the column is a vortex.stats layout: [data, zones], zone_len=4, MAX+MIN+NULL_COUNT
             assertThat(column.isZoned()).isTrue();
@@ -87,7 +87,7 @@ class WriterZoneMapTest {
 
         // When / Then the column is the plain chunked data layout
         try (VortexReader reader = VortexReader.open(file)) {
-            assertThat(reader.layout().children().get(0).isZoned()).isFalse();
+            assertThat(reader.layout().children().getFirst().isZoned()).isFalse();
         }
     }
 
@@ -113,7 +113,7 @@ class WriterZoneMapTest {
 
         // When the per-zone stats table is decoded the way the inspector decodes Rust files
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout zonesFlat = reader.layout().children().get(0).children().get(1);
+            Layout zonesFlat = reader.layout().children().getFirst().children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, numericStatsTableDtype(), 3, arena);
@@ -158,7 +158,7 @@ class WriterZoneMapTest {
 
         // When the per-zone stats table is decoded
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout zonesFlat = reader.layout().children().get(0).children().get(1);
+            Layout zonesFlat = reader.layout().children().getFirst().children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, numericStatsTableDtype(), 2, arena);
@@ -193,7 +193,7 @@ class WriterZoneMapTest {
 
         // When / Then
         try (VortexReader reader = VortexReader.open(file)) {
-            assertThat(reader.layout().children().get(0).isZoned())
+            assertThat(reader.layout().children().getFirst().isZoned())
                     .as("ptype %s zoned", ptype)
                     .isTrue();
         }
@@ -213,7 +213,7 @@ class WriterZoneMapTest {
 
         // When / Then
         try (VortexReader reader = VortexReader.open(file)) {
-            assertThat(reader.layout().children().get(0).isZoned()).isFalse();
+            assertThat(reader.layout().children().getFirst().isZoned()).isFalse();
         }
     }
 
@@ -237,7 +237,7 @@ class WriterZoneMapTest {
         // When / Then — zoned with the full MAX+MIN+SUM+NULL_COUNT bitset (0x78): zone 0 carries a
         // valid min/max from its data, zone 1 (the empty chunk) carries an invalid (null) min/max.
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout column = reader.layout().children().get(0);
+            Layout column = reader.layout().children().getFirst();
             assertThat(column.isZoned()).isTrue();
             MemorySegment meta = column.metadata();
             assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x78);
@@ -275,7 +275,7 @@ class WriterZoneMapTest {
 
         // When / Then the column is zoned with MAX+MIN+NULL_COUNT and string min/max decode per zone
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout column = reader.layout().children().get(0);
+            Layout column = reader.layout().children().getFirst();
             assertThat(column.isZoned()).isTrue();
             MemorySegment meta = column.metadata();
             assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
@@ -315,7 +315,7 @@ class WriterZoneMapTest {
         // test.ext has no decoder, so the file opens only with unknown ids allowed (Rust parity)
         ReadRegistry allowUnknown = ReadRegistry.builder().registerDefaults().allowUnknown().build();
         try (VortexReader reader = VortexReader.open(file, allowUnknown)) {
-            Layout column = reader.layout().children().get(0);
+            Layout column = reader.layout().children().getFirst();
             assertThat(column.isZoned()).isTrue();
             MemorySegment meta = column.metadata();
             assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
@@ -352,9 +352,9 @@ class WriterZoneMapTest {
 
         // When / Then — zoned over a dict data child, MAX+MIN+NULL_COUNT, string min/max per zone
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout column = reader.layout().children().get(0);
+            Layout column = reader.layout().children().getFirst();
             assertThat(column.isZoned()).isTrue();
-            assertThat(column.children().get(0).isDict()).isTrue();
+            assertThat(column.children().getFirst().isDict()).isTrue();
             MemorySegment meta = column.metadata();
             assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
 
@@ -389,9 +389,9 @@ class WriterZoneMapTest {
 
         // When / Then — zoned over a dict child with MAX+MIN+NULL_COUNT, numeric min/max per zone
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout column = reader.layout().children().get(0);
+            Layout column = reader.layout().children().getFirst();
             assertThat(column.isZoned()).isTrue();
-            assertThat(column.children().get(0).isDict()).isTrue();
+            assertThat(column.children().getFirst().isDict()).isTrue();
             MemorySegment meta = column.metadata();
             assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x78);
 
@@ -434,7 +434,7 @@ class WriterZoneMapTest {
 
         // When / Then min/max/sum per zone decode as exact doubles
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout zonesFlat = reader.layout().children().get(0).children().get(1);
+            Layout zonesFlat = reader.layout().children().getFirst().children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, f64StatsTableDtype(), 3, arena);
@@ -470,7 +470,7 @@ class WriterZoneMapTest {
 
         // When / Then min/max per zone match the source
         try (VortexReader reader = VortexReader.open(file)) {
-            Layout zonesFlat = reader.layout().children().get(0).children().get(1);
+            Layout zonesFlat = reader.layout().children().getFirst().children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
                 StructArray stats = (StructArray) reader.decodeSegment(spec, perTypeStatsTableDtype(ptype), 2, arena);

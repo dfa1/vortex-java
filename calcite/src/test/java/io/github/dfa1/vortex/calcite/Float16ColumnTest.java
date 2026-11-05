@@ -172,13 +172,10 @@ class Float16ColumnTest {
 
     private static List<Object[]> drain(VortexTable table) {
         List<Object[]> rows = new ArrayList<>();
-        Enumerator<Object[]> en = table.scan(null, List.of(), null).enumerator();
-        try {
+        try (Enumerator<Object[]> en = table.scan(null, List.of(), null).enumerator()) {
             while (en.moveNext()) {
                 rows.add(en.current());
             }
-        } finally {
-            en.close();
         }
         return rows;
     }

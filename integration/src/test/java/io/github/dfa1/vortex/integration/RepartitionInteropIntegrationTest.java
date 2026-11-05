@@ -67,10 +67,10 @@ class RepartitionInteropIntegrationTest {
         // their own size
         int[] lengths = random.ints(BATCHES * BATCH_ROWS, 0, 24).toArray();
         return Stream.of(
-                Arguments.of("inlined strings", false, (IntFunction<String>) row -> "v%07d".formatted(row)),
-                Arguments.of("out-of-line strings", false, (IntFunction<String>) row -> "value-%010d".formatted(row)),
+                Arguments.of("inlined strings", false, (IntFunction<String>) "v%07d"::formatted),
+                Arguments.of("out-of-line strings", false, (IntFunction<String>) "value-%010d"::formatted),
                 Arguments.of("mixed lengths", false, (IntFunction<String>) row -> "%06d".formatted(row) + "x".repeat(lengths[row])),
-                Arguments.of("nullable, no nulls", true, (IntFunction<String>) row -> "v%07d".formatted(row)),
+                Arguments.of("nullable, no nulls", true, (IntFunction<String>) "v%07d"::formatted),
                 Arguments.of("nullable, sparse nulls", true,
                         (IntFunction<String>) row -> row % 50_000 == 7 ? null : "v%07d".formatted(row)),
                 Arguments.of("nullable, null runs", true,

@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
@@ -33,17 +33,16 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        if (!(ctx.dtype() instanceof DType.Primitive p)) {
+        if (!(ctx.dtype() instanceof DType.Primitive(PType signed, boolean nullable))) {
             throw new VortexException(EncodingId.VORTEX_ZIGZAG, "expected primitive dtype, got " + ctx.dtype());
         }
-        PType signed = p.ptype();
         PType unsigned = toUnsigned(signed);
         long n = ctx.rowCount();
 
         // Validity mirrors the Rust reference (`ValidityChild<ZigZag>`): a zigzag array's
         // validity IS its encoded child's, and the child dtype inherits the nullability.
         // Decode as an Array so a masked child is split rather than flattened (#210).
-        Array encoded = ctx.decodeChild(0, new DType.Primitive(unsigned, p.nullable()), n);
+        Array encoded = ctx.decodeChild(0, new DType.Primitive(unsigned, nullable), n);
         MaskedArray.Unwrapped unwrapped = MaskedArray.unwrap(encoded);
         MemorySegment src = ctx.materialize(unwrapped.inner());
         int elemBytes = signed.byteSize();

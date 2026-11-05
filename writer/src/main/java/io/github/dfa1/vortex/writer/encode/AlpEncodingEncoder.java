@@ -104,9 +104,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         PType ptype = ((DType.Primitive) dtype).ptype();
         boolean[] validity = null;
         Object values = data;
-        if (data instanceof NullableData nullable) {
-            validity = nullable.validity();
-            values = nullable.values();
+        if (data instanceof NullableData(Object values1, boolean[] validity1)) {
+            validity = validity1;
+            values = values1;
         }
         CascadeStep step;
         if (ptype == PType.F64) {

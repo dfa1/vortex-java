@@ -227,9 +227,9 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         PType ptype = p.ptype();
         boolean[] validity = null;
         Object raw = data;
-        if (data instanceof NullableData nullable) {
-            validity = nullable.validity();
-            raw = nullable.values();
+        if (data instanceof NullableData(Object values1, boolean[] validity1)) {
+            validity = validity1;
+            raw = values1;
         }
         int n = Array.getLength(raw);
         if (n == 0) {

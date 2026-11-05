@@ -125,15 +125,15 @@ public final class HtmlReport {
             String label = stride == 1 ? "segment " + i : "segments " + i + "-" + last;
             String name = owner[i] < 0 ? "shared" : columns.get(owner[i]).name();
             block(sb, dataEnd, begin, end - begin, fill(owner[i]),
-                    label + " \u00b7 " + name + " \u00b7 off " + count(begin) + " \u00b7 "
-                            + ByteSize.format(end - begin) + " \u00b7 " + specs.get(i).compression().name());
+                    label + " · " + name + " · off " + count(begin) + " · "
+                            + ByteSize.format(end - begin) + " · " + specs.get(i).compression().name());
         }
         sb.append("</div>\n");
         if (metadata > 0) {
             sb.append("<div class=\"strip meta\">\n");
             block(sb, metadata, 0, metadata, "var(--meta)",
-                    "metadata \u00b7 footer, dtype, layout, postscript, trailer \u00b7 off "
-                            + count(dataEnd) + " \u00b7 " + ByteSize.format(metadata));
+                    "metadata · footer, dtype, layout, postscript, trailer · off "
+                            + count(dataEnd) + " · " + ByteSize.format(metadata));
             sb.append("</div>\n");
         }
         sb.append("</div>\n<div class=\"strips caps\">\n<span class=\"cap\">")
@@ -200,11 +200,11 @@ public final class HtmlReport {
                     .append("</p>\n</div>\n</details>\n");
             return;
         }
-        sb.append(ByteSize.format(column.bytes())).append(" \u00b7 ")
-                .append(percent(column.bytes(), tree.fileSize())).append(" of file \u00b7 ")
+        sb.append(ByteSize.format(column.bytes())).append(" · ")
+                .append(percent(column.bytes(), tree.fileSize())).append(" of file · ")
                 .append(count(column.chunks().size())).append(" chunks");
         if (column.rawBytes() > 0) {
-            sb.append(" \u00b7 ").append(ByteSize.format(column.rawBytes())).append(" unencoded (")
+            sb.append(" · ").append(ByteSize.format(column.rawBytes())).append(" unencoded (")
                     .append(count(tree.totalRowCount())).append(" rows of ")
                     .append(escape(column.storageType())).append(")");
         }

@@ -221,6 +221,6 @@ final class Sample {
             return 0;
         }
         long scaled = (long) total * SAMPLE_FRACTION_NUMERATORS[gen] / SAMPLE_FRACTION_DENOMINATOR;
-        return (int) Math.max(1, Math.min(total, scaled));
+        return (int) Math.clamp(total, 0, scaled);
     }
 }

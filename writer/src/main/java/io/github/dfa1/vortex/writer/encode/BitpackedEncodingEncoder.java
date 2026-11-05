@@ -76,9 +76,9 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         PType ptype = ((DType.Primitive) dtype).ptype();
         boolean[] validity = null;
         Object values = data;
-        if (data instanceof NullableData nullable) {
-            validity = nullable.validity();
-            values = nullable.values();
+        if (data instanceof NullableData(Object values1, boolean[] validity1)) {
+            validity = validity1;
+            values = values1;
         }
         long[] longs = PrimitiveArrays.toLongs(values, ptype, EncodingId.FASTLANES_BITPACKED);
         long typeMask = FastLanes.lowMask(ptype.bits());
@@ -106,9 +106,9 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         PType ptype = ((DType.Primitive) dtype).ptype();
         boolean[] validity = null;
         Object values = data;
-        if (data instanceof NullableData nullable) {
-            validity = nullable.validity();
-            values = nullable.values();
+        if (data instanceof NullableData(Object values1, boolean[] validity1)) {
+            validity = validity1;
+            values = values1;
         }
         long[] longs = PrimitiveArrays.toLongs(values, ptype, EncodingId.FASTLANES_BITPACKED);
         MemorySegment packed = packFastLanes(longs, longs.length, bitWidth, ptype.bits(), ctx.arena());

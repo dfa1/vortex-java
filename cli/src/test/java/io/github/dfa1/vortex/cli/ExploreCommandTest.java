@@ -155,7 +155,7 @@ class ExploreCommandTest {
     }
 
     @Test
-    void serve_analyzesColumnsConcurrently() throws IOException, InterruptedException {
+    void serve_analyzesColumnsConcurrently() throws IOException {
         // Given — each analysis waits until both are running: on the server's default single
         // thread the first would wait forever for the second, and "Analyze all" would run one
         // column at a time however many readers there are

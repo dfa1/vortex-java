@@ -182,7 +182,7 @@ class RunEndEncodingEncoderTest {
     class Stats {
 
         @Test
-        void encode_i64_reportsMinMaxAcrossRuns() throws java.io.IOException {
+        void encode_i64_reportsMinMaxAcrossRuns() {
             // Given — min/max must come from every run's value, not just the first/last run
             long[] data = {10L, 10L, -5L, -5L, 3L, 3L, 3L};
 
@@ -195,7 +195,7 @@ class RunEndEncodingEncoderTest {
         }
 
         @Test
-        void encode_u32_usesUnsignedComparison() throws java.io.IOException {
+        void encode_u32_usesUnsignedComparison() {
             // Given — a raw-bit value that would look negative under signed comparison but is a
             // huge positive magnitude as U32; a signed `<`/`>` comparison would pick the wrong min.
             int[] data = {1, 1, -1, -1}; // -1 raw bits == 4294967295 unsigned

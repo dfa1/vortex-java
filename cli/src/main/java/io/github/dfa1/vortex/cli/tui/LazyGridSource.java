@@ -32,7 +32,6 @@ public final class LazyGridSource implements AutoCloseable {
     private final long totalRows;
     private final int chunkCount;
     private final long[] chunkStartRows;
-    private final long[] chunkRowCounts;
 
     private ScanIterator iter;
     private int iterNextChunk;
@@ -78,7 +77,7 @@ public final class LazyGridSource implements AutoCloseable {
         if (failure.get() != null) {
             throw failure.get();
         }
-        this.chunkRowCounts = rowCountsRef.get();
+        long[] chunkRowCounts = rowCountsRef.get();
         this.chunkCount = chunkRowCounts.length;
         this.chunkStartRows = new long[chunkCount + 1];
         long running = 0;

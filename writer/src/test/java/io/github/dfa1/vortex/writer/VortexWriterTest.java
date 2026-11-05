@@ -487,7 +487,7 @@ class VortexWriterTest {
             throws IOException {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, options)) {
-            sut.writeChunk(Map.of(schema.fieldNames().get(0), data));
+            sut.writeChunk(Map.of(schema.fieldNames().getFirst(), data));
         }
     }
 

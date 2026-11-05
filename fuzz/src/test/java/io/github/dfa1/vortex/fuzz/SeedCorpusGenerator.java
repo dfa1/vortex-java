@@ -129,7 +129,7 @@ class SeedCorpusGenerator {
         }
 
         // Then
-        String result = new String(Files.readAllBytes(file), StandardCharsets.ISO_8859_1);
+        String result = Files.readString(file, StandardCharsets.ISO_8859_1);
         assertTrue(result.contains(candidates[0].toString()), candidates[0] + " lost to the canonical encoding");
     }
 

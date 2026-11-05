@@ -54,7 +54,7 @@ class ZoneAccumulatorTest {
             StructData result = sut.tableData();
 
             // Then
-            assertThat(((NullableData) result.fieldArrays().get(0)).validity()).containsExactly(false);
+            assertThat(((NullableData) result.fieldArrays().getFirst()).validity()).containsExactly(false);
             assertThat(values(result, 2)).isEqualTo(new long[]{3});
         }
 

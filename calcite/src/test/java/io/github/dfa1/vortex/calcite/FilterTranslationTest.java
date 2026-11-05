@@ -59,7 +59,7 @@ class FilterTranslationTest {
     }
 
     @Test
-    void inList_isEnforcedAndPrunes() throws Exception {
+    void inList_isEnforcedAndPrunes() {
         // Given id IN (1, 3)
         RexNode in = REX.makeIn(REX.makeInputRef(BIGINT, 0), List.of(literal(1), literal(3)));
 
@@ -68,7 +68,7 @@ class FilterTranslationTest {
     }
 
     @Test
-    void inListOverTwoColumns_isLeftToCalcite() throws Exception {
+    void inListOverTwoColumns_isLeftToCalcite() {
         // Given id = 1 OR n = 60 — no single-column predicate captures it
         RexNode or = REX.makeCall(SqlStdOperatorTable.OR,
                 REX.makeCall(SqlStdOperatorTable.EQUALS, REX.makeInputRef(BIGINT, 0), literal(1)),
@@ -84,7 +84,7 @@ class FilterTranslationTest {
     }
 
     @Test
-    void literalOnTheLeft_isEnforcedAndPrunes() throws Exception {
+    void literalOnTheLeft_isEnforcedAndPrunes() {
         // Given 3 >= id
         RexNode cmp = REX.makeCall(SqlStdOperatorTable.GREATER_THAN_OR_EQUAL, literal(3), REX.makeInputRef(BIGINT, 0));
 
@@ -93,7 +93,7 @@ class FilterTranslationTest {
     }
 
     @Test
-    void isNull_prunesChunksWithoutNulls() throws Exception {
+    void isNull_prunesChunksWithoutNulls() {
         // Given n IS NULL — the first chunk has a zero null count
         RexNode isNull = REX.makeCall(SqlStdOperatorTable.IS_NULL, REX.makeInputRef(NULLABLE_BIGINT, 1));
 

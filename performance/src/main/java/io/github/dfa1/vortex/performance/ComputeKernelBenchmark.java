@@ -303,7 +303,7 @@ public class ComputeKernelBenchmark {
             FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, ColumnName.of("measure"));
             FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, ColumnName.of("plain"));
             acc += measure.selectedRows() + measure.sum().longValue()
-                    + ((Long) measure.min()).longValue() + plain.sum().longValue();
+                    + (Long) measure.min() + plain.sum().longValue();
         }
         return acc;
     }

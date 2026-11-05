@@ -57,6 +57,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -204,7 +205,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// Sums the chunk row counts of `reader` from chunk metadata, without decoding data.
-    private static long countRows(VortexReader reader) throws IOException {
+    private static long countRows(VortexReader reader) {
         long total = 0;
         try (ScanIterator scan = reader.scan(ScanOptions.all())) {
             for (long c : scan.chunkRowCounts()) {
@@ -653,7 +654,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 .thenComparingLong(c -> c.position);
         // ponytail: rows are cut back to count whenever this slack fills, by a sort that TimSort makes
         // linear on the ordered runs a sorted column gives; capped so a huge count does not double memory
-        int capacity = count + Math.max(1024, Math.min(count, 1 << 20));
+        int capacity = count + Math.clamp(count, 1024, 1 << 20);
         List<Candidate> kept = new ArrayList<>();
         List<Candidate> fromChunk = new ArrayList<>();
         SortKey first = keys.getFirst();
@@ -1117,11 +1118,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 foldedSum = null;             // a contributing zone carried no usable sum
             } else if (floatingSum) {
                 foldedSum = doubleSum;
-            } else if (decimalSum != null) {
-                foldedSum = decimalSum;
-            } else {
-                foldedSum = longSum;
-            }
+            } else foldedSum = Objects.requireNonNullElseGet(decimalSum, () -> longSum);
             Long foldedNulls = nullCountKnown ? nullCount : null;
             // an unknown extreme is reported as absent, which the rule cannot mistake for an empty
             // selection while rows were kept

@@ -159,9 +159,9 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         }
         boolean[] validity = null;
         Object values = data;
-        if (data instanceof NullableData nullable) {
-            validity = nullable.validity();
-            values = nullable.values();
+        if (data instanceof NullableData(Object values1, boolean[] validity1)) {
+            validity = validity1;
+            values = values1;
         }
         DictData d = buildDictData(dtype, values, validity);
         PType codePType = d.codePType();

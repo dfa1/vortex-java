@@ -123,7 +123,7 @@ class FilterPushDownTest {
     // observe.
 
     @Test
-    void fullyCapturedPredicateIsRemovedFromCalcitesRecheckList() throws Exception {
+    void fullyCapturedPredicateIsRemovedFromCalcitesRecheckList() {
         // Given a comparison over a non-floating column (i64, field 0)
         RexBuilder rexBuilder = new RexBuilder(new JavaTypeFactoryImpl());
         RelDataType bigint = rexBuilder.getTypeFactory().createSqlType(SqlTypeName.BIGINT);
@@ -146,7 +146,7 @@ class FilterPushDownTest {
     }
 
     @Test
-    void floatingColumnPredicateIsAlsoRemovedFromCalcitesRecheckList() throws Exception {
+    void floatingColumnPredicateIsAlsoRemovedFromCalcitesRecheckList() {
         // Given a comparison over a floating column (f64, field 2): PredicateEvaluator /
         // PrimitiveFilter are NaN-correct (issue #406 gap 3), so VortexTable can now enforce this
         // one itself too, exactly like the non-floating case above.

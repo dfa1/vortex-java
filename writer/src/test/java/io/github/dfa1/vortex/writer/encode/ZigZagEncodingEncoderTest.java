@@ -237,7 +237,7 @@ class ZigZagEncodingEncoderTest {
     class Stats {
 
         @Test
-        void encode_i32_reportsMinMaxOfOriginalValues() throws java.io.IOException {
+        void encode_i32_reportsMinMaxOfOriginalValues() {
             // Given — the most negative value zigzag-maps to the largest unsigned code (-1 -> 1,
             // 5 -> 10); a bug reading stats off the transformed output would report min=0, max=10
             int[] data = {5, -1, 0, 3};
@@ -251,7 +251,7 @@ class ZigZagEncodingEncoderTest {
         }
 
         @Test
-        void encode_i64_reportsMinMaxOfOriginalValues() throws java.io.IOException {
+        void encode_i64_reportsMinMaxOfOriginalValues() {
             // Given
             long[] data = {Long.MIN_VALUE, Long.MAX_VALUE, 0L};
 

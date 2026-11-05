@@ -1,14 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
-import io.github.dfa1.vortex.core.model.PType;
-
 import io.github.dfa1.vortex.core.model.EncodingId;
-
-import io.github.dfa1.vortex.core.io.VortexFormat;
-
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoListViewMetadata;
 
 import java.lang.foreign.MemorySegment;
@@ -21,8 +18,9 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
     // StructEncodingEncoder is here because a ListView of structs is a legitimate column shape
     // (and is exactly how a vortex.map column stores its {key, value} entries).
     private static final List<EncodingEncoder> FALLBACK = List.of(
-            new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(), new BoolEncodingEncoder(),
-            new NullEncodingEncoder(), new ByteBoolEncodingEncoder(), new StructEncodingEncoder());
+        new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(), new BoolEncodingEncoder(),
+        new NullEncodingEncoder(), new ByteBoolEncodingEncoder(), new StructEncodingEncoder()
+    );
 
     /// Creates the encoder.
     public ListViewEncodingEncoder() {
@@ -46,44 +44,42 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
         // because a map's entries child must be a bare list-view.
         NullableData outerNullable = data instanceof NullableData nd ? nd : null;
         Object payload = outerNullable != null ? outerNullable.values() : data;
-        if (!(payload instanceof ListViewData lvd)) {
+        if (!(payload instanceof ListViewData(Object elements, int[] offsets, int[] sizes, long n))) {
             throw new VortexException(EncodingId.VORTEX_LISTVIEW,
-                    "expected ListViewData, got " + (payload == null ? "null" : payload.getClass().getName()));
+                "expected ListViewData, got " + (payload == null ? "null" : payload.getClass().getName()));
         }
         DType elementType = listDtype.elementType();
         // A nullable element type carries a NullableData(values, validity) pair, which only the
         // masked encoder understands — same dispatch StructEncodingEncoder does per field.
         EncodingEncoder elemEncoding =
-                (lvd.elements() instanceof NullableData && !(elementType instanceof DType.Extension))
-                        ? new MaskedEncodingEncoder()
-                        : findEncoding(elementType);
-        EncodeResult elemResult = elemEncoding.encode(elementType, lvd.elements(), ctx);
+            (elements instanceof NullableData && !(elementType instanceof DType.Extension))
+                ? new MaskedEncodingEncoder()
+                : findEncoding(elementType);
+        EncodeResult elemResult = elemEncoding.encode(elementType, elements, ctx);
 
         List<EncodedBuffer> allBuffers = new ArrayList<>(elemResult.encodedBuffers());
         int elemBufCount = allBuffers.size();
         EncodeNode elemNode = EncodeNode.remapBufferIndices(elemResult.rootNode(), 0);
 
-        long n = lvd.outerLen();
-
         MemorySegment offsetsBuf = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
         for (int i = 0; i < n; i++) {
-            offsetsBuf.setAtIndex(VortexFormat.LE_INT, i, lvd.offsets()[i]);
+            offsetsBuf.setAtIndex(VortexFormat.LE_INT, i, offsets[i]);
         }
         allBuffers.add(EncodedBuffer.of(offsetsBuf, PType.I32));
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);
 
         MemorySegment sizesBuf = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
         for (int i = 0; i < n; i++) {
-            sizesBuf.setAtIndex(VortexFormat.LE_INT, i, lvd.sizes()[i]);
+            sizesBuf.setAtIndex(VortexFormat.LE_INT, i, sizes[i]);
         }
         allBuffers.add(EncodedBuffer.of(sizesBuf, PType.I32));
         EncodeNode sizesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount + 1);
 
-        long elementsLen = elementCount(lvd.elements());
+        long elementsLen = elementCount(elements);
         byte[] metaBytes = new ProtoListViewMetadata(
-                elementsLen,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal()),
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal())
+            elementsLen,
+            io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal()),
+            io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal())
         ).encode();
 
         EncodeNode[] children;
@@ -91,17 +87,17 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
             children = new EncodeNode[]{elemNode, offsetsNode, sizesNode};
         } else {
             EncodeResult validityResult = new BoolEncodingEncoder()
-                    .encode(DTypes.BOOL, outerNullable.validity(), ctx);
+                                              .encode(DTypes.BOOL, outerNullable.validity(), ctx);
             EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), allBuffers.size());
             allBuffers.addAll(validityResult.encodedBuffers());
             children = new EncodeNode[]{elemNode, offsetsNode, sizesNode, validityNode};
         }
 
         EncodeNode root = new EncodeNode(
-                EncodingId.VORTEX_LISTVIEW,
-                MemorySegment.ofArray(metaBytes),
-                children,
-                new int[]{});
+            EncodingId.VORTEX_LISTVIEW,
+            MemorySegment.ofArray(metaBytes),
+            children,
+            new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
     }
 

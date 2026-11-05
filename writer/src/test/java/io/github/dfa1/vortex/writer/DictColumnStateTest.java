@@ -291,7 +291,7 @@ class DictColumnStateTest {
         String emoji = new String(Character.toChars(0x1F600));
 
         // When
-        sut.ingestDictChunk(new String[]{"b", "a", "b", "\uFF21", emoji, "a"});
+        sut.ingestDictChunk(new String[]{"b", "a", "b", "Ａ", emoji, "a"});
         sut.ingestDictChunk(new String[]{"c", null, "c", "d"});
         sut.ingestDictChunk(new String[]{"b", "a", "b"});
 

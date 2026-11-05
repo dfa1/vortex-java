@@ -1,19 +1,17 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.writer.encode.ComparableValues;
+import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-
-import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,15 +43,15 @@ class ZoneMapStatCodecTest {
 
         static java.util.stream.Stream<Arguments> uniformZoneLengthCases() {
             return java.util.stream.Stream.of(
-                    Arguments.of(new long[]{5, 5, 5, 3}, 5L),        // fixed batches, short tail
-                    Arguments.of(new long[]{5, 5, 5}, 5L),           // all equal
-                    Arguments.of(new long[]{7}, 7L),                 // single chunk
-                    Arguments.of(new long[]{4, 4, 2, 4}, 0L),        // short chunk mid-file: stride would misplace rows
-                    Arguments.of(new long[]{4, 6}, 0L),              // tail longer than the stride
-                    Arguments.of(new long[]{4, 4, 0}, 0L),           // empty tail: zone count would exceed ceil(rows / len)
-                    Arguments.of(new long[]{0}, 0L),                 // no rows
-                    Arguments.of(new long[]{}, 0L),                  // no chunks
-                    Arguments.of(new long[]{1L << 32, 1}, 0L));      // does not fit the u32 metadata field
+                Arguments.of(new long[]{5, 5, 5, 3}, 5L),        // fixed batches, short tail
+                Arguments.of(new long[]{5, 5, 5}, 5L),           // all equal
+                Arguments.of(new long[]{7}, 7L),                 // single chunk
+                Arguments.of(new long[]{4, 4, 2, 4}, 0L),        // short chunk mid-file: stride would misplace rows
+                Arguments.of(new long[]{4, 6}, 0L),              // tail longer than the stride
+                Arguments.of(new long[]{4, 4, 0}, 0L),           // empty tail: zone count would exceed ceil(rows / len)
+                Arguments.of(new long[]{0}, 0L),                 // no rows
+                Arguments.of(new long[]{}, 0L),                  // no chunks
+                Arguments.of(new long[]{1L << 32, 1}, 0L));      // does not fit the u32 metadata field
         }
     }
 
@@ -62,7 +60,7 @@ class ZoneMapStatCodecTest {
     class Primitive {
 
         @Test
-        void signed_reportsRealMinMax() throws IOException {
+        void signed_reportsRealMinMax() {
             // Given
             long[] data = {10L, -5L, 3L, 7L};
 
@@ -75,7 +73,7 @@ class ZoneMapStatCodecTest {
         }
 
         @Test
-        void unsigned_usesUnsignedComparison() throws IOException {
+        void unsigned_usesUnsignedComparison() {
             // Given -- -1's raw bits are the largest possible U32 magnitude, not the smallest
             int[] data = {1, -1, 5};
 
@@ -88,7 +86,7 @@ class ZoneMapStatCodecTest {
         }
 
         @Test
-        void nullable_compactsToValidElementsOnly() throws IOException {
+        void nullable_compactsToValidElementsOnly() {
             // Given -- the #381 bug this generalizes: invalid slots carry a placeholder (here 0),
             // which is not a min/max identity and must not corrupt the reported extremes
             long[] values = {0L, 100L, 0L, -50L};
@@ -120,12 +118,12 @@ class ZoneMapStatCodecTest {
     class ExtensionType {
 
         private static final DType TIMESTAMP_MS =
-                new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64,
-                        new io.github.dfa1.vortex.core.model.TimestampMetadata(
-                                io.github.dfa1.vortex.core.model.TimeUnit.Nanoseconds, null), false);
+            new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64,
+                new io.github.dfa1.vortex.core.model.TimestampMetadata(
+                    io.github.dfa1.vortex.core.model.TimeUnit.Nanoseconds, null), false);
 
         @Test
-        void plainPrimitiveStorage_unwrapsToStoragePrimitive() throws IOException {
+        void plainPrimitiveStorage_unwrapsToStoragePrimitive() {
             // Given -- an extension whose data is a bare primitive array, not a special carrier
             long[] data = {100L, 200L, 50L};
 
@@ -138,7 +136,7 @@ class ZoneMapStatCodecTest {
         }
 
         @Test
-        void comparableValuesCarrier_usesItsOwnComparableForm() throws IOException {
+        void comparableValuesCarrier_usesItsOwnComparableForm() {
             // Given -- a carrier whose literal shape isn't a plain primitive array (like
             // DateTimePartsData splitting a timestamp into day/second/subsecond parts); its
             // *comparable* form is what ComparableValues exposes, not the carrier itself
@@ -164,7 +162,7 @@ class ZoneMapStatCodecTest {
         }
 
         @Test
-        void nullablePlainStorage_compactsToValidElementsOnly() throws IOException {
+        void nullablePlainStorage_compactsToValidElementsOnly() {
             // Given
             long[] values = {0L, 300L, 0L};
             boolean[] validity = {false, true, false};
@@ -183,7 +181,7 @@ class ZoneMapStatCodecTest {
     class Utf8Type {
 
         @Test
-        void reportsLexicographicMinMax() throws IOException {
+        void reportsLexicographicMinMax() {
             // Given
             String[] data = {"banana", "apple", "cherry"};
 
@@ -196,7 +194,7 @@ class ZoneMapStatCodecTest {
         }
 
         @Test
-        void nullable_skipsNullEntriesDirectly() throws IOException {
+        void nullable_skipsNullEntriesDirectly() {
             // Given -- Utf8's NullableData carries actual null array entries, not a placeholder
             // scheme, so no compaction step is needed before the lexicographic scan
             String[] values = {null, "banana", null, "apple"};

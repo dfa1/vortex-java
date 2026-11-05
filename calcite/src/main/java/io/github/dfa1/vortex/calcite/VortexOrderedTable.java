@@ -106,7 +106,7 @@ final class VortexOrderedTable extends AbstractTable implements ScannableTable {
             // cannot keep more rows than the table has
             long tableRows = (long) table.getStatistic().getRowCount().doubleValue();
             long want = requested == 0 ? FIRST_BATCH : (long) GROWTH * requested;
-            requested = (int) Math.min(want, Math.min(Integer.MAX_VALUE - 8L, Math.max(1, tableRows)));
+            requested = (int) Math.min(want, Math.clamp(tableRows, 1, Integer.MAX_VALUE - 8L));
             batch = table.topN(cols, filter, keys, requested);
             exhausted = batch.size() < requested || requested >= tableRows;
             // skip the rows an earlier, shorter pass already returned; counted when advanced over, not

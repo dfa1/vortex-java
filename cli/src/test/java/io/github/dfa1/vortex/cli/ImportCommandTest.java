@@ -137,9 +137,9 @@ class ImportCommandTest {
             // Then — the encoding ids are spelled out in the footer's array specs; the default never uses them
             assertThat(withCompact.status()).isEqualTo(ExitStatus.OK);
             assertThat(withoutFlag.status()).isEqualTo(ExitStatus.OK);
-            assertThat(new String(Files.readAllBytes(compact), StandardCharsets.ISO_8859_1))
+            assertThat(Files.readString(compact, StandardCharsets.ISO_8859_1))
                     .contains("vortex.pco").contains("vortex.zstd");
-            assertThat(new String(Files.readAllBytes(plain), StandardCharsets.ISO_8859_1))
+            assertThat(Files.readString(plain, StandardCharsets.ISO_8859_1))
                     .doesNotContain("vortex.pco").doesNotContain("vortex.zstd");
         }
 

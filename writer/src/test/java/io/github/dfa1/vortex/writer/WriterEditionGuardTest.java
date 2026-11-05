@@ -46,7 +46,7 @@ class WriterEditionGuardTest {
     }
 
     @Test
-    void defaultGuard_forcedOutOfEditionEncoder_throwsNamingIdAndEdition(@TempDir Path tmp) throws IOException {
+    void defaultGuard_forcedOutOfEditionEncoder_throwsNamingIdAndEdition(@TempDir Path tmp) {
         // Given — fastlanes.delta is in no edition, so outside the default core2026.08.3 guard;
         // at depth 0 the explicit single-encoder list forces findEncoder's first-match dispatch
         // straight to it, bypassing CascadingCompressor's exclusion-aware competition entirely

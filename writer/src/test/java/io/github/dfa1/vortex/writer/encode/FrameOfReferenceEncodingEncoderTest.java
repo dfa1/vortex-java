@@ -236,7 +236,7 @@ class FrameOfReferenceEncodingEncoderTest {
         }
 
         @Test
-        void encode_signedI64_statsCarryMinAndMax() throws IOException {
+        void encode_signedI64_statsCarryMinAndMax() {
             // Given — unordered so a broken scan (e.g. reusing the residual instead of the logical
             // value) would surface a wrong min/max. Regression for #379: FOR previously hardcoded
             // null stats, silently disabling zone-map pruning for any numeric column the "better
@@ -253,7 +253,7 @@ class FrameOfReferenceEncodingEncoderTest {
         }
 
         @Test
-        void encode_unsignedU32_statsUseUnsignedField() throws IOException {
+        void encode_unsignedU32_statsUseUnsignedField() {
             // Given
             int[] data = {200, 100, 300};
 
@@ -282,7 +282,7 @@ class FrameOfReferenceEncodingEncoderTest {
         }
 
         @Test
-        void encodeCascade_signedI64_statsCarryMinAndMax() throws IOException {
+        void encodeCascade_signedI64_statsCarryMinAndMax() {
             // Given — same #379 regression as encode_signedI64_statsCarryMinAndMax, but for the
             // cascade entry point (CascadingCompressor), the one the "better compression" option
             // actually drives.

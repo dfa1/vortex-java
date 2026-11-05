@@ -267,7 +267,7 @@ class ColumnBuilderTest {
             NullableData outer = (NullableData) result;
             assertThat(outer.validity()).containsExactly(true, false);
             StructData fields = (StructData) outer.values();
-            NullableData bytesField = (NullableData) fields.fieldArrays().get(0);
+            NullableData bytesField = (NullableData) fields.fieldArrays().getFirst();
             assertThat(((byte[][]) bytesField.values())[0]).isEqualTo(blob);
             assertThat(bytesField.validity()).containsExactly(true, false);
             NullableData pathField = (NullableData) fields.fieldArrays().get(1);
@@ -342,7 +342,7 @@ class ColumnBuilderTest {
             NullableData elements = (NullableData) listData.elements();
             assertThat(elements.validity()).containsExactly(true, false);
             StructData structData = (StructData) elements.values();
-            NullableData contentField = (NullableData) structData.fieldArrays().get(0);
+            NullableData contentField = (NullableData) structData.fieldArrays().getFirst();
             assertThat((String[]) contentField.values()).containsExactly("hi", null);
         }
 

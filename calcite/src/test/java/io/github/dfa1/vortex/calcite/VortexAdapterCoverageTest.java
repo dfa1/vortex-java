@@ -105,13 +105,10 @@ class VortexAdapterCoverageTest {
 
         // When — full scan (no filter, all columns)
         List<Object[]> rows = new ArrayList<>();
-        Enumerator<Object[]> en = table.scan(null, List.of(), null).enumerator();
-        try {
+        try (Enumerator<Object[]> en = table.scan(null, List.of(), null).enumerator()) {
             while (en.moveNext()) {
                 rows.add(en.current());
             }
-        } finally {
-            en.close();
         }
 
         // Then — first row carries the right boxed types and values

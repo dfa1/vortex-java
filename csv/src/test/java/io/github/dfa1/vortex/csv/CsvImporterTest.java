@@ -366,8 +366,11 @@ class CsvImporterTest {
     void aSchemaWithNarrowTypesStoresThem(@TempDir Path tmp) throws Exception {
         // Given: every integer width, signed and not, and F32, with an empty cell in a nullable one
         Path csv = tmp.resolve("narrow.csv");
-        Files.writeString(csv, "a,b,c,d,e,f,g,h,i\n-1,255,-2,65535,-3,4294967295,-4,18446744073709551615,1.5\n"
-                + "1,,2,0,3,0,4,0,-0.25\n");
+        Files.writeString(csv, """
+            a,b,c,d,e,f,g,h,i
+            -1,255,-2,65535,-3,4294967295,-4,18446744073709551615,1.5
+            1,,2,0,3,0,4,0,-0.25
+            """);
         Path vortex = tmp.resolve("narrow.vortex");
         DType.Struct schema = DType.structBuilder()
                 .field(ColumnName.of("a"), DTypes.I8)

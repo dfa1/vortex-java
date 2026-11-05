@@ -201,7 +201,6 @@ public record ColumnDistribution(
     /// The running state of one scan.
     private static final class Accumulator {
 
-        private final DType type;
         private final boolean summable;
         private Map<Object, Long> counts = new HashMap<>();
         private final long[] bins;
@@ -215,7 +214,7 @@ public record ColumnDistribution(
         private long[] lengths;
 
         Accumulator(ColumnProfile profile) {
-            this.type = profile.type();
+            DType type = profile.type();
             this.summable = type instanceof DType.Primitive;
             if (isNumeric(type) && profile.min() instanceof Number min && profile.max() instanceof Number max) {
                 this.bins = new long[BINS];
@@ -349,13 +348,13 @@ public record ColumnDistribution(
             boolean unsigned = data.dtype().isUnsigned();
             return switch (data) {
                 case LongArray a when unsigned -> i -> unsignedToDouble(a.getLong(i));
-                case LongArray a -> i -> a.getLong(i);
+                case LongArray a -> a::getLong;
                 case IntArray a when unsigned -> i -> Integer.toUnsignedLong(a.getInt(i));
-                case IntArray a -> i -> a.getInt(i);
+                case IntArray a -> a::getInt;
                 case ShortArray a when unsigned -> i -> Short.toUnsignedInt(a.getShort(i));
-                case ShortArray a -> i -> a.getShort(i);
+                case ShortArray a -> a::getShort;
                 case ByteArray a when unsigned -> i -> Byte.toUnsignedInt(a.getByte(i));
-                case ByteArray a -> i -> a.getByte(i);
+                case ByteArray a -> a::getByte;
                 case DoubleArray a -> a::getDouble;
                 case FloatArray a -> a::getFloat;
                 default -> null;

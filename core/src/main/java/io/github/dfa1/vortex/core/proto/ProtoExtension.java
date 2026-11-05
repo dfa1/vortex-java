@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.core.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.util.Arrays;
 import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.dtype.Extension}.

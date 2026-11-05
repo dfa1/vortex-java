@@ -262,7 +262,7 @@ class VarBinEncodingEncoderTest {
         /// shared prefixes and nulls (an empty or null row in the bytes, but not a value).
         private static String[] mixedOrderStrings(long seed) {
             Random random = new Random(seed);
-            String[] alphabet = {"a", "b", "\u00e9", "\uE000", "\uFFFD", "\uD83D\uDE00", "\uD800\uDC00"};
+            String[] alphabet = {"a", "b", "é", "\uE000", "\uFFFD", "\uD83D\uDE00", "\uD800\uDC00"};
             String[] strings = new String[50];
             for (int i = 0; i < strings.length; i++) {
                 if (random.nextInt(10) == 0) {

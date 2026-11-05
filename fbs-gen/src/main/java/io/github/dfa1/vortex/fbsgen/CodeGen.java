@@ -215,8 +215,8 @@ public final class CodeGen {
             emitScalarTableField(sb, accessor, scalar, vt, field.defaultValue().orElse(null));
             return vtableIndex + 1;
         }
-        if (type instanceof Ast.Vector vector) {
-            emitVectorField(sb, accessor, vector.element(), vt);
+        if (type instanceof Ast.Vector(Ast.FieldType element)) {
+            emitVectorField(sb, accessor, element, vt);
             return vtableIndex + 1;
         }
         Ast.Ref ref = (Ast.Ref) type;
@@ -570,11 +570,11 @@ public final class CodeGen {
         String capital = capitalize(accessor);
         Ast.FieldType type = field.type();
 
-        if (type instanceof Ast.Vector vector) {
+        if (type instanceof Ast.Vector(Ast.FieldType element)) {
             params.add("int " + accessor + "Offset");
             adds.add(new AddEntry("b.addOffset(" + slot + ", " + accessor + "Offset, 0);", 4, adds.size()));
             emitAddOffsetMethod(sb, accessor, capital, slot);
-            emitVectorBuilders(sb, accessor, capital, vector.element());
+            emitVectorBuilders(sb, accessor, capital, element);
             return slot + 1;
         }
         if (type instanceof Ast.Ref ref) {

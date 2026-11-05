@@ -6,6 +6,7 @@ import dev.hardwood.metadata.PhysicalType;
 import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
+import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
@@ -324,7 +325,7 @@ class ParquetExporterTest {
 
             // Then — only the projected column survives
             try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquet))) {
-                assertThat(reader.getFileSchema().getColumns()).extracting(c -> c.name()).containsExactly("id");
+                assertThat(reader.getFileSchema().getColumns()).extracting(ColumnSchema::name).containsExactly("id");
             }
         }
 

@@ -435,7 +435,7 @@ class SequenceEncodingEncoderTest {
     class Stats {
 
         @Test
-        void encode_i64_increasing_reportsFirstAsMinLastAsMax() throws java.io.IOException {
+        void encode_i64_increasing_reportsFirstAsMinLastAsMax() {
             // Given
             long[] data = {10L, 20L, 30L, 40L};
 
@@ -448,7 +448,7 @@ class SequenceEncodingEncoderTest {
         }
 
         @Test
-        void encode_i64_decreasing_reportsLastAsMinFirstAsMax() throws java.io.IOException {
+        void encode_i64_decreasing_reportsLastAsMinFirstAsMax() {
             // Given -- a negative multiplier means the extremes sit at the OPPOSITE endpoints
             long[] data = {40L, 30L, 20L, 10L};
 

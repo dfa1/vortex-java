@@ -104,7 +104,7 @@ final class VarBinBytes {
                         return null;
                     }
                     bytes = java.util.Arrays.copyOf(bytes,
-                            (int) Math.min(Integer.MAX_VALUE, Math.max(needed, bytes.length * 2L)));
+                            (int) Math.clamp(needed, bytes.length * 2L, Integer.MAX_VALUE));
                 }
                 System.arraycopy(encoded, 0, bytes, pos, encoded.length);
                 pos += encoded.length;

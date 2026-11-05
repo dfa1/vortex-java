@@ -53,7 +53,7 @@ class ExtEncodingEncoderTest {
                 new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, TIMESTAMP_MS, false);
 
         @Test
-        void encode_extensionColumn_reportsStorageSpaceBounds() throws Exception {
+        void encode_extensionColumn_reportsStorageSpaceBounds() {
             // Given — epoch millis, not in order
             long[] data = {1_700_000_000_000L, 1_600_000_000_000L, 1_800_000_000_000L};
 
@@ -67,7 +67,7 @@ class ExtEncodingEncoderTest {
         }
 
         @Test
-        void encodeCascade_extensionColumn_reportsTheSameBounds() throws Exception {
+        void encodeCascade_extensionColumn_reportsTheSameBounds() {
             // Given — the cascade reads stats off the step rather than off the children it later
             // resolves, so a step that reports none leaves the column unstatted however its
             // storage child is eventually encoded
@@ -167,7 +167,7 @@ class ExtEncodingEncoderTest {
             assertThat(result.applicable()).isTrue();
             assertThat(result.isTerminal()).isFalse();
             assertThat(result.openChildren()).hasSize(1);
-            ChildSlot slot = result.openChildren().get(0);
+            ChildSlot slot = result.openChildren().getFirst();
             assertThat(slot.childDtype()).isEqualTo(storageDType);
             assertThat(slot.childData()).isSameAs(data);
             assertThat(slot.parentChildIdx()).isZero();

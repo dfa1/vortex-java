@@ -59,7 +59,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
 
         List<EncodedBuffer> buffers = new ArrayList<>();
         EncodeNode coreStorage = runValues.size() == 1
-                ? constantChild(runValues.get(0), buffers)
+                ? constantChild(runValues.getFirst(), buffers)
                 : chunkedConstants(runValues, runLengths, ctx, buffers);
 
         EncodeNode[] children;

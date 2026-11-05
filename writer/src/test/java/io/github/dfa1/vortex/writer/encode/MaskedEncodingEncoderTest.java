@@ -257,7 +257,7 @@ class MaskedEncodingEncoderTest {
     }
 
     @Test
-    void mixedValidity_statsIgnoreThePlaceholderAtInvalidSlots() throws java.io.IOException {
+    void mixedValidity_statsIgnoreThePlaceholderAtInvalidSlots() {
         // Given — a `long[]` cannot represent "no value", so NullableData's invalid slots carry a
         // placeholder (0 here); 0 is not even in the true value set (500..900), and the true min
         // (500) sits behind a leading invalid slot a naive scan would still see as 0. Regression

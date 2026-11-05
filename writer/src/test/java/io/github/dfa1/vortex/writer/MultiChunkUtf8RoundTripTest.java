@@ -71,8 +71,8 @@ class MultiChunkUtf8RoundTripTest {
                 }
             }
             assertThat(seen).hasSize(batches * perBatch);
-            assertThat(seen.get(0)).isEqualTo("row-0-0");
-            assertThat(seen.get(seen.size() - 1)).isEqualTo("row-" + (batches - 1) + "-" + (perBatch - 1));
+            assertThat(seen.getFirst()).isEqualTo("row-0-0");
+            assertThat(seen.getLast()).isEqualTo("row-" + (batches - 1) + "-" + (perBatch - 1));
             // VarBinChunkedArray mechanics are unit-tested in VarBinChunkedModeTest. The current
             // writer's encoding choices for Utf8 do not produce a column-level Chunked
             // layout (each writer chunk surfaces as its own scan Chunk, and within a scan

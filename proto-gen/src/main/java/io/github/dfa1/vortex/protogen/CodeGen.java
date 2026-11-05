@@ -343,6 +343,7 @@ public final class CodeGen {
 
     /// Internal per-field model used by the emitter. Encapsulates Java type, init value,
     /// and emit logic for both decode and encode paths.
+    @SuppressWarnings("ClassCanBeRecord")
     private static final class Field {
         final String name;
         final int number;
@@ -410,7 +411,7 @@ public final class CodeGen {
             return switch (t) {
                 case TypeRegistry.ResolvedType.Enum e -> switch (decl.rule()) {
                     case SINGLE -> new Field(name, decl.number(), javaName,
-                            javaName + "." + e.decl().values().get(0).name(),
+                            javaName + "." + e.decl().values().getFirst().name(),
                             new EnumSingleEmitter(javaName));
                     case OPTIONAL -> new Field(name, decl.number(), javaName, "null",
                             new EnumOptionalEmitter(javaName));

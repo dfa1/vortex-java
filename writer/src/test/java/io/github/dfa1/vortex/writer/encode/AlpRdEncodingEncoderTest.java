@@ -290,7 +290,7 @@ class AlpRdEncodingEncoderTest {
     }
 
     @Test
-    void encode_f64_reportsMinMaxStats() throws IOException {
+    void encode_f64_reportsMinMaxStats() {
         // Given — #382: buildEncodeResult hardcoded (null, null), silently defeating zone-map
         // pruning on every column ALP-RD encoded, regardless of the input data.
         double[] values = {0.5, -3.25, 10.0, 2.0, -1.0};
@@ -304,7 +304,7 @@ class AlpRdEncodingEncoderTest {
     }
 
     @Test
-    void encode_f32_reportsMinMaxStats() throws IOException {
+    void encode_f32_reportsMinMaxStats() {
         // Given — see #382 above; F32 has its own code path (encodeF32/Dictionary32)
         float[] values = {0.5f, -3.25f, 10.0f, 2.0f, -1.0f};
 

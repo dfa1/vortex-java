@@ -164,7 +164,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
 
         RexBuilder rexBuilder = aggregate.getCluster().getRexBuilder();
         List<RelDataType> outTypes = aggregate.getRowType().getFieldList().stream()
-                .map(f -> f.getType()).toList();
+                .map(RelDataTypeField::getType).toList();
 
         if (aggregate.getGroupCount() == 1) {
             rewriteGrouped(call, aggregate, table, scanColumns, scanRowType, project, rexBuilder, outTypes,

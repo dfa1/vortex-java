@@ -19,6 +19,7 @@ import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rel.logical.LogicalValues;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexInputRef;
 import org.apache.calcite.rex.RexLiteral;
@@ -190,7 +191,7 @@ public final class VortexSortPushDownRule extends RelOptRule {
                         : table.topN(emitted, finalFilter, keys, count));
 
         RexBuilder rexBuilder = sort.getCluster().getRexBuilder();
-        List<RelDataType> types = sort.getRowType().getFieldList().stream().map(f -> f.getType()).toList();
+        List<RelDataType> types = sort.getRowType().getFieldList().stream().map(RelDataTypeField::getType).toList();
         List<ImmutableList<RexLiteral>> tuples = new ArrayList<>();
         for (Object[] row : rows.subList(Math.min(offset, rows.size()), rows.size())) {
             List<RexLiteral> literals = new ArrayList<>();

@@ -53,9 +53,9 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         PType ptype = ((DType.Primitive) dtype).ptype();
         boolean[] validity = null;
         Object values = data;
-        if (data instanceof NullableData nullable) {
-            validity = nullable.validity();
-            values = nullable.values();
+        if (data instanceof NullableData(Object values1, boolean[] validity1)) {
+            validity = validity1;
+            values = values1;
         }
         EncodeResult result = switch (ptype) {
             case F64 -> encodeF64((double[]) values, validity, ctx);
