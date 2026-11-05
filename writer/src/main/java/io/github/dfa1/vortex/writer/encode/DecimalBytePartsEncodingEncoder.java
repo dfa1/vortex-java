@@ -29,17 +29,29 @@ public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        // zero low parts: the whole unscaled value lives in one i64, so precision 18 is the ceiling
-        return dtype instanceof DType.Decimal d && d.precision() <= 18;
+        // zero low parts: the whole unscaled value lives in one i64, which a wider decimal's values
+        // may still fit, as Rust's narrowed_decimal finds out from the data
+        return dtype instanceof DType.Decimal;
+    }
+
+    /// A nullable decimal keeps its validity on the mantissa child, as Rust's `split_decimal` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
     }
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         DType.Decimal d = (DType.Decimal) dtype;
-        long[] longs = unscaled(data);
+        NullableData nullable = data instanceof NullableData n ? n : null;
+        if (!fitsLong(nullable == null ? data : nullable.values())) {
+            throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS,
+                    "a value of " + dtype + " does not fit the 64-bit mantissa");
+        }
+        long[] longs = unscaled(nullable == null ? data : nullable.values());
         PType mspType = narrowestSigned(longs);
         DType mspDtype = new DType.Primitive(mspType, d.nullable());
-        Object msp = PrimitiveArrays.fromLongsArray(longs, mspType, EncodingId.VORTEX_DECIMAL_BYTE_PARTS);
+        Object msp = mantissa(longs, mspType, nullable);
         EncodeResult mspResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(mspDtype, msp, ctx);
 
         EncodeNode mspNode = EncodeNode.remapBufferIndices(mspResult.rootNode(), 0);
@@ -49,7 +61,7 @@ public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
         // value and bounds it exactly. A build that starts emitting low parts must fold them in here
         // rather than keep reporting the msp alone.
         return new EncodeResult(root, mspResult.encodedBuffers(), null, null)
-                .withStats(ZoneMapStats.ofDecimal(longs));
+                .withStats(ZoneMapStats.ofDecimal(validLongs(longs, nullable)));
     }
 
     /// The value child goes to the cascade instead of staying a plain `vortex.primitive`, as Rust's
@@ -59,19 +71,61 @@ public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         DType.Decimal d = (DType.Decimal) dtype;
-        long[] longs = unscaled(data);
+        NullableData nullable = data instanceof NullableData n ? n : null;
+        if (!fitsLong(nullable == null ? data : nullable.values())) {
+            return CascadeStep.notApplicable();
+        }
+        long[] longs = unscaled(nullable == null ? data : nullable.values());
         if (longs.length < 2) {
             // Rust's try_downcast leaves an array with no or one element un-narrowed, so it stays a
             // canonical vortex.decimal; a zone-stats table's single row takes that path
             return CascadeStep.notApplicable();
         }
         PType mspType = narrowestSigned(longs);
-        Object msp = PrimitiveArrays.fromLongsArray(longs, mspType, EncodingId.VORTEX_DECIMAL_BYTE_PARTS);
+        Object msp = mantissa(longs, mspType, nullable);
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_DECIMAL_BYTE_PARTS, metadata(mspType), new EncodeNode[1], new int[0]);
         ChildSlot child = new ChildSlot(new DType.Primitive(mspType, d.nullable()), msp, 0, SELF);
         return new CascadeStep(partialRoot, List.of(), List.of(child), null, null, true)
-                .withStats(ZoneMapStats.ofDecimal(longs));
+                .withStats(ZoneMapStats.ofDecimal(validLongs(longs, nullable)));
+    }
+
+    /// The mantissa child's data: the narrowed values, carrying the validity when the column has one.
+    private static Object mantissa(long[] longs, PType mspType, NullableData nullable) {
+        Object msp = PrimitiveArrays.fromLongsArray(longs, mspType, EncodingId.VORTEX_DECIMAL_BYTE_PARTS);
+        if (nullable == null) {
+            return msp;
+        }
+        return new NullableData(msp, nullable.validity());
+    }
+
+    /// The unscaled values of the valid rows: a null row holds a placeholder zero that must not bound the column.
+    private static long[] validLongs(long[] longs, NullableData nullable) {
+        if (nullable == null) {
+            return longs;
+        }
+        boolean[] validity = nullable.validity();
+        long[] valid = new long[longs.length - nullable.nullCount()];
+        int j = 0;
+        for (int i = 0; i < longs.length; i++) {
+            if (validity[i]) {
+                valid[j++] = longs[i];
+            }
+        }
+        return valid;
+    }
+
+    /// Whether every value's unscaled integer fits the one 64-bit mantissa; a `null` (masked-out row) does.
+    private static boolean fitsLong(Object data) {
+        if (!(data instanceof BigDecimal[] values)) {
+            return true;
+        }
+        for (BigDecimal value : values) {
+            if (value != null && value.unscaledValue().bitLength() > 63) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static long[] unscaled(Object data) {

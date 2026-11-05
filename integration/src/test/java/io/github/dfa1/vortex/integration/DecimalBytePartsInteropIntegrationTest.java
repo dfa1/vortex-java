@@ -13,6 +13,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -39,6 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.IntPredicate;
 import java.util.function.IntToLongFunction;
 import java.util.stream.Stream;
 
@@ -49,9 +51,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// does (`narrowed_decimal`, then `compress_child`). The Java side kept the child as a plain i64
 /// `vortex.primitive`, 2.5–16x larger on TPC-H's decimal columns (#644).
 ///
-/// Only the data column is compared: the zone-stats table's min/max columns are nullable, and a
-/// nullable decimal is still wrapped in `vortex.masked` where Rust keeps or drops its validity on the
-/// byte parts (#646).
+/// The whole tree is compared, the zone-stats table included: its min/max columns are nullable, and
+/// a nullable decimal keeps its validity on the byte parts, or drops it, rather than wrapping the
+/// values in `vortex.masked` (#646).
 class DecimalBytePartsInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -93,7 +95,7 @@ class DecimalBytePartsInteropIntegrationTest {
 
         // Then
         assertThat(dataColumn(expected).getFirst()).contains("vortex.decimal_byte_parts");
-        assertThat(dataColumn(EncodingTrees.of(javaFile))).isEqualTo(dataColumn(expected));
+        assertThat(EncodingTrees.of(javaFile)).isEqualTo(expected);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -123,6 +125,71 @@ class DecimalBytePartsInteropIntegrationTest {
         assertThat(range).isEqualTo(expected.subList(1000, 20_000));
     }
 
+    static Stream<Arguments> nullableShapes() {
+        return Stream.of(
+                // nullable but every row valid: written without a validity, as Rust's AllValid
+                Arguments.of("quantity, no nulls", 15, 2,
+                        (IntToLongFunction) i -> (1 + Math.floorMod(RANDOM[i], 50)) * 100L, (IntPredicate) _ -> false),
+                Arguments.of("quantity, every 7th null", 15, 2,
+                        (IntToLongFunction) i -> (1 + Math.floorMod(RANDOM[i], 50)) * 100L, (IntPredicate) i -> i % 7 == 0),
+                Arguments.of("account balance, one null", 15, 2,
+                        (IntToLongFunction) i -> Math.floorMod(RANDOM[i], 1_100_000L) - 99_999L, (IntPredicate) i -> i == 5),
+                // valid values all equal: Rust writes the constant under the validity
+                Arguments.of("constant, every 7th null", 15, 2, (IntToLongFunction) _ -> 700L, (IntPredicate) i -> i % 7 == 0),
+                // past 18 digits: no byte parts, a plain decimal with its validity child
+                Arguments.of("p20, every 5th null", 20, 2,
+                        (IntToLongFunction) i -> (1 + Math.floorMod(RANDOM[i], 50)) * 100L, (IntPredicate) i -> i % 5 == 0),
+                Arguments.of("wide, nulls in the second half", 18, 0,
+                        (IntToLongFunction) i -> 1_000_000_000_000L + Math.floorMod(RANDOM[i], 1_000_000L),
+                        (IntPredicate) i -> i >= ROWS / 2 && i % 3 == 0));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nullableShapes")
+    void nullableColumn_javaWritesTheEncodingTreeJniWrites(String name, int precision, int scale,
+                                                           IntToLongFunction unscaled, IntPredicate isNull,
+                                                           @TempDir Path tmp) throws Exception {
+        // Given — a nullable decimal keeps its validity on the byte parts, or has none (#646)
+        Path jniFile = tmp.resolve("jni.vortex");
+        Path javaFile = tmp.resolve("java.vortex");
+        writeWithJni(jniFile, precision, scale, unscaled, isNull);
+        List<String> expected = EncodingTrees.of(jniFile);
+
+        // When
+        writeWithJava(javaFile, precision, scale, unscaled, isNull);
+
+        // Then
+        assertThat(EncodingTrees.of(javaFile)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nullableShapes")
+    void nullableColumn_jniReadsJavaFile(String name, int precision, int scale, IntToLongFunction unscaled,
+                                         IntPredicate isNull, @TempDir Path tmp) throws Exception {
+        // Given
+        Path file = tmp.resolve("java.vortex");
+        writeWithJava(file, precision, scale, unscaled, isNull);
+        List<BigDecimal> expected = new ArrayList<>(ROWS);
+        for (int i = 0; i < ROWS; i++) {
+            expected.add(isNull.test(i) ? null : BigDecimal.valueOf(unscaled.applyAsLong(i), scale));
+        }
+
+        BigDecimal threshold = BigDecimal.valueOf(unscaled.applyAsLong(ROWS / 2), scale);
+
+        // When
+        List<BigDecimal> all = readWithJni(file, ScanOptions.builder());
+        // a filtered read prunes on the bounds, which must come from the valid rows only
+        List<BigDecimal> filtered = readWithJni(file, ScanOptions.builder().filter(Expression.binary(
+                Expression.BinaryOp.GTE, Expression.column("d"),
+                Expression.literalDecimal(threshold.unscaledValue(), precision, scale))));
+        List<BigDecimal> range = readWithJni(file, ScanOptions.builder().rowRangeBegin(1000).rowRangeEnd(20_000));
+
+        // Then
+        assertThat(all).isEqualTo(expected);
+        assertThat(filtered).isEqualTo(expected.stream().filter(v -> v != null && v.compareTo(threshold) >= 0).toList());
+        assertThat(range).isEqualTo(expected.subList(1000, 20_000));
+    }
+
     /// The data column's encoding subtree: the lines under the zoned layout's first flat, up to the
     /// stats table's flat.
     private static List<String> dataColumn(List<String> tree) {
@@ -133,7 +200,14 @@ class DecimalBytePartsInteropIntegrationTest {
 
     private static void writeWithJni(Path path, int precision, int scale, IntToLongFunction unscaled)
             throws Exception {
-        Schema schema = new Schema(List.of(Field.notNullable("d", new ArrowType.Decimal(precision, scale, 128))));
+        writeWithJni(path, precision, scale, unscaled, null);
+    }
+
+    /// `isNull` null writes a non-nullable column, any predicate a nullable one.
+    private static void writeWithJni(Path path, int precision, int scale, IntToLongFunction unscaled,
+                                     IntPredicate isNull) throws Exception {
+        ArrowType decimal = new ArrowType.Decimal(precision, scale, 128);
+        Schema schema = new Schema(List.of(isNull == null ? Field.notNullable("d", decimal) : Field.nullable("d", decimal)));
         try (VortexWriter writer = VortexWriter.builder(SESSION, path.toAbsolutePath().toUri().toString(), schema,
                 ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
@@ -141,7 +215,11 @@ class DecimalBytePartsInteropIntegrationTest {
             vector.setInitialCapacity(ROWS);
             vector.allocateNew();
             for (int i = 0; i < ROWS; i++) {
-                vector.setSafe(i, BigDecimal.valueOf(unscaled.applyAsLong(i), scale));
+                if (isNull != null && isNull.test(i)) {
+                    vector.setNull(i);
+                } else {
+                    vector.setSafe(i, BigDecimal.valueOf(unscaled.applyAsLong(i), scale));
+                }
             }
             vector.setValueCount(ROWS);
             root.setRowCount(ROWS);
@@ -155,14 +233,24 @@ class DecimalBytePartsInteropIntegrationTest {
 
     private static void writeWithJava(Path path, int precision, int scale, IntToLongFunction unscaled)
             throws IOException {
+        writeWithJava(path, precision, scale, unscaled, null);
+    }
+
+    /// `isNull` null writes a non-nullable column, any predicate a nullable one.
+    private static void writeWithJava(Path path, int precision, int scale, IntToLongFunction unscaled,
+                                      IntPredicate isNull) throws IOException {
         BigDecimal[] values = new BigDecimal[ROWS];
+        boolean[] validity = new boolean[ROWS];
         for (int i = 0; i < ROWS; i++) {
-            values[i] = new BigDecimal(BigInteger.valueOf(unscaled.applyAsLong(i)), scale);
+            validity[i] = isNull == null || !isNull.test(i);
+            values[i] = validity[i] ? new BigDecimal(BigInteger.valueOf(unscaled.applyAsLong(i)), scale) : null;
         }
-        DType.Struct schema = new DType.Struct(List.of(D), List.of(DType.Decimal.of(precision, scale, false)), false);
+        Object data = isNull == null ? values : new NullableData(values, validity);
+        DType.Struct schema = new DType.Struct(List.of(D),
+                List.of(DType.Decimal.of(precision, scale, isNull != null)), false);
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = io.github.dfa1.vortex.writer.VortexWriter.create(channel, schema, WriteOptions.defaults())) {
-            writer.writeChunk(Map.of(D, values));
+            writer.writeChunk(Map.of(D, data));
         }
     }
 

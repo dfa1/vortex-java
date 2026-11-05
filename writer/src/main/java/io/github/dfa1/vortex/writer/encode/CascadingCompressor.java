@@ -9,9 +9,11 @@ import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
 import java.lang.foreign.MemorySegment;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.IntToLongFunction;
 import java.util.function.Supplier;
@@ -55,6 +57,7 @@ public final class CascadingCompressor {
             case double[] a -> a.length;
             case String[] a -> a.length;
             case byte[][] a -> a.length;
+            case BigDecimal[] a -> a.length;
             default -> throw new IllegalArgumentException("unsupported data type: " + data.getClass());
         };
     }
@@ -222,12 +225,13 @@ public final class CascadingCompressor {
     }
 
     /// Whether a nullable column of `dtype` carries its validity as a child of its own encoding, as
-    /// Rust's `StructArray` and `ListArray` do, rather than in a `vortex.masked` wrapper (#648).
+    /// Rust's `StructArray`, `ListArray` and `DecimalArray` do, rather than in a `vortex.masked`
+    /// wrapper (#648, #646).
     ///
     /// @param dtype the column's dtype
-    /// @return `true` for a struct or a list
+    /// @return `true` for a struct, a list or a decimal
     public static boolean carriesValidity(DType dtype) {
-        return dtype instanceof DType.Struct || dtype instanceof DType.List;
+        return dtype instanceof DType.Struct || dtype instanceof DType.List || dtype instanceof DType.Decimal;
     }
 
     /// Entry point: encode `data` using the best cascading strategy.
@@ -245,7 +249,7 @@ public final class CascadingCompressor {
         // null count is zero (`Validity::AllValid`). Deeper down a NullableData keeps its bitmap
         // even when every bit is set, as a filtered or sampled Rust array does.
         // An extension's storage is that array too.
-        if ((keepsValidity(dtype) || dtype instanceof DType.Extension)
+        if ((keepsValidity(dtype) || dtype instanceof DType.Extension || dtype instanceof DType.Decimal)
                 && data instanceof NullableData nullable && nullable.nullCount() == 0) {
             return encodeWithCtx(dtype, nullable.values(), ctx);
         }
@@ -255,6 +259,17 @@ public final class CascadingCompressor {
     private EncodeResult encodeWithCtx(DType dtype, Object data, EncodeContext ctx) {
         if (keepsValidity(dtype) && data instanceof NullableData nullable) {
             return encodeNullablePrimitive(dtype, nullable, ctx);
+        }
+        // An all-null decimal is one null constant, before any scheme, as for a primitive.
+        if (dtype instanceof DType.Decimal && data instanceof NullableData nullable
+                && MaskedEncodingEncoder.isNullConstant(nullable.validity(), ctx)) {
+            return MaskedEncodingEncoder.nullConstant();
+        }
+        if (dtype instanceof DType.Decimal decimal) {
+            Optional<EncodeResult> constant = decimalConstant(decimal, data, ctx);
+            if (constant.isPresent()) {
+                return constant.get();
+            }
         }
         if (dtype instanceof DType.Struct structDtype) {
             return data instanceof NullableData(StructData fields, boolean[] validity)
@@ -295,12 +310,79 @@ public final class CascadingCompressor {
         if (dtype instanceof DType.Extension) {
             return encodeExtension(dtype, data, ctx);
         }
+        if (dtype instanceof DType.Decimal decimal) {
+            return encodeDecimal(decimal, data, ctx);
+        }
         if (!(dtype instanceof DType.Primitive)) {
-            return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
+            return spliceResult(findPrimitiveEncoding(dtype, data, ctx.excluded()), dtype, data, ctx);
         }
 
         return competeAndEncode(dtype, withStats(dtype, data, ctx), ctx,
                 sampleSize -> primitiveBytes(dtype, sampleSize));
+    }
+
+    /// Rust's constant check for a decimal array, run in the compressor before any scheme and never
+    /// on a sample: when every valid value is equal the array is one `vortex.constant`, wrapped in
+    /// `vortex.masked` with the validity when some row is null, and kept only if that is smaller than
+    /// the plain values (`compress_as_constant`).
+    private static Optional<EncodeResult> decimalConstant(DType.Decimal dtype, Object data, EncodeContext ctx) {
+        if (ctx.sample() || ctx.excluded().contains(EncodingId.VORTEX_CONSTANT)) {
+            return Optional.empty();
+        }
+        boolean[] validity = null;
+        Object values = data;
+        if (data instanceof NullableData nullable) {
+            validity = nullable.validity();
+            values = nullable.values();
+        }
+        if (!(values instanceof BigDecimal[] decimals)) {
+            return Optional.empty();
+        }
+        BigDecimal[] valid = decimals;
+        if (validity != null) {
+            valid = new BigDecimal[decimals.length - ((NullableData) data).nullCount()];
+            for (int i = 0, j = 0; i < decimals.length; i++) {
+                if (validity[i]) {
+                    valid[j++] = decimals[i];
+                }
+            }
+        }
+        Optional<EncodeResult> constant = ConstantEncodingEncoder.encodeDecimalIfConstant(dtype, valid);
+        if (constant.isEmpty() || totalBytes(constant.get()) >= (long) decimals.length * dtype.byteWidth()) {
+            return Optional.empty();
+        }
+        if (validity == null) {
+            return constant;
+        }
+        EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
+        EncodeNode validityNode = EncodeNode.remapBufferIndices(bool.rootNode(), constant.get().encodedBuffers().size());
+        List<EncodedBuffer> buffers = new ArrayList<>(constant.get().encodedBuffers());
+        buffers.addAll(bool.encodedBuffers());
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_MASKED, null,
+                new EncodeNode[]{constant.get().rootNode(), validityNode}, new int[0]);
+        return Optional.of(new EncodeResult(root, List.copyOf(buffers), constant.get().statsMin(),
+                constant.get().statsMax()));
+    }
+
+    /// Rust's `DecimalScheme`: a decimal is split into `vortex.decimal_byte_parts` only when that is
+    /// strictly smaller than the plain `vortex.decimal` (its values, plus a packed bitmap when some
+    /// row is null). On a few rows, as in a zone-stats table, the parts cost as much as the plain
+    /// values and the decimal stays canonical (#646).
+    private EncodeResult encodeDecimal(DType.Decimal dtype, Object data, EncodeContext ctx) {
+        EncodeResult scheme = spliceResult(findPrimitiveEncoding(dtype, data, ctx.excluded()), dtype, data, ctx);
+        EncodingId root = scheme.rootNode().encodingId();
+        if (!root.equals(EncodingId.VORTEX_DECIMAL_BYTE_PARTS)) {
+            return scheme;
+        }
+        int n = dataLength(data);
+        long plain = (long) n * dtype.byteWidth();
+        if (data instanceof NullableData nullable && nullable.nullCount() > 0) {
+            plain += (n + 7) / 8;
+        }
+        if (totalBytes(scheme) < plain) {
+            return scheme;
+        }
+        return CANONICAL_DECIMAL.encode(dtype, data, ctx);
     }
 
     /// Rust's `compress_canonical` for an extension array (`compressor/cascade.rs`): an extension
@@ -625,8 +707,14 @@ public final class CascadingCompressor {
     }
 
     private EncodingEncoder findPrimitiveEncoding(DType dtype, Set<EncodingId> excluded) {
+        return findPrimitiveEncoding(dtype, null, excluded);
+    }
+
+    private EncodingEncoder findPrimitiveEncoding(DType dtype, Object data, Set<EncodingId> excluded) {
+        // a nullable decimal reaches only the encodings that keep its validity themselves
+        boolean nullableDecimal = dtype instanceof DType.Decimal && data instanceof NullableData;
         for (EncodingEncoder enc : encodings) {
-            if (excluded.contains(enc.encodingId())) {
+            if (excluded.contains(enc.encodingId()) || nullableDecimal && !enc.acceptsNullable(dtype)) {
                 continue;
             }
             if (enc.encodingId().equals(EncodingId.VORTEX_PRIMITIVE) && enc.accepts(dtype)) {
@@ -636,7 +724,7 @@ public final class CascadingCompressor {
         // Fall through to any accepting encoding (still honoring exclusions so that
         // spliceResult's notApplicable retry rotates to the next candidate).
         for (EncodingEncoder enc : encodings) {
-            if (excluded.contains(enc.encodingId())) {
+            if (excluded.contains(enc.encodingId()) || nullableDecimal && !enc.acceptsNullable(dtype)) {
                 continue;
             }
             if (enc.accepts(dtype)) {

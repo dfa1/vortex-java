@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
@@ -20,6 +21,7 @@ import java.lang.foreign.MemorySegment;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DecimalBytePartsEncodingEncoderTest {
 
@@ -127,18 +129,36 @@ class DecimalBytePartsEncodingEncoderTest {
     }
 
     /// The byte-parts layout stores the whole unscaled value in one i64 mantissa (no low parts), so
-    /// it must not offer itself for a precision whose values overflow a long: the cascade would
-    /// pick it and fail (or truncate) on a decimal(19+) column.
-    @ParameterizedTest(name = "precision {0} accepted={1}")
-    @CsvSource({"1, true", "18, true", "19, false", "38, false", "76, false"})
-    void accepts_onlyPrecisionsThatFitAnI64(int precision, boolean expected) {
+    /// a decimal wider than 18 digits is split only when its values fit a long, as Rust's
+    /// `narrowed_decimal` finds from the data: the cascade steps aside for a value that does not.
+    @ParameterizedTest(name = "precision {0}, unscaled {1}: applicable={2}")
+    @CsvSource({"18, 5, true", "19, 5, true", "38, 5, true", "38, 9223372036854775807, true",
+            "38, 9223372036854775808, false", "38, -9223372036854775809, false",
+            "38, 12345678901234567890123, false"})
+    void encodeCascade_splitsAWideDecimal_onlyWhenItsValuesFitAnI64(int precision, String unscaled,
+            boolean expected) {
         // Given
         var sut = new DecimalBytePartsEncodingEncoder();
+        DType dtype = new DType.Decimal((byte) precision, (byte) 0, false);
+        BigDecimal[] values = {new BigDecimal(unscaled), new BigDecimal("7")};
 
         // When
-        boolean result = sut.accepts(new DType.Decimal((byte) precision, (byte) 0, false));
+        CascadeStep result = sut.encodeCascade(dtype, values, EncodeTestHelper.testCtx());
 
         // Then
-        assertThat(result).isEqualTo(expected);
+        assertThat(result.applicable()).isEqualTo(expected);
+    }
+
+    @Test
+    void encode_aValueThatDoesNotFitAnI64_throws() {
+        // Given
+        var sut = new DecimalBytePartsEncodingEncoder();
+        DType dtype = new DType.Decimal((byte) 38, (byte) 0, false);
+        BigDecimal[] values = {new BigDecimal("9223372036854775808")};
+
+        // When / Then
+        assertThatThrownBy(() -> sut.encode(dtype, values, EncodeTestHelper.testCtx()))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("does not fit");
     }
 }
