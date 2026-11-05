@@ -658,8 +658,8 @@ A `WHERE` of column-vs-literal comparisons, `IN` lists, `IS [NOT] NULL` and pref
 patterns, joined by `AND` (an `OR` only within one column), prunes chunks from zone maps and is
 enforced by the scan, so Calcite does not re-check it; anything else is left to Calcite.
 
-Column types map as follows. Unsigned integers widen to the next signed type (`U64` stays `BIGINT`
-and fails on values past 2^63); `F16` reads as `REAL`.
+Column types map as follows. Unsigned integers widen to the next signed type (`U64` reads as
+`DECIMAL(20, 0)`); `F16` reads as `REAL`.
 
 | Vortex                                      | SQL                                               |
 |---------------------------------------------|---------------------------------------------------|

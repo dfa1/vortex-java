@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- SQL reads a `U64` column as `DECIMAL(20, 0)`, so values past 2^63 show correctly instead of failing. ([#665](https://github.com/dfa1/vortex-java/issues/665))
 - A string or binary chunk past 2 GiB no longer aborts the write when `vortex.onpair` is a candidate: it steps aside and another string encoding takes the chunk, as with a Parquet import of `websight-v01`. ([#643](https://github.com/dfa1/vortex-java/issues/643))
 - Parquet import reads Snappy-compressed files, the default of Spark, parquet-rs and DuckDB, instead of failing for lack of `snappy-java`. ([#645](https://github.com/dfa1/vortex-java/issues/645))
 - A decimal column's values are narrowed and compressed under `vortex.decimal_byte_parts`, as Rust does, instead of stored as plain 64-bit integers: TPC-H's decimal columns are 2.5 to 16 times smaller. ([#644](https://github.com/dfa1/vortex-java/issues/644))
