@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ScanFilter;
 
 import com.google.common.collect.ImmutableList;
@@ -161,6 +163,17 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         }
         RelDataType scanRowType = scan.getRowType();
         List<ColumnName> scanColumns = scanRowType.getFieldNames().stream().map(ColumnName::of).toList();
+
+        // Zone statistics and the zone sum hold the raw signed bits of a U64, which do not order or add
+        // like its DECIMAL(20, 0) value, so Calcite aggregates such a column over the scanned rows.
+        List<Integer> inputs = new ArrayList<>(aggregate.getGroupSet().asList());
+        aggregate.getAggCallList().forEach(c -> inputs.addAll(c.getArgList()));
+        for (int input : inputs) {
+            ColumnName column = resolveColumn(input, scanColumns, project);
+            if (column != null && table.columnType(column) instanceof DType.Primitive p && p.ptype() == PType.U64) {
+                return;
+            }
+        }
 
         RexBuilder rexBuilder = aggregate.getCluster().getRexBuilder();
         List<RelDataType> outTypes = aggregate.getRowType().getFieldList().stream()

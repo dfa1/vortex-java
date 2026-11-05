@@ -758,6 +758,63 @@ class CalciteInteropIntegrationTest {
         assertThat(result).isEqualTo(expected);
     }
 
+    @Test
+    void jniWriter_u64PastSignedRange_readsExactlyAsDecimal(@TempDir Path tmp) throws Exception {
+        // Given — Rust writes a UInt64 column holding 0, 2^63 and 2^64 - 1 (#665)
+        Path file = tmp.resolve("jni_u64.vortex");
+        Schema schema = new Schema(List.of(Field.notNullable("v", new ArrowType.Int(64, false))));
+        try (VortexWriter writer = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), schema,
+                ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
+            org.apache.arrow.vector.UInt8Vector v = (org.apache.arrow.vector.UInt8Vector) root.getVector("v");
+            v.allocateNew(3);
+            v.set(0, 0L);
+            v.set(1, Long.MIN_VALUE);
+            v.set(2, -1L);
+            root.setRowCount(3);
+            try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
+                writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
+            }
+        }
+        BigDecimal half = new BigDecimal("9223372036854775808");
+        BigDecimal max = new BigDecimal("18446744073709551615");
+
+        // When
+        List<BigDecimal> values = new java.util.ArrayList<>();
+        BigDecimal min;
+        BigDecimal largest;
+        BigDecimal sum;
+        long high;
+        try (Connection conn = VortexCalcite.connect("vtx", Map.of("t", file));
+             Statement st = conn.createStatement()) {
+            try (ResultSet rs = st.executeQuery("select v from vtx.t order by v")) {
+                while (rs.next()) {
+                    values.add(rs.getBigDecimal(1));
+                }
+            }
+            try (ResultSet rs = st.executeQuery("select min(v), max(v), sum(v) from vtx.t")) {
+                rs.next();
+                min = rs.getBigDecimal(1);
+                largest = rs.getBigDecimal(2);
+                sum = rs.getBigDecimal(3);
+            }
+            try (ResultSet rs = st.executeQuery("select count(*) from vtx.t where v >= 9223372036854775808")) {
+                rs.next();
+                high = rs.getLong(1);
+            }
+        }
+
+        // Then — the unsigned values, not their two's-complement reading
+        assertThat(values).usingElementComparator(BigDecimal::compareTo)
+                .containsExactly(BigDecimal.ZERO, half, max);
+        assertThat(min).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(largest).isEqualByComparingTo(max);
+        assertThat(sum).isEqualByComparingTo(half.add(max));
+        assertThat(high).isEqualTo(2);
+    }
+
     /// Writes `id`, `e` (an ascending event id, "é"-suffixed every 13th row, null every 97th), `t`
     /// (an ascending value repeated ten times) and `r` (a scrambled value with repeats) in [#BATCHES]
     /// batches of [#EVENT_BATCH_ROWS], past 1 MiB per column by Rust's exact size (a string of at

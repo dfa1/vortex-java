@@ -343,7 +343,9 @@ final class RexFilterTranslator {
             case DType.Utf8 _ -> lit.getValueAs(String.class);
             case DType.Primitive p -> switch (p.ptype()) {
                 case F64, F32, F16 -> lit.getValueAs(Double.class);
-                case I64, U64, I32, U32, I16, U16, I8, U8 -> lit.getValueAs(Long.class);
+                case I64, I32, U32, I16, U16, I8, U8 -> lit.getValueAs(Long.class);
+                // zone-map stats hold the raw signed bits, which do not order like the unsigned value
+                case U64 -> null;
             };
             default -> null;
         };

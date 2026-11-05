@@ -30,6 +30,7 @@ import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
 import org.apache.calcite.avatica.util.ByteString;
 import org.apache.calcite.linq4j.Enumerator;
 
+import java.math.BigDecimal;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
@@ -236,10 +237,8 @@ final class VortexEnumerator implements Enumerator<Object[]> {
                 case F32 -> ((FloatArray) array).getFloat(r);
                 case F16 -> ((Float16Array) array).getFloat(r);
                 case I64 -> ((LongArray) array).getLong(r);
-                // U64 maps to signed BIGINT (no wider SQL integer exists): values with the high bit
-                // set have no signed-long representation, so fail loud rather than surface a
-                // negative to SQL — silent wrong results are the worse outcome.
-                case U64 -> unsignedBigint(((LongArray) array).getLong(r));
+                // U64 maps to DECIMAL(20, 0): the high half (>= 2^63) has no signed-long representation
+                case U64 -> unsignedDecimal(((LongArray) array).getLong(r));
                 // U32 exceeds signed INTEGER, so it maps to BIGINT and widens losslessly here.
                 case U32 -> Integer.toUnsignedLong(((IntArray) array).getInt(r));
                 // Narrow ints decode to their own array width (Byte/Short/Int), not IntArray —
@@ -275,17 +274,14 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         };
     }
 
-    /// Guards a U64 value being surfaced to Calcite's signed `BIGINT`: values with the high bit set
-    /// (`>= 2^63`) have no lossless signed-long representation, so this throws rather than let a
-    /// negative reach SQL. Vortex has no wider unsigned SQL type to widen into, so loud beats wrong.
+    /// Widens a raw U64 value into the `DECIMAL(20, 0)` Calcite maps U64 to.
     ///
     /// @param raw the raw U64 bits read from the column
-    /// @return `raw` unchanged when it fits the non-negative signed-long range
-    private static long unsignedBigint(long raw) {
-        if (raw < 0) {
-            throw new VortexException("U64 value " + Long.toUnsignedString(raw)
-                                          + " exceeds the signed BIGINT range Calcite maps U64 to");
+    /// @return the unsigned value as an exact decimal
+    private static BigDecimal unsignedDecimal(long raw) {
+        if (raw >= 0) {
+            return BigDecimal.valueOf(raw);
         }
-        return raw;
+        return new BigDecimal(Long.toUnsignedString(raw));
     }
 }

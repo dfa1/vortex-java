@@ -1527,7 +1527,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// Maps a Vortex dtype to a Calcite SQL type. Unsigned integers map to the next wider signed
     /// SQL type so the declared type can hold their full range (`U8`->`SMALLINT`, `U16`->`INTEGER`,
     /// `U32`->`BIGINT`); `U64` is the exception — no wider SQL integer exists, so it maps to
-    /// `BIGINT` and [VortexEnumerator] guards the high-half values that cannot fit.
+    /// `DECIMAL(20, 0)`, which holds its full range.
     ///
     /// `vortex.timestamp` is a `TIMESTAMP` holding the stored value as a UTC wall clock, zone or
     /// not: Avatica shifts `TIMESTAMP WITH LOCAL TIME ZONE` by the JVM's zone in its JDBC getters,
@@ -1544,7 +1544,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 case F64 -> factory.createSqlType(SqlTypeName.DOUBLE);
                 // SQL has no half-precision type: an F16 widens exactly into REAL, like F32
                 case F32, F16 -> factory.createSqlType(SqlTypeName.REAL);
-                case I64, U64, U32 -> factory.createSqlType(SqlTypeName.BIGINT);
+                case I64, U32 -> factory.createSqlType(SqlTypeName.BIGINT);
+                // 2^64 - 1 has 20 digits; Calcite's UBIGINT reads back signed through Avatica's typed getters
+                case U64 -> factory.createSqlType(SqlTypeName.DECIMAL, 20, 0);
                 case I32, U16 -> factory.createSqlType(SqlTypeName.INTEGER);
                 case I16, U8 -> factory.createSqlType(SqlTypeName.SMALLINT);
                 case I8 -> factory.createSqlType(SqlTypeName.TINYINT);

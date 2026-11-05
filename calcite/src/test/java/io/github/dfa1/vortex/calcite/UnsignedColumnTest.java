@@ -13,6 +13,7 @@ import org.apache.calcite.linq4j.Enumerator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.math.BigDecimal;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -24,8 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Unsigned high-half handling in the Calcite adapter (#216): U32 widens losslessly into `BIGINT`
-/// and U64 — mapped to signed `BIGINT` because no wider SQL integer exists — fails loud rather than
-/// surfacing a two's-complement negative to SQL. The canonical motivating shape is an unsigned
+/// and U64 maps to `DECIMAL(20, 0)`, which holds its full range (#665). The canonical motivating shape is an unsigned
 /// integer column (like uci-wine's magnesium); here each column carries a boundary high-half value.
 class UnsignedColumnTest {
 
@@ -53,20 +53,20 @@ class UnsignedColumnTest {
         // Then — U32 widened to a positive Long (not a negative int), U64 kept as its Long value
         assertThat(rows).hasSize(1);
         assertThat(rows.getFirst()[0]).isEqualTo(U32_HIGH);
-        assertThat(rows.getFirst()[1]).isEqualTo(4000L);
+        assertThat(rows.getFirst()[1]).isEqualTo(new BigDecimal(4000));
     }
 
     @Test
-    void scan_u64HighHalf_failsLoudRatherThanSurfaceNegative() throws Exception {
-        // Given — a U64 value with no lossless signed-BIGINT representation
+    void scan_u64HighHalf_surfacesTheUnsignedValue() throws Exception {
+        // Given — a U64 value with the high bit set, which no signed BIGINT can hold
         Path file = write("u64-high.vortex", WriteOptions.defaults(), 0, U64_HIGH);
-        VortexTable table = new VortexTable(file);
 
-        // When / Then — materialization throws instead of yielding a negative BIGINT
-        assertThatThrownBy(() -> drain(table))
-                .isInstanceOf(VortexException.class)
-                .hasMessageContaining("U64 value")
-                .hasMessageContaining("BIGINT");
+        // When
+        List<Object[]> rows = drain(new VortexTable(file));
+
+        // Then — DECIMAL(20, 0) carries the exact unsigned value (#665)
+        assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst()[1]).isEqualTo(new BigDecimal("9223372036854775808"));
     }
 
     @Test

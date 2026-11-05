@@ -85,12 +85,12 @@ class VortexAdapterCoverageTest {
 
         // Then — one SqlTypeName per logical type. Unsigned integers map to the next wider signed
         // SQL type so the declared type holds their full range (#216); U64 is the exception (no
-        // wider SQL integer) and stays BIGINT with a value-side overflow guard.
+        // wider SQL integer) and maps to DECIMAL(20, 0).
         Map<String, SqlTypeName> expected = Map.ofEntries(
                 Map.entry("i8", SqlTypeName.TINYINT), Map.entry("u8", SqlTypeName.SMALLINT),
                 Map.entry("i16", SqlTypeName.SMALLINT), Map.entry("u16", SqlTypeName.INTEGER),
                 Map.entry("i32", SqlTypeName.INTEGER), Map.entry("u32", SqlTypeName.BIGINT),
-                Map.entry("i64", SqlTypeName.BIGINT), Map.entry("u64", SqlTypeName.BIGINT),
+                Map.entry("i64", SqlTypeName.BIGINT), Map.entry("u64", SqlTypeName.DECIMAL),
                 Map.entry("f32", SqlTypeName.REAL), Map.entry("f64", SqlTypeName.DOUBLE),
                 Map.entry("s", SqlTypeName.VARCHAR), Map.entry("b", SqlTypeName.BOOLEAN));
         assertThat(rowType.getFieldList()).hasSize(12);
@@ -122,7 +122,7 @@ class VortexAdapterCoverageTest {
         assertThat(r0[3]).isEqualTo(1000L);      // i64 -> Long
         assertThat(r0[4]).isEqualTo((short) 4);  // u8  -> Short (zero-extended into SMALLINT)
         assertThat(r0[5]).isEqualTo(40);         // u16 -> Integer (zero-extended into INTEGER)
-        assertThat(r0[7]).isEqualTo(4000L);      // u64 -> Long
+        assertThat(r0[7]).isEqualTo(new java.math.BigDecimal(4000)); // u64 -> BigDecimal
         assertThat(r0[8]).isEqualTo(1.5f);       // f32 -> Float, as its REAL type needs
         assertThat(r0[9]).isEqualTo(1.25);       // f64 -> Double
         assertThat(r0[10]).isEqualTo("a");       // s   -> String
