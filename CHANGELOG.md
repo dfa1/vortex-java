@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - The compact preset writes text columns as zstd frames of 8192 values, as Rust does, so a row-range scan decompresses only the frames it overlaps. ([#636](https://github.com/dfa1/vortex-java/issues/636))
+- A nullable decimal column keeps its validity in its own encoding, or has none when every row is valid, instead of a `vortex.masked` wrapper, and a column of equal decimals is one constant, as Rust writes them: decimal zone-stats tables are smaller. ([#646](https://github.com/dfa1/vortex-java/issues/646))
 - `VortexAggregates` summarizes a `U64` column exactly: `MIN`, `MAX` and `SUM` compare and add unsigned instead of failing past 2^63. ([#665](https://github.com/dfa1/vortex-java/issues/665))
 - A list column's elements and offsets are compressed by the cascade, and a nullable list or struct keeps its validity as a child instead of a `vortex.masked` wrapper, as Rust does: nested columns are smaller. ([#648](https://github.com/dfa1/vortex-java/issues/648))
 - SQL reads a `U64` column as `DECIMAL(20, 0)`, so values past 2^63 show correctly instead of failing. ([#665](https://github.com/dfa1/vortex-java/issues/665))

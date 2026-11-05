@@ -29,8 +29,22 @@ public final class DecimalEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Decimal;
     }
 
+    /// A nullable decimal keeps its validity as a `vortex.bool` child, as Rust's `DecimalArray` does.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return dtype instanceof DType.Decimal;
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData nullable) {
+            EncodeResult values = encode(dtype, nullable.values(), ctx);
+            if (nullable.values() instanceof BigDecimal[] decimals) {
+                // the packed buffer holds a placeholder zero for each null row, which must not bound the column
+                values = values.withStats(ZoneMapStats.ofDecimal((DType.Decimal) dtype, validOnly(decimals, nullable.validity())));
+            }
+            return values.withValidity(nullable.validity(), ctx);
+        }
         DType.Decimal d = (DType.Decimal) dtype;
         int bw = d.byteWidth();
         // the metadata's values type is the width's log2: 1 byte is 0, 32 bytes is 5
@@ -49,6 +63,13 @@ public final class DecimalEncodingEncoder implements EncodingEncoder {
         EncodeNode node = new EncodeNode(EncodingId.VORTEX_DECIMAL, metaBuf, new EncodeNode[0], new int[]{0});
         // Rust's i256 is two 128-bit halves, so no decimal width aligns past 16 bytes.
         return new EncodeResult(node, List.of(new EncodedBuffer(seg, Math.min(bw, 16))), null, null).withStats(ZoneMapStats.ofDecimal(seg, bw));
+    }
+
+    private static BigDecimal[] validOnly(BigDecimal[] values, boolean[] validity) {
+        return java.util.stream.IntStream.range(0, values.length)
+                .filter(i -> validity[i])
+                .mapToObj(i -> values[i])
+                .toArray(BigDecimal[]::new);
     }
 
     /// Packs the unscaled values little-endian, two's complement, `width` bytes each. A `null`

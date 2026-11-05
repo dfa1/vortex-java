@@ -1333,9 +1333,13 @@ public final class VortexWriter implements Closeable {
                 // value cascade, which reads ctx.registry()) sees only them.
                 EncodeContext columnCtx = EncodeContext.ofDepth(options.allowedCascading(), ctx.arena(),
                         registry, editionExcluded);
-                return data instanceof NullableData && !(dtype instanceof DType.Extension)
-                        ? new MaskedEncodingEncoder().encode(dtype, data, columnCtx)
-                        : new CascadingCompressor(encoders).encode(dtype, data, columnCtx);
+                // a decimal, struct or list keeps its validity in its own encoding, as on the default path
+                boolean masked = data instanceof NullableData && !(dtype instanceof DType.Extension)
+                        && !(options.allowedCascading() > 0 && CascadingCompressor.carriesValidity(dtype));
+                if (masked) {
+                    return new MaskedEncodingEncoder().encode(dtype, data, columnCtx);
+                }
+                return new CascadingCompressor(encoders).encode(dtype, data, columnCtx);
             }
         };
     }

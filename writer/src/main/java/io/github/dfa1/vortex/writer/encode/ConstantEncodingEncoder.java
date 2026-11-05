@@ -7,8 +7,11 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Array;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Optional;
@@ -73,6 +76,29 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         }
         return encodeIfConstant(p.ptype(), data)
                 .orElseThrow(() -> new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array"));
+    }
+
+    /// Encodes a decimal column as a `vortex.constant` when every value is equal. The scalar is the
+    /// unscaled value little-endian at the column's storage width, as Rust encodes a decimal scalar.
+    ///
+    /// @param dtype  the decimal dtype
+    /// @param values the decimals, none `null`
+    /// @return the constant array, or empty when `values` is empty or the values differ
+    static Optional<EncodeResult> encodeDecimalIfConstant(DType.Decimal dtype, BigDecimal[] values) {
+        if (values.length == 0) {
+            return Optional.empty();
+        }
+        for (BigDecimal value : values) {
+            if (value == null || value.compareTo(values[0]) != 0) {
+                return Optional.empty();
+            }
+        }
+        int width = dtype.byteWidth();
+        byte[] le = DecimalEncodingEncoder.pack(new BigDecimal[]{values[0]}, width, Arena.ofAuto())
+                .toArray(ValueLayout.JAVA_BYTE);
+        ProtoScalarValue scalar = ProtoScalarValue.ofBytesValue(le);
+        return Optional.of(EncodeResult.simple(EncodingId.VORTEX_CONSTANT,
+                EncodedBuffer.bytes(MemorySegment.ofArray(scalar.encode())), scalar, scalar));
     }
 
     /// Encodes `data` as a `vortex.constant` when every value is equal (floats by raw bits), in
