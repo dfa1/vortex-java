@@ -11,13 +11,33 @@ import java.lang.foreign.MemorySegment;
 /// @param metadata      optional encoding-specific metadata bytes, or `null`
 /// @param children      child encode nodes (empty for leaf nodes)
 /// @param bufferIndices indices into the flat buffer list for data owned by this node
+/// @param stats         the array stats this node carries, or `null` for none
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record EncodeNode(
         EncodingId encodingId,
         MemorySegment metadata,
         EncodeNode[] children,
-        int[] bufferIndices
+        int[] bufferIndices,
+        NodeStats stats
 ) {
+    /// Creates a node that carries no stats.
+    ///
+    /// @param encodingId    encoding id for this node
+    /// @param metadata      optional encoding-specific metadata bytes, or `null`
+    /// @param children      child encode nodes (empty for leaf nodes)
+    /// @param bufferIndices indices into the flat buffer list for data owned by this node
+    public EncodeNode(EncodingId encodingId, MemorySegment metadata, EncodeNode[] children, int[] bufferIndices) {
+        this(encodingId, metadata, children, bufferIndices, null);
+    }
+
+    /// A copy of this node carrying `stats`.
+    ///
+    /// @param stats the array stats the copy carries
+    /// @return the copy
+    public EncodeNode withStats(NodeStats stats) {
+        return new EncodeNode(encodingId, metadata, children, bufferIndices, stats);
+    }
+
     /// Creates a leaf node with a single buffer and no children or metadata.
     ///
     /// @param encodingId  the encoding identifier for this leaf node
@@ -46,6 +66,6 @@ public record EncodeNode(
         for (int i = 0; i < oldChildren.length; i++) {
             newChildren[i] = remapBufferIndices(oldChildren[i], offset);
         }
-        return new EncodeNode(node.encodingId(), node.metadata(), newChildren, newIdx);
+        return new EncodeNode(node.encodingId(), node.metadata(), newChildren, newIdx, node.stats());
     }
 }

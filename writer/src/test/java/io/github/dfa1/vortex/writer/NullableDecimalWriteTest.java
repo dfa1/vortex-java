@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.channels.FileChannel;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -42,18 +41,19 @@ class NullableDecimalWriteTest {
 
     @ParameterizedTest(name = "DECIMAL({0}, 2), cascade {1}")
     @CsvSource({"20, 3", "20, 0", "15, 3", "15, 0", "38, 3", "5, 0"})
-    void nullableDecimal_boundsSkipTheNullRows(int precision, int cascade) throws Exception {
-        // Given — the null row's slot holds a placeholder zero that is below every valid value
+    void nullableDecimal_withNulls_roundTripsAndCountsItsNulls(int precision, int cascade) throws Exception {
+        // Given — the null row's slot holds a placeholder zero that is below every valid value; the
+        // flat segment keeps no bounds (Rust's does not), and the zone table's are checked against
+        // vortex-jni by DecimalBytePartsInteropIntegrationTest's filtered read
         BigDecimal[] values = {dec("0.05"), null, dec("0.07"), dec("0.09")};
         Path file = write(precision, WriteOptions.cascading(cascade), values);
 
         // When
-        ArrayStats result = stats(file);
+        List<ArrayStats> result = zoneStats(file);
 
-        // Then — the minimum is 0.05, not the placeholder
-        assertThat(unscaled(result.min())).isEqualTo(5);
-        assertThat(unscaled(result.max())).isEqualTo(9);
-        assertThat(result.nullCount()).isEqualTo(1);
+        // Then
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().nullCount()).isEqualTo(1);
         assertThat(read(file)).containsExactly(values);
     }
 
@@ -174,6 +174,13 @@ class NullableDecimalWriteTest {
         }
     }
 
+    private static List<ArrayStats> zoneStats(Path file) throws IOException {
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(ScanOptions.all())) {
+            return scan.columnZoneStats(D);
+        }
+    }
+
     private static BigDecimal[] read(Path file) throws IOException {
         List<BigDecimal> out = new ArrayList<>();
         try (VortexReader reader = VortexReader.open(file);
@@ -198,16 +205,5 @@ class NullableDecimalWriteTest {
 
     private static BigDecimal dec(String value) {
         return new BigDecimal(value);
-    }
-
-    /// The unscaled value of a decimal bound as `ArrayStats` reads it: a UTF-8 string of the
-    /// little-endian two's-complement bytes, at whatever width the encoding wrote them.
-    private static long unscaled(Object bound) {
-        byte[] le = ((String) bound).getBytes(StandardCharsets.UTF_8);
-        byte[] be = new byte[le.length];
-        for (int i = 0; i < le.length; i++) {
-            be[le.length - 1 - i] = le[i];
-        }
-        return new BigInteger(be).longValueExact();
     }
 }

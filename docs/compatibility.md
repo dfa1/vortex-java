@@ -152,6 +152,26 @@ decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nul
 | `vortex.zstd_buffers`       | `ZstdBuffersEncodingDecoder`     | —                                | ✅      | ❌      | Read only (`zstd2026.02.0`, opt-in in Rust): each buffer of any wrapped encoding is Zstd-decompressed at its declared alignment, then the inner encoding decodes with its own children. Needs the optional zstd binding, like `vortex.zstd`. Interop-tested against a Rust-written fixture (`scripts/fixtures/zstd-buffers`) |
 | `vortex.onpair`             | `OnPairEncodingDecoder`          | `OnPairEncodingEncoder`          | ✅      | ✅      | Utf8, Binary; `core2026.08.1`, a cascade candidate under the default edition (competes with FSST, as in Rust) |
 
+### Array stats on flat segments
+
+A flat segment's `ArrayNode` tree carries array stats, and Rust's flat layout does not compute them: it keeps
+the ones the compressor had cached on the array, and each encoding passes on only some
+(#583). The writer mirrors that for the **root node**:
+
+| Column | Root encoding | Stats written |
+|---|---|---|
+| integer | `vortex.primitive`, `fastlanes.bitpacked` | `min`, `max`, `is_constant` (only without nulls), `null_count`, `uncompressed_size_in_bytes` |
+| float | `vortex.primitive` | `is_constant` (only without nulls), `null_count`, `uncompressed_size_in_bytes`; no bounds |
+| bool | `vortex.bool` | `is_constant`, `uncompressed_size_in_bytes` |
+| any | any other encoding (`vortex.alp`, `vortex.alprd`, `vortex.fsst`, `vortex.onpair`, `vortex.constant`, `fastlanes.for`, `vortex.dict`, strings, ...) | none |
+
+So a Java-written string column has no bound in its flat segments, as a Rust-written one has none:
+`VortexReader.columnStats()` reports no string `min`/`max` for either, and a string bound lives only in the
+zoned layout's stats table. The decimal bounds the reader can read come from the same two places, and the
+zone table's are not decoded yet. Child nodes carry no stats yet, and `vortex.sequence` does not write its sorted
+flags yet ([#583](https://github.com/dfa1/vortex-java/issues/583)); `NodeStatsInteropIntegrationTest` compares
+every flat root against vortex-jni.
+
 ### Decode shape
 
 Per [ADR 0010](../adr/0010-lazy-decode.md) and [ADR 0012](../adr/0012-zero-copy-layout-decoding.md), each

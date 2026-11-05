@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The array stats on a flat segment's root node are the ones Rust keeps: integers under `vortex.primitive` and `fastlanes.bitpacked` carry min, max, `is_constant`, `null_count` and the uncompressed size, and every other encoding carries none, so a Java-written string column reports no flat `min`/`max`, as a Rust-written one. ([#583](https://github.com/dfa1/vortex-java/issues/583))
 - The compact preset writes text columns as zstd frames of 8192 values, as Rust does, so a row-range scan decompresses only the frames it overlaps. ([#636](https://github.com/dfa1/vortex-java/issues/636))
 - A nullable decimal column keeps its validity in its own encoding, or has none when every row is valid, instead of a `vortex.masked` wrapper, and a column of equal decimals is one constant, as Rust writes them: decimal zone-stats tables are smaller. ([#646](https://github.com/dfa1/vortex-java/issues/646))
 - `VortexAggregates` summarizes a `U64` column exactly: `MIN`, `MAX` and `SUM` compare and add unsigned instead of failing past 2^63. ([#665](https://github.com/dfa1/vortex-java/issues/665))

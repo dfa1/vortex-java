@@ -216,9 +216,10 @@ class GlobalDictUtf8Test {
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             var result = vf.columnStats().get(ColumnName.of("status"));
 
-            // Then — lexicographic bounds over the three values, not over the codes
-            assertThat(result.min()).isEqualTo("closed");
-            assertThat(result.max()).isEqualTo("open");
+            // Then — Rust keeps no string bounds in a flat array's stats, so none are reported; the
+            // null count is still known
+            assertThat(result.min()).isNull();
+            assertThat(result.max()).isNull();
             assertThat(result.nullCount()).isZero();
         }
     }
