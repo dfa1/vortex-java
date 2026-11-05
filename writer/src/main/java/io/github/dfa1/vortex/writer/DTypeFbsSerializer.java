@@ -17,10 +17,12 @@ import io.github.dfa1.vortex.core.fbs.FbsUtf8;
 import io.github.dfa1.vortex.core.fbs.FbsUnion;
 import io.github.dfa1.vortex.core.fbs.FbsVariant;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.ExtensionMetadata;
 import io.github.dfa1.vortex.core.model.OpaqueMetadata;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimeUnitMetadata;
 import io.github.dfa1.vortex.core.model.TimestampMetadata;
@@ -31,6 +33,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 
 /// Serializes a [DType] tree to its FlatBuffer wire encoding (the file's DType blob, pointed to
@@ -130,52 +133,46 @@ final class DTypeFbsSerializer {
                 int inner = FbsNull.endFbsNull(fbb);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsNull, inner);
             }
-            case DType.Bool(var nullable) -> {
+            case DType.Bool(boolean nullable) -> {
                 int inner = FbsBool.createFbsBool(fbb, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsBool, inner);
             }
-            case DType.Primitive(var ptype, var nullable) -> {
+            case DType.Primitive(PType ptype, boolean nullable) -> {
                 int inner = FbsPrimitive.createFbsPrimitive(fbb, ptype.ordinal(), nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, inner);
             }
-            case DType.Decimal(var precision, var scale, var nullable) -> {
+            case DType.Decimal(byte precision, byte scale, boolean nullable) -> {
                 int inner = FbsDecimal.createFbsDecimal(fbb, precision, scale, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsDecimal, inner);
             }
-            case DType.Struct(var fieldNames, var fieldTypes, var nullable) -> {
+            case DType.Struct(List<ColumnName> fieldNames, List<DType> fieldTypes, boolean nullable) -> {
                 // Build child DType tables first (FlatBuffers bottom-up requirement)
-                int[] fieldOffsets = new int[fieldTypes.size()];
-                for (int i = 0; i < fieldOffsets.length; i++) {
-                    fieldOffsets[i] = serializeDType(fbb, fieldTypes.get(i));
-                }
-                int[] nameOffsets = new int[fieldNames.size()];
-                for (int i = 0; i < nameOffsets.length; i++) {
-                    nameOffsets[i] = fbb.createString(fieldNames.get(i).value());
-                }
+                int[] fieldOffsets = createTypeOffsets(fbb, fieldTypes);
+                int[] nameOffsets = createNameOffsets(fbb, fieldNames);
                 int namesVec = FbsStruct.createNamesVector(fbb, nameOffsets);
                 int dtypesVec = FbsStruct.createDtypesVector(fbb, fieldOffsets);
                 int inner = FbsStruct.createFbsStruct(fbb, namesVec, dtypesVec, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsStruct, inner);
             }
-            case DType.Utf8(var nullable) -> {
+            case DType.Utf8(boolean nullable) -> {
                 int inner = FbsUtf8.createFbsUtf8(fbb, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsUtf8, inner);
             }
-            case DType.Binary(var nullable) -> {
+            case DType.Binary(boolean nullable) -> {
                 int inner = FbsBinary.createFbsBinary(fbb, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsBinary, inner);
             }
-            case DType.List(var elementType, var nullable) -> {
+            case DType.List(DType elementType, boolean nullable) -> {
                 int elemTypeOff = serializeDType(fbb, elementType);
                 int inner = FbsList.createFbsList(fbb, elemTypeOff, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsList, inner);
             }
-            case DType.FixedSizeList(var elementType, var fixedSize, var nullable) -> {
+            case DType.FixedSizeList(DType elementType, int fixedSize, boolean nullable) -> {
                 int elemTypeOff = serializeDType(fbb, elementType);
                 int inner = FbsFixedSizeList.createFbsFixedSizeList(fbb, elemTypeOff, fixedSize, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsFixedSizeList, inner);
             }
-            case DType.Map(var keyType, var valueType, var keysSorted, var nullable) -> {
+            case DType.Map(DType keyType, DType valueType, boolean keysSorted, boolean nullable) -> {
                 int keyTypeOff = serializeDType(fbb, keyType);
                 int valueTypeOff = serializeDType(fbb, valueType);
                 int inner = FbsMap.createFbsMap(fbb, keyTypeOff, valueTypeOff, keysSorted, nullable);
@@ -190,19 +187,13 @@ final class DTypeFbsSerializer {
                 int inner = FbsExtension.createFbsExtension(fbb, idOff, storageDtypeOff, metaOff);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsExtension, inner);
             }
-            case DType.Variant(var nullable) -> {
+            case DType.Variant(boolean nullable) -> {
                 int inner = FbsVariant.createFbsVariant(fbb, nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsVariant, inner);
             }
-            case DType.Union(var names, var variantTypes, var typeIds, var nullable) -> {
-                int[] typeOffsets = new int[variantTypes.size()];
-                for (int i = 0; i < typeOffsets.length; i++) {
-                    typeOffsets[i] = serializeDType(fbb, variantTypes.get(i));
-                }
-                int[] nameOffsets = new int[names.size()];
-                for (int i = 0; i < nameOffsets.length; i++) {
-                    nameOffsets[i] = fbb.createString(names.get(i).value());
-                }
+            case DType.Union(List<ColumnName> names, List<DType> variantTypes, List<Integer> typeIds, boolean nullable) -> {
+                int[] typeOffsets = createTypeOffsets(fbb, variantTypes);
+                int[] nameOffsets = createNameOffsets(fbb, names);
                 byte[] ids = new byte[typeIds.size()];
                 for (int i = 0; i < ids.length; i++) {
                     ids[i] = typeIds.get(i).byteValue();
@@ -211,7 +202,22 @@ final class DTypeFbsSerializer {
                         FbsUnion.createDtypesVector(fbb, typeOffsets), FbsUnion.createTypeIdsVector(fbb, ids), nullable);
                 yield FbsDType.createFbsDType(fbb, FbsType.FbsUnion, inner);
             }
-            default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);
         };
+    }
+
+    private static int[] createNameOffsets(FbsBuilder fbb, List<ColumnName> names) {
+        int[] nameOffsets = new int[names.size()];
+        for (int i = 0; i < nameOffsets.length; i++) {
+            nameOffsets[i] = fbb.createString(names.get(i).value());
+        }
+        return nameOffsets;
+    }
+
+    private int[] createTypeOffsets(FbsBuilder fbb, List<DType> variantTypes) {
+        int[] typeOffsets = new int[variantTypes.size()];
+        for (int i = 0; i < typeOffsets.length; i++) {
+            typeOffsets[i] = serializeDType(fbb, variantTypes.get(i));
+        }
+        return typeOffsets;
     }
 }
