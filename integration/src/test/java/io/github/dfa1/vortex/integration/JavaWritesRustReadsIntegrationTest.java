@@ -311,10 +311,18 @@ class JavaWritesRustReadsIntegrationTest {
 
     @SuppressWarnings("SameParameterValue")
     private static String[] readStringColumn(Path file, String column) throws IOException {
+        return readStringColumn(file, column, 0, Long.MAX_VALUE);
+    }
+
+    /// The `column` strings of rows `[begin, end)`; `Long.MAX_VALUE` as `end` reads to the last row.
+    private static String[] readStringColumn(Path file, String column, long begin, long end) throws IOException {
         String uri = file.toAbsolutePath().toUri().toString();
-        ScanOptions opts = ScanOptions.builder()
-                                   .projection(Expression.select(new String[]{column}, Expression.root()))
-                                   .build();
+        var builder = ScanOptions.builder()
+                                   .projection(Expression.select(new String[]{column}, Expression.root()));
+        if (end != Long.MAX_VALUE) {
+            builder = builder.rowRangeBegin(begin).rowRangeEnd(end);
+        }
+        ScanOptions opts = builder.build();
         var strings = new ArrayList<String>();
         DataSource ds = DataSource.open(SESSION, uri);
         Scan scan = ds.scan(opts);
@@ -1972,6 +1980,31 @@ class JavaWritesRustReadsIntegrationTest {
         // Then
         String[] decoded = readStringColumn(file, "s");
         assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
+    void javaWriter_rustReader_zstdTextFrames_fullAndRowRange(@TempDir Path tmp) throws IOException {
+        // Given — the compact preset's text Zstd writes 8192 values per frame as Rust does (#636):
+        // 20,000 strings are three frames, and the row range below starts in the second frame and
+        // ends in the third, so Rust must decompress the frames it overlaps and slice them
+        Path file = tmp.resolve("java_zstd_text_frames.vtx");
+        String[] data = new String[20_000];
+        for (int i = 0; i < data.length; i++) {
+            data[i] = "value-" + i + "/" + (i % 97);
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
+                     List.of(ZstdEncodingEncoder.forText()))) {
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
+        }
+
+        // When
+        String[] full = readStringColumn(file, "s");
+        String[] range = readStringColumn(file, "s", 9_000, 17_000);
+
+        // Then
+        assertThat(full).containsExactly(data);
+        assertThat(range).containsExactly(java.util.Arrays.copyOfRange(data, 9_000, 17_000));
     }
 
     @Test

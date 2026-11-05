@@ -699,6 +699,23 @@ class ZstdEncodingEncoderTest {
         }
 
         @Test
+        void forText_writes8192ValuesPerFrame() throws Exception {
+            // Given — 20,000 short strings, as a compact-preset text column
+            String[] values = new String[20_000];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = "value-" + (i % 97);
+            }
+            var sut = ZstdEncodingEncoder.forText();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
+
+            // Then — Rust's frame size (#636), and the frames read back whole
+            assertThat(frameValueCounts(result)).containsExactly(8_192L, 8_192L, 3_616L);
+            assertThat(roundTrip(result)).containsExactly(values);
+        }
+
+        @Test
         void valuesPerFrame_andByteCap_closeAtWhicheverComesFirst() throws Exception {
             // Given — at most 3 values a frame, at most 40 bytes: the byte cap closes first
             var sut = new ZstdEncodingEncoder(3, true, 40);
