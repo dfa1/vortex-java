@@ -9,8 +9,6 @@ import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.compute.Compute;
-import io.github.dfa1.vortex.reader.compute.RowSelection;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -23,11 +21,12 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
+import io.github.dfa1.vortex.reader.compute.Compute;
+import io.github.dfa1.vortex.reader.compute.RowSelection;
 import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
-
 import org.apache.calcite.avatica.util.ByteString;
 import org.apache.calcite.linq4j.Enumerator;
 
@@ -42,7 +41,6 @@ import java.util.function.Function;
 /// retained, so the working set stays at one chunk rather than the whole result.
 final class VortexEnumerator implements Enumerator<Object[]> {
 
-    private final Path file;
     private final AtomicLong chunksScannedLastQuery;
     private final ColumnName[] names;
     private final DType[] types;
@@ -52,7 +50,8 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     /// evaluated once.
     private final Function<Chunk, RowSelection> matcher;
     private final VortexReader reader;
-    private final ScanIterator scan;
+    private final ScanOptions scanOptions;
+    private ScanIterator scan;
     private Chunk chunk;
     private RowSelection rowMatcher;
     private Object[] columns;
@@ -72,9 +71,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     ///                               via [Compute#matcher(ScanFilter)] so the result stays
     ///                               exact — or `null` when every pushed predicate is still Calcite's to
     ///                               re-check
-    VortexEnumerator(Path file, AtomicLong chunksScannedLastQuery, ScanOptions options,
-                      ColumnName[] names, DType[] types, ScanFilter exactFilter) {
-        this.file = file;
+    VortexEnumerator(Path file, AtomicLong chunksScannedLastQuery, ScanOptions options, ColumnName[] names, DType[] types, ScanFilter exactFilter) {
         this.chunksScannedLastQuery = chunksScannedLastQuery;
         this.names = names;
         this.types = types;
@@ -84,23 +81,15 @@ final class VortexEnumerator implements Enumerator<Object[]> {
         }
         this.matcher = exactFilter == null ? null : Compute.matcher(exactFilter);
         chunksScannedLastQuery.set(0);
-        VortexReader openedReader = null;
-        try {
-            openedReader = VortexReader.open(file);
-            this.reader = openedReader;
-            this.scan = openedReader.scan(options);
-        } catch (IOException e) {
-            closeQuietly(openedReader);
-            throw new UncheckedIOException("cannot scan " + file, e);
-        } catch (RuntimeException e) {
-            closeQuietly(openedReader);
-            throw e;
-        }
+        this.reader = open(file);
+        this.scanOptions = options;
     }
 
-    private void closeQuietly(VortexReader r) {
-        if (r != null) {
-            r.close();
+    private VortexReader open(Path file) {
+        try {
+            return VortexReader.open(file);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -153,6 +142,9 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     ///
     /// @return `false` when the scan is exhausted
     boolean nextChunk() {
+        if (scan == null) {
+            this.scan = reader.scan(this.scanOptions);
+        }
         if (chunk != null) {
             chunk.close();
             chunk = null;
@@ -270,11 +262,11 @@ final class VortexEnumerator implements Enumerator<Object[]> {
             // day (int), TIMESTAMP milliseconds since the epoch (long)
             case DType.Extension ext -> switch (ext.extensionId()) {
                 case ExtensionId.WellKnown.VORTEX_DATE ->
-                        Math.toIntExact(DateExtensionDecoder.INSTANCE.decode(ext, (Array) array, r).toEpochDay());
+                    Math.toIntExact(DateExtensionDecoder.INSTANCE.decode(ext, (Array) array, r).toEpochDay());
                 case ExtensionId.WellKnown.VORTEX_TIME ->
-                        (int) (TimeExtensionDecoder.INSTANCE.decode(ext, (Array) array, r).toNanoOfDay() / 1_000_000);
+                    (int) (TimeExtensionDecoder.INSTANCE.decode(ext, (Array) array, r).toNanoOfDay() / 1_000_000);
                 case ExtensionId.WellKnown.VORTEX_TIMESTAMP ->
-                        TimestampExtensionDecoder.INSTANCE.instant(ext, (Array) array, r).toEpochMilli();
+                    TimestampExtensionDecoder.INSTANCE.instant(ext, (Array) array, r).toEpochMilli();
                 case ExtensionId.WellKnown.VORTEX_UUID -> UuidExtensionDecoder.INSTANCE.decode((Array) array, r);
                 default -> value(array, ext.storageDType(), r);
             };
@@ -292,7 +284,7 @@ final class VortexEnumerator implements Enumerator<Object[]> {
     private static long unsignedBigint(long raw) {
         if (raw < 0) {
             throw new VortexException("U64 value " + Long.toUnsignedString(raw)
-                    + " exceeds the signed BIGINT range Calcite maps U64 to");
+                                          + " exceeds the signed BIGINT range Calcite maps U64 to");
         }
         return raw;
     }
