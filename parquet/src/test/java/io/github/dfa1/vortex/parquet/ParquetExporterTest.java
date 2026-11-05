@@ -22,6 +22,7 @@ import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -38,6 +39,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.math.BigDecimal;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -546,6 +548,40 @@ class ParquetExporterTest {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk chunk = iter.next()) {
                     assertThat(chunk.as(ColumnName.of("events"), Instant.class)).containsExactlyElementsOf(instants);
+                }
+            }
+        }
+
+        @ParameterizedTest(name = "DECIMAL({0}, 2)")
+        @CsvSource({"9", "10", "15", "18", "19", "38", "76"})
+        void decimalColumn_roundTripsThroughParquetAndBack(int precision, @TempDir Path tmp) throws Exception {
+            // Given — a nullable decimal holding nulls, negatives and the widest value of its precision (#655)
+            DType.Decimal decimal = DType.Decimal.of(precision, 2, true);
+            BigDecimal widest = new BigDecimal(java.math.BigInteger.TEN.pow(precision).subtract(java.math.BigInteger.ONE), 2);
+            List<BigDecimal> values = Arrays.asList(
+                    new BigDecimal("17.00"), null, new BigDecimal("-0.05"), widest, widest.negate(), BigDecimal.ZERO.setScale(2));
+            Path original = writeVortex(tmp, "original.vortex",
+                    List.of(ColumnName.of("d")), List.of(decimal),
+                    Map.of(ColumnName.of("d"), values.toArray(BigDecimal[]::new)));
+            Path parquet = tmp.resolve("out.parquet");
+            Path reimported = tmp.resolve("reimported.vortex");
+
+            // When
+            ParquetExporter.exportParquet(original, parquet);
+            ParquetImporter.importParquet(parquet, reimported);
+
+            // Then
+            try (VortexReader reader = VortexReader.open(reimported);
+                 ScanIterator iter = reader.scan(ScanOptions.all())) {
+                assertThat(((DType.Struct) reader.dtype()).fieldTypes().getFirst()).isEqualTo(decimal);
+                try (Chunk chunk = iter.next()) {
+                    MaskedArray masked = (MaskedArray) chunk.column(ColumnName.of("d"));
+                    DecimalArray inner = (DecimalArray) masked.inner();
+                    List<BigDecimal> result = new java.util.ArrayList<>();
+                    for (int i = 0; i < values.size(); i++) {
+                        result.add(masked.isValid(i) ? inner.getDecimal(i) : null);
+                    }
+                    assertThat(result).containsExactlyElementsOf(values);
                 }
             }
         }
