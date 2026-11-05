@@ -23,6 +23,7 @@ import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -36,8 +37,11 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /// Reads a Vortex file and writes a Parquet file.
@@ -55,9 +59,14 @@ import java.util.List;
 /// - I64 → INT64 (no annotation), U64 → INT64 (IntType 64, unsigned)
 /// - F32 → FLOAT, F64 → DOUBLE, F16 → FIXED_LEN_BYTE_ARRAY(2) (FLOAT16)
 /// - Utf8 → BYTE_ARRAY (STRING), Binary → BYTE_ARRAY (no annotation)
+/// - Decimal → DECIMAL on INT32 (precision up to 9), INT64 (up to 18) or FIXED_LEN_BYTE_ARRAY
 /// - `vortex.timestamp` → INT64 (TIMESTAMP, `isAdjustedToUTC` set from whether the column
 ///   carries a timezone)
 public final class ParquetExporter {
+
+    // the most digits an unscaled decimal holds in a Parquet INT32 / INT64
+    private static final int MAX_INT32_DIGITS = 9;
+    private static final int MAX_INT64_DIGITS = 18;
 
     private ParquetExporter() {
     }
@@ -165,11 +174,34 @@ public final class ParquetExporter {
                     builder.addColumn(name, PhysicalType.BYTE_ARRAY, rep, new LogicalType.StringType());
             case DType.Binary _ -> builder.addColumn(name, PhysicalType.BYTE_ARRAY, rep);
             case DType.Primitive p -> addPrimitiveColumn(builder, name, p.ptype(), rep);
+            case DType.Decimal d -> addDecimalColumn(builder, name, d, rep);
             case DType.Extension ext -> addTimestampColumn(builder, name, ext, rep);
             default -> throw new UnsupportedOperationException(
                     "unsupported column type for Parquet export (STRUCT/LIST/MAP not yet supported): " + type
                             + " (column: " + name + ")");
         }
+    }
+
+    /// Maps a decimal to Parquet's `DECIMAL` annotation on the narrowest physical type holding its
+    /// unscaled value: `INT32` up to 9 digits, `INT64` up to 18, else a big-endian two's-complement
+    /// `FIXED_LEN_BYTE_ARRAY` just wide enough for the precision. The importer reads each of them back
+    /// as the same Vortex decimal.
+    private static void addDecimalColumn(FileSchema.Builder builder, String name, DType.Decimal d,
+            RepetitionType rep) {
+        LogicalType.DecimalType logical = new LogicalType.DecimalType(d.precision(), d.scale());
+        if (d.precision() <= MAX_INT32_DIGITS) {
+            builder.addColumn(name, PhysicalType.INT32, rep, logical);
+        } else if (d.precision() <= MAX_INT64_DIGITS) {
+            builder.addColumn(name, PhysicalType.INT64, rep, logical);
+        } else {
+            builder.addColumn(name, PhysicalType.FIXED_LEN_BYTE_ARRAY, rep, decimalByteWidth(d.precision()), logical);
+        }
+    }
+
+    /// The fewest bytes whose two's-complement range holds every `precision`-digit unscaled value.
+    private static int decimalByteWidth(int precision) {
+        int bits = BigInteger.TEN.pow(precision).subtract(BigInteger.ONE).bitLength() + 1;
+        return (bits + 7) / 8;
     }
 
     private static void addPrimitiveColumn(FileSchema.Builder builder, String name, PType ptype, RepetitionType rep) {
@@ -228,6 +260,7 @@ public final class ParquetExporter {
             case DType.Utf8 _ -> writeBytes(batch, idx, target, rowCount, nulls);
             case DType.Binary _ -> writeBytes(batch, idx, target, rowCount, nulls);
             case DType.Primitive p -> writePrimitive(batch, idx, p.ptype(), target, rowCount, nulls);
+            case DType.Decimal d -> writeDecimals(batch, idx, d, (DecimalArray) target, rowCount, nulls);
             case DType.Extension _ -> writeLongs(batch, idx, target, rowCount, nulls);
             default -> throw new UnsupportedOperationException("unsupported column type for Parquet export: " + type);
         }
@@ -278,6 +311,67 @@ public final class ParquetExporter {
                 }
             }
         }
+    }
+
+    /// Writes a decimal column as its unscaled integer, on the physical type [#addDecimalColumn] chose
+    /// for the precision. A null row writes a zero instead of reading the masked slot.
+    private static void writeDecimals(ColumnBatch batch, int idx, DType.Decimal type, DecimalArray arr,
+            int rowCount, boolean[] nulls) {
+        if (type.precision() <= MAX_INT64_DIGITS) {
+            long[] unscaled = new long[rowCount];
+            for (int i = 0; i < rowCount; i++) {
+                if (nulls == null || !nulls[i]) {
+                    unscaled[i] = unscaledValue(arr.getDecimal(i), type).longValueExact();
+                }
+            }
+            if (type.precision() <= MAX_INT32_DIGITS) {
+                int[] values = new int[rowCount];
+                for (int i = 0; i < rowCount; i++) {
+                    values[i] = (int) unscaled[i];
+                }
+                if (nulls == null) {
+                    batch.ints(idx, values);
+                } else {
+                    batch.ints(idx, values, nulls);
+                }
+            } else if (nulls == null) {
+                batch.longs(idx, unscaled);
+            } else {
+                batch.longs(idx, unscaled, nulls);
+            }
+            return;
+        }
+        int width = decimalByteWidth(type.precision());
+        byte[][] values = new byte[rowCount][];
+        for (int i = 0; i < rowCount; i++) {
+            BigInteger unscaled = BigInteger.ZERO;
+            if (nulls == null || !nulls[i]) {
+                unscaled = unscaledValue(arr.getDecimal(i), type);
+            }
+            values[i] = signExtend(unscaled.toByteArray(), width);
+        }
+        if (nulls == null) {
+            batch.fixed(idx, values);
+        } else {
+            batch.fixed(idx, values, nulls);
+        }
+    }
+
+    private static BigInteger unscaledValue(BigDecimal value, DType.Decimal type) {
+        if (value.scale() != type.scale()) {
+            return value.setScale(type.scale()).unscaledValue();
+        }
+        return value.unscaledValue();
+    }
+
+    /// Left-pads big-endian two's-complement `bytes` to `width` with the sign byte.
+    private static byte[] signExtend(byte[] bytes, int width) {
+        byte[] result = new byte[width];
+        if (bytes[0] < 0) {
+            Arrays.fill(result, (byte) -1);
+        }
+        System.arraycopy(bytes, 0, result, width - bytes.length, bytes.length);
+        return result;
     }
 
     private static void writeBooleans(ColumnBatch batch, int idx, Array target, int rowCount, boolean[] nulls) {
