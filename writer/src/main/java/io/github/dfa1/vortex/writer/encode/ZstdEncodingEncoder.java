@@ -59,6 +59,9 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         }
     }
 
+    /// Values per frame of the compact preset, as in Rust's `from_var_bin_view_without_dict(.., 3, 8192, ..)`.
+    private static final long TEXT_VALUES_PER_FRAME = 8192;
+
     /// Largest uncompressed payload of one varbin frame: half the 2 GiB a reader takes per frame.
     private static final long MAX_FRAME_BYTES = 1L << 30;
 
@@ -76,12 +79,13 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         this(0);
     }
 
-    /// Creates an encoder for strings and binary only (single frame per array), as Rust's compact
-    /// preset uses Zstd, leaving numbers to Pco.
+    /// Creates an encoder for strings and binary only, as Rust's compact preset uses Zstd, leaving
+    /// numbers to Pco. It writes [#TEXT_VALUES_PER_FRAME] values per frame, as Rust's binary
+    /// Zstd scheme does, so a row-range scan decompresses only the frames it overlaps.
     ///
     /// @return a text-only encoder
     public static ZstdEncodingEncoder forText() {
-        return new ZstdEncodingEncoder(0, true);
+        return new ZstdEncodingEncoder(TEXT_VALUES_PER_FRAME, true);
     }
 
     /// Creates an encoder that splits the payload into frames of `valuesPerFrame` values each.

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The compact preset writes text columns as zstd frames of 8192 values, as Rust does, so a row-range scan decompresses only the frames it overlaps. ([#636](https://github.com/dfa1/vortex-java/issues/636))
 - `VortexAggregates` summarizes a `U64` column exactly: `MIN`, `MAX` and `SUM` compare and add unsigned instead of failing past 2^63. ([#665](https://github.com/dfa1/vortex-java/issues/665))
 - SQL reads a `U64` column as `DECIMAL(20, 0)`, so values past 2^63 show correctly instead of failing. ([#665](https://github.com/dfa1/vortex-java/issues/665))
 - Parquet export writes a decimal column as a Parquet `DECIMAL` instead of failing, so a Parquet import followed by an export is lossless. ([#655](https://github.com/dfa1/vortex-java/issues/655))
