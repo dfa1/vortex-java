@@ -1,11 +1,16 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.proto.ProtoListMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.function.IntToLongFunction;
@@ -19,6 +24,9 @@ import java.util.function.Supplier;
 /// representations as open children; encodings that use the default are terminal.
 /// At depth 0 only terminal encodings are considered.
 public final class CascadingCompressor {
+
+    // a list's offsets: signed 64-bit, the width `vortex.list` records in its metadata
+    private static final DType OFFSETS = DTypes.I64;
 
     private static final EncodingEncoder CANONICAL_PRIMITIVE = new PrimitiveEncodingEncoder();
     private static final EncodingEncoder CANONICAL_BOOL = new BoolEncodingEncoder();
@@ -213,6 +221,15 @@ public final class CascadingCompressor {
         return dtype instanceof DType.Primitive;
     }
 
+    /// Whether a nullable column of `dtype` carries its validity as a child of its own encoding, as
+    /// Rust's `StructArray` and `ListArray` do, rather than in a `vortex.masked` wrapper (#648).
+    ///
+    /// @param dtype the column's dtype
+    /// @return `true` for a struct or a list
+    public static boolean carriesValidity(DType dtype) {
+        return dtype instanceof DType.Struct || dtype instanceof DType.List;
+    }
+
     /// Entry point: encode `data` using the best cascading strategy.
     ///
     /// Cascade parameters (depth, sampling, exclusions) are taken from `ctx`.
@@ -243,6 +260,17 @@ public final class CascadingCompressor {
             return data instanceof NullableData(StructData fields, boolean[] validity)
                     ? encodeStruct(structDtype, fields, validity, ctx)
                     : encodeStruct(structDtype, (StructData) data, null, ctx);
+        }
+
+        // A list column carries ListData, or ListViewData when the caller picked list-view storage;
+        // only the former is a vortex.list the cascade can compress.
+        if (dtype instanceof DType.List listDtype) {
+            if (data instanceof ListData list) {
+                return encodeList(listDtype, list, null, ctx);
+            }
+            if (data instanceof NullableData(ListData list, boolean[] validity)) {
+                return encodeList(listDtype, list, validity, ctx);
+            }
         }
 
         // Utf8/Binary: same sample-and-measure competition as Primitive below (Dict/VarBin
@@ -544,21 +572,55 @@ public final class CascadingCompressor {
         for (int i = 0; i < fields.size(); i++) {
             DType fieldDtype = fieldTypes.get(i);
             Object fieldData = fields.get(i);
-            // Mirrors StructEncodingEncoder's own field loop: a nullable field arrives as
-            // NullableData(values, validity), not the dense array (String[], byte[][], ...)
-            // encodeWithCtx's per-dtype dispatch expects. A nullable struct carries its validity
-            // as its own child instead, so it recurses rather than being masked, and a nullable
-            // primitive keeps its validity in the encoding that stores its values.
-            boolean masked = fieldData instanceof NullableData && !(fieldDtype instanceof DType.Extension)
-                    && !(fieldDtype instanceof DType.Struct) && !keepsValidity(fieldDtype);
-            EncodeResult fieldResult = masked
-                    ? new MaskedEncodingEncoder().encode(fieldDtype, fieldData, ctx)
-                    : encode(fieldDtype, fieldData, ctx);
+            EncodeResult fieldResult = encodeChild(fieldDtype, fieldData, ctx);
             int bufOffset = allBuffers.size();
             children[fieldOffset + i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
             allBuffers.addAll(fieldResult.encodedBuffers());
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_STRUCT, null, children, new int[0]);
+        return new EncodeResult(root, List.copyOf(allBuffers), null, null);
+    }
+
+    /// Encodes a child of a struct or list. A nullable child arrives as `NullableData(values,
+    /// validity)`, not the dense array (`String[]`, `byte[][]`, ...) the per-dtype dispatch
+    /// expects. A nullable primitive keeps its validity in the encoding that stores its values and
+    /// a nullable struct or list carries it as a child of its own, so those recurse; any other
+    /// nullable child is masked.
+    private EncodeResult encodeChild(DType dtype, Object data, EncodeContext ctx) {
+        boolean masked = data instanceof NullableData && !(dtype instanceof DType.Extension)
+                && !carriesValidity(dtype) && !keepsValidity(dtype);
+        if (masked) {
+            return new MaskedEncodingEncoder().encode(dtype, data, ctx);
+        }
+        return encode(dtype, data, ctx);
+    }
+
+    /// Encodes a list as `vortex.list`: its elements and its offsets, each compressed by the
+    /// cascade like a column of their own, and its row validity as a third child when `validity`
+    /// is non-null, the shape the reader (and Rust) expect for a nullable list.
+    private EncodeResult encodeList(DType.List dtype, ListData data, boolean[] validity, EncodeContext ctx) {
+        List<EncodedBuffer> allBuffers = new ArrayList<>();
+        EncodeResult elements = encodeChild(dtype.elementType(), data.elements(), ctx);
+        EncodeNode elementsNode = EncodeNode.remapBufferIndices(elements.rootNode(), 0);
+        allBuffers.addAll(elements.encodedBuffers());
+
+        long[] offsets = Arrays.copyOf(data.offsets(), (int) data.outerLen() + 1);
+        EncodeResult offsetsResult = encode(OFFSETS, offsets, ctx);
+        EncodeNode offsetsNode = EncodeNode.remapBufferIndices(offsetsResult.rootNode(), allBuffers.size());
+        allBuffers.addAll(offsetsResult.encodedBuffers());
+
+        EncodeNode[] children = new EncodeNode[validity == null ? 2 : 3];
+        children[0] = elementsNode;
+        children[1] = offsetsNode;
+        if (validity != null) {
+            EncodeResult validityResult = MaskedEncodingEncoder.encodeValidity(validity, ctx);
+            children[2] = EncodeNode.remapBufferIndices(validityResult.rootNode(), allBuffers.size());
+            allBuffers.addAll(validityResult.encodedBuffers());
+        }
+        byte[] metadata = new ProtoListMetadata(offsets[offsets.length - 1],
+                ProtoPType.fromValue(PType.I64.ordinal())).encode();
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_LIST, MemorySegment.ofArray(metadata), children,
+                new int[0]);
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
     }
 
