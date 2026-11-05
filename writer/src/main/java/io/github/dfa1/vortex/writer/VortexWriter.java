@@ -890,7 +890,9 @@ public final class VortexWriter implements Closeable {
         }
         // With cascading on, a nullable primitive column goes to the compressor, which keeps the
         // validity in the encoding that stores the values, as Rust does (#604)
-        boolean keepsValidity = options.allowedCascading() > 0 && CascadingCompressor.keepsValidity(dtype);
+        // and so does a nullable struct or list, which carry it as a child of their own (#648)
+        boolean keepsValidity = options.allowedCascading() > 0
+                && (CascadingCompressor.keepsValidity(dtype) || CascadingCompressor.carriesValidity(dtype));
         if (encodingOverride == null
                 && data instanceof io.github.dfa1.vortex.writer.encode.NullableData
                 && !(dtype instanceof DType.Extension) && !keepsValidity) {

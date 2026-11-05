@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.ListArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
@@ -698,6 +699,71 @@ class CascadingCompressorTest {
 
             // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
+        }
+    }
+
+    @Nested
+    class Lists {
+
+        @Test
+        void nullableList_keepsValidityAsAChild_andCompressesItsOffsets() {
+            // Given — 2,000 lists of 4 elements, every 7th null (a null list holds no elements): the
+            // offsets are a stride of 4 broken by the nulls, a shape every integer scheme beats plain
+            int rows = 2_000;
+            long[] offsets = new long[rows + 1];
+            boolean[] validity = new boolean[rows];
+            long[] flat = new long[rows * 4];
+            int n = 0;
+            for (int i = 0; i < rows; i++) {
+                validity[i] = i % 7 != 0;
+                if (validity[i]) {
+                    for (int k = 0; k < 4; k++) {
+                        flat[n++] = i * 10L + k;
+                    }
+                }
+                offsets[i + 1] = n;
+            }
+            DType.List dtype = new DType.List(DTypes.I64, true);
+            ListData list = new ListData(java.util.Arrays.copyOf(flat, n), offsets, rows);
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult result = sut.encode(dtype, new NullableData(list, validity), ctx(3));
+
+            // Then — a list with elements, offsets and validity children, and no masked wrapper (#648)
+            EncodeNode root = result.rootNode();
+            assertThat(root.encodingId()).isEqualTo(EncodingId.VORTEX_LIST);
+            assertThat(root.children()).hasSize(3);
+            assertThat(root.children()[1].encodingId()).isNotEqualTo(EncodingId.VORTEX_PRIMITIVE);
+            assertThat(encodingIds(root)).doesNotContain(EncodingId.VORTEX_MASKED);
+
+            // And it is smaller than the plain encoder's list: 8-byte offsets and a masked bitmap
+            EncodeResult plain = new ListEncodingEncoder().encode(dtype, list, ctx(0));
+            assertThat(bytes(result)).isLessThan(bytes(plain));
+
+            // And the column reads back, nulls included
+            ReadRegistry registry = ReadRegistry.loadAll();
+            DecodeContext decodeCtx = DecodeTestHelper.toDecodeContext(result, rows, dtype, registry);
+            MaskedArray decoded = (MaskedArray) registry.decode(decodeCtx);
+            ListArray inner = (ListArray) decoded.inner();
+            LongArray decodedOffsets = (LongArray) inner.offsets();
+            for (int i = 0; i < rows; i++) {
+                assertThat(decoded.isValid(i)).isEqualTo(validity[i]);
+                assertThat(decodedOffsets.getLong(i + 1)).isEqualTo(offsets[i + 1]);
+            }
+        }
+
+        private static long bytes(EncodeResult result) {
+            return result.encodedBuffers().stream().mapToLong(b -> b.data().byteSize()).sum();
+        }
+
+        private static List<EncodingId> encodingIds(EncodeNode node) {
+            List<EncodingId> ids = new java.util.ArrayList<>();
+            ids.add(node.encodingId());
+            for (EncodeNode child : node.children()) {
+                ids.addAll(encodingIds(child));
+            }
+            return ids;
         }
     }
 }
