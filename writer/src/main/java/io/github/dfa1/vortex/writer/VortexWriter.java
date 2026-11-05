@@ -23,6 +23,7 @@ import io.github.dfa1.vortex.writer.encode.EncodeNode;
 import io.github.dfa1.vortex.writer.encode.EncodeResult;
 import io.github.dfa1.vortex.writer.encode.EncodedBuffer;
 import io.github.dfa1.vortex.writer.encode.MinMax;
+import io.github.dfa1.vortex.writer.encode.NodeStats;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
 import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
@@ -957,6 +958,10 @@ public final class VortexWriter implements Closeable {
                 max = fallback != null ? fallback.max() : null;
             }
             SegmentStats stats = new SegmentStats(min, max, ZoneMapStatCodec.columnSum(dtype, data), nullCount);
+            // the stats the flat segment's root node carries are Rust's, not the zone map's
+            EncodeNode root = result.rootNode().withStats(RootNodeStats.of(dtype, result.rootNode().encodingId(),
+                    min, max, arrayLength(data), nullCount));
+            result = new EncodeResult(root, result.encodedBuffers(), result.statsMin(), result.statsMax());
             return new EncodedSegment(result, arena, stats);
         } catch (RuntimeException | Error e) {
             arena.close();
@@ -979,7 +984,7 @@ public final class VortexWriter implements Closeable {
         long offset = bytesWritten;
         List<EncodedBuffer> buffers = result.encodedBuffers();
         int[] paddings = bufferPaddings(buffers);
-        ByteBuffer fbBuf = buildArrayFlatBuffer(result, paddings, encoded.stats().nullCount());
+        ByteBuffer fbBuf = buildArrayFlatBuffer(result, paddings);
 
         // Segment format: [padding, buffer]... [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
         int fbLen = fbBuf.remaining();
@@ -1095,36 +1100,10 @@ public final class VortexWriter implements Closeable {
         return paddings;
     }
 
-    private ByteBuffer buildArrayFlatBuffer(EncodeResult result, int[] paddings, long nullCount) {
+    private ByteBuffer buildArrayFlatBuffer(EncodeResult result, int[] paddings) {
         var fbb = new FbsBuilder(256);
 
-        // Stats for the root node only (build vectors before the ArrayStats table). null_count is
-        // always recorded; min/max only when the encoder produced them. Sum is not embedded per-flat
-        // (Rust's flat writer doesn't either — flat/writer.rs retains only pre-computed stats); the
-        // per-zone sum lives in the vortex.stats zone-map table emitted by flushZoneMaps().
-        int minVec = result.hasStats()
-                ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(fbb, result.statsMin().encode()) : 0;
-        int maxVec = result.hasStats()
-                ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMaxVector(fbb, result.statsMax().encode()) : 0;
-        // forceDefaults only while building ArrayStats, so null_count = 0 is serialized (flatbuffers
-        // omits a scalar equal to its default otherwise) — matching the Rust writer and letting the
-        // reader prune IS NULL on zero-null chunks. Reset immediately so the Array/ArrayNode tables
-        // keep their normal (offset-default-omitting) layout.
-        fbb.forceDefaults(true);
-        io.github.dfa1.vortex.core.fbs.FbsArrayStats.startFbsArrayStats(fbb);
-        if (result.hasStats()) {
-            // The encoder's min/max are the exact extremes, never truncated. An absent precision
-            // is the FlatBuffer default Inexact, which is what Rust read every Java bound as.
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMin(fbb, minVec);
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMinPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMax(fbb, maxVec);
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMaxPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
-        }
-        io.github.dfa1.vortex.core.fbs.FbsArrayStats.addNullCount(fbb, nullCount);
-        int statsOff = io.github.dfa1.vortex.core.fbs.FbsArrayStats.endFbsArrayStats(fbb);
-        fbb.forceDefaults(false);
-
-        int rootNodeOff = buildArrayNodeFlatBuffer(fbb, result.rootNode(), statsOff);
+        int rootNodeOff = buildArrayNodeFlatBuffer(fbb, result.rootNode());
 
         // Buffer struct vector — one entry per buffer in result.
         // FbsLayout (LE): padding(u16) | alignment_exponent(u8) | compression(u8) | length(u32)
@@ -1151,12 +1130,59 @@ public final class VortexWriter implements Closeable {
 
     // ── FbsFooter / metadata serialization ──────────────────────────────────────
 
-    private int buildArrayNodeFlatBuffer(FbsBuilder fbb, EncodeNode node, int statsOff) {
+    /// The `ArrayStats` table of a node's stats, or `0` when it carries none. Every stat present is
+    /// written, a `false` flag or a zero count included, as Rust writes an exact stat of any value.
+    private static int buildStats(FbsBuilder fbb, NodeStats stats) {
+        if (stats == null || stats.isEmpty()) {
+            return 0;
+        }
+        // vectors first: FlatBuffers builds bottom-up
+        int minVec = stats.min() == null ? 0
+                : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(fbb, stats.min().encode());
+        int maxVec = stats.max() == null ? 0
+                : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMaxVector(fbb, stats.max().encode());
+        // forceDefaults only while building ArrayStats, so a scalar equal to its default is still
+        // serialized; reset immediately so the Array/ArrayNode tables keep their normal layout
+        fbb.forceDefaults(true);
+        io.github.dfa1.vortex.core.fbs.FbsArrayStats.startFbsArrayStats(fbb);
+        if (stats.min() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMin(fbb, minVec);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMinPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
+        }
+        if (stats.max() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMax(fbb, maxVec);
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMaxPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
+        }
+        if (stats.isSorted() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsSorted(fbb, stats.isSorted());
+        }
+        if (stats.isStrictSorted() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsStrictSorted(fbb, stats.isStrictSorted());
+        }
+        if (stats.isConstant() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsConstant(fbb, stats.isConstant());
+        }
+        if (stats.nullCount() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addNullCount(fbb, stats.nullCount());
+        }
+        if (stats.uncompressedSize() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addUncompressedSizeInBytes(fbb, stats.uncompressedSize());
+        }
+        if (stats.nanCount() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addNanCount(fbb, stats.nanCount());
+        }
+        int off = io.github.dfa1.vortex.core.fbs.FbsArrayStats.endFbsArrayStats(fbb);
+        fbb.forceDefaults(false);
+        return off;
+    }
+
+    private int buildArrayNodeFlatBuffer(FbsBuilder fbb, EncodeNode node) {
         // Build children first (FlatBuffers bottom-up: nested objects before parent table)
         int[] childOffsets = new int[node.children().length];
         for (int i = 0; i < childOffsets.length; i++) {
-            childOffsets[i] = buildArrayNodeFlatBuffer(fbb, node.children()[i], 0);
+            childOffsets[i] = buildArrayNodeFlatBuffer(fbb, node.children()[i]);
         }
+        int statsOff = buildStats(fbb, node.stats());
 
         int metaOff = 0;
         if (node.metadata() != null && node.metadata().byteSize() > 0) {

@@ -918,8 +918,8 @@ class JavaWritesRustReadsIntegrationTest {
     @MethodSource("stringEncoders")
     void javaWriter_jniReader_utf8ChunkStats_inUtf8ByteOrder(EncodingEncoder encoder, @TempDir Path tmp)
             throws IOException {
-        // Given — each string encoder writes the chunk's min/max, and with zone maps off those are
-        // the only bounds in the file. The emoji is a surrogate pair: below U+E000 in UTF-16, above
+        // Given — a string column's bounds live in the zone map (Rust keeps none in a flat segment's
+        // array stats), and a filtered read prunes against them. The emoji is a surrogate pair: below U+E000 in UTF-16, above
         // it in UTF-8, the order Rust compares in, so a UTF-16 max (U+E000) would let a reader prune
         // the chunk holding it. The shared-prefix ids made the FSST table keep two symbols in one of
         // Rust's hash slots, and vortex-jni aborted the JVM rebuilding it to filter.
@@ -932,23 +932,16 @@ class JavaWritesRustReadsIntegrationTest {
         keys[500] = "\uE000";
         Path file = tmp.resolve("java_utf8_chunk_stats.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults().withZoneMaps(false),
-                     List.of(encoder))) {
+             var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(), List.of(encoder))) {
             sut.writeChunk(Map.of(ColumnName.of("s"), keys));
         }
 
         // When
         List<Object> result = readColumnFiltered(file, "s", Expression.binary(Expression.BinaryOp.EQ,
                 Expression.column("s"), Expression.literal(emoji)));
-        io.github.dfa1.vortex.reader.ArrayStats stats;
-        try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file)) {
-            stats = reader.columnStats().get(ColumnName.of("s"));
-        }
 
         // Then
         assertThat(result).map(Object::toString).containsExactly(emoji);
-        assertThat(stats.min()).isEqualTo("EVT0000000000");
-        assertThat(stats.max()).isEqualTo(emoji);
     }
 
     @Test
@@ -980,11 +973,12 @@ class JavaWritesRustReadsIntegrationTest {
             stats = reader.columnStats().get(ColumnName.of("k"));
         }
 
-        // Then — vortex-jni accepts the flat stats' precision fields, and the column's min/max are
-        // the full keys: only the zone map truncates, so SQL MIN/MAX may answer from these stats.
+        // Then — the matching row survives the truncated zone bounds. As in a Rust-written file, no
+        // flat array stats hold a string bound, and the zone map's are truncated, so the column
+        // reports no exact min/max.
         assertThat(result).extracting(Object::toString).containsExactly(target);
-        assertThat(stats.min()).isEqualTo(prefix + String.format("%08d", 0));
-        assertThat(stats.max()).isEqualTo(prefix + String.format("%08d", 3 * batch - 1));
+        assertThat(stats.min()).isNull();
+        assertThat(stats.max()).isNull();
     }
 
     @Test

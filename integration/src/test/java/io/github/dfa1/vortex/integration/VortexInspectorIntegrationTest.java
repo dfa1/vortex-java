@@ -202,11 +202,11 @@ class VortexInspectorIntegrationTest {
     }
 
     @Test
-    void columnProfile_globalDictColumn_rangeFromValuesNotCodes(@TempDir Path tmp) throws IOException {
-        // Given — the default vortex.zoned map records only truncated bounds for a string, so the
-        // profile takes min/max from each chunk's own stats; under a dict layout those are the
-        // values pool's. The pool's sum and null count describe the dictionary, not the rows, and
-        // must not leak in: four distinct values against 2,000 rows
+    void columnProfile_globalDictColumn_hasNoRangeAndNoDictionaryTotals(@TempDir Path tmp) throws IOException {
+        // Given — the default vortex.zoned map records only truncated bounds for a string, and Rust
+        // keeps no bound in a flat segment's array stats, so the profile has no range. The pool's
+        // sum and null count describe the dictionary, not the rows, and must not leak in: four
+        // distinct values against 2,000 rows
         Path file = tmp.resolve("dict.vtx");
         ColumnName fruit = ColumnName.of("fruit");
         var schema = new DType.Struct(List.of(fruit), List.of(DTypes.UTF8), false);
@@ -223,9 +223,8 @@ class VortexInspectorIntegrationTest {
         }
 
         // Then
-        assertThat(result.min()).isEqualTo("apple");
-        assertThat(result.max()).isEqualTo("date");
-        assertThat(result.nullCount()).isZero();
+        assertThat(result.min()).isNull();
+        assertThat(result.max()).isNull();
         assertThat(result.sum()).isNull();
     }
 
