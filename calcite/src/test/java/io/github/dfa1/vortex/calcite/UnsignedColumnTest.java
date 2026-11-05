@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.calcite;
 
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
@@ -12,8 +11,11 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.calcite.linq4j.Enumerator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -22,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Unsigned high-half handling in the Calcite adapter (#216): U32 widens losslessly into `BIGINT`
 /// and U64 maps to `DECIMAL(20, 0)`, which holds its full range (#665). The canonical motivating shape is an unsigned
@@ -84,28 +85,42 @@ class UnsignedColumnTest {
         }
     }
 
-    @Test
-    void sum_u64HighHalf_failsLoudOnFullScan() throws Exception {
-        // Given — a U64 element the signed accumulator cannot represent, zone maps off
-        Path file = write("sum-u64.vortex", noZoneMaps(), 0, U64_HIGH);
+    @ParameterizedTest(name = "zone maps {0}")
+    @ValueSource(booleans = {true, false})
+    void summary_u64HighHalf_isExactAndUnsigned(boolean zoneMaps) throws Exception {
+        // Given — 2^63 and 2^64 - 1, whose raw bits are the two most negative longs (#665)
+        Path file = write("sum-u64.vortex", zoneMaps ? WriteOptions.defaults() : noZoneMaps(), 0, U64_HIGH, -1L);
 
-        // When / Then — scanSum throws rather than corrupt the sum with a negative addend
+        // When
         try (VortexReader reader = VortexReader.open(file, registry())) {
-            assertThatThrownBy(() -> VortexAggregates.of(reader, ColumnName.of("u64")))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("U64 value");
+            VortexAggregates.Summary result = VortexAggregates.of(reader, ColumnName.of("u64"));
+
+            // Then — compared and summed as unsigned, with no wraparound
+            BigInteger half = new BigInteger("9223372036854775808");
+            BigInteger max = new BigInteger("18446744073709551615");
+            assertThat(result.min()).isEqualTo(half);
+            assertThat(result.max()).isEqualTo(max);
+            assertThat(result.count()).isEqualTo(2);
+            assertThat(result.sum()).isEqualTo(half.add(max));
+            assertThat(result.avg()).isEqualTo(half.add(max).doubleValue() / 2);
         }
     }
 
-    private Path write(String name, WriteOptions opts, int u32, long u64) throws Exception {
+    private Path write(String name, WriteOptions opts, int u32, long... u64) throws Exception {
         Path file = tmp.resolve(name);
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, SCHEMA, opts)) {
             writer.writeChunk(Map.of(
-                    ColumnName.of("u32"), new int[]{u32},
-                    ColumnName.of("u64"), new long[]{u64}));
+                    ColumnName.of("u32"), u32Column(u32, u64.length),
+                    ColumnName.of("u64"), u64));
         }
         return file;
+    }
+
+    private static int[] u32Column(int first, int rows) {
+        int[] column = new int[rows];
+        column[0] = first;
+        return column;
     }
 
     private static WriteOptions noZoneMaps() {

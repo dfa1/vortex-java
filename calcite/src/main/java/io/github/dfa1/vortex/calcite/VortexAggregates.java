@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.calcite;
 
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -14,7 +14,12 @@ import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.compute.ZoneReducer;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 
 /// Column aggregates answered with the cheapest available source.
 ///
@@ -37,7 +42,8 @@ public final class VortexAggregates {
     /// A column's aggregate summary plus where each part was sourced.
     ///
     /// `sum` is a [Long] for integer columns (exact, matching SQL `SUM(BIGINT)` which also wraps
-    /// at 2^63) and a [Double] for floating-point columns — never a `double` accumulation of
+    /// at 2^63), a [BigInteger] for `U64` columns (exact; `min` and `max` are [BigInteger] too) and
+    /// a [Double] for floating-point columns — never a `double` accumulation of
     /// integers, which would lose precision past 2^53.
     ///
     /// @param column      the column name
@@ -62,6 +68,9 @@ public final class VortexAggregates {
     /// @param column the numeric column name
     /// @return the column's aggregate summary
     public static Summary of(VortexReader reader, ColumnName column) {
+        if (isU64(reader, column)) {
+            return unsignedSummary(reader, column);
+        }
         ArrayStats stats = reader.columnStats().getOrDefault(column, ArrayStats.empty());
         long totalRows = totalRows(reader);
         long nullCount = stats.nullCount() == null ? 0L : stats.nullCount();
@@ -84,6 +93,64 @@ public final class VortexAggregates {
 
         return new Summary(column, min, max, count, sum, avg,
                 Source.ZONE_STATS_PUSHDOWN, sumSource);
+    }
+
+    private static boolean isU64(VortexReader reader, ColumnName column) {
+        if (!(reader.dtype() instanceof DType.Struct struct)) {
+            return false;
+        }
+        int idx = struct.fieldNames().indexOf(column);
+        return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype() == PType.U64;
+    }
+
+    /// Summarizes a `U64` column by one streaming scan. Its zone statistics hold the raw signed
+    /// bits, which neither order nor add like the unsigned value, so `MIN`, `MAX` and `SUM` all
+    /// come from the data, compared unsigned and summed into a [BigInteger] that cannot wrap.
+    private static Summary unsignedSummary(VortexReader reader, ColumnName column) {
+        long count = 0L;
+        long minBits = 0L;
+        long maxBits = 0L;
+        BigInteger sum = BigInteger.ZERO;
+        try (ScanIterator scan = reader.scan(ScanOptions.columns(column))) {
+            while (scan.hasNext()) {
+                try (Chunk chunk = scan.next()) {
+                    Array array = chunk.column(column);
+                    MaskedArray masked = array instanceof MaskedArray m ? m : null;
+                    LongArray values = (LongArray) (masked == null ? array : masked.inner());
+                    for (long i = 0; i < chunk.rowCount(); i++) {
+                        if (masked != null && !masked.isValid(i)) {
+                            continue;
+                        }
+                        long v = values.getLong(i);
+                        if (count == 0 || Long.compareUnsigned(v, minBits) < 0) {
+                            minBits = v;
+                        }
+                        if (count == 0 || Long.compareUnsigned(v, maxBits) > 0) {
+                            maxBits = v;
+                        }
+                        count++;
+                        sum = sum.add(unsigned(v));
+                    }
+                }
+            }
+        }
+        Double avg = null;
+        if (count > 0) {
+            avg = new BigDecimal(sum).divide(BigDecimal.valueOf(count), MathContext.DECIMAL128).doubleValue();
+        }
+        if (count == 0) {
+            return new Summary(column, null, null, 0L, null, null, Source.FULL_SCAN, Source.FULL_SCAN);
+        }
+        return new Summary(column, unsigned(minBits), unsigned(maxBits), count, sum, avg,
+                Source.FULL_SCAN, Source.FULL_SCAN);
+    }
+
+    private static BigInteger unsigned(long bits) {
+        BigInteger value = BigInteger.valueOf(bits);
+        if (bits < 0) {
+            value = value.add(BigInteger.ONE.shiftLeft(Long.SIZE));
+        }
+        return value;
     }
 
     private static boolean isUnsigned(Array arr) {
@@ -110,23 +177,8 @@ public final class VortexAggregates {
                     long n = chunk.rowCount();
                     switch (chunk.<Array>column(column)) {
                         case LongArray a -> {
-                            // Branch-split on the loop-invariant unsigned flag so the signed body
-                            // stays vectorizable. A U64 element with the high bit set (>= 2^63) has
-                            // no signed-long home and would corrupt the sum, so fail loud — aligned
-                            // with VortexTable mapping U64 to signed BIGINT.
-                            if (isUnsigned(a)) {
-                                for (long i = 0; i < n; i++) {
-                                    long v = a.getLong(i);
-                                    if (v < 0) {
-                                        throw new VortexException("U64 value " + Long.toUnsignedString(v)
-                                                + " exceeds the signed BIGINT range SUM accumulates into");
-                                    }
-                                    longSum += v;
-                                }
-                            } else {
-                                for (long i = 0; i < n; i++) {
-                                    longSum += a.getLong(i);
-                                }
+                            for (long i = 0; i < n; i++) {
+                                longSum += a.getLong(i);
                             }
                         }
                         case IntArray a -> {
