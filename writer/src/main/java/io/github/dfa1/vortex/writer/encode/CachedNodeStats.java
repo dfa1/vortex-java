@@ -38,10 +38,22 @@ final class CachedNodeStats {
             case DType.Primitive p when !p.ptype().isFloating() && retainsIntegerStats(root) ->
                     new NodeStats(min, max, isConstant(min, max, nullCount), null, null, nullCount,
                             canonicalSize(p, rows, nullCount), null);
-            case DType.Bool _ when root.equals(EncodingId.VORTEX_BOOL) ->
-                    new NodeStats(null, null, false, null, null, null, (rows + 7) / 8, null);
+            case DType.Bool _ when root.equals(EncodingId.VORTEX_BOOL) -> ofBool(rows, false);
             default -> NodeStats.NONE;
         };
+    }
+
+    /// The stats of a `vortex.bool` array: constant when every bit is equal, and nothing else then; the
+    /// packed size otherwise.
+    ///
+    /// @param rows     the number of rows
+    /// @param constant whether every row is equal
+    /// @return the bool array's stats
+    static NodeStats ofBool(long rows, boolean constant) {
+        if (constant) {
+            return new NodeStats(null, null, true, null, null, null, null, null);
+        }
+        return new NodeStats(null, null, false, null, null, null, (rows + 7) / 8, null);
     }
 
     /// The stats of the `vortex.bool` array that holds a nullable array's validity. Rust builds it

@@ -32,6 +32,8 @@ public final class CascadingCompressor {
 
     private static final EncodingEncoder CANONICAL_PRIMITIVE = new PrimitiveEncodingEncoder();
     private static final EncodingEncoder CANONICAL_BOOL = new BoolEncodingEncoder();
+    /// Bytes of a `vortex.constant` bool: Rust keeps a bool array whose packed bits are no larger.
+    private static final int CONSTANT_BOOL_BYTES = 2;
     private static final EncodingEncoder CANONICAL_VARBIN = new VarBinEncodingEncoder();
     private static final EncodingEncoder CANONICAL_DECIMAL = new DecimalEncodingEncoder();
     private static final EncodingEncoder CANONICAL_EXTENSION = new ExtEncodingEncoder();
@@ -270,7 +272,13 @@ public final class CascadingCompressor {
     /// The stats Rust keeps on the node of an array it compressed, here a child of the segment's root
     /// as much as the root itself ([CachedNodeStats]).
     private static NodeStats nodeStats(DType dtype, Object data, EncodingId root) {
-        if (!(dtype instanceof DType.Primitive || dtype instanceof DType.Bool)) {
+        if (dtype instanceof DType.Bool) {
+            if (!root.equals(EncodingId.VORTEX_BOOL) || !(data instanceof boolean[] bools)) {
+                return NodeStats.NONE;
+            }
+            return CachedNodeStats.ofBool(bools.length, SimdOperationsSupport.preferred().allEqual(bools));
+        }
+        if (!(dtype instanceof DType.Primitive)) {
             return NodeStats.NONE;
         }
         MinMax bounds = dtype instanceof DType.Primitive p && !p.ptype().isFloating() ? ZoneMapStats.of(dtype, data) : null;
@@ -336,12 +344,27 @@ public final class CascadingCompressor {
         if (dtype instanceof DType.Decimal decimal) {
             return encodeDecimal(decimal, data, ctx);
         }
+        if (dtype instanceof DType.Bool && data instanceof boolean[] bools) {
+            return encodeBool(bools, ctx);
+        }
         if (!(dtype instanceof DType.Primitive)) {
             return spliceResult(findPrimitiveEncoding(dtype, data, ctx.excluded()), dtype, data, ctx);
         }
 
         return competeAndEncode(dtype, withStats(dtype, data, ctx), ctx,
                 sampleSize -> primitiveBytes(dtype, sampleSize));
+    }
+
+    /// A bool array stays `vortex.bool` unless it is one value and that is smaller as a
+    /// `vortex.constant`: Rust's `ConstantScheme` only wins when the constant is smaller than the packed
+    /// bits, which it is from 17 rows (3 bytes) on. A zone table's three flags, or a few rows, stay bool.
+    private EncodeResult encodeBool(boolean[] bools, EncodeContext ctx) {
+        boolean constantPays = (bools.length + 7) / 8 > CONSTANT_BOOL_BYTES;
+        if (constantPays && !ctx.sample() && !ctx.excluded().contains(EncodingId.VORTEX_CONSTANT)
+                && SimdOperationsSupport.preferred().allEqual(bools)) {
+            return new ConstantEncodingEncoder().encode(DTypes.BOOL, bools, ctx);
+        }
+        return CANONICAL_BOOL.encode(DTypes.BOOL, bools, ctx);
     }
 
     /// Rust's constant check for a decimal array, run in the compressor before any scheme and never

@@ -71,6 +71,8 @@ class NodeStatsInteropIntegrationTest {
         long[] descending = new long[N];
         double[] nullableFloat = new double[N];
         boolean[] validFloat = new boolean[N];
+        boolean[] flag = new boolean[N];
+        String[] noisy = new String[N];
         for (int i = 0; i < N; i++) {
             sorted[i] = i;
             random[i] = r.nextLong();
@@ -79,6 +81,8 @@ class NodeStatsInteropIntegrationTest {
             sf[i] = i * 0.5;
             patched[i] = i % 100 == 0 ? r.nextDouble() * 1e9 : i * 0.01;
             descending[i] = 100_000L - i * 3L;
+            flag[i] = true;
+            noisy[i] = Long.toHexString(r.nextLong()) + Long.toHexString(r.nextLong());
             low[i] = "k" + r.nextInt(10);
             high[i] = "value-" + Long.toString(r.nextLong() & 0xffffffffL, 36);
             bool[i] = r.nextBoolean();
@@ -97,7 +101,9 @@ class NodeStatsInteropIntegrationTest {
                 Field.nullable("nullable", new ArrowType.Int(32, true)),
                 Field.notNullable("patched", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
                 Field.notNullable("descending", new ArrowType.Int(64, true)),
-                Field.nullable("nullf", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))));
+                Field.nullable("nullf", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
+                Field.notNullable("flag", ArrowType.Bool.INSTANCE),
+                Field.notNullable("noisy", ArrowType.Utf8.INSTANCE)));
         Path jni = tmp.resolve("jni.vortex");
         try (VortexWriter w = VortexWriter.builder(SESSION, jni.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(arrow, ALLOCATOR)) {
@@ -113,6 +119,8 @@ class NodeStatsInteropIntegrationTest {
             Float8Vector pv = (Float8Vector) root.getVector("patched");
             BigIntVector dv = (BigIntVector) root.getVector("descending");
             Float8Vector nf = (Float8Vector) root.getVector("nullf");
+            BitVector fv = (BitVector) root.getVector("flag");
+            VarCharVector nz = (VarCharVector) root.getVector("noisy");
             root.allocateNew();
             for (int i = 0; i < N; i++) {
                 a.setSafe(i, sorted[i]);
@@ -130,6 +138,8 @@ class NodeStatsInteropIntegrationTest {
                 } else {
                     nf.setNull(i);
                 }
+                fv.setSafe(i, 1);
+                nz.setSafe(i, noisy[i].getBytes(StandardCharsets.UTF_8));
                 if (valid[i]) {
                     nv.setSafe(i, nullable[i]);
                 } else {
@@ -144,8 +154,8 @@ class NodeStatsInteropIntegrationTest {
         }
         Path java = tmp.resolve("java.vortex");
         DType.Struct schema = new DType.Struct(
-                List.of("sorted", "random", "small", "rf", "sf", "low", "high", "bool", "nullable", "patched", "descending", "nullf").stream().map(ColumnName::of).toList(),
-                List.of(DTypes.I64, DTypes.I64, DTypes.I32, DTypes.F64, DTypes.F64, DTypes.UTF8, DTypes.UTF8, DTypes.BOOL, DTypes.I32.asNullable(), DTypes.F64, DTypes.I64, DTypes.F64.asNullable()), false);
+                List.of("sorted", "random", "small", "rf", "sf", "low", "high", "bool", "nullable", "patched", "descending", "nullf", "flag", "noisy").stream().map(ColumnName::of).toList(),
+                List.of(DTypes.I64, DTypes.I64, DTypes.I32, DTypes.F64, DTypes.F64, DTypes.UTF8, DTypes.UTF8, DTypes.BOOL, DTypes.I32.asNullable(), DTypes.F64, DTypes.I64, DTypes.F64.asNullable(), DTypes.BOOL, DTypes.UTF8), false);
         try (FileChannel ch = FileChannel.open(java, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             Map<ColumnName, Object> chunk = new java.util.LinkedHashMap<>();
@@ -161,6 +171,8 @@ class NodeStatsInteropIntegrationTest {
             chunk.put(ColumnName.of("patched"), patched);
             chunk.put(ColumnName.of("descending"), descending);
             chunk.put(ColumnName.of("nullf"), new NullableData(nullableFloat, validFloat));
+            chunk.put(ColumnName.of("flag"), flag);
+            chunk.put(ColumnName.of("noisy"), noisy);
             w.writeChunk(chunk);
         }
         List<String> expected = EncodingTrees.withStats(jni);
@@ -174,9 +186,22 @@ class NodeStatsInteropIntegrationTest {
         List<List<String>> expectedColumns = columns(expected);
         List<List<String>> resultColumns = columns(result);
         assertThat(resultColumns).hasSameSizeAs(expectedColumns);
-        for (int c : new int[]{0, 1, 2, 3, 4, 8, 9, 10, 11}) {
+        for (int c : new int[]{0, 1, 2, 3, 4, 8, 9, 10, 11, 12}) {
             assertThat(resultColumns.get(c)).as("column %d", c).isEqualTo(expectedColumns.get(c));
         }
+        // the string columns' zone tables wait for Rust's varbinview canonical form (#583)
+        for (int c = 0; c < expectedColumns.size(); c++) {
+            if (c == 5 || c == 6 || c == 13) {
+                continue;
+            }
+            assertThat(zoneTable(resultColumns.get(c))).as("zone table of column %d", c)
+                    .isEqualTo(zoneTable(expectedColumns.get(c)));
+        }
+    }
+
+    /// The lines of a column's stats-table segment: the last flat under the zoned layout.
+    private static List<String> zoneTable(List<String> column) {
+        return column.subList(column.lastIndexOf("    vortex.flat"), column.size());
     }
 
     /// The tree lines of each top-level column, in file order.

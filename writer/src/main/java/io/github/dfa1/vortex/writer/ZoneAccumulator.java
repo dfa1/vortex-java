@@ -194,14 +194,11 @@ final class ZoneAccumulator {
         return new StructData(fields);
     }
 
-    private static NullableData counts(List<Long> counts) {
-        long[] values = counts.stream().mapToLong(Long::longValue).toArray();
-        boolean[] valid = new boolean[values.length];
-        Arrays.fill(valid, true);
-        return new NullableData(values, valid);
+    private static long[] counts(List<Long> counts) {
+        return counts.stream().mapToLong(Long::longValue).toArray();
     }
 
-    private NullableData boundedMaxColumn(int zones) {
+    private Object boundedMaxColumn(int zones) {
         // The state struct is null for a zone with no non-null value; otherwise `unknown` says
         // whether any bound fit, and `bound` holds it when one did.
         boolean[] stateValid = new boolean[zones];
@@ -213,11 +210,23 @@ final class ZoneAccumulator {
             unknown[i] = maxUnknown.get(i);
             bounds.add(maxs.get(i));
         }
-        return new NullableData(new StructData(List.of(valueColumn(bounds), unknown)), stateValid);
+        return withValidity(new StructData(List.of(valueColumn(bounds), unknown)), stateValid);
+    }
+
+    /// `values` with its validity, or on its own when every row is valid: Rust builds each stats-table
+    /// column with a builder whose validity stays `AllValid` unless a null is appended, so a column
+    /// without nulls carries no validity child and is not masked.
+    private static Object withValidity(Object values, boolean[] valid) {
+        for (boolean v : valid) {
+            if (!v) {
+                return new NullableData(values, valid);
+            }
+        }
+        return values;
     }
 
     /// A per-zone value column in the column's own carrier, `null` entries invalid.
-    private NullableData valueColumn(List<Object> perZone) {
+    private Object valueColumn(List<Object> perZone) {
         int zones = perZone.size();
         boolean[] valid = new boolean[zones];
         for (int i = 0; i < zones; i++) {
@@ -263,7 +272,7 @@ final class ZoneAccumulator {
             case BINARY -> perZone.toArray(new byte[0][]);
             case NULL_COUNT_ONLY -> throw new IllegalStateException("no value column for " + dtype);
         };
-        return new NullableData(values, valid);
+        return withValidity(values, valid);
     }
 
     // ── per-zone stats ─────────────────────────────────────────────────────

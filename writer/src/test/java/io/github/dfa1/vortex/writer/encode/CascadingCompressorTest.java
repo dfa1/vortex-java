@@ -191,6 +191,20 @@ class CascadingCompressorTest {
         }
 
         @Test
+        void constantBoolColumn_staysABoolUntilTheConstantIsSmaller() {
+            // Given — 16 rows pack into 2 bytes, as small as a constant; 17 rows pack into 3
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult small = sut.encode(DTypes.BOOL, new boolean[16], ctx(3));
+            EncodeResult large = sut.encode(DTypes.BOOL, new boolean[17], ctx(3));
+
+            // Then
+            assertThat(small.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_BOOL);
+            assertThat(large.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+        }
+
+        @Test
         void nullableIntegerValidity_isABoolChildCarryingTheValidCount() {
             // Given
             int[] values = new int[1024];

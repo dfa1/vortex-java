@@ -133,4 +133,22 @@ class CachedNodeStatsTest {
         assertThat(result.rootNode().stats())
                 .isEqualTo(CachedNodeStats.of(DTypes.I64, EncodingId.VORTEX_PRIMITIVE, MIN, MAX, 100, 0));
     }
+
+    @Test
+    void ofBool_constantCarriesOnlyTheFlag() {
+        // Given / When
+        NodeStats result = CachedNodeStats.ofBool(20_000, true);
+
+        // Then
+        assertThat(result).isEqualTo(new NodeStats(null, null, true, null, null, null, null, null));
+    }
+
+    @Test
+    void ofBool_otherwiseCarriesTheFlagAndThePackedSize() {
+        // Given / When
+        NodeStats result = CachedNodeStats.ofBool(17, false);
+
+        // Then
+        assertThat(result).isEqualTo(new NodeStats(null, null, false, null, null, null, 3L, null));
+    }
 }
