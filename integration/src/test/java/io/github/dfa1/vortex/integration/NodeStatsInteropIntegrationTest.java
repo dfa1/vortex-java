@@ -55,7 +55,7 @@ class NodeStatsInteropIntegrationTest {
     @Test
     void javaWritesTheRootStatsJniWrites(@TempDir Path tmp) throws Exception {
         // Given — the same rows through both writers: sorted, random and small-range integers, floats,
-        // low- and high-cardinality strings, bools, and a nullable integer
+        // low- and high-cardinality strings, bools, and a nullable integer and float
         Random r = new Random(7);
         long[] sorted = new long[N];
         long[] random = new long[N];
@@ -69,6 +69,8 @@ class NodeStatsInteropIntegrationTest {
         boolean[] valid = new boolean[N];
         double[] patched = new double[N];
         long[] descending = new long[N];
+        double[] nullableFloat = new double[N];
+        boolean[] validFloat = new boolean[N];
         for (int i = 0; i < N; i++) {
             sorted[i] = i;
             random[i] = r.nextLong();
@@ -81,6 +83,8 @@ class NodeStatsInteropIntegrationTest {
             high[i] = "value-" + Long.toString(r.nextLong() & 0xffffffffL, 36);
             bool[i] = r.nextBoolean();
             valid[i] = i % 7 != 0;
+            validFloat[i] = i % 5 != 0;
+            nullableFloat[i] = validFloat[i] ? r.nextDouble() * 100 : 0;
             nullable[i] = valid[i] ? r.nextInt(5_000) : 0;
         }
         Schema arrow = new Schema(List.of(
@@ -92,7 +96,8 @@ class NodeStatsInteropIntegrationTest {
                 Field.notNullable("bool", ArrowType.Bool.INSTANCE),
                 Field.nullable("nullable", new ArrowType.Int(32, true)),
                 Field.notNullable("patched", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
-                Field.notNullable("descending", new ArrowType.Int(64, true))));
+                Field.notNullable("descending", new ArrowType.Int(64, true)),
+                Field.nullable("nullf", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))));
         Path jni = tmp.resolve("jni.vortex");
         try (VortexWriter w = VortexWriter.builder(SESSION, jni.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(arrow, ALLOCATOR)) {
@@ -107,6 +112,7 @@ class NodeStatsInteropIntegrationTest {
             IntVector nv = (IntVector) root.getVector("nullable");
             Float8Vector pv = (Float8Vector) root.getVector("patched");
             BigIntVector dv = (BigIntVector) root.getVector("descending");
+            Float8Vector nf = (Float8Vector) root.getVector("nullf");
             root.allocateNew();
             for (int i = 0; i < N; i++) {
                 a.setSafe(i, sorted[i]);
@@ -119,6 +125,11 @@ class NodeStatsInteropIntegrationTest {
                 h.setSafe(i, bool[i] ? 1 : 0);
                 pv.setSafe(i, patched[i]);
                 dv.setSafe(i, descending[i]);
+                if (validFloat[i]) {
+                    nf.setSafe(i, nullableFloat[i]);
+                } else {
+                    nf.setNull(i);
+                }
                 if (valid[i]) {
                     nv.setSafe(i, nullable[i]);
                 } else {
@@ -133,8 +144,8 @@ class NodeStatsInteropIntegrationTest {
         }
         Path java = tmp.resolve("java.vortex");
         DType.Struct schema = new DType.Struct(
-                List.of("sorted", "random", "small", "rf", "sf", "low", "high", "bool", "nullable", "patched", "descending").stream().map(ColumnName::of).toList(),
-                List.of(DTypes.I64, DTypes.I64, DTypes.I32, DTypes.F64, DTypes.F64, DTypes.UTF8, DTypes.UTF8, DTypes.BOOL, DTypes.I32.asNullable(), DTypes.F64, DTypes.I64), false);
+                List.of("sorted", "random", "small", "rf", "sf", "low", "high", "bool", "nullable", "patched", "descending", "nullf").stream().map(ColumnName::of).toList(),
+                List.of(DTypes.I64, DTypes.I64, DTypes.I32, DTypes.F64, DTypes.F64, DTypes.UTF8, DTypes.UTF8, DTypes.BOOL, DTypes.I32.asNullable(), DTypes.F64, DTypes.I64, DTypes.F64.asNullable()), false);
         try (FileChannel ch = FileChannel.open(java, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             Map<ColumnName, Object> chunk = new java.util.LinkedHashMap<>();
@@ -149,6 +160,7 @@ class NodeStatsInteropIntegrationTest {
             chunk.put(ColumnName.of("nullable"), new NullableData(nullable, valid));
             chunk.put(ColumnName.of("patched"), patched);
             chunk.put(ColumnName.of("descending"), descending);
+            chunk.put(ColumnName.of("nullf"), new NullableData(nullableFloat, validFloat));
             w.writeChunk(chunk);
         }
         List<String> expected = EncodingTrees.withStats(jni);
@@ -162,7 +174,7 @@ class NodeStatsInteropIntegrationTest {
         List<List<String>> expectedColumns = columns(expected);
         List<List<String>> resultColumns = columns(result);
         assertThat(resultColumns).hasSameSizeAs(expectedColumns);
-        for (int c : new int[]{0, 1, 2, 3, 4, 8, 9, 10}) {
+        for (int c : new int[]{0, 1, 2, 3, 4, 8, 9, 10, 11}) {
             assertThat(resultColumns.get(c)).as("column %d", c).isEqualTo(expectedColumns.get(c));
         }
     }

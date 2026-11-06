@@ -16,9 +16,9 @@ import java.util.Arrays;
 /// on: a canonical primitive or bool does, as does `fastlanes.bitpacked`
 /// (`bitpacking/array/bitpack_compress`); `vortex.alp`, `vortex.alprd`, `vortex.fsst`,
 /// `vortex.onpair`, `vortex.constant` and the rest do not, so their roots carry nothing.
-public final class RootNodeStats {
+final class CachedNodeStats {
 
-    private RootNodeStats() {
+    private CachedNodeStats() {
     }
 
     /// The stats the root node of a segment encoded as `root` carries.
@@ -30,7 +30,7 @@ public final class RootNodeStats {
     /// @param rows      the number of rows
     /// @param nullCount the number of null rows
     /// @return the root's stats, [NodeStats#NONE] when the encoding passes none on
-    public static NodeStats of(DType dtype, EncodingId root, ProtoScalarValue min, ProtoScalarValue max, long rows,
+    static NodeStats of(DType dtype, EncodingId root, ProtoScalarValue min, ProtoScalarValue max, long rows,
                         long nullCount) {
         return switch (dtype) {
             case DType.Primitive p when p.ptype().isFloating() && root.equals(EncodingId.VORTEX_PRIMITIVE) ->
@@ -50,7 +50,7 @@ public final class RootNodeStats {
     ///
     /// @param validity per-row validity
     /// @return the validity child's stats
-    public static NodeStats ofValidity(boolean[] validity) {
+    static NodeStats ofValidity(boolean[] validity) {
         long valid = 0;
         for (boolean v : validity) {
             if (v) {

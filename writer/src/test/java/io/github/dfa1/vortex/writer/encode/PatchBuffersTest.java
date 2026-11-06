@@ -1,12 +1,15 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.ValueLayout;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,6 +56,33 @@ class PatchBuffersTest {
         // When / Then
         assertThatThrownBy(() -> PatchBuffers.of(positions, 10, EncodeTestHelper.testCtx()))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void valuesNode_unequalValues_arePrimitiveMarkedNotConstant() {
+        // Given
+        List<EncodedBuffer> buffers = new ArrayList<>();
+
+        // When
+        EncodeNode result = PatchBuffers.valuesNode(new long[]{3, 9}, PType.I64, buffers, EncodeTestHelper.testCtx());
+
+        // Then — the constant check that found them unequal leaves its answer on the array
+        assertThat(result.encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+        assertThat(result.stats()).isEqualTo(new NodeStats(null, null, false, null, null, null, null, null));
+        assertThat(buffers).hasSize(1);
+    }
+
+    @Test
+    void valuesNode_equalValues_areAConstantCarryingNoNotConstantFlag() {
+        // Given
+        List<EncodedBuffer> buffers = new ArrayList<>();
+
+        // When
+        EncodeNode result = PatchBuffers.valuesNode(new long[]{7, 7}, PType.I64, buffers, EncodeTestHelper.testCtx());
+
+        // Then
+        assertThat(result.encodingId()).isEqualTo(EncodingId.VORTEX_CONSTANT);
+        assertThat(result.stats() == null || result.stats().isEmpty()).isTrue();
     }
 
     @ParameterizedTest(name = "{0} -> {1}")

@@ -76,31 +76,31 @@ class SequenceEncodingEncoderTest {
         @Test
         void encode_risingStep_isSortedAndStrictlySorted() {
             // Given / When
-            NodeStats stats = ENCODER.encode(DTypes.I64, new long[]{5, 8, 11}, EncodeTestHelper.testCtx()).rootNode().stats();
+            NodeStats result = ENCODER.encode(DTypes.I64, new long[]{5, 8, 11}, EncodeTestHelper.testCtx()).rootNode().stats();
 
-            // Then — Rust's Sequence::stats
-            assertThat(stats.isSorted()).isTrue();
-            assertThat(stats.isStrictSorted()).isTrue();
+            // Then — Rust's Sequence::result
+            assertThat(result.isSorted()).isTrue();
+            assertThat(result.isStrictSorted()).isTrue();
         }
 
         @Test
         void encode_fallingStep_isNeitherSorted() {
             // Given / When
-            NodeStats stats = ENCODER.encode(DTypes.I64, new long[]{11, 8, 5}, EncodeTestHelper.testCtx()).rootNode().stats();
+            NodeStats result = ENCODER.encode(DTypes.I64, new long[]{11, 8, 5}, EncodeTestHelper.testCtx()).rootNode().stats();
 
             // Then
-            assertThat(stats.isSorted()).isFalse();
-            assertThat(stats.isStrictSorted()).isFalse();
+            assertThat(result.isSorted()).isFalse();
+            assertThat(result.isStrictSorted()).isFalse();
         }
 
         @Test
         void encode_singleValue_isSortedWhateverTheStep() {
             // Given / When
-            NodeStats stats = ENCODER.encode(DTypes.I64, new long[]{7}, EncodeTestHelper.testCtx()).rootNode().stats();
+            NodeStats result = ENCODER.encode(DTypes.I64, new long[]{7}, EncodeTestHelper.testCtx()).rootNode().stats();
 
             // Then — no adjacent pair to compare
-            assertThat(stats.isSorted()).isTrue();
-            assertThat(stats.isStrictSorted()).isTrue();
+            assertThat(result.isSorted()).isTrue();
+            assertThat(result.isStrictSorted()).isTrue();
         }
 
         @Test

@@ -24,7 +24,6 @@ import io.github.dfa1.vortex.writer.encode.EncodeResult;
 import io.github.dfa1.vortex.writer.encode.EncodedBuffer;
 import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.writer.encode.NodeStats;
-import io.github.dfa1.vortex.writer.encode.RootNodeStats;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
 import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
@@ -960,12 +959,7 @@ public final class VortexWriter implements Closeable {
             }
             SegmentStats stats = new SegmentStats(min, max, ZoneMapStatCodec.columnSum(dtype, data), nullCount);
             // the stats the flat segment's root node carries are Rust's, not the zone map's
-            NodeStats own = result.rootNode().stats();
-            if (own == null || own.isEmpty()) {
-                EncodeNode root = result.rootNode().withStats(RootNodeStats.of(dtype, result.rootNode().encodingId(),
-                        min, max, arrayLength(data), nullCount));
-                result = new EncodeResult(root, result.encodedBuffers(), result.statsMin(), result.statsMax());
-            }
+            result = result.withRootStats(dtype, min, max, arrayLength(data), nullCount);
             return new EncodedSegment(result, arena, stats);
         } catch (RuntimeException | Error e) {
             arena.close();

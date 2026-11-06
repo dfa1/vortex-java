@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -62,6 +63,25 @@ public record EncodeResult(
                 : new EncodeResult(rootNode, encodedBuffers, stats.min(), stats.max());
     }
 
+    /// This result with the array stats Rust keeps on the root of a flat segment, unless the encoder
+    /// already put its own there.
+    ///
+    /// @param dtype     the column's dtype
+    /// @param min       the exact minimum of the input, or `null` when unknown
+    /// @param max       the exact maximum of the input, or `null` when unknown
+    /// @param rows      the number of rows
+    /// @param nullCount the number of null rows
+    /// @return this result, or a copy whose root carries the stats
+    public EncodeResult withRootStats(DType dtype, ProtoScalarValue min, ProtoScalarValue max, long rows,
+                                      long nullCount) {
+        NodeStats own = rootNode.stats();
+        if (own != null && !own.isEmpty()) {
+            return this;
+        }
+        EncodeNode root = rootNode.withStats(CachedNodeStats.of(dtype, rootNode.encodingId(), min, max, rows, nullCount));
+        return new EncodeResult(root, encodedBuffers, statsMin, statsMax);
+    }
+
     /// This result with `validity` appended to the root as its last child, a plain `vortex.bool`:
     /// where Rust's primitive and bit-packed arrays keep the validity of a nullable array, which
     /// the encodings stacked above them (FoR, ZigZag, dict codes) pass down unchanged.
@@ -73,7 +93,7 @@ public record EncodeResult(
         EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         EncodeNode[] children = Arrays.copyOf(rootNode.children(), rootNode.children().length + 1);
         children[children.length - 1] = EncodeNode.remapBufferIndices(bool.rootNode(), encodedBuffers.size())
-                .withStats(RootNodeStats.ofValidity(validity));
+                .withStats(CachedNodeStats.ofValidity(validity));
         List<EncodedBuffer> buffers = new ArrayList<>(encodedBuffers);
         buffers.addAll(bool.encodedBuffers());
         EncodeNode root = new EncodeNode(rootNode.encodingId(), rootNode.metadata(), children, rootNode.bufferIndices());
