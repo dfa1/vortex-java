@@ -21,7 +21,7 @@ import java.util.Map;
 
 /// Cardinality-bounded buffering state for one global-dictionary candidate column (ADR 0021). Instead of
 /// retaining raw values from a column's first chunk until `close()`, this holds a deduplicated
-/// value-to-code map (first-seen order, capped at [#GLOBAL_DICT_MAX_CARDINALITY]) and one cheap
+/// value-to-code map (first-seen order, at most [#MAX_ENTRIES] entries per dictionary) and one cheap
 /// `short[]` code array per ingested chunk. Per-chunk stats are captured at ingest time from the
 /// raw chunk, before it is discarded.
 ///
@@ -31,14 +31,6 @@ import java.util.Map;
 /// therefore the wire codes.
 final class DictColumnState {
 
-    // Columns with global cardinality below this threshold are dict-encoded across all chunks.
-    // The cap is type-aware. Numeric stays low: a global dict hurts high-cardinality F64/I64
-    // columns (ALP/bitpacked codes beat U16 dict codes). Utf8/Binary is raised far higher — text columns
-    // with thousands of repeated distinct values (street/place names) dictionary-compress well
-    // (#299), and the per-chunk short[] code buffer holds codes 0..32767 (up to 32768 distinct)
-    // with no wider buffer; the codes are always U16 (CODES_PTYPE).
-    static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
-
     /// The codes ptype of every global dict: Rust's `DictLayoutConstraints` derive it from the
     /// configured maximum dictionary length, not the actual one -- U8 only when `max_len <= 255`,
     /// and the default `max_len` is `u16::MAX` -- so a default Rust global dict always has U16
@@ -47,11 +39,11 @@ final class DictColumnState {
     /// U16 codes it does not (taxi Airport_fee).
     static final PType CODES_PTYPE = PType.U16;
 
-    /// Rust's `DictLayoutConstraints` defaults for a Utf8/Binary dictionary: at most `u16::MAX`
-    /// entries and 1 MiB of views plus out-of-line bytes. A column that reaches either starts a new
-    /// dictionary, so a text column's cardinality is not a reason to give up the dict layout.
-    static final int MAX_VARBIN_ENTRIES = 65_535;
-    static final long MAX_VARBIN_DICT_BYTES = 1L << 20;
+    /// Rust's `DictLayoutConstraints` defaults: at most `u16::MAX` entries and 1 MiB of values (of
+    /// views plus out-of-line bytes for text). A column that reaches either starts a new dictionary,
+    /// so a column's cardinality is not a reason to give up the dict layout.
+    static final int MAX_ENTRIES = 65_535;
+    static final long MAX_DICT_BYTES = 1L << 20;
     private static final int VIEW_BYTES = 16;
     private static final int MAX_INLINED_BYTES = 12;
 
@@ -209,53 +201,44 @@ final class DictColumnState {
         };
     }
 
-    /// Ingests one primitive chunk into this candidate column's cardinality-bounded dict state (ADR
-    /// 0021): dedups each valid value into the shared value-to-code map, appends a per-chunk `short[]`
-    /// code array, and captures the chunk's row/null counts and min/max/sum stats before the raw array
-    /// is discarded. Null slots buffer the null entry's code, assigned at the first one.
-    ///
-    /// Returns `false` — without mutating this state — the moment a new distinct value would push the
-    /// map past [#GLOBAL_DICT_MAX_CARDINALITY]; the caller then demotes the column to per-chunk
-    /// encoding. This moves the cap check from `close()` to a continuous, mid-file guard so a column
-    /// whose distinct set grows past the cap never accumulates unbounded memory first.
+    /// Ingests the leading rows of a primitive chunk that fit this dictionary under Rust's constraints
+    /// (`DictLayoutConstraints`: [#MAX_ENTRIES] entries and 1 MiB of values), as Rust's primitive dict
+    /// builder does: the first entry is always admitted, and the row that needs an entry that no
+    /// longer fits ends the prefix. The caller starts a new dictionary with the rest. Dedups each
+    /// valid value into the shared value-to-code map, appends a per-chunk `short[]` code array, and
+    /// captures the prefix's row/null counts and min/max/sum stats before the raw array is discarded.
+    /// Null slots buffer the null entry's code, assigned at the first one.
     ///
     /// @param data the chunk data (a primitive array or a [NullableData] wrapper)
-    /// @return `true` if the chunk was ingested within the cardinality cap; `false` if the column
-    ///         must be demoted
-    boolean ingestDictChunk(Object data) {
+    /// @return how many leading rows were ingested, `0` when the first row already needs a new
+    ///         dictionary
+    int ingestDictChunk(Object data) {
         boolean nullableData = data instanceof NullableData;
         Object values = nullableData ? ((NullableData) data).values() : data;
         boolean[] validity = nullableData ? ((NullableData) data).validity() : null;
         int len = primitiveArrayLen(values, ptype);
-        int cap = GLOBAL_DICT_MAX_CARDINALITY;
-        int startSize = valueToCode.size();
-        int startNullCode = nullCode;
+        int cap = (int) Math.min(MAX_ENTRIES, MAX_DICT_BYTES / ptype.byteSize());
 
-        // One pass: insert new values and build the per-chunk code array. Ingest stays
-        // all-or-nothing — a chunk that would breach the cap rolls back the entries it added (the
-        // map's tail, codes >= startSize) — so the demoting caller still sees untouched state. The
-        // earlier shape ran a non-mutating counting pass first to get that atomicity, which cost a
-        // second boxed map probe for every row in the file.
         short[] codes = new short[len];
         // Probe the unboxed bits index and box only when inserting a value the dictionary has not
-        // seen before (at most `cap` times for the whole file). The boxed key itself still comes
-        // from the source array, so I32 vs I64 and NaN/-0.0 keying stay exactly what a
-        // Double/Long-keyed map gave.
+        // seen before. The boxed key itself still comes from the source array, so I32 vs I64 and
+        // NaN/-0.0 keying stay exactly what a Double/Long-keyed map gave.
         long[] bits = rawBits(values, ptype, len);
+        int consumed = len;
         for (int i = 0; i < len; i++) {
             if (validity != null && !validity[i]) {
                 if (nullCode < 0 && !addNullEntry(cap)) {
-                    rollbackTo(startSize, startNullCode);
-                    return false;
+                    consumed = i;
+                    break;
                 }
                 codes[i] = (short) nullCode;
                 continue;
             }
             int code = bitsIndex.get(bits[i]);
             if (code < 0) {
-                if (valueToCode.size() == cap) {
-                    rollbackTo(startSize, startNullCode);
-                    return false;
+                if (!valueToCode.isEmpty() && valueToCode.size() >= cap) {
+                    consumed = i;
+                    break;
                 }
                 code = valueToCode.size();
                 valueToCode.put(readPrimitiveElement(values, ptype, i), code);
@@ -263,15 +246,31 @@ final class DictColumnState {
             }
             codes[i] = (short) code;
         }
-
+        if (consumed == 0) {
+            return 0;
+        }
+        if (consumed < len) {
+            codes = Arrays.copyOf(codes, consumed);
+            validity = validity != null ? Arrays.copyOf(validity, consumed) : null;
+            values = prefix(values, consumed);
+        }
         MinMax mm = PrimitiveEncodingEncoder.minMaxStats(ptype, values);
-        record(codes, validity, len, mm != null ? mm.min() : null, mm != null ? mm.max() : null,
+        record(codes, validity, consumed, mm != null ? mm.min() : null, mm != null ? mm.max() : null,
                 PrimitiveEncodingEncoder.sumStat(ptype, values));
-        return true;
+        return consumed;
+    }
+
+    private static Object prefix(Object values, int n) {
+        return switch (values) {
+            case int[] a -> Arrays.copyOf(a, n);
+            case long[] a -> Arrays.copyOf(a, n);
+            case double[] a -> Arrays.copyOf(a, n);
+            default -> throw new IllegalStateException("not a global dict carrier: " + values.getClass());
+        };
     }
 
     /// Ingests the leading rows of a text chunk that fit this dictionary under Rust's constraints
-    /// (`DictLayoutConstraints`: [#MAX_VARBIN_ENTRIES] entries, [#MAX_VARBIN_DICT_BYTES] bytes), as
+    /// (`DictLayoutConstraints`: [#MAX_ENTRIES] entries, [#MAX_DICT_BYTES] bytes), as
     /// Rust's bytes dict builder does: the first entry is always admitted, and the row that needs an
     /// entry that no longer fits ends the prefix. The caller starts a new dictionary with the rest.
     ///
@@ -308,7 +307,7 @@ final class DictColumnState {
             if (code == null) {
                 long added = entryBytes(v);
                 boolean first = valueToCode.isEmpty();
-                if (!first && (valueToCode.size() >= MAX_VARBIN_ENTRIES || dictBytes + added > MAX_VARBIN_DICT_BYTES)) {
+                if (!first && (valueToCode.size() >= MAX_ENTRIES || dictBytes + added > MAX_DICT_BYTES)) {
                     consumed = i;
                     break;
                 }
@@ -360,7 +359,7 @@ final class DictColumnState {
     // when it no longer fits.
     private boolean addVarBinNullEntry() {
         if (!valueToCode.isEmpty()
-                && (valueToCode.size() >= MAX_VARBIN_ENTRIES || dictBytes + VIEW_BYTES > MAX_VARBIN_DICT_BYTES)) {
+                && (valueToCode.size() >= MAX_ENTRIES || dictBytes + VIEW_BYTES > MAX_DICT_BYTES)) {
             return false;
         }
         nullCode = valueToCode.size();
@@ -381,32 +380,14 @@ final class DictColumnState {
         codeArrayBytes += 2L * len;
     }
 
-    // Gives the null entry the next code, as Rust's dict builder does at the first null; false
-    // when the dictionary is already full.
+    // Gives the null entry the next code, as Rust's `encode_null`; false when it no longer fits.
     private boolean addNullEntry(int cap) {
-        if (valueToCode.size() == cap) {
+        if (!valueToCode.isEmpty() && valueToCode.size() >= cap) {
             return false;
         }
         nullCode = valueToCode.size();
         valueToCode.put(NULL_KEY, nullCode);
         return true;
-    }
-
-    /// Drops every dictionary entry added since the map held `startSize` values, restoring the
-    /// state a rejected chunk found — the demoting caller replays the already-buffered chunks
-    /// through [#buildInverseMap] and [#reconstructChunk], which must not see this chunk's values.
-    private void rollbackTo(int startSize, int startNullCode) {
-        valueToCode.values().removeIf(code -> code >= startSize);
-        nullCode = startNullCode;
-        if (varBin) {
-            return;
-        }
-        bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
-        for (Map.Entry<Object, Integer> e : valueToCode.entrySet()) {
-            if (e.getKey() != NULL_KEY) {
-                bitsIndex.put(valueBits(ptype, e.getKey()), e.getValue());
-            }
-        }
     }
 
     /// The chunk's values as raw bit patterns, keyed so that two rows share a pattern exactly when
@@ -551,57 +532,51 @@ final class DictColumnState {
         return seen.size() * 2 < data.length;
     }
 
-    static boolean isDictCandidate(PType ptype, Object data) {
-        return isDictCandidate(ptype, data, null);
+    /// Whether the dict layout reads a column of `ptype`: only the carriers the reader's lazy dict
+    /// decode supports (I32/U32, I64/U64, F64) are admitted.
+    /// - I8/U8/I16/U16 excluded: dict gives little/no benefit (a U8/U16 code is no smaller than the
+    ///   value), the Rust compressor does not dict them either (verified by
+    ///   RustWritesJavaReadsIntegrationTest#jniWriter_javaReader_lowCardinalityI16), and the reader
+    ///   cannot decode a narrow-int dict -- emitting one produced an unreadable file.
+    /// - F16/F32 excluded: no measured workload; ALP usually wins.
+    ///
+    /// Whether it is worth it is Rust's probe, in the writer: the cascade must pick a dict for the
+    /// column's first 8192 rows.
+    ///
+    /// @param ptype the column's primitive type
+    /// @return `true` for a type the dict layout reads
+    static boolean admitsPtype(PType ptype) {
+        return switch (ptype) {
+            case I32, U32, I64, U64, F64 -> true;
+            default -> false;
+        };
     }
 
-    /// Like [#isDictCandidate(PType, Object)] but ignores null (invalid) rows when counting distinct
-    /// values, so a nullable low-cardinality column still qualifies for the shared global dictionary.
-    /// Null slots hold zero-valued placeholders (per NullableData's contract); skipping them keeps a
-    /// legitimate `0` value from being deduplicated against those placeholders and keeps nulls out of
-    /// the distinct count. The ratio denominator stays the total row count (not the valid-row count),
-    /// matching the per-chunk encoders' convention that a null placeholder occupies a row like any
-    /// other value.
+    /// Whether a sample of a primitive column is dictionary material when there is no cascade to ask:
+    /// Rust's dict scheme skips a sample with more than half of its values distinct, and a single
+    /// value is a constant, not a dictionary.
     ///
     /// @param ptype    the column's primitive type
-    /// @param data     the packed values array; positions marked invalid by `validity` are skipped
-    /// @param validity per-row validity bitmap, or `null` meaning every row is valid
-    /// @return `true` if the column's distinct valid-value count is low enough to dictionary-encode
-    static boolean isDictCandidate(PType ptype, Object data, boolean[] validity) {
-        // Only the carriers the reader's lazy dict decode supports (I32/I64/F64) are admitted.
-        // - I8/U8/I16/U16 excluded: dict gives little/no benefit (a U8/U16 code is no smaller
-        //   than the value), the Rust compressor does not dict them either (verified by
-        //   RustWritesJavaReadsIntegrationTest#jniWriter_javaReader_lowCardinalityI16), and the
-        //   reader cannot decode a narrow-int dict — emitting one produced an unreadable file.
-        // - F16/F32 excluded: no measured workload; ALP usually wins.
-        // F64 admitted: low-card F64 columns (taxi mta_tax/Airport_fee/extra) compress better via
-        // global dict + sparse-coded codes (matches Rust FloatDictScheme). The skip rule
-        // (cardinality / 2 below) mirrors Rust's >50%-distinct skip.
-        if (ptype == PType.I8 || ptype == PType.U8
-                || ptype == PType.I16 || ptype == PType.U16
-                || ptype == PType.F16 || ptype == PType.F32) {
-            return false;
-        }
+    /// @param data     the sample's values; positions marked invalid by `validity` are skipped
+    /// @param validity per-row validity, or `null` when every row is valid
+    /// @return `true` if the valid values are under half distinct, and more than one
+    static boolean isLowCardinality(PType ptype, Object data, boolean[] validity) {
         int n = primitiveArrayLen(data, ptype);
         if (n == 0) {
             return false;
         }
-        // Counts distinct values on raw bits rather than into a HashSet<Object>, which boxed one
-        // value per row of the probe chunk — the same cost already removed from ingestDictChunk
-        // and DictEncodingEncoder, and 8.2% of a bitpacked write.
-        int distinct = countDistinctCapped(rawBits(data, ptype, n), n, validity);
-        if (distinct > GLOBAL_DICT_MAX_CARDINALITY || distinct == 0) {
-            return false;
+        long[] bits = rawBits(data, ptype, n);
+        LongIntMap seen = new LongIntMap(64);
+        int distinct = 0;
+        for (int i = 0; i < n; i++) {
+            if ((validity == null || validity[i]) && seen.add(bits[i])) {
+                distinct++;
+            }
         }
-        // Single-value columns fit vortex.constant better than dict (zero dict overhead).
-        // Delegate to the cascading compressor.
-        if (distinct == 1) {
-            return false;
-        }
-        return distinct * 2 < n;
+        return distinct > 1 && distinct * 2 < n;
     }
 
-    /// Length of a global-dict column's chunk array. Only the dict-admitted carriers ([#isDictCandidate])
+    /// Length of a global-dict column's chunk array. Only the dict-admitted carriers ([#admitsPtype])
     /// — I32/U32, I64/U64, F64 — reach here; narrow-int and F16/F32 ptypes are rejected upstream.
     static int primitiveArrayLen(Object data, PType ptype) {
         return switch (ptype) {
@@ -613,7 +588,7 @@ final class DictColumnState {
     }
 
     /// Boxed element `i` of a global-dict column's chunk array. Only the dict-admitted carriers
-    /// ([#isDictCandidate]) — I32/U32, I64/U64, F64 — reach here; narrow-int and F16/F32 ptypes are
+    /// ([#admitsPtype]) — I32/U32, I64/U64, F64 — reach here; narrow-int and F16/F32 ptypes are
     /// rejected upstream.
     static Object readPrimitiveElement(Object data, PType ptype, int i) {
         return switch (ptype) {
@@ -622,31 +597,6 @@ final class DictColumnState {
             case F64 -> ((double[]) data)[i];
             default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
         };
-    }
-
-    /// Counts distinct raw bit patterns, abandoning as soon as the count exceeds
-    /// [#GLOBAL_DICT_MAX_CARDINALITY] — past that the column is not a dictionary candidate, so the
-    /// exact count is never needed. The set never grows: it is sized once for the cap.
-    ///
-    /// @param bits     the chunk's values as raw bit patterns
-    /// @param n        element count
-    /// @param validity per-row validity, or `null` when every row is valid
-    /// @return the distinct count, or [#GLOBAL_DICT_MAX_CARDINALITY] + 1 if the cap was exceeded
-    private static int countDistinctCapped(long[] bits, int n, boolean[] validity) {
-        LongIntMap seen = new LongIntMap(GLOBAL_DICT_MAX_CARDINALITY + 1);
-        int distinct = 0;
-        for (int i = 0; i < n; i++) {
-            if (validity != null && !validity[i]) {
-                continue;
-            }
-            if (seen.add(bits[i])) {
-                distinct++;
-                if (distinct > GLOBAL_DICT_MAX_CARDINALITY) {
-                    return distinct;
-                }
-            }
-        }
-        return distinct;
     }
 
     // The dictionary key of one Utf8/Binary row. Utf8 keys are always Strings, a UTF-8 row decoded,

@@ -12,7 +12,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static io.github.dfa1.vortex.writer.DictColumnState.GLOBAL_DICT_MAX_CARDINALITY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -22,73 +21,24 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 /// fixes each cardinality / ratio edge.
 class DictColumnStateTest {
 
-    // ── isDictCandidate (primitive) ──────────────────────────────────────────────
+    // ── admitsPtype ──────────────────────────────────────────────────────────────
 
-    static Stream<Arguments> dictCandidateCases() {
+    static Stream<Arguments> admittedPtypes() {
         return Stream.of(
                 // exclusions: a U8/U16 code is no smaller than the value, and F16/F32 prefer ALP
-                arguments("F32 excluded", PType.F32, new float[]{1f, 1f, 2f, 2f, 2f}, false),
-                arguments("F16 excluded", PType.F16, new short[]{1, 1, 2, 2, 2}, false),
-                arguments("I8 excluded", PType.I8, new byte[]{1, 2, 1, 2, 1}, false),
-                arguments("U8 excluded", PType.U8, new byte[]{1, 2, 1, 2, 1}, false),
-                arguments("I16 excluded", PType.I16, new short[]{1, 2, 1, 2, 1}, false),
-                arguments("U16 excluded", PType.U16, new short[]{1, 2, 1, 2, 1}, false),
-                // admitted carriers, 2 distinct over 5 rows (4 < 5, under the gate)
-                arguments("I64 low cardinality", PType.I64, new long[]{1, 2, 1, 2, 1}, true),
-                arguments("F64 low cardinality", PType.F64, new double[]{1, 2, 1, 2, 1}, true),
-                arguments("empty", PType.I64, new long[0], false),
-                arguments("single distinct value", PType.I64, new long[]{7, 7, 7, 7}, false),
-                arguments("ratio exactly 50%", PType.I64, new long[]{1, 2, 1, 2}, false),
-                arguments("ratio under 50%", PType.I64, new long[]{1, 2, 1, 2, 1}, true),
-                arguments("cardinality at MAX", PType.I64, distinctThenRepeat(GLOBAL_DICT_MAX_CARDINALITY), true),
-                arguments("cardinality over MAX", PType.I64, distinctThenRepeat(GLOBAL_DICT_MAX_CARDINALITY + 1), false));
+                arguments(PType.F32, false), arguments(PType.F16, false), arguments(PType.I8, false),
+                arguments(PType.U8, false), arguments(PType.I16, false), arguments(PType.U16, false),
+                arguments(PType.I32, true), arguments(PType.U32, true), arguments(PType.I64, true),
+                arguments(PType.U64, true), arguments(PType.F64, true));
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("dictCandidateCases")
-    void isDictCandidate(String name, PType ptype, Object data, boolean expected) {
-        // Given — a column of `ptype` with the case's data
+    @MethodSource("admittedPtypes")
+    void admitsPtype(PType ptype, boolean expected) {
+        // Given — a column of `ptype`
 
         // When
-        boolean result = DictColumnState.isDictCandidate(ptype, data);
-
-        // Then
-        assertThat(result).isEqualTo(expected);
-    }
-
-    // ── isDictCandidate (primitive, nullable) ────────────────────────────────────
-
-    static Stream<Arguments> nullableDictCandidateCases() {
-        // The values array holds a zero placeholder at every null slot (NullableData contract). Nulls
-        // must not count toward cardinality; the ratio denominator stays the total row count.
-        return Stream.of(
-                // 2 distinct valid values (1, 2) over 5 total rows: 2*2 < 5 → candidate. The null slot
-                // (index 2, placeholder 0) is skipped, so 0 does not inflate cardinality to 3.
-                arguments("nulls excluded from cardinality",
-                        new long[]{1, 2, 0, 1, 2}, new boolean[]{true, true, false, true, true}, true),
-                // All-null: no valid values, so never a candidate (nothing to dictionary).
-                arguments("all-null not a candidate",
-                        new long[]{0, 0, 0}, new boolean[]{false, false, false}, false),
-                // Null-heavy but only 2 distinct valid values over 8 total rows (2*2 < 8) → candidate.
-                arguments("null-heavy but low cardinality still passes",
-                        new long[]{1, 0, 0, 2, 0, 1, 0, 2},
-                        new boolean[]{true, false, false, true, false, true, false, true}, true),
-                // Placeholder 0 collides with a legitimate valid 0: skipping nulls keeps 0 as a real
-                // distinct value only from its valid occurrence (2 distinct: 0 and 5).
-                arguments("placeholder zero not deduped against valid zero",
-                        new long[]{0, 0, 5, 0, 5}, new boolean[]{true, false, true, false, true}, true),
-                // validity == null delegates to the all-valid path: single distinct value → not a
-                // candidate (constant encoding wins).
-                arguments("null validity single value", new long[]{7, 7, 7, 7}, null, false));
-    }
-
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("nullableDictCandidateCases")
-    void isDictCandidate_nullable(String name, long[] data, boolean[] validity, boolean expected) {
-        // Given — an I64 column with the case's values and validity
-
-        // When
-        boolean result = DictColumnState.isDictCandidate(PType.I64, data, validity);
+        boolean result = DictColumnState.admitsPtype(ptype);
 
         // Then
         assertThat(result).isEqualTo(expected);
@@ -103,7 +53,7 @@ class DictColumnStateTest {
                 arguments("ratio under 50%", new String[]{"a", "b", "a", "b", "a"}, true),
                 // no cardinality cap as for numbers: Rust skips a sample only above half distinct, and a
                 // column that outgrows one dictionary starts another
-                arguments("Utf8 admitted above numeric cap", repeated(GLOBAL_DICT_MAX_CARDINALITY + 1), true),
+                arguments("Utf8 admitted above numeric cap", repeated(2_049), true),
                 arguments("cardinality of a full dictionary", repeated(70_000), true));
     }
 
@@ -201,22 +151,21 @@ class DictColumnStateTest {
         boolean[] validity = {true, true, false, true, false, true};
 
         // When
-        boolean admitted = sut.ingestDictChunk(new NullableData(values, validity));
+        int admitted = sut.ingestDictChunk(new NullableData(values, validity));
         short[] result = sut.chunkCodes(0);
 
         // Then
-        assertThat(admitted).isTrue();
+        assertThat(admitted).isEqualTo(values.length);
         assertThat(result).containsExactly((short) 0, (short) 1, (short) 2, (short) 1, (short) 2, (short) 3);
         assertThat(sut.nullCode()).isEqualTo(2);
         assertThat((double[]) sut.uniques()).containsExactly(1.75, 0.0, 0.0, -1.75);
     }
 
     @Test
-    void ingestDictChunk_rejectedChunk_rollsBackItsNullEntry() {
-        // Given — a full dictionary; the next chunk brings its first null and then a new value, so
-        // the chunk is rejected and must not leave a null entry behind for the demotion replay
+    void ingestDictChunk_stopsAtTheNullEntryThatNoLongerFits() {
+        // Given — a dictionary filled to u16::MAX entries; the next chunk's first row is a null
         var sut = new DictColumnState(new DType.Primitive(PType.I64, true));
-        long[] full = new long[DictColumnState.GLOBAL_DICT_MAX_CARDINALITY - 1];
+        long[] full = new long[DictColumnState.MAX_ENTRIES];
         for (int i = 0; i < full.length; i++) {
             full[i] = i;
         }
@@ -225,12 +174,32 @@ class DictColumnStateTest {
         boolean[] validity = {false, true};
 
         // When
-        boolean result = sut.ingestDictChunk(new NullableData(next, validity));
+        int result = sut.ingestDictChunk(new NullableData(next, validity));
 
-        // Then
-        assertThat(result).isFalse();
+        // Then — Rust's encode_null: no room for a null entry, so the dictionary is closed
+        assertThat(result).isZero();
         assertThat(sut.nullCode()).isEqualTo(-1);
         assertThat(sut.cardinality()).isEqualTo(full.length);
+    }
+
+    @Test
+    void ingestDictChunk_stopsAtTheValueThatNoLongerFitsAndKeepsThePrefixStats() {
+        // Given — a dictionary filled to u16::MAX entries
+        var sut = new DictColumnState(new DType.Primitive(PType.I64, false));
+        long[] full = new long[DictColumnState.MAX_ENTRIES];
+        for (int i = 0; i < full.length; i++) {
+            full[i] = i;
+        }
+        sut.ingestDictChunk(full);
+
+        // When — known values still fit; the first new one ends the prefix
+        int result = sut.ingestDictChunk(new long[]{5, 6, -1, 7});
+
+        // Then — and the prefix's own bounds are recorded, not the whole chunk's
+        assertThat(result).isEqualTo(2);
+        assertThat(sut.chunkRowCounts()).containsExactly((long) full.length, 2L);
+        assertThat(sut.chunkStatsMin().getLast()).isEqualTo(ProtoScalarValue.ofInt64Value(5L));
+        assertThat(sut.chunkStatsMax().getLast()).isEqualTo(ProtoScalarValue.ofInt64Value(6L));
     }
 
     // ── primitiveArrayLen / readPrimitiveElement ─────────────────────────────────
@@ -335,7 +304,7 @@ class DictColumnStateTest {
     void ingestVarBinChunk_stopsAtTheEntryThatNoLongerFits() {
         // Given — a dictionary filled to u16::MAX entries
         DictColumnState sut = new DictColumnState(new DType.Utf8(false));
-        String[] full = new String[DictColumnState.MAX_VARBIN_ENTRIES];
+        String[] full = new String[DictColumnState.MAX_ENTRIES];
         for (int i = 0; i < full.length; i++) {
             full[i] = "v" + i;
         }
@@ -346,7 +315,7 @@ class DictColumnStateTest {
 
         // Then
         assertThat(consumed).isEqualTo(2);
-        assertThat(sut.cardinality()).isEqualTo(DictColumnState.MAX_VARBIN_ENTRIES);
+        assertThat(sut.cardinality()).isEqualTo(DictColumnState.MAX_ENTRIES);
         assertThat(sut.chunkRowCounts()).containsExactly((long) full.length, 2L);
     }
 
@@ -363,14 +332,14 @@ class DictColumnStateTest {
         int consumed = sut.ingestVarBinChunk(values);
 
         // Then
-        assertThat(consumed).isEqualTo((int) (DictColumnState.MAX_VARBIN_DICT_BYTES / 36));
+        assertThat(consumed).isEqualTo((int) (DictColumnState.MAX_DICT_BYTES / 36));
     }
 
     @Test
     void ingestVarBinChunk_admitsTheFirstEntryWhateverItsSize() {
         // Given — one value past the byte limit on its own
         DictColumnState sut = new DictColumnState(new DType.Utf8(false));
-        String huge = "x".repeat((int) DictColumnState.MAX_VARBIN_DICT_BYTES + 1);
+        String huge = "x".repeat((int) DictColumnState.MAX_DICT_BYTES + 1);
 
         // When
         int consumed = sut.ingestVarBinChunk(new String[]{huge, "other"});
@@ -383,7 +352,7 @@ class DictColumnStateTest {
     void ingestVarBinChunk_aFullDictionaryTakesNothingNew() {
         // Given
         DictColumnState sut = new DictColumnState(new DType.Utf8(false));
-        sut.ingestVarBinChunk(new String[]{"x".repeat((int) DictColumnState.MAX_VARBIN_DICT_BYTES + 1)});
+        sut.ingestVarBinChunk(new String[]{"x".repeat((int) DictColumnState.MAX_DICT_BYTES + 1)});
 
         // When
         int consumed = sut.ingestVarBinChunk(new String[]{"new"});
