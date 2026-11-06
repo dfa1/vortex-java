@@ -83,7 +83,7 @@
         <!-- Mutation testing pilot (ADR: test-suite strength). Opt-in only:
              ./mvnw -pl reader -am -P pitest verify -DskipITs
              Common PIT setup is inherited from the parent `pitest` profile; only the scope differs:
-             the file-structure bounds-checking parse classes with dedicated security tests.
+             every class in the module.
              Report: reader/target/pit-reports/. -->
         <profile>
             <id>pitest</id>
@@ -94,12 +94,7 @@
                         <artifactId>pitest-maven</artifactId>
                         <configuration>
                             <targetClasses>
-                                <param>io.github.dfa1.vortex.reader.Footer</param>
-                                <param>io.github.dfa1.vortex.reader.Trailer</param>
-                                <param>io.github.dfa1.vortex.reader.PostscriptParser</param>
-                                <param>io.github.dfa1.vortex.reader.SegmentSpec</param>
-                                <param>io.github.dfa1.vortex.reader.layout.Layout</param>
-                                <param>io.github.dfa1.vortex.reader.SerializedArrayDecoder</param>
+                                <param>io.github.dfa1.vortex.reader.*</param>
                             </targetClasses>
                         </configuration>
                     </plugin>

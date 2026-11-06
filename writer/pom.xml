@@ -83,12 +83,7 @@
                         <artifactId>pitest-maven</artifactId>
                         <configuration>
                             <targetClasses>
-                                <param>io.github.dfa1.vortex.writer.ChunkImpl</param>
-                                <param>io.github.dfa1.vortex.writer.WriteRegistry</param>
-                                <param>io.github.dfa1.vortex.writer.WriteRegistry$Builder</param>
-                                <param>io.github.dfa1.vortex.writer.VortexWriter</param>
-                                <param>io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder</param>
-                                <param>io.github.dfa1.vortex.writer.encode.AlpRdEncodingEncoder</param>
+                                <param>io.github.dfa1.vortex.writer.*</param>
                             </targetClasses>
                         </configuration>
                     </plugin>

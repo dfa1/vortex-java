@@ -178,9 +178,12 @@
                         <artifactId>pitest-maven</artifactId>
                         <configuration>
                             <targetClasses>
-                                <param>io.github.dfa1.vortex.core.io.IoBounds</param>
-                                <param>io.github.dfa1.vortex.core.io.PTypeIO</param>
+                                <param>io.github.dfa1.vortex.core.*</param>
                             </targetClasses>
+                            <excludedClasses>
+                                <param>io.github.dfa1.vortex.core.fbs.*</param>
+                                <param>io.github.dfa1.vortex.core.proto.*</param>
+                            </excludedClasses>
                         </configuration>
                     </plugin>
                 </plugins>
