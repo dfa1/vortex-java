@@ -94,12 +94,12 @@ class DictValuesPoolCompressionIntegrationTest {
 
     @Test
     void utf8_cardinalityAbovePriorCap_admittedToGlobalDict(@TempDir Path tmp) throws IOException {
-        // Given — 8 000 distinct values: above the old 2048 numeric-era cap (so previously demoted
-        // to per-chunk), below the 32768 Utf8 cap, with >50% dedup so the ratio gate admits it.
+        // Given — 3 000 distinct values: above the old 2048 numeric-era cap (so previously demoted
+        // to per-chunk), with under half of the first 8192 rows distinct, which is Rust's gate.
         Path file = tmp.resolve("high_card.vortex");
         int rowsPerChunk = 20_000;
         int chunkCount = 4;
-        int distinct = 8_000;
+        int distinct = 3_000;
 
         List<String> expected = new ArrayList<>();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -113,10 +113,10 @@ class DictValuesPoolCompressionIntegrationTest {
         }
 
         // Then — the column is stored as one global dictionary (a DICT layout node), not a per-chunk
-        // fallback. Before the type-aware cap a 8 000-distinct column produced no DICT layout.
+        // fallback.
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             assertThat(hasDictLayout(InspectorTree.build(vf).root()))
-                    .as("8 000-distinct Utf8 column admitted to the global dictionary")
+                    .as("3 000-distinct Utf8 column admitted to the global dictionary")
                     .isTrue();
         }
 

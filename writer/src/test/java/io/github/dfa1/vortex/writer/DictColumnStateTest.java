@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static io.github.dfa1.vortex.writer.DictColumnState.GLOBAL_DICT_MAX_CARDINALITY;
-import static io.github.dfa1.vortex.writer.DictColumnState.GLOBAL_DICT_MAX_CARDINALITY_UTF8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
@@ -102,12 +101,10 @@ class DictColumnStateTest {
                 arguments("empty", new String[0], false),
                 arguments("ratio exactly 50%", new String[]{"a", "b", "a", "b"}, false),
                 arguments("ratio under 50%", new String[]{"a", "b", "a", "b", "a"}, true),
-                // Utf8 uses the raised type-aware cap (#299), not the numeric 2048.
-                arguments("Utf8 admitted above numeric cap",
-                        distinctStrings(GLOBAL_DICT_MAX_CARDINALITY + 1), true),
-                arguments("cardinality at Utf8 MAX", distinctStrings(GLOBAL_DICT_MAX_CARDINALITY_UTF8), true),
-                arguments("cardinality over Utf8 MAX",
-                        distinctStrings(GLOBAL_DICT_MAX_CARDINALITY_UTF8 + 1), false));
+                // no cardinality cap as for numbers: Rust skips a sample only above half distinct, and a
+                // column that outgrows one dictionary starts another
+                arguments("Utf8 admitted above numeric cap", repeated(GLOBAL_DICT_MAX_CARDINALITY + 1), true),
+                arguments("cardinality of a full dictionary", repeated(70_000), true));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -178,11 +175,11 @@ class DictColumnStateTest {
         boolean[] validity = {true, true, false, true, true};
 
         // When
-        boolean admitted = sut.ingestDictChunk(new NullableData(values, validity));
+        int admitted = sut.ingestVarBinChunk(new NullableData(values, validity));
         Object result = sut.reconstructChunk(sut.buildInverseMap(), 0);
 
         // Then — two values plus the null entry, and demotion rebuilds the original rows (null kept null)
-        assertThat(admitted).isTrue();
+        assertThat(admitted).isEqualTo(5);
         assertThat(sut.cardinality()).isEqualTo(3);
         assertThat((byte[][]) sut.uniques()).isDeepEqualTo(new byte[][]{{1, 2}, {3}, null});
         assertThat(result).isInstanceOfSatisfying(NullableData.class, nd -> {
@@ -291,9 +288,9 @@ class DictColumnStateTest {
         String emoji = new String(Character.toChars(0x1F600));
 
         // When
-        sut.ingestDictChunk(new String[]{"b", "a", "b", "Ａ", emoji, "a"});
-        sut.ingestDictChunk(new String[]{"c", null, "c", "d"});
-        sut.ingestDictChunk(new String[]{"b", "a", "b"});
+        sut.ingestVarBinChunk(new String[]{"b", "a", "b", "Ａ", emoji, "a"});
+        sut.ingestVarBinChunk(new String[]{"c", null, "c", "d"});
+        sut.ingestVarBinChunk(new String[]{"b", "a", "b"});
 
         // Then
         assertThat(decodeStrings(sut.chunkStatsMin())).containsExactly("a", "c", "a");
@@ -321,5 +318,78 @@ class DictColumnStateTest {
             a[i] = "s" + (i % distinct);
         }
         return a;
+    }
+
+    // A column of `distinct` values each repeated three times: under half distinct, whatever its size.
+    private static String[] repeated(int distinct) {
+        String[] out = new String[distinct * 3];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = "value-" + (i / 3);
+        }
+        return out;
+    }
+
+    // ── ingestVarBinChunk (Rust's dict constraints) ──────────────────────────────
+
+    @Test
+    void ingestVarBinChunk_stopsAtTheEntryThatNoLongerFits() {
+        // Given — a dictionary filled to u16::MAX entries
+        DictColumnState sut = new DictColumnState(new DType.Utf8(false));
+        String[] full = new String[DictColumnState.MAX_VARBIN_ENTRIES];
+        for (int i = 0; i < full.length; i++) {
+            full[i] = "v" + i;
+        }
+        sut.ingestVarBinChunk(full);
+
+        // When — known values still fit, the first new one ends the prefix
+        int consumed = sut.ingestVarBinChunk(new String[]{"v0", "v1", "new", "v2"});
+
+        // Then
+        assertThat(consumed).isEqualTo(2);
+        assertThat(sut.cardinality()).isEqualTo(DictColumnState.MAX_VARBIN_ENTRIES);
+        assertThat(sut.chunkRowCounts()).containsExactly((long) full.length, 2L);
+    }
+
+    @Test
+    void ingestVarBinChunk_countsViewsAndOutOfLineBytesAgainstTheByteLimit() {
+        // Given — 20-byte values cost a 16-byte view plus themselves: 36 bytes, so 29127 fit in 1 MiB
+        DictColumnState sut = new DictColumnState(new DType.Utf8(false));
+        String[] values = new String[40_000];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = String.format("%020d", i);
+        }
+
+        // When
+        int consumed = sut.ingestVarBinChunk(values);
+
+        // Then
+        assertThat(consumed).isEqualTo((int) (DictColumnState.MAX_VARBIN_DICT_BYTES / 36));
+    }
+
+    @Test
+    void ingestVarBinChunk_admitsTheFirstEntryWhateverItsSize() {
+        // Given — one value past the byte limit on its own
+        DictColumnState sut = new DictColumnState(new DType.Utf8(false));
+        String huge = "x".repeat((int) DictColumnState.MAX_VARBIN_DICT_BYTES + 1);
+
+        // When
+        int consumed = sut.ingestVarBinChunk(new String[]{huge, "other"});
+
+        // Then — the caller makes progress, and the next value starts a new dictionary
+        assertThat(consumed).isEqualTo(1);
+    }
+
+    @Test
+    void ingestVarBinChunk_aFullDictionaryTakesNothingNew() {
+        // Given
+        DictColumnState sut = new DictColumnState(new DType.Utf8(false));
+        sut.ingestVarBinChunk(new String[]{"x".repeat((int) DictColumnState.MAX_VARBIN_DICT_BYTES + 1)});
+
+        // When
+        int consumed = sut.ingestVarBinChunk(new String[]{"new"});
+
+        // Then
+        assertThat(consumed).isZero();
+        assertThat(sut.chunkCount()).isEqualTo(1);
     }
 }

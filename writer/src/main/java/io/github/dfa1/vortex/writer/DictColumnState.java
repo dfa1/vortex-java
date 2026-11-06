@@ -46,7 +46,14 @@ final class DictColumnState {
     /// the codes' raw width, and on U8 codes Sparse's estimate beat bit-packing where on Rust's
     /// U16 codes it does not (taxi Airport_fee).
     static final PType CODES_PTYPE = PType.U16;
-    static final int GLOBAL_DICT_MAX_CARDINALITY_UTF8 = 32_768;
+
+    /// Rust's `DictLayoutConstraints` defaults for a Utf8/Binary dictionary: at most `u16::MAX`
+    /// entries and 1 MiB of views plus out-of-line bytes. A column that reaches either starts a new
+    /// dictionary, so a text column's cardinality is not a reason to give up the dict layout.
+    static final int MAX_VARBIN_ENTRIES = 65_535;
+    static final long MAX_VARBIN_DICT_BYTES = 1L << 20;
+    private static final int VIEW_BYTES = 16;
+    private static final int MAX_INLINED_BYTES = 12;
 
     private static final int INDEX_MIN_CAPACITY = 64;
     // The null entry's key in valueToCode: identity-compared, so no real value can collide with it.
@@ -82,6 +89,8 @@ final class DictColumnState {
     private final List<ProtoScalarValue> chunkStatsMax = new ArrayList<>();
     private final List<ProtoScalarValue> chunkStatsSum = new ArrayList<>();
     private long codeArrayBytes;
+    // Rust's `dict_bytes()`: a 16-byte view per entry plus the bytes of each value too long to inline.
+    private long dictBytes;
 
     DictColumnState(DType dtype) {
         this.dtype = dtype;
@@ -200,28 +209,27 @@ final class DictColumnState {
         };
     }
 
-    /// Ingests one chunk into this candidate column's cardinality-bounded dict state (ADR 0021): dedups
-    /// each valid value into the shared value-to-code map, appends a per-chunk `short[]` code array,
-    /// and captures the chunk's row/null counts and min/max/sum stats before the raw array is
-    /// discarded. Null slots buffer the null entry's code, assigned at the first one.
+    /// Ingests one primitive chunk into this candidate column's cardinality-bounded dict state (ADR
+    /// 0021): dedups each valid value into the shared value-to-code map, appends a per-chunk `short[]`
+    /// code array, and captures the chunk's row/null counts and min/max/sum stats before the raw array
+    /// is discarded. Null slots buffer the null entry's code, assigned at the first one.
     ///
     /// Returns `false` — without mutating this state — the moment a new distinct value would push the
     /// map past [#GLOBAL_DICT_MAX_CARDINALITY]; the caller then demotes the column to per-chunk
     /// encoding. This moves the cap check from `close()` to a continuous, mid-file guard so a column
     /// whose distinct set grows past the cap never accumulates unbounded memory first.
     ///
-    /// @param data the chunk data (primitive array, `String[]`, `byte[][]`, or a [NullableData] wrapper)
+    /// @param data the chunk data (a primitive array or a [NullableData] wrapper)
     /// @return `true` if the chunk was ingested within the cardinality cap; `false` if the column
     ///         must be demoted
     boolean ingestDictChunk(Object data) {
         boolean nullableData = data instanceof NullableData;
         Object values = nullableData ? ((NullableData) data).values() : data;
         boolean[] validity = nullableData ? ((NullableData) data).validity() : null;
-        int len = varBin ? ((Object[]) values).length : primitiveArrayLen(values, ptype);
-        int cap = dictMaxCardinality(varBin);
+        int len = primitiveArrayLen(values, ptype);
+        int cap = GLOBAL_DICT_MAX_CARDINALITY;
         int startSize = valueToCode.size();
         int startNullCode = nullCode;
-        Object[] strings = varBin ? (Object[]) values : null;
 
         // One pass: insert new values and build the per-chunk code array. Ingest stays
         // all-or-nothing — a chunk that would breach the cap rolls back the entries it added (the
@@ -229,46 +237,95 @@ final class DictColumnState {
         // earlier shape ran a non-mutating counting pass first to get that atomicity, which cost a
         // second boxed map probe for every row in the file.
         short[] codes = new short[len];
-        boolean statsStrings = strings != null && !binary;
+        // Probe the unboxed bits index and box only when inserting a value the dictionary has not
+        // seen before (at most `cap` times for the whole file). The boxed key itself still comes
+        // from the source array, so I32 vs I64 and NaN/-0.0 keying stay exactly what a
+        // Double/Long-keyed map gave.
+        long[] bits = rawBits(values, ptype, len);
+        for (int i = 0; i < len; i++) {
+            if (validity != null && !validity[i]) {
+                if (nullCode < 0 && !addNullEntry(cap)) {
+                    rollbackTo(startSize, startNullCode);
+                    return false;
+                }
+                codes[i] = (short) nullCode;
+                continue;
+            }
+            int code = bitsIndex.get(bits[i]);
+            if (code < 0) {
+                if (valueToCode.size() == cap) {
+                    rollbackTo(startSize, startNullCode);
+                    return false;
+                }
+                code = valueToCode.size();
+                valueToCode.put(readPrimitiveElement(values, ptype, i), code);
+                bitsIndex.put(bits[i], code);
+            }
+            codes[i] = (short) code;
+        }
+
+        MinMax mm = PrimitiveEncodingEncoder.minMaxStats(ptype, values);
+        record(codes, validity, len, mm != null ? mm.min() : null, mm != null ? mm.max() : null,
+                PrimitiveEncodingEncoder.sumStat(ptype, values));
+        return true;
+    }
+
+    /// Ingests the leading rows of a text chunk that fit this dictionary under Rust's constraints
+    /// (`DictLayoutConstraints`: [#MAX_VARBIN_ENTRIES] entries, [#MAX_VARBIN_DICT_BYTES] bytes), as
+    /// Rust's bytes dict builder does: the first entry is always admitted, and the row that needs an
+    /// entry that no longer fits ends the prefix. The caller starts a new dictionary with the rest.
+    ///
+    /// @param data the chunk data (`String[]`, `byte[][]`, or a [NullableData] wrapper)
+    /// @return how many leading rows were ingested, `0` when the first row already needs a new
+    ///         dictionary
+    int ingestVarBinChunk(Object data) {
+        boolean nullableData = data instanceof NullableData;
+        Object[] strings = (Object[]) (nullableData ? ((NullableData) data).values() : data);
+        boolean[] validity = nullableData ? ((NullableData) data).validity() : null;
+        int len = strings.length;
+        short[] codes = new short[len];
+        boolean statsStrings = !binary;
         String minString = null;
         String maxString = null;
         int chunkStamp = ++stamp;
         if (statsStrings && seenInChunk == null) {
             seenInChunk = new int[16];
         }
-        if (strings != null) {
-            for (int i = 0; i < len; i++) {
-                // Nullable Utf8/Binary keeps a real null at invalid positions (ChunkImpl.adaptUtf8,
-                // adaptBinary); either way the slot is null and points at the null entry.
-                if ((validity != null && !validity[i]) || strings[i] == null) {
-                    if (nullCode < 0 && !addNullEntry(cap)) {
-                        rollbackTo(startSize, startNullCode);
-                        return false;
-                    }
-                    codes[i] = (short) nullCode;
-                    continue;
+        int consumed = len;
+        for (int i = 0; i < len; i++) {
+            // Nullable Utf8/Binary keeps a real null at invalid positions (ChunkImpl.adaptUtf8,
+            // adaptBinary); either way the slot is null and points at the null entry.
+            if ((validity != null && !validity[i]) || strings[i] == null) {
+                if (nullCode < 0 && !addVarBinNullEntry()) {
+                    consumed = i;
+                    break;
                 }
-                Object v = dictKey(strings[i]);
-                Integer code = valueToCode.get(v);
-                if (code == null) {
-                    if (valueToCode.size() == cap) {
-                        rollbackTo(startSize, startNullCode);
-                        return false;
-                    }
-                    code = valueToCode.size();
-                    valueToCode.put(v, code);
+                codes[i] = (short) nullCode;
+                continue;
+            }
+            Object v = dictKey(strings[i]);
+            Integer code = valueToCode.get(v);
+            if (code == null) {
+                long added = entryBytes(v);
+                boolean first = valueToCode.isEmpty();
+                if (!first && (valueToCode.size() >= MAX_VARBIN_ENTRIES || dictBytes + added > MAX_VARBIN_DICT_BYTES)) {
+                    consumed = i;
+                    break;
                 }
-                codes[i] = code.shortValue();
-                // Min/max depend on the distinct values only, so compare each code once per
-                // chunk instead of twice per row (UTF-8 order compare was 4% of a cascading write).
-                if (statsStrings) {
-                    if (code >= seenInChunk.length) {
-                        // Grown with the dictionary, not sized to the cap: a low-cardinality column
-                        // must not hold 128 KiB the retained-bytes budget cannot see.
-                        seenInChunk = Arrays.copyOf(seenInChunk, Math.max(code + 1, seenInChunk.length * 2));
-                    }
+                code = valueToCode.size();
+                valueToCode.put(v, code);
+                dictBytes += added;
+            }
+            codes[i] = code.shortValue();
+            // Min/max depend on the distinct values only, so compare each code once per chunk
+            // instead of twice per row (UTF-8 order compare was 4% of a cascading write).
+            if (statsStrings) {
+                if (code >= seenInChunk.length) {
+                    // Grown with the dictionary, not sized to the cap: a low-cardinality column
+                    // must not hold 128 KiB the retained-bytes budget cannot see.
+                    seenInChunk = Arrays.copyOf(seenInChunk, Math.max(code + 1, seenInChunk.length * 2));
                 }
-                if (statsStrings && seenInChunk[code] != chunkStamp) {
+                if (seenInChunk[code] != chunkStamp) {
                     seenInChunk[code] = chunkStamp;
                     String s = (String) v;
                     if (minString == null || Utf8Order.compare(s, minString) < 0) {
@@ -279,57 +336,49 @@ final class DictColumnState {
                     }
                 }
             }
-        } else {
-            // Primitive path: probe the unboxed bits index and box only when inserting a value the
-            // dictionary has not seen before (at most `cap` times for the whole file). The boxed
-            // key itself still comes from the source array, so I32 vs I64 and NaN/-0.0 keying stay
-            // exactly what a Double/Long-keyed map gave.
-            long[] bits = rawBits(values, ptype, len);
-            for (int i = 0; i < len; i++) {
-                if (validity != null && !validity[i]) {
-                    if (nullCode < 0 && !addNullEntry(cap)) {
-                        rollbackTo(startSize, startNullCode);
-                        return false;
-                    }
-                    codes[i] = (short) nullCode;
-                    continue;
-                }
-                int code = bitsIndex.get(bits[i]);
-                if (code < 0) {
-                    if (valueToCode.size() == cap) {
-                        rollbackTo(startSize, startNullCode);
-                        return false;
-                    }
-                    code = valueToCode.size();
-                    valueToCode.put(readPrimitiveElement(values, ptype, i), code);
-                    bitsIndex.put(bits[i], code);
-                }
-                codes[i] = (short) code;
-            }
         }
+        if (consumed == 0) {
+            return 0;
+        }
+        if (consumed < len) {
+            codes = Arrays.copyOf(codes, consumed);
+            validity = validity != null ? Arrays.copyOf(validity, consumed) : null;
+        }
+        // No min/max for Binary, matching the per-chunk VarBin path (VarBinEncodingEncoder).
+        MinMax mm = binary ? null : VarBinEncodingEncoder.encodeMinMax(minString, maxString);
+        record(codes, validity, consumed, mm != null ? mm.min() : null, mm != null ? mm.max() : null, null);
+        return consumed;
+    }
 
+    // The bytes a new entry adds to the dictionary: its view, and the value itself when too long to inline.
+    private long entryBytes(Object key) {
+        int length = key instanceof String s ? s.getBytes(StandardCharsets.UTF_8).length : ((ByteBuffer) key).remaining();
+        return length > MAX_INLINED_BYTES ? VIEW_BYTES + length : VIEW_BYTES;
+    }
+
+    // Gives the null entry the next code under the text constraints (Rust's `encode_null`); false
+    // when it no longer fits.
+    private boolean addVarBinNullEntry() {
+        if (!valueToCode.isEmpty()
+                && (valueToCode.size() >= MAX_VARBIN_ENTRIES || dictBytes + VIEW_BYTES > MAX_VARBIN_DICT_BYTES)) {
+            return false;
+        }
+        nullCode = valueToCode.size();
+        valueToCode.put(NULL_KEY, nullCode);
+        dictBytes += VIEW_BYTES;
+        return true;
+    }
+
+    private void record(short[] codes, boolean[] validity, int len, ProtoScalarValue min, ProtoScalarValue max,
+                        ProtoScalarValue sum) {
         chunkCodes.add(codes);
         chunkValidity.add(validity);
         chunkRowCounts.add((long) len);
         chunkNullCounts.add(validity != null ? VortexWriter.countNulls(validity) : 0L);
-        if (binary) {
-            // No min/max for Binary, matching the per-chunk VarBin path (VarBinEncodingEncoder).
-            chunkStatsMin.add(null);
-            chunkStatsMax.add(null);
-            chunkStatsSum.add(null);
-        } else if (varBin) {
-            MinMax mm = VarBinEncodingEncoder.encodeMinMax(minString, maxString);
-            chunkStatsMin.add(mm != null ? mm.min() : null);
-            chunkStatsMax.add(mm != null ? mm.max() : null);
-            chunkStatsSum.add(null);
-        } else {
-            MinMax mm = PrimitiveEncodingEncoder.minMaxStats(ptype, values);
-            chunkStatsMin.add(mm != null ? mm.min() : null);
-            chunkStatsMax.add(mm != null ? mm.max() : null);
-            chunkStatsSum.add(PrimitiveEncodingEncoder.sumStat(ptype, values));
-        }
+        chunkStatsMin.add(min);
+        chunkStatsMax.add(max);
+        chunkStatsSum.add(sum);
         codeArrayBytes += 2L * len;
-        return true;
     }
 
     // Gives the null entry the next code, as Rust's dict builder does at the first null; false
@@ -478,23 +527,23 @@ final class DictColumnState {
     /// The ratio denominator stays the total row count (not the valid-row count), matching the
     /// per-chunk encoders' convention that null placeholders occupy a row like any other value.
     ///
+    /// Rust's `StringDictScheme` skips a sample with more than half its values distinct, and has no
+    /// cap on the count: a column that outgrows one dictionary starts another.
+    ///
     /// @param data     the Utf8 (`String[]`) or Binary (`byte[][]`) values; null elements at invalid
     ///                 positions are skipped
     /// @param validity per-row validity bitmap, or `null` meaning every row is valid
-    /// @return `true` if the column's distinct valid-value count is low enough to dictionary-encode
+    /// @return `true` if the sample's distinct valid-value count is low enough to dictionary-encode
     static boolean isVarBinDictCandidate(Object[] data, boolean[] validity) {
         if (data.length == 0) {
             return false;
         }
-        var seen = HashSet.newHashSet(Math.min(GLOBAL_DICT_MAX_CARDINALITY_UTF8, data.length));
+        var seen = HashSet.newHashSet(data.length);
         for (int i = 0; i < data.length; i++) {
             if ((validity != null && !validity[i]) || data[i] == null) {
                 continue;
             }
             seen.add(varBinKey(data[i]));
-            if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY_UTF8) {
-                return false;
-            }
         }
         if (seen.isEmpty()) {
             return false;
@@ -598,11 +647,6 @@ final class DictColumnState {
             }
         }
         return distinct;
-    }
-
-    // The global-dict cardinality cap for a column, by whether it is Utf8/Binary (see the constants above).
-    private static int dictMaxCardinality(boolean varBin) {
-        return varBin ? GLOBAL_DICT_MAX_CARDINALITY_UTF8 : GLOBAL_DICT_MAX_CARDINALITY;
     }
 
     // The dictionary key of one Utf8/Binary row. Utf8 keys are always Strings, a UTF-8 row decoded,
