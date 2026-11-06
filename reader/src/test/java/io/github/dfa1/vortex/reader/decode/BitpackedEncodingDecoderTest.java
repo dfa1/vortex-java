@@ -1,22 +1,35 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPType;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -285,6 +298,100 @@ class BitpackedEncodingDecoderTest {
         private MemorySegment packedBytes(int n) {
             return MemorySegment.ofArray(new byte[n]);
         }
+    }
+
+
+    /// Value-level round trip for every width of every integer ptype. The validity fixtures above
+    /// all use `bit_width=0`, so nothing else pins the 8/16/32/64-bit unpack kernels or the
+    /// per-row schedule (shifts, masks, word spill into the next word): a wrong shift or mask
+    /// there silently corrupts values and only integration tests would notice. The reference
+    /// packer below is written from the FastLanes layout, independently of the decoder. The row
+    /// counts cover a partial block, several blocks, and a non-zero offset into the first block.
+    @ParameterizedTest(name = "{0} bitWidth={1} rows={2} offset={3}")
+    @MethodSource("roundTripCases")
+    void unpack_roundTrip_matchesReferencePacker(PType ptype, int bitWidth, int rows, int offset) {
+        // Given
+        int typeBits = ptype.bits();
+        Random random = new Random(31L * typeBits + bitWidth);
+        long mask = FastLanes.lowMask(bitWidth);
+        long[] logical = new long[rows + offset];
+        for (int i = 0; i < logical.length; i++) {
+            logical[i] = random.nextLong() & mask;
+        }
+        ArrayNode node = new ArrayNode(BITPACKED, MemorySegment.ofArray(new ProtoBitPackedMetadata(bitWidth, offset, null).encode()),
+                new ArrayNode[0], new int[]{0});
+        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), rows,
+                new MemorySegment[]{referencePack(logical, bitWidth, typeBits)}, REGISTRY, Arena.ofAuto());
+
+        // When
+        Array result = SUT.decode(ctx);
+
+        // Then
+        for (int i = 0; i < rows; i++) {
+            assertThat(read(result, ptype, i)).as("row %d", i).isEqualTo(logical[offset + i]);
+        }
+    }
+
+    private static Stream<Arguments> roundTripCases() {
+        int[][] shapes = {{1, 0}, {1500, 37}, {2500, 0}};
+        List<Arguments> cases = new ArrayList<>();
+        for (PType ptype : List.of(PType.I8, PType.I16, PType.I32, PType.I64)) {
+            for (int bitWidth = 1; bitWidth <= ptype.bits(); bitWidth++) {
+                for (int[] shape : shapes) {
+                    cases.add(Arguments.of(ptype, bitWidth, shape[0], shape[1]));
+                }
+            }
+        }
+        return cases.stream();
+    }
+
+    /// Packs `logical` the FastLanes way: per 1024-element block, lane `l` holds the values at
+    /// `iterateIndex(row, l)` for `row` in `[0, typeBits)` as a little-endian bit stream of
+    /// `bitWidth` words, interleaved so word `w` of lane `l` sits at word index `w * lanes + l`.
+    private static MemorySegment referencePack(long[] logical, int bitWidth, int typeBits) {
+        int lanes = 1024 / typeBits;
+        int blocks = (logical.length + 1023) / 1024;
+        ByteBuffer out = ByteBuffer.allocate(blocks * 128 * bitWidth).order(ByteOrder.LITTLE_ENDIAN);
+        for (int block = 0; block < blocks; block++) {
+            long[][] words = new long[lanes][bitWidth];
+            for (int lane = 0; lane < lanes; lane++) {
+                for (int row = 0; row < typeBits; row++) {
+                    int idx = block * 1024 + FastLanes.iterateIndex(row, lane);
+                    long v = idx < logical.length ? logical[idx] : 0L;
+                    int bitPos = row * bitWidth;
+                    int word = bitPos / typeBits;
+                    int shift = bitPos % typeBits;
+                    words[lane][word] |= v << shift;
+                    if (shift + bitWidth > typeBits) {
+                        words[lane][word + 1] |= v >>> (typeBits - shift);
+                    }
+                }
+            }
+            for (int w = 0; w < bitWidth; w++) {
+                for (int lane = 0; lane < lanes; lane++) {
+                    long word = words[lane][w];
+                    switch (typeBits) {
+                        case 8 -> out.put((byte) word);
+                        case 16 -> out.putShort((short) word);
+                        case 32 -> out.putInt((int) word);
+                        default -> out.putLong(word);
+                    }
+                }
+            }
+        }
+        MemorySegment seg = Arena.ofAuto().allocate(out.capacity(), 8);
+        seg.copyFrom(MemorySegment.ofArray(out.array()));
+        return seg;
+    }
+
+    /// Reads row `i` zero-extended to its `ptype` width, so it compares with the unsigned logical value.
+    private static long read(Array array, PType ptype, int i) {
+        return switch (ptype) {
+            case I8 -> ((ByteArray) array).getByte(i) & 0xFFL;
+            case I16 -> ((ShortArray) array).getShort(i) & 0xFFFFL;
+            case I32 -> ((IntArray) array).getInt(i) & 0xFFFFFFFFL;
+            default -> ((LongArray) array).getLong(i);
+        };
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────────

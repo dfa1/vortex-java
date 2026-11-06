@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -282,6 +284,53 @@ class PcoEncodingDecoderTest {
             assertThat(((LongArray) result).getLong(0)).isEqualTo(100L);
             assertThat(((LongArray) result).getLong(1)).isEqualTo(200L);
         }
+    }
+
+    /// IntMult mode (`mode=1`): each value is `mult * base + adj`, stored as two ANS streams.
+    /// The fixtures are real chunk-meta and page bytes from the Pco encoder (byte-identical to
+    /// Rust's) for 24 values `1000 * (i * 7 % 13)`, so `base=1000` and every adjustment is zero.
+    /// Hand-building the ANS tables and bit streams would test the builder, not the decoder;
+    /// without these, a wrong multiply, mask or stream offset in `decodeIntMultPage` is only
+    /// caught by the integration tests.
+    @Nested
+    class DecodeIntMult {
+
+        @Test
+        void decode_intMult_i32_recombinesMultiplierAndAdjustment() {
+            // Given
+            DecodeContext ctx = ctxWith(metaWithOneChunk(24), DTypes.I32, 24, new MemorySegment[]{
+                    hex("813e0000001000d8240601202000802800000000"), hex("708192a3b4c5061728394a5b")});
+
+            // When
+            Array result = SUT.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(24);
+            for (int i = 0; i < 24; i++) {
+                assertThat(((IntArray) result).getInt(i)).as("row %d", i).isEqualTo(1000 * (i * 7 % 13));
+            }
+        }
+
+        @Test
+        void decode_intMult_i64_recombinesMultiplierAndAdjustment() {
+            // Given
+            DecodeContext ctx = ctxWith(metaWithOneChunk(24), DTypes.I64, 24, new MemorySegment[]{
+                    hex("813e000000000000001000b89f1a2fdd24060120400000650000000000000000"),
+                    hex("708192a3b4c5061728394a5b")});
+
+            // When
+            Array result = SUT.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(24);
+            for (int i = 0; i < 24; i++) {
+                assertThat(((LongArray) result).getLong(i)).as("row %d", i).isEqualTo(1000L * (i * 7 % 13));
+            }
+        }
+    }
+
+    private static MemorySegment hex(String hex) {
+        return segmentOf(java.util.HexFormat.of().parseHex(hex));
     }
 
     @Nested
