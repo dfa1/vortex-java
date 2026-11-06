@@ -158,7 +158,7 @@ Both schema languages are compiled in-process to MemorySegment-native Java, with
 ### Mutation testing
 
 Opt-in [PIT](https://pitest.org) profile in `core` and `reader` (`-P pitest`), bound to the
-`verify` phase and scoped to the bounds/parse classes via `<targetClasses>` in each module POM.
+`verify` phase and scoped to every class of the module via `<targetClasses>` in each module POM (core excludes the generated `core.fbs`/`core.proto`).
 Used to harden the security-critical bounds guards (ADR 0003 Phase E).
 
 ```bash
