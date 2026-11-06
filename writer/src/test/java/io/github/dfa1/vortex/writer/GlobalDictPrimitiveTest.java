@@ -153,15 +153,10 @@ class GlobalDictPrimitiveTest {
     }
 
     @Test
-    void cardinalityGrowsPastCapMidFile_i64_demotesImmediatelyToChunkedLayout(@TempDir Path tmp) throws IOException {
-        // Given — the core ADR 0021 case. The first chunk is a genuine low-cardinality dict candidate
-        // (200 distinct / 1000 rows), so the column is admitted and buffered as codes. Later chunks
-        // introduce fresh uniques until the distinct set crosses GLOBAL_DICT_MAX_CARDINALITY (2048)
-        // partway through the file. The OLD raw-buffering path would have accumulated every raw value
-        // for the whole file before catching this at close(); the new path detects the breach at
-        // ingest and demotes IMMEDIATELY. We can't assert on memory in a unit test, but the OUTPUT
-        // SHAPE proves the demotion happened: a Chunked-of-Flats layout (one Flat per chunk), NOT a
-        // single shared Dict layout. A Dict here would mean the whole column was still buffered.
+    void cardinalityGrowsPastTheOldCapMidFile_i64_staysOneDictionary(@TempDir Path tmp) throws IOException {
+        // Given — the first chunk is a genuine low-cardinality dict candidate (200 distinct / 1000
+        // rows). Later chunks introduce fresh uniques until the distinct set crosses 2048, the cap
+        // the writer used to demote at. Rust has no such cap: its dictionary holds up to 65,535 values.
         var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
         Path file = tmp.resolve("card_grows_i64.vortex");
         int chunkCount = 6;
@@ -170,8 +165,7 @@ class GlobalDictPrimitiveTest {
         long next = 0;
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
-            // When — chunk 0 is low-card (200 distinct), later chunks are all-unique so the running
-            // distinct count climbs ~1000/chunk and passes 2048 during chunk 2 or 3.
+            // When
             for (int c = 0; c < chunkCount; c++) {
                 long[] data = new long[rowsPerChunk];
                 for (int i = 0; i < rowsPerChunk; i++) {
@@ -183,16 +177,41 @@ class GlobalDictPrimitiveTest {
             }
         }
 
-        // Then — the demoted column is written per chunk, never as a shared Dict.
+        // Then — still one shared Dict layout, and every value round-trips
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             var columnLayout = unwrapZoned(vf.layout().children().getFirst());
-            assertThat(columnLayout.isDict()).as("cardinality-demoted column must not be a global dict").isFalse();
-            // The replayed batches coalesce like any column's (Rust's repartition, #470): well
-            // under 1 MB, so one Flat.
-            assertThat(columnLayout.children()).as("demoted rows coalesce into one chunk")
-                    .singleElement().satisfies(child -> assertThat(child.isFlat()).isTrue());
+            assertThat(columnLayout.isDict()).as("one dictionary holds 5,200 values").isTrue();
+            assertThat(readAllLongs(vf, "v")).containsExactly(expected);
+        }
+    }
 
-            // And every value round-trips exactly across all chunks despite the mid-file demotion.
+    @Test
+    void cardinalityPastAFullDictionary_i64_startsANewOne(@TempDir Path tmp) throws IOException {
+        // Given — the first 8192 rows hold 2,000 distinct values, so the column is admitted; every row after
+        // them is new, which takes the dictionary past 65,535 values
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
+        Path file = tmp.resolve("runs_i64.vortex");
+        int chunkCount = 8;
+        int rowsPerChunk = 40_000;
+        long[] expected = new long[chunkCount * rowsPerChunk];
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            // When
+            for (int c = 0; c < chunkCount; c++) {
+                long[] data = new long[rowsPerChunk];
+                for (int i = 0; i < rowsPerChunk; i++) {
+                    data[i] = c == 0 && i < 8_192 ? wide(i % 2_000) : wide(100_000L + (long) c * rowsPerChunk + i);
+                    expected[c * rowsPerChunk + i] = data[i];
+                }
+                sut.writeChunk(Map.of(ColumnName.of("v"), data));
+            }
+        }
+
+        // Then — a chunked layout of dict layouts, and every value round-trips
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            var columnLayout = unwrapZoned(vf.layout().children().getFirst());
+            assertThat(columnLayout.isChunked()).isTrue();
+            assertThat(columnLayout.children()).hasSizeGreaterThan(1).allSatisfy(child -> assertThat(child.isDict()).isTrue());
             assertThat(readAllLongs(vf, "v")).containsExactly(expected);
         }
     }

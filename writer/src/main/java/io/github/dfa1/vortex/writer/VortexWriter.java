@@ -99,12 +99,12 @@ import java.util.stream.Collectors;
 /// ```
 ///
 /// With global dictionary encoding enabled (the default), candidate columns are buffered in the heap
-/// until `close()` so a shared dictionary can span every chunk. Buffering is cardinality-bounded
-/// (ADR 0021): each candidate retains a deduplicated value-to-code map capped at
-/// `GLOBAL_DICT_MAX_CARDINALITY` plus cheap per-chunk code arrays, so retained memory scales with a
-/// column's distinct-value count and row count — not its raw byte size. A column whose distinct set
-/// would exceed the cap demotes to per-chunk encoding immediately. [WriteOptions#globalDictMaxRetainedBytes()]
-/// (default 1 GB) remains a secondary safety net over the aggregate code-array bytes.
+/// until `close()` so a shared dictionary can span every chunk. Buffering is bounded (ADR 0021): each
+/// candidate retains a deduplicated value-to-code map of at most 65,535 entries or 1 MiB per
+/// dictionary, as Rust's dict layout does, plus cheap per-chunk code arrays; a column that fills a
+/// dictionary starts the next, so retained memory scales with the open dictionary and the row count,
+/// not the raw byte size. [WriteOptions#globalDictMaxRetainedBytes()] (default 1 GB) remains a
+/// secondary safety net over the aggregate code-array bytes.
 public final class VortexWriter implements Closeable {
 
     // Indices into layout_specs list in the FbsFooter
@@ -166,12 +166,12 @@ public final class VortexWriter implements Closeable {
 
     // Global dict state: columns detected as low-cardinality on their first chunk are buffered here
     // instead of encoded per-chunk. Buffering is cardinality-bounded (ADR 0021): rather than retain
-    // raw values, each candidate holds a deduplicated value->code map (capped at
-    // GLOBAL_DICT_MAX_CARDINALITY) plus cheap per-chunk code arrays. Flushed in close() as one Dict
-    // layout. When a column's distinct set would exceed the cap mid-file, it demotes immediately.
+    // raw values, each candidate holds a deduplicated value->code map (at most 65,535 entries or 1 MiB
+    // per dictionary) plus cheap per-chunk code arrays. Flushed in close() as one Dict layout per
+    // dictionary. Past the retained-bytes budget the largest columns demote to per-chunk encoding.
     private final Set<ColumnName> dictCandidates = new LinkedHashSet<>();
     private final Map<ColumnName, DictColumnState> dictStates = new LinkedHashMap<>();
-    // Dictionaries a text column has already filled to Rust's constraints (a new one starts when it
+    // Dictionaries a column has already filled to Rust's constraints (a new one starts when it
     // reaches them); the open one is in dictStates.
     private final Map<ColumnName, List<DictColumnState>> dictRuns = new LinkedHashMap<>();
     private final Map<ColumnName, List<DictColRef>> dictColRefs = new LinkedHashMap<>();
@@ -668,7 +668,18 @@ public final class VortexWriter implements Closeable {
                         ? ((io.github.dfa1.vortex.writer.encode.NullableData) data).validity() : null;
                 boolean candidate = false;
                 if (colDtype instanceof DType.Primitive p) {
-                    candidate = DictColumnState.isDictCandidate(p.ptype(), values, validity);
+                    // Rust's DictStrategy admits a column when its probe compressor, the cascade, turns
+                    // the first 8192 rows into a dict; there is no cardinality cap
+                    candidate = DictColumnState.admitsPtype(p.ptype());
+                    if (candidate && options.allowedCascading() == 0) {
+                        // no cascade to ask: the sample's distinct count decides
+                        int probeRows = (int) Math.min(Repartitioner.BLOCK_ROWS, arrayLength(data));
+                        Object head = Repartitioner.head(values, probeRows);
+                        candidate = DictColumnState.isLowCardinality(p.ptype(), head,
+                                validity != null ? Arrays.copyOf(validity, probeRows) : null);
+                    } else if (candidate) {
+                        candidate = probeCompressesToDict(colDtype, data);
+                    }
                 } else if (colDtype instanceof DType.Utf8 || colDtype instanceof DType.Binary) {
                     // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported), by what
                     // its first 8192 rows do: not more than half distinct. The cascade probe stays with
@@ -678,9 +689,6 @@ public final class VortexWriter implements Closeable {
                             Arrays.copyOf((Object[]) values, probeRows),
                             validity != null ? Arrays.copyOf(validity, probeRows) : null);
                 }
-                if (candidate && colDtype instanceof DType.Primitive) {
-                    candidate = probeCompressesToDict(colDtype, data);
-                }
                 if (candidate) {
                     dictCandidates.add(colName);
                     dictStates.put(colName, new DictColumnState(colDtype));
@@ -688,34 +696,19 @@ public final class VortexWriter implements Closeable {
             }
 
             if (dictCandidates.contains(colName)) {
-                // Ingest this chunk into the column's cardinality-bounded dict state: dedup values
-                // into the shared value->code map, buffer a cheap per-chunk code array, and capture
-                // the per-chunk stats now (before the raw array is discarded). If a new distinct
-                // value would push the map past GLOBAL_DICT_MAX_CARDINALITY, ingestDictChunk returns
-                // false and we demote the column immediately (mid-file cap breach, ADR 0021).
-                boolean admitted;
-                if (colDtype instanceof DType.Primitive) {
-                    admitted = dictStates.get(colName).ingestDictChunk(data);
-                } else {
-                    ingestVarBinChunk(colName, colDtype, data);
-                    admitted = true;
-                }
-                if (!admitted) {
-                    // Cap breached by this chunk: demote (replaying the already-buffered chunks per
-                    // -chunk) then write this chunk — which ingest rejected without buffering — too.
-                    demoteDictColumn(colName);
-                    appendChunk(colName, colDtype, data);
-                } else {
-                    long before = dictRetainedBytes.getOrDefault(colName, 0L);
-                    long after = retainedBytes(colName);
-                    dictRetainedTotal += after - before;
-                    dictRetainedBytes.put(colName, after);
-                    if (dictRetainedTotal > dictRetainedBudget) {
-                        // Aggregate code-array budget exceeded (secondary safety net). Demote the
-                        // largest-retained columns until back under budget, so writer memory stays
-                        // bounded even across many wide candidate columns.
-                        evictLargestDictColumnsUntilUnderBudget();
-                    }
+                // Ingest this chunk into the column's open dictionary, starting the next one when it is
+                // full: dedup values into the shared value->code map, buffer a cheap per-chunk code
+                // array, and capture the per-chunk stats now (before the raw array is discarded).
+                ingestChunk(colName, colDtype, data);
+                long before = dictRetainedBytes.getOrDefault(colName, 0L);
+                long after = retainedBytes(colName);
+                dictRetainedTotal += after - before;
+                dictRetainedBytes.put(colName, after);
+                if (dictRetainedTotal > dictRetainedBudget) {
+                    // Aggregate code-array budget exceeded (secondary safety net). Demote the
+                    // largest-retained columns until back under budget, so writer memory stays
+                    // bounded even across many wide candidate columns.
+                    evictLargestDictColumnsUntilUnderBudget();
                 }
             } else {
                 appendChunk(colName, colDtype, data);
@@ -1583,15 +1576,15 @@ public final class VortexWriter implements Closeable {
     // orchestration that needs this writer's segment-writing machinery (writeSegment, colChunks,
     // schema, options).
 
-    /// Feeds one text chunk to the column's open dictionary; whatever does not fit under Rust's
+    /// Feeds one chunk to the column's open dictionary; whatever does not fit under Rust's
     /// constraints closes it and starts the next one (`DictStrategy`: "when the dict constraints are
-    /// hit, a new dictionary is created"), so a text column never gives up its dict layout for its
+    /// hit, a new dictionary is created"), so a column never gives up its dict layout for its
     /// cardinality.
-    private void ingestVarBinChunk(ColumnName colName, DType colDtype, Object data) {
+    private void ingestChunk(ColumnName colName, DType colDtype, Object data) {
         Object rest = data;
         while (true) {
             DictColumnState state = dictStates.get(colName);
-            int consumed = state.ingestVarBinChunk(rest);
+            int consumed = colDtype instanceof DType.Primitive ? state.ingestDictChunk(rest) : state.ingestVarBinChunk(rest);
             long length = arrayLength(rest);
             if (consumed == length) {
                 return;

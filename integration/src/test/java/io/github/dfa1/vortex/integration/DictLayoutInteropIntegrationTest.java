@@ -21,6 +21,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -38,11 +39,12 @@ import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Which text columns get Rust's dict layout, and how many dictionaries it makes (#650). Rust's
-/// `DictStrategy` admits a column by its first 8192 rows (not more than half distinct) and starts a
-/// new dictionary whenever the open one reaches 65,535 entries or 1 MiB, so a column of any total
-/// cardinality can keep its dict layout.
-class DictLayoutStringInteropIntegrationTest {
+/// Which text and numeric columns get Rust's dict layout, and how many dictionaries it makes (#650,
+/// #649). Rust's `DictStrategy` admits a column by its first 8192 rows and starts a new dictionary
+/// whenever the open one reaches 65,535 entries or 1 MiB, so a column of any total cardinality can
+/// keep its dict layout.
+@Tag("slow")
+class DictLayoutInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
@@ -98,6 +100,96 @@ class DictLayoutStringInteropIntegrationTest {
         assertThat(dictLayouts(EncodingTrees.of(jni))).isEqualTo(2);
         assertThat(dictLayouts(EncodingTrees.of(java))).isEqualTo(2);
         assertThat(readAll(java)).containsExactly(values);
+    }
+
+    @ParameterizedTest(name = "pool of {0} values")
+    @ValueSource(ints = {100, 3_000, 20_000, 150_000})
+    void admitsTheNumericColumnsRustAdmits(int poolSize, @TempDir Path tmp) throws Exception {
+        // Given — 3 chunks of full-width i64 drawn at random from a pool (hashes, like ClickBench's URLHash)
+        Random r = new Random(11);
+        long[] pool = new long[poolSize];
+        for (int i = 0; i < pool.length; i++) {
+            pool[i] = r.nextLong();
+        }
+        long[] values = new long[CHUNK * 3];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = pool[r.nextInt(pool.length)];
+        }
+
+        // When
+        Path java = writeJava(tmp, values);
+        Path jni = writeJni(tmp, values);
+
+        // Then
+        assertThat(dictLayouts(EncodingTrees.of(java))).isEqualTo(dictLayouts(EncodingTrees.of(jni)));
+    }
+
+    @Test
+    void startsANewNumericDictionaryWhenTheOpenOneIsFull(@TempDir Path tmp) throws Exception {
+        // Given — 8 chunks: the first 8192 rows hold 2000 distinct values, every row after them is new
+        Random r = new Random(5);
+        long[] values = new long[CHUNK * 8];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i < 8_192 ? r.nextLong() % 2_000 * 1_000_003L : r.nextLong();
+        }
+
+        // When
+        Path java = writeJava(tmp, values);
+        Path jni = writeJni(tmp, values);
+
+        // Then — whatever Rust decides for this column, so do we, dictionary for dictionary
+        assertThat(dictLayouts(EncodingTrees.of(java))).isEqualTo(dictLayouts(EncodingTrees.of(jni)));
+        assertThat(readAllLongs(java)).containsExactly(values);
+    }
+
+    private static Path writeJava(Path tmp, long[] values) throws IOException {
+        Path file = tmp.resolve("java.vortex");
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("url")), List.of(DTypes.I64), false);
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var w = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            for (int from = 0; from < values.length; from += CHUNK) {
+                w.writeChunk(Map.of(ColumnName.of("url"), java.util.Arrays.copyOfRange(values, from, from + CHUNK)));
+            }
+        }
+        return file;
+    }
+
+    private static Path writeJni(Path tmp, long[] values) throws Exception {
+        Path file = tmp.resolve("jni.vortex");
+        Schema arrow = new Schema(List.of(Field.notNullable("url", new ArrowType.Int(64, true))));
+        try (VortexWriter w = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR).build()) {
+            for (int from = 0; from < values.length; from += CHUNK) {
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(arrow, ALLOCATOR)) {
+                    org.apache.arrow.vector.BigIntVector v = (org.apache.arrow.vector.BigIntVector) root.getVector("url");
+                    root.allocateNew();
+                    for (int i = 0; i < CHUNK; i++) {
+                        v.setSafe(i, values[from + i]);
+                    }
+                    root.setRowCount(CHUNK);
+                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR); ArrowSchema as = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, as);
+                        w.writeBatch(array.memoryAddress(), as.memoryAddress());
+                    }
+                }
+            }
+        }
+        return file;
+    }
+
+    private static long[] readAllLongs(Path file) throws IOException {
+        List<Long> out = new ArrayList<>();
+        try (var reader = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = reader.scan(ScanOptions.columns(ColumnName.of("url")))) {
+            while (iter.hasNext()) {
+                try (var chunk = iter.next()) {
+                    var longs = (io.github.dfa1.vortex.reader.array.LongArray) chunk.column(ColumnName.of("url"));
+                    for (long i = 0; i < longs.length(); i++) {
+                        out.add(longs.getLong(i));
+                    }
+                }
+            }
+        }
+        return out.stream().mapToLong(Long::longValue).toArray();
     }
 
     private static Path writeJava(Path tmp, String[] values) throws IOException {
