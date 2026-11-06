@@ -73,7 +73,7 @@ record PatchBuffers(PType indexType, MemorySegment indices, PType offsetType, Me
     }
 
     /// Appends the patch values to `buffers` as Rust's `compress_patches` leaves them: a
-    /// `vortex.constant` when every value is equal, a `vortex.primitive` otherwise.
+    /// `vortex.constant` when every value is equal, a `vortex.primitive` otherwise, marked not constant.
     ///
     /// @param values  the patch values: a primitive array of `ptype`, or for an integer `ptype` its
     ///                values widened to a `long[]` as `PrimitiveArrays.toLongs` widens them
@@ -98,7 +98,9 @@ record PatchBuffers(PType indexType, MemorySegment indices, PType offsetType, Me
             segment = PrimitiveArrays.toSegment(values, ptype, ctx.arena());
         }
         buffers.add(EncodedBuffer.of(segment, ptype));
-        return EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, first);
+        // the constant check that found them unequal leaves its answer on the array
+        return EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, first)
+                .withStats(new NodeStats(null, null, false, null, null, null, null, null));
     }
 
     // Writes widened integers back at their own width, in one copy.

@@ -49,6 +49,7 @@ public final class CascadingCompressor {
         return switch (data) {
             case StructData(var fieldArrays) -> fieldArrays.isEmpty() ? 0 : dataLength(fieldArrays.getFirst());
             case NullableData nullable -> nullable.length();
+            case boolean[] a -> a.length;
             case byte[] a -> a.length;
             case short[] a -> a.length;
             case int[] a -> a.length;
@@ -257,6 +258,28 @@ public final class CascadingCompressor {
     }
 
     private EncodeResult encodeWithCtx(DType dtype, Object data, EncodeContext ctx) {
+        EncodeResult result = encodeArray(dtype, data, ctx);
+        NodeStats own = result.rootNode().stats();
+        if (ctx.sample() || own != null && !own.isEmpty()) {
+            return result;
+        }
+        return new EncodeResult(result.rootNode().withStats(nodeStats(dtype, data, result.rootNode().encodingId())),
+                result.encodedBuffers(), result.statsMin(), result.statsMax());
+    }
+
+    /// The stats Rust keeps on the node of an array it compressed, here a child of the segment's root
+    /// as much as the root itself ([RootNodeStats]).
+    private static NodeStats nodeStats(DType dtype, Object data, EncodingId root) {
+        if (!(dtype instanceof DType.Primitive || dtype instanceof DType.Bool)) {
+            return NodeStats.NONE;
+        }
+        MinMax bounds = dtype instanceof DType.Primitive p && !p.ptype().isFloating() ? ZoneMapStats.of(dtype, data) : null;
+        long nullCount = data instanceof NullableData nullable ? nullable.nullCount() : 0L;
+        return RootNodeStats.of(dtype, root, bounds == null ? null : bounds.min(), bounds == null ? null : bounds.max(),
+                dataLength(data), nullCount);
+    }
+
+    private EncodeResult encodeArray(DType dtype, Object data, EncodeContext ctx) {
         if (keepsValidity(dtype) && data instanceof NullableData nullable) {
             return encodeNullablePrimitive(dtype, nullable, ctx);
         }

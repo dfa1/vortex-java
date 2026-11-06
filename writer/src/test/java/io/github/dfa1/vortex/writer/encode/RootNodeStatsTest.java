@@ -1,9 +1,8 @@
-package io.github.dfa1.vortex.writer;
+package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.writer.encode.NodeStats;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -84,5 +83,26 @@ class RootNodeStatsTest {
         // Then — Rust keeps no string bound in a flat segment's array stats
         assertThat(varbin).isEqualTo(NodeStats.NONE);
         assertThat(fsst).isEqualTo(NodeStats.NONE);
+    }
+
+    @Test
+    void validityBitmap_mixedCarriesBoundsAndTheValidCount() {
+        // Given / When
+        NodeStats result = RootNodeStats.ofValidity(new boolean[]{true, false, true, true});
+
+        // Then
+        assertThat(result).isEqualTo(new NodeStats(ProtoScalarValue.ofBoolValue(false),
+                ProtoScalarValue.ofBoolValue(true), null, null, null, 0L, null, null, ProtoScalarValue.ofUint64Value(3L)));
+    }
+
+    @Test
+    void validityBitmap_ofOneValueIsConstant() {
+        // Given / When
+        NodeStats allValid = RootNodeStats.ofValidity(new boolean[]{true, true});
+        NodeStats noneValid = RootNodeStats.ofValidity(new boolean[]{false, false});
+
+        // Then
+        assertThat(allValid).isEqualTo(new NodeStats(null, null, true, null, null, null, null, null));
+        assertThat(noneValid).isEqualTo(allValid);
     }
 }

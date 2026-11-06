@@ -156,7 +156,8 @@ decimals ([#430](https://github.com/dfa1/vortex-java/pull/430)) and nulls in nul
 
 A flat segment's `ArrayNode` tree carries array stats, and Rust's flat layout does not compute them: it keeps
 the ones the compressor had cached on the array, and each encoding passes on only some
-(#583). The writer mirrors that for the **root node**:
+(#583). The writer mirrors that for every node of the tree the compressor encodes, the root and the children
+it cascades into alike:
 
 | Column | Root encoding | Stats written |
 |---|---|---|
@@ -168,9 +169,16 @@ the ones the compressor had cached on the array, and each encoding passes on onl
 So a Java-written string column has no bound in its flat segments, as a Rust-written one has none:
 `VortexReader.columnStats()` reports no string `min`/`max` for either, and a string bound lives only in the
 zoned layout's stats table. The decimal bounds the reader can read come from the same two places, and the
-zone table's are not decoded yet. Child nodes carry no stats yet, and `vortex.sequence` does not write its sorted
-flags yet ([#583](https://github.com/dfa1/vortex-java/issues/583)); `NodeStatsInteropIntegrationTest` compares
-every flat root against vortex-jni.
+zone table's are not decoded yet.
+
+The nodes below the root follow the same table, plus four shapes of their own: a `vortex.sequence` carries
+`is_sorted` and `is_strict_sorted` (false for a falling step), the primitive values of ALP and ALP-RD patches
+carry `is_constant = false`, and the `vortex.bool` validity bitmap of a nullable primitive carries `is_constant`
+when every row is valid and otherwise `min`, `max`, `sum` (the valid-row count) and `null_count`.
+`NodeStatsInteropIntegrationTest` compares every flat root, and the whole tree of the numeric columns, against
+vortex-jni. The string columns' children (FSST lengths and codes, whose values depend on the trained symbol
+table) and the zone-table segments of string and bool columns are not covered yet
+([#583](https://github.com/dfa1/vortex-java/issues/583)).
 
 ### Decode shape
 

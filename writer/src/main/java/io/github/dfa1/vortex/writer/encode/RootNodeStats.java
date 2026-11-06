@@ -1,9 +1,8 @@
-package io.github.dfa1.vortex.writer;
+package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.writer.encode.NodeStats;
 
 import java.util.Arrays;
 
@@ -17,7 +16,7 @@ import java.util.Arrays;
 /// on: a canonical primitive or bool does, as does `fastlanes.bitpacked`
 /// (`bitpacking/array/bitpack_compress`); `vortex.alp`, `vortex.alprd`, `vortex.fsst`,
 /// `vortex.onpair`, `vortex.constant` and the rest do not, so their roots carry nothing.
-final class RootNodeStats {
+public final class RootNodeStats {
 
     private RootNodeStats() {
     }
@@ -31,7 +30,7 @@ final class RootNodeStats {
     /// @param rows      the number of rows
     /// @param nullCount the number of null rows
     /// @return the root's stats, [NodeStats#NONE] when the encoding passes none on
-    static NodeStats of(DType dtype, EncodingId root, ProtoScalarValue min, ProtoScalarValue max, long rows,
+    public static NodeStats of(DType dtype, EncodingId root, ProtoScalarValue min, ProtoScalarValue max, long rows,
                         long nullCount) {
         return switch (dtype) {
             case DType.Primitive p when p.ptype().isFloating() && root.equals(EncodingId.VORTEX_PRIMITIVE) ->
@@ -43,6 +42,26 @@ final class RootNodeStats {
                     new NodeStats(null, null, false, null, null, null, (rows + 7) / 8, null);
             default -> NodeStats.NONE;
         };
+    }
+
+    /// The stats of the `vortex.bool` array that holds a nullable array's validity. Rust builds it
+    /// from the mask: an array of one value is constant, a mixed one carries both bounds, its
+    /// valid-row count as the sum and no nulls.
+    ///
+    /// @param validity per-row validity
+    /// @return the validity child's stats
+    public static NodeStats ofValidity(boolean[] validity) {
+        long valid = 0;
+        for (boolean v : validity) {
+            if (v) {
+                valid++;
+            }
+        }
+        if (valid == 0 || valid == validity.length) {
+            return new NodeStats(null, null, true, null, null, null, null, null);
+        }
+        return new NodeStats(ProtoScalarValue.ofBoolValue(false), ProtoScalarValue.ofBoolValue(true), null, null, null,
+                0L, null, null, ProtoScalarValue.ofUint64Value(valid));
     }
 
     private static boolean retainsIntegerStats(EncodingId root) {
