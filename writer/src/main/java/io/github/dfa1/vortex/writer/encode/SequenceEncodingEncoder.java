@@ -116,8 +116,10 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         }
         long last = previous;
         boolean baseIsMin = pt.isUnsigned() ? Long.compareUnsigned(base, last) <= 0 : base <= last;
+        // Rust's `Sequence::is_sorted`: a step is never zero here, so only a negative one breaks the order
+        boolean sorted = n <= 1 || pt.isUnsigned() || multiplier > 0;
         return buildResult(buildIntScalar(pt, base), buildIntScalar(pt, multiplier),
-                buildIntScalar(pt, baseIsMin ? base : last), buildIntScalar(pt, baseIsMin ? last : base));
+                buildIntScalar(pt, baseIsMin ? base : last), buildIntScalar(pt, baseIsMin ? last : base), sorted);
     }
 
     /// `a - b` in `pt`, or not applicable when the result does not fit `pt`.
@@ -176,10 +178,11 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         return new VortexException(EncodingId.VORTEX_SEQUENCE, "sequence step overflows " + pt);
     }
 
-    private static EncodeResult buildResult(ProtoScalarValue base, ProtoScalarValue mul, ProtoScalarValue statsMin, ProtoScalarValue statsMax) {
+    private static EncodeResult buildResult(ProtoScalarValue base, ProtoScalarValue mul, ProtoScalarValue statsMin, ProtoScalarValue statsMax, boolean sorted) {
         ProtoSequenceMetadata meta = new ProtoSequenceMetadata(base, mul);
         MemorySegment metaBuf = MemorySegment.ofArray(meta.encode());
-        EncodeNode node = new EncodeNode(EncodingId.VORTEX_SEQUENCE, metaBuf, new EncodeNode[0], new int[]{});
+        EncodeNode node = new EncodeNode(EncodingId.VORTEX_SEQUENCE, metaBuf, new EncodeNode[0], new int[]{})
+                .withStats(new NodeStats(null, null, null, sorted, sorted, null, null, null));
         return new EncodeResult(node, List.of(), statsMin, statsMax);
     }
 

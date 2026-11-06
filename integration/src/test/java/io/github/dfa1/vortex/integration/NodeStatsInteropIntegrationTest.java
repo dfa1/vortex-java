@@ -40,8 +40,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// data (#583). Rust's flat layout keeps only the stats the compressor had cached on the array, and each
 /// encoding passes on some of them: integers keep min, max, `is_constant`, `null_count` and the
 /// uncompressed size under `vortex.primitive` and `fastlanes.bitpacked`; floats and strings keep none
-/// under ALP, FSST or onpair. `vortex.sequence` is compared by encoding only: its sorted flags are not
-/// written yet.
+/// under ALP, FSST or onpair. A sequence carries its sorted flags, and the validity bitmap of a
+/// nullable integer its true count.
 class NodeStatsInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -67,12 +67,16 @@ class NodeStatsInteropIntegrationTest {
         boolean[] bool = new boolean[N];
         int[] nullable = new int[N];
         boolean[] valid = new boolean[N];
+        double[] patched = new double[N];
+        long[] descending = new long[N];
         for (int i = 0; i < N; i++) {
             sorted[i] = i;
             random[i] = r.nextLong();
             small[i] = r.nextInt(100);
             rf[i] = r.nextDouble() * 1000;
             sf[i] = i * 0.5;
+            patched[i] = i % 100 == 0 ? r.nextDouble() * 1e9 : i * 0.01;
+            descending[i] = 100_000L - i * 3L;
             low[i] = "k" + r.nextInt(10);
             high[i] = "value-" + Long.toString(r.nextLong() & 0xffffffffL, 36);
             bool[i] = r.nextBoolean();
@@ -86,7 +90,9 @@ class NodeStatsInteropIntegrationTest {
                 Field.notNullable("sf", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
                 Field.notNullable("low", ArrowType.Utf8.INSTANCE), Field.notNullable("high", ArrowType.Utf8.INSTANCE),
                 Field.notNullable("bool", ArrowType.Bool.INSTANCE),
-                Field.nullable("nullable", new ArrowType.Int(32, true))));
+                Field.nullable("nullable", new ArrowType.Int(32, true)),
+                Field.notNullable("patched", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
+                Field.notNullable("descending", new ArrowType.Int(64, true))));
         Path jni = tmp.resolve("jni.vortex");
         try (VortexWriter w = VortexWriter.builder(SESSION, jni.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(arrow, ALLOCATOR)) {
@@ -99,6 +105,8 @@ class NodeStatsInteropIntegrationTest {
             VarCharVector g = (VarCharVector) root.getVector("high");
             BitVector h = (BitVector) root.getVector("bool");
             IntVector nv = (IntVector) root.getVector("nullable");
+            Float8Vector pv = (Float8Vector) root.getVector("patched");
+            BigIntVector dv = (BigIntVector) root.getVector("descending");
             root.allocateNew();
             for (int i = 0; i < N; i++) {
                 a.setSafe(i, sorted[i]);
@@ -109,6 +117,8 @@ class NodeStatsInteropIntegrationTest {
                 f.setSafe(i, low[i].getBytes(StandardCharsets.UTF_8));
                 g.setSafe(i, high[i].getBytes(StandardCharsets.UTF_8));
                 h.setSafe(i, bool[i] ? 1 : 0);
+                pv.setSafe(i, patched[i]);
+                dv.setSafe(i, descending[i]);
                 if (valid[i]) {
                     nv.setSafe(i, nullable[i]);
                 } else {
@@ -123,31 +133,58 @@ class NodeStatsInteropIntegrationTest {
         }
         Path java = tmp.resolve("java.vortex");
         DType.Struct schema = new DType.Struct(
-                List.of("sorted", "random", "small", "rf", "sf", "low", "high", "bool", "nullable").stream().map(ColumnName::of).toList(),
-                List.of(DTypes.I64, DTypes.I64, DTypes.I32, DTypes.F64, DTypes.F64, DTypes.UTF8, DTypes.UTF8, DTypes.BOOL, DTypes.I32.asNullable()), false);
+                List.of("sorted", "random", "small", "rf", "sf", "low", "high", "bool", "nullable", "patched", "descending").stream().map(ColumnName::of).toList(),
+                List.of(DTypes.I64, DTypes.I64, DTypes.I32, DTypes.F64, DTypes.F64, DTypes.UTF8, DTypes.UTF8, DTypes.BOOL, DTypes.I32.asNullable(), DTypes.F64, DTypes.I64), false);
         try (FileChannel ch = FileChannel.open(java, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            w.writeChunk(Map.of(ColumnName.of("sorted"), sorted, ColumnName.of("random"), random,
-                    ColumnName.of("small"), small, ColumnName.of("rf"), rf, ColumnName.of("sf"), sf,
-                    ColumnName.of("low"), low, ColumnName.of("high"), high, ColumnName.of("bool"), bool,
-                    ColumnName.of("nullable"), new NullableData(nullable, valid)));
+            Map<ColumnName, Object> chunk = new java.util.LinkedHashMap<>();
+            chunk.put(ColumnName.of("sorted"), sorted);
+            chunk.put(ColumnName.of("random"), random);
+            chunk.put(ColumnName.of("small"), small);
+            chunk.put(ColumnName.of("rf"), rf);
+            chunk.put(ColumnName.of("sf"), sf);
+            chunk.put(ColumnName.of("low"), low);
+            chunk.put(ColumnName.of("high"), high);
+            chunk.put(ColumnName.of("bool"), bool);
+            chunk.put(ColumnName.of("nullable"), new NullableData(nullable, valid));
+            chunk.put(ColumnName.of("patched"), patched);
+            chunk.put(ColumnName.of("descending"), descending);
+            w.writeChunk(chunk);
         }
-        List<String> expected = flatRoots(EncodingTrees.withStats(jni));
+        List<String> expected = EncodingTrees.withStats(jni);
 
         // When
-        List<String> result = flatRoots(EncodingTrees.withStats(java));
+        List<String> result = EncodingTrees.withStats(java);
 
-        // Then
-        assertThat(result).isEqualTo(expected);
+        // Then — every flat segment's root, and the whole tree (children and zone table) of the columns
+        // whose encodings do not depend on how each writer trains its string symbol table
+        assertThat(flatRoots(result)).isEqualTo(flatRoots(expected));
+        List<List<String>> expectedColumns = columns(expected);
+        List<List<String>> resultColumns = columns(result);
+        assertThat(resultColumns).hasSameSizeAs(expectedColumns);
+        for (int c : new int[]{0, 1, 2, 3, 4, 8, 9, 10}) {
+            assertThat(resultColumns.get(c)).as("column %d", c).isEqualTo(expectedColumns.get(c));
+        }
     }
 
-    /// The root node line of every flat segment, in file order; a sequence's stats are blanked.
+    /// The tree lines of each top-level column, in file order.
+    private static List<List<String>> columns(List<String> tree) {
+        List<List<String>> columns = new java.util.ArrayList<>();
+        for (String line : tree.subList(1, tree.size())) {
+            if (!line.startsWith("   ")) {
+                columns.add(new java.util.ArrayList<>());
+            }
+            columns.getLast().add(line);
+        }
+        return columns;
+    }
+
+    /// The root node line of every flat segment, in file order.
     private static List<String> flatRoots(List<String> tree) {
         List<String> roots = new java.util.ArrayList<>();
         for (int i = 0; i + 1 < tree.size(); i++) {
             if (tree.get(i).strip().equals("vortex.flat")) {
-                String root = tree.get(i + 1).strip();
-                roots.add(root.startsWith("vortex.sequence") ? "vortex.sequence" : root);
+                roots.add(tree.get(i + 1).strip());
             }
         }
         return roots;

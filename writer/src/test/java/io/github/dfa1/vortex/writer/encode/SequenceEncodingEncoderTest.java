@@ -74,6 +74,36 @@ class SequenceEncodingEncoderTest {
         }
 
         @Test
+        void encode_risingStep_isSortedAndStrictlySorted() {
+            // Given / When
+            NodeStats stats = ENCODER.encode(DTypes.I64, new long[]{5, 8, 11}, EncodeTestHelper.testCtx()).rootNode().stats();
+
+            // Then — Rust's Sequence::stats
+            assertThat(stats.isSorted()).isTrue();
+            assertThat(stats.isStrictSorted()).isTrue();
+        }
+
+        @Test
+        void encode_fallingStep_isNeitherSorted() {
+            // Given / When
+            NodeStats stats = ENCODER.encode(DTypes.I64, new long[]{11, 8, 5}, EncodeTestHelper.testCtx()).rootNode().stats();
+
+            // Then
+            assertThat(stats.isSorted()).isFalse();
+            assertThat(stats.isStrictSorted()).isFalse();
+        }
+
+        @Test
+        void encode_singleValue_isSortedWhateverTheStep() {
+            // Given / When
+            NodeStats stats = ENCODER.encode(DTypes.I64, new long[]{7}, EncodeTestHelper.testCtx()).rootNode().stats();
+
+            // Then — no adjacent pair to compare
+            assertThat(stats.isSorted()).isTrue();
+            assertThat(stats.isStrictSorted()).isTrue();
+        }
+
+        @Test
         void encode_float_throwsVortexException() {
             // Given
             EncodeContext ctx = EncodeTestHelper.testCtx();

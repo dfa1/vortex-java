@@ -72,7 +72,8 @@ public record EncodeResult(
     EncodeResult withValidity(boolean[] validity, EncodeContext ctx) {
         EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         EncodeNode[] children = Arrays.copyOf(rootNode.children(), rootNode.children().length + 1);
-        children[children.length - 1] = EncodeNode.remapBufferIndices(bool.rootNode(), encodedBuffers.size());
+        children[children.length - 1] = EncodeNode.remapBufferIndices(bool.rootNode(), encodedBuffers.size())
+                .withStats(RootNodeStats.ofValidity(validity));
         List<EncodedBuffer> buffers = new ArrayList<>(encodedBuffers);
         buffers.addAll(bool.encodedBuffers());
         EncodeNode root = new EncodeNode(rootNode.encodingId(), rootNode.metadata(), children, rootNode.bufferIndices());

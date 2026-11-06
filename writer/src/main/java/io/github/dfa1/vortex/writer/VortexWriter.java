@@ -24,6 +24,7 @@ import io.github.dfa1.vortex.writer.encode.EncodeResult;
 import io.github.dfa1.vortex.writer.encode.EncodedBuffer;
 import io.github.dfa1.vortex.writer.encode.MinMax;
 import io.github.dfa1.vortex.writer.encode.NodeStats;
+import io.github.dfa1.vortex.writer.encode.RootNodeStats;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
 import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
@@ -959,9 +960,12 @@ public final class VortexWriter implements Closeable {
             }
             SegmentStats stats = new SegmentStats(min, max, ZoneMapStatCodec.columnSum(dtype, data), nullCount);
             // the stats the flat segment's root node carries are Rust's, not the zone map's
-            EncodeNode root = result.rootNode().withStats(RootNodeStats.of(dtype, result.rootNode().encodingId(),
-                    min, max, arrayLength(data), nullCount));
-            result = new EncodeResult(root, result.encodedBuffers(), result.statsMin(), result.statsMax());
+            NodeStats own = result.rootNode().stats();
+            if (own == null || own.isEmpty()) {
+                EncodeNode root = result.rootNode().withStats(RootNodeStats.of(dtype, result.rootNode().encodingId(),
+                        min, max, arrayLength(data), nullCount));
+                result = new EncodeResult(root, result.encodedBuffers(), result.statsMin(), result.statsMax());
+            }
             return new EncodedSegment(result, arena, stats);
         } catch (RuntimeException | Error e) {
             arena.close();
@@ -1141,6 +1145,8 @@ public final class VortexWriter implements Closeable {
                 : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(fbb, stats.min().encode());
         int maxVec = stats.max() == null ? 0
                 : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMaxVector(fbb, stats.max().encode());
+        int sumVec = stats.sum() == null ? 0
+                : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createSumVector(fbb, stats.sum().encode());
         // forceDefaults only while building ArrayStats, so a scalar equal to its default is still
         // serialized; reset immediately so the Array/ArrayNode tables keep their normal layout
         fbb.forceDefaults(true);
@@ -1152,6 +1158,9 @@ public final class VortexWriter implements Closeable {
         if (stats.max() != null) {
             io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMax(fbb, maxVec);
             io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMaxPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
+        }
+        if (stats.sum() != null) {
+            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addSum(fbb, sumVec);
         }
         if (stats.isSorted() != null) {
             io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsSorted(fbb, stats.isSorted());
