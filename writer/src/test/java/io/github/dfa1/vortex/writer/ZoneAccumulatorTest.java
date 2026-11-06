@@ -59,6 +59,20 @@ class ZoneAccumulatorTest {
         }
 
         @Test
+        void columnsWithoutNullsCarryNoValidity() {
+            // Given two zones, each with a value: Rust's builders stay AllValid, so nothing is masked
+            ZoneAccumulator sut = new ZoneAccumulator(DTypes.I64.withNullable(true));
+            sut.add(new NullableData(new long[]{1, 2, 3}, new boolean[]{true, false, true}), 3);
+
+            // When
+            sut.finish();
+            StructData result = sut.tableData();
+
+            // Then
+            assertThat(result.fieldArrays()).noneMatch(NullableData.class::isInstance);
+        }
+
+        @Test
         void floatsSkipNanInMinMaxAndCountIt() {
             // Given a leading NaN — Rust's max/min skip NaN and record them in nan_count
             ZoneAccumulator sut = new ZoneAccumulator(DTypes.F64);
@@ -69,8 +83,8 @@ class ZoneAccumulatorTest {
             StructData result = sut.tableData();
 
             // Then — fields: max, min, nan_count, null_count
-            assertThat((double[]) ((NullableData) result.fieldArrays().get(0)).values()).containsExactly(2.0);
-            assertThat((double[]) ((NullableData) result.fieldArrays().get(1)).values()).containsExactly(-1.0);
+            assertThat((double[]) result.fieldArrays().get(0)).containsExactly(2.0);
+            assertThat((double[]) result.fieldArrays().get(1)).containsExactly(-1.0);
             assertThat(values(result, 2)).isEqualTo(new long[]{2});
         }
 
