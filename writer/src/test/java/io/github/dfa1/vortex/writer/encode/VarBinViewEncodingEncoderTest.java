@@ -55,6 +55,19 @@ class VarBinViewEncodingEncoderTest {
         }
 
         @Test
+        void encode_noRows_hasAnEmptyViewsBuffer() {
+            // Given
+            VarBinViewEncodingEncoder sut = new VarBinViewEncodingEncoder();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, new String[0], EncodeTestHelper.testCtx());
+
+            // Then — Rust checks the views buffer against the row count, so an empty array has none
+            assertThat(result.encodedBuffers()).hasSize(1);
+            assertThat(result.encodedBuffers().getFirst().data().byteSize()).isZero();
+        }
+
+        @Test
         void accepts_primitive_false() {
             // Given
             // When

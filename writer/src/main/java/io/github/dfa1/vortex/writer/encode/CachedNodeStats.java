@@ -89,6 +89,16 @@ final class CachedNodeStats {
         return min != null && max != null && Arrays.equals(min.encode(), max.encode());
     }
 
+    /// The stats of a canonical text array, a `vortex.varbinview`: the flag, the null count and the size
+    /// of its views and out-of-line bytes.
+    ///
+    /// @param nullCount the number of null rows
+    /// @param viewBytes the exact size of the canonical array in bytes
+    /// @return the node's stats
+    static NodeStats ofView(long nullCount, long viewBytes) {
+        return new NodeStats(null, null, notConstant(nullCount), null, null, nullCount, viewBytes, null);
+    }
+
     private static Boolean notConstant(long nullCount) {
         if (nullCount > 0) {
             return null;

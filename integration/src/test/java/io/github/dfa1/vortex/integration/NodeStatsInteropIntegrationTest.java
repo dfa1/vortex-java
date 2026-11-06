@@ -189,9 +189,10 @@ class NodeStatsInteropIntegrationTest {
         for (int c : new int[]{0, 1, 2, 3, 4, 8, 9, 10, 11, 12}) {
             assertThat(resultColumns.get(c)).as("column %d", c).isEqualTo(expectedColumns.get(c));
         }
-        // the string columns' zone tables wait for Rust's varbinview canonical form (#583)
+        // the zone table of `high` holds three bounds, which Rust's trained symbol table compresses and ours
+        // does not: the string children depend on the trained table, which is not ported byte for byte
         for (int c = 0; c < expectedColumns.size(); c++) {
-            if (c == 5 || c == 6 || c == 13) {
+            if (c == 6) {
                 continue;
             }
             assertThat(zoneTable(resultColumns.get(c))).as("zone table of column %d", c)

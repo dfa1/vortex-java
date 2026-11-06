@@ -31,6 +31,7 @@ public final class CascadingCompressor {
     private static final DType OFFSETS = DTypes.I64;
 
     private static final EncodingEncoder CANONICAL_PRIMITIVE = new PrimitiveEncodingEncoder();
+    private static final EncodingEncoder CANONICAL_VARBINVIEW = new VarBinViewEncodingEncoder();
     private static final EncodingEncoder CANONICAL_BOOL = new BoolEncodingEncoder();
     /// Bytes of a `vortex.constant` bool: Rust keeps a bool array whose packed bits are no larger.
     private static final int CONSTANT_BOOL_BYTES = 2;
@@ -214,6 +215,14 @@ public final class CascadingCompressor {
         if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
             return false;
         }
+        // Rust's canonical text is `vortex.varbinview`, the baseline every scheme must beat, and
+        // its `VarBinScheme` re-encodes binary only
+        if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
+            EncodingId id = enc.encodingId();
+            if (id.equals(EncodingId.VORTEX_VARBINVIEW) || id.equals(EncodingId.VORTEX_VARBIN) && dtype instanceof DType.Utf8) {
+                return false;
+            }
+        }
         return !(data instanceof NullableData) || enc.acceptsNullable(dtype);
     }
 
@@ -278,6 +287,13 @@ public final class CascadingCompressor {
             }
             return CachedNodeStats.ofBool(bools.length, SimdOperationsSupport.preferred().allEqual(bools));
         }
+        if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
+            if (!root.equals(EncodingId.VORTEX_VARBINVIEW)) {
+                return NodeStats.NONE;
+            }
+            long nulls = data instanceof NullableData nullable ? nullable.nullCount() : 0L;
+            return CachedNodeStats.ofView(nulls, viewBytes(data, Integer.MAX_VALUE, 0L));
+        }
         if (!(dtype instanceof DType.Primitive)) {
             return NodeStats.NONE;
         }
@@ -330,7 +346,7 @@ public final class CascadingCompressor {
         // practice).
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
             return competeAndEncode(dtype, new ArrayAndStats(dtype, data, StatsOptions.defaults()), ctx,
-                    sampleSize -> Long.MAX_VALUE);
+                    sampleSize -> viewBytes(data, sampleSize, ctx.sampleSeed()));
         }
 
         // Remaining non-primitives (extension types, List, ...): find the accepting encoding and
@@ -507,6 +523,21 @@ public final class CascadingCompressor {
             return spliceResult(canonical, dtype, data, ctx);
         }
         return result;
+    }
+
+    /// The size of the canonical text array of the `sampleSize` rows a trial encodes: Rust's
+    /// `vortex.varbinview` is a 16-byte view per row plus the bytes of each value too long to be
+    /// inlined in it.
+    private static long viewBytes(Object data, int sampleSize, long seed) {
+        Object sample = sampleSize < dataLength(data) ? stratifiedSample(data, sampleSize, seed) : data;
+        if (sample instanceof NullableData nullable) {
+            sample = nullable.values();
+        }
+        long total = 0;
+        for (byte[] row : VarBinBytes.toByteArrays(sample)) {
+            total += 16 + (row.length > 12 ? row.length : 0);
+        }
+        return total;
     }
 
     private static long totalBytes(EncodeResult result) {
@@ -767,6 +798,10 @@ public final class CascadingCompressor {
                 return enc;
             }
         }
+        if ((dtype instanceof DType.Utf8 || dtype instanceof DType.Binary)
+                && !excluded.contains(EncodingId.VORTEX_VARBINVIEW)) {
+            return CANONICAL_VARBINVIEW;
+        }
         // Fall through to any accepting encoding (still honoring exclusions so that
         // spliceResult's notApplicable retry rotates to the next candidate).
         for (EncodingEncoder enc : encodings) {
@@ -782,7 +817,7 @@ public final class CascadingCompressor {
         return switch (dtype) {
             case DType.Primitive _ -> CANONICAL_PRIMITIVE;
             case DType.Bool _ -> CANONICAL_BOOL;
-            case DType.Utf8 _, DType.Binary _ -> CANONICAL_VARBIN;
+            case DType.Utf8 _, DType.Binary _ -> CANONICAL_VARBINVIEW;
             case DType.Decimal _ -> CANONICAL_DECIMAL;
             case DType.Extension _ -> CANONICAL_EXTENSION;
             default -> throw new UnsupportedOperationException("no encoder for dtype: " + dtype);
