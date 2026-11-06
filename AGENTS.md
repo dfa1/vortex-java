@@ -78,6 +78,11 @@ Trunk-based, `main` always green, small commits. The repo allows **rebase merges
 and merge commits are disabled): squash a PR's commits locally into one, force-push, then
 `gh pr merge --rebase`.
 
+**Work one ticket at a time, start to end, straight to `main`.** No stacked PRs and no branches
+built on an unmerged branch: finish the ticket, get CI green, merge, then start the next from the
+updated `main`. If the next piece depends on an open PR, wait for it to merge instead of stacking.
+Split work into PRs that each stand alone on `main`.
+
 **Always keep history linear:**
 - Before merging, run `git pull --rebase origin main` to ensure your branch is rebased on latest main
 - Use `git merge --ff-only` for fast-forward merges, or `git rebase` followed by `git merge --ff-only`
