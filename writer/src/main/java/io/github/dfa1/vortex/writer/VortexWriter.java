@@ -171,7 +171,10 @@ public final class VortexWriter implements Closeable {
     // layout. When a column's distinct set would exceed the cap mid-file, it demotes immediately.
     private final Set<ColumnName> dictCandidates = new LinkedHashSet<>();
     private final Map<ColumnName, DictColumnState> dictStates = new LinkedHashMap<>();
-    private final Map<ColumnName, DictColRef> dictColRefs = new LinkedHashMap<>();
+    // Dictionaries a text column has already filled to Rust's constraints (a new one starts when it
+    // reaches them); the open one is in dictStates.
+    private final Map<ColumnName, List<DictColumnState>> dictRuns = new LinkedHashMap<>();
+    private final Map<ColumnName, List<DictColRef>> dictColRefs = new LinkedHashMap<>();
     // Code-array bytes retained per global-dict-candidate column, and their running sum; together
     // they guard the aggregate memory budget (dictRetainedBudget) as a secondary safety net (ADR
     // 0021) so no set of mis-detected columns can pin the heap. Now that codes cost ~2 B/row instead
@@ -489,7 +492,7 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    private static long arrayLength(Object data) {
+    static long arrayLength(Object data) {
         return switch (data) {
             case byte[] a -> a.length;
             case short[] a -> a.length;
@@ -667,12 +670,14 @@ public final class VortexWriter implements Closeable {
                 if (colDtype instanceof DType.Primitive p) {
                     candidate = DictColumnState.isDictCandidate(p.ptype(), values, validity);
                 } else if (colDtype instanceof DType.Utf8 || colDtype instanceof DType.Binary) {
-                    // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported).
-                    candidate = DictColumnState.isVarBinDictCandidate((Object[]) values, validity);
+                    // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported), by what
+                    // its first 8192 rows do: not more than half distinct. The cascade probe stays with
+                    // primitives: ours picks OnPair for strings where Rust's StringDictScheme wins.
+                    int probeRows = Math.min(Repartitioner.BLOCK_ROWS, ((Object[]) values).length);
+                    candidate = DictColumnState.isVarBinDictCandidate(
+                            Arrays.copyOf((Object[]) values, probeRows),
+                            validity != null ? Arrays.copyOf(validity, probeRows) : null);
                 }
-                // ponytail: only primitives take Rust's probe. Strings pick OnPair where Rust's
-                // StringDictScheme wins, so for them the cardinality check above still matches
-                // Rust more often.
                 if (candidate && colDtype instanceof DType.Primitive) {
                     candidate = probeCompressesToDict(colDtype, data);
                 }
@@ -688,8 +693,13 @@ public final class VortexWriter implements Closeable {
                 // the per-chunk stats now (before the raw array is discarded). If a new distinct
                 // value would push the map past GLOBAL_DICT_MAX_CARDINALITY, ingestDictChunk returns
                 // false and we demote the column immediately (mid-file cap breach, ADR 0021).
-                DictColumnState state = dictStates.get(colName);
-                boolean admitted = state.ingestDictChunk(data);
+                boolean admitted;
+                if (colDtype instanceof DType.Primitive) {
+                    admitted = dictStates.get(colName).ingestDictChunk(data);
+                } else {
+                    ingestVarBinChunk(colName, colDtype, data);
+                    admitted = true;
+                }
                 if (!admitted) {
                     // Cap breached by this chunk: demote (replaying the already-buffered chunks per
                     // -chunk) then write this chunk — which ingest rejected without buffering — too.
@@ -697,7 +707,7 @@ public final class VortexWriter implements Closeable {
                     appendChunk(colName, colDtype, data);
                 } else {
                     long before = dictRetainedBytes.getOrDefault(colName, 0L);
-                    long after = state.retainedBytes();
+                    long after = retainedBytes(colName);
                     dictRetainedTotal += after - before;
                     dictRetainedBytes.put(colName, after);
                     if (dictRetainedTotal > dictRetainedBudget) {
@@ -1249,15 +1259,24 @@ public final class VortexWriter implements Closeable {
         // Dict-encoded columns (one zone per code chunk). MIN/MAX/SUM come from each chunk's logical
         // values (computed at dict-build time); NULL_COUNT always. Matches Rust, whose zone-map
         // stats are computed on the logical column dtype, independent of the dict encoding.
-        for (Map.Entry<ColumnName, DictColRef> e : dictColRefs.entrySet()) {
-            DictColRef ref = e.getValue();
+        for (Map.Entry<ColumnName, List<DictColRef>> e : dictColRefs.entrySet()) {
             DType colDtype = columnDtype(e.getKey());
             DType minMaxDtype = ZoneMapStatCodec.zoneMinMaxDtype(colDtype);
-            long[] nullCounts = ref.chunkNullCounts().stream().mapToLong(Long::longValue).toArray();
-            emitZoneMap(e.getKey(), minMaxDtype,
-                    ref.chunkStatsMin(), ref.chunkStatsMax(),
-                    ZoneMapStatCodec.zoneSumDtype(colDtype), ref.chunkStatsSum(), nullCounts,
-                    ref.chunkRowCounts().stream().mapToLong(Long::longValue).toArray());
+            List<ProtoScalarValue> mins = new ArrayList<>();
+            List<ProtoScalarValue> maxs = new ArrayList<>();
+            List<ProtoScalarValue> sums = new ArrayList<>();
+            List<Long> nulls = new ArrayList<>();
+            List<Long> rows = new ArrayList<>();
+            for (DictColRef ref : e.getValue()) {
+                mins.addAll(ref.chunkStatsMin());
+                maxs.addAll(ref.chunkStatsMax());
+                sums.addAll(ref.chunkStatsSum());
+                nulls.addAll(ref.chunkNullCounts());
+                rows.addAll(ref.chunkRowCounts());
+            }
+            emitZoneMap(e.getKey(), minMaxDtype, mins, maxs, ZoneMapStatCodec.zoneSumDtype(colDtype), sums,
+                    nulls.stream().mapToLong(Long::longValue).toArray(),
+                    rows.stream().mapToLong(Long::longValue).toArray());
         }
     }
 
@@ -1472,12 +1491,23 @@ public final class VortexWriter implements Closeable {
 
         for (int c = 0; c < colCount; c++) {
             ColumnName colName = schema.fieldNames().get(c);
-            DictColRef ref = dictColRefs.get(colName);
-            if (ref != null) {
-                int dictLayout = buildDictColLayout(fbb, ref);
-                colLayouts[c] = wrapZoneMap(fbb, colName, dictLayout, ref.totalRows());
+            List<DictColRef> refs = dictColRefs.get(colName);
+            if (refs != null) {
+                // one dictionary is the column's layout; several are a chunked layout of them
+                int[] dictLayouts = new int[refs.size()];
+                long colRows = 0;
+                for (int i = 0; i < dictLayouts.length; i++) {
+                    dictLayouts[i] = buildDictColLayout(fbb, refs.get(i));
+                    colRows += refs.get(i).totalRows();
+                }
+                int dictLayout = dictLayouts[0];
+                if (dictLayouts.length > 1) {
+                    dictLayout = FbsLayout.createFbsLayout(fbb, LAYOUT_CHUNKED, colRows, 0,
+                            FbsLayout.createChildrenVector(fbb, dictLayouts), 0);
+                }
+                colLayouts[c] = wrapZoneMap(fbb, colName, dictLayout, colRows);
                 if (totalRows == 0) {
-                    totalRows = ref.totalRows();
+                    totalRows = colRows;
                 }
             } else {
                 List<ChunkRef> chunks = colChunks.get(colName);
@@ -1553,6 +1583,33 @@ public final class VortexWriter implements Closeable {
     // orchestration that needs this writer's segment-writing machinery (writeSegment, colChunks,
     // schema, options).
 
+    /// Feeds one text chunk to the column's open dictionary; whatever does not fit under Rust's
+    /// constraints closes it and starts the next one (`DictStrategy`: "when the dict constraints are
+    /// hit, a new dictionary is created"), so a text column never gives up its dict layout for its
+    /// cardinality.
+    private void ingestVarBinChunk(ColumnName colName, DType colDtype, Object data) {
+        Object rest = data;
+        while (true) {
+            DictColumnState state = dictStates.get(colName);
+            int consumed = state.ingestVarBinChunk(rest);
+            long length = arrayLength(rest);
+            if (consumed == length) {
+                return;
+            }
+            dictRuns.computeIfAbsent(colName, _ -> new ArrayList<>()).add(state);
+            dictStates.put(colName, new DictColumnState(colDtype));
+            rest = consumed == 0 ? rest : Repartitioner.tail(rest, consumed);
+        }
+    }
+
+    private long retainedBytes(ColumnName colName) {
+        long total = dictStates.get(colName).retainedBytes();
+        for (DictColumnState run : dictRuns.getOrDefault(colName, List.of())) {
+            total += run.retainedBytes();
+        }
+        return total;
+    }
+
     /// Demotes the largest-retained global-dict candidate columns to per-chunk encoding, one at a
     /// time (largest first), until the aggregate retained bytes fall back under the budget. Demoting
     /// the largest column frees the most memory per eviction, so the fewest columns lose their shared
@@ -1584,32 +1641,42 @@ public final class VortexWriter implements Closeable {
     /// @param colName the column being demoted from global-dict to per-chunk encoding
     /// @throws IOException if writing a flushed segment fails
     private void demoteDictColumn(ColumnName colName) throws IOException {
-        DictColumnState state = dictStates.remove(colName);
+        DictColumnState open = dictStates.remove(colName);
+        List<DictColumnState> states = new ArrayList<>(dictRuns.getOrDefault(colName, List.of()));
+        dictRuns.remove(colName);
         dictCandidates.remove(colName);
         Long freed = dictRetainedBytes.remove(colName);
         if (freed != null) {
             dictRetainedTotal -= freed;
         }
-        if (state == null) {
+        if (open == null) {
             return;
         }
+        states.add(open);
         DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
-        Object[] inverse = state.buildInverseMap();
-        for (int c = 0; c < state.chunkCount(); c++) {
-            appendChunk(colName, colDtype, state.reconstructChunk(inverse, c));
+        for (DictColumnState state : states) {
+            Object[] inverse = state.buildInverseMap();
+            for (int c = 0; c < state.chunkCount(); c++) {
+                appendChunk(colName, colDtype, state.reconstructChunk(inverse, c));
+            }
         }
     }
 
     private void flushDictColumns() throws IOException {
         for (ColumnName colName : dictCandidates) {
-            DictColumnState state = dictStates.get(colName);
-            if (state == null || state.chunkCount() == 0 || state.cardinality() == 0) {
-                continue;
+            List<DictColumnState> states = new ArrayList<>(dictRuns.getOrDefault(colName, List.of()));
+            if (dictStates.get(colName) != null) {
+                states.add(dictStates.get(colName));
             }
-            if (state.varBin()) {
-                writeGlobalDictVarBinColumn(colName, state);
-            } else {
-                writeGlobalDictColumn(colName, state);
+            for (DictColumnState state : states) {
+                if (state.chunkCount() == 0 || state.cardinality() == 0) {
+                    continue;
+                }
+                if (state.varBin()) {
+                    writeGlobalDictVarBinColumn(colName, state);
+                } else {
+                    writeGlobalDictColumn(colName, state);
+                }
             }
         }
     }
@@ -1676,8 +1743,8 @@ public final class VortexWriter implements Closeable {
             codesSegIdxes.add(writeSegment(codesDtype, last));
             codesRowCounts.add((long) ((short[]) last).length);
         }
-        dictColRefs.put(colName, new DictColRef(valuesSegIdx, state.cardinality(), codesSegIdxes, codesRowCounts,
-                state.chunkRowCounts(), state.chunkNullCounts(),
+        dictColRefs.computeIfAbsent(colName, _ -> new ArrayList<>()).add(new DictColRef(valuesSegIdx, state.cardinality(),
+                codesSegIdxes, codesRowCounts, state.chunkRowCounts(), state.chunkNullCounts(),
                 state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
     }
 

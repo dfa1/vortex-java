@@ -91,6 +91,15 @@ final class Repartitioner {
         return concat(List.of(new Piece(data, 0, rows, 0)));
     }
 
+    /// A batch without its first `from` rows, in the batch's carrier shape.
+    ///
+    /// @param data a batch of a column [#supports(DType)] accepts
+    /// @param from how many leading rows to drop, less than the batch's row count
+    /// @return the remaining rows
+    static Object tail(Object data, int from) {
+        return concat(List.of(new Piece(data, from, (int) VortexWriter.arrayLength(data) - from, 0)));
+    }
+
     /// Whether sizing a batch of `data` reads its values, as for strings and binaries -- the
     /// only batches worth [#sizePieces(Object,long,long)] ahead of time.
     ///
