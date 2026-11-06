@@ -249,6 +249,45 @@ class CascadingCompressorTest {
     }
 
     @Nested
+    class TextCanonical {
+
+        @Test
+        void incompressibleUtf8_staysTheCanonicalVarBinView() {
+            // Given — distinct random 8-byte strings: no scheme beats the 16-byte views
+            Random random = new Random(3);
+            String[] values = new String[2048];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = Long.toString(random.nextLong() & 0xffffffffL, 36);
+            }
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, values, ctx(0));
+
+            // Then — Rust's `VarBinScheme` re-encodes binary only
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_VARBINVIEW);
+        }
+
+        @Test
+        void varBinViewRoot_carriesTheFlagNullCountAndViewSize() {
+            // Given
+            Random random = new Random(3);
+            String[] values = new String[2048];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = Long.toString(random.nextLong() & 0xffffffffL, 36);
+            }
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, values, ctx(0));
+
+            // Then — a 16-byte view per row, values of up to 12 bytes inline
+            assertThat(result.rootNode().stats())
+                    .isEqualTo(new NodeStats(null, null, false, null, null, 0L, 2048L * 16, null));
+        }
+    }
+
+    @Nested
     class RoundTrip {
 
         @Test

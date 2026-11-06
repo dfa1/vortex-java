@@ -177,7 +177,8 @@ patches carry `is_constant = false`, and the `vortex.bool` validity bitmap of a 
 when every row is valid (or none is) and otherwise `min`, `max`, `sum` (the valid-row count) and `null_count`.
 `NodeStatsInteropIntegrationTest` compares every flat root, and the whole tree of the numeric columns, against
 vortex-jni. The string columns' children (FSST lengths and codes, whose values depend on the trained symbol
-table) and the zone-table segments of string columns, which wait for Rust's `vortex.varbinview` canonical form, are not covered yet
+table) are not covered, nor is the zone table of a column whose few bounds Rust's trained table compresses and ours does not.
+Text is `vortex.varbinview` unless a scheme beats its size (`vortex.varbin` is a binary-only scheme, as in Rust), and that node carries `is_constant`, `null_count` and the size of its views
 ([#583](https://github.com/dfa1/vortex-java/issues/583)).
 
 ### Decode shape

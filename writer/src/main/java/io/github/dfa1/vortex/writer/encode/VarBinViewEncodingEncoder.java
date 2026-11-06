@@ -70,7 +70,7 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
         for (int b = 0; b < dataBufs.length; b++) {
             dataBufs[b] = arena.allocate(bufferSizes.get(b));
         }
-        MemorySegment viewsBuf = arena.allocate(n > 0 ? (long) n * VIEW_SIZE : 1);
+        MemorySegment viewsBuf = arena.allocate((long) n * VIEW_SIZE, VIEW_SIZE);
 
         int bufferIndex = 0;
         long dataOffset = 0;
