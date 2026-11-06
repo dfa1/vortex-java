@@ -17,6 +17,7 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -158,6 +159,79 @@ class CascadingCompressorTest {
             }
             return false;
         }
+    }
+
+    @Nested
+    class ChildNodeStats {
+
+        @Test
+        void dictChildren_carryTheirBoundsAndNullCount() {
+            // Given
+            int[] values = new int[2048];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = (i % 10) * 1000;
+            }
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I32, values, ctx(3));
+
+            // Then — the dict itself passes nothing on; its codes and its values are arrays of their own
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_DICT);
+            assertThat(result.rootNode().stats().isEmpty()).isTrue();
+            NodeStats codes = result.rootNode().children()[0].stats();
+            assertThat(codes.min()).isEqualTo(ProtoScalarValue.ofUint64Value(0L));
+            assertThat(codes.max()).isEqualTo(ProtoScalarValue.ofUint64Value(9L));
+            assertThat(codes.nullCount()).isZero();
+            assertThat(codes.isConstant()).isFalse();
+            NodeStats distinct = result.rootNode().children()[1].stats();
+            assertThat(distinct.min()).isEqualTo(ProtoScalarValue.ofInt64Value(0L));
+            assertThat(distinct.max()).isEqualTo(ProtoScalarValue.ofInt64Value(9000L));
+            assertThat(distinct.nullCount()).isZero();
+        }
+
+        @Test
+        void nullableIntegerValidity_isABoolChildCarryingTheValidCount() {
+            // Given
+            int[] values = new int[1024];
+            boolean[] validity = new boolean[values.length];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = i * 3;
+                validity[i] = i % 5 != 0;
+            }
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult result = sut.encode(new DType.Primitive(PType.I32, true), new NullableData(values, validity), ctx(0));
+
+            // Then
+            EncodeNode[] children = result.rootNode().children();
+            EncodeNode bool = children[children.length - 1];
+            assertThat(bool.encodingId()).isEqualTo(EncodingId.VORTEX_BOOL);
+            assertThat(bool.stats()).isEqualTo(CachedNodeStats.ofValidity(validity));
+        }
+
+        @Test
+        void nullableFloatValidity_isABoolChildCarryingTheValidCount() {
+            // Given
+            double[] values = new double[1024];
+            boolean[] validity = new boolean[values.length];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = i * 0.5;
+                validity[i] = i % 7 != 0;
+            }
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+
+            // When
+            EncodeResult result = sut.encode(new DType.Primitive(PType.F64, true), new NullableData(values, validity), ctx(0));
+
+            // Then
+            EncodeNode[] children = result.rootNode().children();
+            EncodeNode bool = children[children.length - 1];
+            assertThat(bool.encodingId()).isEqualTo(EncodingId.VORTEX_BOOL);
+            assertThat(bool.stats()).isEqualTo(CachedNodeStats.ofValidity(validity));
+        }
+
     }
 
     @Nested

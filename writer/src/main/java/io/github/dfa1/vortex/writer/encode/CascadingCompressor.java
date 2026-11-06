@@ -268,14 +268,14 @@ public final class CascadingCompressor {
     }
 
     /// The stats Rust keeps on the node of an array it compressed, here a child of the segment's root
-    /// as much as the root itself ([RootNodeStats]).
+    /// as much as the root itself ([CachedNodeStats]).
     private static NodeStats nodeStats(DType dtype, Object data, EncodingId root) {
         if (!(dtype instanceof DType.Primitive || dtype instanceof DType.Bool)) {
             return NodeStats.NONE;
         }
         MinMax bounds = dtype instanceof DType.Primitive p && !p.ptype().isFloating() ? ZoneMapStats.of(dtype, data) : null;
         long nullCount = data instanceof NullableData nullable ? nullable.nullCount() : 0L;
-        return RootNodeStats.of(dtype, root, bounds == null ? null : bounds.min(), bounds == null ? null : bounds.max(),
+        return CachedNodeStats.of(dtype, root, bounds == null ? null : bounds.min(), bounds == null ? null : bounds.max(),
                 dataLength(data), nullCount);
     }
 
