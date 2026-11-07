@@ -17,7 +17,6 @@ import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,18 +80,10 @@ public final class VortexWriter implements Closeable {
         if (schema.nullable()) {
             throw new IllegalArgumentException("the root struct cannot be nullable: rows cannot be null");
         }
-        // Wire contract, enforced by the reference writer ("StructLayout must have unique field
-        // names"): duplicate-name schemas are constructible via the DType.Struct record (only
-        // StructBuilder validates), so guard here — colChunks below is name-keyed and would
-        // silently collapse the duplicates anyway. The name policy itself (non-blank, no control
-        // characters — NUL additionally aborts the reference toolchain's Arrow FFI export) is
-        // already certified by the ColumnName type carried in schema.fieldNames().
-        var uniqueNames = new HashSet<ColumnName>();
-        for (ColumnName name : schema.fieldNames()) {
-            if (!uniqueNames.add(name)) {
-                throw new IllegalArgumentException("duplicate field name: " + name);
-            }
-        }
+        // Field names need no check here: DType.Struct guarantees they are unique (the reference
+        // writer's "StructLayout must have unique field names") and ColumnName certifies the name
+        // policy (no control characters — NUL additionally aborts the reference toolchain's Arrow
+        // FFI export).
         this.schema = schema;
         this.options = options;
         this.extensionRegistry = extensionRegistry;

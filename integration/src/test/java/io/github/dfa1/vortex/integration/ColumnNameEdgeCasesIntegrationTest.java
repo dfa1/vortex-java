@@ -67,8 +67,8 @@ class ColumnNameEdgeCasesIntegrationTest {
     void jniWriterRejectsDuplicateColumnNames(@TempDir Path tmp) {
         // Given — a schema with two fields named "dup". Rust's in-memory StructFields documents
         // duplicates as legal (first-match name access), but its FILE writer enforces uniqueness:
-        // "StructLayout must have unique field names". This test pins that wire contract — the
-        // Java writer must mirror the same rejection (see VortexWriterTest).
+        // "StructLayout must have unique field names". This test pins that wire contract — Java
+        // rejects it earlier, in the DType.Struct constructor (see DTypeStructValidationTest).
         Path file = tmp.resolve("jni_dup_names.vortex");
         Schema schema = new Schema(List.of(
                 Field.notNullable("dup", new ArrowType.Int(64, true)),

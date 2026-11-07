@@ -49,7 +49,7 @@ class PostscriptParserDTypeGuardsTest {
         MemorySegment layout = flatLayout();
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("duplicate field name in file schema: dup");
+                .hasMessageContaining("duplicate field name: dup");
     }
 
     @Test

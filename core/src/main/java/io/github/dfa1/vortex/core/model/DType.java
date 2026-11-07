@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.core.model;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.Objects;
 
 /// Vortex logical data type. Strictly logical — defines value domain, not physical storage.
@@ -99,24 +98,25 @@ public sealed interface DType
     }
 
     /// Fluent builder for [Struct] dtypes. Use [#structBuilder()] to obtain one.
-    /// Preserves insertion order and rejects duplicate field names at [#build()].
+    /// Preserves insertion order; [#build()] rejects duplicate field names, as [Struct] does.
     final class StructBuilder {
-        private final LinkedHashMap<ColumnName, DType> fields = new LinkedHashMap<>();
+        private final java.util.List<ColumnName> names;
+        private final java.util.List<DType> types;
         private boolean nullable;
 
         private StructBuilder() {
+            this.names = new ArrayList<>();
+            this.types = new ArrayList<>();
         }
 
         /// Adds a named field to the struct under construction.
         ///
-        /// @param name the validated field name; must not have been previously added
+        /// @param name the validated field name; must be unique within the struct
         /// @param type the field type
         /// @return this builder
-        /// @throws IllegalArgumentException if `name` duplicates a previously added field
         public StructBuilder field(ColumnName name, DType type) {
-            if (fields.putIfAbsent(name, type) != null) {
-                throw new IllegalArgumentException("duplicate field name: " + name);
-            }
+            names.add(name);
+            types.add(type);
             return this;
         }
 
@@ -131,11 +131,9 @@ public sealed interface DType
         /// Builds the [Struct] dtype.
         ///
         /// @return a new [Struct] reflecting every field added so far
+        /// @throws VortexException if a field name was added twice
         public Struct build() {
-            return new Struct(
-                    java.util.List.copyOf(fields.keySet()),
-                    java.util.List.copyOf(new ArrayList<>(fields.values())),
-                    nullable);
+            return new Struct(java.util.List.copyOf(names), java.util.List.copyOf(types), nullable);
         }
     }
 
@@ -247,21 +245,31 @@ public sealed interface DType
             java.util.List<DType> fieldTypes,
             boolean nullable) implements DType {
 
-        /// Validates that names and types pair 1:1. Duplicate names are legal in memory,
-        /// mirroring the Rust reference's `StructFields`; uniqueness is a file-boundary
-        /// contract, enforced by the writer and the file parser.
+        /// Validates that names and types pair 1:1 and that names are unique.
+        ///
+        /// Stricter than the Rust reference's in-memory `StructFields`, which tolerates duplicates
+        /// (first-match name access): its file writer refuses them ("StructLayout must have unique
+        /// field names"), so a duplicate-name struct could never be written or read back. Checking
+        /// here covers every path at once — builder, writer schema, nested structs, and dtypes parsed
+        /// from untrusted files, which is why it throws [VortexException].
         ///
         /// @param fieldNames ordered list of field names
         /// @param fieldTypes ordered list of field types, parallel to `fieldNames`
         /// @param nullable   whether null values are permitted
-        /// @throws NullPointerException     if `fieldNames` or `fieldTypes` is `null`
-        /// @throws IllegalArgumentException if the two lists differ in size
+        /// @throws NullPointerException if `fieldNames` or `fieldTypes` is `null`
+        /// @throws VortexException      if the two lists differ in size or a name repeats
         public Struct {
             java.util.Objects.requireNonNull(fieldNames, "fieldNames");
             java.util.Objects.requireNonNull(fieldTypes, "fieldTypes");
             if (fieldNames.size() != fieldTypes.size()) {
-                throw new IllegalArgumentException("fieldNames/fieldTypes size mismatch: "
+                throw new VortexException("fieldNames/fieldTypes size mismatch: "
                         + fieldNames.size() + " names, " + fieldTypes.size() + " types");
+            }
+            var seen = new java.util.HashSet<ColumnName>();
+            for (ColumnName name : fieldNames) {
+                if (!seen.add(name)) {
+                    throw new VortexException("duplicate field name: " + name);
+                }
             }
         }
 

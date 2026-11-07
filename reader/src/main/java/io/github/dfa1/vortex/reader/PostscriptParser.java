@@ -25,7 +25,6 @@ import io.github.dfa1.vortex.reader.layout.Layout;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 
 final class PostscriptParser {
@@ -269,15 +268,10 @@ final class PostscriptParser {
                 }
                 var names = new ArrayList<io.github.dfa1.vortex.core.model.ColumnName>(s.namesLength());
                 var types = new ArrayList<DType>(s.dtypesLength());
-                var seen = new HashSet<String>();
+                // Duplicate names (a crafted or corrupt file: the reference writer refuses them)
+                // are rejected by the DType.Struct constructor as VortexException.
                 for (int i = 0; i < s.namesLength(); i++) {
                     String name = s.names(i);
-                    if (!seen.add(name)) {
-                        // Wire contract, enforced by the reference writer ("StructLayout must
-                        // have unique field names"): a duplicate here is a crafted or corrupt
-                        // file, and the name-keyed Chunk API would silently drop a column.
-                        throw new VortexException("duplicate field name in file schema: " + name);
-                    }
                     // Blank names are wire-legal and produced by the Rust reference (e.g. an
                     // empty name at field index 0); ColumnName accepts them. Control characters
                     // are rejected on both the read and write paths — wrap as VortexException
