@@ -92,27 +92,6 @@ class VortexWriterTest {
     }
 
     @Test
-    void create_duplicateFieldNames_throwsIllegalArgumentException(@TempDir Path tmp) throws IOException {
-        // Given — a duplicate-name schema built via the DType.Struct record, which validates
-        // nothing (only StructBuilder rejects duplicates). The reference writer refuses such
-        // schemas ("StructLayout must have unique field names"), so ours must too — otherwise
-        // we emit files the canonical implementation would never produce.
-        var schema = new DType.Struct(
-                List.of(ColumnName.of("dup"), ColumnName.of("dup")),
-                List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, false)),
-                false);
-        Path file = tmp.resolve("dup.vtx");
-
-        // When / Then — options hoisted so only the subject call is in the lambda
-        WriteOptions opts = WriteOptions.defaults();
-        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            assertThatThrownBy(() -> VortexWriter.create(ch, schema, opts))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("duplicate field name: dup");
-        }
-    }
-
-    @Test
     void create_nullableRootStruct_isRejected(@TempDir Path tmp) throws IOException {
         // Given — a nullable root: Rust reads a nullable struct layout only with a leading validity
         // child, which this writer never writes, so vortex-jni refused every such file

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.core.model;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -51,14 +52,17 @@ class DTypeStructBuilderTest {
     }
 
     @Test
-    void duplicateField_throws_atAddTime() {
-        // Given
-        DType.StructBuilder sut = DType.structBuilder().field(ColumnName.of("x"), DTypes.I64);
+    void duplicateField_throws_atBuild() {
+        // Given — the builder delegates uniqueness to the Struct constructor, so a repeated
+        // name must still fail rather than silently replace the earlier field
+        DType.StructBuilder sut = DType.structBuilder()
+                .field(ColumnName.of("x"), DTypes.I64)
+                .field(ColumnName.of("x"), DTypes.F64);
 
         // When / Then
-        assertThatThrownBy(() -> sut.field(ColumnName.of("x"), DTypes.F64))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("duplicate field name: x");
+        assertThatThrownBy(sut::build)
+                .isInstanceOf(VortexException.class)
+                .hasMessage("duplicate field name: x");
     }
 
     @Test
