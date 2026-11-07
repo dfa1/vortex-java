@@ -5,7 +5,7 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.19.1] — 2026-11-07
 
 ### Changed
 - `VortexWriter` is split into smaller internal parts and writes byte-identical files. ([#663](https://github.com/dfa1/vortex-java/issues/663))
