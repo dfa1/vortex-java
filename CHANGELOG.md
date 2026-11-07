@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `EncodeContext` has a new last component, `trace`, so code calling its canonical constructor passes `EncodeTrace.NONE`. ([#601](https://github.com/dfa1/vortex-java/issues/601))
 
+### Fixed
+- A nullable text column without a null is written without a validity, as Rust writes it, instead of under `vortex.masked` (with cascading on). ([#650](https://github.com/dfa1/vortex-java/issues/650))
+
 ### Added
 - JDK Flight Recorder events for file open, HTTP range requests, segment decode and encode, chunk filtering, writer back-pressure and the compressor's scheme choices, which mirror Rust's compressor trace. ([#601](https://github.com/dfa1/vortex-java/issues/601))
 
