@@ -60,6 +60,15 @@ public final class ArrayAndStats {
         return stats;
     }
 
+    /// The stats if something has already computed them, without computing them now: a caller that only
+    /// wants the min and max is better off scanning for them than forcing the run, distinct and
+    /// frequency counts of the whole set.
+    ///
+    /// @return the stats, or `null` if [#stats()] was never asked for
+    ArrayStats statsIfComputed() {
+        return stats;
+    }
+
     /// Returns the number of rows, null or not.
     ///
     /// @return the array length

@@ -275,7 +275,13 @@ public final class CascadingCompressor {
     private EncodeResult encodeWithCtx(DType dtype, Object data, EncodeContext ctx, boolean traced) {
         var event = new CompressEvent();
         event.begin();
-        EncodeResult result = encodeArray(dtype, data, ctx);
+        // a primitive's stats are shared by the competition and its node stats: Rust caches them on the
+        // array, and reads min and max from there instead of scanning again
+        ArrayAndStats input = null;
+        if (dtype instanceof DType.Primitive) {
+            input = withStats(dtype, data, ctx);
+        }
+        EncodeResult result = encodeArray(dtype, data, ctx, input);
         if (traced && !ctx.sample()) {
             CompressorEvents.compress(event, ctx, dtype, data, result);
         }
@@ -283,13 +289,20 @@ public final class CascadingCompressor {
         if (ctx.sample() || own != null && !own.isEmpty()) {
             return result;
         }
-        return new EncodeResult(result.rootNode().withStats(nodeStats(dtype, data, result.rootNode().encodingId())),
+        return new EncodeResult(result.rootNode().withStats(nodeStats(dtype, data, result.rootNode().encodingId(), input)),
                 result.encodedBuffers(), result.statsMin(), result.statsMax());
     }
 
     /// The stats Rust keeps on the node of an array it compressed, here a child of the segment's root
     /// as much as the root itself ([CachedNodeStats]).
-    private static NodeStats nodeStats(DType dtype, Object data, EncodingId root) {
+    ///
+    /// @param dtype the array's dtype
+    /// @param data  the array
+    /// @param root  the encoding the array was compressed to
+    /// @param input the array's stats if it has any, whose min and max are reused when the competition
+    ///              already computed them
+    /// @return the stats the node carries
+    private static NodeStats nodeStats(DType dtype, Object data, EncodingId root, ArrayAndStats input) {
         if (dtype instanceof DType.Bool) {
             if (!root.equals(EncodingId.VORTEX_BOOL) || !(data instanceof boolean[] bools)) {
                 return NodeStats.NONE;
@@ -306,15 +319,32 @@ public final class CascadingCompressor {
         if (!(dtype instanceof DType.Primitive)) {
             return NodeStats.NONE;
         }
-        MinMax bounds = dtype instanceof DType.Primitive p && !p.ptype().isFloating() ? ZoneMapStats.of(dtype, data) : null;
+        MinMax bounds = null;
+        if (((DType.Primitive) dtype).ptype().isInteger()) {
+            bounds = integerBounds((DType.Primitive) dtype, data, input);
+        }
         long nullCount = data instanceof NullableData nullable ? nullable.nullCount() : 0L;
         return CachedNodeStats.of(dtype, root, bounds == null ? null : bounds.min(), bounds == null ? null : bounds.max(),
                 RowCount.of(data), nullCount);
     }
 
-    private EncodeResult encodeArray(DType dtype, Object data, EncodeContext ctx) {
+    /// The bounds of an integer array's valid values: from the stats the competition computed when it
+    /// did, else by scanning for them.
+    static MinMax integerBounds(DType.Primitive dtype, Object data, ArrayAndStats input) {
+        ArrayStats computed = null;
+        if (input != null) {
+            computed = input.statsIfComputed();
+        }
+        // no values (empty, or every row null) is the EMPTY stats, and has no bounds to reuse
+        if (computed != null && computed.valueCount() > 0) {
+            return PrimitiveEncodingEncoder.integerMinMax(dtype.ptype(), computed.min(), computed.max());
+        }
+        return ZoneMapStats.of(dtype, data);
+    }
+
+    private EncodeResult encodeArray(DType dtype, Object data, EncodeContext ctx, ArrayAndStats input) {
         if (keepsValidity(dtype) && data instanceof NullableData nullable) {
-            return encodeNullablePrimitive(dtype, nullable, ctx);
+            return encodeNullablePrimitive(dtype, nullable, ctx, input);
         }
         // An all-null decimal is one null constant, before any scheme, as for a primitive.
         if (dtype instanceof DType.Decimal && data instanceof NullableData nullable
@@ -376,8 +406,7 @@ public final class CascadingCompressor {
             return spliceResult(findPrimitiveEncoding(dtype, data, ctx.excluded()), dtype, data, ctx);
         }
 
-        return competeAndEncode(dtype, withStats(dtype, data, ctx), ctx,
-                sampleSize -> primitiveBytes(dtype, sampleSize));
+        return competeAndEncode(dtype, input, ctx, sampleSize -> primitiveBytes(dtype, sampleSize));
     }
 
     /// A bool array stays `vortex.bool` unless it is one value and that is smaller as a
@@ -591,7 +620,8 @@ public final class CascadingCompressor {
     /// both decided by the compressor before any scheme (`compressor/cascade.rs`). Otherwise the
     /// schemes compete with the validity in their arrays: a sampled scheme is measured with its
     /// validity child, against the values plus a packed bitmap.
-    private EncodeResult encodeNullablePrimitive(DType dtype, NullableData data, EncodeContext ctx) {
+    private EncodeResult encodeNullablePrimitive(DType dtype, NullableData data, EncodeContext ctx,
+            ArrayAndStats input) {
         int n = data.length();
         if (MaskedEncodingEncoder.isNullConstant(data.validity(), ctx)) {
             return MaskedEncodingEncoder.nullConstant();
@@ -604,7 +634,6 @@ public final class CascadingCompressor {
                 return MaskedEncodingEncoder.maskedConstant(dtype, data, valid, ctx);
             }
         }
-        ArrayAndStats input = withStats(dtype, data, ctx);
         int sampleSize = sampleSize(n, ctx);
         Object sample = sampleSize < n ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data;
         Choice choice = chooseBest(dtype, input, ctx, uncompressedBytes(dtype, sample), () -> sample);

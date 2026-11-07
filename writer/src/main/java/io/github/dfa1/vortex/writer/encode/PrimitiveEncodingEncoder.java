@@ -87,6 +87,21 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
+    /// The bounds of an integer array whose min and max are already known, as scalars: what
+    /// [#minMaxStats(PType, Object)] makes of the same kernel's answer.
+    ///
+    /// @param ptype an integer type
+    /// @param min   the minimum, widened (raw 64 bits for `U64`)
+    /// @param max   the maximum, widened
+    /// @return the serialized bounds
+    static MinMax integerMinMax(PType ptype, long min, long max) {
+        return switch (ptype) {
+            case I8, I16, I32, I64 -> new MinMax(scalarI64(min), scalarI64(max));
+            case U8, U16, U32, U64 -> new MinMax(scalarU64(min), scalarU64(max));
+            default -> throw new IllegalArgumentException(ptype + " is not an integer type");
+        };
+    }
+
     /// The min half of a [#minMaxStats] result, or `null` when `stats` itself is `null` (empty
     /// data). Saves callers the repeated `stats == null ? null : stats.min()` idiom.
     ///
