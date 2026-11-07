@@ -4,13 +4,17 @@ import io.github.dfa1.vortex.core.compute.Utf8Order;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
 /// Dtype-aware three-way comparison of two boxed scalar values, the ordering primitive the compute
 /// kernels lower every value predicate and `MIN` / `MAX` reduction onto.
 ///
 /// The comparison mode is keyed off the *column* dtype, never the boxed operand type: integer
 /// columns compare as longs (unsigned columns via [Long#compareUnsigned(long, long)]), float columns
-/// as doubles, strings in UTF-8 byte order ([Utf8Order]), and everything else through the natural
-/// [Comparable] order. Keying off the column
+/// as doubles, strings in UTF-8 byte order ([Utf8Order]), decimals by value ([BigDecimal#compareTo]),
+/// and everything else through the natural [Comparable] order. With no column, a [BigDecimal]
+/// operand makes it a decimal compare. Keying off the column
 /// keeps the compare width-agnostic — a caller may box a filter value at any integer width — and
 /// never routes an integer column through double-compare, which would lose precision past 2^53.
 ///
@@ -26,13 +30,18 @@ public final class Compare {
     ///
     /// @param a      the left value, typically the array element under test
     /// @param b      the right value, typically the predicate operand
-    /// @param column the dtype that decides the comparison mode (unsigned, floating, or natural), or
+    /// @param column the dtype that decides the comparison mode (unsigned, floating, decimal, or natural), or
     ///               `null` to compare width-agnostically off the operands (numbers as longs unless
     ///               either side is floating, otherwise the natural [Comparable] order)
     /// @return a negative, zero, or positive integer as `a` is less than, equal to, or greater than `b`
     /// @throws VortexException if the two values are not mutually comparable
     @SuppressWarnings("unchecked")
     public static int values(Object a, Object b, DType column) {
+        // a decimal is a Number, but its order is its value, never the long it truncates to; a
+        // primitive column keeps its own order, whatever the operand's type
+        if ((a instanceof BigDecimal || b instanceof BigDecimal) && !(column instanceof DType.Primitive)) {
+            return decimal(a).compareTo(decimal(b));
+        }
         if (a instanceof Number na && b instanceof Number nb) {
             if (column instanceof DType.Primitive prim) {
                 if (prim.ptype().isFloating()) {
@@ -62,6 +71,21 @@ public final class Compare {
             throw new VortexException("compute value of type " + className(b)
                     + " is not comparable to the array value of type " + className(a), e);
         }
+    }
+
+    /// A decimal-column operand as a [BigDecimal]: a decimal itself, an integer of any width, or a
+    /// finite float or double. Anything else, a NaN or an infinity among them, has no decimal value.
+    private static BigDecimal decimal(Object value) {
+        return switch (value) {
+            case null -> throw new VortexException("compute value of type null is not comparable to a decimal");
+            case BigDecimal d -> d;
+            case BigInteger b -> new BigDecimal(b);
+            case Byte _, Short _, Integer _, Long _ -> BigDecimal.valueOf(((Number) value).longValue());
+            case Double d when Double.isFinite(d) -> BigDecimal.valueOf(d);
+            case Float f when Float.isFinite(f) -> new BigDecimal(f.toString());
+            default -> throw new VortexException("compute value of type " + className(value)
+                    + " (" + value + ") is not comparable to a decimal");
+        };
     }
 
     /// Returns the simple class name of `value`, or `"null"` when it is absent, for error messages.

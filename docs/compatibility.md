@@ -168,8 +168,8 @@ it cascades into alike:
 
 So a Java-written string column has no bound in its flat segments, as a Rust-written one has none:
 `VortexReader.columnStats()` reports no string `min`/`max` for either, and a string bound lives only in the
-zoned layout's stats table. The decimal bounds the reader can read come from the same two places, and the
-zone table's are not decoded yet.
+zoned layout's stats table. A decimal column's min and max are decoded from the zone table too: `columnStats()` reports them and
+zone-map pruning uses them, compared by value at the column's scale.
 
 The nodes below the root follow the same table, plus three shapes of their own: a `vortex.sequence` carries
 `is_sorted` and `is_strict_sorted` (false for a falling step), the primitive values of ALP, ALP-RD and bit-packed

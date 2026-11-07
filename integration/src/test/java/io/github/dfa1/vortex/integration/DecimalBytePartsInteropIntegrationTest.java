@@ -12,6 +12,10 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.reader.ScanFilter;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
+import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.apache.arrow.c.ArrowArray;
@@ -123,6 +127,92 @@ class DecimalBytePartsInteropIntegrationTest {
         assertThat(all).isEqualTo(expected);
         assertThat(filtered).isEqualTo(expected.stream().filter(v -> v.compareTo(threshold) >= 0).toList());
         assertThat(range).isEqualTo(expected.subList(1000, 20_000));
+    }
+
+    /// The file's decimal min, max and null count, which Rust keeps in the zone table: read by Java
+    /// from a vortex-jni file and from its own, they are the extremes of the valid rows.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("nullableShapes")
+    void columnStats_areTheExtremesOfTheValidRows(String name, int precision, int scale, IntToLongFunction unscaled,
+                                                  IntPredicate isNull, @TempDir Path tmp) throws Exception {
+        // Given
+        Path jniFile = tmp.resolve("jni.vortex");
+        Path javaFile = tmp.resolve("java.vortex");
+        writeWithJni(jniFile, precision, scale, unscaled, isNull);
+        writeWithJava(javaFile, precision, scale, unscaled, isNull);
+        BigDecimal min = null;
+        BigDecimal max = null;
+        long nulls = 0;
+        for (int i = 0; i < ROWS; i++) {
+            if (isNull.test(i)) {
+                nulls++;
+                continue;
+            }
+            BigDecimal value = BigDecimal.valueOf(unscaled.applyAsLong(i), scale);
+            min = min == null || value.compareTo(min) < 0 ? value : min;
+            max = max == null || value.compareTo(max) > 0 ? value : max;
+        }
+
+        // When
+        ArrayStats fromJni = columnStats(jniFile);
+        ArrayStats fromJava = columnStats(javaFile);
+
+        // Then
+        for (ArrayStats stats : List.of(fromJni, fromJava)) {
+            assertThat((BigDecimal) stats.min()).isEqualByComparingTo(min);
+            assertThat((BigDecimal) stats.max()).isEqualByComparingTo(max);
+            assertThat(stats.nullCount()).isEqualTo(nulls);
+        }
+    }
+
+    /// Pruning trusts each zone's decimal bounds, so a filtered read by Java of a vortex-jni file (whose
+    /// zone table Rust wrote) and of Java's own must return exactly the matching rows.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("shapes")
+    void filteredReadByJava_returnsExactlyTheMatchingRows(String name, int precision, int scale,
+                                                          IntToLongFunction unscaled, @TempDir Path tmp)
+            throws Exception {
+        // Given
+        Path jniFile = tmp.resolve("jni.vortex");
+        Path javaFile = tmp.resolve("java.vortex");
+        writeWithJni(jniFile, precision, scale, unscaled);
+        writeWithJava(javaFile, precision, scale, unscaled);
+        List<BigDecimal> all = new ArrayList<>(ROWS);
+        for (int i = 0; i < ROWS; i++) {
+            all.add(BigDecimal.valueOf(unscaled.applyAsLong(i), scale));
+        }
+        BigDecimal threshold = all.get(ROWS / 2);
+
+        // When
+        List<BigDecimal> fromJni = readWithJava(jniFile, ScanFilter.gte(D, threshold));
+        List<BigDecimal> fromJava = readWithJava(javaFile, ScanFilter.gte(D, threshold));
+
+        // Then
+        List<BigDecimal> expected = all.stream().filter(v -> v.compareTo(threshold) >= 0).toList();
+        assertThat(fromJni).usingElementComparator(BigDecimal::compareTo).isEqualTo(expected);
+        assertThat(fromJava).usingElementComparator(BigDecimal::compareTo).isEqualTo(expected);
+    }
+
+    private static List<BigDecimal> readWithJava(Path file, ScanFilter filter) throws IOException {
+        List<BigDecimal> out = new ArrayList<>();
+        try (var reader = VortexReader.open(file);
+             var scan = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all().withFilter(filter))) {
+            while (scan.hasNext()) {
+                try (var chunk = scan.next()) {
+                    DecimalArray array = chunk.column(D);
+                    for (int i = 0; i < chunk.rowCount(); i++) {
+                        out.add(array.getDecimal(i));
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    private static ArrayStats columnStats(Path file) throws IOException {
+        try (var reader = VortexReader.open(file)) {
+            return reader.columnStats().get(D);
+        }
     }
 
     static Stream<Arguments> nullableShapes() {

@@ -1,8 +1,16 @@
 package io.github.dfa1.vortex.reader.compute;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -100,5 +108,69 @@ class CompareTest {
         assertThatThrownBy(() -> Compare.values("x", 1L, DTypes.UTF8))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("not comparable");
+    }
+
+    static Stream<Arguments> decimalPairs() {
+        DType decimal = new DType.Decimal((byte) 10, (byte) 2, false);
+        DType wide = new DType.Decimal((byte) 38, (byte) 0, false);
+        BigDecimal i128 = new BigDecimal("170141183460469231731687303715884105727");
+        return Stream.of(
+                // 1.5 and 1.2 are both 1 as a long
+                Arguments.of("by value, not the truncated long", decimal, new BigDecimal("1.5"), new BigDecimal("1.2"), 1),
+                Arguments.of("same value, two scales", decimal, new BigDecimal("1.50"), new BigDecimal("1.5"), 0),
+                Arguments.of("negative", decimal, new BigDecimal("-0.01"), new BigDecimal("0.00"), -1),
+                Arguments.of("negative scale", decimal, new BigDecimal("1E+2"), 100L, 0),
+                Arguments.of("long operand", decimal, new BigDecimal("2.50"), 2L, 1),
+                Arguments.of("long on the left", decimal, 1L, new BigDecimal("1.00"), 0),
+                Arguments.of("double operand", decimal, new BigDecimal("2.50"), 2.75d, -1),
+                Arguments.of("float operand", decimal, new BigDecimal("2.50"), 2.25f, 1),
+                Arguments.of("past a long", wide, i128, Long.MAX_VALUE, 1),
+                Arguments.of("big integer operand", decimal, new BigDecimal("1"), BigInteger.TWO.pow(64), -1),
+                Arguments.of("no column", null, new BigDecimal("1.5"), new BigDecimal("1.2"), 1));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("decimalPairs")
+    void decimalsCompareByValue(String name, DType column, Object a, Object b, int sign) {
+        // Given a decimal column (or none) and operands of mixed types
+
+        // When
+        int result = Compare.values(a, b, column);
+
+        // Then
+        assertThat(Integer.signum(result)).isEqualTo(sign);
+    }
+
+    static Stream<Arguments> notDecimalValues() {
+        DType decimal = new DType.Decimal((byte) 10, (byte) 2, false);
+        return Stream.of(
+                Arguments.of("NaN", Double.NaN),
+                Arguments.of("infinity", Double.POSITIVE_INFINITY),
+                Arguments.of("float NaN", Float.NaN),
+                Arguments.of("text", "x"),
+                Arguments.of("null", null)).map(a -> Arguments.of(a.get()[0], decimal, a.get()[1]));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("notDecimalValues")
+    void decimalAgainstAValueWithNoDecimalMeaningThrows(String name, DType column, Object operand) {
+        // Given / When / Then
+        assertThatThrownBy(() -> Compare.values(new BigDecimal("1"), operand, column))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("not comparable to a decimal");
+    }
+
+    @Test
+    void primitiveColumnsKeepTheirOwnOrderWhateverTheOperand() {
+        // Given a U64 value past 2^63 (a negative long), and a float column holding NaN
+        long big = -1L;
+
+        // When
+        int unsigned = Compare.values(big, new BigDecimal("2"), DTypes.U64);
+        int nan = Compare.values(Double.NaN, new BigDecimal("1.5"), DTypes.F64);
+
+        // Then the unsigned order and the double order hold, no decimal conversion
+        assertThat(unsigned).isPositive();
+        assertThat(nan).isPositive();
     }
 }
