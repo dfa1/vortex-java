@@ -8,9 +8,11 @@ import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.fbs.FbsDType;
 import io.github.dfa1.vortex.core.fbs.FbsExtension;
+import io.github.dfa1.vortex.core.fbs.FbsFixedSizeList;
 import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.core.fbs.FbsList;
 import io.github.dfa1.vortex.core.fbs.FbsMap;
 import io.github.dfa1.vortex.core.fbs.FbsNull;
 import io.github.dfa1.vortex.core.fbs.FbsPType;
@@ -20,6 +22,8 @@ import io.github.dfa1.vortex.core.fbs.FbsType;
 import io.github.dfa1.vortex.core.fbs.FbsUnion;
 import io.github.dfa1.vortex.core.fbs.FbsUtf8;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.MemorySegment;
 import java.util.List;
@@ -214,6 +218,52 @@ class PostscriptParserDTypeGuardsTest {
                 .hasMessageContaining("invalid extension id");
     }
 
+    @ParameterizedTest(name = "type tag {0}")
+    @ValueSource(bytes = {FbsType.FbsBool, FbsType.FbsPrimitive, FbsType.FbsDecimal, FbsType.FbsUtf8,
+            FbsType.FbsBinary, FbsType.FbsStruct, FbsType.FbsList, FbsType.FbsExtension,
+            FbsType.FbsFixedSizeList, FbsType.FbsVariant, FbsType.FbsUnion, FbsType.FbsMap})
+    void convertDType_typeTagWithoutTable_throwsVortexException(byte typeTag) {
+        // Given — a dtype that names a type but carries no table for it. FbsVerifier rejects it
+        // before convertDType runs, which is why convertDType may dereference fbs.type(...)
+        // without a null check (IntelliJ flags those as possible NPEs). Null is excluded: it
+        // reads no table.
+        var fbb = new FbsBuilder(64);
+        fbb.finish(FbsDType.createFbsDType(fbb, typeTag, 0));
+        MemorySegment dtype = fbb.dataSegment();
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("inconsistent with its value");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"list", "fixed_size_list", "extension"})
+    void convertDType_missingChildDType_throwsVortexException(String kind) {
+        // Given — element_type / storage_dtype are optional fields, so a crafted table can omit
+        // them. Recursing into the null child used to surface only as parseBlobs' generic
+        // "malformed footer/layout/dtype blob" wrap of a NullPointerException.
+        var fbb = new FbsBuilder(128);
+        int root = switch (kind) {
+            case "list" -> FbsDType.createFbsDType(fbb, FbsType.FbsList, FbsList.createFbsList(fbb, 0, false));
+            case "fixed_size_list" -> FbsDType.createFbsDType(fbb, FbsType.FbsFixedSizeList,
+                    FbsFixedSizeList.createFbsFixedSizeList(fbb, 0, 2, false));
+            default -> FbsDType.createFbsDType(fbb, FbsType.FbsExtension, FbsExtension.createFbsExtension(fbb,
+                    fbb.createString("acme.geopoint"), 0, FbsExtension.createMetadataVector(fbb, new byte[0])));
+        };
+        fbb.finish(root);
+        MemorySegment dtype = fbb.dataSegment();
+
+        // When / Then
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("child dtype missing");
+    }
+
     @Test
     void convertDType_extensionMissingId_throwsVortexException() {
         // Given — FlatBuffers fields are optional on the wire; a crafted extension omits its id
@@ -253,7 +303,7 @@ class PostscriptParserDTypeGuardsTest {
         MemorySegment layout = flatLayout();
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("map dtype missing key_type or value_type");
+                .hasMessageContaining("child dtype missing");
     }
 
     @Test
@@ -266,7 +316,7 @@ class PostscriptParserDTypeGuardsTest {
         MemorySegment layout = flatLayout();
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("map dtype missing key_type or value_type");
+                .hasMessageContaining("child dtype missing");
     }
 
     @Test

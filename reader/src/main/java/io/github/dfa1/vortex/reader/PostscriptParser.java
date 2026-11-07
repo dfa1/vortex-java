@@ -238,6 +238,11 @@ final class PostscriptParser {
     }
 
     private static DType convertDType(io.github.dfa1.vortex.core.fbs.FbsDType fbs) {
+        // Child dtypes (element_type, storage_dtype, key_type, value_type) are optional fields on
+        // the wire, which the generated reader surfaces as null: one check covers every parent.
+        if (fbs == null) {
+            throw new VortexException("child dtype missing");
+        }
         int typeType = fbs.typeType();
         return switch (typeType) {
             case FbsType.FbsNull -> new DType.Null(true);
@@ -298,11 +303,6 @@ final class PostscriptParser {
             }
             case FbsType.FbsMap -> {
                 var m = fbs.type(new FbsMap());
-                // Both child dtypes are mandatory; a crafted table can omit either field, which
-                // the generated reader surfaces as null.
-                if (m.keyType() == null || m.valueType() == null) {
-                    throw new VortexException("map dtype missing key_type or value_type");
-                }
                 DType keyType = convertDType(m.keyType());
                 DType valueType = convertDType(m.valueType());
                 // A nullable key type is rejected by DType.Map's own constructor, which raises
