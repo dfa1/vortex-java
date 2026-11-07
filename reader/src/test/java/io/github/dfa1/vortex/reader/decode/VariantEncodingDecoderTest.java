@@ -237,6 +237,37 @@ class VariantEncodingDecoderTest {
         }
 
         @Test
+        void struct_controlCharacterName_throwsVortexException() {
+            // Given — a crafted shredded dtype whose second field name carries a NUL; the
+            // metadata is untrusted, so it must not leak ColumnName's IllegalArgumentException
+            var proto = io.github.dfa1.vortex.core.proto.ProtoDType.ofStruct(new io.github.dfa1.vortex.core.proto.ProtoStruct(
+                    List.of("a", "b\u0000"),
+                    List.of(prim(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false),
+                            prim(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false)),
+                    false));
+
+            // When / Then
+            assertThatThrownBy(() -> VariantEncodingDecoder.dtypeFromProto(proto))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("invalid field name at field index 1 in shredded dtype");
+        }
+
+        @Test
+        void union_controlCharacterName_throwsVortexException() {
+            // Given — the union branch builds names the same way, so it needs the same guard
+            var proto = io.github.dfa1.vortex.core.proto.ProtoDType.ofUnion(new io.github.dfa1.vortex.core.proto.ProtoUnion(
+                    List.of("x\n"),
+                    List.of(prim(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false)),
+                    List.of(0),
+                    false));
+
+            // When / Then
+            assertThatThrownBy(() -> VariantEncodingDecoder.dtypeFromProto(proto))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("invalid union variant name at index 0 in shredded dtype");
+        }
+
+        @Test
         void list() {
             // Given / When element type is translated recursively
             DType result = VariantEncodingDecoder.dtypeFromProto(

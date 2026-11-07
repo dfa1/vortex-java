@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - A nullable text column without a null is written without a validity, as Rust writes it, instead of under `vortex.masked` (with cascading on). ([#650](https://github.com/dfa1/vortex-java/issues/650))
 - A struct with duplicate field names now fails with `VortexException` when it is built, at any nesting level; the writer used to check only top-level names. ([#696](https://github.com/dfa1/vortex-java/pull/696))
+- A `vortex.variant` column whose shredded dtype has a control character in a field or variant name fails with `VortexException` instead of `IllegalArgumentException`. ([#694](https://github.com/dfa1/vortex-java/issues/694))
 
 ### Added
 - JDK Flight Recorder events for file open, HTTP range requests, segment decode and encode, chunk filtering, writer back-pressure and the compressor's scheme choices, which mirror Rust's compressor trace. ([#601](https://github.com/dfa1/vortex-java/issues/601))

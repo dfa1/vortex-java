@@ -104,8 +104,8 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
             var s = proto.struct();
             var names = new ArrayList<io.github.dfa1.vortex.core.model.ColumnName>(s.names().size());
             var types = new ArrayList<DType>(s.dtypes().size());
-            for (String name : s.names()) {
-                names.add(io.github.dfa1.vortex.core.model.ColumnName.of(name));
+            for (int i = 0; i < s.names().size(); i++) {
+                names.add(columnName(s.names().get(i), "field name at field index", i));
             }
             for (io.github.dfa1.vortex.core.proto.ProtoDType child : s.dtypes()) {
                 types.add(dtypeFromProto(child));
@@ -140,8 +140,8 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         if (proto.union() != null) {
             var u = proto.union();
             var names = new ArrayList<io.github.dfa1.vortex.core.model.ColumnName>(u.names().size());
-            for (String name : u.names()) {
-                names.add(io.github.dfa1.vortex.core.model.ColumnName.of(name));
+            for (int i = 0; i < u.names().size(); i++) {
+                names.add(columnName(u.names().get(i), "union variant name at index", i));
             }
             var types = new ArrayList<DType>(u.dtypes().size());
             for (io.github.dfa1.vortex.core.proto.ProtoDType child : u.dtypes()) {
@@ -150,5 +150,16 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
             return new DType.Union(names, types, u.type_ids(), u.nullable());
         }
         throw new VortexException("unsupported proto DType");
+    }
+
+    // The names come from file metadata, so a control character is malformed input and must
+    // fail as VortexException, as PostscriptParser does for the file schema, not as the
+    // IllegalArgumentException ColumnName throws for caller-supplied names.
+    private static io.github.dfa1.vortex.core.model.ColumnName columnName(String name, String what, int index) {
+        io.github.dfa1.vortex.core.model.ColumnName.violation(name).ifPresent(reason -> {
+            throw new VortexException(EncodingId.VORTEX_VARIANT,
+                    "invalid " + what + " " + index + " in shredded dtype: " + reason);
+        });
+        return new io.github.dfa1.vortex.core.model.ColumnName(name);
     }
 }
