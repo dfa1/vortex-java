@@ -1,78 +1,48 @@
 package io.github.dfa1.vortex.fsst;
 
-import java.util.Random;
-
-/// A fixed, byte-size-bounded training sample drawn deterministically from a corpus of rows.
+/// The training sample, drawn as Rust's `fsst-rs` does (`builder.rs`'s `make_sample`, itself the C++
+/// reference's): the rows as they are when their bytes total under [#TARGET_SAMPLE_BYTES], else
+/// [#LINE_BYTES]-byte lines of randomly picked non-empty rows until the target is reached. The
+/// pick is a fixed hash sequence ([#hash(long)]), not a seeded generator, so a given corpus always
+/// draws the same sample, and the same one Rust draws.
 ///
-/// FSST training does not scan the whole input on every generation. Instead it draws one bounded
-/// sample up front — targeting [#TARGET_SAMPLE_BYTES] bytes assembled from contiguous chunks of at
-/// most [#MAX_CHUNK_BYTES] bytes, each taken from a randomly chosen row — and then each of the five
-/// training generations replays only a growing fraction of that same sample. This replaces the old
-/// `FsstEncodingEncoder`'s string-count-bounded, always-full-sample scheme, which on long-string
-/// columns pulled in far more training bytes than the reference intends for no compression benefit
-/// (issue #287). Sampling by bytes keeps training cost proportional to the sample size regardless of
-/// how long individual rows are.
-///
-/// The sample is held as a single concatenated byte array with explicit chunk boundaries, because a
-/// symbol must never be counted across a chunk boundary: chunks come from unrelated rows, so a
-/// "symbol" spanning two chunks would be an artifact of sampling, not a real substring of any row.
-///
-/// Drawing is deterministic given a seed: the same rows and seed always produce a byte-identical
-/// sample, which is what makes the whole trained table reproducible across runs (the encoder's
-/// output must be byte-identical for a given input).
+/// A line is a slice of one row, and a short corpus keeps its empty rows as empty lines: training
+/// skips lines by their index, so the indices have to be Rust's too.
 final class Sample {
 
-    /// Target total sample size in bytes. The Rust reference `spiraldb/fsst` targets ~16KB; a
-    /// sample this size is large enough to learn a stable table while keeping every generation's
-    /// compress-count pass cheap.
-    static final int TARGET_SAMPLE_BYTES = 16 * 1024;
+    /// A corpus of at least this many bytes is sampled down to about this many: Rust's
+    /// `FSST_SAMPLETARGET`.
+    static final int TARGET_SAMPLE_BYTES = 1 << 14;
 
-    /// Maximum length of a single contiguous chunk drawn from one row. Long rows contribute several
-    /// chunks; short rows contribute one (truncated to the row length). Bounding chunk length keeps
-    /// the sample spread across many rows rather than dominated by a single long one.
-    static final int MAX_CHUNK_BYTES = 512;
+    /// Longest line a sample takes from one row: Rust's `FSST_SAMPLELINE`.
+    static final int LINE_BYTES = 512;
 
-    /// Denominator for the per-generation growing sample fraction. Each generation replays
-    /// `SAMPLE_FRACTION_NUMERATORS[gen] / SAMPLE_FRACTION_DENOMINATOR` of the sample's chunks.
-    static final int SAMPLE_FRACTION_DENOMINATOR = 128;
+    /// Rust's seed of the sample's hash sequence.
+    private static final long SAMPLE_SEED = 4637947L;
 
-    /// Per-generation numerators over [#SAMPLE_FRACTION_DENOMINATOR]. Early generations see only a
-    /// small fraction of the sample (the table is still small and low-quality, so compressing more
-    /// bytes buys nothing), ramping to the full sample on the last generation once the table has
-    /// mostly converged. These are the Rust reference's fractions: ~6%, ~30%, ~53%, ~77%, 100%.
-    static final int[] SAMPLE_FRACTION_NUMERATORS = {8, 38, 68, 98, 128};
+    /// The generations' sample fractions, out of [#FRACTION_DENOMINATOR]: Rust's `GENERATIONS`.
+    static final int[] FRACTION_NUMERATORS = {8, 38, 68, 98, 128};
+
+    /// The denominator of the sample fractions.
+    static final int FRACTION_DENOMINATOR = 128;
 
     private final byte[] bytes;
+    private final int[] lineBoundaries;
+    private final int lineCount;
+    private final boolean sampled;
 
-    /// Chunk boundaries as one array of `chunkCount + 1` cumulative offsets: chunk `i` spans
-    /// `[chunkBoundaries[i], chunkBoundaries[i + 1])`. Chunks are written back-to-back in
-    /// [#draw(byte[][], long)], so a chunk's end always equals the next chunk's start — a separate
-    /// ends array would just duplicate `chunkBoundaries[1..]`. The array may be over-allocated
-    /// (sized for the worst case of every chunk being 1 byte); only indices `0 .. chunkCount` are
-    /// valid, so `chunkCount` is tracked separately rather than trimming the array to size.
-    private final int[] chunkBoundaries;
-    private final int chunkCount;
-
-    private Sample(byte[] bytes, int[] chunkBoundaries, int chunkCount) {
+    private Sample(byte[] bytes, int[] lineBoundaries, int lineCount, boolean sampled) {
         this.bytes = bytes;
-        this.chunkBoundaries = chunkBoundaries;
-        this.chunkCount = chunkCount;
+        this.lineBoundaries = lineBoundaries;
+        this.lineCount = lineCount;
+        this.sampled = sampled;
     }
 
-    /// Draws a deterministic byte-size-bounded sample from `rows`.
+    /// Draws the sample of rows held one array each.
     ///
-    /// Rows are selected at random; each selection contributes one contiguous chunk of at most
-    /// [#MAX_CHUNK_BYTES] bytes, starting at a random offset within the chosen row. Empty rows are
-    /// skipped. Drawing stops once [#TARGET_SAMPLE_BYTES] bytes have been collected, so a corpus
-    /// smaller than the target is used in full. When every row is empty the sample is empty.
-    ///
-    /// @param rows the corpus rows, each a raw byte array (never `null`, but individually may be
-    ///             empty)
-    /// @param seed the PRNG seed; the same rows and seed yield a byte-identical sample
-    /// @return a sample of up to [#TARGET_SAMPLE_BYTES] bytes split into per-row chunks
-    @SuppressWarnings("java:S2245") // Deterministic PRNG is the contract: training samples must be
-                                    // reproducible across builds. No security boundary here.
-    static Sample draw(byte[][] rows, long seed) {
+    /// @param rows the corpus rows, never `null`; a row may be empty
+    /// @return the sample
+    static Sample draw(byte[][] rows) {
         return draw(rows.length, new RowAccess() {
             @Override
             public int rowLength(int row) {
@@ -80,27 +50,20 @@ final class Sample {
             }
 
             @Override
-            public void copyChunk(int row, int start, int len, byte[] out, int outPos) {
+            public void copy(int row, int start, int len, byte[] out, int outPos) {
                 System.arraycopy(rows[row], start, out, outPos, len);
             }
-        }, seed);
+        });
     }
 
-    /// Draws a deterministic byte-size-bounded sample from rows held contiguously, where row `i`
-    /// spans `rowBytes[rowOffsets[i], rowOffsets[i + 1])`.
-    ///
-    /// Behaves exactly like [#draw(byte[][], long)] — same selection order, same chunk lengths,
-    /// same bytes for the same seed — but reads its rows out of one shared array instead of one
-    /// `byte[]` object per row, so a caller holding its corpus contiguously never has to explode it
-    /// into per-row arrays just to train.
+    /// Draws the sample of rows held contiguously, row `i` spanning `rowBytes[rowOffsets[i],
+    /// rowOffsets[i + 1])`.
     ///
     /// @param rowBytes   all rows' bytes concatenated
     /// @param rowOffsets `rowCount + 1` cumulative offsets into `rowBytes`
     /// @param rowCount   the number of rows
-    /// @param seed       the PRNG seed; the same rows and seed yield a byte-identical sample
-    /// @return a sample of up to [#TARGET_SAMPLE_BYTES] bytes split into per-row chunks
-    @SuppressWarnings("java:S2245") // Deterministic PRNG is the contract, as in the byte[][] overload.
-    static Sample draw(byte[] rowBytes, int[] rowOffsets, int rowCount, long seed) {
+    /// @return the sample
+    static Sample draw(byte[] rowBytes, int[] rowOffsets, int rowCount) {
         return draw(rowCount, new RowAccess() {
             @Override
             public int rowLength(int row) {
@@ -108,119 +71,111 @@ final class Sample {
             }
 
             @Override
-            public void copyChunk(int row, int start, int len, byte[] out, int outPos) {
+            public void copy(int row, int start, int len, byte[] out, int outPos) {
                 System.arraycopy(rowBytes, rowOffsets[row] + start, out, outPos, len);
             }
-        }, seed);
+        });
     }
 
-    /// Shared sampling core behind both `draw` overloads: identical row-selection and
-    /// chunk-copying logic, addressed through `access` so it works whether rows live as one
-    /// `byte[]` per row or concatenated in a shared buffer.
-    ///
-    /// @param rowCount the number of rows
-    /// @param access   row-length and chunk-copy operations for the caller's row storage
-    /// @param seed     the PRNG seed; the same rows and seed yield a byte-identical sample
-    /// @return a sample of up to [#TARGET_SAMPLE_BYTES] bytes split into per-row chunks
-    private static Sample draw(int rowCount, RowAccess access, long seed) {
+    private static Sample draw(int rowCount, RowAccess access) {
         long totalBytes = 0;
-        // Pre-filter non-empty row indices once, up front: drawing then picks uniformly among only
-        // these `nonEmptyRows` candidates, an O(1) selection per chunk. The alternative — drawing a
-        // row index from the full row-count range and re-drawing on an empty hit — is an unbounded
-        // rejection sampler whose expected draw count is quadratic in the corpus's sparsity (e.g. a
-        // 1M-row, 0.01%-non-empty corpus), not the bounded skip a prior version of this comment
-        // claimed.
-        int[] nonEmptyRowIndices = new int[rowCount];
-        int nonEmptyRows = 0;
+        for (int i = 0; i < rowCount; i++) {
+            totalBytes += access.rowLength(i);
+        }
+        if (totalBytes < TARGET_SAMPLE_BYTES) {
+            return whole(rowCount, access, (int) totalBytes);
+        }
+        return sampled(rowCount, access);
+    }
+
+    private static Sample whole(int rowCount, RowAccess access, int totalBytes) {
+        byte[] out = new byte[totalBytes];
+        int[] boundaries = new int[rowCount + 1];
+        int pos = 0;
         for (int i = 0; i < rowCount; i++) {
             int len = access.rowLength(i);
-            totalBytes += len;
-            if (len > 0) {
-                nonEmptyRowIndices[nonEmptyRows++] = i;
-            }
+            access.copy(i, 0, len, out, pos);
+            pos += len;
+            boundaries[i + 1] = pos;
         }
-        if (nonEmptyRows == 0) {
-            return new Sample(new byte[0], new int[]{0}, 0);
-        }
-
-        int target = (int) Math.min(TARGET_SAMPLE_BYTES, totalBytes);
-        byte[] out = new byte[target];
-        // Every chunk is at least 1 byte, so `target` chunks is the worst-case count (plus one for
-        // the leading 0 boundary); no growable, boxing list needed.
-        int[] boundaries = new int[target + 1];
-        int chunkCount = 0;
-        Random rng = new Random(seed);
-        int outPos = 0;
-
-        while (outPos < target) {
-            int row = nonEmptyRowIndices[rng.nextInt(nonEmptyRows)];
-            int rowLen = access.rowLength(row);
-            int remaining = target - outPos;
-            int chunkLen = Math.min(Math.min(MAX_CHUNK_BYTES, rowLen), remaining);
-            int maxStart = rowLen - chunkLen;
-            int start = maxStart == 0 ? 0 : rng.nextInt(maxStart + 1);
-            access.copyChunk(row, start, chunkLen, out, outPos);
-            outPos += chunkLen;
-            chunkCount++;
-            boundaries[chunkCount] = outPos;
-        }
-
-        return new Sample(out, boundaries, chunkCount);
+        return new Sample(out, boundaries, rowCount, false);
     }
 
-    /// Row-length and chunk-copy operations abstracting over the two row storage shapes `draw`
-    /// accepts (one `byte[]` per row, or rows concatenated into a shared buffer).
+    private static Sample sampled(int rowCount, RowAccess access) {
+        // a line is at most LINE_BYTES, and the draw stops at the first line past the target
+        byte[] out = new byte[TARGET_SAMPLE_BYTES + LINE_BYTES];
+        int[] boundaries = new int[TARGET_SAMPLE_BYTES + 2];
+        int lines = 0;
+        int size = 0;
+        long rnd = hash(SAMPLE_SEED);
+        while (size < TARGET_SAMPLE_BYTES) {
+            rnd = hash(rnd);
+            int start = (int) Long.remainderUnsigned(rnd, rowCount);
+            int row = firstNonEmptyFrom(start, rowCount, access);
+            if (row < 0) {
+                break;
+            }
+            int rowLength = access.rowLength(row);
+            int chunks = 1 + (rowLength - 1) / LINE_BYTES;
+            rnd = hash(rnd);
+            int chunk = LINE_BYTES * (int) Long.remainderUnsigned(rnd, chunks);
+            int len = Math.min(LINE_BYTES, rowLength - chunk);
+            access.copy(row, chunk, len, out, size);
+            size += len;
+            lines++;
+            boundaries[lines] = size;
+        }
+        return new Sample(out, boundaries, lines, true);
+    }
+
+    /// The first row from `start` on, wrapping around, that is not empty, or -1 when every row is.
+    private static int firstNonEmptyFrom(int start, int rowCount, RowAccess access) {
+        for (int i = start; i < rowCount; i++) {
+            if (access.rowLength(i) > 0) {
+                return i;
+            }
+        }
+        for (int i = 0; i < start; i++) {
+            if (access.rowLength(i) > 0) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// Rust's `fsst_hash`, the C++ reference's `FSST_HASH`.
+    ///
+    /// @param value the value to hash
+    /// @return its hash
+    static long hash(long value) {
+        return value * 2971215073L ^ value >>> 15;
+    }
+
     private interface RowAccess {
         int rowLength(int row);
 
-        void copyChunk(int row, int start, int len, byte[] out, int outPos);
+        void copy(int row, int start, int len, byte[] out, int outPos);
     }
 
-    /// Returns the concatenated sample bytes. Chunk boundaries in [#chunkStart(int)] /
-    /// [#chunkEnd(int)] delimit the parts that came from distinct rows.
-    ///
-    /// @return the sample bytes; never `null`, possibly empty
     byte[] bytes() {
         return bytes;
     }
 
-    /// Returns the number of chunks the sample is split into. Generation `gen` replays only the
-    /// first [#chunkCountForGeneration(int)] of these.
-    ///
-    /// @return the total chunk count
-    int chunkCount() {
-        return chunkCount;
+    int lineCount() {
+        return lineCount;
     }
 
-    /// Returns the start offset (inclusive) of chunk `i` within [#bytes()].
-    ///
-    /// @param i the chunk index, in `0 .. chunkCount() - 1`
-    /// @return the chunk's start offset into the sample bytes
-    int chunkStart(int i) {
-        return chunkBoundaries[i];
+    int lineStart(int i) {
+        return lineBoundaries[i];
     }
 
-    /// Returns the end offset (exclusive) of chunk `i` within [#bytes()].
-    ///
-    /// @param i the chunk index, in `0 .. chunkCount() - 1`
-    /// @return the chunk's end offset into the sample bytes
-    int chunkEnd(int i) {
-        return chunkBoundaries[i + 1];
+    int lineEnd(int i) {
+        return lineBoundaries[i + 1];
     }
 
-    /// Returns how many leading chunks generation `gen` (0-based) should replay, applying that
-    /// generation's growing sample fraction. Generation 0 sees roughly 6% of the chunks, the last
-    /// generation sees them all. At least one chunk is always replayed when the sample is non-empty,
-    /// so no generation trains on nothing.
-    ///
-    /// @param gen the 0-based generation index, in `0 .. SAMPLE_FRACTION_NUMERATORS.length - 1`
-    /// @return the number of leading chunks to replay for that generation
-    int chunkCountForGeneration(int gen) {
-        int total = chunkCount();
-        if (total == 0) {
-            return 0;
-        }
-        long scaled = (long) total * SAMPLE_FRACTION_NUMERATORS[gen] / SAMPLE_FRACTION_DENOMINATOR;
-        return (int) Math.clamp(total, 0, scaled);
+    /// Whether the corpus was sampled down, rather than taken whole: Rust prunes the last
+    /// generation's table only for a corpus it took whole.
+    boolean sampled() {
+        return sampled;
     }
 }

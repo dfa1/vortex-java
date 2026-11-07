@@ -9,78 +9,118 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SampleTest {
 
     @Test
-    void draw_largeInput_totalSampledBytesNearTarget() {
-        // Given — a corpus far larger than the 16KB target, so sampling must cap the total.
+    void draw_largeInput_totalSampledBytesPassTheTargetByAtMostALine() {
+        // Given a corpus far larger than the 16KB target, so it is sampled down
         byte[][] rows = repeatedRows("the quick brown fox jumps over the lazy dog ", 5_000);
 
         // When
-        Sample result = Sample.draw(rows, 1L);
+        Sample result = Sample.draw(rows);
 
-        // Then — the total lands at the target exactly here, since every draw chunk is full-length;
-        // in general it is bounded by TARGET_SAMPLE_BYTES and never overshoots (draws stop once the
-        // target is reached). Allow a small tolerance for the last, possibly-truncated chunk.
+        // Then Rust draws lines until the target is reached, so the last one may pass it
+        assertThat(result.sampled()).isTrue();
+        assertThat(result.bytes().length).isGreaterThanOrEqualTo(Sample.TARGET_SAMPLE_BYTES);
         assertThat(totalBytes(result))
-                .isLessThanOrEqualTo(Sample.TARGET_SAMPLE_BYTES)
-                .isGreaterThan(Sample.TARGET_SAMPLE_BYTES - Sample.MAX_CHUNK_BYTES);
+                .isGreaterThanOrEqualTo(Sample.TARGET_SAMPLE_BYTES)
+                .isLessThan(Sample.TARGET_SAMPLE_BYTES + Sample.LINE_BYTES);
     }
 
     @Test
-    void draw_smallInput_usesFullCorpus() {
-        // Given — a corpus well under the target: no under-sampling should occur.
-        byte[][] rows = repeatedRows("abc", 4); // 12 bytes total, << 16KB.
+    void draw_smallInput_keepsEveryRowWholeAsALine() {
+        // Given a corpus under the target, with an empty row among them
+        byte[][] rows = {bytes("abc"), new byte[0], bytes("de"), bytes("fghij")};
 
         // When
-        Sample result = Sample.draw(rows, 1L);
+        Sample result = Sample.draw(rows);
 
-        // Then — every input byte is represented.
-        assertThat(totalBytes(result)).isEqualTo(12);
+        // Then every row is a line, the empty one too: training skips lines by their index
+        assertThat(result.sampled()).isFalse();
+        assertThat(result.lineCount()).isEqualTo(4);
+        assertThat(result.lineEnd(1) - result.lineStart(1)).isZero();
+        assertThat(totalBytes(result)).isEqualTo(10);
+        assertThat(new String(result.bytes(), StandardCharsets.UTF_8)).isEqualTo("abcdefghij");
     }
 
     @Test
-    void draw_allEmptyRows_producesEmptySample() {
-        // Given — every row empty, so there is nothing to sample.
+    void draw_sampledCorpusOfMostlyEmptyRows_walksPastTheEmptyOnes() {
+        // Given 10,000 rows of which every hundredth holds 400 bytes: 40KB, sampled
+        byte[][] rows = new byte[10_000][];
+        for (int i = 0; i < rows.length; i++) {
+            rows[i] = i % 100 == 0 ? bytes("y".repeat(400)) : new byte[0];
+        }
+
+        // When
+        Sample result = Sample.draw(rows);
+
+        // Then every line is a slice of a non-empty row, and the target is reached
+        assertThat(result.sampled()).isTrue();
+        assertThat(totalBytes(result)).isGreaterThanOrEqualTo(Sample.TARGET_SAMPLE_BYTES);
+        for (int line = 0; line < result.lineCount(); line++) {
+            assertThat(result.lineEnd(line) - result.lineStart(line)).isPositive();
+        }
+    }
+
+    @Test
+    void draw_emptyRowsOnly_givesAnEmptyLineEach() {
+        // Given every row empty
         byte[][] rows = {new byte[0], new byte[0], new byte[0]};
 
         // When
-        Sample result = Sample.draw(rows, 1L);
+        Sample result = Sample.draw(rows);
 
-        // Then
-        assertThat(result.chunkCount()).isZero();
+        // Then three empty lines, no bytes
+        assertThat(result.lineCount()).isEqualTo(3);
         assertThat(result.bytes()).isEmpty();
-        assertThat(result.chunkCountForGeneration(0)).isZero();
     }
 
     @Test
-    void draw_sameSeed_producesByteIdenticalSample() {
+    void draw_longRows_takeLinesOfAtMostFiveHundredTwelveBytes() {
+        // Given rows of 5000 bytes each, 20 of them: 100KB, sampled
+        byte[][] rows = repeatedRows("x".repeat(5_000), 20);
+
+        // When
+        Sample result = Sample.draw(rows);
+
+        // Then
+        for (int line = 0; line < result.lineCount(); line++) {
+            assertThat(result.lineEnd(line) - result.lineStart(line)).isBetween(1, Sample.LINE_BYTES);
+        }
+    }
+
+    @Test
+    void draw_sameRows_drawTheSameSampleAsTheContiguousOverload() {
         // Given
         byte[][] rows = repeatedRows("deterministic sampling must reproduce ", 2_000);
 
         // When
-        Sample first = Sample.draw(rows, 99L);
-        Sample second = Sample.draw(rows, 99L);
+        Sample perRow = Sample.draw(rows);
+        Sample contiguous = Sample.draw(flatten(rows), offsets(rows), rows.length);
 
-        // Then
-        assertThat(second.bytes()).isEqualTo(first.bytes());
-        assertThat(second.chunkCount()).isEqualTo(first.chunkCount());
+        // Then a fixed hash sequence, no seed: the same lines either way
+        assertThat(contiguous.bytes()).isEqualTo(perRow.bytes());
+        assertThat(contiguous.lineCount()).isEqualTo(perRow.lineCount());
     }
 
     @Test
-    void chunkCountForGeneration_growsMonotonicallyToFullSample() {
-        // Given
-        byte[][] rows = repeatedRows("grow the fraction over generations ", 2_000);
-        Sample sut = Sample.draw(rows, 7L);
+    void hash_isRustsFsstHash() {
+        // Given Rust's `value.wrapping_mul(2971215073) ^ value.wrapping_shr(15)`
 
         // When
-        int gen0 = sut.chunkCountForGeneration(0);
-        int gen4 = sut.chunkCountForGeneration(4);
+        long zero = Sample.hash(0);
+        long one = Sample.hash(1);
+        long minusOne = Sample.hash(-1L);
 
-        // Then — the first generation sees only a fraction; the last sees every chunk.
-        assertThat(gen0).isGreaterThanOrEqualTo(1).isLessThan(sut.chunkCount());
-        assertThat(gen4).isEqualTo(sut.chunkCount());
+        // Then
+        assertThat(zero).isZero();
+        assertThat(one).isEqualTo(2971215073L);
+        assertThat(minusOne).isEqualTo(-2971215073L ^ (-1L >>> 15));
+    }
+
+    private static byte[] bytes(String text) {
+        return text.getBytes(StandardCharsets.UTF_8);
     }
 
     private static byte[][] repeatedRows(String text, int count) {
-        byte[] row = text.getBytes(StandardCharsets.UTF_8);
+        byte[] row = bytes(text);
         byte[][] rows = new byte[count][];
         for (int i = 0; i < count; i++) {
             rows[i] = row;
@@ -88,10 +128,32 @@ class SampleTest {
         return rows;
     }
 
+    private static byte[] flatten(byte[][] rows) {
+        int total = 0;
+        for (byte[] row : rows) {
+            total += row.length;
+        }
+        byte[] out = new byte[total];
+        int pos = 0;
+        for (byte[] row : rows) {
+            System.arraycopy(row, 0, out, pos, row.length);
+            pos += row.length;
+        }
+        return out;
+    }
+
+    private static int[] offsets(byte[][] rows) {
+        int[] out = new int[rows.length + 1];
+        for (int i = 0; i < rows.length; i++) {
+            out[i + 1] = out[i] + rows[i].length;
+        }
+        return out;
+    }
+
     private static int totalBytes(Sample sample) {
         int total = 0;
-        for (int i = 0; i < sample.chunkCount(); i++) {
-            total += sample.chunkEnd(i) - sample.chunkStart(i);
+        for (int line = 0; line < sample.lineCount(); line++) {
+            total += sample.lineEnd(line) - sample.lineStart(line);
         }
         return total;
     }

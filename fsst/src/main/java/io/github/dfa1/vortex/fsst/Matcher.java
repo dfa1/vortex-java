@@ -49,7 +49,7 @@ public final class Matcher {
     }
 
     /// Rebuilds a matcher from new symbols, re-seeding `previous`'s backing arrays in place instead
-    /// of allocating fresh ~288 KB tables. Training's per-generation loop calls this six times per
+    /// of allocating fresh ~288 KB tables. Training's per-generation loop calls this five times per
     /// [CompressorBuilder#train(byte[][])]; without reuse each call allocates and zero-fills a fresh
     /// [LossyPerfectHashTable] and [ShortCodeTable] that the very next call immediately discards
     /// (issue #393 #7).

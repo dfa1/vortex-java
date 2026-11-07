@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `EncodeContext` has a new last component, `trace`, so code calling its canonical constructor passes `EncodeTrace.NONE`. ([#601](https://github.com/dfa1/vortex-java/issues/601))
 
+### Removed
+- `CompressorBuilder#seed(long)` of the `vortex-fsst` module: training takes Rust's fixed sample, not a seeded one. ([#583](https://github.com/dfa1/vortex-java/issues/583))
+
 ### Fixed
+- FSST symbol tables are trained as Rust's `fsst-rs` does (its sample, generations, candidate gains and cut), so a text column without a null gets Rust's FSST encoding up to ties of equal gain, its offsets a `vortex.sequence` where Rust's cascade finds one. ([#583](https://github.com/dfa1/vortex-java/issues/583))
 - A nullable text column without a null is written without a validity, as Rust writes it, instead of under `vortex.masked` (with cascading on). ([#650](https://github.com/dfa1/vortex-java/issues/650))
 - A struct with duplicate field names now fails with `VortexException` when it is built, at any nesting level; the writer used to check only top-level names. ([#696](https://github.com/dfa1/vortex-java/pull/696))
 - A `vortex.variant` column whose shredded dtype has a control character in a field or variant name fails with `VortexException` instead of `IllegalArgumentException`. ([#694](https://github.com/dfa1/vortex-java/issues/694))

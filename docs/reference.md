@@ -423,9 +423,9 @@ zero-ceremony standalone use, and both paths produce identical output for the sa
 
 | Method                  | Notes                                                                       |
 |-------------------------|-----------------------------------------------------------------------------|
-| `new CompressorBuilder()` | Fresh builder using a fixed reproducible default seed                     |
-| `seed(long)`            | Override the training-sample seed; returns `this` for chaining               |
-| `train(byte[][] rows)`  | Runs the bottom-up generation loop, returns a trained `Compressor` (deterministic in rows + seed) |
+| `new CompressorBuilder()` | A builder; training takes no options: it follows Rust's `fsst-rs`, its sample included |
+| `train(byte[][] rows)`  | Runs the bottom-up generation loop, returns a trained `Compressor` (deterministic in the rows) |
+| `train(byte[] rowBytes, int[] rowOffsets, int rowCount)` | The same over rows held contiguously, as a varbin column has them |
 
 ### `Compressor`
 
@@ -437,7 +437,7 @@ Immutable trained symbol table (up to 255 codes; `0xFF` is the escape). Produced
 | `symbolCount()`                                           | Number of symbols in the table (0–255)                                |
 | `packedSymbol(int code)`                                  | The symbol's bytes packed LSB-first into a `long`                     |
 | `symbolLength(int code)`                                  | The symbol's length in bytes (1–8)                                    |
-| `codesSortedByLength()`                                   | Code permutation, multi-byte length-ascending then all length-1 last  |
+| `codesSortedByLength()`                                   | Code permutation in Rust's final order: 2-byte symbols no longer symbol starts with, those one does (last taken first), 3–8 bytes by length, then the 1-byte ones |
 | `toDecompressor()`                                        | A `Decompressor` bound to this table                                  |
 | `compress(byte[] in, int start, int end, byte[] out, long outPos)`             | Greedy longest-match compress; size `out` ≥ `2 * (end - start)`  |
 | `compress(MemorySegment in, long start, long end, MemorySegment out, long outPos)` | FFM-native hot path; same sizing rule                       |

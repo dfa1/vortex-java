@@ -6,6 +6,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -130,13 +131,13 @@ class CompressorBuilderTest {
     class Determinism {
 
         @Test
-        void train_sameInputAndSeed_producesByteIdenticalTable() {
-            // Given — the same corpus trained twice with the same explicit seed.
+        void train_sameInput_producesByteIdenticalTable() {
+            // Given — the same corpus trained twice.
             byte[][] rows = logLikeRows(2_000);
 
             // When
-            Compressor first = new CompressorBuilder().seed(1234L).train(rows);
-            Compressor second = new CompressorBuilder().seed(1234L).train(rows);
+            Compressor first = new CompressorBuilder().train(rows);
+            Compressor second = new CompressorBuilder().train(rows);
 
             // Then — identical symbol count and identical (packed, length) for every code.
             assertThat(second.symbolCount()).isEqualTo(first.symbolCount());
@@ -146,21 +147,6 @@ class CompressorBuilderTest {
             }
         }
 
-        @Test
-        void train_defaultSeed_isAlsoDeterministic() {
-            // Given — no explicit seed: the default seed must be a fixed constant, not wall-clock.
-            byte[][] rows = logLikeRows(1_000);
-
-            // When
-            Compressor first = new CompressorBuilder().train(rows);
-            Compressor second = new CompressorBuilder().train(rows);
-
-            // Then
-            assertThat(second.symbolCount()).isEqualTo(first.symbolCount());
-            for (int code = 0; code < first.symbolCount(); code++) {
-                assertThat(second.packedSymbol(code)).isEqualTo(first.packedSymbol(code));
-            }
-        }
     }
 
     @Nested
@@ -202,79 +188,68 @@ class CompressorBuilderTest {
         @Test
         void run_nonFinalGeneration_prunesCandidateBelowFloor() {
             // Given — "ab" repeated a thousand times (very frequent) with a single "cd" appended
-            // (count 1). A non-final generation at full sample fraction (numerator 128) uses a
-            // min-count floor of 5, so the rare "cd" pair — and its bytes 'c'/'d' — must be pruned
+            // (count 1). A non-final generation scales its min-count floor with its sample
+            // fraction (5 * 98 / 128 = 3 here), so the rare "cd" pair — and its bytes 'c'/'d' — must be pruned
             // before ranking, unlike a naive keep-everything scheme.
             StringBuilder text = new StringBuilder();
             for (int i = 0; i < 1_000; i++) {
                 text.append("ab");
             }
             text.append("cd");
-            Sample sample = Sample.draw(new byte[][]{utf8(text.toString())}, 1L);
+            Sample sample = Sample.draw(new byte[][]{utf8(text.toString())});
             Compressor emptyTable = Compressor.of(List.of());
 
-            // When — one non-final generation over the whole sample.
+            // When — one non-final generation (fraction 98 of 128: a floor of 5 * 98 / 128 = 3).
             List<Symbol> result =
-                    TrainingGeneration.run(emptyTable, sample, sample.chunkCount(), 128, false);
+                    TrainingGeneration.run(emptyTable, sample, 98, new TrainingGeneration.Counts());
 
-            // Then — the rare bytes never make it into the table.
-            assertThat(containsByte(result, (byte) 'c')).isFalse();
-            assertThat(containsByte(result, (byte) 'd')).isFalse();
+            // Then — the rare bytes are no symbols of their own (a merge with a frequent code may carry
+            // them, as Rust's candidates do: its floor is on the first code's count)
+            assertThat(hasSymbol(result, 1, (byte) 'c')).isFalse();
+            assertThat(hasSymbol(result, 1, (byte) 'd')).isFalse();
             // Sanity: the frequent 'a'/'b' content is retained.
             assertThat(containsByte(result, (byte) 'a')).isTrue();
         }
     }
 
     @Nested
-    class SingleByteGainBoost {
+    class Growth {
 
         @Test
-        void train_frequentSingleByte_survivesAmidManyMultiByteCompetitors() {
-            // Given — a frequent single byte 'x' separates many distinct 3-byte groups. Under plain
-            // count*length gain a single byte is easily out-ranked by longer candidates; the 8x
-            // single-byte boost is exactly what keeps a frequent byte in the table, so it is not
-            // crowded out and its occurrences do not degrade into 2-byte escapes.
-            String[] groups = {"abc", "def", "ghi", "jkl", "mno", "pqr", "stu", "vwx"};
-            Random random = new Random(3);
-            StringBuilder text = new StringBuilder();
-            for (int i = 0; i < 4_000; i++) {
-                text.append(groups[random.nextInt(groups.length)]).append('x');
-            }
-            Compressor sut = new CompressorBuilder().train(new byte[][]{utf8(text.toString())});
+        void train_aRunOfOneByte_growsEightByteSymbols() {
+            // Given — rows of one repeated byte: each generation doubles the symbol by merging a
+            // symbol with itself, up to the eight bytes a symbol holds
+            byte[] row = new byte[1_000];
+            Arrays.fill(row, (byte) 'x');
 
             // When
-            boolean result = hasSingleByteSymbol(sut, (byte) 'x');
+            Compressor sut = new CompressorBuilder().train(new byte[][]{row, row, row});
 
             // Then
-            assertThat(result).isTrue();
+            assertThat(hasSymbol(sut, 8, (byte) 'x', (byte) 'x', (byte) 'x', (byte) 'x',
+                    (byte) 'x', (byte) 'x', (byte) 'x', (byte) 'x')).isTrue();
         }
     }
 
     @Nested
-    class NulByteCollision {
+    class NulByteSymbols {
 
         @Test
-        void run_currentTableAlreadyHasNulSuffixedSymbol_countsBothMatchLengthsSeparately() {
-            // Given — a current table that already contains "A\0" as a trained 2-byte symbol (as
-            // it would after an earlier generation learned it from real "A\0" occurrences). The
-            // sample repeats "AX" (a standalone 'A' the matcher can't extend into "A\0", since the
-            // next byte is 'X' not NUL) and "A\0" (which the matcher matches as one length-2
-            // symbol) equally often. Both produce a `bumpSingle` call with the *same* packed long:
-            // `{0x41}` (length 1, from "AX"'s 'A') and `{0x41, 0x00}` (length 2, from "A\0") both
-            // mask to `0x41` (issue #393 #5). A packed-only key would merge the two into one
-            // corrupted candidate; keying by `(packed, length)` must keep them distinct.
-            Compressor current = Compressor.of(List.of(new Symbol(0x41L, 2))); // "A\0", code 0
+        void train_dataWithZeroBytes_neverTakesASymbolEndingInOne() {
+            // Given — "A" followed by a zero byte, and "AX", equally often. Rust measures a symbol by
+            // its last non-zero byte, so the merge of "A" and a zero byte is just "A": a symbol
+            // ending in zeros would have a length its bytes do not show.
             byte[] row = interleavedStandaloneAndNulSuffixed(2_000);
-            Sample sample = Sample.draw(new byte[][]{row}, 1L);
 
-            // When — one final generation (minCount relaxed to 1) over the whole sample.
-            List<Symbol> result =
-                    TrainingGeneration.run(current, sample, sample.chunkCount(), 128, true);
+            // When
+            Compressor sut = new CompressorBuilder().train(new byte[][]{row});
 
-            // Then — both the standalone length-1 'A' symbol and the real "A\0" length-2 symbol
-            // survive as distinct, correctly counted candidates.
-            assertThat(hasSymbol(result, 1, (byte) 'A')).isTrue();
-            assertThat(hasSymbol(result, 2, (byte) 'A', (byte) 0)).isTrue();
+            // Then — every symbol's length is where its last non-zero byte is
+            for (int code = 0; code < sut.symbolCount(); code++) {
+                long packed = sut.packedSymbol(code);
+                int length = Math.max(1, 8 - Long.numberOfLeadingZeros(packed) / 8);
+                assertThat(sut.symbolLength(code)).as("symbol %d", code).isEqualTo(length);
+            }
         }
 
         private byte[] interleavedStandaloneAndNulSuffixed(int repeats) {
@@ -282,30 +257,11 @@ class CompressorBuilderTest {
             int pos = 0;
             for (int i = 0; i < repeats; i++) {
                 row[pos++] = 'A';
-                row[pos++] = 'X'; // standalone 'A': the matcher cannot extend this into "A\0"
+                row[pos++] = 'X';
                 row[pos++] = 'A';
-                row[pos++] = 0;   // "A\0": matches the pre-trained length-2 symbol
+                row[pos++] = 0;
             }
             return row;
-        }
-
-        private boolean hasSymbol(List<Symbol> symbols, int length, byte... expectedBytes) {
-            for (Symbol symbol : symbols) {
-                if (symbol.length() != length) {
-                    continue;
-                }
-                boolean matches = true;
-                for (int k = 0; k < length; k++) {
-                    if (symbol.byteAt(k) != expectedBytes[k]) {
-                        matches = false;
-                        break;
-                    }
-                }
-                if (matches) {
-                    return true;
-                }
-            }
-            return false;
         }
     }
 
@@ -351,8 +307,8 @@ class CompressorBuilderTest {
             }
 
             // When
-            Compressor perRow = new CompressorBuilder().seed(99L).train(rows);
-            Compressor result = new CompressorBuilder().seed(99L)
+            Compressor perRow = new CompressorBuilder().train(rows);
+            Compressor result = new CompressorBuilder()
                                         .train(flatten(rows), offsetsOf(rows), rows.length);
 
             // Then
@@ -409,13 +365,32 @@ class CompressorBuilderTest {
         }
     }
 
-    private static boolean hasSingleByteSymbol(Compressor compressor, byte value) {
-        for (int code = 0; code < compressor.symbolCount(); code++) {
-            if (compressor.symbolLength(code) == 1 && (byte) compressor.packedSymbol(code) == value) {
+    private static boolean hasSymbol(List<Symbol> symbols, int length, byte... bytes) {
+        for (Symbol symbol : symbols) {
+            if (symbol.length() == length && matches(symbol, bytes)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static boolean hasSymbol(Compressor compressor, int length, byte... bytes) {
+        for (int code = 0; code < compressor.symbolCount(); code++) {
+            if (compressor.symbolLength(code) == length
+                    && matches(new Symbol(compressor.packedSymbol(code), length), bytes)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matches(Symbol symbol, byte[] bytes) {
+        for (int k = 0; k < bytes.length; k++) {
+            if (symbol.byteAt(k) != bytes[k]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean containsByte(List<Symbol> symbols, byte value) {
