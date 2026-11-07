@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.writer.encode.ComparableValues;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
+import io.github.dfa1.vortex.writer.encode.RowCount;
 
 import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
@@ -97,7 +98,7 @@ final class Repartitioner {
     /// @param from how many leading rows to drop, less than the batch's row count
     /// @return the remaining rows
     static Object tail(Object data, int from) {
-        return concat(List.of(new Piece(data, from, (int) VortexWriter.arrayLength(data) - from, 0)));
+        return concat(List.of(new Piece(data, from, RowCount.of(data) - from, 0)));
     }
 
     /// Whether sizing a batch of `data` reads its values, as for strings and binaries -- the

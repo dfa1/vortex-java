@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `VortexWriter` is split into smaller internal parts and writes byte-identical files. ([#663](https://github.com/dfa1/vortex-java/issues/663))
+
 ### Fixed
 - The array stats on a flat segment's root node are the ones Rust keeps: integers under `vortex.primitive` and `fastlanes.bitpacked` carry min, max, `is_constant`, `null_count` and the uncompressed size, and every other encoding carries none, so a Java-written string column reports no flat `min`/`max`, as a Rust-written one. ([#583](https://github.com/dfa1/vortex-java/issues/583))
 - The child nodes of a flat segment carry the array stats Rust keeps: a sequence its sorted flags, a nullable integer's validity bitmap its true count, and patch values `is_constant = false`. ([#583](https://github.com/dfa1/vortex-java/issues/583))

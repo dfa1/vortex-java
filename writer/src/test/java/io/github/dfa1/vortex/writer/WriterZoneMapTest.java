@@ -201,7 +201,7 @@ class WriterZoneMapTest {
 
     @Test
     void noChunks_emitsNoZoneMap(@TempDir Path tmp) throws IOException {
-        // Given a file closed without any writeChunk: the column has no chunks, so flushZoneMaps
+        // Given a file closed without any writeChunk: the column has no chunks, so ZoneMapWriter#flush
         // skips it (the empty-chunks guard) and emits no zone-map.
         WriteOptions opts = WriteOptions.cascading(0).withZoneMaps(true).withGlobalDict(false).withEdition(Editions.CORE_2025_10_0);
         Path file = tmp.resolve("empty.vtx");

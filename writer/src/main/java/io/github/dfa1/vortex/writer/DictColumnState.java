@@ -373,11 +373,21 @@ final class DictColumnState {
         chunkCodes.add(codes);
         chunkValidity.add(validity);
         chunkRowCounts.add((long) len);
-        chunkNullCounts.add(validity != null ? VortexWriter.countNulls(validity) : 0L);
+        chunkNullCounts.add(validity != null ? countNulls(validity) : 0L);
         chunkStatsMin.add(min);
         chunkStatsMax.add(max);
         chunkStatsSum.add(sum);
         codeArrayBytes += 2L * len;
+    }
+
+    private static long countNulls(boolean[] validity) {
+        long nulls = 0;
+        for (boolean valid : validity) {
+            if (!valid) {
+                nulls++;
+            }
+        }
+        return nulls;
     }
 
     // Gives the null entry the next code, as Rust's `encode_null`; false when it no longer fits.
