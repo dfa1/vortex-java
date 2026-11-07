@@ -46,7 +46,13 @@ public final class ExtEncodingEncoder implements EncodingEncoder {
         } else {
             EncodingEncoder storageEncoder = FallbackEncodings.find(STORAGE_FALLBACK, storage)
                     .orElseThrow(() -> new VortexException(EncodingId.VORTEX_EXT, "no storage encoder for " + storage));
-            childResult = storageEncoder.encode(storage, data, ctx);
+            // DateTimePartsData only asks vortex.datetimeparts to split the timestamps; with no
+            // such encoder in play (an uncompressed write) they are plain i64 storage
+            Object storageData = data;
+            if (data instanceof DateTimePartsData parts) {
+                storageData = parts.timestamps();
+            }
+            childResult = storageEncoder.encode(storage, storageData, ctx);
         }
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[]{childResult.rootNode()}, new int[0]);
         // The storage encode already computed the column's bounds; dropping them left every

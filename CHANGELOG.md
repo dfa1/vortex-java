@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - An uncompressed write (`WriteOptions.cascading(0)`) of a nullable bool or struct column writes the file instead of failing with "no inner encoding". ([#689](https://github.com/dfa1/vortex-java/pull/689))
+- An uncompressed write of a timestamp column from a Parquet import stores the timestamps instead of failing with "Argument is not an array". ([#689](https://github.com/dfa1/vortex-java/pull/689))
 - `vortex.onpair` compression collects its codes in off-heap chunks and keeps them as `int`s instead of sizing a `long` array for one code per input byte, lowering its peak memory on large text chunks. ([#657](https://github.com/dfa1/vortex-java/issues/657))
 - Parquet import closes a chunk once its text and binary reach 64 MiB, so a wide-string file such as `websight-v01` no longer runs out of heap at `-Xmx8g`. ([#657](https://github.com/dfa1/vortex-java/issues/657))
 - The array stats on a flat segment's root node are the ones Rust keeps: integers under `vortex.primitive` and `fastlanes.bitpacked` carry min, max, `is_constant`, `null_count` and the uncompressed size, and every other encoding carries none, so a Java-written string column reports no flat `min`/`max`, as a Rust-written one. ([#583](https://github.com/dfa1/vortex-java/issues/583))
