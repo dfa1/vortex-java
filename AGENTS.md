@@ -396,6 +396,8 @@ procedure):
   `forEachChunk`; use `Optional`, records, sealed types, pattern switches, virtual threads, FFM).
   New APIs should feel like JDK APIs.
 - Always braces for `if`/`else`/`for`/`while`, even one-liners (`if (c) { return a; }`).
+- **No closing parenthesis alone on its line** (checkstyle `RegexpSingleline`): a declaration
+  stays on one line, or wraps its parameters and ends the last one with `) {`.
 - **No ternary that wraps or binds.** A `?:` that spans lines, or whose condition binds a pattern
   (`x instanceof Foo f && … ? f.a() : x`), is an `if`: assign the default, then override it.
   A short one-line ternary (`n == 0 ? 1 : n`) is fine.

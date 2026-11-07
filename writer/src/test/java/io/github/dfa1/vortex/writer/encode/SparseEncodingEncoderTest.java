@@ -178,15 +178,13 @@ class SparseEncodingEncoderTest {
 
         private static DecodeContext buildSparseCtx(
                 DType dtype, long rowCount, long fillLong, PType idxPtype,
-                long[] patchIndices, long[] patchValues
-        ) {
+                long[] patchIndices, long[] patchValues) {
             return buildSparseCtxWithOffset(dtype, rowCount, fillLong, idxPtype, patchIndices, patchValues, 0L);
         }
 
         private static DecodeContext buildSparseCtxWithOffset(
                 DType dtype, long rowCount, long fillLong, PType idxPtype,
-                long[] patchIndices, long[] patchValues, long offset
-        ) {
+                long[] patchIndices, long[] patchValues, long offset) {
             byte[] fillBytes = ProtoScalarValue.ofInt64Value(fillLong).encode();
             byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, offset, idxPtype);
             byte[] idxBuf = toLEBytes(patchIndices, idxPtype);
@@ -197,8 +195,7 @@ class SparseEncodingEncoderTest {
 
         private static DecodeContext buildSparseCtxF64(
                 DType dtype, long rowCount, double fillDouble,
-                long[] patchIndices, double[] patchValues
-        ) {
+                long[] patchIndices, double[] patchValues) {
             byte[] fillBytes = ProtoScalarValue.ofF64Value(fillDouble).encode();
             byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, 0L, PType.U32);
             byte[] idxBuf = toLEBytes(patchIndices, PType.U32);

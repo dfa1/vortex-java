@@ -245,8 +245,7 @@ public sealed interface DType
     record Struct(
             java.util.List<ColumnName> fieldNames,
             java.util.List<DType> fieldTypes,
-            boolean nullable
-    ) implements DType {
+            boolean nullable) implements DType {
 
         /// Validates that names and types pair 1:1. Duplicate names are legal in memory,
         /// mirroring the Rust reference's `StructFields`; uniqueness is a file-boundary
@@ -344,8 +343,7 @@ public sealed interface DType
             ExtensionId extensionId,
             DType storageDType,
             ExtensionMetadata metadata,
-            boolean nullable
-    ) implements DType {
+            boolean nullable) implements DType {
 
         /// Requires metadata that is a record, so the dtype compares and hashes by value.
         ///
@@ -379,8 +377,7 @@ public sealed interface DType
             java.util.List<ColumnName> names,
             java.util.List<DType> variantTypes,
             java.util.List<Integer> typeIds,
-            boolean nullable
-    ) implements DType {
+            boolean nullable) implements DType {
 
         /// Rust's limit: one variant per `u8` type id.
         public static final int MAX_VARIANTS = 256;

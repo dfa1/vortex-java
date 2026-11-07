@@ -22,8 +22,7 @@ public record Layout(
         long rowCount,
         MemorySegment metadata,
         List<Layout> children,
-        List<Integer> segments
-) {
+        List<Integer> segments) {
     /// Returns `true` if this layout is a flat (leaf) layout.
     ///
     /// @return `true` when `layoutId` is [LayoutId#FLAT]

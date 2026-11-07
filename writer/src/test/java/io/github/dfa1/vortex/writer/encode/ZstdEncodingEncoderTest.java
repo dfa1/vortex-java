@@ -303,8 +303,7 @@ class ZstdEncodingEncoderTest {
     class Decode {
 
         private static DecodeContext makeDictCtx(
-                byte[] meta, DType dtype, long n, byte[] dictBytes, byte[]... compressedFrames
-        ) {
+                byte[] meta, DType dtype, long n, byte[] dictBytes, byte[]... compressedFrames) {
             MemorySegment[] segments = new MemorySegment[1 + compressedFrames.length];
             segments[0] = MemorySegment.ofArray(dictBytes);
             int[] bufIndices = new int[1 + compressedFrames.length];
@@ -319,8 +318,7 @@ class ZstdEncodingEncoderTest {
         }
 
         private static DecodeContext makeNullableCtx(
-                byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames
-        ) {
+                byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames) {
             EncodeResult validityResult = BOOL_ENCODER.encode(DTypes.BOOL, validityBits, EncodeTestHelper.testCtx());
             EncodeNode remappedValidity = EncodeNode.remapBufferIndices(
                     validityResult.rootNode(), compressedFrames.length);

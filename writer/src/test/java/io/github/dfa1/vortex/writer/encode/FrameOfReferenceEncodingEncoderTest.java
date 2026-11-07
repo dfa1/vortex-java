@@ -41,8 +41,7 @@ class FrameOfReferenceEncodingEncoderTest {
     class Decode {
 
         private static DecodeContext buildForContext(
-                DType dtype, long reference, long[] residuals, PType ptype
-        ) {
+                DType dtype, long reference, long[] residuals, PType ptype) {
             byte[] metaBytes = ProtoScalarValue.ofInt64Value(reference).encode();
 
             int elemBytes = ptype.byteSize();

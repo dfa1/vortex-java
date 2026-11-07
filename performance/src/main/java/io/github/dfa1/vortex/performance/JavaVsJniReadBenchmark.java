@@ -539,8 +539,7 @@ public class JavaVsJniReadBenchmark {
             dev.vortex.api.VortexWriter writer,
             int[] epochDays, byte[][] symbols,
             double[] open, double[] high, double[] low, double[] close, long[] volume,
-            int n
-    ) throws IOException {
+            int n) throws IOException {
         try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, allocator)) {
             DateDayVector dateVec = (DateDayVector) root.getVector("date");
             VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");

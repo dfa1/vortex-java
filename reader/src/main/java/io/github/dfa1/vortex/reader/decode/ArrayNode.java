@@ -24,6 +24,5 @@ public record ArrayNode(
         EncodingId encodingId,
         MemorySegment metadata,
         ArrayNode[] children,
-        int[] bufferIndices
-) {
+        int[] bufferIndices) {
 }

@@ -257,7 +257,6 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             long[] inner,
             int[] laneOffsets,
             short[] patchIndices,
-            long[] patchValues
-    ) {
+            long[] patchValues) {
     }
 }

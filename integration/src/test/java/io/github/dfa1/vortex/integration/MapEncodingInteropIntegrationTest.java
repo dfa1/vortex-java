@@ -222,8 +222,7 @@ class MapEncodingInteropIntegrationTest {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static ListViewData entries(
-            String[] keys, long[] values, boolean[] valueValidity, int[] offsets, int[] sizes, long rows
-    ) {
+            String[] keys, long[] values, boolean[] valueValidity, int[] offsets, int[] sizes, long rows) {
         StructData entryStructs = new StructData(List.of(keys, new NullableData(values, valueValidity)));
         return new ListViewData(entryStructs, offsets, sizes, rows);
     }
@@ -247,8 +246,7 @@ class MapEncodingInteropIntegrationTest {
     }
 
     private static void writeMapColumnWithJni(
-            Path file, boolean nullableMap, boolean keysSorted, List<Map<String, Long>> rows
-    ) throws IOException {
+            Path file, boolean nullableMap, boolean keysSorted, List<Map<String, Long>> rows) throws IOException {
         Schema schema = arrowMapSchema(nullableMap, keysSorted);
         String uri = file.toAbsolutePath().toUri().toString();
         try (dev.vortex.api.VortexWriter writer =

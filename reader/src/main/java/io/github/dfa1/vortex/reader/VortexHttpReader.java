@@ -54,8 +54,7 @@ public final class VortexHttpReader implements VortexHandle {
     private VortexHttpReader(
         URI uri, HttpClient client, long fileSize,
         int version, Footer footer, DType dtype, Layout layout,
-        ReadRegistry registry, LayoutRegistry layoutRegistry
-    ) {
+        ReadRegistry registry, LayoutRegistry layoutRegistry) {
         this.uri = uri;
         this.client = client;
         this.arena = Arena.ofConfined();
@@ -263,8 +262,7 @@ public final class VortexHttpReader implements VortexHandle {
     private static MemorySegment fetchBlob(
         long offset, long length,
         long tailStart, byte[] tail,
-        URI uri, HttpClient client
-    ) throws IOException {
+        URI uri, HttpClient client) throws IOException {
         if (offset >= tailStart) {
             long relOffset = offset - tailStart;
             return IoBounds.slice(MemorySegment.ofArray(tail), relOffset, length);
@@ -304,8 +302,7 @@ public final class VortexHttpReader implements VortexHandle {
     public io.github.dfa1.vortex.reader.array.Array decodeSegment(
             io.github.dfa1.vortex.reader.SegmentSpec spec,
             DType dtype, long rowCount,
-            java.lang.foreign.SegmentAllocator arenaOut
-    ) {
+            java.lang.foreign.SegmentAllocator arenaOut) {
         MemorySegment seg = rawSegment(spec);
         return new SerializedArrayDecoder(registry)
                 .decode(seg, footer.arraySpecs(), dtype, rowCount, arenaOut);

@@ -114,8 +114,7 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
 
     private static void applyPatches(
             MemorySegment out, long n, long nPatches, long nChunks, long nLanes, long offset, int elemBytes,
-            MemorySegment laneOffsets, MemorySegment patchIndices, MemorySegment patchValues
-    ) {
+            MemorySegment laneOffsets, MemorySegment patchIndices, MemorySegment patchValues) {
         long laneCap = SegmentBroadcast.capacity(laneOffsets, 4, nChunks * nLanes + 1);
         long idxCap = SegmentBroadcast.capacity(patchIndices, 2, nPatches);
         long valCap = SegmentBroadcast.capacity(patchValues, elemBytes, nPatches);

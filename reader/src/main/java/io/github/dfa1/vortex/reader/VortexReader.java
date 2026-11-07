@@ -39,8 +39,7 @@ public final class VortexReader implements VortexHandle {
     private VortexReader(
             Arena arena, MemorySegment fileSegment, long fileSize,
             int version, Footer footer, DType dtype, Layout layout,
-            ReadRegistry registry, LayoutRegistry layoutRegistry
-    ) {
+            ReadRegistry registry, LayoutRegistry layoutRegistry) {
         this.arena = arena;
         this.fileSegment = fileSegment;
         this.fileSize = fileSize;
@@ -102,8 +101,7 @@ public final class VortexReader implements VortexHandle {
     }
 
     private static VortexReader parse(
-            MemorySegment seg, long size, Arena arena, ReadRegistry registry, LayoutRegistry layoutRegistry
-    ) {
+            MemorySegment seg, long size, Arena arena, ReadRegistry registry, LayoutRegistry layoutRegistry) {
         long bodyBytes = size - VortexFormat.TRAILER_SIZE;
         var trailerSeg = IoBounds.slice(seg, bodyBytes, VortexFormat.TRAILER_SIZE);
         Trailer trailer = Trailer.parse(trailerSeg, bodyBytes);
@@ -313,8 +311,7 @@ public final class VortexReader implements VortexHandle {
     public io.github.dfa1.vortex.reader.array.Array decodeSegment(
             io.github.dfa1.vortex.reader.SegmentSpec spec,
             DType dtype, long rowCount,
-            java.lang.foreign.SegmentAllocator arena
-    ) {
+            java.lang.foreign.SegmentAllocator arena) {
         MemorySegment seg = IoBounds.slice(fileSegment, spec.offset(), spec.length()).asReadOnly();
         return new SerializedArrayDecoder(registry)
                 .decode(seg, footer.arraySpecs(), dtype, rowCount, arena);

@@ -25,8 +25,7 @@ public final class DecodeTestHelper {
     /// @param registry registry used for nested decode dispatch
     /// @return decode context ready for [EncodingDecoder#decode]
     public static DecodeContext toDecodeContext(
-            EncodeResult result, long rowCount, DType dtype, ReadRegistry registry
-    ) {
+            EncodeResult result, long rowCount, DType dtype, ReadRegistry registry) {
         List<MemorySegment> buffers = result.buffers();
         MemorySegment[] segments = buffers.toArray(new MemorySegment[0]);
         ArrayNode root = toArrayNode(result.rootNode());
