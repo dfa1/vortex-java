@@ -20,17 +20,21 @@ import java.util.List;
 /// When the context carries cascade depth (positive [EncodeContext#allowedCascading]) the inner
 /// non-nullable values are compressed through the full [CascadingCompressor] built from the
 /// registry, so nullable columns get the same Dict/FSST/ALP/bitpack selection as dense columns.
-/// Without cascade depth the values fall back to a fixed first-match encoder
-/// (primitive / varbin / fixed-size-list).
+/// Without cascade depth the values fall back to a fixed first-match encoder: the canonical
+/// encoding of every dtype a nullable column can have.
 public final class MaskedEncodingEncoder implements EncodingEncoder {
 
     private static final byte[] EMPTY_BYTES = new byte[0];
 
+    // Bool and Struct were missing, so an uncompressed write of a nullable bool or struct column
+    // failed with "no inner encoding" (a Parquet import of finepdfs and oasst1)
     private static final List<EncodingEncoder> INNER_FALLBACK = List.of(
             new PrimitiveEncodingEncoder(),
+            new BoolEncodingEncoder(),
             new VarBinEncodingEncoder(),
             new FixedSizeListEncodingEncoder(),
             new ListEncodingEncoder(),
+            new StructEncodingEncoder(),
             new DecimalEncodingEncoder());
 
     /// Creates the encoder.
