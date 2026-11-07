@@ -48,24 +48,6 @@ public final class CascadingCompressor {
         this.encodings = List.copyOf(encodings);
     }
 
-    private static int dataLength(Object data) {
-        return switch (data) {
-            case StructData(var fieldArrays) -> fieldArrays.isEmpty() ? 0 : dataLength(fieldArrays.getFirst());
-            case NullableData nullable -> nullable.length();
-            case boolean[] a -> a.length;
-            case byte[] a -> a.length;
-            case short[] a -> a.length;
-            case int[] a -> a.length;
-            case long[] a -> a.length;
-            case float[] a -> a.length;
-            case double[] a -> a.length;
-            case String[] a -> a.length;
-            case byte[][] a -> a.length;
-            case BigDecimal[] a -> a.length;
-            default -> throw new IllegalArgumentException("unsupported data type: " + data.getClass());
-        };
-    }
-
     /// Rows per sample stride: Rust's `SAMPLE_SIZE`.
     private static final int SAMPLE_STRIDE = 64;
 
@@ -201,7 +183,7 @@ public final class CascadingCompressor {
     /// Rust's `exact_uncompressed_size` of a primitive array: the values, plus a packed bitmap
     /// when some row is null (`validity_uncompressed_size_in_bytes`, nothing when all are valid).
     private static long uncompressedBytes(DType dtype, Object data) {
-        int n = dataLength(data);
+        int n = RowCount.of(data);
         long values = primitiveBytes(dtype, n);
         if (data instanceof NullableData nullable && nullable.nullCount() > 0) {
             return values + (n + 7) / 8;
@@ -300,7 +282,7 @@ public final class CascadingCompressor {
         MinMax bounds = dtype instanceof DType.Primitive p && !p.ptype().isFloating() ? ZoneMapStats.of(dtype, data) : null;
         long nullCount = data instanceof NullableData nullable ? nullable.nullCount() : 0L;
         return CachedNodeStats.of(dtype, root, bounds == null ? null : bounds.min(), bounds == null ? null : bounds.max(),
-                dataLength(data), nullCount);
+                RowCount.of(data), nullCount);
     }
 
     private EncodeResult encodeArray(DType dtype, Object data, EncodeContext ctx) {
@@ -436,7 +418,7 @@ public final class CascadingCompressor {
         if (!root.equals(EncodingId.VORTEX_DECIMAL_BYTE_PARTS)) {
             return scheme;
         }
-        int n = dataLength(data);
+        int n = RowCount.of(data);
         long plain = (long) n * dtype.byteWidth();
         if (data instanceof NullableData nullable && nullable.nullCount() > 0) {
             plain += (n + 7) / 8;
@@ -498,7 +480,7 @@ public final class CascadingCompressor {
             DType dtype, ArrayAndStats input, EncodeContext ctx, IntToLongFunction baselineFn
     ) {
         Object data = input.data();
-        int n = dataLength(data);
+        int n = RowCount.of(data);
         int sampleSize = sampleSize(n, ctx);
         Choice choice = chooseBest(dtype, input, ctx, baselineFn.applyAsLong(sampleSize),
                 () -> sampleSize < n ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data);
@@ -529,7 +511,7 @@ public final class CascadingCompressor {
     /// `vortex.varbinview` is a 16-byte view per row plus the bytes of each value too long to be
     /// inlined in it.
     private static long viewBytes(Object data, int sampleSize, long seed) {
-        Object sample = sampleSize < dataLength(data) ? stratifiedSample(data, sampleSize, seed) : data;
+        Object sample = sampleSize < RowCount.of(data) ? stratifiedSample(data, sampleSize, seed) : data;
         if (sample instanceof NullableData nullable) {
             sample = nullable.values();
         }
@@ -666,7 +648,7 @@ public final class CascadingCompressor {
     /// An empty child is returned before any selection, as Rust's `compress` does
     /// (`compressor/cascade.rs`), so it costs nothing.
     private long measureBestChild(DType dtype, Object data, EncodeContext ctx) {
-        int n = dataLength(data);
+        int n = RowCount.of(data);
         long baseline = uncompressedBytes(dtype, data);
         if (n == 0) {
             return baseline;

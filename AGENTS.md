@@ -53,7 +53,14 @@ reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, A
           reader.layout — Layout, LayoutDecoder, LayoutDecodeContext, LayoutRegistry
           + built-in *LayoutDecoder impls, ZonedStatsSchema
 writer  — VortexWriter, WriteRegistry, WriteOptions, ColumnEncoding, ExtensionEncoder
-          writer.encode — EncodingEncoder, EncodeContext, EncodeResult, EncodedBuffer, NullableData
+          VortexWriter orchestrates package-private parts (one concern each):
+            SegmentEncoder   — picks and runs encoders; immutable, the only state executor tasks touch
+            SegmentSink      — ordered segment writes to the channel, footer, postscript, trailer
+            LayoutTree       — the layout tree + footer layout_specs; the only place FbsLayout is built
+            GlobalDictWriter — global dictionary columns: detect, buffer, demote, flush
+            ZoneMapWriter    — zone maps (vortex.zoned, legacy vortex.stats)
+          writer.encode — EncodingEncoder, EncodeContext, EncodeResult, EncodedBuffer, NullableData,
+          RowCount (`RowCount.of(data)`: rows of any column carrier — never re-implement it)
           + *EncodingEncoder impls,
           extension encoders
 csv, parquet, jdbc — import/export between Vortex files and CSV, Parquet, and JDBC sources

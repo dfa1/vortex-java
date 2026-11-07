@@ -1,88 +1,29 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.core.fbs.FbsBuilder;
-import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
-import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
-import io.github.dfa1.vortex.writer.encode.ListData;
-import io.github.dfa1.vortex.writer.encode.ListViewData;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.model.DTypes;
-import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.core.io.VortexFormat;
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.Edition;
 import io.github.dfa1.vortex.core.model.EditionFamily;
 import io.github.dfa1.vortex.core.model.Editions;
-import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.LayoutId;
-import io.github.dfa1.vortex.writer.encode.EncodeContext;
-import io.github.dfa1.vortex.writer.encode.EncodeNode;
-import io.github.dfa1.vortex.writer.encode.EncodeResult;
-import io.github.dfa1.vortex.writer.encode.EncodedBuffer;
-import io.github.dfa1.vortex.writer.encode.MinMax;
-import io.github.dfa1.vortex.writer.encode.NodeStats;
-import io.github.dfa1.vortex.writer.encode.NullableData;
-import io.github.dfa1.vortex.writer.encode.StructData;
-import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.AlpRdEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.CascadingCompressor;
-import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.DateTimePartsEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.DecimalBytePartsEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.DecimalEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.ZigZagEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.OnPairEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.SequenceEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
-import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
-import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
-import io.github.dfa1.vortex.core.fbs.FbsFooter;
-import io.github.dfa1.vortex.core.fbs.FbsLayout;
-import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
-import io.github.dfa1.vortex.core.fbs.FbsPostscript;
-import io.github.dfa1.vortex.core.fbs.FbsPostscriptSegment;
-import io.github.dfa1.vortex.core.fbs.FbsSegmentSpec;
+import io.github.dfa1.vortex.writer.encode.RowCount;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.channels.WritableByteChannel;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.stream.Collectors;
+import java.util.function.Consumer;
 
 /// Writes a Vortex file.
 ///
@@ -107,105 +48,29 @@ import java.util.stream.Collectors;
 /// secondary safety net over the aggregate code-array bytes.
 public final class VortexWriter implements Closeable {
 
-    // Indices into layout_specs list in the FbsFooter
-    // values() clones its array on every call; the edition filter reads it once per writer.
-    private static final List<EncodingId.WellKnown> WELL_KNOWN_IDS = List.of(EncodingId.WellKnown.values());
-
-    /// Largest slice of a segment written at once: a ByteBuffer holds at most 2 GiB.
-    private static final long MAX_WRITE_SLICE = 1L << 30;
-
-    private static final int LAYOUT_FLAT = 0;
-    private static final int LAYOUT_CHUNKED = 1;
-    private static final int LAYOUT_STRUCT = 2;
-    private static final int LAYOUT_DICT = 3;
-    private static final int LAYOUT_ZONED = 4;
-
-    private static final List<EncodingEncoder> DEFAULT_CODECS = List.of(
-            new AlpEncodingEncoder(), new PrimitiveEncodingEncoder(), new BoolEncodingEncoder(),
-            new DictEncodingEncoder(), new VarBinEncodingEncoder(), new ExtEncodingEncoder(),
-            new FixedSizeListEncodingEncoder(), new ListEncodingEncoder(), new DecimalEncodingEncoder());
-
     private static final WriteRegistry DEFAULT_EXTENSIONS = WriteRegistry.builder().registerDefaultExtensions().build();
 
-    // Base cascade codec list — no Zstd or Pco. They are appended (before PrimitiveEncoding) when
-    // WriteOptions.compact() is true. See WriteOptions.withCompact(boolean) for the tradeoff.
-
-    private final WritableByteChannel channel;
     private final DType.Struct schema;
     private final WriteOptions options;
-    private final List<EncodingEncoder> encodings;
-    private final WriteRegistry defaultRegistry;
+    // The only writer state the encoding tasks on WriteOptions#executor() touch; immutable.
+    private final SegmentEncoder segmentEncoder;
+    private final SegmentSink sink;
     // Extension encoders for the Collection auto-route: the built-ins, or the caller's registry.
     private final WriteRegistry extensionRegistry;
     /// Serializes the schema at close, reusing the extension metadata bytes checked at create.
     private final DTypeFbsSerializer dtypeSerializer;
-    private final List<EncodingEncoder> cascadeCodecs;
-    private final WriteRegistry cascadeRegistry;
-    // The dict-layout probe's codecs: the cascade with the integer dictionary back in, as Rust's
-    // probe is its full compressor while its data compressor leaves IntDictScheme out.
-    private final List<EncodingEncoder> probeCodecs;
-    private final WriteRegistry probeRegistry;
-    private final List<SegRef> segs = new ArrayList<>();
-    private final Map<ColumnName, List<ChunkRef>> colChunks = new LinkedHashMap<>();
-    private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
-    // Edition guard (issue #301): the cumulative member set of every WriteOptions#editions()
-    // family enabled for this writer, or empty when no edition is configured (guard off).
-    // editionExcluded is its complement over every well-known encoding id plus the custom encoders this writer holds
-    // (encodings + cascadeCodecs) - seeded into every EncodeContext's initial `excluded` set so
-    // CascadingCompressor's existing per-candidate exclusion check (already consulted at every
-    // selection site, including nested competitions like a masked column's validity-bitmap
-    // cascade) skips ineligible candidates and gracefully falls back, rather than the guard only
-    // discovering a violation after the fact. registerEncodingIds still checks editionAllowed
-    // directly as a backstop for paths that select an encoding without consulting excluded at all
-    // (e.g. a forced encodingOverride, or MaskedEncodingEncoder#encodeValidity's own top-level
-    // Sparse/RunEnd/Rle/Bool choice, which are all core-family and so never actually trip this in
-    // practice - see adr/0023-vortex-editions-adoption.md).
-    private final Set<EncodingId> editionAllowed;
-    private final Set<EncodingId> editionExcluded;
-    private long bytesWritten = 0;
-
-    // Global dict state: columns detected as low-cardinality on their first chunk are buffered here
-    // instead of encoded per-chunk. Buffering is cardinality-bounded (ADR 0021): rather than retain
-    // raw values, each candidate holds a deduplicated value->code map (at most 65,535 entries or 1 MiB
-    // per dictionary) plus cheap per-chunk code arrays. Flushed in close() as one Dict layout per
-    // dictionary. Past the retained-bytes budget the largest columns demote to per-chunk encoding.
-    private final Set<ColumnName> dictCandidates = new LinkedHashSet<>();
-    private final Map<ColumnName, DictColumnState> dictStates = new LinkedHashMap<>();
-    // Dictionaries a column has already filled to Rust's constraints (a new one starts when it
-    // reaches them); the open one is in dictStates.
-    private final Map<ColumnName, List<DictColumnState>> dictRuns = new LinkedHashMap<>();
-    private final Map<ColumnName, List<DictColRef>> dictColRefs = new LinkedHashMap<>();
-    // Code-array bytes retained per global-dict-candidate column, and their running sum; together
-    // they guard the aggregate memory budget (dictRetainedBudget) as a secondary safety net (ADR
-    // 0021) so no set of mis-detected columns can pin the heap. Now that codes cost ~2 B/row instead
-    // of raw values, this budget rarely fires; when the sum crosses it, the largest columns demote.
-    private final Map<ColumnName, Long> dictRetainedBytes = new LinkedHashMap<>();
-    private long dictRetainedTotal = 0;
-    // Effective aggregate global-dict retention budget, configured via
-    // WriteOptions.globalDictMaxRetainedBytes(); see that field's javadoc for the rationale.
-    private final long dictRetainedBudget;
-    private boolean firstChunkSeen = false;
-
-    // Per-column zone-maps, populated by flushZoneMaps() in close() when enableZoneMaps is set.
-    private final Map<ColumnName, ZoneMapRef> zoneMaps = new LinkedHashMap<>();
     // Rust's vortex.zoned: fixed 8192-row zones fed from the raw batches, independent of chunking.
     // Used when the targeted core edition includes the layout; otherwise the legacy per-chunk
-    // vortex.stats zone map is built from colChunks/dictColRefs at close.
+    // vortex.stats zone map, whose targets also keep one chunk per batch.
     private final boolean zonedLayout;
-    private final Map<ColumnName, ZoneAccumulator> zoneAccumulators = new LinkedHashMap<>();
-    // Each column's zone stats accumulate on the executor, chained so a column's batches still
-    // arrive in order; flushZoneMaps waits for every chain.
-    private final Map<ColumnName, CompletableFuture<Void>> zoneTails = new LinkedHashMap<>();
-    // WriteOptions.columnEncodings resolved to the encoder each overridden column is written with.
-    private final Map<ColumnName, EncodingEncoder> columnEncoders = new LinkedHashMap<>();
+    private final GlobalDictWriter globalDict;
+    private final ZoneMapWriter zoneMaps;
+    private final Map<ColumnName, List<ChunkRef>> colChunks;
     // Rust's repartition: each column's batches coalesce into ~1 MB chunks of 8192-row multiples.
-    private final Map<ColumnName, Repartitioner> repartitioners = new LinkedHashMap<>();
+    private final Map<ColumnName, Repartitioner> repartitioners;
     // The batch being written: its columns' piece sizes, measured on the executor ahead of appendChunk.
-    private final Map<ColumnName, CompletableFuture<long[]>> pieceSizes = new HashMap<>();
-    // Segments encoding on WriteOptions#executor(), written to the channel in submission order so
-    // segment indexes are known at submit time and the file bytes do not depend on the executor.
-    private final ArrayDeque<CompletableFuture<EncodedSegment>> pending = new ArrayDeque<>();
-    private int submittedSegments = 0;
+    private final Map<ColumnName, CompletableFuture<long[]>> pieceSizes;
+    private boolean firstChunkSeen;
 
     private VortexWriter(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings,
@@ -223,45 +88,31 @@ public final class VortexWriter implements Closeable {
         // silently collapse the duplicates anyway. The name policy itself (non-blank, no control
         // characters — NUL additionally aborts the reference toolchain's Arrow FFI export) is
         // already certified by the ColumnName type carried in schema.fieldNames().
-        var uniqueNames = new java.util.HashSet<ColumnName>();
+        var uniqueNames = new HashSet<ColumnName>();
         for (ColumnName name : schema.fieldNames()) {
             if (!uniqueNames.add(name)) {
                 throw new IllegalArgumentException("duplicate field name: " + name);
             }
         }
-        this.channel = channel;
         this.schema = schema;
         this.options = options;
-        this.dictRetainedBudget = options.globalDictMaxRetainedBytes().bytes();
-        this.encodings = encodings;
-        this.defaultRegistry = buildRegistry(encodings);
         this.extensionRegistry = extensionRegistry;
         this.dtypeSerializer = new DTypeFbsSerializer(extensionRegistry);
         validateExtensions(schema);
-        // A custom encoder list is the whole candidate set, cascade included: emitting a built-in
-        // the caller left out would produce a file their own read registry may not decode.
-        this.cascadeCodecs = encodings == DEFAULT_CODECS ? buildCascadeCodecs(options) : List.copyOf(encodings);
-        this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
-        this.probeCodecs = this.cascadeCodecs.stream()
-                .map(e -> e instanceof DictEncodingEncoder ? new DictEncodingEncoder() : e)
-                .toList();
-        this.probeRegistry = buildRegistry(this.probeCodecs);
-        this.editionAllowed = editionAllowed(options.editions());
         this.zonedLayout = options.enableZoneMaps() && editionHasZonedLayout(options.editions());
-        for (Map.Entry<ColumnName, ColumnEncoding> e : options.columnEncodings().entrySet()) {
-            if (!schema.fieldNames().contains(e.getKey())) {
-                throw new IllegalArgumentException("column encoding for unknown column: " + e.getKey());
-            }
-            columnEncoders.put(e.getKey(), columnEncoder(e.getKey(), e.getValue()));
-        }
-        this.editionExcluded = editionExcluded(this.editionAllowed, encodings, this.cascadeCodecs);
+        this.segmentEncoder = new SegmentEncoder(options, encodings, schema.fieldNames());
+        this.sink = new SegmentSink(channel, segmentEncoder, options.executor());
+        this.globalDict = new GlobalDictWriter(options, segmentEncoder, sink, zonedLayout, this::appendChunk);
+        this.zoneMaps = new ZoneMapWriter(schema, options, zonedLayout, segmentEncoder, sink);
+        this.colChunks = new LinkedHashMap<>();
         for (ColumnName name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
+        this.repartitioners = new LinkedHashMap<>();
+        this.pieceSizes = new HashMap<>();
+        this.firstChunkSeen = false;
     }
 
-    /// The union of every enabled edition's cumulative member set, or empty if no edition is
-    /// configured — an empty result means the guard is off entirely.
     /// Whether the write may emit Rust's `vortex.zoned` layout, added in `core2026.08.0`: with the
     /// edition guard off (Rust's `disable_editions()` writes its latest layouts), or when the
     /// enabled core edition is that one or later.
@@ -271,49 +122,6 @@ public final class VortexWriter implements Closeable {
         }
         Edition core = editions.get(EditionFamily.CORE);
         return core != null && Editions.ALL.indexOf(core) >= Editions.ALL.indexOf(Editions.CORE_2026_08_0);
-    }
-
-    private static Set<EncodingId> editionAllowed(Map<EditionFamily, Edition> editions) {
-        if (editions.isEmpty()) {
-            return Set.of();
-        }
-        Set<EncodingId> allowed = new LinkedHashSet<>();
-        for (Edition edition : editions.values()) {
-            allowed.addAll(Editions.cumulativeMembers(edition));
-        }
-        return Set.copyOf(allowed);
-    }
-
-    /// Every encoder id — well-known, plus the custom ones this writer holds — outside `allowed`. Seeding
-    /// this into every [EncodeContext]'s initial exclusion set lets [CascadingCompressor]'s
-    /// existing per-candidate check skip them and fall back to the best remaining candidate,
-    /// instead of the edition guard only surfacing as a hard failure after encoding completes.
-    private static Set<EncodingId> editionExcluded(
-            Set<EncodingId> allowed, List<EncodingEncoder> encodings, List<EncodingEncoder> cascadeCodecs) {
-        if (allowed.isEmpty()) {
-            return Set.of();
-        }
-        Set<EncodingId> excluded = new LinkedHashSet<>();
-        // Every well-known id, not only the encoders listed here: an encoder can carry its own private
-        // candidate list (Sparse's bool patch-index cascade offers fastlanes.delta), and those
-        // candidates must be filtered by the same edition policy.
-        for (EncodingId.WellKnown id : WELL_KNOWN_IDS) {
-            if (!allowed.contains(id)) {
-                excluded.add(id);
-            }
-        }
-        // custom (non-well-known) encoders this writer holds
-        for (EncodingEncoder enc : encodings) {
-            if (!allowed.contains(enc.encodingId())) {
-                excluded.add(enc.encodingId());
-            }
-        }
-        for (EncodingEncoder enc : cascadeCodecs) {
-            if (!allowed.contains(enc.encodingId())) {
-                excluded.add(enc.encodingId());
-            }
-        }
-        return Set.copyOf(excluded);
     }
 
     /// Runs [ExtensionEncoder#validate(DType.Extension)] on every extension dtype in `dtype`, nested
@@ -349,90 +157,6 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    /// Builds a [WriteRegistry] from the given encoder list.
-    private static WriteRegistry buildRegistry(List<EncodingEncoder> encoders) {
-        WriteRegistry.Builder b = WriteRegistry.builder();
-        for (EncodingEncoder e : encoders) {
-            b.register(e);
-        }
-        return b.build();
-    }
-
-    private static List<EncodingEncoder> buildCascadeCodecs(WriteOptions options) {
-        List<EncodingEncoder> codecs = new ArrayList<>();
-        // FbsExtension-dtype dispatch order matters: findPrimitiveEncoding picks the first
-        // accepting codec. DateTimePartsEncoding goes first: it splits any vortex.timestamp
-        // storage (DateTimePartsData, long[], or NullableData over long[] with its validity on
-        // the days child); for other extensions, Days units or an all-null chunk it returns
-        // notApplicable and spliceResult excludes it, falling back to ExtEncoding, which
-        // cascades the storage child through FoR/Bitpacked/RLE/ALP.
-        // FixedSizeListEncoding handles UUID-style fixed-size byte storage downstream
-        // of ExtEncoding.
-        codecs.add(new DateTimePartsEncodingEncoder());
-        codecs.add(new ExtEncodingEncoder());
-        codecs.add(new FixedSizeListEncodingEncoder());
-        codecs.add(new ListEncodingEncoder());
-        codecs.add(new ConstantEncodingEncoder());
-        // The primitive schemes in Rust's registration order (vortex-btrblocks session.rs), which
-        // breaks a tie between equal scores: integers FoR, ZigZag, BitPacking, Sparse, IntDict,
-        // RunEnd, Sequence, RLE, Delta; floats ALP, ALP-RD, FloatDict, sparse, RLE. One list
-        // serves both, so Dict sits before Sparse as the floats have it; for integers the two only
-        // meet in the probe and zone tables, on an exact tie of two estimates.
-        codecs.add(new FrameOfReferenceEncodingEncoder());
-        // ZigZag folds signed values to small unsigned magnitudes and cascades them into
-        // bit-packing, as Rust's ZigZagScheme does (issue #410). It competes with FoR, which
-        // always fits in as few bits, so it is here for parity rather than for size.
-        codecs.add(new ZigZagEncodingEncoder());
-        codecs.add(new BitpackedEncodingEncoder());
-        codecs.add(new AlpEncodingEncoder());
-        // ALP-RD competes for high-precision F64/F32 that plain ALP can't fit without too many
-        // exceptions (e.g. nyc-311 Latitude): without it in the competition such columns fall back
-        // to raw vortex.primitive or dict, matching neither the Rust reference (which uses alprd) nor
-        // its size (#304). Registered on WriteRegistry already; this adds it as a top-level candidate.
-        codecs.add(new AlpRdEncodingEncoder());
-        // Rust's file writer keeps integers out of the data cascade because its DictStrategy
-        // dictionary-encodes suitable columns as a layout. That is our global dictionary: with it
-        // off (a streaming CSV import cannot buffer a whole column), an integer chunk keeps its
-        // per-chunk dictionary, or a low-cardinality integer column loses its dictionary entirely.
-        codecs.add(options.globalDict() ? DictEncodingEncoder.forDataCascade() : new DictEncodingEncoder());
-        codecs.add(new SparseEncodingEncoder());
-        codecs.add(new RunEndEncodingEncoder());
-        // Rust's SequenceScheme: an exact integer arithmetic sequence costs two scalars (#507).
-        codecs.add(new SequenceEncodingEncoder());
-        codecs.add(new RleEncodingEncoder());
-        // Delta is in no edition ("no edition includes fastlanes.delta yet"), so like Rust's
-        // DeltaScheme it competes only when the edition guard is off (WriteOptions#withoutEditions).
-        Set<EncodingId> allowed = editionAllowed(options.editions());
-        if (allowed.isEmpty() || allowed.contains(EncodingId.FASTLANES_DELTA)) {
-            codecs.add(new DeltaEncodingEncoder());
-        }
-        // Decimals: byte-parts (precision <= 18) narrows its mantissa and cascades it through
-        // FoR/bit-packing, as Rust's DecimalScheme always does (AlwaysUse); it is found first, and
-        // plain vortex.decimal takes what it declines (wider precisions, chunks under two values).
-        codecs.add(new DecimalBytePartsEncodingEncoder());
-        codecs.add(new DecimalEncodingEncoder());
-        // FsstEncodingEncoder sits between Dict and VarBin. Utf8 goes through
-        // CascadingCompressor's sample-and-measure competition (like Primitive dtypes),
-        // not first-match dispatch, so Dict/FSST/VarBin genuinely compete on measured
-        // size — matching Rust, which uses FSST for high-cardinality short strings
-        // (e.g. taxi store_and_fwd_flag).
-        // OnPair (core2026.08.1) competes with FSST whenever the enabled editions include it, as
-        // Rust's OnPairScheme does in its default compressor: the default edition does.
-        if (allowed.isEmpty() || allowed.contains(EncodingId.VORTEX_ONPAIR)) {
-            codecs.add(new OnPairEncodingEncoder());
-        }
-        codecs.add(new FsstEncodingEncoder());
-        codecs.add(new VarBinEncodingEncoder());
-        if (options.compact()) {
-            // Rust's with_compact(): Zstd for strings and binary, Pco for numerics.
-            codecs.add(ZstdEncodingEncoder.forText());
-            codecs.add(new PcoEncodingEncoder());
-        }
-        codecs.add(new PrimitiveEncodingEncoder());
-        codecs.add(new BoolEncodingEncoder());
-        return List.copyOf(codecs);
-    }
-
     /// Creates a [VortexWriter] using the default encoder set.
     ///
     /// @param channel the channel to write to
@@ -442,11 +166,9 @@ public final class VortexWriter implements Closeable {
     public static VortexWriter create(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options
     ) {
-        return new VortexWriter(channel, schema, options, DEFAULT_CODECS, DEFAULT_EXTENSIONS);
+        return new VortexWriter(channel, schema, options, SegmentEncoder.DEFAULT_CODECS, DEFAULT_EXTENSIONS);
     }
 
-    /// Creates a [VortexWriter] with a custom encoder list.
-    ///
     /// Creates a [VortexWriter] with a custom encoder list.
     ///
     /// @param channel   the channel to write to
@@ -477,67 +199,20 @@ public final class VortexWriter implements Closeable {
     }
 
     /// Counts rows for the length-consistency check in [#writeChunk]. Accepts the
-    /// same shapes the writer takes plus pre-conversion [java.util.Collection]s
+    /// same shapes the writer takes plus pre-conversion [Collection]s
     /// from the extension-column auto-route path.
     private static long rowCountForValidation(ColumnName colName, Object data) {
-        if (data instanceof java.util.Collection<?> coll) {
+        if (data instanceof Collection<?> coll) {
             return coll.size();
         }
         try {
-            return arrayLength(data);
+            return RowCount.of(data);
         } catch (UnsupportedOperationException _) {
             throw new IllegalArgumentException(
                     "column '" + colName + "' has unsupported data type: "
                             + data.getClass().getSimpleName());
         }
     }
-
-    static long arrayLength(Object data) {
-        return switch (data) {
-            case byte[] a -> a.length;
-            case short[] a -> a.length;
-            case int[] a -> a.length;
-            case long[] a -> a.length;
-            case float[] a -> a.length;
-            case double[] a -> a.length;
-            case boolean[] a -> a.length;
-            case String[] a -> a.length;
-            case java.math.BigDecimal[] a -> a.length;
-            case byte[][] a -> a.length;
-            // A struct column's row count is its fields' row count (all fields share length,
-            // enforced by StructEncodingEncoder); an empty struct carries no rows.
-            case StructData d -> d.fieldArrays().isEmpty() ? 0L : arrayLength(d.fieldArrays().getFirst());
-            case ListData d -> d.outerLen();
-            case ListViewData d -> d.outerLen();
-            case DateTimePartsData d -> d.timestamps().length;
-            case FixedSizeListData d -> d.outerLen();
-            case io.github.dfa1.vortex.writer.encode.NullableData d -> d.validity().length;
-            case io.github.dfa1.vortex.writer.encode.VariantData d -> d.length();
-            default -> throw new UnsupportedOperationException(
-                    "unsupported data type: " + data.getClass());
-        };
-    }
-
-    private static ByteBuffer buildPostscript(
-            long footerOff, int footerLen,
-            long dtypeOff, int dtypeLen,
-            long layoutOff, int layoutLen
-    ) {
-        var fbb = new FbsBuilder(256);
-
-        int footerSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(
-                fbb, footerOff, footerLen, 0, 0, 0);
-        int dtypeSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(
-                fbb, dtypeOff, dtypeLen, 0, 0, 0);
-        int layoutSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(
-                fbb, layoutOff, layoutLen, 0, 0, 0);
-
-        int psOff = FbsPostscript.createFbsPostscript(fbb, dtypeSegOff, layoutSegOff, 0, footerSegOff);
-        FbsPostscript.finishFbsPostscriptBuffer(fbb, psOff);
-        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-    }
-
-    // ── Segment encoding ─────────────────────────────────────────────────────
 
     /// Write one chunk via the typed [Chunk] builder. Each `.put` is validated
     /// against the writer's schema (name exists, array type matches dtype, boxed arrays for
@@ -554,8 +229,8 @@ public final class VortexWriter implements Closeable {
     ///
     /// @param builder consumer that populates a [Chunk] with all schema columns
     /// @throws IOException if an I/O error occurs writing to the underlying channel
-    public void writeChunk(java.util.function.Consumer<Chunk> builder) throws IOException {
-        var impl = new io.github.dfa1.vortex.writer.ChunkImpl(schema);
+    public void writeChunk(Consumer<Chunk> builder) throws IOException {
+        var impl = new ChunkImpl(schema);
         builder.accept(impl);
         writeChunk(impl.finish());
     }
@@ -618,7 +293,7 @@ public final class VortexWriter implements Closeable {
             // long[] / byte[] storage array. The dtype stays as DType.Extension so
             // ExtEncoding wraps the storage child below — matches Rust's nested layout
             // (ExtEncoding → PrimitiveEncoding) and lets Registry skip its unwrap path.
-            if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
+            if (colDtype instanceof DType.Extension extDtype && data instanceof Collection<?> coll) {
                 ExtensionEncoder impl = extensionRegistry.lookup(extDtype.extensionId());
                 if (impl == null) {
                     // Without an encoder the Collection would reach the encoders unconverted and
@@ -633,14 +308,14 @@ public final class VortexWriter implements Closeable {
             // Sizing a string batch reads every string and was the caller thread's largest cost
             // of an import. Columns are independent, so the pool sizes them all at once.
             if (zonedLayout && Repartitioner.supports(colDtype) && Repartitioner.sizeReadsValues(data)
-                    && !dictCandidates.contains(colName)) {
+                    && !globalDict.isCandidate(colName)) {
                 // Only read the column's own Repartitioner: creating it here would change the order
                 // flushRepartitioners writes the last chunks in.
                 Repartitioner own = repartitioners.get(colName);
                 long firstRow = own == null ? 0 : own.rows();
                 Object batch = data;
                 pieceSizes.put(colName, CompletableFuture.supplyAsync(
-                        () -> Repartitioner.sizePieces(batch, arrayLength(batch), firstRow), options.executor()));
+                        () -> Repartitioner.sizePieces(batch, RowCount.of(batch), firstRow), options.executor()));
             }
         }
 
@@ -649,88 +324,17 @@ public final class VortexWriter implements Closeable {
             DType colDtype = schema.fieldTypes().get(i);
             Object data = adapted.get(colName);
 
-            if (zonedLayout) {
-                ZoneAccumulator acc = zoneAccumulators.computeIfAbsent(colName, _ -> new ZoneAccumulator(colDtype));
-                Object batch = data;
-                zoneTails.put(colName, zoneTails.getOrDefault(colName, CompletableFuture.completedFuture(null))
-                        .thenRunAsync(() -> acc.add(batch, arrayLength(batch)), options.executor()));
+            zoneMaps.add(colName, colDtype, data);
+            if (!firstChunkSeen) {
+                globalDict.detect(colName, colDtype, data);
             }
-
-            if (!firstChunkSeen && options.globalDict() && !columnEncoders.containsKey(colName)) {
-                // Global dict candidate detection inspects raw primitive/String/byte[] arrays. Nullable
-                // columns (carried as NullableData) run the same cardinality/ratio check against
-                // their values, skipping null positions per the validity bitmap; the reader's dict
-                // lazy-decode already handles masked (nullable) codes children.
-                boolean nullable = data instanceof io.github.dfa1.vortex.writer.encode.NullableData;
-                Object values = nullable
-                        ? ((io.github.dfa1.vortex.writer.encode.NullableData) data).values() : data;
-                boolean[] validity = nullable
-                        ? ((io.github.dfa1.vortex.writer.encode.NullableData) data).validity() : null;
-                boolean candidate = false;
-                if (colDtype instanceof DType.Primitive p) {
-                    // Rust's DictStrategy admits a column when its probe compressor, the cascade, turns
-                    // the first 8192 rows into a dict; there is no cardinality cap
-                    candidate = DictColumnState.admitsPtype(p.ptype());
-                    if (candidate && options.allowedCascading() == 0) {
-                        // no cascade to ask: the sample's distinct count decides
-                        int probeRows = (int) Math.min(Repartitioner.BLOCK_ROWS, arrayLength(data));
-                        Object head = Repartitioner.head(values, probeRows);
-                        candidate = DictColumnState.isLowCardinality(p.ptype(), head,
-                                validity != null ? Arrays.copyOf(validity, probeRows) : null);
-                    } else if (candidate) {
-                        candidate = probeCompressesToDict(colDtype, data);
-                    }
-                } else if (colDtype instanceof DType.Utf8 || colDtype instanceof DType.Binary) {
-                    // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported), by what
-                    // its first 8192 rows do: not more than half distinct. The cascade probe stays with
-                    // primitives: ours picks OnPair for strings where Rust's StringDictScheme wins.
-                    int probeRows = Math.min(Repartitioner.BLOCK_ROWS, ((Object[]) values).length);
-                    candidate = DictColumnState.isVarBinDictCandidate(
-                            Arrays.copyOf((Object[]) values, probeRows),
-                            validity != null ? Arrays.copyOf(validity, probeRows) : null);
-                }
-                if (candidate) {
-                    dictCandidates.add(colName);
-                    dictStates.put(colName, new DictColumnState(colDtype));
-                }
-            }
-
-            if (dictCandidates.contains(colName)) {
-                // Ingest this chunk into the column's open dictionary, starting the next one when it is
-                // full: dedup values into the shared value->code map, buffer a cheap per-chunk code
-                // array, and capture the per-chunk stats now (before the raw array is discarded).
-                ingestChunk(colName, colDtype, data);
-                long before = dictRetainedBytes.getOrDefault(colName, 0L);
-                long after = retainedBytes(colName);
-                dictRetainedTotal += after - before;
-                dictRetainedBytes.put(colName, after);
-                if (dictRetainedTotal > dictRetainedBudget) {
-                    // Aggregate code-array budget exceeded (secondary safety net). Demote the
-                    // largest-retained columns until back under budget, so writer memory stays
-                    // bounded even across many wide candidate columns.
-                    evictLargestDictColumnsUntilUnderBudget();
-                }
+            if (globalDict.isCandidate(colName)) {
+                globalDict.ingest(colName, colDtype, data);
             } else {
                 appendChunk(colName, colDtype, data);
             }
         }
         firstChunkSeen = true;
-    }
-
-    /// Rust's `DictStrategy` admission: the column gets a dict layout only when the full cascade,
-    /// its probe compressor, turns the first 8192-row block into a `vortex.dict`
-    /// (`vortex-layout/src/layouts/dict/writer.rs`). Without a cascade there is no compressor to
-    /// ask, and the cardinality check alone decides.
-    private boolean probeCompressesToDict(DType colDtype, Object data) {
-        if (options.allowedCascading() == 0) {
-            return true;
-        }
-        Object block = Repartitioner.head(data, (int) Math.min(Repartitioner.BLOCK_ROWS, arrayLength(data)));
-        try (Arena arena = Arena.ofConfined()) {
-            EncodeContext ctx = EncodeContext.ofDepth(options.allowedCascading(), arena, probeRegistry, editionExcluded);
-            EncodeResult result = new CascadingCompressor(probeCodecs).encode(colDtype, block, ctx);
-            return result.rootNode().encodingId().equals(EncodingId.VORTEX_DICT);
-        }
     }
 
     /// Hands one batch of a column to its [Repartitioner], writing every chunk it completes; a
@@ -743,14 +347,14 @@ public final class VortexWriter implements Closeable {
         }
         Repartitioner repartitioner = repartitioners.computeIfAbsent(colName, _ -> new Repartitioner(colDtype));
         CompletableFuture<long[]> sizes = pieceSizes.remove(colName);
-        for (Object chunk : repartitioner.add(data, arrayLength(data), sizes != null ? sizes.join() : null)) {
+        for (Object chunk : repartitioner.add(data, RowCount.of(data), sizes != null ? sizes.join() : null)) {
             writeDataChunk(colName, colDtype, chunk);
         }
     }
 
     private void writeDataChunk(ColumnName colName, DType colDtype, Object data) throws IOException {
-        long rowCount = arrayLength(data);
-        int segIdx = writeSegment(colDtype, data, columnEncoders.get(colName));
+        long rowCount = RowCount.of(data);
+        int segIdx = writeSegment(colDtype, data, segmentEncoder.columnEncoder(colName));
         colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
     }
 
@@ -766,1007 +370,27 @@ public final class VortexWriter implements Closeable {
     @Override
     public void close() throws IOException {
         flushRepartitioners();
-        flushDictColumns();
-        flushZoneMaps();
-        drainSegments(0);
-        ByteBuffer footerBuf = buildFooter();
-        long footerOff = bytesWritten;
-        write(footerBuf);
-
-        ByteBuffer dtypeBuf = dtypeSerializer.buildDType(schema);
-        long dtypeOff = bytesWritten;
-        write(dtypeBuf);
-
-        ByteBuffer layoutBuf = buildLayout();
-        long layoutOff = bytesWritten;
-        write(layoutBuf);
-
-        ByteBuffer psBuf = buildPostscript(
-                footerOff, footerBuf.capacity(),
-                dtypeOff, dtypeBuf.capacity(),
-                layoutOff, layoutBuf.capacity());
-        write(psBuf);
-
-        // Trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
-        var trailer = ByteBuffer.allocate(VortexFormat.TRAILER_SIZE).order(ByteOrder.LITTLE_ENDIAN);
-        trailer.putShort((short) VortexFormat.VERSION);
-        trailer.putShort((short) psBuf.capacity());
-        trailer.put(VortexFormat.MAGIC.asByteBuffer());
-        trailer.flip();
-        channel.write(trailer);
-    }
-
-    private int writeSegment(DType dtype, Object data) throws IOException {
-        return writeSegment(dtype, data, null);
+        globalDict.flush();
+        zoneMaps.flush(colChunks, globalDict.written());
+        // the zoned layout: Rust's "vortex.zoned" when the edition has it, else the legacy
+        // "vortex.stats" alias every reader accepts
+        LayoutId zoned = LayoutId.STATS;
+        if (zonedLayout) {
+            zoned = LayoutId.ZONED;
+        }
+        sink.finish(zoned, dtypeSerializer.buildDType(schema),
+                LayoutTree.build(schema, colChunks, globalDict.written(), zoneMaps.written()));
     }
 
     private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride) throws IOException {
-        return writeSegment(dtype, data, encodingOverride, Set.of());
-    }
-
-    /// Writes a segment, optionally forcing a specific `encodingOverride` instead of the
-    /// configured cascade, and optionally excluding encodings from the cascade competition.
-    ///
-    /// `excludedFromCascade` lets the global Utf8 dictionary path compress its values pool
-    /// through the normal Utf8 competition (FSST/VarBin/Zstd) while excluding
-    /// [DictEncodingEncoder] — the cascade would otherwise re-pick it and wrap the dictionary
-    /// in another dict the reader cannot unwrap. Only consulted on the cascade branch
-    /// (`encodingOverride == null && allowedCascading > 0`).
-    ///
-    /// @param dtype               logical type of the segment
-    /// @param data                the values to encode
-    /// @param encodingOverride    a specific encoder to force, or `null` to use the cascade
-    /// @param excludedFromCascade encoding ids to exclude from the cascade competition
-    /// @return the index of the written segment
-    /// @throws IOException if writing to the channel fails
-    private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride,
-            Set<EncodingId> excludedFromCascade) throws IOException {
-        EncodingEncoder override = resolveOverride(dtype, data, encodingOverride);
-        pending.add(CompletableFuture.supplyAsync(
-                () -> encodeSegment(dtype, data, override, excludedFromCascade), options.executor()));
-        int segIdx = submittedSegments++;
-        drainSegments(MAX_IN_FLIGHT_SEGMENTS);
-        return segIdx;
-    }
-
-    // ponytail: fixed in-flight window bounds memory to ~2 chunks per core; make it a WriteOptions
-    // knob if a caller needs a tighter memory bound or a deeper pipeline.
-    private static final int MAX_IN_FLIGHT_SEGMENTS = 2 * Runtime.getRuntime().availableProcessors();
-
-    /// Writes completed segments from the head of the queue, in submission order, blocking on the
-    /// head while more than `keep` are still in flight. `drainSegments(0)` writes them all.
-    private void drainSegments(int keep) throws IOException {
-        while (!pending.isEmpty() && (pending.size() > keep || pending.peek().isDone())) {
-            EncodedSegment encoded;
-            try {
-                encoded = pending.poll().join();
-            } catch (CompletionException e) {
-                discardPending();
-                // Encoders throw only unchecked exceptions: rethrow them as the sequential path did.
-                switch (e.getCause()) {
-                    case RuntimeException re -> throw re;
-                    case Error err -> throw err;
-                    default -> throw new IOException(e.getCause());
-                }
-            }
-            try (Arena _ = encoded.arena()) {
-                writeEncoded(encoded);
-            }
-        }
-    }
-
-    private void joinZoneTails() throws IOException {
-        try {
-            CompletableFuture.allOf(zoneTails.values().toArray(CompletableFuture[]::new)).join();
-        } catch (CompletionException e) {
-            switch (e.getCause()) {
-                case RuntimeException re -> throw re;
-                case Error err -> throw err;
-                default -> throw new IOException(e.getCause());
-            }
-        }
-    }
-
-    /// Waits out every in-flight segment after a failure so none of their arenas leaks.
-    private void discardPending() {
-        while (!pending.isEmpty()) {
-            pending.poll().handle((encoded, _) -> {
-                if (encoded != null) {
-                    encoded.arena().close();
-                }
-                return null;
-            }).join();
-        }
-    }
-
-    /// Picks the structural encoder a segment is forced through, or `encodingOverride` unchanged.
-    /// Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncodingEncoder here.
-    /// FbsExtension columns route through ExtEncodingEncoder.encode which itself delegates to
-    /// MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
-    /// Exception: a configured encoder that embeds validity itself (acceptsNullable, e.g.
-    /// vortex.zstd) takes the NullableData straight, so no masked wrapper is inserted.
-    /// Map columns bypass both: the container encoding is structural rather than a
-    /// compressible primitive codec (same reason Variant does below), and their validity is
-    /// delegated to the entries child's own validity slot, so no masked wrapper belongs here.
-    private EncodingEncoder resolveOverride(DType dtype, Object data, EncodingEncoder encodingOverride) {
-        if (encodingOverride == null && dtype instanceof DType.Map) {
-            return new io.github.dfa1.vortex.writer.encode.MapEncodingEncoder();
-        }
-        // With cascading on, a nullable primitive column goes to the compressor, which keeps the
-        // validity in the encoding that stores the values, as Rust does (#604)
-        // and so does a nullable struct or list, which carry it as a child of their own (#648)
-        boolean keepsValidity = options.allowedCascading() > 0
-                && (CascadingCompressor.keepsValidity(dtype) || CascadingCompressor.carriesValidity(dtype));
-        if (encodingOverride == null
-                && data instanceof io.github.dfa1.vortex.writer.encode.NullableData
-                && !(dtype instanceof DType.Extension) && !keepsValidity) {
-            EncodingEncoder nullableCapable = nullableCapableEncoder(dtype);
-            return nullableCapable != null ? nullableCapable : new MaskedEncodingEncoder();
-        }
-        // Variant columns bypass the cascade: the container encoding is structural, not a
-        // compressible primitive codec, so route straight to the dedicated encoder.
-        if (encodingOverride == null && dtype instanceof DType.Variant) {
-            return new io.github.dfa1.vortex.writer.encode.VariantEncodingEncoder();
-        }
-        return encodingOverride;
-    }
-
-    /// Encodes one segment and computes its stats: the CPU-bound half of a segment write, run on
-    /// [WriteOptions#executor()]. Touches only immutable writer state; the returned arena is shared
-    /// so the writing thread can read and close it.
-    private EncodedSegment encodeSegment(DType dtype, Object data, EncodingEncoder encodingOverride,
-            Set<EncodingId> excludedFromCascade) {
-        Arena arena = Arena.ofShared();
-        try {
-            EncodeResult result;
-            if (encodingOverride != null) {
-                // Give overrides the cascade registry + depth when cascading is enabled, so
-                // wrapping encoders (notably MaskedEncodingEncoder for nullable columns) can
-                // compress their inner values through the full CascadingCompressor rather than a
-                // fixed first-match encoder. Without cascading, a depth-0 context is passed and the
-                // override behaves as before.
-                EncodeContext encodeCtx = options.allowedCascading() > 0
-                        ? EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded)
-                        : EncodeContext.of(arena, defaultRegistry, editionExcluded);
-                // A wrapping override (masked) cascades its inner values, so the exclusions hold
-                // there too -- a nullable global-dict pool must never become a dict itself.
-                encodeCtx = encodeCtx.withExcluded(excludedFromCascade);
-                result = encodingOverride.encode(dtype, data, encodeCtx);
-            } else if (options.allowedCascading() > 0) {
-                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded);
-                for (EncodingId excluded : excludedFromCascade) {
-                    encodeCtx = encodeCtx.withExcluded(excluded);
-                }
-                CascadingCompressor compressor = new CascadingCompressor(cascadeCodecs);
-                result = compressor.encode(dtype, data, encodeCtx);
-            } else {
-                EncodingEncoder encoder = findEncoder(dtype);
-                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry, editionExcluded);
-                result = encoder.encode(dtype, data, encodeCtx);
-            }
-            long nullCount = data instanceof NullableData nd ? countNulls(nd.validity()) : 0L;
-            // The winning encoder's own stats win when present (a cheaper override, e.g.
-            // vortex.constant already knows its value is both extremes) -- otherwise the generic
-            // fallback computes them from the untouched input, independent of which encoder ran.
-            // This is what makes stats coverage an encoder-independent guarantee rather than a
-            // per-encoder convention every new encoder has to remember (ADR 0025).
-            ProtoScalarValue min;
-            ProtoScalarValue max;
-            if (result.hasStats()) {
-                min = result.statsMin();
-                max = result.statsMax();
-            } else {
-                MinMax fallback = ZoneMapStatCodec.columnMinMax(dtype, data);
-                min = fallback != null ? fallback.min() : null;
-                max = fallback != null ? fallback.max() : null;
-            }
-            SegmentStats stats = new SegmentStats(min, max, ZoneMapStatCodec.columnSum(dtype, data), nullCount);
-            // the stats the flat segment's root node carries are Rust's, not the zone map's
-            result = result.withRootStats(dtype, min, max, arrayLength(data), nullCount);
-            return new EncodedSegment(result, arena, stats);
-        } catch (RuntimeException | Error e) {
-            arena.close();
-            throw e;
-        }
-    }
-
-    /// Appends one encoded segment to the channel: the ordered, I/O half of a segment write.
-    private void writeEncoded(EncodedSegment encoded) throws IOException {
-        EncodeResult result = encoded.result();
-        // Register all encoding IDs found in the node tree
-        registerEncodingIds(result.rootNode());
-
-        // Align segment start to 64 bytes so each buffer is Arrow-compatible
-        long prePad = (64 - bytesWritten % 64) % 64;
-        if (prePad > 0) {
-            writePadding((int) prePad);
-        }
-
-        long offset = bytesWritten;
-        List<EncodedBuffer> buffers = result.encodedBuffers();
-        int[] paddings = bufferPaddings(buffers);
-        ByteBuffer fbBuf = buildArrayFlatBuffer(result, paddings);
-
-        // Segment format: [padding, buffer]... [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
-        int fbLen = fbBuf.remaining();
-        for (int i = 0; i < buffers.size(); i++) {
-            if (paddings[i] > 0) {
-                writePadding(paddings[i]);
-            }
-            write(buffers.get(i).data());
-        }
-        write(fbBuf);
-        var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
-        sizeBuf.flip();
-        channel.write(sizeBuf);
-        bytesWritten += 4;
-
-        segs.add(new SegRef(offset, bytesWritten - offset, encoded.stats()));
-    }
-
-    private void registerEncodingIds(EncodeNode node) {
-        EncodingId id = node.encodingId();
-        // Edition guard backstop (issue #301): editionExcluded, seeded into every EncodeContext,
-        // already steers CascadingCompressor away from out-of-edition candidates during selection
-        // (see the editionExcluded/editionAllowed fields' javadoc) - this direct check catches
-        // whatever still reaches here anyway: a forced encodingOverride, or a selection path that
-        // does not consult EncodeContext#excluded() at all. Never silently write a file outside
-        // the declared edition.
-        if (!editionAllowed.isEmpty() && !editionAllowed.contains(id)) {
-            throw editionViolation(id);
-        }
-        encodingIdx.computeIfAbsent(id, _ -> encodingIdx.size());
-        for (EncodeNode child : node.children()) {
-            registerEncodingIds(child);
-        }
-    }
-
-    private VortexException editionViolation(EncodingId id) {
-        String configured = options.editions().values().stream()
-                .map(e -> e.id().toString())
-                .sorted()
-                .collect(Collectors.joining(", "));
-        Optional<Edition> owning = Editions.owningEdition(id);
-        String hint = owning.isPresent()
-                ? "; it joins " + owning.get().id() + " — enable that edition via WriteOptions.withEdition(...)"
-                : "; it is not part of any edition — only WriteOptions.withoutEditions() permits it";
-        return new VortexException(id, "outside the configured edition(s) [" + configured + "]" + hint);
-    }
-
-    private EncodingEncoder findEncoder(DType dtype) {
-        for (EncodingEncoder c : encodings) {
-            if (c.accepts(dtype)) {
-                return c;
-            }
-        }
-        throw new UnsupportedOperationException("no encoder for dtype: " + dtype);
-    }
-
-    /// Returns the configured encoder for `dtype` that consumes a [NullableData] carrier directly
-    /// (embedding its own validity), or `null` to fall back to `vortex.masked` wrapping. Only the
-    /// first-match flat path is considered; with cascading enabled the compressor owns selection,
-    /// so nullable columns keep the masked layout.
-    private EncodingEncoder nullableCapableEncoder(DType dtype) {
-        if (options.allowedCascading() > 0) {
-            return null;
-        }
-        for (EncodingEncoder c : encodings) {
-            if (c.accepts(dtype) && c.acceptsNullable(dtype)) {
-                return c;
-            }
-        }
-        return null;
-    }
-
-    private void write(MemorySegment seg) throws IOException {
-        // A segment may pass 2 GiB (a u32 length on the wire, #629) but a ByteBuffer cannot, so the
-        // segment is written in slices that each fit one
-        long size = seg.byteSize();
-        for (long at = 0; at < size; at += MAX_WRITE_SLICE) {
-            ByteBuffer buf = seg.asSlice(at, Math.min(MAX_WRITE_SLICE, size - at)).asByteBuffer();
-            while (buf.hasRemaining()) {
-                channel.write(buf);
-            }
-        }
-        bytesWritten += size;
-    }
-
-    private void write(ByteBuffer buf) throws IOException {
-        buf.rewind();
-        while (buf.hasRemaining()) {
-            channel.write(buf);
-        }
-        bytesWritten += buf.capacity();
-    }
-
-    private void writePadding(int n) throws IOException {
-        ByteBuffer pad = ByteBuffer.allocate(n);
-        while (pad.hasRemaining()) {
-            channel.write(pad);
-        }
-        bytesWritten += n;
-    }
-
-    /// Zero bytes to write before each buffer so it starts on a multiple of its own alignment. The
-    /// segment starts 64-byte aligned (more than any element needs), so offsets relative to the
-    /// segment start are enough.
-    private static int[] bufferPaddings(List<EncodedBuffer> buffers) {
-        int[] paddings = new int[buffers.size()];
-        long position = 0;
-        for (int i = 0; i < buffers.size(); i++) {
-            int alignment = buffers.get(i).alignment();
-            paddings[i] = (int) ((alignment - position % alignment) % alignment);
-            position += paddings[i] + buffers.get(i).data().byteSize();
-        }
-        return paddings;
-    }
-
-    private ByteBuffer buildArrayFlatBuffer(EncodeResult result, int[] paddings) {
-        var fbb = new FbsBuilder(256);
-
-        int rootNodeOff = buildArrayNodeFlatBuffer(fbb, result.rootNode());
-
-        // Buffer struct vector — one entry per buffer in result.
-        // FbsLayout (LE): padding(u16) | alignment_exponent(u8) | compression(u8) | length(u32)
-        // FlatBuffers builds backward: iterate in reverse.
-        // alignment_exponent is the element's own alignment, as Rust declares it: the Rust reader
-        // keeps it on the buffer, failing array construction when it is less than the element needs
-        // and aborting on any row slice off a multiple of it when it is more (this writer used to
-        // declare 64 for every buffer, which crashed filtered vortex-jni scans of zone-mapped files).
-        var bufs = result.encodedBuffers();
-        io.github.dfa1.vortex.core.fbs.FbsArray.startBuffersVector(fbb, bufs.size());
-        for (int i = bufs.size() - 1; i >= 0; i--) {
-            fbb.prep(4, 8);
-            fbb.putInt((int) bufs.get(i).data().byteSize());
-            fbb.putByte((byte) 0);   // compression = None
-            fbb.putByte((byte) Integer.numberOfTrailingZeros(bufs.get(i).alignment()));
-            fbb.putShort((short) paddings[i]);
-        }
-        int bufVec = fbb.endVector();
-
-        int arrayOff = io.github.dfa1.vortex.core.fbs.FbsArray.createFbsArray(fbb, rootNodeOff, bufVec);
-        io.github.dfa1.vortex.core.fbs.FbsArray.finishFbsArrayBuffer(fbb, arrayOff);
-        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-    }
-
-    // ── FbsFooter / metadata serialization ──────────────────────────────────────
-
-    /// The `ArrayStats` table of a node's stats, or `0` when it carries none. Every stat present is
-    /// written, a `false` flag or a zero count included, as Rust writes an exact stat of any value.
-    private static int buildStats(FbsBuilder fbb, NodeStats stats) {
-        if (stats == null || stats.isEmpty()) {
-            return 0;
-        }
-        // vectors first: FlatBuffers builds bottom-up
-        int minVec = stats.min() == null ? 0
-                : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(fbb, stats.min().encode());
-        int maxVec = stats.max() == null ? 0
-                : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMaxVector(fbb, stats.max().encode());
-        int sumVec = stats.sum() == null ? 0
-                : io.github.dfa1.vortex.core.fbs.FbsArrayStats.createSumVector(fbb, stats.sum().encode());
-        // forceDefaults only while building ArrayStats, so a scalar equal to its default is still
-        // serialized; reset immediately so the Array/ArrayNode tables keep their normal layout
-        fbb.forceDefaults(true);
-        io.github.dfa1.vortex.core.fbs.FbsArrayStats.startFbsArrayStats(fbb);
-        if (stats.min() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMin(fbb, minVec);
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMinPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
-        }
-        if (stats.max() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMax(fbb, maxVec);
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addMaxPrecision(fbb, io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
-        }
-        if (stats.sum() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addSum(fbb, sumVec);
-        }
-        if (stats.isSorted() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsSorted(fbb, stats.isSorted());
-        }
-        if (stats.isStrictSorted() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsStrictSorted(fbb, stats.isStrictSorted());
-        }
-        if (stats.isConstant() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addIsConstant(fbb, stats.isConstant());
-        }
-        if (stats.nullCount() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addNullCount(fbb, stats.nullCount());
-        }
-        if (stats.uncompressedSize() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addUncompressedSizeInBytes(fbb, stats.uncompressedSize());
-        }
-        if (stats.nanCount() != null) {
-            io.github.dfa1.vortex.core.fbs.FbsArrayStats.addNanCount(fbb, stats.nanCount());
-        }
-        int off = io.github.dfa1.vortex.core.fbs.FbsArrayStats.endFbsArrayStats(fbb);
-        fbb.forceDefaults(false);
-        return off;
-    }
-
-    private int buildArrayNodeFlatBuffer(FbsBuilder fbb, EncodeNode node) {
-        // Build children first (FlatBuffers bottom-up: nested objects before parent table)
-        int[] childOffsets = new int[node.children().length];
-        for (int i = 0; i < childOffsets.length; i++) {
-            childOffsets[i] = buildArrayNodeFlatBuffer(fbb, node.children()[i]);
-        }
-        int statsOff = buildStats(fbb, node.stats());
-
-        int metaOff = 0;
-        if (node.metadata() != null && node.metadata().byteSize() > 0) {
-            byte[] metaBytes = node.metadata().toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
-            metaOff = io.github.dfa1.vortex.core.fbs.FbsArrayNode.createMetadataVector(fbb, metaBytes);
-        }
-
-        int childVec = 0;
-        if (childOffsets.length > 0) {
-            childVec = io.github.dfa1.vortex.core.fbs.FbsArrayNode.createChildrenVector(fbb, childOffsets);
-        }
-
-        int bufIdxVec = io.github.dfa1.vortex.core.fbs.FbsArrayNode.createBuffersVector(fbb, node.bufferIndices());
-        int encIdx = encodingIdx.get(node.encodingId());
-        return io.github.dfa1.vortex.core.fbs.FbsArrayNode.createFbsArrayNode(
-                fbb, encIdx, metaOff, childVec, bufIdxVec, statsOff);
-    }
-
-    /// Emits a per-column `vortex.stats` zone-map (one zone per chunk) for every fixed-width
-    /// primitive column whose chunks all carry min/max stats. Must run before [#buildFooter]
-    /// so the stats-table segments are present in `segment_specs`.
-    private void flushZoneMaps() throws IOException {
-        if (!options.enableZoneMaps()) {
-            return;
-        }
-        // The legacy zone map below reads each chunk's stats off its written segment.
-        drainSegments(0);
-        if (zonedLayout) {
-            joinZoneTails();
-            for (Map.Entry<ColumnName, ZoneAccumulator> e : zoneAccumulators.entrySet()) {
-                ZoneAccumulator acc = e.getValue();
-                acc.finish();
-                if (acc.zoneCount() == 0) {
-                    continue;
-                }
-                int zonesSegIdx = writeSegment(acc.tableDtype(), acc.tableData(), zoneTableEncoder());
-                zoneMaps.put(e.getKey(), new ZoneMapRef(zonesSegIdx, acc.zoneCount(), acc.metadata()));
-            }
-            return;
-        }
-        for (Map.Entry<ColumnName, List<ChunkRef>> e : colChunks.entrySet()) {
-            ColumnName colName = e.getKey();
-            List<ChunkRef> chunks = e.getValue();
-            if (chunks.isEmpty()) {
-                continue;
-            }
-            DType colDtype = columnDtype(colName);
-            DType minMaxDtype = ZoneMapStatCodec.zoneMinMaxDtype(colDtype);
-            DType sumDtype = ZoneMapStatCodec.zoneSumDtype(colDtype);
-            long[] nullCounts = new long[chunks.size()];
-            List<SegmentStats> stats = chunks.stream().map(c -> segs.get(c.segIdx()).stats()).toList();
-            for (int i = 0; i < chunks.size(); i++) {
-                nullCounts[i] = stats.get(i).nullCount();
-            }
-            emitZoneMap(colName, minMaxDtype,
-                    stats.stream().map(SegmentStats::min).toList(),
-                    stats.stream().map(SegmentStats::max).toList(),
-                    sumDtype, stats.stream().map(SegmentStats::sum).toList(),
-                    nullCounts, chunks.stream().mapToLong(ChunkRef::rowCount).toArray());
-        }
-        // Dict-encoded columns (one zone per code chunk). MIN/MAX/SUM come from each chunk's logical
-        // values (computed at dict-build time); NULL_COUNT always. Matches Rust, whose zone-map
-        // stats are computed on the logical column dtype, independent of the dict encoding.
-        for (Map.Entry<ColumnName, List<DictColRef>> e : dictColRefs.entrySet()) {
-            DType colDtype = columnDtype(e.getKey());
-            DType minMaxDtype = ZoneMapStatCodec.zoneMinMaxDtype(colDtype);
-            List<ProtoScalarValue> mins = new ArrayList<>();
-            List<ProtoScalarValue> maxs = new ArrayList<>();
-            List<ProtoScalarValue> sums = new ArrayList<>();
-            List<Long> nulls = new ArrayList<>();
-            List<Long> rows = new ArrayList<>();
-            for (DictColRef ref : e.getValue()) {
-                mins.addAll(ref.chunkStatsMin());
-                maxs.addAll(ref.chunkStatsMax());
-                sums.addAll(ref.chunkStatsSum());
-                nulls.addAll(ref.chunkNullCounts());
-                rows.addAll(ref.chunkRowCounts());
-            }
-            emitZoneMap(e.getKey(), minMaxDtype, mins, maxs, ZoneMapStatCodec.zoneSumDtype(colDtype), sums,
-                    nulls.stream().mapToLong(Long::longValue).toArray(),
-                    rows.stream().mapToLong(Long::longValue).toArray());
-        }
+        return sink.write(dtype, data, encodingOverride, Set.of());
     }
 
     private DType columnDtype(ColumnName colName) {
         return schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
     }
 
-    /// Writes one `vortex.stats` zone-map for `colName`: one zone per chunk, with NULL_COUNT always,
-    /// MAX/MIN (plus always-false `_is_truncated` flags) when `minMaxDtype` is non-null, and SUM when
-    /// `sumDtype` is non-null. `minBytes`/`maxBytes`/`sumBytes` hold each zone's serialized scalar —
-    /// read only when the matching dtype is set; a `null` entry marks that specific zone's stat as
-    /// unknown (e.g. an all-null chunk, an overflowed sum, or an encoder that does not surface a
-    /// min/max) rather than dropping the stat for the whole column — MIN/MAX/SUM are nullable per
-    /// zone, matching Rust. Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), SUM(5),
-    /// NULL_COUNT(6).
-    private void emitZoneMap(ColumnName colName, DType minMaxDtype, List<ProtoScalarValue> minBytes, List<ProtoScalarValue> maxBytes,
-                             DType sumDtype, List<ProtoScalarValue> sumBytes, long[] nullCounts,
-                             long[] rowCounts) throws IOException {
-        int nZones = nullCounts.length;
-        boolean[] allValid = new boolean[nZones];
-        java.util.Arrays.fill(allValid, true);
-
-        List<String> names = new java.util.ArrayList<>();
-        List<DType> types = new java.util.ArrayList<>();
-        List<Object> fields = new java.util.ArrayList<>();
-        if (minMaxDtype != null) {
-            boolean[] notTruncated = new boolean[nZones];
-            boolean[] maxValid = new boolean[nZones];
-            Object maxValues = ZoneMapStatCodec.zoneStatValues(minMaxDtype, maxBytes, maxValid);
-            names.add("max");
-            types.add(minMaxDtype);
-            fields.add(new NullableData(maxValues, maxValid));
-            names.add("max_is_truncated");
-            types.add(DTypes.BOOL);
-            fields.add(notTruncated);
-            boolean[] minValid = new boolean[nZones];
-            Object minValues = ZoneMapStatCodec.zoneStatValues(minMaxDtype, minBytes, minValid);
-            names.add("min");
-            types.add(minMaxDtype);
-            fields.add(new NullableData(minValues, minValid));
-            names.add("min_is_truncated");
-            types.add(DTypes.BOOL);
-            fields.add(notTruncated.clone());
-        }
-        if (sumDtype != null) {
-            boolean[] sumValid = new boolean[nZones];
-            Object sumArr = ZoneMapStatCodec.sumColumn(sumDtype, sumBytes, sumValid);
-            names.add("sum");
-            types.add(sumDtype);
-            fields.add(new NullableData(sumArr, sumValid));
-        }
-        names.add("null_count");
-        types.add(new DType.Primitive(PType.U64, true));
-        fields.add(new NullableData(nullCounts, allValid.clone()));
-
-        DType.Struct statsDtype = new DType.Struct(
-                names.stream().map(ColumnName::of).toList(), List.copyOf(types), false);
-        int zonesSegIdx = writeSegment(statsDtype, new StructData(fields), new StructEncodingEncoder());
-        zoneMaps.put(colName,
-                new ZoneMapRef(zonesSegIdx, nZones, ZoneMapStatCodec.zonedMetadataBytes(
-                        ZoneMapStatCodec.uniformZoneLength(rowCounts), minMaxDtype != null, sumDtype != null)));
-    }
-
-    /// The encoder a column with a [ColumnEncoding] override is written with: the cascade over the
-    /// column's candidates only, wrapping nullable data in `vortex.masked` as the default path does.
-    ///
-    /// @throws IllegalArgumentException if this writer has no encoder for one of the encodings
-    private EncodingEncoder columnEncoder(ColumnName column, ColumnEncoding encoding) {
-        // The encoders this writer cascades with; a default writer also offers the other built-ins
-        // (Pco, Zstd, …) that are registered but not default candidates. A custom encoder list stays
-        // the whole set, as it is for every other column.
-        Map<EncodingId, EncodingEncoder> available = new LinkedHashMap<>();
-        for (EncodingEncoder enc : cascadeCodecs) {
-            available.putIfAbsent(enc.encodingId(), enc);
-        }
-        if (encodings == DEFAULT_CODECS) {
-            WriteRegistry.loadAll().encoderMap().forEach(available::putIfAbsent);
-        }
-        List<EncodingEncoder> encoders = new ArrayList<>();
-        for (EncodingId id : encoding.encodings()) {
-            EncodingEncoder enc = available.get(id);
-            if (enc == null) {
-                throw new IllegalArgumentException("column '" + column + "': this writer cannot encode " + id);
-            }
-            encoders.add(enc);
-        }
-        WriteRegistry registry = buildRegistry(encoders);
-        return new EncodingEncoder() {
-            @Override
-            public EncodingId encodingId() {
-                return encoders.getFirst().encodingId();
-            }
-
-            @Override
-            public boolean accepts(DType dtype) {
-                return true;
-            }
-
-            @Override
-            public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-                // The candidates are the whole set: the column's context (and so a masked column's
-                // value cascade, which reads ctx.registry()) sees only them.
-                EncodeContext columnCtx = EncodeContext.ofDepth(options.allowedCascading(), ctx.arena(),
-                        registry, editionExcluded);
-                // a decimal, struct or list keeps its validity in its own encoding, as on the default path
-                boolean masked = data instanceof NullableData && !(dtype instanceof DType.Extension)
-                        && !(options.allowedCascading() > 0 && CascadingCompressor.carriesValidity(dtype));
-                if (masked) {
-                    return new MaskedEncodingEncoder().encode(dtype, data, columnCtx);
-                }
-                return new CascadingCompressor(encoders).encode(dtype, data, columnCtx);
-            }
-        };
-    }
-
-    /// Encodes a `vortex.zoned` stats table through the cascade at any depth and with any encoder
-    /// list, as Rust's stats strategy always compresses it: [CascadingCompressor] encodes the
-    /// struct itself (including the nullable `bounded_max` state) and falls back to canonical
-    /// encodings for any field no candidate accepts.
-    ///
-    /// The candidates are the probe's: Rust compresses stats tables with its full compressor,
-    /// integer dictionaries included, and keeps `IntDictScheme` out of the data compressor only
-    /// (`vortex-file` `strategy.rs`), so a zone's `null_count` column can be a `vortex.dict`.
-    private EncodingEncoder zoneTableEncoder() {
-        List<EncodingEncoder> codecs = probeCodecs;
-        return new EncodingEncoder() {
-            @Override
-            public EncodingId encodingId() {
-                return EncodingId.VORTEX_STRUCT;
-            }
-
-            @Override
-            public boolean accepts(DType dtype) {
-                return dtype instanceof DType.Struct;
-            }
-
-            @Override
-            public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-                return new CascadingCompressor(codecs).encode(dtype, data, ctx);
-            }
-        };
-    }
-
-    /// Wraps a column's data layout in a `vortex.stats` (zoned) layout when a zone-map was
-    /// emitted for it; otherwise returns the data layout unchanged.
-    private int wrapZoneMap(FbsBuilder fbb, ColumnName colName, int dataLayout, long colRows) {
-        ZoneMapRef zm = zoneMaps.get(colName);
-        if (zm == null) {
-            return dataLayout;
-        }
-        int zonesSegV = FbsLayout.createSegmentsVector(fbb, new long[]{zm.zonesSegIdx()});
-        int zonesFlat = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, zm.nZones(), 0, 0, zonesSegV);
-        int childV = FbsLayout.createChildrenVector(fbb, new int[]{dataLayout, zonesFlat});
-        int metaV = FbsLayout.createMetadataVector(fbb, zm.metadata());
-        return FbsLayout.createFbsLayout(fbb, LAYOUT_ZONED, colRows, metaV, childV, 0);
-    }
-
-    static long countNulls(boolean[] validity) {
-        long nulls = 0;
-        for (boolean valid : validity) {
-            if (!valid) {
-                nulls++;
-            }
-        }
-        return nulls;
-    }
-
-    private ByteBuffer buildFooter() {
-        var fbb = new FbsBuilder(512);
-
-        // array_specs: all encoding IDs used across all written segments, in registration order
-        EncodingId[] encIds = encodingIdx.entrySet().stream()
-                                      .sorted(Map.Entry.comparingByValue())
-                                      .map(Map.Entry::getKey)
-                                      .toArray(EncodingId[]::new);
-        int[] asOffsets = new int[encIds.length];
-        for (int i = 0; i < encIds.length; i++) {
-            asOffsets[i] = FbsArraySpec.createFbsArraySpec(fbb, fbb.createString(encIds[i].id()));
-        }
-        int asv = FbsFooter.createArraySpecsVector(fbb, asOffsets);
-
-        // layout_specs, in LAYOUT_* index order: FLAT, CHUNKED, STRUCT, DICT, then the zoned
-        // layout: Rust's "vortex.zoned" when the edition has it, else the legacy "vortex.stats"
-        // alias every reader accepts.
-        int ls0 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.FLAT.id()));
-        int ls1 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.CHUNKED.id()));
-        int ls2 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.STRUCT.id()));
-        int ls3 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.DICT.id()));
-        int ls4 = FbsLayoutSpec.createFbsLayoutSpec(fbb,
-                fbb.createString((zonedLayout ? LayoutId.ZONED : LayoutId.STATS).id()));
-        int lsv = FbsFooter.createLayoutSpecsVector(fbb, new int[]{ls0, ls1, ls2, ls3, ls4});
-
-        // segment_specs (inline struct vector — write in reverse order)
-        FbsFooter.startSegmentSpecsVector(fbb, segs.size());
-        for (int i = segs.size() - 1; i >= 0; i--) {
-            SegRef s = segs.get(i);
-            FbsSegmentSpec.createFbsSegmentSpec(fbb, s.offset(), s.len(), 6, 0, 0);
-        }
-        int ssv = fbb.endVector();
-
-        int off = FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
-        fbb.finish(off);
-        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-    }
-
-    private ByteBuffer buildLayout() {
-        var fbb = new FbsBuilder(256);
-        int colCount = schema.fieldNames().size();
-
-        int[] colLayouts = new int[colCount];
-        long totalRows = 0;
-
-        for (int c = 0; c < colCount; c++) {
-            ColumnName colName = schema.fieldNames().get(c);
-            List<DictColRef> refs = dictColRefs.get(colName);
-            if (refs != null) {
-                // one dictionary is the column's layout; several are a chunked layout of them
-                int[] dictLayouts = new int[refs.size()];
-                long colRows = 0;
-                for (int i = 0; i < dictLayouts.length; i++) {
-                    dictLayouts[i] = buildDictColLayout(fbb, refs.get(i));
-                    colRows += refs.get(i).totalRows();
-                }
-                int dictLayout = dictLayouts[0];
-                if (dictLayouts.length > 1) {
-                    dictLayout = FbsLayout.createFbsLayout(fbb, LAYOUT_CHUNKED, colRows, 0,
-                            FbsLayout.createChildrenVector(fbb, dictLayouts), 0);
-                }
-                colLayouts[c] = wrapZoneMap(fbb, colName, dictLayout, colRows);
-                if (totalRows == 0) {
-                    totalRows = colRows;
-                }
-            } else {
-                List<ChunkRef> chunks = colChunks.get(colName);
-                long colRows = 0;
-                int[] flats = new int[chunks.size()];
-                for (int i = 0; i < chunks.size(); i++) {
-                    ChunkRef cr = chunks.get(i);
-                    int segV = FbsLayout.createSegmentsVector(fbb, new long[]{cr.segIdx()});
-                    flats[i] = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, cr.rowCount(), 0, 0, segV);
-                    colRows += cr.rowCount();
-                }
-                int childV = FbsLayout.createChildrenVector(fbb, flats);
-                int dataChunked = FbsLayout.createFbsLayout(fbb, LAYOUT_CHUNKED, colRows, 0, childV, 0);
-                colLayouts[c] = wrapZoneMap(fbb, colName, dataChunked, colRows);
-                if (totalRows == 0) {
-                    totalRows = colRows;
-                }
-            }
-        }
-
-        int rootChildV = FbsLayout.createChildrenVector(fbb, colLayouts);
-        int rootLayout = FbsLayout.createFbsLayout(fbb, LAYOUT_STRUCT, totalRows, 0, rootChildV, 0);
-        FbsLayout.finishFbsLayoutBuffer(fbb, rootLayout);
-        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-    }
-
-    private int buildDictColLayout(FbsBuilder fbb, DictColRef ref) {
-        // Build codes Chunked layout: children are one Flat per original chunk
-        int numChunks = ref.codesSegIdxes().size();
-        int[] codesFlats = new int[numChunks];
-        long totalCodesRows = 0;
-        for (int j = 0; j < numChunks; j++) {
-            long rowCount = ref.codesRowCounts().get(j);
-            int segV = FbsLayout.createSegmentsVector(fbb, new long[]{ref.codesSegIdxes().get(j)});
-            codesFlats[j] = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, rowCount, 0, 0, segV);
-            totalCodesRows += rowCount;
-        }
-        int codesChildV = FbsLayout.createChildrenVector(fbb, codesFlats);
-        int codesChunked = FbsLayout.createFbsLayout(fbb, LAYOUT_CHUNKED, totalCodesRows, 0, codesChildV, 0);
-
-        // Build values Flat layout
-        int valSegV = FbsLayout.createSegmentsVector(fbb, new long[]{ref.valuesSegIdx()});
-        int valuesFlat = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, ref.valuesLen(), 0, 0, valSegV);
-
-        // DictLayoutMetadata proto (matches Rust): field 1 = codes_ptype (PType varint)
-        byte[] metaBytes = buildDictLayoutMetaBytes(DictColumnState.CODES_PTYPE, ref.nullableCodes());
-        int metaVec = metaBytes.length > 0 ? FbsLayout.createMetadataVector(fbb, metaBytes) : 0;
-
-        // Dict layout: child[0]=values, child[1]=codes (matches Rust DictLayout child order)
-        int[] dictChildren = {valuesFlat, codesChunked};
-        int dictChildV = FbsLayout.createChildrenVector(fbb, dictChildren);
-        return FbsLayout.createFbsLayout(fbb, LAYOUT_DICT, totalCodesRows, metaVec, dictChildV, 0);
-    }
-
-    /// Rust's `DictLayoutMetadata`: field 1 `codes_ptype`, field 2 `is_nullable_codes`, field 3
-    /// `all_values_referenced`. Rust's writer always sets fields 2 and 3 (field 3 as `false`: its
-    /// `DictLayout::new` never claims every value is referenced), so the metadata matches
-    /// vortex-jni's byte for byte.
-    private static byte[] buildDictLayoutMetaBytes(PType codePType, boolean nullableCodes) {
-        int ordinal = codePType.ordinal();
-        // Fields 2 and 3, wire type 0 (varint): tags (2<<3)|0 = 0x10 and (3<<3)|0 = 0x18
-        byte[] flags = {0x10, (byte) (nullableCodes ? 1 : 0), 0x18, 0};
-        if (ordinal == 0) {
-            // Proto3 omits default values; U8 ordinal=0 is the default
-            return flags;
-        }
-        // Field 1, wire type 0 (varint): tag = (1<<3)|0 = 0x08
-        return new byte[]{0x08, (byte) ordinal, flags[0], flags[1], flags[2], flags[3]};
-    }
-
-    // ── Global dict helpers ───────────────────────────────────────────────────
-    // Buffering state and pure encoding logic live in DictColumnState; the methods below are the
-    // orchestration that needs this writer's segment-writing machinery (writeSegment, colChunks,
-    // schema, options).
-
-    /// Feeds one chunk to the column's open dictionary; whatever does not fit under Rust's
-    /// constraints closes it and starts the next one (`DictStrategy`: "when the dict constraints are
-    /// hit, a new dictionary is created"), so a column never gives up its dict layout for its
-    /// cardinality.
-    private void ingestChunk(ColumnName colName, DType colDtype, Object data) {
-        Object rest = data;
-        while (true) {
-            DictColumnState state = dictStates.get(colName);
-            int consumed = colDtype instanceof DType.Primitive ? state.ingestDictChunk(rest) : state.ingestVarBinChunk(rest);
-            long length = arrayLength(rest);
-            if (consumed == length) {
-                return;
-            }
-            dictRuns.computeIfAbsent(colName, _ -> new ArrayList<>()).add(state);
-            dictStates.put(colName, new DictColumnState(colDtype));
-            rest = consumed == 0 ? rest : Repartitioner.tail(rest, consumed);
-        }
-    }
-
-    private long retainedBytes(ColumnName colName) {
-        long total = dictStates.get(colName).retainedBytes();
-        for (DictColumnState run : dictRuns.getOrDefault(colName, List.of())) {
-            total += run.retainedBytes();
-        }
-        return total;
-    }
-
-    /// Demotes the largest-retained global-dict candidate columns to per-chunk encoding, one at a
-    /// time (largest first), until the aggregate retained bytes fall back under the budget. Demoting
-    /// the largest column frees the most memory per eviction, so the fewest columns lose their shared
-    /// dictionary. Called when a chunk pushes the running total over `dictRetainedBudget`.
-    ///
-    /// @throws IOException if writing a flushed segment fails
-    private void evictLargestDictColumnsUntilUnderBudget() throws IOException {
-        while (dictRetainedTotal > dictRetainedBudget && !dictRetainedBytes.isEmpty()) {
-            ColumnName largest = null;
-            long largestBytes = -1L;
-            for (Map.Entry<ColumnName, Long> e : dictRetainedBytes.entrySet()) {
-                if (e.getValue() > largestBytes) {
-                    largestBytes = e.getValue();
-                    largest = e.getKey();
-                }
-            }
-            demoteDictColumn(largest);
-        }
-    }
-
-    /// Abandons the shared global dictionary for one column — either because a mid-file chunk would
-    /// push its distinct set past the cardinality cap, or because the aggregate code-array budget was
-    /// crossed — and replays its already-buffered chunks as ordinary per-chunk segments so no data is
-    /// lost (ADR 0021). Each buffered chunk is reconstructed exactly from its `short[]` codes plus the
-    /// inverse code-to-value map, then written through the normal cascade path, yielding a
-    /// Chunked-of-Flats layout. The buffered state is released for GC and the running retained total
-    /// is decremented.
-    ///
-    /// @param colName the column being demoted from global-dict to per-chunk encoding
-    /// @throws IOException if writing a flushed segment fails
-    private void demoteDictColumn(ColumnName colName) throws IOException {
-        DictColumnState open = dictStates.remove(colName);
-        List<DictColumnState> states = new ArrayList<>(dictRuns.getOrDefault(colName, List.of()));
-        dictRuns.remove(colName);
-        dictCandidates.remove(colName);
-        Long freed = dictRetainedBytes.remove(colName);
-        if (freed != null) {
-            dictRetainedTotal -= freed;
-        }
-        if (open == null) {
-            return;
-        }
-        states.add(open);
-        DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
-        for (DictColumnState state : states) {
-            Object[] inverse = state.buildInverseMap();
-            for (int c = 0; c < state.chunkCount(); c++) {
-                appendChunk(colName, colDtype, state.reconstructChunk(inverse, c));
-            }
-        }
-    }
-
-    private void flushDictColumns() throws IOException {
-        for (ColumnName colName : dictCandidates) {
-            List<DictColumnState> states = new ArrayList<>(dictRuns.getOrDefault(colName, List.of()));
-            if (dictStates.get(colName) != null) {
-                states.add(dictStates.get(colName));
-            }
-            for (DictColumnState state : states) {
-                if (state.chunkCount() == 0 || state.cardinality() == 0) {
-                    continue;
-                }
-                if (state.varBin()) {
-                    writeGlobalDictVarBinColumn(colName, state);
-                } else {
-                    writeGlobalDictColumn(colName, state);
-                }
-            }
-        }
-    }
-
-    private void writeGlobalDictColumn(ColumnName colName, DictColumnState state) throws IOException {
-        // Write values segment using the same codec path as regular segments so codes benefit from
-        // bitpacking/FOR when cascading is enabled. Safe: global dict is disabled for custom-encoding
-        // writers (withGlobalDict(false)), so this.encodings == DEFAULT_CODECS here.
-        int valuesSegIdx = writeSegment(state.dtype(), dictPool(state));
-        writeGlobalDictCodes(colName, state, valuesSegIdx);
-    }
-
-    private void writeGlobalDictVarBinColumn(ColumnName colName, DictColumnState state) throws IOException {
-        // Compress the distinct-values pool through the normal Utf8/Binary competition
-        // (FSST/VarBin/Zstd) so it captures substring redundancy across dictionary entries (#299),
-        // but exclude Dict so the cascade never wraps the (all-unique-by-construction) dictionary in
-        // another dict the reader cannot unwrap. At cascade depth 0 there is no competition to run,
-        // so force flat VarBin as before; a pool with a null entry is masked there instead, its
-        // values still VarBin.
-        Object pool = dictPool(state);
-        int valuesSegIdx;
-        if (options.allowedCascading() > 0) {
-            valuesSegIdx = writeSegment(state.dtype(), pool, null, Set.of(EncodingId.VORTEX_DICT));
-        } else if (state.nullCode() >= 0) {
-            valuesSegIdx = writeSegment(state.dtype(), pool, new MaskedEncodingEncoder(), Set.of(EncodingId.VORTEX_DICT));
-        } else {
-            valuesSegIdx = writeSegment(state.dtype(), pool, new VarBinEncodingEncoder());
-        }
-        writeGlobalDictCodes(colName, state, valuesSegIdx);
-    }
-
-    // The dictionary entries in code order. A column that met a null holds one entry, invalid, that
-    // every null row points at -- Rust's dict builder (vortex-array builders/dict) -- so the codes
-    // need no validity of their own: Rust's dict layout writer always emits non-nullable codes.
-    private static Object dictPool(DictColumnState state) {
-        Object uniques = state.uniques();
-        int nullCode = state.nullCode();
-        if (nullCode < 0) {
-            return uniques;
-        }
-        boolean[] poolValidity = new boolean[state.cardinality()];
-        Arrays.fill(poolValidity, true);
-        poolValidity[nullCode] = false;
-        return new NullableData(uniques, poolValidity);
-    }
-
-    // The buffered codes are already the wire codes: first-seen order, null included. Rust's dict
-    // strategy coalesces the codes like any data column, so U16 codes chunk at 512Ki rows; the
-    // legacy zone map keeps one code chunk per batch, its zones.
-    private void writeGlobalDictCodes(ColumnName colName, DictColumnState state, int valuesSegIdx) throws IOException {
-        DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, false);
-        List<Integer> codesSegIdxes = new ArrayList<>();
-        List<Long> codesRowCounts = new ArrayList<>();
-        Repartitioner repartitioner = zonedLayout ? new Repartitioner(codesDtype) : null;
-        for (int c = 0; c < state.chunkCount(); c++) {
-            short[] codes = state.chunkCodes(c);
-            List<Object> ready = repartitioner != null ? repartitioner.add(codes, codes.length) : List.of(codes);
-            for (Object chunk : ready) {
-                codesSegIdxes.add(writeSegment(codesDtype, chunk));
-                codesRowCounts.add((long) ((short[]) chunk).length);
-            }
-        }
-        for (Object last : repartitioner != null ? repartitioner.finish() : List.of()) {
-            codesSegIdxes.add(writeSegment(codesDtype, last));
-            codesRowCounts.add((long) ((short[]) last).length);
-        }
-        dictColRefs.computeIfAbsent(colName, _ -> new ArrayList<>()).add(new DictColRef(valuesSegIdx, state.cardinality(),
-                codesSegIdxes, codesRowCounts, state.chunkRowCounts(), state.chunkNullCounts(),
-                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
-    }
-
-    private record SegRef(long offset, long len, SegmentStats stats) {
-    }
-
-    private record SegmentStats(ProtoScalarValue min, ProtoScalarValue max, ProtoScalarValue sum, long nullCount) {
-    }
-
-    private record EncodedSegment(EncodeResult result, Arena arena, SegmentStats stats) {
-    }
-
-    private record ChunkRef(int segIdx, long rowCount) {
-    }
-
-    /// Per-column zone-map: the flat segment holding the per-zone stats table, the zone
-    /// count (one zone per chunk), the logical rows per zone, and whether the table carries
-    /// MIN/MAX (else NULL_COUNT only).
-    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-    private record ZoneMapRef(int zonesSegIdx, long nZones, byte[] metadata) {
-    }
-
-    /// @param nullableCodes whether the codes child carries validity (Rust's `is_nullable_codes`)
-    private record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,
-            List<Long> codesRowCounts, List<Long> chunkRowCounts, List<Long> chunkNullCounts,
-            List<ProtoScalarValue> chunkStatsMin, List<ProtoScalarValue> chunkStatsMax, List<ProtoScalarValue> chunkStatsSum,
-            boolean nullableCodes) {
-        long totalRows() {
-            return chunkRowCounts.stream().mapToLong(Long::longValue).sum();
-        }
+    /// One written chunk of a column: its segment and row count.
+    record ChunkRef(int segIdx, long rowCount) {
     }
 }

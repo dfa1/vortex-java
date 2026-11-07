@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.ComparableValues;
 import io.github.dfa1.vortex.writer.encode.NullableData;
+import io.github.dfa1.vortex.writer.encode.RowCount;
 import io.github.dfa1.vortex.writer.encode.StructData;
 
 import java.io.ByteArrayOutputStream;
@@ -76,7 +77,7 @@ final class ZoneAccumulator {
         int off = 0;
         if (carry != null) {
             // Complete the carried-over zone with this batch's head, then continue in place.
-            int carried = length(carry);
+            int carried = RowCount.of(carry);
             int take = Math.min(ZONE_LEN - carried, n);
             Object joined = concat(carry, slice(values, validity, 0, take));
             off = take;
@@ -100,7 +101,7 @@ final class ZoneAccumulator {
     /// Closes the final partial zone, if any.
     void finish() {
         if (carry != null) {
-            zone(carry, 0, length(carry));
+            zone(carry, 0, RowCount.of(carry));
             carry = null;
         }
     }
@@ -535,11 +536,6 @@ final class ZoneAccumulator {
     private static Object validityOnly(Object batch, int rows) {
         boolean[] placeholder = new boolean[rows];
         return batch instanceof NullableData nd ? new NullableData(placeholder, nd.validity()) : placeholder;
-    }
-
-    private static int length(Object data) {
-        Object values = data instanceof NullableData nd ? nd.values() : data;
-        return java.lang.reflect.Array.getLength(values);
     }
 
     private static Object slice(Object values, boolean[] validity, int off, int len) {
