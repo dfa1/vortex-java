@@ -8,6 +8,7 @@ For task-oriented usage see [how-to.md](how-to.md); for design rationale see [ex
 - [Writer API](#writer-api)
 - [Scan API](#scan-api)
 - [Encoding registry](#encoding-registry)
+- [JFR events](#jfr-events)
 - [FSST (`io.github.dfa1.vortex.fsst`)](#fsst-iogithubdfa1vortexfsst)
 - [Parquet / CSV import and Parquet export](#parquet--csv-import-and-parquet-export)
 - [JDBC import](#jdbc-import)
@@ -485,6 +486,37 @@ A decoder claims its ids via `LayoutDecoder.layoutIds()` (a set — the zoned de
 `vortex.zoned` and legacy `vortex.stats`). Custom decoders receive a `LayoutDecodeContext`
 (`decodeChild`, `decodeSegment` access, `arena`) and are reachable end-to-end via
 `VortexReader.open(path, readRegistry, layoutRegistry)`.
+
+## JFR events
+
+The reader and writer emit JDK Flight Recorder events (`io.github.dfa1.vortex.core.jfr`), named
+`io.github.dfa1.vortex.<Name>`, category `Vortex`. Recording off, an event costs a field read.
+
+| Event | Emitted by | Fields |
+|---|---|---|
+| `FileOpened` | `VortexReader.open`, `VortexHttpReader.open` (spans the whole open; none when it fails) | `source`, `fileSize`, `formatVersion`, `segmentCount` |
+| `FileMapping` | `VortexReader.open` (the `channel.map`) | `file`, `size` |
+| `HttpRange` | every range request of `VortexHttpReader` | `source`, `offset` (`-1` = tail), `length`, `status` (`0` = no response) |
+| `SegmentDecoded` | every flat segment decoded | `encoding`, `rowCount`, `segmentSize` |
+| `ChunkFilter` | a filtered `ScanIterator`, on close | `totalChunks`, `chunksPruned`, `chunksWithoutMatch`, `chunksReturned`, `rowsReturned` |
+| `SegmentEncoded` | every flat segment encoded | `column`, `segment`, `encoding`, `bufferCount`, `encodedSize` |
+| `SegmentWait` | the writer blocked on its oldest in-flight segment (duration is the wait) | `segmentsInFlight` |
+
+The compressor's decisions follow the spans of Rust's `vortex-compressor/src/trace.rs` (target `vortex_compressor::encode`), category `Vortex/Compressor`, with Java's own scheme ids. They are **off by default** (tens of thousands per write): enable them in the recording, e.g. `-XX:StartFlightRecording:filename=rec.jfr,io.github.dfa1.vortex.Candidate#enabled=true,io.github.dfa1.vortex.Winner#enabled=true,io.github.dfa1.vortex.Compress#enabled=true`. Each carries `column`, `segment` and `cascadePath` + `cascadeDepth`, the cascade down to the array as `parent.child/parent.child`, e.g. `datetimeparts.0/fastlanes.rle.1` (the `vortex.` prefix dropped; empty at the root, where Rust prints `root`, so a Rust trace is read side by side, not joined):
+
+| Event | Rust span | Emitted | Fields |
+|---|---|---|---|
+| `Compress` | `compress` | every array the cascade encodes, at every level; `inputNbytes` is `-1` for text and nested types, which have no cheap size | `dtype`, `arrayLen`, `inputNbytes`, `compressedNbytes`, `compressionRatio` |
+| `Candidate` | `scheme_eval` | every scheme evaluated for an array | `parent`, `schemeCandidate`, `verdict` (`skip`, `always_use`, `estimate`, `measured`, `cascade_exhausted`), `sample`, `baselineNbytes`, `estimatedRatio`, `sampleNbytes` |
+| `Winner` | `winner_compress` | the scheme picked, encoded on the full array | `parent`, `schemeChosen`, `inputNbytes`, `compressedNbytes`, `estimatedRatio`, `achievedRatio`, `accepted`, `estimated`, `error` |
+
+`estimatedRatio` against `achievedRatio` shows a stats estimate that a measurement contradicts; `sample` tells a trial encode on the sample from the full array. `accepted = false` means the scheme was dropped (it failed, or did not beat the uncompressed array) and the canonical encoding was used. A struct's or list's children keep their parent's cascade path. Zone-table, dict-values and codes segments carry their data column's name, and the global-dict admission probe has `segment = -1`. `ChunkFilter` is committed on close, so a scan stopped early by a limit or by `close()` has `chunksPruned + chunksWithoutMatch + chunksReturned < totalChunks`.
+
+The events use the `jdk.jfr` module: a `jlink`ed runtime needs it (`--add-modules jdk.jfr`).
+
+An HTTP `source` is `scheme://host[:port]/path`: user info, query and fragment are dropped, as
+presigned URLs carry credentials there. `SegmentEncoded` is committed from executor threads; `SegmentWait` on the writing thread,
+and only when a non-default executor makes it wait. See [how-to.md](how-to.md#find-where-a-read-or-write-spends-its-time-jfr).
 
 ## Parquet / CSV import and Parquet export
 

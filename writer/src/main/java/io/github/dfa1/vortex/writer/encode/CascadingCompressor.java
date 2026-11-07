@@ -1,5 +1,8 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.jfr.CandidateEvent;
+import io.github.dfa1.vortex.core.jfr.CompressEvent;
+import io.github.dfa1.vortex.core.jfr.WinnerEvent;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -251,7 +254,18 @@ public final class CascadingCompressor {
     }
 
     private EncodeResult encodeWithCtx(DType dtype, Object data, EncodeContext ctx) {
+        return encodeWithCtx(dtype, data, ctx, true);
+    }
+
+    /// @param traced whether to record a `Compress` event; `false` for the retry of an array whose
+    ///               first attempt, already inside one, did not apply
+    private EncodeResult encodeWithCtx(DType dtype, Object data, EncodeContext ctx, boolean traced) {
+        var event = new CompressEvent();
+        event.begin();
         EncodeResult result = encodeArray(dtype, data, ctx);
+        if (traced && !ctx.sample()) {
+            CompressorEvents.compress(event, ctx, dtype, data, result);
+        }
         NodeStats own = result.rootNode().stats();
         if (ctx.sample() || own != null && !own.isEmpty()) {
             return result;
@@ -498,9 +512,26 @@ public final class CascadingCompressor {
         if (choice.encoder() == null) {
             return spliceResult(canonical, dtype, data, ctx);
         }
-        EncodeResult result = spliceResult(choice.encoder(), dtype, data, ctx);
-        if (dtype instanceof DType.Primitive && choice.encoder() != canonical
-                && totalBytes(result) >= uncompressedBytes(dtype, data)) {
+        var event = new WinnerEvent();
+        event.begin();
+        boolean[] notApplicable = new boolean[1];
+        EncodeResult result = spliceResult(choice.encoder(), dtype, data, ctx, notApplicable);
+        boolean accepted = !(dtype instanceof DType.Primitive && choice.encoder() != canonical
+                && totalBytes(result) >= uncompressedBytes(dtype, data));
+        // a scheme that did not apply was reported where it failed, and the result is another one's
+        if (event.shouldCommit() && !notApplicable[0]) {
+            double estimatedRatio = Double.NaN;
+            if (choice.size() > 0) {
+                estimatedRatio = choice.baseline() / choice.size();
+            }
+            String error = "";
+            if (!accepted) {
+                error = "not smaller than the uncompressed array";
+            }
+            CompressorEvents.winner(event, ctx, dtype, data, new CompressorEvents.Outcome(
+                    choice.encoder().encodingId(), estimatedRatio, choice.estimated(), totalBytes(result), accepted, error));
+        }
+        if (!accepted) {
             return spliceResult(canonical, dtype, data, ctx);
         }
         return result;
@@ -521,7 +552,20 @@ public final class CascadingCompressor {
         return total;
     }
 
-    private static long totalBytes(EncodeResult result) {
+    /// The uncompressed size of an array, for the JFR events: the values of a primitive plus its
+    /// packed validity, the packed bits of a bool, and `-1` for a dtype with no cheap size (text, struct,
+    /// list, extension, decimal): sizing text would copy every row.
+    static long inputBytes(DType dtype, Object data) {
+        if (dtype instanceof DType.Primitive) {
+            return uncompressedBytes(dtype, data);
+        }
+        if (dtype instanceof DType.Bool) {
+            return (RowCount.of(data) + 7L) / 8;
+        }
+        return -1;
+    }
+
+    static long totalBytes(EncodeResult result) {
         long total = 0;
         for (EncodedBuffer buffer : result.encodedBuffers()) {
             total += buffer.data().byteSize();
@@ -561,7 +605,8 @@ public final class CascadingCompressor {
     ///                  unmeasured when `estimated`
     /// @param estimated whether the winner won without being encoded: by [Estimate#ALWAYS_USE] or
     ///                  a stats [Estimate.Ratio], so `size` is not what it encodes to
-    private record Choice(EncodingEncoder encoder, double size, boolean estimated) {
+    /// @param baseline  the uncompressed size the choice was made against
+    private record Choice(EncodingEncoder encoder, double size, boolean estimated, long baseline) {
     }
 
     /// Rust's `choose_best_scheme` (`compressor/select.rs`), for one array.
@@ -590,11 +635,19 @@ public final class CascadingCompressor {
                 continue;
             }
             Estimate est = competes(dtype) ? enc.expectedRatio(dtype, input, ctx) : Estimate.COMPLETE;
+            if (est == Estimate.SKIP) {
+                CompressorEvents.candidate(new CandidateEvent(), ctx, new CompressorEvents.Evaluation(
+                        enc.encodingId(), "skip", ctx.sample(), baseline, Double.NaN, -1));
+            }
             if (est == Estimate.ALWAYS_USE) {
-                return new Choice(enc, 0, true);
+                CompressorEvents.candidate(new CandidateEvent(), ctx, new CompressorEvents.Evaluation(
+                        enc.encodingId(), "always_use", ctx.sample(), baseline, Double.NaN, -1));
+                return new Choice(enc, 0, true, baseline);
             }
             if (est instanceof Estimate.Ratio(double ratio)) {
                 double size = baseline / ratio;
+                CompressorEvents.candidate(new CandidateEvent(), ctx, new CompressorEvents.Evaluation(
+                        enc.encodingId(), "estimate", ctx.sample(), baseline, ratio, -1));
                 if (size < bestSize) {
                     best = enc;
                     bestSize = size;
@@ -605,38 +658,45 @@ public final class CascadingCompressor {
             }
         }
         if (deferred.isEmpty()) {
-            return new Choice(best, bestSize, bestEstimated);
+            return new Choice(best, bestSize, bestEstimated, baseline);
         }
 
         Object measured = sample.get();
         EncodeContext sampleCtx = ctx.withSampling();
         for (EncodingEncoder enc : deferred) {
+            var event = new CandidateEvent();
+            event.begin();
             CascadeStep step = enc.encodeCascade(dtype, measured, sampleCtx);
             // At depth 0, skip encodings that require cascade
             if (!step.isTerminal() && sampleCtx.allowedCascading() <= 0) {
+                CompressorEvents.candidate(event, ctx, new CompressorEvents.Evaluation(
+                        enc.encodingId(), "cascade_exhausted", true, baseline, Double.NaN, -1));
                 continue;
             }
             long size = measureStep(enc, step, sampleCtx);
+            CompressorEvents.candidate(event, ctx, new CompressorEvents.Evaluation(
+                    enc.encodingId(), "measured", true, baseline, Double.NaN, size));
             if (size < bestSize) {
                 best = enc;
                 bestSize = size;
                 bestEstimated = false;
             }
         }
-        return new Choice(best, bestSize, bestEstimated);
+        return new Choice(best, bestSize, bestEstimated, baseline);
     }
 
     /// Derives the context a child slot is filled under: one cascade level deeper, with the slot's
     /// own exclusions unioned in. Both the sample measurement and the real encode go through here,
     /// so a child can never be measured under one exclusion policy and encoded under another.
-    private static EncodeContext childContext(EncodeContext ctx, ChildSlot slot) {
-        return ctx.withDecrementedDepth().withExcluded(slot.excluded());
+    private static EncodeContext childContext(EncodeContext ctx, EncodingEncoder parent, ChildSlot slot) {
+        return ctx.withDecrementedDepth().withExcluded(slot.excluded())
+                .withTrace(ctx.trace().child(parent.encodingId(), slot.parentChildIdx()));
     }
 
     private long measureStep(EncodingEncoder enc, CascadeStep step, EncodeContext ctx) {
         long total = step.ownedBytes();
         for (ChildSlot slot : step.openChildren()) {
-            total += measureBestChild(slot.childDtype(), slot.childData(), childContext(ctx, slot));
+            total += measureBestChild(slot.childDtype(), slot.childData(), childContext(ctx, enc, slot));
         }
         return total;
     }
@@ -665,12 +725,24 @@ public final class CascadingCompressor {
     }
 
     private EncodeResult spliceResult(EncodingEncoder winner, DType dtype, Object data, EncodeContext ctx) {
+        return spliceResult(winner, dtype, data, ctx, null);
+    }
+
+    /// @param notApplicable set `[0]` when the winner did not apply to the full array and another
+    ///                      encoding was used, if not `null`
+    private EncodeResult spliceResult(EncodingEncoder winner, DType dtype, Object data, EncodeContext ctx,
+            boolean[] notApplicable) {
         CascadeStep step = winner.encodeCascade(dtype, data, ctx);
 
         if (!step.applicable()) {
             // Winner was selected on a sample that looked applicable (e.g. all-constant prefix),
             // but full data is not. Re-run without this encoding.
-            return encodeWithCtx(dtype, data, ctx.withExcluded(winner.encodingId()));
+            CompressorEvents.winner(new WinnerEvent(), ctx, dtype, data, new CompressorEvents.Outcome(
+                    winner.encodingId(), Double.NaN, false, -1, false, "not applicable to the full array"));
+            if (notApplicable != null) {
+                notApplicable[0] = true;
+            }
+            return encodeWithCtx(dtype, data, ctx.withExcluded(winner.encodingId()), false);
         }
 
         if (step.isTerminal()) {
@@ -681,7 +753,7 @@ public final class CascadingCompressor {
         EncodeNode[] children = step.partialRoot().children().clone();
 
         for (ChildSlot slot : step.openChildren()) {
-            EncodeResult childResult = encodeWithCtx(slot.childDtype(), slot.childData(), childContext(ctx, slot));
+            EncodeResult childResult = encodeWithCtx(slot.childDtype(), slot.childData(), childContext(ctx, winner, slot));
 
             int bufOffset = allBuffers.size();
             children[slot.parentChildIdx()] = EncodeNode.remapBufferIndices(childResult.rootNode(), bufOffset);

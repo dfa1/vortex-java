@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
+import io.github.dfa1.vortex.core.jfr.ChunkFilterEvent;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
@@ -134,6 +135,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // Per column, the decoded values of the latest dictionary the pruning checks read.
     private Map<ColumnName, DictValues> dictValuesByColumn;
     private int chunkIndex;
+
+    // Filtered-scan outcome per chunk, reported by the ChunkFilter event on close.
+    private int chunksPruned;
+    private int chunksWithoutMatch;
+    private int chunksReturned;
     private int peekedChunkIdx = -1;
     private long rowsReturned;
     private Chunk openChunk;
@@ -342,9 +348,17 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         while (chunkIndex < chunks.size()) {
             ChunkSpec spec = chunks.get(chunkIndex);
-            if (filter != null && (canPruneChunk(spec, filter) || !selectMatchingRows(spec))) {
-                chunkIndex++;
-                continue;
+            if (filter != null) {
+                if (canPruneChunk(spec, filter)) {
+                    chunksPruned++;
+                    chunkIndex++;
+                    continue;
+                }
+                if (!selectMatchingRows(spec)) {
+                    chunksWithoutMatch++;
+                    chunkIndex++;
+                    continue;
+                }
             }
             peekedChunkIdx = chunkIndex;
             return true;
@@ -433,6 +447,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             rowsReturned += chunkRows;
         }
         openChunk = chunk;
+        chunksReturned++;
         return chunk;
     }
 
@@ -825,12 +840,28 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
     }
 
+    private void emitChunkFilterEvent() {
+        if (filter == null || chunks == null) {
+            return;
+        }
+        var event = new ChunkFilterEvent();
+        if (event.shouldCommit()) {
+            event.totalChunks = chunks.size();
+            event.chunksPruned = chunksPruned;
+            event.chunksWithoutMatch = chunksWithoutMatch;
+            event.chunksReturned = chunksReturned;
+            event.rowsReturned = rowsReturned;
+            event.commit();
+        }
+    }
+
     @Override
     public void close() {
         if (closed) {
             return;
         }
         closed = true;
+        emitChunkFilterEvent();
         if (openChunk != null && !openChunk.isClosed()) {
             openChunk.close();
         }

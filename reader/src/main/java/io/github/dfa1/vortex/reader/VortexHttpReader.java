@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
+import io.github.dfa1.vortex.core.jfr.FileOpenedEvent;
+import io.github.dfa1.vortex.core.jfr.HttpRangeEvent;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.layout.LayoutRegistry;
 
@@ -111,6 +113,8 @@ public final class VortexHttpReader implements VortexHandle {
     /// @throws IOException if the file cannot be opened or parsed
     public static VortexHttpReader open(URI uri, ReadRegistry registry, LayoutRegistry layoutRegistry,
             HttpClient client) throws IOException {
+        var opened = new FileOpenedEvent();
+        opened.begin();
         // Single suffix Range request — Content-Range response header gives us fileSize.
         // Avoids a separate HEAD round trip.
         TailFetch tf = fetchTail(uri, client);
@@ -159,11 +163,60 @@ public final class VortexHttpReader implements VortexHandle {
         PostscriptParser.validateSegmentSpecs(parsed.footer().segmentSpecs(), fileSize);
         DType dtype = registry.resolveExtensions(parsed.dtype());
 
-        return new VortexHttpReader(
+        var reader = new VortexHttpReader(
             uri, client, fileSize, trailer.version(),
             parsed.footer(), dtype, parsed.layout(),
             registry, layoutRegistry
         );
+        if (opened.shouldCommit()) {
+            opened.source = describe(uri);
+            opened.fileSize = fileSize;
+            opened.formatVersion = trailer.version();
+            opened.segmentCount = parsed.footer().segmentSpecs().size();
+            opened.commit();
+        }
+        return reader;
+    }
+
+    /// Describes `uri` as `scheme://host[:port]` plus its raw path. Drops user info, query and
+    /// fragment: presigned URLs carry credentials there, and a recording must not.
+    static String describe(URI uri) {
+        var sb = new StringBuilder();
+        if (uri.getScheme() != null) {
+            sb.append(uri.getScheme()).append("://");
+        }
+        if (uri.getHost() != null) {
+            sb.append(uri.getHost());
+        }
+        if (uri.getPort() >= 0) {
+            sb.append(':').append(uri.getPort());
+        }
+        if (uri.getRawPath() != null) {
+            sb.append(uri.getRawPath());
+        }
+        return sb.toString();
+    }
+
+    /// Sends a range request, committing an [HttpRangeEvent] whether or not it got a response.
+    private static HttpResponse<byte[]> sendRange(
+            HttpRequest req, HttpClient client, URI uri, long offset, long length)
+            throws IOException, InterruptedException {
+        var event = new HttpRangeEvent();
+        event.begin();
+        int status = 0;
+        try {
+            HttpResponse<byte[]> resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            status = resp.statusCode();
+            return resp;
+        } finally {
+            if (event.shouldCommit()) {
+                event.source = describe(uri);
+                event.offset = offset;
+                event.length = length;
+                event.status = status;
+                event.commit();
+            }
+        }
     }
 
     /// Fetches the last [#TAIL_SIZE] bytes in one request.
@@ -176,7 +229,7 @@ public final class VortexHttpReader implements VortexHandle {
                               .build();
         HttpResponse<byte[]> resp;
         try {
-            resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            resp = sendRange(req, client, uri, -1, TAIL_SIZE.bytes());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted fetching tail of " + uri, e);
@@ -237,7 +290,7 @@ public final class VortexHttpReader implements VortexHandle {
                               .GET()
                               .build();
         try {
-            HttpResponse<byte[]> resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            HttpResponse<byte[]> resp = sendRange(req, client, uri, from, to - from + 1);
             int status = resp.statusCode();
             if (status != 206 && status != 200) {
                 throw new VortexException("HTTP " + status + " fetching range from " + uri);

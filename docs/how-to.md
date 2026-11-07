@@ -1196,3 +1196,25 @@ try (VortexReader vf = VortexReader.open(Path.of("future.vortex"), registry);
     }
 }
 ```
+
+---
+
+## Find where a read or write spends its time (JFR)
+
+The reader and writer emit [JFR events](reference.md#jfr-events), so a recording shows where the
+time goes with no code change. Record a run, then print the Vortex events:
+
+```bash
+java -XX:StartFlightRecording=filename=rec.jfr,settings=profile -jar app.jar
+jfr print --events 'io.github.dfa1.vortex.*' rec.jfr
+jfr summary rec.jfr        # event counts, to see which families fired
+```
+
+What to look for:
+
+- **Slow open**: `FileOpened` (duration) with `FileMapping` or, over HTTP, the `HttpRange` events nested in it.
+- **Slow remote read**: many `HttpRange` events, or ones with a long duration; `status` 0 is a failed request.
+- **Decode cost**: `SegmentDecoded` duration per `encoding`.
+- **Filter that prunes nothing**: `ChunkFilter` with `chunksReturned` close to `totalChunks`.
+- **Why a scheme won or lost**: `Candidate` events (`verdict`, estimated vs measured sizes) and the `Winner` (`estimatedRatio` against `achievedRatio`, `accepted`), joined by `column`, `segment` and `cascadePath`. These events are off by default and number tens of thousands per write: enable them with `io.github.dfa1.vortex.Candidate#enabled=true` (and `Winner`, `Compress`) in `-XX:StartFlightRecording`, and filter by column.
+- **Writer stalls**: `SegmentWait` (the writer blocked on a slow encode) next to `SegmentEncoded` durations per `encoding`.

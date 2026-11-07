@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.jfr.SegmentEncodedEvent;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.Edition;
@@ -21,6 +22,7 @@ import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
 import io.github.dfa1.vortex.writer.encode.EncodeResult;
+import io.github.dfa1.vortex.writer.encode.EncodeTrace;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
@@ -45,6 +47,7 @@ import io.github.dfa1.vortex.writer.encode.ZigZagEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -140,13 +143,16 @@ final class SegmentEncoder {
     /// [DictEncodingEncoder] — the cascade would otherwise re-pick it and wrap the dictionary
     /// in another dict the reader cannot unwrap.
     ///
+    /// @param trace               the column and segment being encoded, for the compressor's JFR events
     /// @param dtype               logical type of the segment
     /// @param data                the values to encode
     /// @param encodingOverride    a specific encoder to force, or `null` to use the cascade
     /// @param excludedFromCascade encoding ids to exclude from the cascade competition
     /// @return the encoded segment, owning its arena
-    EncodedSegment encode(DType dtype, Object data, EncodingEncoder encodingOverride,
+    EncodedSegment encode(EncodeTrace trace, DType dtype, Object data, EncodingEncoder encodingOverride,
             Set<EncodingId> excludedFromCascade) {
+        var event = new SegmentEncodedEvent();
+        event.begin();
         EncodingEncoder override = resolveOverride(dtype, data, encodingOverride);
         Arena arena = Arena.ofShared();
         try {
@@ -157,16 +163,18 @@ final class SegmentEncoder {
                 // compress their inner values through the full CascadingCompressor rather than a
                 // fixed first-match encoder. Without cascading, a depth-0 context is passed and the
                 // override behaves as before.
-                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry, editionExcluded);
+                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry, editionExcluded).withTrace(trace);
                 if (options.allowedCascading() > 0) {
-                    encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded);
+                    encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded)
+                            .withTrace(trace);
                 }
                 // A wrapping override (masked) cascades its inner values, so the exclusions hold
                 // there too -- a nullable global-dict pool must never become a dict itself.
                 encodeCtx = encodeCtx.withExcluded(excludedFromCascade);
                 result = override.encode(dtype, data, encodeCtx);
             } else if (options.allowedCascading() > 0) {
-                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded);
+                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry, editionExcluded)
+                        .withTrace(trace);
                 for (EncodingId excluded : excludedFromCascade) {
                     encodeCtx = encodeCtx.withExcluded(excluded);
                 }
@@ -174,7 +182,7 @@ final class SegmentEncoder {
                 result = compressor.encode(dtype, data, encodeCtx);
             } else {
                 EncodingEncoder encoder = findEncoder(dtype);
-                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry, editionExcluded);
+                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry, editionExcluded).withTrace(trace);
                 result = encoder.encode(dtype, data, encodeCtx);
             }
             long nullCount = data instanceof NullableData nd ? nd.nullCount() : 0L;
@@ -196,6 +204,19 @@ final class SegmentEncoder {
             SegmentStats stats = new SegmentStats(min, max, ZoneMapStatCodec.columnSum(dtype, data), nullCount);
             // the stats the flat segment's root node carries are Rust's, not the zone map's
             result = result.withRootStats(dtype, min, max, RowCount.of(data), nullCount);
+            if (event.shouldCommit()) {
+                List<MemorySegment> buffers = result.buffers();
+                long encodedSize = 0;
+                for (MemorySegment buffer : buffers) {
+                    encodedSize += buffer.byteSize();
+                }
+                event.column = trace.column();
+                event.segment = trace.segment();
+                event.encoding = result.rootNode().encodingId().id();
+                event.bufferCount = buffers.size();
+                event.encodedSize = encodedSize;
+                event.commit();
+            }
             return new EncodedSegment(result, arena, stats);
         } catch (RuntimeException | Error e) {
             arena.close();
@@ -206,14 +227,15 @@ final class SegmentEncoder {
     /// Rust's `DictStrategy` admission: the column gets a dict layout only when the full cascade,
     /// its probe compressor, turns the first 8192-row block into a `vortex.dict`
     /// (`vortex-layout/src/layouts/dict/writer.rs`). Without a cascade there is no compressor to
-    /// ask, and the cardinality check alone decides.
-    boolean probeCompressesToDict(DType colDtype, Object data) {
+    /// ask, and the cardinality check alone decides. `column` only labels the probe's JFR events.
+    boolean probeCompressesToDict(ColumnName column, DType colDtype, Object data) {
         if (options.allowedCascading() == 0) {
             return true;
         }
         Object block = Repartitioner.head(data, Math.min(Repartitioner.BLOCK_ROWS, RowCount.of(data)));
         try (Arena arena = Arena.ofConfined()) {
-            EncodeContext ctx = EncodeContext.ofDepth(options.allowedCascading(), arena, probeRegistry, editionExcluded);
+            EncodeContext ctx = EncodeContext.ofDepth(options.allowedCascading(), arena, probeRegistry, editionExcluded)
+                    .withTrace(EncodeTrace.of(column.value(), -1));
             EncodeResult result = new CascadingCompressor(probeCodecs).encode(colDtype, block, ctx);
             return result.rootNode().encodingId().equals(EncodingId.VORTEX_DICT);
         }
@@ -370,7 +392,7 @@ final class SegmentEncoder {
                 // The candidates are the whole set: the column's context (and so a masked column's
                 // value cascade, which reads ctx.registry()) sees only them.
                 EncodeContext columnCtx = EncodeContext.ofDepth(options.allowedCascading(), ctx.arena(),
-                        registry, editionExcluded);
+                        registry, editionExcluded).withTrace(ctx.trace());
                 // a decimal, struct or list keeps its validity in its own encoding, as on the default path
                 boolean masked = data instanceof NullableData && !(dtype instanceof DType.Extension)
                         && !(options.allowedCascading() > 0 && CascadingCompressor.carriesValidity(dtype));

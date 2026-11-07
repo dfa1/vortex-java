@@ -5,6 +5,14 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `EncodeContext` has a new last component, `trace`, so code calling its canonical constructor passes `EncodeTrace.NONE`. ([#601](https://github.com/dfa1/vortex-java/issues/601))
+
+### Added
+- JDK Flight Recorder events for file open, HTTP range requests, segment decode and encode, chunk filtering, writer back-pressure and the compressor's scheme choices, which mirror Rust's compressor trace. ([#601](https://github.com/dfa1/vortex-java/issues/601))
+
 ## [0.19.1] — 2026-11-07
 
 ### Changed

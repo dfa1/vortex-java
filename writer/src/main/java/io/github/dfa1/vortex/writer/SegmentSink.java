@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.fbs.FbsArray;
+import io.github.dfa1.vortex.core.jfr.SegmentWaitEvent;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.core.fbs.FbsArrayStats;
@@ -17,6 +19,7 @@ import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.writer.SegmentEncoder.EncodedSegment;
 import io.github.dfa1.vortex.writer.SegmentEncoder.SegmentStats;
 import io.github.dfa1.vortex.writer.encode.EncodeNode;
+import io.github.dfa1.vortex.writer.encode.EncodeTrace;
 import io.github.dfa1.vortex.writer.encode.EncodeResult;
 import io.github.dfa1.vortex.writer.encode.EncodedBuffer;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
@@ -74,15 +77,17 @@ final class SegmentSink {
     }
 
     /// Submits a segment to [SegmentEncoder#encode] on the executor and returns the index it will
-    /// be written at; see there for `encodingOverride` and `excludedFromCascade`.
+    /// be written at, tracing it as segment of `column`; see there for `encodingOverride` and `excludedFromCascade`.
     ///
     /// @return the index of the written segment
     /// @throws IOException if writing an earlier, completed segment to the channel fails
-    int write(DType dtype, Object data, EncodingEncoder encodingOverride,
+    int write(ColumnName column, DType dtype, Object data, EncodingEncoder encodingOverride,
             Set<EncodingId> excludedFromCascade) throws IOException {
+        int segIdx = submittedSegments;
+        EncodeTrace trace = EncodeTrace.of(column.value(), segIdx);
         pending.add(CompletableFuture.supplyAsync(
-                () -> encoder.encode(dtype, data, encodingOverride, excludedFromCascade), executor));
-        int segIdx = submittedSegments++;
+                () -> encoder.encode(trace, dtype, data, encodingOverride, excludedFromCascade), executor));
+        submittedSegments++;
         drain(MAX_IN_FLIGHT_SEGMENTS);
         return segIdx;
     }
@@ -145,13 +150,30 @@ final class SegmentSink {
         while (!pending.isEmpty() && (pending.size() > keep || pending.peek().isDone())) {
             EncodedSegment encoded;
             try {
-                encoded = pending.poll().join();
+                encoded = awaitHead(pending.poll(), pending.size() + 1);
             } catch (CompletionException e) {
                 discardPending();
                 throw rethrowCause(e);
             }
             try (Arena _ = encoded.arena()) {
                 writeEncoded(encoded);
+            }
+        }
+    }
+
+    /// Joins the oldest in-flight segment, recording a [SegmentWaitEvent] when it is not done yet.
+    private static EncodedSegment awaitHead(CompletableFuture<EncodedSegment> head, int inFlight) {
+        if (head.isDone()) {
+            return head.join();
+        }
+        var event = new SegmentWaitEvent();
+        event.begin();
+        try {
+            return head.join();
+        } finally {
+            if (event.shouldCommit()) {
+                event.segmentsInFlight = inFlight;
+                event.commit();
             }
         }
     }

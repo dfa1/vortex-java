@@ -100,7 +100,7 @@ class CascadingCompressorTest {
             }
             EncodeContext encodeCtx = new EncodeContext(
                     Arena.ofAuto(), toRegistry(ALL_CODECS),
-                    1, Set.of(EncodingId.VORTEX_ALP), 42L, 64, 0.1, false);
+                    1, Set.of(EncodingId.VORTEX_ALP), 42L, 64, 0.1, false, EncodeTrace.NONE);
             CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
 
             // When

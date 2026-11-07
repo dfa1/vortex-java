@@ -95,7 +95,7 @@ final class GlobalDictWriter {
                 candidate = DictColumnState.isLowCardinality(p.ptype(), head,
                         validity != null ? Arrays.copyOf(validity, probeRows) : null);
             } else if (candidate) {
-                candidate = encoder.probeCompressesToDict(colDtype, data);
+                candidate = encoder.probeCompressesToDict(colName, colDtype, data);
             }
         } else if (colDtype instanceof DType.Utf8 || colDtype instanceof DType.Binary) {
             // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported), by what
@@ -242,7 +242,7 @@ final class GlobalDictWriter {
         // Write values segment using the same codec path as regular segments so codes benefit from
         // bitpacking/FOR when cascading is enabled. Safe: global dict is disabled for custom-encoding
         // writers (withGlobalDict(false)), so the writer's encodings are the default ones here.
-        int valuesSegIdx = sink.write(state.dtype(), dictPool(state), null, Set.of());
+        int valuesSegIdx = sink.write(colName, state.dtype(), dictPool(state), null, Set.of());
         writeGlobalDictCodes(colName, state, valuesSegIdx);
     }
 
@@ -256,11 +256,11 @@ final class GlobalDictWriter {
         Object pool = dictPool(state);
         int valuesSegIdx;
         if (options.allowedCascading() > 0) {
-            valuesSegIdx = sink.write(state.dtype(), pool, null, Set.of(EncodingId.VORTEX_DICT));
+            valuesSegIdx = sink.write(colName, state.dtype(), pool, null, Set.of(EncodingId.VORTEX_DICT));
         } else if (state.nullCode() >= 0) {
-            valuesSegIdx = sink.write(state.dtype(), pool, new MaskedEncodingEncoder(), Set.of(EncodingId.VORTEX_DICT));
+            valuesSegIdx = sink.write(colName, state.dtype(), pool, new MaskedEncodingEncoder(), Set.of(EncodingId.VORTEX_DICT));
         } else {
-            valuesSegIdx = sink.write(state.dtype(), pool, new VarBinEncodingEncoder(), Set.of());
+            valuesSegIdx = sink.write(colName, state.dtype(), pool, new VarBinEncodingEncoder(), Set.of());
         }
         writeGlobalDictCodes(colName, state, valuesSegIdx);
     }
@@ -292,12 +292,12 @@ final class GlobalDictWriter {
             short[] codes = state.chunkCodes(c);
             List<Object> ready = repartitioner != null ? repartitioner.add(codes, codes.length) : List.of(codes);
             for (Object chunk : ready) {
-                codesSegIdxes.add(sink.write(codesDtype, chunk, null, Set.of()));
+                codesSegIdxes.add(sink.write(colName, codesDtype, chunk, null, Set.of()));
                 codesRowCounts.add((long) ((short[]) chunk).length);
             }
         }
         for (Object last : repartitioner != null ? repartitioner.finish() : List.of()) {
-            codesSegIdxes.add(sink.write(codesDtype, last, null, Set.of()));
+            codesSegIdxes.add(sink.write(colName, codesDtype, last, null, Set.of()));
             codesRowCounts.add((long) ((short[]) last).length);
         }
         dictColRefs.computeIfAbsent(colName, _ -> new ArrayList<>()).add(new DictColRef(valuesSegIdx, state.cardinality(),

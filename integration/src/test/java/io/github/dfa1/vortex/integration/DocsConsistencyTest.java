@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// Checks:
 /// - every `io.github.dfa1.vortex...` FQN resolves to a real class (nested classes via `$`
-///   fallback) or, for package-only FQNs, a real source directory,
+///   fallback), a JFR event name, or, for package-only FQNs, a real source directory,
 /// - every `META-INF/services/<fqn>` mention names a service file that actually exists,
 /// - every relative markdown link resolves to an existing file,
 /// - every backticked `UpperCase.method(...)` claim whose receiver is a project class names a
@@ -100,7 +100,7 @@ class DocsConsistencyTest {
             while (m.find()) {
                 String fqn = m.group();
                 boolean isClassLike = Character.isUpperCase(fqn.charAt(fqn.lastIndexOf('.') + 1));
-                if (isClassLike ? !resolvesAsClass(fqn) : !resolvesAsPackage(fqn)) {
+                if (isClassLike ? !resolvesAsClass(fqn) && !isJfrEventName(fqn) : !resolvesAsPackage(fqn)) {
                     violations.add(doc.getFileName() + ": " + fqn);
                 }
             }
@@ -183,6 +183,22 @@ class DocsConsistencyTest {
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    /// A JFR event is named `io.github.dfa1.vortex.<Name>` (its `@Name`), not after its class: it is
+    /// real when `core.jfr` has the `<Name>Event` class.
+    private static boolean isJfrEventName(String fqn) {
+        String prefix = "io.github.dfa1.vortex.";
+        if (!fqn.startsWith(prefix) || fqn.indexOf('.', prefix.length()) >= 0) {
+            return false;
+        }
+        try {
+            Class.forName("io.github.dfa1.vortex.core.jfr." + fqn.substring(prefix.length()) + "Event", false,
+                    DocsConsistencyTest.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException _) {
+            return false;
+        }
+    }
 
     private static boolean resolvesAsClass(String fqn) {
         // Progressively convert trailing dots to $ for nested classes (Chunk.Column,

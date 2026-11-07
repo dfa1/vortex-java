@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.jfr.FileMappingEvent;
+import io.github.dfa1.vortex.core.jfr.FileOpenedEvent;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.layout.LayoutRegistry;
 
@@ -83,6 +85,8 @@ public final class VortexReader implements VortexHandle {
     /// @throws IOException if the file cannot be opened or parsed
     public static VortexReader open(Path path, ReadRegistry registry, LayoutRegistry layoutRegistry)
             throws IOException {
+        var opened = new FileOpenedEvent();
+        opened.begin();
         Arena arena = Arena.ofConfined();
         try (var channel = FileChannel.open(path, StandardOpenOption.READ)) {
             long size = channel.size();
@@ -92,8 +96,23 @@ public final class VortexReader implements VortexHandle {
             // The channel is no longer needed after map(): the Arena owns the mapping's
             // lifetime. try-with-resources closes the file descriptor while all Array
             // buffers remain valid zero-copy slices until arena.close() is called.
+            var mapping = new FileMappingEvent();
+            mapping.begin();
             var segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
-            return parse(segment, size, arena, registry, layoutRegistry);
+            if (mapping.shouldCommit()) {
+                mapping.file = path.toString();
+                mapping.size = size;
+                mapping.commit();
+            }
+            var reader = parse(segment, size, arena, registry, layoutRegistry);
+            if (opened.shouldCommit()) {
+                opened.source = path.toString();
+                opened.fileSize = size;
+                opened.formatVersion = reader.version();
+                opened.segmentCount = reader.footer().segmentSpecs().size();
+                opened.commit();
+            }
+            return reader;
         } catch (Exception e) {
             arena.close();
             throw e;
