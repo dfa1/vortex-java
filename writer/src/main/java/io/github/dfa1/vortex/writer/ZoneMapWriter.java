@@ -85,7 +85,7 @@ final class ZoneMapWriter {
                 if (acc.zoneCount() == 0) {
                     continue;
                 }
-                int zonesSegIdx = sink.write(acc.tableDtype(), acc.tableData(), encoder.zoneTableEncoder(), Set.of());
+                int zonesSegIdx = sink.write(e.getKey(), acc.tableDtype(), acc.tableData(), encoder.zoneTableEncoder(), Set.of());
                 zoneMaps.put(e.getKey(), new ZoneMapRef(zonesSegIdx, acc.zoneCount(), acc.metadata()));
             }
             return;
@@ -201,7 +201,7 @@ final class ZoneMapWriter {
 
         DType.Struct statsDtype = new DType.Struct(
                 names.stream().map(ColumnName::of).toList(), List.copyOf(types), false);
-        int zonesSegIdx = sink.write(statsDtype, new StructData(fields), new StructEncodingEncoder(), Set.of());
+        int zonesSegIdx = sink.write(colName, statsDtype, new StructData(fields), new StructEncodingEncoder(), Set.of());
         zoneMaps.put(colName,
                 new ZoneMapRef(zonesSegIdx, nZones, ZoneMapStatCodec.zonedMetadataBytes(
                         ZoneMapStatCodec.uniformZoneLength(rowCounts), minMaxDtype != null, sumDtype != null)));

@@ -5,6 +5,7 @@ import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.jfr.SegmentDecodedEvent;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.fbs.FbsBuffer;
@@ -49,6 +50,8 @@ final class SerializedArrayDecoder {
     /// @return the decoded [Array] for this segment
     public Array decode(MemorySegment seg, List<EncodingId> encodingSpecs,
             DType dtype, long rowCount, SegmentAllocator arena) {
+        var event = new SegmentDecodedEvent();
+        event.begin();
         // long: a segment's length is a u32 on the wire, so it may pass 2 GiB (#629)
         long segLen = seg.byteSize();
 
@@ -75,7 +78,14 @@ final class SerializedArrayDecoder {
         }
 
         var ctx = new DecodeContext(convertArrayNode(root, encodingSpecs), dtype, rowCount, bufs, registry, arena);
-        return registry.decode(ctx);
+        Array array = registry.decode(ctx);
+        if (event.shouldCommit()) {
+            event.encoding = ctx.node().encodingId().id();
+            event.rowCount = rowCount;
+            event.segmentSize = segLen;
+            event.commit();
+        }
+        return array;
     }
 
     private static ArrayNode convertArrayNode(io.github.dfa1.vortex.core.fbs.FbsArrayNode fbs,

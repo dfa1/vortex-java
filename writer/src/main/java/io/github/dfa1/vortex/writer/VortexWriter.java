@@ -347,7 +347,7 @@ public final class VortexWriter implements Closeable {
 
     private void writeDataChunk(ColumnName colName, DType colDtype, Object data) throws IOException {
         long rowCount = RowCount.of(data);
-        int segIdx = writeSegment(colDtype, data, segmentEncoder.columnEncoder(colName));
+        int segIdx = writeSegment(colName, colDtype, data, segmentEncoder.columnEncoder(colName));
         colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
     }
 
@@ -375,8 +375,9 @@ public final class VortexWriter implements Closeable {
                 LayoutTree.build(schema, colChunks, globalDict.written(), zoneMaps.written()));
     }
 
-    private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride) throws IOException {
-        return sink.write(dtype, data, encodingOverride, Set.of());
+    private int writeSegment(ColumnName column, DType dtype, Object data, EncodingEncoder encodingOverride)
+            throws IOException {
+        return sink.write(column, dtype, data, encodingOverride, Set.of());
     }
 
     private DType columnDtype(ColumnName colName) {

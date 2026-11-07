@@ -39,6 +39,7 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
                         EditionId, Edition, EditionFamily, Editions
           core.io       IoBounds, PTypeIO, VortexFormat, MemorySize
           core.error    VortexException
+          core.jfr      JFR events (FileOpened, HttpRange, SegmentDecoded, SegmentEncoded, ChunkFilter, Compress, Candidate, Winner, …)
           core.compute  FastLanes, PrimitiveArrays, Utf8Order, Utf8Validation
           core.simd     SimdOperations (kernels shared by reader+writer, all eleven ptypes),
                         AutoVectorizedSimdOperations (C2-shaped loops, the Rust-parity default),
