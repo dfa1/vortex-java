@@ -231,6 +231,18 @@ public final class CascadingCompressor {
         return dtype instanceof DType.Struct || dtype instanceof DType.List || dtype instanceof DType.Decimal;
     }
 
+    /// Whether `data` is a nullable text column without a null, which has no validity to store: as
+    /// Rust imports a string array whose null count is zero (`Validity::AllValid`), it is written
+    /// as the plain values, never under a `vortex.masked`.
+    ///
+    /// @param dtype the column's dtype
+    /// @param data  the column's carrier
+    /// @return `true` for a [NullableData] of utf8 or binary values with every row valid
+    public static boolean isUnmaskedText(DType dtype, Object data) {
+        return (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary)
+                && data instanceof NullableData nullable && nullable.nullCount() == 0;
+    }
+
     /// Entry point: encode `data` using the best cascading strategy.
     ///
     /// Cascade parameters (depth, sampling, exclusions) are taken from `ctx`.
@@ -246,9 +258,10 @@ public final class CascadingCompressor {
         // null count is zero (`Validity::AllValid`). Deeper down a NullableData keeps its bitmap
         // even when every bit is set, as a filtered or sampled Rust array does.
         // An extension's storage is that array too.
-        if ((keepsValidity(dtype) || dtype instanceof DType.Extension || dtype instanceof DType.Decimal)
+        if (isUnmaskedText(dtype, data)
+                || (keepsValidity(dtype) || dtype instanceof DType.Extension || dtype instanceof DType.Decimal)
                 && data instanceof NullableData nullable && nullable.nullCount() == 0) {
-            return encodeWithCtx(dtype, nullable.values(), ctx);
+            return encodeWithCtx(dtype, ((NullableData) data).values(), ctx);
         }
         return encodeWithCtx(dtype, data, ctx);
     }

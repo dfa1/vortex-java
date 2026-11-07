@@ -313,9 +313,11 @@ final class SegmentEncoder {
         // and so does a nullable struct or list, which carry it as a child of their own (#648)
         boolean keepsValidity = options.allowedCascading() > 0
                 && (CascadingCompressor.keepsValidity(dtype) || CascadingCompressor.carriesValidity(dtype));
+        // a text column without a null has no validity to store, whatever the cascade picks
+        boolean noValidity = options.allowedCascading() > 0 && CascadingCompressor.isUnmaskedText(dtype, data);
         if (encodingOverride == null
                 && data instanceof NullableData
-                && !(dtype instanceof DType.Extension) && !keepsValidity) {
+                && !(dtype instanceof DType.Extension) && !keepsValidity && !noValidity) {
             EncodingEncoder nullableCapable = nullableCapableEncoder(dtype);
             return nullableCapable != null ? nullableCapable : new MaskedEncodingEncoder();
         }
@@ -395,7 +397,8 @@ final class SegmentEncoder {
                         registry, editionExcluded).withTrace(ctx.trace());
                 // a decimal, struct or list keeps its validity in its own encoding, as on the default path
                 boolean masked = data instanceof NullableData && !(dtype instanceof DType.Extension)
-                        && !(options.allowedCascading() > 0 && CascadingCompressor.carriesValidity(dtype));
+                        && !(options.allowedCascading() > 0 && (CascadingCompressor.carriesValidity(dtype)
+                        || CascadingCompressor.isUnmaskedText(dtype, data)));
                 if (masked) {
                     return new MaskedEncodingEncoder().encode(dtype, data, columnCtx);
                 }
