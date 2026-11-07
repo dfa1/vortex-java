@@ -24,7 +24,7 @@ final class CompressorEvents {
         event.segment = trace.segment();
         event.cascadePath = trace.pathString();
         event.cascadeDepth = trace.depth();
-        event.dtype = dtype.toString();
+        event.dtype = dtypeName(dtype);
         event.arrayLen = RowCount.of(data);
         event.inputNbytes = CascadingCompressor.inputBytes(dtype, data);
         event.compressedNbytes = CascadingCompressor.totalBytes(result);
@@ -96,6 +96,42 @@ final class CompressorEvents {
         event.estimated = outcome.estimated();
         event.error = outcome.error();
         event.commit();
+    }
+
+    /// A dtype as Rust displays it: `i64`, `utf8?` for a nullable one, `list(i64)`, `struct{a: i64}`.
+    ///
+    /// @param dtype the dtype
+    /// @return its short name
+    static String dtypeName(DType dtype) {
+        String name = switch (dtype) {
+            case DType.Null _ -> "null";
+            case DType.Bool _ -> "bool";
+            case DType.Primitive p -> p.ptype().name().toLowerCase();
+            case DType.Decimal d -> "decimal(" + d.precision() + "," + d.scale() + ")";
+            case DType.Utf8 _ -> "utf8";
+            case DType.Binary _ -> "binary";
+            case DType.List l -> "list(" + dtypeName(l.elementType()) + ")";
+            case DType.FixedSizeList l -> "fixed_size_list(" + dtypeName(l.elementType()) + "," + l.fixedSize() + ")";
+            case DType.Map m -> "map(" + dtypeName(m.keyType()) + "," + dtypeName(m.valueType()) + ")";
+            case DType.Struct s -> structName(s);
+            case DType.Extension e -> "ext(" + e.extensionId().id() + ")";
+            default -> dtype.getClass().getSimpleName().toLowerCase();
+        };
+        if (dtype.nullable()) {
+            return name + "?";
+        }
+        return name;
+    }
+
+    private static String structName(DType.Struct struct) {
+        var sb = new StringBuilder("struct{");
+        for (int i = 0; i < struct.fieldNames().size(); i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(struct.fieldNames().get(i).value()).append(": ").append(dtypeName(struct.fieldTypes().get(i)));
+        }
+        return sb.append('}').toString();
     }
 
     private static double ratio(long input, long compressed) {

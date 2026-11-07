@@ -1202,19 +1202,103 @@ try (VortexReader vf = VortexReader.open(Path.of("future.vortex"), registry);
 ## Find where a read or write spends its time (JFR)
 
 The reader and writer emit [JFR events](reference.md#jfr-events), so a recording shows where the
-time goes with no code change. Record a run, then print the Vortex events:
+time goes, and why the compressor chose what it chose, with no code change and no dependency. There
+are two families, and they cost very different amounts:
+
+| Family | Events | Default | Cost |
+|---|---|---|---|
+| I/O, decode, encode, filter | `FileOpened`, `FileMapping`, `HttpRange`, `SegmentDecoded`, `ChunkFilter`, `SegmentEncoded`, `SegmentWait` | on in any recording | one event per file, request or segment |
+| Compressor decisions | `Candidate`, `Winner`, `Compress` | **off** | tens of thousands per write: about 200 for one 16,384-row column |
+
+### Record a run
+
+Any recording picks up the first family. The compressor events need a leading `+`:
 
 ```bash
-java -XX:StartFlightRecording=filename=rec.jfr,settings=profile -jar app.jar
-jfr print --events 'io.github.dfa1.vortex.*' rec.jfr
-jfr summary rec.jfr        # event counts, to see which families fired
+java -XX:StartFlightRecording:filename=rec.jfr,settings=profile \
+     -jar app.jar
+
+# add the compressor's decisions (mind the +: without it the event stays off)
+java -XX:StartFlightRecording:filename=rec.jfr,+io.github.dfa1.vortex.Candidate#enabled=true,+io.github.dfa1.vortex.Winner#enabled=true,+io.github.dfa1.vortex.Compress#enabled=true \
+     -jar app.jar
 ```
 
-What to look for:
+For a long command line, or a recording started by `jcmd <pid> JFR.start settings=vortex.jfc`, put the
+same switches in a settings file:
 
-- **Slow open**: `FileOpened` (duration) with `FileMapping` or, over HTTP, the `HttpRange` events nested in it.
-- **Slow remote read**: many `HttpRange` events, or ones with a long duration; `status` 0 is a failed request.
+```xml
+<?xml version="1.0"?>
+<configuration version="2.0">
+  <event name="io.github.dfa1.vortex.Candidate"><setting name="enabled">true</setting></event>
+  <event name="io.github.dfa1.vortex.Winner"><setting name="enabled">true</setting></event>
+  <event name="io.github.dfa1.vortex.Compress"><setting name="enabled">true</setting></event>
+</configuration>
+```
+
+### Read it
+
+```bash
+jfr summary rec.jfr | grep vortex                 # which events fired, and how many
+jfr view --width 160 SegmentEncoded rec.jfr       # one event type as a table
+jfr print --events Winner rec.jfr                 # every field of every event
+jfr print --categories 'Vortex*' rec.jfr          # the whole family
+```
+
+`jfr view` shows `Winner` like this (a 16,384-row `I64` column of long runs, columns cut to fit):
+
+```
+Column Segment Cascade Path  Depth Parent Scheme         Input    Compressed Estimated Achieved Accepted Error
+------ ------- ------------- ----- ------ -------------- -------- ---------- --------- -------- -------- ------------------
+id          -1                   0        vortex.dict    64.0 kB  176 bytes   324.436  372.364     true
+id          -1 dict.0            1 dict   vortex.runend   8.0 kB   48 bytes    21.333  170.667     true
+id          -1 dict.0/runend.0   2 runend fastlanes.for  32 bytes   1.6 kB     1.231    0.019    false not smaller than ...
+```
+
+For anything a table cannot answer, print JSON and use `jq`. The schemes the compressor picked and
+then dropped:
+
+```bash
+jfr print --json --events Winner rec.jfr \
+  | jq -r '.recording.events[].values | select(.accepted == false)
+           | [.column, .cascadePath, .schemeChosen, .estimatedRatio, .achievedRatio] | @tsv'
+```
+
+### What to look for
+
+- **Slow open**: `FileOpened` (its duration) with `FileMapping`, or, over HTTP, the `HttpRange` events inside it.
+- **Slow remote read**: many `HttpRange` events, or long ones; `status` 0 is a request that got no response.
 - **Decode cost**: `SegmentDecoded` duration per `encoding`.
-- **Filter that prunes nothing**: `ChunkFilter` with `chunksReturned` close to `totalChunks`.
-- **Why a scheme won or lost**: `Candidate` events (`verdict`, estimated vs measured sizes) and the `Winner` (`estimatedRatio` against `achievedRatio`, `accepted`), joined by `column`, `segment` and `cascadePath`. These events are off by default and number tens of thousands per write: enable them with `io.github.dfa1.vortex.Candidate#enabled=true` (and `Winner`, `Compress`) in `-XX:StartFlightRecording`, and filter by column.
-- **Writer stalls**: `SegmentWait` (the writer blocked on a slow encode) next to `SegmentEncoded` durations per `encoding`.
+- **A filter that prunes nothing**: `ChunkFilter` with `chunksReturned` close to `totalChunks`. It is committed when the scan closes, so a scan stopped early by a limit counts fewer chunks.
+- **Writer stalls**: `SegmentWait` (the writer blocked on its oldest in-flight segment) next to `SegmentEncoded` durations per `encoding`. The default executor encodes on the writing thread, so `SegmentWait` only appears with your own executor.
+- **A column that came out big**: the `Winner` of its root array (empty `cascadePath`), then the `Candidate`s sharing its `column`, `segment` and `cascadePath`:
+  - `verdict = skip` or `always_use`: decided on stats, nothing was encoded.
+  - `estimate`: the scheme won or lost on a stats ratio. If the winner's `achievedRatio` is far below its `estimatedRatio` (the third row above: 1.23 estimated, 0.019 achieved, because a 32-byte child padded to a 1.6 kB bit-packed block), the estimate was wrong, and `accepted = false` means the compressor noticed and kept the canonical encoding. When it did not, look for the estimate that disagrees with the measurement.
+  - `measured` (with `sample = true`): a trial encode on the stratified sample; `sampleNbytes` is what it cost against `baselineNbytes`.
+  - `cascade_exhausted`: a scheme that needs a child, with no cascade depth left.
+- **Which array a decision belongs to**: `cascadePath` reads root first, `dict.0/runend.0` meaning the first child of a dict, then the first child of a run-end inside it; the root is empty. `segment` is the index in the file, and `-1` is the global-dict admission probe. Zone-table and dictionary segments carry their data column's name.
+
+### Compare with Rust
+
+The compressor events follow the spans of Rust's `vortex-compressor` trace (`scheme_eval`, `winner_compress`, `compress`), so a Java decision log can be read next to Rust's. Rust prints the cascade path differently (`root`, `scheme[i] > scheme[i]`) and names schemes its own way, so read the two side by side rather than joining them. vortex-jni does not expose Rust's compressor trace; to see why Rust chose a scheme, run its compressor with span events on, then compare with the `Winner` for the same column.
+
+### From code
+
+A `RecordingStream` reads the events in the same process, with nothing written to disk:
+
+```java
+try (var stream = new jdk.jfr.consumer.RecordingStream()) {
+    stream.enable("io.github.dfa1.vortex.Winner");
+    stream.onEvent("io.github.dfa1.vortex.Winner", e -> {
+        if (!e.getBoolean("accepted")) {
+            System.out.println(e.getString("column") + " " + e.getString("cascadePath")
+                    + " dropped " + e.getString("schemeChosen") + ": " + e.getString("error"));
+        }
+    });
+    stream.startAsync();
+    // ... write the file ...
+}
+```
+
+`startAsync()` returns before the stream is running, so events committed in the first moments can be missed: start it well before the write, or use a recording file for anything exact.
+
+The `jdk.jfr` module must be in the runtime (`--add-modules jdk.jfr` for a `jlink`ed one).
