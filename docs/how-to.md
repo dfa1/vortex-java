@@ -401,10 +401,10 @@ java -jar cli/target/vortex-cli-*-all.jar import https://example.com/data.parque
 
 **Heap for wide-text files.** An import buffers one chunk, at most 65,536 rows or 64 MiB of text and
 binary (`ImportOptions#withMaxChunkBytes`), and the Parquet reader reads ahead of it. Measured on
-Raincloud's `websight-v01` (29 GB, about 35 KB of HTML and an image per row): `-Xmx8g` imports it,
-`-Xmx4g` and `-Xmx2g` run out of heap. About 1 GB of the heap at 2g is the Parquet reader's
-read-ahead of wide values, which this project does not configure, so give such a file 8 GB.
-Files with narrow columns need far less.
+Raincloud's `websight-v01` (29 GB, about 35 KB of HTML and an image per row): `-Xmx8g` imports it
+at the default bound. `-Xmx4g` imports it only with a smaller one (`withMaxChunkBytes(16L << 20)`) and
+runs out of heap at the default; `-Xmx2g` runs out of heap at the default. About 1 GB of the heap at 2g is the Parquet reader's read-ahead of wide values, which
+this project does not configure, so give such a file 8 GB. Files with narrow columns need far less.
 
 ---
 
