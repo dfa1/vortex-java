@@ -129,6 +129,28 @@ class OnPairEncodingEncoderTest {
         assertThat(codes).isLessThan(data.length * 22L / 4);
     }
 
+    @Test
+    void encode_pastOneChunkOfCodes_roundTrips() {
+        // Given — noise barely merges, so 2.4 MB of it is well over the 1M codes one off-heap chunk holds
+        Random random = new Random(11);
+        String[] data = IntStream.range(0, 400)
+                .mapToObj(i -> random.ints(6000, 33, 127)
+                        .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                        .toString())
+                .toArray(String[]::new);
+        EncodeContext ctx = EncodeContext.ofDepth(0, Arena.ofAuto(), WriteRegistry.loadAll());
+
+        // When
+        EncodeResult result = SUT.encode(DTypes.UTF8, data, ctx);
+
+        // Then
+        assertThat(decodeMeta(result.rootNode().metadata()).codes_len()).isGreaterThan(1L << 20);
+        VarBinArray decoded = (VarBinArray) decode(result, data.length);
+        for (int i = 0; i < data.length; i++) {
+            assertThat(decoded.getString(i)).isEqualTo(data[i]);
+        }
+    }
+
     private static ProtoOnPairMetadata decodeMeta(MemorySegment seg) {
         try {
             return ProtoOnPairMetadata.decode(seg, 0, seg.byteSize());

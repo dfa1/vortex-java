@@ -65,14 +65,14 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         OnPair c = Encoder.compress(rows);
         Arena arena = ctx.arena();
         PType[] ptypes = c.childPTypes();
-        long[][] values = c.childValues();
         List<EncodedBuffer> buffers = new ArrayList<>();
         buffers.add(EncodedBuffer.bytes(c.dictBytes(arena)));
         EncodeNode[] children = new EncodeNode[4];
         for (int i = 0; i < 4; i++) {
-            MemorySegment seg = arena.allocate(Math.max(1, values[i].length * (long) ptypes[i].byteSize()));
-            for (int j = 0; j < values[i].length; j++) {
-                PTypeIO.set(seg, (long) j * ptypes[i].byteSize(), ptypes[i], values[i][j]);
+            int count = c.childCount(i);
+            MemorySegment seg = arena.allocate(Math.max(1, count * (long) ptypes[i].byteSize()));
+            for (int j = 0; j < count; j++) {
+                PTypeIO.set(seg, (long) j * ptypes[i].byteSize(), ptypes[i], c.childAt(i, j));
             }
             buffers.add(EncodedBuffer.of(seg, ptypes[i]));
             children[i] = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, i + 1);
@@ -97,11 +97,9 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         }
         OnPair c = Encoder.compress(rows);
         PType[] ptypes = c.childPTypes();
-        long[][] values = c.childValues();
         List<ChildSlot> slots = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
-            slots.add(new ChildSlot(new DType.Primitive(ptypes[i], false),
-                    PrimitiveArrays.fromLongsArray(values[i], ptypes[i], EncodingId.VORTEX_ONPAIR), i, SELF));
+            slots.add(new ChildSlot(new DType.Primitive(ptypes[i], false), c.childCarrier(i, ptypes[i]), i, SELF));
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ONPAIR, MemorySegment.ofArray(c.metadata()),
                 new EncodeNode[4], new int[]{0});
@@ -113,7 +111,7 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
     /// The compressed column: read-padded dictionary bytes plus the four integer children in slot
     /// order (`dict_offsets`, `codes`, `codes_offsets`, `uncompressed_lengths`).
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-    record OnPair(byte[] dict, long[] dictOffsets, long[] codes, long[] codesOffsets, long[] lengths) {
+    record OnPair(byte[] dict, long[] dictOffsets, int[] codes, long[] codesOffsets, long[] lengths) {
 
         PType[] childPTypes() {
             long maxLength = 0;
@@ -127,8 +125,33 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
                 PType.narrowestUnsigned(maxLength)};
         }
 
-        long[][] childValues() {
-            return new long[][]{dictOffsets, codes, codesOffsets, lengths};
+        /// The length of child `i` in slot order: `dict_offsets`, `codes`, `codes_offsets`, lengths.
+        int childCount(int i) {
+            return switch (i) {
+                case 0 -> dictOffsets.length;
+                case 1 -> codes.length;
+                case 2 -> codesOffsets.length;
+                default -> lengths.length;
+            };
+        }
+
+        long childAt(int i, int j) {
+            return switch (i) {
+                case 0 -> dictOffsets[j];
+                case 1 -> codes[j];
+                case 2 -> codesOffsets[j];
+                default -> lengths[j];
+            };
+        }
+
+        /// Child `i` as `ptype`'s heap carrier array; the codes narrow from `int`s, never held as `long`s.
+        Object childCarrier(int i, PType ptype) {
+            return switch (i) {
+                case 0 -> PrimitiveArrays.fromLongsArray(dictOffsets, ptype, EncodingId.VORTEX_ONPAIR);
+                case 1 -> PrimitiveArrays.fromIntsArray(codes, ptype, EncodingId.VORTEX_ONPAIR);
+                case 2 -> PrimitiveArrays.fromLongsArray(codesOffsets, ptype, EncodingId.VORTEX_ONPAIR);
+                default -> PrimitiveArrays.fromLongsArray(lengths, ptype, EncodingId.VORTEX_ONPAIR);
+            };
         }
 
         MemorySegment dictBytes(Arena arena) {
@@ -156,6 +179,8 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         static final int DICT_CAPACITY = 1 << 12;
         static final double SAMPLE_FRACTION = 0.15;
         static final long SEED = 42;
+        /// Codes held per off-heap chunk: 4 MiB of `int`s.
+        static final int CHUNK_CODES = 1 << 20;
 
         static OnPair compress(VarBinBytes.Rows rows) {
             Trie trained = train(rows);
@@ -179,22 +204,41 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
             int n = rows.count();
             int[] offsets = rows.offsets();
             byte[] bytes = rows.bytes();
-            long[] codes = new long[offsets[n] - offsets[0]];
             long[] codesOffsets = new long[n + 1];
             long[] lengths = new long[n];
             int numCodes = 0;
-            for (int i = 0; i < n; i++) {
-                int pos = offsets[i];
-                int end = offsets[i + 1];
-                lengths[i] = (long) end - pos;
-                while (pos < end) {
-                    long match = dict.longestMatch(bytes, pos, end);
-                    codes[numCodes++] = Trie.token(match);
-                    pos += Trie.length(match);
+            int[] codes;
+            // Codes go into off-heap chunks, pulling another when one fills: the count is only known at
+            // the end, and one code per input byte (the worst case) would be 8 bytes of heap per byte.
+            try (Arena arena = Arena.ofConfined()) {
+                List<MemorySegment> chunks = new ArrayList<>();
+                MemorySegment chunk = MemorySegment.NULL;
+                int inChunk = CHUNK_CODES;
+                for (int i = 0; i < n; i++) {
+                    int pos = offsets[i];
+                    int end = offsets[i + 1];
+                    lengths[i] = (long) end - pos;
+                    while (pos < end) {
+                        long match = dict.longestMatch(bytes, pos, end);
+                        if (inChunk == CHUNK_CODES) {
+                            chunk = arena.allocate((long) CHUNK_CODES * Integer.BYTES, Integer.BYTES);
+                            chunks.add(chunk);
+                            inChunk = 0;
+                        }
+                        chunk.setAtIndex(ValueLayout.JAVA_INT, inChunk++, Trie.token(match));
+                        numCodes++;
+                        pos += Trie.length(match);
+                    }
+                    codesOffsets[i + 1] = numCodes;
                 }
-                codesOffsets[i + 1] = numCodes;
+                codes = new int[numCodes];
+                for (int k = 0; k < chunks.size(); k++) {
+                    int from = k * CHUNK_CODES;
+                    MemorySegment.copy(chunks.get(k), ValueLayout.JAVA_INT, 0, codes, from,
+                            Math.min(CHUNK_CODES, numCodes - from));
+                }
             }
-            return new OnPair(padded, dictOffsets, Arrays.copyOf(codes, numCodes), codesOffsets, lengths);
+            return new OnPair(padded, dictOffsets, codes, codesOffsets, lengths);
         }
 
         /// `discover_tokens` over a seeded random row order, until the byte budget or the
