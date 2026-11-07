@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VortexWriter` is split into smaller internal parts and writes byte-identical files. ([#663](https://github.com/dfa1/vortex-java/issues/663))
 
 ### Fixed
+- Parquet import closes a chunk once its text and binary reach 64 MiB, so a wide-string file such as `websight-v01` no longer runs out of heap at `-Xmx8g`. ([#657](https://github.com/dfa1/vortex-java/issues/657))
 - The array stats on a flat segment's root node are the ones Rust keeps: integers under `vortex.primitive` and `fastlanes.bitpacked` carry min, max, `is_constant`, `null_count` and the uncompressed size, and every other encoding carries none, so a Java-written string column reports no flat `min`/`max`, as a Rust-written one. ([#583](https://github.com/dfa1/vortex-java/issues/583))
 - The child nodes of a flat segment carry the array stats Rust keeps: a sequence its sorted flags, a nullable integer's validity bitmap its true count, and patch values `is_constant = false`. ([#583](https://github.com/dfa1/vortex-java/issues/583))
 - The zone table of a column holds Rust's shape: no validity or mask on a column without nulls, and a constant bool stays a `vortex.bool` until the constant is smaller. ([#583](https://github.com/dfa1/vortex-java/issues/583))

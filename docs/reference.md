@@ -508,15 +508,16 @@ internal) — no full-file download occurs.
 
 ### `ImportOptions` (`io.github.dfa1.vortex.parquet.ImportOptions`)
 
-Record: `(int chunkSize, List<String> columns, ProgressListener progressListener, WriteOptions writeOptions)`.
+Final class (private constructor); `chunkSize` and `maxChunkBytes` bound the rows and the text/binary bytes buffered per chunk.
 
 | Factory / builder                 | Notes                                                          |
 |-----------------------------------|----------------------------------------------------------------|
-| `ImportOptions.defaults()`        | `chunkSize=65_536`, no projection, `WriteOptions.cascading(3)` |
+| `ImportOptions.defaults()`        | `chunkSize=65_536`, `maxChunkBytes=64 MiB`, no projection, `WriteOptions.cascading(3)` |
 | `.withColumns(List<String>)`      | Project columns during import                                  |
 | `.withProgressListener(listener)` | Progress callbacks                                             |
 | `.withWriteOptions(WriteOptions)` | Override write options                                         |
-| `.withChunkSize(int)`             | Rows per `writeChunk` batch                                    |
+| `.withChunkSize(int)`             | At most this many rows per `writeChunk` batch                  |
+| `.withMaxChunkBytes(long)`        | Closes a chunk early once its text and binary hold this many chars/bytes (wide-string files) |
 
 ### `ParquetExporter` (`io.github.dfa1.vortex.parquet.ParquetExporter`)
 

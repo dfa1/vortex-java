@@ -36,6 +36,12 @@ sealed interface ColumnBuilder {
     /// @return a typed array, `StructData`, or `ListData`, optionally wrapped in `NullableData`
     Object build();
 
+    /// The text and binary bytes accumulated so far (a string counts its chars), which bounds
+    /// the heap a chunk of wide values needs.
+    ///
+    /// @return the buffered variable-length bytes
+    long bytes();
+
     /// Creates the builder for `type` — [DType.Struct] and [DType.List] recurse; every other
     /// dtype uses [LeafColumnBuilder].
     ///
@@ -65,6 +71,15 @@ final class StructColumnBuilder implements ColumnBuilder {
             fieldBuilders.add(ColumnBuilder.forType(fieldType));
         }
         this.validity = dtype.nullable() ? new ArrayList<>() : null;
+    }
+
+    @Override
+    public long bytes() {
+        long total = 0;
+        for (ColumnBuilder fieldBuilder : fieldBuilders) {
+            total += fieldBuilder.bytes();
+        }
+        return total;
     }
 
     @Override
@@ -116,6 +131,11 @@ final class ListColumnBuilder implements ColumnBuilder {
     }
 
     @Override
+    public long bytes() {
+        return elementBuilder.bytes();
+    }
+
+    @Override
     public void append(Object value) {
         if (value == null) {
             if (validity == null) {
@@ -157,6 +177,7 @@ final class LeafColumnBuilder implements ColumnBuilder {
 
     private final DType dtype;
     private final List<Object> values = new ArrayList<>();
+    private long bytes;
 
     LeafColumnBuilder(DType dtype) {
         if (dtype instanceof DType.Extension) {
@@ -180,6 +201,16 @@ final class LeafColumnBuilder implements ColumnBuilder {
     @Override
     public void append(Object value) {
         values.add(value);
+        if (value instanceof String str) {
+            bytes += str.length();
+        } else if (value instanceof byte[] bin) {
+            bytes += bin.length;
+        }
+    }
+
+    @Override
+    public long bytes() {
+        return bytes;
     }
 
     @Override

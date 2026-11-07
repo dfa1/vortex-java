@@ -710,6 +710,32 @@ class ParquetImporterTest {
         }
 
         @Test
+        void maxChunkBytes_closesChunkBeforeRowBound(@TempDir Path tmp) throws Exception {
+            // Given — a 1-byte bound closes a chunk after every row that holds text or binary (#657)
+            Path vortex = tmp.resolve("out.vortex");
+            List<Long> flushed = new ArrayList<>();
+            ImportOptions options = ImportOptions.defaults().withMaxChunkBytes(1)
+                                                 .withProgressListener((done, total) -> flushed.add(done));
+
+            // When
+            ParquetImporter.importParquet(fixture(), vortex, options);
+
+            // Then — one flush per row, and every row survives
+            assertThat(flushed).hasSize(100);
+            try (VortexReader reader = VortexReader.open(vortex)) {
+                assertThat(reader.layout().rowCount()).isEqualTo(100L);
+            }
+        }
+
+        @Test
+        void maxChunkBytes_belowOne_throws() {
+            // When / Then
+            assertThatThrownBy(() -> ImportOptions.defaults().withMaxChunkBytes(0))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("maxChunkBytes");
+        }
+
+        @Test
         void projection_unknownColumn_throws(@TempDir Path tmp) throws Exception {
             // Given
             Path vortex = tmp.resolve("out.vortex");
