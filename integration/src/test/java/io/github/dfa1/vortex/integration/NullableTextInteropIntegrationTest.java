@@ -86,7 +86,7 @@ class NullableTextInteropIntegrationTest {
     /// The shapes whose whole tree is Rust's. The others still differ beyond the validity, in the
     /// scheme chosen for the text itself (#650: the probe applies to numbers only; FSST's lengths).
     static Stream<Arguments> treeShapes() {
-        return shapes().filter(a -> a.get()[0].equals("unique, no nulls"));
+        return shapes().filter(a -> a.get()[0].equals("unique, no nulls") || a.get()[0].equals("few distinct, no nulls"));
     }
 
     @ParameterizedTest(name = "{0}")

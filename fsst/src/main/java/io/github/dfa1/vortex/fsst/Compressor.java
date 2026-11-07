@@ -36,12 +36,27 @@ public final class Compressor {
     static final VarHandle LONG_LE_BYTES =
             MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
 
+    /// Slots of the symbol table Rust's builder keeps, whose real symbols are the first `symbolCount()`.
+    private static final int SYMBOL_SLOTS = 255;
+
     private final List<Symbol> symbolsByGainDescending;
     private final Matcher matcher;
+    /// The bytes of each of the table's [#SYMBOL_SLOTS] slots as Rust's builder holds them: the real
+    /// symbols, then, past them, whatever an earlier generation left there, which Rust never clears.
+    private final long[] slots;
 
-    private Compressor(List<Symbol> symbolsByGainDescending, Matcher matcher) {
+    private Compressor(List<Symbol> symbolsByGainDescending, Matcher matcher, long[] slots) {
         this.symbolsByGainDescending = symbolsByGainDescending;
         this.matcher = matcher;
+        this.slots = slots;
+    }
+
+    private static long[] slotsOf(List<Symbol> symbols, long[] previous) {
+        long[] slots = previous.clone();
+        for (int code = 0; code < symbols.size(); code++) {
+            slots[code] = symbols.get(code).packedBytes();
+        }
+        return slots;
     }
 
     /// Creates a compressor over the given symbols, which must be in gain-descending order (code =
@@ -51,7 +66,7 @@ public final class Compressor {
     /// @return a compressor bound to that table
     static Compressor of(List<Symbol> symbolsByGainDescending) {
         List<Symbol> copy = List.copyOf(symbolsByGainDescending);
-        return new Compressor(copy, Matcher.of(copy));
+        return new Compressor(copy, Matcher.of(copy), slotsOf(copy, new long[SYMBOL_SLOTS]));
     }
 
     /// Rebuilds a compressor from new symbols, reusing `previous`'s [Matcher] backing arrays instead
@@ -64,7 +79,7 @@ public final class Compressor {
     ///         matcher arrays
     static Compressor rebuild(List<Symbol> symbolsByGainDescending, Compressor previous) {
         List<Symbol> copy = List.copyOf(symbolsByGainDescending);
-        return new Compressor(copy, Matcher.rebuild(copy, previous.matcher));
+        return new Compressor(copy, Matcher.rebuild(copy, previous.matcher), slotsOf(copy, previous.slots));
     }
 
     /// Returns an equivalent compressor whose codes are permuted: the symbol currently at code
@@ -119,47 +134,68 @@ public final class Compressor {
         return symbolsByGainDescending.get(code).length();
     }
 
-    /// Returns a permutation of the codes ordered by symbol length: all multi-byte symbols (length
-    /// 2-8) first in non-decreasing length order, then all length-1 symbols last.
+    /// Returns a permutation of the codes in the order Rust's `fsst-rs` numbers them once its table is
+    /// final (`finalize`): the 2-byte symbols that no other symbol shares its first two bytes with, in
+    /// the order they were taken; then the 2-byte symbols some longer symbol starts with, last taken
+    /// first; then the 3, 4, ..., 8-byte symbols, each length in the order they were taken; then the
+    /// 1-byte symbols.
     ///
-    /// This is pure, wire-format-agnostic reordering logic — "sort by length, single-byte-last" —
-    /// with no `vortex.fsst`-specific naming or semantics baked in. The `vortex.fsst` wire adapter
-    /// (a separate module) happens to interpret this exact permutation as its on-wire symbol order,
-    /// but that interpretation lives entirely in the adapter; the algorithm module only knows how to
-    /// sort. Ties within a length bucket keep their gain-descending relative order (a stable sort),
-    /// so the permutation is deterministic.
+    /// The split of the 2-byte symbols lets Rust's compressor skip its hash table for a 2-byte code
+    /// below the split, which no longer symbol can extend. Rust asks "does another symbol start with
+    /// these two bytes" of every slot of its table, including the ones an earlier training generation
+    /// left behind past the final symbols, so a table smaller than an earlier one splits differently
+    /// than its own symbols alone would.
     ///
-    /// @return an `int[]` permutation of `0 .. symbolCount() - 1` in length-sorted, single-byte-last
-    ///         order
+    /// @return an `int[]` permutation of `0 .. symbolCount() - 1`: the code at each position
     public int[] codesSortedByLength() {
-        // Counting sort over symbol length: lengths are bounded to 1-8 (Matcher.maxSymbolLength()),
-        // so a comparator-based sort is unnecessary work — this is O(symbolCount) with no boxing,
-        // and a single forward pass over codes 0..symbolCount()-1 (their gain-descending order) into
-        // each length's bucket is stable by construction, with no comparator needed to break ties.
         int maxSymbolLength = Matcher.maxSymbolLength();
-        int[] countByLength = new int[maxSymbolLength + 1]; // index 1..maxSymbolLength; 0 unused
         int n = symbolCount();
+        int[] countByLength = new int[maxSymbolLength + 1]; // index 1..maxSymbolLength; 0 unused
         for (int code = 0; code < n; code++) {
             countByLength[symbolLength(code)]++;
         }
 
-        // Bucket start offsets in wire order: multi-byte lengths 2..maxSymbolLength ascending, then
-        // length-1 last.
-        int[] bucketStart = new int[maxSymbolLength + 1];
-        int offset = 0;
-        for (int length = 2; length <= maxSymbolLength; length++) {
-            bucketStart[length] = offset;
-            offset += countByLength[length];
+        // First position of each length: 1-byte symbols after all the others; the 2-byte ones from 0,
+        // split at the suffix limit; then each longer length after the one before.
+        int[] nextPosition = new int[maxSymbolLength + 1];
+        nextPosition[1] = n - countByLength[1];
+        nextPosition[2] = 0;
+        for (int length = 2; length < maxSymbolLength; length++) {
+            nextPosition[length + 1] = nextPosition[length] + countByLength[length];
         }
-        bucketStart[1] = offset;
+        int noSuffix = 0;
+        int hasSuffix = nextPosition[3];
 
         int[] result = new int[n];
-        int[] nextSlot = bucketStart.clone();
         for (int code = 0; code < n; code++) {
             int length = symbolLength(code);
-            result[nextSlot[length]++] = code;
+            int position;
+            if (length == 2) {
+                if (sharesFirstTwoBytes(code)) {
+                    hasSuffix--;
+                    position = hasSuffix;
+                } else {
+                    position = noSuffix++;
+                }
+            } else {
+                position = nextPosition[length]++;
+            }
+            result[position] = code;
         }
         return result;
+    }
+
+    /// Whether another slot starts with the same two bytes as the 2-byte symbol `code`: as Rust's
+    /// `finalize` asks it, of every slot of its table, the ones past the real symbols too, with what
+    /// an earlier generation left in them.
+    private boolean sharesFirstTwoBytes(int code) {
+        long first2 = slots[code] & 0xFFFF;
+        for (int other = 0; other < SYMBOL_SLOTS; other++) {
+            if (other != code && (slots[other] & 0xFFFF) == first2) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Builds a [Decompressor] over this compressor's table so the same trained symbols round-trip

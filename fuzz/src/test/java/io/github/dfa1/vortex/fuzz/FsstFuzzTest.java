@@ -28,7 +28,7 @@ class FsstFuzzTest {
         for (int i = 0; i < rows.length; i++) {
             rows[i] = data.consumeBytes(data.consumeInt(0, 128));
         }
-        Compressor compressor = new CompressorBuilder().seed(data.consumeLong()).train(rows);
+        Compressor compressor = new CompressorBuilder().train(rows);
         Decompressor decompressor = compressor.toDecompressor();
         // A row the table was not trained on: all escapes is still a valid encoding.
         byte[] unseen = data.consumeRemainingAsBytes();

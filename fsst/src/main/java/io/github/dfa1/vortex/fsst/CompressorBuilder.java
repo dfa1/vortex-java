@@ -2,49 +2,22 @@ package io.github.dfa1.vortex.fsst;
 
 import java.util.List;
 
-/// Trains an FSST [Compressor] from a corpus of rows using the FSST paper's bottom-up algorithm
-/// (Algorithm 3) plus the Rust reference's four engineering refinements (issue #287).
+/// Trains an FSST [Compressor] from a corpus of rows as Rust's `fsst-rs` does (`Compressor::train`,
+/// the FSST paper's Algorithm 3 with the C++ reference's refinements): the same sample, the same five
+/// generations over a growing share of its lines, and the same candidates, gains and cut.
 ///
-/// Training runs [#GENERATIONS] generations starting from an empty symbol table. Each generation
-/// compress-counts a growing fraction of one fixed [Sample] with the current table, then rebuilds
-/// the table from the top-gain candidates (see [TrainingGeneration]). The refinements — adaptive
-/// per-generation sample fraction, per-generation min-count pruning, the 8x single-byte gain boost,
-/// and a final cost-based prune — are all applied inside that per-generation step; this class only
-/// drives the loop and threads the seed through.
-///
-/// Training is deterministic: the same rows and seed always produce a byte-identical [Compressor],
-/// so an encoder built on top of it produces byte-identical output for a given input. Use the
-/// builder to override the seed:
+/// Training is deterministic: the same rows always produce a byte-identical [Compressor]. Rust's own
+/// tables differ from this one only in where candidates of exactly equal gain and length are
+/// ordered, which depends on its hash map ([TrainingGeneration]).
 ///
 /// ```java
-/// Compressor compressor = new CompressorBuilder().seed(42L).train(rows);
+/// Compressor compressor = new CompressorBuilder().train(rows);
 /// ```
 public final class CompressorBuilder {
 
-    /// Number of training generations. The FSST paper reports the table stabilizing after roughly
-    /// five passes; each pass can pair adjacent symbols to roughly double their length, so five
-    /// passes grow symbols to the full 8-byte length from an empty start.
-    private static final int GENERATIONS = Sample.SAMPLE_FRACTION_NUMERATORS.length;
-
-    /// Default PRNG seed when [#seed(long)] is not called. A fixed constant (not wall-clock derived)
-    /// keeps training reproducible out of the box.
-    private static final long DEFAULT_SEED = 0x5EEDL;
-
-    private long seed = DEFAULT_SEED;
-
-    /// Creates a builder using the default seed until [#seed(long)] is called.
+    /// Creates a builder.
     public CompressorBuilder() {
-        // Explicit no-arg constructor: fields default to the reproducible DEFAULT_SEED.
-    }
-
-    /// Sets the PRNG seed used to draw the training sample. The same rows and seed always train a
-    /// byte-identical compressor.
-    ///
-    /// @param seed the sample-drawing seed
-    /// @return this builder, for chaining
-    public CompressorBuilder seed(long seed) {
-        this.seed = seed;
-        return this;
+        // Explicit no-arg constructor: nothing to configure, Rust's training takes no options.
     }
 
     /// Trains a compressor over `rows`, running the full bottom-up generation loop.
@@ -56,38 +29,37 @@ public final class CompressorBuilder {
     ///             empty)
     /// @return the trained compressor
     public Compressor train(byte[][] rows) {
-        return trainOn(Sample.draw(rows, seed));
+        if (rows.length == 0) {
+            return Compressor.of(List.of());
+        }
+        return trainOn(Sample.draw(rows));
     }
 
     /// Trains a compressor over rows held contiguously, where row `i` spans
     /// `rowBytes[rowOffsets[i], rowOffsets[i + 1])`.
     ///
-    /// Equivalent to [#train(byte[][])] — same sample, same resulting table for the same seed —
-    /// but takes the corpus in the contiguous shape a varbin column already has, so the caller
-    /// need not materialize one `byte[]` per row just to train.
+    /// Equivalent to [#train(byte[][])] (same sample, same table) but takes the corpus in the
+    /// contiguous shape a varbin column already has, so the caller need not materialize one `byte[]`
+    /// per row just to train.
     ///
     /// @param rowBytes   all rows' bytes concatenated
     /// @param rowOffsets `rowCount + 1` cumulative offsets into `rowBytes`
     /// @param rowCount   the number of rows
     /// @return the trained compressor
     public Compressor train(byte[] rowBytes, int[] rowOffsets, int rowCount) {
-        return trainOn(Sample.draw(rowBytes, rowOffsets, rowCount, seed));
+        if (rowCount == 0) {
+            return Compressor.of(List.of());
+        }
+        return trainOn(Sample.draw(rowBytes, rowOffsets, rowCount));
     }
 
     private Compressor trainOn(Sample sample) {
         Compressor compressor = Compressor.of(List.of());
-        if (sample.chunkCount() == 0) {
-            return compressor;
-        }
         // Reused across every generation instead of allocating fresh count arrays five times over
         // (issue #395).
         TrainingGeneration.Counts counts = new TrainingGeneration.Counts();
-        for (int gen = 0; gen < GENERATIONS; gen++) {
-            boolean finalGeneration = gen == GENERATIONS - 1;
-            int chunkLimit = sample.chunkCountForGeneration(gen);
-            int fractionNumerator = Sample.SAMPLE_FRACTION_NUMERATORS[gen];
-            List<Symbol> symbols = TrainingGeneration.run(
-                    compressor, sample, chunkLimit, fractionNumerator, finalGeneration, counts);
+        for (int fraction : Sample.FRACTION_NUMERATORS) {
+            List<Symbol> symbols = TrainingGeneration.run(compressor, sample, fraction, counts);
             // Reuse compressor's own (now fully consumed) matcher arrays instead of allocating a
             // fresh ~288 KB pair of tables on every one of the five generations (issue #393 #7).
             compressor = Compressor.rebuild(symbols, compressor);

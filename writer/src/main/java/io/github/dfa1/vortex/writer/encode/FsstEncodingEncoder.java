@@ -32,18 +32,15 @@ import java.util.List;
 ///
 /// Symbols are laid out on the wire in length order — all multi-byte symbols (length 2-8) first in
 /// non-decreasing length order, then all length-1 symbols — as the `vortex.fsst` wire contract
-/// requires (mirroring Rust `FSSTData::validate_symbol_lengths`). The [Compressor] instead numbers
-/// its codes in gain-descending order, so this adapter remaps every code the compressor emits into
-/// that length-sorted wire order (see [#encode]).
+/// requires (mirroring Rust `FSSTData::validate_symbol_lengths`), and within the 2-byte ones as Rust's
+/// `fsst-rs` numbers them ([Compressor#codesSortedByLength()]). The [Compressor] numbers its codes in
+/// the order it took them, so this adapter remaps every code the compressor emits into that wire
+/// order (see [#encode]).
 public final class FsstEncodingEncoder implements EncodingEncoder {
 
     /// This encoding, barred from its own children: the lengths and code offsets are primitive
     /// arrays FSST cannot compress anyway, and the slots exist for bitpacking/constant folding.
     private static final Set<EncodingId> SELF = Set.of(EncodingId.VORTEX_FSST);
-
-    /// Fixed seed for the training-sample PRNG. Encoding must be reproducible: the same input
-    /// always trains the same symbol table and produces byte-identical output.
-    private static final long TRAINING_SAMPLE_SEED = 0x5EEDL;
 
     /// Creates the encoder.
     public FsstEncodingEncoder() {
@@ -173,8 +170,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             maxUncompLen = Math.max(maxUncompLen, uncompLens[i]);
         }
 
-        Compressor trained = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED)
-                                     .train(rowBytes, rowOffsets, n);
+        Compressor trained = new CompressorBuilder().train(rowBytes, rowOffsets, n);
 
         // byte[]-input overload over the shared row buffer: the intrinsified VarHandle word load
         // is faster than wrapping each row in a MemorySegment first, and the row is addressed as
@@ -201,7 +197,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             maxUncompLen = Math.max(maxUncompLen, uncompLens[i]);
         }
 
-        Compressor trained = new CompressorBuilder().seed(TRAINING_SAMPLE_SEED).train(byteArrays);
+        Compressor trained = new CompressorBuilder().train(byteArrays);
 
         return finishCompress(trained, n, totalInput, maxUncompLen, uncompLens, arena,
                 (compressor, i, scratch, destOffset) -> {
@@ -229,8 +225,8 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         int numSymbols = trained.symbolCount();
 
         // Wire order: the wire lists symbols in length order (multi-byte length-ascending, then
-        // length-1 last), whereas training numbers its codes gain-descending. wireOrder[i] is the
-        // trained (internal) code that belongs at wire position i.
+        // length-1 last), whereas training numbers its codes in the order it took them.
+        // wireOrder[i] is the trained (internal) code that belongs at wire position i.
         int[] wireOrder = trained.codesSortedByLength();
 
         MemorySegment symBuf = arena.allocate(numSymbols * 8L, 8);

@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.reader.layout.Layout;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,44 @@ final class EncodingTrees {
     /// naming the stats present and their precision: what Rust and Java write into a flat segment.
     static List<String> withStats(Path file) throws IOException {
         return of(file, true);
+    }
+
+    /// The raw buffers of the file's first flat segment, in the order its array node lists them,
+    /// without their alignment padding: what a trained FSST table and its code stream are, byte
+    /// for byte, whatever the cascade made of the children.
+    static List<byte[]> firstFlatBuffers(Path file) throws IOException {
+        try (VortexReader reader = VortexReader.open(file)) {
+            Layout flat = firstFlat(reader.layout());
+            if (flat == null) {
+                throw new IllegalStateException("no flat layout in " + file);
+            }
+            SegmentSpec spec = reader.footer().segmentSpecs().get(flat.segments().getFirst());
+            MemorySegment seg = reader.rawSegment(spec);
+            int fbLen = seg.get(LE_INT, seg.byteSize() - 4L);
+            FbsArray array = FbsArray.getRootAsFbsArray(seg.asSlice(seg.byteSize() - 4L - fbLen, fbLen));
+            List<byte[]> out = new ArrayList<>();
+            long offset = 0;
+            for (int i = 0; i < array.buffersLength(); i++) {
+                offset += array.buffers(i).padding();
+                long length = array.buffers(i).length();
+                out.add(seg.asSlice(offset, length).toArray(ValueLayout.JAVA_BYTE));
+                offset += length;
+            }
+            return out;
+        }
+    }
+
+    private static Layout firstFlat(Layout layout) {
+        if (layout.isFlat() && !layout.segments().isEmpty()) {
+            return layout;
+        }
+        for (Layout child : layout.children()) {
+            Layout found = firstFlat(child);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static List<String> of(Path file, boolean stats) throws IOException {

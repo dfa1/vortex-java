@@ -2,32 +2,27 @@ package io.github.dfa1.vortex.fsst;
 
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-/// One generation of FSST bottom-up training (the FSST paper's Algorithm 3): compress-count the
-/// sample with the current symbol table, then build the next table from the top-gain candidates.
+/// One generation of FSST bottom-up training (the FSST paper's Algorithm 3), a port of Rust's
+/// `fsst-rs` `Compressor::train` loop body (`builder.rs`): compress-count the generation's lines with
+/// the current symbol table, then build the next table from the highest-gain candidates.
 ///
-/// Compress-count parses each sample chunk with the current [Compressor] using longest-match-first
-/// greedy parsing, tallying how often each matched symbol occurs (`count1`) and how often each pair
-/// of adjacent matches occurs (`count2`). Make-table then proposes a candidate for every counted
-/// symbol (its own bytes) and every counted adjacent pair (their concatenation, truncated to 8
-/// bytes), ranks them by gain, and keeps the top 255.
+/// Compress-count parses each line with the current [Compressor], longest match first, tallying how
+/// often each match occurs (`count1`) and each adjacent pair of matches (`count2`); a match of more
+/// than one byte also counts its first byte alone, as the extension a single-byte symbol could
+/// make. Counts are keyed by Rust's extended codes: a byte no symbol matches is its own value
+/// `0..255`, and the symbol of code `k` is `256 + k`.
 ///
-/// Beyond the bare paper this ports the Rust reference's four refinements (issue #287), each guarded
-/// and documented at its site below: per-generation min-count pruning, the 8x single-byte gain
-/// boost, and — on the final generation only — a cost-based prune pass. The growing sample fraction
-/// (the fourth refinement) is applied by the caller via [Sample#chunkCountForGeneration(int)].
-///
-/// Counting is keyed by *code*, not by packed bytes (issue #393 #395): every match [Matcher] returns
-/// already carries a code, and every non-match (escape) reduces to one of 256 literal byte values —
-/// together a fixed, dense `[0, CODE_SPACE)` space matching the Rust reference's own
-/// (`spiraldb/fsst/src/builder.rs`'s `Counter`, `FSST_CODE_MASK`-sized `count1`/`count2`). [Counts]
-/// tallies both into flat arrays with no hashing, no boxing, and no per-generation reallocation — a
-/// [BitSet] per array tracks which slots this generation actually touched, so clearing between
-/// generations only resets the (small) touched-bit tracking, not the (large) count arrays
-/// themselves. A single [Counts] instance is meant to be reused across every generation of one
-/// [CompressorBuilder#train(byte[][])] call via [#run(Compressor, Sample, int, int, boolean, Counts)].
+/// Make-table turns every counted code into a candidate, the symbol itself and, until the last
+/// generation, its merges with the codes seen after it, and sums the gains of candidates that are the
+/// same symbol. The candidates are popped best first from a heap that orders them by gain and length
+/// only, as Rust's `BinaryHeap` does, and the first 255 that fit become the table. Two candidates of
+/// equal gain and length leave the heap in an order that depends on the order they were pushed, which
+/// in Rust is its hash map's iteration order; here it is the order the codes were counted. A table
+/// then differs from Rust's in at most such ties.
 final class TrainingGeneration {
 
     /// Maximum number of real symbols kept per generation (codes `0..254`; `0xFF` is the escape).
@@ -36,219 +31,158 @@ final class TrainingGeneration {
     /// Maximum symbol length in bytes, bounded by what fits in one `long`.
     private static final int MAX_SYMBOL_LENGTH = 8;
 
-    /// First code in the escape pseudo-code range: real trained-symbol codes are always
-    /// `< ESCAPE_BASE` (bounded by [#MAX_SYMBOLS], since a [Matcher] built from `current` can never
-    /// return a code past its own table size), so `ESCAPE_BASE + byteValue` (`byteValue` in `0..255`)
-    /// gives every possible escaped literal byte its own code with no possibility of collision.
-    private static final int ESCAPE_BASE = MAX_SYMBOLS;
+    /// Rust's `FSST_CODE_BASE`: the extended code of symbol 0. Codes below it are bytes no symbol
+    /// matched.
+    private static final int CODE_BASE = 256;
 
-    /// Total dense code space: [#MAX_SYMBOLS] real-symbol slots plus 256 escape pseudo-codes, one
-    /// per literal byte value. Fixed regardless of how many symbols are actually trained so far in
-    /// any given generation, which is what lets [Counts]'s arrays stay a constant size and be reused
-    /// across generations instead of resized as the table grows.
-    private static final int CODE_SPACE = ESCAPE_BASE + 256;
+    /// Rust's `FSST_CODE_MASK`: the extended code before any match in a line, never a real code.
+    private static final int NO_CODE = 511;
 
-    /// Single-byte gain multiplier. WHY: multiplying every length-1 candidate's gain by 8 before
-    /// ranking deliberately over-values frequent single bytes relative to their raw `count*length`.
-    /// A single byte in the table replaces a 2-byte escape on every occurrence, so keeping frequent
-    /// bytes suppresses escapes; without the boost a marginally-higher-gain multi-byte candidate can
-    /// crowd a genuinely more valuable single byte out of the 255 slots. The old encoder used plain
-    /// gain and had exactly this gap.
+    /// Size of the code space, Rust's `COUNTS1_SIZE`.
+    private static final int CODE_SPACE = 512;
+
+    /// Single-byte gain multiplier: a single byte in the table replaces a 2-byte escape on every
+    /// occurrence, so frequent bytes are worth more than their raw `count * length`. The C++
+    /// reference's heuristic.
     private static final int SINGLE_BYTE_GAIN_BOOST = 8;
 
     private TrainingGeneration() {
     }
 
-    /// Runs one training generation with a fresh [Counts], for callers that do not need to reuse
-    /// counting storage across generations (tests; single-generation callers).
+    /// Runs one training generation and returns the next generation's symbols in the order they
+    /// were taken (code = list index), ready to build the next [Compressor].
     ///
-    /// @param current the current generation's compressor (an empty-table compressor for generation
-    ///                0, so every position escapes and bootstraps single-byte candidates)
-    /// @param sample the fixed training sample
-    /// @param chunkLimit the number of leading sample chunks this generation replays (its growing
-    ///                   fraction), from [Sample#chunkCountForGeneration(int)]
-    /// @param sampleFractionNumerator this generation's sample-fraction numerator over
-    ///                                [Sample#SAMPLE_FRACTION_DENOMINATOR], used for the min-count
-    ///                                floor
-    /// @param finalGeneration whether this is the last generation, which relaxes the min-count floor
-    ///                        to 1 and enables the cost-based final prune
-    /// @return the next generation's symbols, gain-descending, at most [#MAX_SYMBOLS] of them
-    static List<Symbol> run(Compressor current, Sample sample, int chunkLimit,
-                            int sampleFractionNumerator, boolean finalGeneration) {
-        return run(current, sample, chunkLimit, sampleFractionNumerator, finalGeneration, new Counts());
-    }
-
-    /// Runs one training generation and returns the next generation's symbols in gain-descending
-    /// order (code = list index), ready to build the next [Compressor] / [Matcher].
-    ///
-    /// @param current the current generation's compressor (an empty-table compressor for generation
-    ///                0, so every position escapes and bootstraps single-byte candidates)
-    /// @param sample the fixed training sample
-    /// @param chunkLimit the number of leading sample chunks this generation replays (its growing
-    ///                   fraction), from [Sample#chunkCountForGeneration(int)]
-    /// @param sampleFractionNumerator this generation's sample-fraction numerator over
-    ///                                [Sample#SAMPLE_FRACTION_DENOMINATOR], used for the min-count
-    ///                                floor
-    /// @param finalGeneration whether this is the last generation, which relaxes the min-count floor
-    ///                        to 1 and enables the cost-based final prune
-    /// @param counts reusable counting storage, cleared at the start of this call; passing the same
-    ///               instance across every generation of one `train()` call avoids reallocating its
-    ///               backing arrays five times over
-    /// @return the next generation's symbols, gain-descending, at most [#MAX_SYMBOLS] of them
-    static List<Symbol> run(Compressor current, Sample sample, int chunkLimit,
-                            int sampleFractionNumerator, boolean finalGeneration, Counts counts) {
-        compressCount(current, sample, chunkLimit, counts);
-        return makeTable(current, counts, sampleFractionNumerator, finalGeneration);
-    }
-
-    /// Compress-counts the first `chunkLimit` chunks of `sample` into `counts` (cleared first):
-    /// greedily parses each chunk with `current`, tallying single-match counts and adjacent-pair
-    /// counts, both keyed by code (generation 0's empty table escapes everything, seeding the escape
-    /// pseudo-codes for single bytes).
-    ///
-    /// Each position loads its 8-byte input word exactly once. While 8 real bytes remain, the word
-    /// loads with one intrinsified `VarHandle` read (the same trick [Compressor#compress(byte[],
-    /// int, int, byte[], long)] uses); only the tail of each chunk falls back to the byte-by-byte,
-    /// zero-padding [Compressor#loadWord(byte[], int, int)].
-    private static void compressCount(Compressor current, Sample sample, int chunkLimit, Counts counts) {
-        counts.clear();
+    /// @param current  the current generation's compressor (an empty one for generation 0, so every
+    ///                 position escapes and bootstraps the single-byte candidates)
+    /// @param sample   the training sample
+    /// @param fraction this generation's sample fraction numerator over
+    ///                 [Sample#FRACTION_DENOMINATOR]: it picks the lines replayed, the count floor, and
+    ///                 whether merges are made (not in the last generation)
+    /// @param counts   reusable counting storage, cleared at the end of this call
+    /// @return the next generation's symbols, at most [#MAX_SYMBOLS] of them
+    static List<Symbol> run(Compressor current, Sample sample, int fraction, Counts counts) {
         byte[] bytes = sample.bytes();
-        for (int c = 0; c < chunkLimit; c++) {
-            int start = sample.chunkStart(c);
-            int end = sample.chunkEnd(c);
-            int previousCode = -1; // No previous match within this chunk yet.
-            int pos = start;
-            int fastEnd = end - 8;
-            while (pos < end) {
-                long word = pos <= fastEnd
-                        ? (long) Compressor.LONG_LE_BYTES.get(bytes, pos)
-                        : Compressor.loadWord(bytes, pos, end);
-                int codeAndLength = codeAndLengthAt(current, word, pos, end);
-                int code = Matcher.codeOf(codeAndLength);
-                counts.bumpSingle(code);
-                if (previousCode >= 0) {
-                    counts.bumpPair(previousCode, code);
-                }
-                previousCode = code;
-                pos += Matcher.lengthOf(codeAndLength);
+        for (int line = 0; line < sample.lineCount(); line++) {
+            // Rust's per-line skip: a generation replays about fraction/128 of the lines
+            if (fraction < Sample.FRACTION_DENOMINATOR && (Sample.hash(line) & 127) > fraction) {
+                continue;
             }
+            compressCount(current, bytes, sample.lineStart(line), sample.lineEnd(line), counts);
+        }
+        // the last generation of a corpus taken whole is pruned, one that was sampled is not
+        boolean prune = fraction >= Sample.FRACTION_DENOMINATOR && !sample.sampled();
+        List<Symbol> next = optimize(current, counts, fraction, prune);
+        counts.clear();
+        return next;
+    }
+
+    private static void compressCount(Compressor current, byte[] bytes, int start, int end, Counts counts) {
+        int previousCode = NO_CODE;
+        int pos = start;
+        int fastEnd = end - 8;
+        while (pos < end) {
+            long word = pos <= fastEnd
+                    ? (long) Compressor.LONG_LE_BYTES.get(bytes, pos)
+                    : Compressor.loadWord(bytes, pos, end);
+            int packedMatch = current.matcher().longestMatch(word);
+            int length = Matcher.lengthOf(packedMatch);
+            int code;
+            if (length > 0) {
+                code = CODE_BASE + Matcher.codeOf(packedMatch);
+            } else {
+                code = (int) (word & 0xFF);
+                length = 1;
+            }
+            counts.bumpSingle(code);
+            counts.bumpPair(previousCode, code);
+            if (length > 1) {
+                // also the extension by just this symbol's first byte
+                int firstByte = (int) (word & 0xFF);
+                counts.bumpSingle(firstByte);
+                counts.bumpPair(previousCode, firstByte);
+            }
+            previousCode = code;
+            pos += length;
         }
     }
 
-    /// Returns the code and length of the current table's longest match against the already-loaded
-    /// `word` at `pos`, packed as `code << 8 | length` (the same shape [Matcher#longestMatch(long)]
-    /// itself returns). Falls back to the escape pseudo-code for the literal byte at `pos` (length 1)
-    /// when nothing matches.
-    ///
-    /// An over-long match is rejected the same way [Compressor#compress(byte[], int, int, byte[],
-    /// long)] rejects it: `word` zero-pads past `end` when loaded via [Compressor#loadWord(byte[],
-    /// int, int)], so a symbol with trailing zero bytes can spuriously match the padding beyond the
-    /// chunk. Counting such a match would tally a candidate spanning bytes that are not really in
-    /// the sample, and could advance `pos` past `end`.
-    private static int codeAndLengthAt(Compressor current, long word, int pos, int end) {
-        int packedMatch = current.matcher().longestMatch(word);
-        int length = Matcher.lengthOf(packedMatch);
-        if (length > 0 && pos + length <= end) {
-            return packedMatch;
-        }
-        return (ESCAPE_BASE + (int) (word & 0xFF)) << 8 | 1;
-    }
-
-    /// Builds the next table from the counted candidates: proposes each single symbol and each
-    /// adjacent-pair concatenation, prunes by min-count, boosts single-byte gain, ranks, applies the
-    /// final cost prune on the last generation, and keeps the top [#MAX_SYMBOLS] by gain.
-    ///
-    /// @param current the compressor `counts` was tallied against — real (non-escape) codes resolve
-    ///                 to their bytes/length through it
-    private static List<Symbol> makeTable(Compressor current, Counts counts,
-                                          int sampleFractionNumerator, boolean finalGeneration) {
-        // Refinement 2 — per-generation min-count pruning. A candidate seen fewer times than this
-        // floor is noise at this generation's sample coverage and is dropped before its gain is even
-        // computed. The floor scales with the sample fraction so early, low-coverage generations
-        // prune more aggressively; the final generation relaxes it to 1 so rare-but-real candidates
-        // survive the last, authoritative ranking pass.
-        int minCount = finalGeneration
-                ? 1
-                : Math.max(1, 5 * sampleFractionNumerator / Sample.SAMPLE_FRACTION_DENOMINATOR);
-
-        List<Candidate> candidates = new ArrayList<>();
-        counts.forEachSingle((code, count) -> {
-            if (count >= minCount) {
-                int length = candidateLength(current, code);
-                long packed = candidateBytes(current, code);
-                candidates.add(new Candidate(packed, length, gainOf(count, length)));
-            }
-        });
-        counts.forEachPair((firstCode, secondCode, count) -> {
+    /// Rust's `optimize`: the candidates from the counts, then the best 255 that fit in the table.
+    private static List<Symbol> optimize(Compressor current, Counts counts, int fraction, boolean prune) {
+        // keyed by the symbol's bytes: the same symbol reached through different codes (a byte
+        // that escaped and the symbol that is just that byte) adds up its gains
+        Map<Long, Long> gains = new LinkedHashMap<>();
+        // Rust's integer division: 0 at the first generation, where every count is at least 1
+        int minCount = prune ? 1 : 5 * fraction / Sample.FRACTION_DENOMINATOR;
+        for (int code1 = counts.nextSingle(0); code1 >= 0 && code1 < NO_CODE; code1 = counts.nextSingle(code1 + 1)) {
+            long symbol1 = symbolOf(current, code1);
+            int length1 = lengthOf(symbol1);
+            long count = counts.single(code1);
             if (count < minCount) {
-                return;
+                continue;
             }
-            int firstLength = candidateLength(current, firstCode);
-            long firstPacked = candidateBytes(current, firstCode);
-            int secondLength = candidateLength(current, secondCode);
-            long secondPacked = candidateBytes(current, secondCode);
-            int combinedLength = Math.min(firstLength + secondLength, MAX_SYMBOL_LENGTH);
-            long combined = concatenate(firstPacked, firstLength, secondPacked);
-            long packed = combined & lengthMask(combinedLength);
-            candidates.add(new Candidate(packed, combinedLength, gainOf(count, combinedLength)));
-        });
-
-        return selectTop(candidates, finalGeneration);
-    }
-
-    /// Resolves a code's packed bytes: `current`'s trained symbol table for a real code, or the
-    /// literal byte value itself for an escape pseudo-code.
-    private static long candidateBytes(Compressor current, int code) {
-        return code < ESCAPE_BASE ? current.packedSymbol(code) : (long) (code - ESCAPE_BASE);
-    }
-
-    /// Resolves a code's byte length: `current`'s trained symbol table for a real code, or 1 for an
-    /// escape pseudo-code (every escape is a single literal byte).
-    private static int candidateLength(Compressor current, int code) {
-        return code < ESCAPE_BASE ? current.symbolLength(code) : 1;
-    }
-
-    /// Ranks candidates by gain-descending (length-descending on ties) and keeps the top
-    /// [#MAX_SYMBOLS], applying the final cost prune on the last generation and skipping a 3-8 byte
-    /// candidate whose [LossyPerfectHashTable] slot a better one already holds.
-    private static List<Symbol> selectTop(List<Candidate> candidates, boolean finalGeneration) {
-        // Refinement 4 — final cost-based prune, applied BEFORE top-K selection. Only on the last
-        // generation, a symbol earns its code slot only if its real (un-boosted) gain exceeds
-        // length+1: it must save at least that many bytes over escaping every occurrence, otherwise
-        // the slot is better left for a candidate that does. Pruning after the heap (as opposed to
-        // before) would leave a disqualified survivor's slot empty even when a qualifying candidate
-        // sat just below the top-255 cut, so the 255 slots would not all be filled with symbols that
-        // earn them. Provisional earlier generations skip this so their symbols stay available to be
-        // re-evaluated next pass.
-        List<Candidate> eligible = candidates;
-        if (finalGeneration) {
-            eligible = new ArrayList<>(candidates.size());
-            for (Candidate candidate : candidates) {
-                if (realGain(candidate) > candidate.length() + 1L) {
-                    eligible.add(candidate);
+            long gain = count * length1;
+            if (length1 == 1) {
+                gain *= SINGLE_BYTE_GAIN_BOOST;
+            }
+            gains.merge(symbol1, gain, Long::sum);
+            // no merges in the last generation, nor of a symbol that cannot grow
+            if (fraction >= Sample.FRACTION_DENOMINATOR || length1 == MAX_SYMBOL_LENGTH) {
+                continue;
+            }
+            for (int code2 = counts.nextPair(code1, 0); code2 >= 0 && code2 < NO_CODE;
+                 code2 = counts.nextPair(code1, code2 + 1)) {
+                long symbol2 = symbolOf(current, code2);
+                int length2 = lengthOf(symbol2);
+                if (length1 + length2 > MAX_SYMBOL_LENGTH) {
+                    continue;
                 }
+                long merged = symbol1 | symbol2 << (8 * length1);
+                gains.merge(merged, counts.pair(code1, code2) * lengthOf(merged), Long::sum);
             }
         }
 
-        // Best first, as Rust's `optimize` pops its heap: a 3-8 byte candidate whose hash slot a
-        // better one holds is skipped, and the next candidate takes its code. Rust asserts that no
-        // two stored symbols share a slot when it rebuilds a compressor from a file's symbol table
-        // (vortex-jni does, to compress a filter literal), so a table breaking it aborted the JVM.
-        eligible.sort(Collections.reverseOrder(TrainingGeneration::compareGain));
+        CandidateHeap heap = new CandidateHeap(gains.size());
+        for (Map.Entry<Long, Long> candidate : gains.entrySet()) {
+            heap.push(candidate.getValue(), lengthOf(candidate.getKey()), candidate.getKey());
+        }
         BitSet takenSlots = new BitSet();
         List<Symbol> result = new ArrayList<>(MAX_SYMBOLS);
-        for (int i = 0; i < eligible.size() && result.size() < MAX_SYMBOLS; i++) {
-            Candidate candidate = eligible.get(i);
-            if (candidate.length() < 3 || claimSlot(takenSlots, candidate.packed())) {
-                result.add(new Symbol(candidate.packed(), candidate.length()));
+        while (!heap.isEmpty() && result.size() < MAX_SYMBOLS) {
+            heap.pop();
+            long symbol = heap.poppedSymbol();
+            int length = heap.poppedLength();
+            if (prune) {
+                long saves = heap.poppedGain();
+                if (length == 1) {
+                    saves /= SINGLE_BYTE_GAIN_BOOST;
+                }
+                if (saves <= length + 1) {
+                    continue;
+                }
+            }
+            // a 3-8 byte symbol whose hash slot a better one holds is skipped, and the next
+            // candidate takes its code
+            if (length < 3 || claimSlot(takenSlots, symbol)) {
+                result.add(new Symbol(symbol, length));
             }
         }
         return result;
     }
 
-    /// Takes the [LossyPerfectHashTable] slot of a 3-8 byte symbol.
-    ///
-    /// @return `false` when a better symbol already holds it
+    /// The symbol of an extended code: a byte no symbol matched, or the current table's symbol.
+    private static long symbolOf(Compressor current, int code) {
+        if (code < CODE_BASE) {
+            return code;
+        }
+        return current.packedSymbol(code - CODE_BASE);
+    }
+
+    /// Rust's `Symbol::len`: the bytes up to the last non-zero one, at least one. A symbol that ends in
+    /// zero bytes is the shorter one, and a zero byte alone is one byte.
+    private static int lengthOf(long symbol) {
+        return Math.max(1, MAX_SYMBOL_LENGTH - Long.numberOfLeadingZeros(symbol) / 8);
+    }
+
     private static boolean claimSlot(BitSet takenSlots, long packed) {
         int slot = LossyPerfectHashTable.slotFor(packed);
         if (takenSlots.get(slot)) {
@@ -258,62 +192,133 @@ final class TrainingGeneration {
         return true;
     }
 
-    /// Gain used for ranking: `count * length`, with the single-byte boost applied to length-1
-    /// candidates (refinement 3).
-    private static long gainOf(long count, int length) {
-        long gain = count * length;
-        return length == 1 ? gain * SINGLE_BYTE_GAIN_BOOST : gain;
-    }
+    /// Rust's `BinaryHeap<Candidate>`, sift for sift, ordered by `(gain, length)`: the order equal
+    /// candidates pop in is the heap's own, so it has to be the same algorithm.
+    static final class CandidateHeap {
 
-    /// Real (un-boosted) gain of a candidate, dividing the length-1 boost back out — used only by
-    /// the final cost prune, which must judge a symbol on its true byte savings, not its boosted
-    /// ranking gain.
-    private static long realGain(Candidate candidate) {
-        return candidate.length() == 1
-                ? candidate.gain() / SINGLE_BYTE_GAIN_BOOST
-                : candidate.gain();
-    }
+        private final long[] gains;
+        private final int[] lengths;
+        private final long[] symbols;
+        private int size;
+        private long poppedGain;
+        private int poppedLength;
+        private long poppedSymbol;
 
-    private static int compareGain(Candidate a, Candidate b) {
-        int byGain = Long.compare(a.gain(), b.gain());
-        if (byGain != 0) {
-            return byGain;
+        CandidateHeap(int capacity) {
+            gains = new long[capacity];
+            lengths = new int[capacity];
+            symbols = new long[capacity];
         }
-        return Integer.compare(a.length(), b.length());
-    }
 
-    /// Concatenates two packed symbols LSB-first: the first symbol's bytes stay in the low bytes and
-    /// the second symbol's bytes are shifted up by the first symbol's byte length, so the combined
-    /// word reads the first symbol's bytes then the second's. A shift of 64 bits (first already 8
-    /// bytes long) drops the second symbol entirely, which is correct — the result is then truncated
-    /// to 8 bytes anyway.
-    private static long concatenate(long first, int firstLength, long second) {
-        if (firstLength >= MAX_SYMBOL_LENGTH) {
-            return first;
+        boolean isEmpty() {
+            return size == 0;
         }
-        return first | (second << (firstLength * 8));
+
+        long poppedGain() {
+            return poppedGain;
+        }
+
+        int poppedLength() {
+            return poppedLength;
+        }
+
+        long poppedSymbol() {
+            return poppedSymbol;
+        }
+
+        void push(long gain, int length, long symbol) {
+            gains[size] = gain;
+            lengths[size] = length;
+            symbols[size] = symbol;
+            siftUp(0, size);
+            size++;
+        }
+
+        /// Rust's `pop`: takes the last element, swaps it with the root, and sifts the root down to
+        /// the bottom and back up.
+        void pop() {
+            size--;
+            long gain = gains[size];
+            int length = lengths[size];
+            long symbol = symbols[size];
+            if (size > 0) {
+                long rootGain = gains[0];
+                int rootLength = lengths[0];
+                long rootSymbol = symbols[0];
+                gains[0] = gain;
+                lengths[0] = length;
+                symbols[0] = symbol;
+                gain = rootGain;
+                length = rootLength;
+                symbol = rootSymbol;
+                siftDownToBottom(0);
+            }
+            poppedGain = gain;
+            poppedLength = length;
+            poppedSymbol = symbol;
+        }
+
+        private boolean lessOrEqual(long gainA, int lengthA, long gainB, int lengthB) {
+            if (gainA != gainB) {
+                return gainA < gainB;
+            }
+            return lengthA <= lengthB;
+        }
+
+        private void siftUp(int start, int position) {
+            long gain = gains[position];
+            int length = lengths[position];
+            long symbol = symbols[position];
+            int pos = position;
+            while (pos > start) {
+                int parent = (pos - 1) / 2;
+                if (lessOrEqual(gain, length, gains[parent], lengths[parent])) {
+                    break;
+                }
+                gains[pos] = gains[parent];
+                lengths[pos] = lengths[parent];
+                symbols[pos] = symbols[parent];
+                pos = parent;
+            }
+            gains[pos] = gain;
+            lengths[pos] = length;
+            symbols[pos] = symbol;
+        }
+
+        private void siftDownToBottom(int position) {
+            int end = size;
+            int start = position;
+            long gain = gains[position];
+            int length = lengths[position];
+            long symbol = symbols[position];
+            int pos = position;
+            int child = 2 * pos + 1;
+            while (child <= Math.max(0, end - 2)) {
+                if (lessOrEqual(gains[child], lengths[child], gains[child + 1], lengths[child + 1])) {
+                    child++;
+                }
+                gains[pos] = gains[child];
+                lengths[pos] = lengths[child];
+                symbols[pos] = symbols[child];
+                pos = child;
+                child = 2 * pos + 1;
+            }
+            if (child == end - 1) {
+                gains[pos] = gains[child];
+                lengths[pos] = lengths[child];
+                symbols[pos] = symbols[child];
+                pos = child;
+            }
+            gains[pos] = gain;
+            lengths[pos] = length;
+            symbols[pos] = symbol;
+            siftUp(start, pos);
+        }
     }
 
-    private static long lengthMask(int length) {
-        return length >= MAX_SYMBOL_LENGTH ? ~0L : (1L << (length * 8)) - 1;
-    }
-
-    /// A ranked candidate symbol: packed bytes, length, and ranking gain (boosted for length 1).
-    private record Candidate(long packed, int length, long gain) {
-    }
-
-    /// Tallies of single-match and adjacent-pair counts during compress-count, keyed by *code* — a
-    /// dense `[0, CODE_SPACE)` space, not packed bytes — matching the Rust reference's own
-    /// `Counter` (`spiraldb/fsst/src/builder.rs`, issue #393 #395). `counts1`/`counts2` are flat
-    /// arrays sized once and reused across every generation of a `train()` call: a code's identity
-    /// alone (not its byte content) is the key, so there is no hashing, no boxing, and — since the
-    /// code space is fixed regardless of how many symbols are actually trained in any one
-    /// generation — no resizing either.
-    ///
-    /// Between generations only [#clear()] runs, which resets the touched-bit tracking, not the
-    /// (much larger) count arrays: [#bumpSingle(int)]/[#bumpPair(int, int)] read a slot's prior value
-    /// only when its touched bit is set, so a stale value left over from an earlier generation in an
-    /// untouched slot is never read.
+    /// Match counts and adjacent-pair counts over the extended code space, flat arrays with no
+    /// hashing, reused across generations: a [BitSet] per array tracks the slots a generation
+    /// touched, so clearing resets only that.
     static final class Counts {
 
         private final long[] counts1 = new long[CODE_SPACE];
@@ -321,9 +326,6 @@ final class TrainingGeneration {
         private final BitSet singleTouched = new BitSet(CODE_SPACE);
         private final BitSet pairTouched = new BitSet(CODE_SPACE * CODE_SPACE);
 
-        /// Resets counting for a new generation. Only the touched-bit tracking is cleared — cheap,
-        /// proportional to how much was actually touched last generation — not the count arrays
-        /// themselves.
         void clear() {
             singleTouched.clear();
             pairTouched.clear();
@@ -342,26 +344,27 @@ final class TrainingGeneration {
             pairTouched.set(idx);
         }
 
-        void forEachSingle(SingleConsumer consumer) {
-            for (int code = singleTouched.nextSetBit(0); code >= 0; code = singleTouched.nextSetBit(code + 1)) {
-                consumer.accept(code, counts1[code]);
-            }
+        long single(int code) {
+            return counts1[code];
         }
 
-        void forEachPair(PairConsumer consumer) {
-            for (int idx = pairTouched.nextSetBit(0); idx >= 0; idx = pairTouched.nextSetBit(idx + 1)) {
-                consumer.accept(idx / CODE_SPACE, idx % CODE_SPACE, counts2[idx]);
-            }
+        long pair(int firstCode, int secondCode) {
+            return counts2[firstCode * CODE_SPACE + secondCode];
         }
-    }
 
-    @FunctionalInterface
-    private interface SingleConsumer {
-        void accept(int code, long count);
-    }
+        /// The first counted code at or after `from`, in ascending order, or -1.
+        int nextSingle(int from) {
+            return singleTouched.nextSetBit(from);
+        }
 
-    @FunctionalInterface
-    private interface PairConsumer {
-        void accept(int firstCode, int secondCode, long count);
+        /// The first code at or after `from` counted as following `firstCode`, in ascending order, or
+        /// -1.
+        int nextPair(int firstCode, int from) {
+            int idx = pairTouched.nextSetBit(firstCode * CODE_SPACE + from);
+            if (idx < 0 || idx >= (firstCode + 1) * CODE_SPACE) {
+                return -1;
+            }
+            return idx - firstCode * CODE_SPACE;
+        }
     }
 }
