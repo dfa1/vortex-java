@@ -100,6 +100,12 @@ class NullableIntegerInteropIntegrationTest {
                 // a few wide values: bit-packing with patches, which carry one offset per 1024 rows
                 shape("wide outliers", PType.I32, i -> i % 97 == 0 ? 1_000_000 + Math.floorMod(RANDOM[i], 1_000_000)
                         : Math.floorMod(RANDOM[i], 1000), every7),
+                // shapes after the real columns of #651 (time of day, short runs narrow and wide, ids in groups):
+                // synthetic, they check the cascade lands on the tree vortex-jni writes
+                shape("time of day", PType.I32, i -> Math.floorMod(RANDOM[i], 86_400), every7),
+                shape("short runs, narrow", PType.I32, i -> Math.floorMod(RANDOM[i / 40], 300), i -> i % 9 == 0),
+                shape("short runs, wide", PType.I32, i -> Math.floorMod(RANDOM[i / 8], 1_000_000), i -> i % 9 == 0),
+                shape("ids in groups", PType.I32, i -> 100_000 + i / 3, i -> i % 11 == 0),
                 // all outliers equal: the patch values are a constant
                 shape("equal outliers", PType.I32, i -> i % 97 == 0 ? 1_000_000_000 : Math.floorMod(RANDOM[i], 1000),
                         every7));
