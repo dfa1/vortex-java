@@ -39,6 +39,38 @@ class ColumnBuilderTest {
         }
 
         @Test
+        void bytes_countsTextAndBinaryNotPrimitives() {
+            // Given — text and binary leaves add their length, a primitive and a null add nothing (#657)
+            ColumnBuilder text = ColumnBuilder.forType(new DType.Utf8(true));
+            ColumnBuilder binary = ColumnBuilder.forType(new DType.Binary(true));
+            ColumnBuilder primitive = ColumnBuilder.forType(new DType.Primitive(PType.I64, false));
+
+            // When
+            text.append("abc");
+            text.append(null);
+            binary.append(new byte[5]);
+            primitive.append(7L);
+
+            // Then
+            assertThat(text.bytes()).isEqualTo(3);
+            assertThat(binary.bytes()).isEqualTo(5);
+            assertThat(primitive.bytes()).isZero();
+        }
+
+        @Test
+        void bytes_ofListSumsElements(@Mock PqList list) {
+            // Given
+            ColumnBuilder sut = ColumnBuilder.forType(new DType.List(new DType.Utf8(false), false));
+            given(list.values()).willReturn(List.of("ab", "cde"));
+
+            // When
+            sut.append(list);
+
+            // Then
+            assertThat(sut.bytes()).isEqualTo(5);
+        }
+
+        @Test
         void nullablePrimitive_wrapsInNullableData_withDefaultsAtNullPositions() {
             // Given — Raincloud-style nullable int leaf; Hardwood decodes INT32 as Integer
             ColumnBuilder sut = ColumnBuilder.forType(new DType.Primitive(PType.I32, true));

@@ -134,20 +134,25 @@ public final class ParquetImporter {
                 int chunkSize = options.chunkSize();
                 Object[] buffers = allocateBuffers(types, chunkSize);
                 ColumnBuilder[] nestedBuilders = allocateNestedBuilders(types);
+                long maxChunkBytes = options.maxChunkBytes();
                 int chunkPos = 0;
+                long chunkBytes = 0;
                 long rowsDone = 0;
 
                 while (rowReader.hasNext()) {
                     rowReader.next();
                     fillRow(rowReader, names, types, buffers, nestedBuilders, chunkPos, sourceName, rowsDone);
+                    chunkBytes += varLenBytes(buffers, chunkPos);
                     chunkPos++;
+                    long buffered = chunkBytes + nestedBytes(nestedBuilders);
                     rowsDone++;
 
-                    if (chunkPos == chunkSize) {
+                    if (chunkPos == chunkSize || buffered >= maxChunkBytes) {
                         writer.writeChunk(buildChunk(names, types, buffers, nestedBuilders, chunkPos));
                         buffers = allocateBuffers(types, chunkSize);
                         nestedBuilders = allocateNestedBuilders(types);
                         chunkPos = 0;
+                        chunkBytes = 0;
                         if (options.progressListener() != null) {
                             options.progressListener().onProgress(rowsDone, totalRows);
                         }
@@ -162,6 +167,31 @@ public final class ParquetImporter {
                 }
             }
         }
+    }
+
+    /// The text and binary bytes the row at `pos` holds (a string counts its chars, close enough
+    /// for a bound), what makes a wide-string chunk heavy.
+    private static long varLenBytes(Object[] buffers, int pos) {
+        long bytes = 0;
+        for (Object buffer : buffers) {
+            switch (buffer) {
+                case String[] arr when arr[pos] != null -> bytes += arr[pos].length();
+                case byte[][] arr when arr[pos] != null -> bytes += arr[pos].length;
+                case null, default -> {
+                }
+            }
+        }
+        return bytes;
+    }
+
+    private static long nestedBytes(ColumnBuilder[] builders) {
+        long bytes = 0;
+        for (ColumnBuilder builder : builders) {
+            if (builder != null) {
+                bytes += builder.bytes();
+            }
+        }
+        return bytes;
     }
 
     static void checkNoDuplicateNames(List<ColumnName> names, String sourceName) {

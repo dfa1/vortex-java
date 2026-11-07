@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
@@ -46,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.IntPredicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -155,6 +157,45 @@ class ParquetImportInteropIntegrationTest {
         assertThat(range).isEqualTo(expected.subList(1000, 20_000));
     }
 
+    /// A nullable text column imported under a byte bound far below the row bound, so chunks close
+    /// on bytes (#657): vortex-jni reads back every value, also through a filtered and a row-range read.
+    @Test
+    void textClosedOnByteBound_jniReadsImportedFile(@TempDir Path tmp) throws Exception {
+        // Given
+        String[] expected = new String[ROWS];
+        byte[][] bytes = new byte[ROWS][];
+        boolean[] nulls = new boolean[ROWS];
+        for (int i = 0; i < ROWS; i++) {
+            nulls[i] = i % 5 == 0;
+            if (!nulls[i]) {
+                expected[i] = "row-" + i + "-" + "x".repeat(i % 50);
+                bytes[i] = expected[i].getBytes(StandardCharsets.UTF_8);
+            } else {
+                bytes[i] = new byte[0];
+            }
+        }
+        Path parquet = tmp.resolve("text.parquet");
+        FileSchema schema = FileSchema.builder("schema")
+                .addColumn("s", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL, new LogicalType.StringType())
+                .build();
+        try (ParquetFileWriter writer = ParquetFileWriter.create(OutputFile.of(parquet), schema)) {
+            writer.columnWriter().writeBatch(batch -> batch.bytes(0, bytes, nulls));
+        }
+        Path imported = tmp.resolve("imported.vortex");
+
+        // When — about 100 rows a chunk
+        ParquetImporter.importParquet(parquet, imported, ImportOptions.defaults().withMaxChunkBytes(4_000));
+        List<String> all = readTextWithJni(imported, ScanOptions.builder());
+        List<String> filtered = readTextWithJni(imported, ScanOptions.builder()
+                .filter(Expression.isNotNull(Expression.column("s"))));
+        List<String> range = readTextWithJni(imported, ScanOptions.builder().rowRangeBegin(1000).rowRangeEnd(20_000));
+
+        // Then
+        assertThat(all).containsExactly(expected);
+        assertThat(filtered).containsExactlyElementsOf(Arrays.stream(expected).filter(Objects::nonNull).toList());
+        assertThat(range).containsExactly(Arrays.copyOfRange(expected, 1000, 20_000));
+    }
+
     private static Path toParquet(Path tmp, DType.Extension dtype, List<Instant> values) throws IOException {
         Path vortex = tmp.resolve("source.vortex");
         DType.Struct schema = new DType.Struct(List.of(TS), List.of(dtype), false);
@@ -225,6 +266,26 @@ class ParquetImportInteropIntegrationTest {
                     assertThat(arrowType.getScale()).isEqualTo(scale);
                     for (int i = 0; i < root.getRowCount(); i++) {
                         out.add(vec.isNull(i) ? null : (BigDecimal) vec.getObject(i));
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    private static List<String> readTextWithJni(Path file, ImmutableScanOptions.Builder options) throws IOException {
+        ScanOptions opts = options.projection(Expression.select(new String[]{"s"}, Expression.root())).build();
+        List<String> out = new ArrayList<>();
+        DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
+        Scan scan = ds.scan(opts);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    FieldVector vec = root.getVector("s");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        out.add(vec.isNull(i) ? null : vec.getObject(i).toString());
                     }
                 }
             }
