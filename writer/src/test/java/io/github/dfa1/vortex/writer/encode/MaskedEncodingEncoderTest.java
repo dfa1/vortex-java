@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.PType;
@@ -444,6 +445,29 @@ class MaskedEncodingEncoderTest {
             // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
             assertEveryRowNull(READ.decode(DecodeTestHelper.toDecodeContext(result, ROWS, DTypes.I64.asNullable(), READ)));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("canonicalWithoutCompressor")
+        void anUncompressedWriteMasksTheCanonicalEncoding(DType dtype, Object values, EncodingId canonical) {
+            // Given: depth 0 has no compressor, only the canonical fallbacks, and bool and struct had
+            // none, so a Parquet import of a nullable bool or struct column wrote no file at all
+            boolean[] validity = new boolean[ROWS];
+            Arrays.fill(validity, 0, ROWS / 2, true);
+
+            // When
+            EncodeResult result = SUT.encode(dtype, new NullableData(values, validity), EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_MASKED);
+            assertThat(result.rootNode().children()[0].encodingId()).isEqualTo(canonical);
+        }
+
+        static Stream<Arguments> canonicalWithoutCompressor() {
+            return Stream.of(
+                    Arguments.of(DTypes.BOOL.asNullable(), new boolean[ROWS], EncodingId.VORTEX_BOOL),
+                    Arguments.of(new DType.Struct(List.of(ColumnName.of("a")), List.of(DTypes.I64), true),
+                            new StructData(List.of(new long[ROWS])), EncodingId.VORTEX_STRUCT));
         }
 
         @ParameterizedTest
