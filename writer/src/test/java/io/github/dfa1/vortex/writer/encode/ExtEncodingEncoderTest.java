@@ -141,6 +141,30 @@ class ExtEncodingEncoderTest {
             }
         }
 
+        @Test
+        void encode_dateTimePartsWithoutItsEncoder_storesTheTimestamps() {
+            // Given: the Parquet importer hands a timestamp column over as DateTimePartsData for
+            // vortex.datetimeparts to split; an uncompressed write has no such encoder, and the
+            // record reached vortex.primitive as is ("Argument is not an array")
+            long[] timestamps = {100L, 200L, 300L, 400L};
+            DType extDType = new DType.Extension(ExtensionId.VORTEX_TIMESTAMP, DTypes.I64, TIMESTAMP_MS, false);
+
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(extDType, new DateTimePartsData(timestamps, false),
+                    EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(resultEncoded.rootNode().children()[0].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+            DecodeContext ctx = new DecodeContext(
+                    encodeNodeToArrayNode(resultEncoded.rootNode()), extDType, timestamps.length,
+                    resultEncoded.buffers().toArray(MemorySegment[]::new),
+                    REGISTRY, Arena.ofAuto());
+            LongArray longArray = (LongArray) DECODER.decode(ctx);
+            for (int i = 0; i < timestamps.length; i++) {
+                assertThat(longArray.getLong(i)).isEqualTo(timestamps[i]);
+            }
+        }
+
         private ArrayNode encodeNodeToArrayNode(EncodeNode n) {
             ArrayNode[] children = new ArrayNode[n.children().length];
             for (int i = 0; i < children.length; i++) {

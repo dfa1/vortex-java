@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
 import org.apache.arrow.memory.BufferAllocator;
@@ -46,7 +47,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// A file written without compression (`WriteOptions.cascading(0)`) reads back in vortex-jni for the
 /// column shapes a Parquet import hands the writer. A nullable bool or struct failed in
-/// `vortex.masked` ("no inner encoding") and wrote no file at all.
+/// `vortex.masked` ("no inner encoding"), and a timestamp handed over as [DateTimePartsData] reached
+/// `vortex.primitive` as a record ("Argument is not an array"): each wrote no file at all.
 class UncompressedWriteInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -77,8 +79,12 @@ class UncompressedWriteInteropIntegrationTest {
                 Arguments.of(Named.of("nullable struct", new Shape(point,
                         from -> structs(from),
                         row -> row % 5 == 1 ? "NULL" : String.valueOf(row % 3 == 0 ? null : row * 0.5)))),
-                // a timestamp column with nulls, as the Parquet importer hands it over
-                // (NullableData over long[])
+                // as the Parquet importer hands over a timestamp column without nulls
+                Arguments.of(Named.of("timestamp as datetimeparts", new Shape(
+                        TimestampDtype.of(TimeUnit.Microseconds, null, true),
+                        from -> new DateTimePartsData(timestamps(from), true),
+                        row -> timestamp(row)))),
+                // and one with nulls, which it hands over as NullableData over long[]
                 Arguments.of(Named.of("nullable timestamp with nulls", new Shape(
                         TimestampDtype.of(TimeUnit.Microseconds, null, true),
                         from -> new NullableData(timestamps(from), validity(from)),
