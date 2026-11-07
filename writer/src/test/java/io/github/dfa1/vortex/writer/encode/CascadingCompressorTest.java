@@ -22,6 +22,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import io.github.dfa1.vortex.writer.WriteRegistry;
@@ -188,6 +189,44 @@ class CascadingCompressorTest {
             assertThat(distinct.min()).isEqualTo(ProtoScalarValue.ofInt64Value(0L));
             assertThat(distinct.max()).isEqualTo(ProtoScalarValue.ofInt64Value(9000L));
             assertThat(distinct.nullCount()).isZero();
+        }
+
+        static Stream<Arguments> boundedColumns() {
+            int rows = 4096;
+            int[] small = new int[rows];
+            long[] smallLongs = new long[rows];
+            short[] smallShorts = new short[rows];
+            boolean[] everySeventhNull = new boolean[rows];
+            for (int i = 0; i < rows; i++) {
+                small[i] = (i * 7) % 16;
+                smallLongs[i] = (i * 13L) % 50;
+                smallShorts[i] = (short) ((i * 11) % 200);
+                everySeventhNull[i] = i % 7 != 0;
+            }
+            return Stream.of(
+                    Arguments.of("i32", new DType.Primitive(PType.I32, false), small),
+                    Arguments.of("i32 with nulls", new DType.Primitive(PType.I32, true),
+                            new NullableData(small, everySeventhNull)),
+                    Arguments.of("u16", new DType.Primitive(PType.U16, false), smallShorts),
+                    Arguments.of("u64 with nulls", new DType.Primitive(PType.U64, true),
+                            new NullableData(smallLongs, everySeventhNull)),
+                    Arguments.of("i64", new DType.Primitive(PType.I64, false), smallLongs));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("boundedColumns")
+        void integerColumn_rootCarriesTheBoundsOfItsValidValues(String name, DType dtype, Object data) {
+            // Given
+            CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
+            MinMax expected = ZoneMapStats.of(dtype, data);
+
+            // When
+            EncodeResult result = sut.encode(dtype, data, ctx(3));
+
+            // Then the root node, a bit-packed array here, has the bounds a scan of the valid rows finds
+            NodeStats root = result.rootNode().stats();
+            assertThat(root.min()).isNotNull().isEqualTo(expected.min());
+            assertThat(root.max()).isNotNull().isEqualTo(expected.max());
         }
 
         @Test
