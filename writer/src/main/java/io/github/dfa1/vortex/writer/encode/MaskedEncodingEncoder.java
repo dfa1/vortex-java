@@ -21,7 +21,7 @@ import java.util.List;
 /// non-nullable values are compressed through the full [CascadingCompressor] built from the
 /// registry, so nullable columns get the same Dict/FSST/ALP/bitpack selection as dense columns.
 /// Without cascade depth the values fall back to a fixed first-match encoder: the canonical
-/// encoding of every dtype a nullable column can have.
+/// encoding of a primitive, bool, string or binary, list, struct or decimal column.
 public final class MaskedEncodingEncoder implements EncodingEncoder {
 
     private static final byte[] EMPTY_BYTES = new byte[0];
