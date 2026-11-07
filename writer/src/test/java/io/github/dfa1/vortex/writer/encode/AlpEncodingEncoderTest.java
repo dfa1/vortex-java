@@ -45,8 +45,7 @@ class AlpEncodingEncoderTest {
 
         private static DecodeContext buildAlpCtxF64(
                 int expE, int expF, long[] encodedVals,
-                long[] patchIndices, double[] patchValues
-        ) {
+                long[] patchIndices, double[] patchValues) {
             ProtoPatchesMetadata pm = patchIndices != null
                     ? new ProtoPatchesMetadata((long) patchIndices.length, 0L,
                             io.github.dfa1.vortex.core.proto.ProtoPType.U32, null, null, null)

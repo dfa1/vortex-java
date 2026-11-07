@@ -39,8 +39,7 @@ public record ArrayStats(
         Boolean isConstant,
         Long nullCount,
         Long uncompressedSizeInBytes,
-        Long nanCount
-) {
+        Long nanCount) {
     private static final ArrayStats EMPTY =
             new ArrayStats(null, false, null, false, null, null, null, null, null, null, null);
 

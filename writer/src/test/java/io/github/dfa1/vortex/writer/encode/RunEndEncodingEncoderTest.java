@@ -36,8 +36,7 @@ class RunEndEncodingEncoderTest {
 
         private static DecodeContext buildCtx(
                 DType dtype, long rowCount,
-                long[] ends, long[] values, PType endsPtype, long offset
-        ) {
+                long[] ends, long[] values, PType endsPtype, long offset) {
             byte[] metaBytes = new ProtoRunEndMetadata(
                     io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(endsPtype.ordinal()), ends.length, offset).encode();
 

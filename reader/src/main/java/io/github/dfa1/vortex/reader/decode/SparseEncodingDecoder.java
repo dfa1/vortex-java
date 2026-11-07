@@ -279,8 +279,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
 
     private static Array decodeVarBin(
             DecodeContext ctx, long n, long numPatches, long offset, PType indicesPtype,
-            boolean fillValid, ProtoScalarValue fillScalar
-    ) {
+            boolean fillValid, ProtoScalarValue fillScalar) {
         // Patch positions are decoded as an Array (not just a segment) so the shared
         // row-validity helper can index them lazily, exactly like the primitive path.
         DType indicesDtype = new DType.Primitive(indicesPtype, false);

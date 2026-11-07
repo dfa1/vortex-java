@@ -26,8 +26,7 @@ public record NodeStats(
         Long nullCount,
         Long uncompressedSize,
         Long nanCount,
-        ProtoScalarValue sum
-) {
+        ProtoScalarValue sum) {
 
     /// Stats without a sum.
     ///

@@ -396,8 +396,7 @@ final class SegmentSink {
     private static ByteBuffer buildPostscript(
             long footerOff, int footerLen,
             long dtypeOff, int dtypeLen,
-            long layoutOff, int layoutLen
-    ) {
+            long layoutOff, int layoutLen) {
         var fbb = new FbsBuilder(256);
 
         int footerSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(

@@ -477,8 +477,7 @@ public final class CascadingCompressor {
     ///                   beat to win
     /// @return the [EncodeResult] produced by the winning encoding
     private EncodeResult competeAndEncode(
-            DType dtype, ArrayAndStats input, EncodeContext ctx, IntToLongFunction baselineFn
-    ) {
+            DType dtype, ArrayAndStats input, EncodeContext ctx, IntToLongFunction baselineFn) {
         Object data = input.data();
         int n = RowCount.of(data);
         int sampleSize = sampleSize(n, ctx);

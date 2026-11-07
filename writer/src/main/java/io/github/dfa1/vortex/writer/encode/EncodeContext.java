@@ -42,8 +42,7 @@ public record EncodeContext(
         long sampleSeed,
         int minSampleSize,
         double sampleFraction,
-        boolean sample
-) {
+        boolean sample) {
 
     /// Smallest sample the cost competition will measure on, matching the Rust reference's
     /// `SAMPLE_SIZE * SAMPLE_COUNT` (64 x 16). Kept a multiple of 1024 for the reason the

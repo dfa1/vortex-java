@@ -27,8 +27,7 @@ public record CascadeStep(
         List<ChildSlot> openChildren,
         ProtoScalarValue statsMin,
         ProtoScalarValue statsMax,
-        boolean applicable
-) {
+        boolean applicable) {
     /// This step with zone-map bounds attached, for an encoder whose entry point knows the
     /// column's values but whose step is assembled deeper down. A step that is not applicable is
     /// returned unchanged: it carries no node for the bounds to belong to.

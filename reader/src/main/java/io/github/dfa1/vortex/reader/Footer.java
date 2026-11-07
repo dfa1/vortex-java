@@ -19,6 +19,5 @@ public record Footer(
         List<EncodingId> arraySpecs,
         List<LayoutId> layoutSpecs,
         List<SegmentSpec> segmentSpecs,
-        List<CompressionScheme> compressionSpecs
-) {
+        List<CompressionScheme> compressionSpecs) {
 }

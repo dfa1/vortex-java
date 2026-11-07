@@ -38,8 +38,7 @@ public record ArrayStats(
         boolean distinctCapped,
         long averageRunLength,
         long min,
-        long max
-) {
+        long max) {
 
     /// Sentinel stats for empty arrays.
     public static final ArrayStats EMPTY = new ArrayStats(0, 0, 0, 0, false, 0, 0, 0);

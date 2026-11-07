@@ -34,6 +34,15 @@
         <property name="message" value="HTML tags forbidden in Markdown Javadoc (///). Use Markdown: blank line for paragraph, - for list, ``` for code, **text** for bold."/>
     </module>
 
+    <!-- A wrapped declaration ends its last parameter line with ") {", never a line holding only
+         the closing parenthesis: keep the signature on one line, or wrap the parameters. -->
+    <module name="RegexpSingleline">
+        <property name="format" value="^\s*\)(\s+(throws|implements|extends)\s[^{;]*)?\s*\{\s*$"/>
+        <property name="minimum" value="0"/>
+        <property name="maximum" value="0"/>
+        <property name="message" value="Closing parenthesis alone on its line: end the last parameter line with `) {`, or keep the signature on one line."/>
+    </module>
+
     <module name="SuppressionSingleFilter">
         <property name="files" value="[\\/](fbs|proto)[\\/]"/>
     </module>

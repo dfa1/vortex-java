@@ -14,6 +14,5 @@ public record SegmentSpec(
         long offset,
         long length,
         byte alignmentExponent,
-        CompressionScheme compression
-) {
+        CompressionScheme compression) {
 }

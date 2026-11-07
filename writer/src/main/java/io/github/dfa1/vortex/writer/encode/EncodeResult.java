@@ -20,8 +20,7 @@ public record EncodeResult(
         EncodeNode rootNode,
         List<EncodedBuffer> encodedBuffers,
         ProtoScalarValue statsMin,
-        ProtoScalarValue statsMax
-) {
+        ProtoScalarValue statsMax) {
     /// The raw bytes of [#encodedBuffers()], in the same order.
     ///
     /// @return the buffer bytes

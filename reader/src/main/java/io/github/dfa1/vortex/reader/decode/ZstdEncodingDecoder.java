@@ -118,8 +118,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array buildNullableArray(
-            DType dtype, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx
-    ) {
+            DType dtype, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx) {
         Array child;
         if (dtype instanceof DType.Primitive dt) {
             child = buildScatteredPrimitive(dt, rowCount, validValues, validity, ctx);
@@ -132,8 +131,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array buildScatteredPrimitive(
-            DType.Primitive dt, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx
-    ) {
+            DType.Primitive dt, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx) {
         int byteSize = dt.ptype().byteSize();
         MemorySegment out = ctx.arena().allocate(rowCount * byteSize);
         long readPos = 0;
@@ -148,8 +146,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     }
 
     private static VarBinArray buildScatteredVarBin(
-            DType dtype, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx
-    ) {
+            DType dtype, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx) {
         long totalDataBytes = 0;
         long scanPos = 0;
         for (long i = 0; i < rowCount; i++) {
@@ -187,8 +184,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
             DecodeContext ctx,
             ProtoZstdMetadata meta,
             int frameCount,
-            long totalUncompressed
-    ) {
+            long totalUncompressed) {
         // Zero-copy: decompress each native frame straight into its slice of the arena output,
         // no heap byte[] bounce. The mmap'd file buffers are already native; the scratch arena
         // only services the heap segments unit tests hand in.

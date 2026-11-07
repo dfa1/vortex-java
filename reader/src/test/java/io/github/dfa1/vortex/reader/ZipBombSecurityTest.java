@@ -244,8 +244,7 @@ class ZipBombSecurityTest {
     private static Path writeVtxFile(
             Path dir, String name,
             byte[][] segments,
-            ByteBuffer footerBuf, ByteBuffer dtypeBuf, ByteBuffer layoutBuf
-    ) throws Exception {
+            ByteBuffer footerBuf, ByteBuffer dtypeBuf, ByteBuffer layoutBuf) throws Exception {
         long totalSegBytes = 0;
         for (byte[] seg : segments) {
             totalSegBytes += seg.length;

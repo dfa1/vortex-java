@@ -384,8 +384,7 @@ class FsstEncodingEncoderTest {
 
         private static DecodeContext buildCtx(
                 long[] symbols, byte[] symLens, byte[] compressed,
-                int[] uncompLens, int[] codesOffsets, long n
-        ) {
+                int[] uncompLens, int[] codesOffsets, long n) {
             Arena arena = Arena.ofAuto();
 
             MemorySegment symBuf = arena.allocate(Math.max(symbols.length * 8L, 1), 8);

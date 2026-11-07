@@ -18,8 +18,7 @@ public record EncodeNode(
         MemorySegment metadata,
         EncodeNode[] children,
         int[] bufferIndices,
-        NodeStats stats
-) {
+        NodeStats stats) {
     /// Creates a node that carries no stats.
     ///
     /// @param encodingId    encoding id for this node

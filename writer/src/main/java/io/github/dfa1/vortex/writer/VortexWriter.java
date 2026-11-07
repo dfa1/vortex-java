@@ -74,8 +74,7 @@ public final class VortexWriter implements Closeable {
 
     private VortexWriter(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings,
-            WriteRegistry extensionRegistry
-    ) {
+            WriteRegistry extensionRegistry) {
         // A nullable struct layout carries a leading validity child (Rust's validate_children:
         // nfields + 1 children); the root layout written here has one child per column and no way
         // to mark a row null, so Rust refused every such file ("nchildren == expected").
@@ -163,9 +162,7 @@ public final class VortexWriter implements Closeable {
     /// @param schema  the struct schema for the file
     /// @param options write options
     /// @return a new writer
-    public static VortexWriter create(
-            WritableByteChannel channel, DType.Struct schema, WriteOptions options
-    ) {
+    public static VortexWriter create(WritableByteChannel channel, DType.Struct schema, WriteOptions options) {
         return new VortexWriter(channel, schema, options, SegmentEncoder.DEFAULT_CODECS, DEFAULT_EXTENSIONS);
     }
 
@@ -176,9 +173,7 @@ public final class VortexWriter implements Closeable {
     /// @param options   write options
     /// @param encodings custom encoder list
     /// @return a new writer
-    public static VortexWriter create(
-            WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings
-    ) {
+    public static VortexWriter create(WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings) {
         // Custom encoding list: disable global dict — using DEFAULT_CODECS for values/codes behind the scenes
         // would violate the user's expectation that only their encoding list is used.
         return new VortexWriter(channel, schema, options.withGlobalDict(false), encodings, DEFAULT_EXTENSIONS);
@@ -191,9 +186,7 @@ public final class VortexWriter implements Closeable {
     /// @param options  write options
     /// @param registry write registry supplying encoders and extensions
     /// @return a new writer
-    public static VortexWriter create(
-            WritableByteChannel channel, DType.Struct schema, WriteOptions options, WriteRegistry registry
-    ) {
+    public static VortexWriter create(WritableByteChannel channel, DType.Struct schema, WriteOptions options, WriteRegistry registry) {
         return new VortexWriter(channel, schema, options.withGlobalDict(false),
                 List.copyOf(registry.encoderMap().values()), registry);
     }

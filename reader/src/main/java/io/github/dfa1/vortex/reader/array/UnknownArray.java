@@ -29,8 +29,7 @@ public record UnknownArray(
         long length,
         MemorySegment metadata,
         MemorySegment[] buffers,
-        Array[] children
-) implements Array {
+        Array[] children) implements Array {
 
     /// Returns the child array at position `i`.
     ///
