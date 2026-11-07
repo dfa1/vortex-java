@@ -4,11 +4,13 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
+import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.compute.Predicate;
@@ -20,6 +22,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -747,6 +750,97 @@ class ZoneMapPruningTest {
 
             // When / Then — no chunk's zone can hold "nope", so nothing is decoded at all
             assertThat(scanRowCounts(file, ScanFilter.eq(ColumnName.of("s"), "nope"))).isEmpty();
+        }
+    }
+
+    @Nested
+    class Decimals {
+
+        // Three 8192-row zones: 1.00..1.49, 5.00..5.49, 9.00..9.49 at scale 2, the longs 1, 5 and 9 apart
+        private Path writeDecimalChunks(Path tmp) throws IOException {
+            DType.Struct schema = new DType.Struct(List.of(ColumnName.of("d")),
+                    List.of(new DType.Decimal((byte) 10, (byte) 2, false)), false);
+            Path file = tmp.resolve("decimals.vtx");
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+                BigDecimal[] values = new BigDecimal[3 * 8192];
+                for (int i = 0; i < values.length; i++) {
+                    values[i] = BigDecimal.valueOf(100 + (i / 8192) * 400L + i % 50, 2);
+                }
+                sut.writeChunk(Map.of(ColumnName.of("d"), values));
+            }
+            return file;
+        }
+
+        @Test
+        void zoneStats_areEachZonesDecimalBounds(@TempDir Path tmp) throws IOException {
+            // Given
+            Path file = writeDecimalChunks(tmp);
+
+            // When
+            List<ArrayStats> zones;
+            try (var vf = VortexReader.open(file, registry());
+                 var iter = vf.scan(ScanOptions.all())) {
+                zones = iter.columnZoneStats(ColumnName.of("d"));
+            }
+
+            // Then
+            assertThat(zones).hasSize(3);
+            assertThat((BigDecimal) zones.get(0).min()).isEqualByComparingTo("1.00");
+            assertThat((BigDecimal) zones.get(0).max()).isEqualByComparingTo("1.49");
+            assertThat((BigDecimal) zones.get(1).min()).isEqualByComparingTo("5.00");
+            assertThat((BigDecimal) zones.get(1).max()).isEqualByComparingTo("5.49");
+            assertThat((BigDecimal) zones.get(2).min()).isEqualByComparingTo("9.00");
+            assertThat((BigDecimal) zones.get(2).max()).isEqualByComparingTo("9.49");
+        }
+
+        static Stream<Arguments> filters() {
+            ColumnName d = ColumnName.of("d");
+            return Stream.of(
+                    Arguments.of("gt 5.20", ScanFilter.gt(d, new BigDecimal("5.20")), (java.util.function.Predicate<BigDecimal>) v -> v.compareTo(new BigDecimal("5.20")) > 0),
+                    Arguments.of("gt 5.49", ScanFilter.gt(d, new BigDecimal("5.49")), (java.util.function.Predicate<BigDecimal>) v -> v.compareTo(new BigDecimal("5.49")) > 0),
+                    Arguments.of("gte 5.49", ScanFilter.gte(d, new BigDecimal("5.49")), (java.util.function.Predicate<BigDecimal>) v -> v.compareTo(new BigDecimal("5.49")) >= 0),
+                    Arguments.of("lt 1.00", ScanFilter.lt(d, new BigDecimal("1.00")), (java.util.function.Predicate<BigDecimal>) v -> false),
+                    Arguments.of("lte 1.00", ScanFilter.lte(d, new BigDecimal("1.00")), (java.util.function.Predicate<BigDecimal>) v -> v.compareTo(new BigDecimal("1.00")) <= 0),
+                    Arguments.of("eq 5.25", ScanFilter.eq(d, new BigDecimal("5.25")), (java.util.function.Predicate<BigDecimal>) v -> v.compareTo(new BigDecimal("5.25")) == 0),
+                    // a literal at another scale is the same value
+                    Arguments.of("eq 5.250", ScanFilter.eq(d, new BigDecimal("5.250")), (java.util.function.Predicate<BigDecimal>) v -> v.compareTo(new BigDecimal("5.25")) == 0),
+                    // a long, 1.49 < 5 <= 5.00 and 5.49 < 9
+                    Arguments.of("gte long 5", ScanFilter.gte(d, 5L), (java.util.function.Predicate<BigDecimal>) v -> v.compareTo(BigDecimal.valueOf(5)) >= 0),
+                    Arguments.of("gt long 9", ScanFilter.gt(d, 9L), (java.util.function.Predicate<BigDecimal>) v -> v.compareTo(BigDecimal.valueOf(9)) > 0));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("filters")
+        void filteredScan_returnsExactlyTheMatchingDecimals(String name, ScanFilter filter,
+                                                           java.util.function.Predicate<BigDecimal> matches, @TempDir Path tmp)
+                throws IOException {
+            // Given
+            Path file = writeDecimalChunks(tmp);
+            List<BigDecimal> expected = new ArrayList<>();
+            for (int i = 0; i < 3 * 8192; i++) {
+                BigDecimal value = BigDecimal.valueOf(100 + (i / 8192) * 400L + i % 50, 2);
+                if (matches.test(value)) {
+                    expected.add(value);
+                }
+            }
+
+            // When
+            List<BigDecimal> rows = new ArrayList<>();
+            try (var vf = VortexReader.open(file, registry());
+                 var iter = vf.scan(ScanOptions.all().withFilter(filter))) {
+                while (iter.hasNext()) {
+                    try (Chunk chunk = iter.next()) {
+                        DecimalArray array = chunk.column(ColumnName.of("d"));
+                        for (int i = 0; i < chunk.rowCount(); i++) {
+                            rows.add(array.getDecimal(i));
+                        }
+                    }
+                }
+            }
+
+            // Then
+            assertThat(rows).usingElementComparator(BigDecimal::compareTo).isEqualTo(expected);
         }
     }
 }
