@@ -145,7 +145,7 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 | `static create(WritableByteChannel, DType.Struct, WriteOptions, WriteRegistry)`  | Custom [`WriteRegistry`](#writeregistry-iogithubdfa1vortexwriterwriteregistry) — encoders and extension encoders together |
 | `writeChunk(Consumer<Chunk>)`                                                    | One batch of rows; typed builder validates column names + array types at each `.put`; missing columns throw `IllegalStateException` when the lambda returns. Preferred when columns are known at compile time. |
 | `writeChunk(Map<ColumnName, Object>)`                                                | One batch of rows by map. Validates that every schema column is present and that all columns share the same row count. Use when the column set is built dynamically (Parquet/JDBC importers, generic exporters). |
-| `finish()`                                                                       | Finalizes the file (footer, postscript, trailer) and returns a `WriteSummary`: `fileSize()`, `rowCount()` and per column (schema order) its `compressedSize()` and `stats()` — the footer's file statistics (min, max, sum, null and NaN counts, folded over the batches, as vortex-jni's `VortexWriter.finish()` reports them). Later calls return the same summary; `writeChunk` afterwards throws `IllegalStateException` |
+| `finish()`                                                                       | Finalizes the file (footer, postscript, trailer) and returns a `WriteSummary`: `fileSize()`, `rowCount()` and per column (schema order) its `compressedSize()` and `stats()` — the footer's file statistics (min, max, null and NaN counts and uncompressed size, accumulated over the batches, as vortex-jni's `VortexWriter.finish()` reports them; a UTF-8 or binary min/max is a 64-byte bound, never exact). Later calls return the same summary; `writeChunk` afterwards throws `IllegalStateException` |
 | `close()`                                                                        | `finish()` unless it already ran                                                                                 |
 
 Batches are not chunks: as Rust's writer does, each primitive, boolean, decimal, string and binary
@@ -236,7 +236,7 @@ returned. The filter's columns are decoded even when they are not projected.
 
 An integer column takes an integer operand of any width (`Long`, `Integer`, `Short`, `Byte`). A
 `Double`, `Float` or `BigDecimal` operand on an integer column fails the scan with
-`VortexException`, as vortex-jni refuses it ("Cannot compare different DTypes i64 and f64").
+`VortexException`, as vortex-jni refuses it ("Comparison requires equal dtypes ignoring nullability, got i64 and f64").
 
 | Static factory              | Builds                            |
 |------------------------------|------------------------------------|

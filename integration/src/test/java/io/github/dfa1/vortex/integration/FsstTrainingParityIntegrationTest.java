@@ -29,8 +29,6 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.IntFunction;
@@ -38,12 +36,9 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// vortex-java trains the FSST symbol table as Rust's `fsst-rs` does (#583): the same sample, the same
-/// five generations, the same candidates, gains and cut. The two tables are not byte for byte equal,
-/// and cannot be: candidates of exactly equal gain leave Rust's heap in the order its hash map
-/// iterates them, which depends on the CPU's SIMD width, so Rust's own table differs between x86 and
-/// arm. What has to hold is that nearly every symbol is Rust's and the code stream is as long;
-/// [NullableTextInteropIntegrationTest] holds a column whose whole encoding tree equals Rust's.
+/// vortex-java trains the FSST symbol table as Rust's `fsst-rs` 0.7 does (#583): the same sample, the
+/// same five generations, the same candidates, gains and cut, and the same order between candidates of
+/// equal gain and length. The symbols, their lengths and the code stream are byte for byte Rust's.
 class FsstTrainingParityIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -65,7 +60,7 @@ class FsstTrainingParityIntegrationTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("shapes")
-    void javaTrainsAnFsstTableCloseToJnis(String name, int rows, IntFunction<String> values, @TempDir Path tmp)
+    void javaTrainsJnisFsstTable(String name, int rows, IntFunction<String> values, @TempDir Path tmp)
             throws Exception {
         // Given
         Path jniFile = tmp.resolve("jni.vortex");
@@ -80,29 +75,9 @@ class FsstTrainingParityIntegrationTest {
         // Then
         List<byte[]> expected = EncodingTrees.firstFlatBuffers(jniFile);
         List<byte[]> actual = EncodingTrees.firstFlatBuffers(javaFile);
-        List<String> rustSymbols = symbolSet(expected);
-        List<String> javaSymbols = symbolSet(actual);
-        long common = javaSymbols.stream().filter(rustSymbols::contains).count();
-        assertThat(common).as("symbols Rust also has, of %d (Java has %d)", rustSymbols.size(), javaSymbols.size())
-                .isGreaterThanOrEqualTo((long) (0.8 * rustSymbols.size()));
-        assertThat((double) actual.get(2).length).as("code stream bytes, Rust's is %d", expected.get(2).length)
-                .isBetween(0.985 * expected.get(2).length, 1.015 * expected.get(2).length);
-    }
-
-    /// The table's symbols as (length, bytes) strings, sorted: the table whatever order it is numbered in.
-    private static List<String> symbolSet(List<byte[]> buffers) {
-        byte[] symbols = buffers.get(0);
-        byte[] lengths = buffers.get(1);
-        List<String> out = new ArrayList<>();
-        for (int i = 0; i < lengths.length; i++) {
-            StringBuilder hex = new StringBuilder();
-            for (int k = 0; k < lengths[i]; k++) {
-                hex.append(String.format("%02x", symbols[i * 8 + k]));
-            }
-            out.add(hex.toString());
-        }
-        Collections.sort(out);
-        return out;
+        assertThat(actual.get(0)).as("symbols").isEqualTo(expected.get(0));
+        assertThat(actual.get(1)).as("symbol lengths").isEqualTo(expected.get(1));
+        assertThat(actual.get(2)).as("code stream").isEqualTo(expected.get(2));
     }
 
     private static long mix(long i) {

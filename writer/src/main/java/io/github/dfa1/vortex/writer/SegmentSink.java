@@ -412,7 +412,7 @@ final class SegmentSink {
         int[] offsets = new int[fields.size()];
         for (int i = 0; i < fields.size(); i++) {
             FileStatsAccumulator field = fields.get(i);
-            offsets[i] = buildStats(fbb, field.stats(), field.minExact(), field.maxExact());
+            offsets[i] = buildStats(fbb, field.stats(), field.boundsExact(), field.boundsExact());
         }
         int vec = FbsFileStatistics.createFieldStatsVector(fbb, offsets);
         fbb.finish(FbsFileStatistics.createFbsFileStatistics(fbb, vec));

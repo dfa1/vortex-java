@@ -1,24 +1,20 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.encode.NodeStats;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Test;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// The fold rules of [FileStatsAccumulator] that `FileStatisticsInteropIntegrationTest` cannot reach
-/// with a small file: sums that overflow only past millions of rows, and columns without any batch.
+/// The accumulation rules of [FileStatsAccumulator], each on its own; `FileStatisticsInteropIntegrationTest`
+/// checks them all together against vortex-jni.
 class FileStatsAccumulatorTest {
 
     @Test
-    void noBatch_carriesNoStat() {
-        // Given — Rust drops every per-batch stat of a column it never saw a batch of: even the null
-        // count and the sum, which a column with rows always has
+    void noBatch_zeroNullCountAndSize() {
+        // Given — Rust's accumulators start at zero and keep it without a batch
         FileStatsAccumulator sut = new FileStatsAccumulator(DTypes.I64);
         sut.add(new long[0], 0);
 
@@ -26,7 +22,7 @@ class FileStatsAccumulatorTest {
         NodeStats result = sut.stats();
 
         // Then
-        assertThat(result).isEqualTo(NodeStats.NONE);
+        assertThat(result).isEqualTo(new NodeStats(null, null, null, null, null, 0L, 0L, null));
     }
 
     @Test
@@ -43,33 +39,71 @@ class FileStatsAccumulatorTest {
     }
 
     @Test
-    void unsignedSumOverflowAcrossBatches_dropsSum() {
-        // Given — each batch fits u64, their total does not: the fold is checked too
-        FileStatsAccumulator sut = new FileStatsAccumulator(DTypes.U64);
-        sut.add(new long[]{-2L}, 1);
-        sut.add(new long[]{2L}, 1);
+    void utf8AllNullBatch_keepsTheOtherBatchesMax() {
+        // Given — Rust's BoundedMax skips a batch without a valid value
+        FileStatsAccumulator sut = new FileStatsAccumulator(DTypes.UTF8.asNullable());
+        sut.add(new NullableData(new String[]{"b", "a"}, new boolean[]{true, true}), 2);
+        sut.add(new NullableData(new String[]{null}, new boolean[]{false}), 1);
 
         // When
         NodeStats result = sut.stats();
 
-        // Then — min and max are unaffected
-        assertThat(result.sum()).isNull();
-        assertThat(result.max()).isEqualTo(ProtoScalarValue.ofUint64Value(-2L));
+        // Then
+        assertThat(result.max()).isEqualTo(ProtoScalarValue.ofStringValue("b"));
+        assertThat(result.nullCount()).isEqualTo(1L);
     }
 
     @Test
-    void decimalSumPastMaxPrecision_dropsSum() {
-        // Given — at Rust's maximum precision a sum cannot widen: two values near 10^76 overflow it
-        BigDecimal big = new BigDecimal(BigInteger.TEN.pow(76).subtract(BigInteger.ONE));
-        FileStatsAccumulator sut = new FileStatsAccumulator(DType.Decimal.of(76, 0, false));
-        sut.add(new BigDecimal[]{big, big}, 2);
+    void utf8_boundsAreInexact() {
+        // Given — a short string is never cut, yet a bounded min/max only approximates Min/Max
+        FileStatsAccumulator sut = new FileStatsAccumulator(DTypes.UTF8);
+        sut.add(new String[]{"a"}, 1);
+
+        // When
+        boolean result = sut.boundsExact();
+
+        // Then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void i64_boundsAreExact() {
+        // Given
+        FileStatsAccumulator sut = new FileStatsAccumulator(DTypes.I64);
+        sut.add(new long[]{1, 2}, 2);
+
+        // When
+        boolean result = sut.boundsExact();
+
+        // Then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void integers_haveNoSum() {
+        // Given — Rust 0.91's default aggregates have no sum
+        FileStatsAccumulator sut = new FileStatsAccumulator(DTypes.I64);
+        sut.add(new long[]{1, 2}, 2);
 
         // When
         NodeStats result = sut.stats();
 
         // Then
         assertThat(result.sum()).isNull();
-        assertThat(result.min()).isNotNull();
+    }
+
+    @Test
+    void uncompressedSize_addsUpTheBatches() {
+        // Given — 8 bytes a row; the first batch's one null adds a bitmap, the second is all valid
+        FileStatsAccumulator sut = new FileStatsAccumulator(DTypes.I64.asNullable());
+        sut.add(new NullableData(new long[]{1, 0, 3}, new boolean[]{true, false, true}), 3);
+        sut.add(new NullableData(new long[]{4, 5}, new boolean[]{true, true}), 2);
+
+        // When
+        NodeStats result = sut.stats();
+
+        // Then
+        assertThat(result.uncompressedSize()).isEqualTo(3 * 8 + 1 + 2 * 8L);
     }
 
     @Test
@@ -82,6 +116,6 @@ class FileStatsAccumulatorTest {
         NodeStats result = sut.stats();
 
         // Then
-        assertThat(result).isEqualTo(new NodeStats(null, null, null, null, null, 4L, null, null, null));
+        assertThat(result).isEqualTo(new NodeStats(null, null, null, null, null, 4L, 0L, null));
     }
 }

@@ -183,7 +183,7 @@ final class Repartitioner {
     /// Rust's exact `uncompressed_size_in_bytes` of the block being filled, as one canonical
     /// array (`vortex-array/src/aggregate_fn/fns/uncompressed_size_in_bytes`): fixed-width values
     /// at their width, Utf8/Binary as a 16-byte view per row plus each valid value too long to
-    /// inline in its view, and the validity per [#validityBytes(long,long)].
+    /// inline in its view, and the validity per [UncompressedSize#validityBytes(long,long)].
     private long blockBytes() {
         long outOfLine = 0;
         long valid = 0;
@@ -197,20 +197,7 @@ final class Repartitioner {
             case DType.Bool _ -> (blockRows + 7L) / 8;
             default -> (long) blockRows * elementBytes(storage);
         };
-        return values + validityBytes(valid, blockRows);
-    }
-
-    /// Rust's `validity_uncompressed_size_in_bytes` of a block's mask: nothing when every row is
-    /// valid, a bitmap when some are, and when none are, a `ConstantArray(false)`'s one buffer --
-    /// the 2-byte proto `ScalarValue { bool_value: false }`.
-    private static long validityBytes(long valid, long rows) {
-        if (valid == rows) {
-            return 0;
-        }
-        if (valid == 0) {
-            return 2;
-        }
-        return (rows + 7) / 8;
+        return values + UncompressedSize.validityBytes(valid, blockRows);
     }
 
     private static long validRows(Piece p) {

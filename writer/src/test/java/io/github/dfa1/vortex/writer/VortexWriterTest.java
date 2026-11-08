@@ -808,7 +808,7 @@ class VortexWriterTest {
             assertThat(result.rowCount()).isEqualTo(4);
             assertThat(result.columns()).containsOnlyKeys(ColumnName.of("id"), ColumnName.of("value"));
             ArrayStats id = result.columns().get(ColumnName.of("id")).stats();
-            assertThat(id).isEqualTo(new ArrayStats(1L, true, 9L, true, 15L, null, null, null, 0L, null, null));
+            assertThat(id).isEqualTo(new ArrayStats(1L, true, 9L, true, null, null, null, null, 0L, 4 * 8L, null));
             assertThat(result.columns().get(ColumnName.of("value")).compressedSize()).isPositive();
         }
 
@@ -843,8 +843,8 @@ class VortexWriterTest {
         }
 
         @Test
-        void noRows_hasEmptyStats() throws IOException {
-            // Given — Rust keeps no statistic of a column it saw no batch of
+        void noRows_zeroNullCountAndSize() throws IOException {
+            // Given — Rust's null count and size start at zero; a float column also counts NaNs
             VortexWriter sut = VortexWriter.create(java.nio.channels.Channels.newChannel(out), SCHEMA, WriteOptions.defaults());
 
             // When
@@ -852,8 +852,9 @@ class VortexWriterTest {
 
             // Then
             assertThat(result.rowCount()).isZero();
-            assertThat(result.columns().values()).extracting(WriteSummary.Column::stats)
-                    .containsOnly(ArrayStats.empty());
+            assertThat(result.columns().values()).extracting(WriteSummary.Column::stats).containsExactly(
+                    new ArrayStats(null, false, null, false, null, null, null, null, 0L, 0L, null),
+                    new ArrayStats(null, false, null, false, null, null, null, null, 0L, 0L, 0L));
         }
     }
 }

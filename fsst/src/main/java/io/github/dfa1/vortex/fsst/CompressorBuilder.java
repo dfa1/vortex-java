@@ -2,13 +2,12 @@ package io.github.dfa1.vortex.fsst;
 
 import java.util.List;
 
-/// Trains an FSST [Compressor] from a corpus of rows as Rust's `fsst-rs` does (`Compressor::train`,
+/// Trains an FSST [Compressor] from a corpus of rows as Rust's `fsst-rs` 0.7 does (`Compressor::train`,
 /// the FSST paper's Algorithm 3 with the C++ reference's refinements): the same sample, the same five
 /// generations over a growing share of its lines, and the same candidates, gains and cut.
 ///
-/// Training is deterministic: the same rows always produce a byte-identical [Compressor]. Rust's own
-/// tables differ from this one only in where candidates of exactly equal gain and length are
-/// ordered, which depends on its hash map ([TrainingGeneration]).
+/// Training is deterministic: the same rows always produce a byte-identical [Compressor], the table
+/// fsst-rs 0.7 trains from them ([TrainingGeneration]).
 ///
 /// ```java
 /// Compressor compressor = new CompressorBuilder().train(rows);

@@ -22,11 +22,11 @@ public record WriteSummary(long fileSize, long rowCount, Map<ColumnName, Column>
 
     /// One top-level column of the written file.
     ///
-    /// `stats` are the file statistics written into the footer: Rust's min, max, sum, null count
-    /// and NaN count, each folded over the `writeChunk` batches. A UTF-8 or binary bound is cut to
-    /// 64 bytes and then inexact (`minExact`/`maxExact` say so); a binary bound is a `byte[]`. A
-    /// statistic Rust does not keep for the column's type is `null`, as is every one of a column
-    /// without rows.
+    /// `stats` are the file statistics written into the footer: Rust's min, max, null count, NaN
+    /// count and uncompressed size, each accumulated over the `writeChunk` batches. A UTF-8 or binary
+    /// bound is cut to 64 bytes and always inexact (`minExact`/`maxExact` say so); a binary bound is
+    /// a `byte[]`. A statistic Rust does not keep for the column's type is `null`; a column without
+    /// rows has a zero null count and size.
     ///
     /// @param compressedSize the bytes of every segment of the column: data, zone map and
     ///                       dictionary, as Rust's `compressed_column_sizes` counts them
