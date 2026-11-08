@@ -404,7 +404,7 @@ class CompressorBuilderTest {
         return false;
     }
 
-    /// fsst-rs 0.6.0 `fsst_hash` of the first three bytes, masked to its 2048-slot table: written
+    /// fsst-rs 0.7 `fsst_hash` of the first three bytes, masked to its 2048-slot table: written
     /// out here rather than calling [LossyPerfectHashTable#slotFor(long)], so the test checks Rust's
     /// slots and not whatever hash Java uses.
     private static int rustSlot(long packed) {

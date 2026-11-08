@@ -375,7 +375,7 @@ As in Rust, opening a file with any other extension id that has no registered de
 (`VortexException`; Rust: "No such DType extension ID"), unless
 `ReadRegistry.Builder#allowUnknown()` is set — then the id round-trips verbatim through
 `DType.Extension`'s raw `String` field and the column reads as its storage array, Rust's
-`ForeignExtDType`. vortex-jni 0.88.0 exposes no `allow_unknown`, so it cannot read a file with a
+`ForeignExtDType`. vortex-jni 0.91.0 exposes no `allow_unknown`, so it cannot read a file with a
 custom extension id at all. A blank id, or one with a control character, fails the read with
 `VortexException` (Rust accepts any string).
 
