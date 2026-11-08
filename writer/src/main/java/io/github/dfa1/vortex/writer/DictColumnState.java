@@ -67,7 +67,7 @@ final class DictColumnState {
     // hot-loop rule). valueToCode stays the authoritative store — it carries first-seen order, the
     // VarBin keys, and everything the demotion and flush paths read — but probing it needs a boxed key,
     // and one Long per row of every candidate column profiled as the writer's hottest single frame.
-    private LongIntMap bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
+    private final LongIntMap bitsIndex = new LongIntMap(INDEX_MIN_CAPACITY);
     // The null entry's code, or -1 until the first null slot; mirrors valueToCode.get(NULL_KEY)
     // so the hot loops never probe the map for it.
     private int nullCode = -1;
