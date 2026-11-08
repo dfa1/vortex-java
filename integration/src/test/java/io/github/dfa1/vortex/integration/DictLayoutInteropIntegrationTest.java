@@ -37,7 +37,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -49,6 +50,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -155,9 +157,14 @@ class DictLayoutInteropIntegrationTest {
         assertThat(readAllLongs(java)).containsExactly(values);
     }
 
-    @ParameterizedTest(name = "{0}")
-    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16"})
-    void admitsANullableNarrowColumnAsRustDoes(PType ptype, @TempDir Path tmp) throws Exception {
+    static Stream<Arguments> narrowColumns() {
+        return Stream.of(PType.I8, PType.U8, PType.I16, PType.U16)
+                .flatMap(p -> Stream.of(Arguments.of(p, true), Arguments.of(p, false)));
+    }
+
+    @ParameterizedTest(name = "{0}, nullable {1}")
+    @MethodSource("narrowColumns")
+    void admitsANarrowColumnAsRustDoes(PType ptype, boolean nullable, @TempDir Path tmp) throws Exception {
         // Given — the profile of Public BI Generico's `Disco` first 8192 rows (#651): a nullable
         // SMALLINT, 40% valid, 62 distinct values in 5..132 with a few far more common than the
         // rest, value runs of about 2 rows between null runs of about 12. Rust's dict layout admits
@@ -183,23 +190,25 @@ class DictLayoutInteropIntegrationTest {
             }
         }
 
-        // When
-        Path java = writeJavaNullable(tmp, ptype, values, valid);
-        Path jni = writeJniNullable(tmp, ptype, values, valid);
+        // When — non-nullable, the null rows keep their run's value
+        Path java = writeJavaNullable(tmp, ptype, values, nullable ? valid : null);
+        Path jni = writeJniNullable(tmp, ptype, values, nullable ? valid : null);
 
-        // Then — the same layouts and encodings, node for node, the same bytes (8-bit values have
-        // U8 codes, as Rust's dict builder bounds the codes by the values' range: Java's U16 codes
-        // had the same tree), and vortex-jni reads Java's file back to the same values as its own
+        // Then — the same layouts and encodings, node for node, the same bytes (non-nullable 8-bit
+        // values have U8 codes, as Rust sizes the codes for the values' range plus a null entry:
+        // Java's U16 codes had the same tree), and vortex-jni reads Java's file back to the same
+        // values as its own
         assertThat(EncodingTrees.of(java)).isEqualTo(EncodingTrees.of(jni));
         assertThat(EncodingTrees.flatBuffersHex(java)).isEqualTo(EncodingTrees.flatBuffersHex(jni));
         assertThat(dictLayouts(EncodingTrees.of(java))).isPositive();
         assertThat(readWithJni(java)).isEqualTo(readWithJni(jni));
     }
 
+    /// A narrow column, nullable when `valid` is not `null`.
     private static Path writeJavaNullable(Path tmp, PType ptype, int[] values, boolean[] valid) throws IOException {
         Path file = tmp.resolve("java.vortex");
         ColumnName col = ColumnName.of("v");
-        DType.Struct schema = DType.structBuilder().field(col, new DType.Primitive(ptype, true)).build();
+        DType.Struct schema = DType.structBuilder().field(col, new DType.Primitive(ptype, valid != null)).build();
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             for (int from = 0; from < values.length; from += CHUNK) {
@@ -219,7 +228,11 @@ class DictLayoutInteropIntegrationTest {
                         yield a;
                     }
                 };
-                w.writeChunk(Map.of(col, new NullableData(chunk, java.util.Arrays.copyOfRange(valid, from, from + CHUNK))));
+                Object data = chunk;
+                if (valid != null) {
+                    data = new NullableData(chunk, java.util.Arrays.copyOfRange(valid, from, from + CHUNK));
+                }
+                w.writeChunk(Map.of(col, data));
             }
         }
         return file;
@@ -233,7 +246,7 @@ class DictLayoutInteropIntegrationTest {
             case U16 -> new ArrowType.Int(16, false);
             default -> new ArrowType.Int(16, true);
         };
-        Schema arrow = new Schema(List.of(Field.nullable("v", type)));
+        Schema arrow = new Schema(List.of(valid != null ? Field.nullable("v", type) : Field.notNullable("v", type)));
         try (VortexWriter w = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR).build()) {
             for (int from = 0; from < values.length; from += CHUNK) {
                 try (VectorSchemaRoot root = VectorSchemaRoot.create(arrow, ALLOCATOR)) {
@@ -241,7 +254,7 @@ class DictLayoutInteropIntegrationTest {
                     root.allocateNew();
                     for (int i = 0; i < CHUNK; i++) {
                         int at = from + i;
-                        if (!valid[at]) {
+                        if (valid != null && !valid[at]) {
                             v.setNull(i);
                             continue;
                         }

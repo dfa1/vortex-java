@@ -213,9 +213,9 @@ class DictColumnStateTest {
 
     @ParameterizedTest
     @EnumSource(value = PType.class, names = {"I8", "U8"})
-    void ingestDictChunk_closesAnEightBitDictionaryWhereItsU8CodesEnd(PType ptype) {
-        // Given — every byte value, then a null: a 257th entry, which U8 codes cannot name (Rust
-        // panics there; Java starts a new dictionary)
+    void ingestDictChunk_aNullableEightBitDictionaryHoldsEveryValueAndANull(PType ptype) {
+        // Given — every byte value, then a null: 257 entries, which U8 codes could not name, so
+        // the codes are U16 (Rust 0.91 counts the null entry when it sizes them)
         var sut = new DictColumnState(new DType.Primitive(ptype, true), true);
         byte[] all = new byte[257];
         boolean[] validity = new boolean[257];
@@ -228,9 +228,22 @@ class DictColumnStateTest {
         int result = sut.ingestDictChunk(new NullableData(all, validity));
 
         // Then
-        assertThat(sut.codesPType()).isEqualTo(PType.U8);
-        assertThat(result).isEqualTo(256);
-        assertThat(sut.cardinality()).isEqualTo(256);
+        assertThat(sut.codesPType()).isEqualTo(PType.U16);
+        assertThat(result).isEqualTo(257);
+        assertThat(sut.cardinality()).isEqualTo(257);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8"})
+    void codesPType_isU8OverNonNullableEightBitValues(PType ptype) {
+        // Given
+        var sut = new DictColumnState(new DType.Primitive(ptype, false), true);
+
+        // When
+        PType result = sut.codesPType();
+
+        // Then
+        assertThat(result).isEqualTo(PType.U8);
     }
 
     @ParameterizedTest
