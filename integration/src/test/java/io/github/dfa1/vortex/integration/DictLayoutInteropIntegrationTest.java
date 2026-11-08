@@ -15,6 +15,9 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -197,11 +200,16 @@ class DictLayoutInteropIntegrationTest {
         // Then — the same layouts and encodings, node for node, the same bytes (non-nullable 8-bit
         // values have U8 codes, as Rust sizes the codes for the values' range plus a null entry:
         // Java's U16 codes had the same tree), and vortex-jni reads Java's file back to the same
-        // values as its own
+        // values as its own, and Java reads its own back (U8 codes included) to the values written
         assertThat(EncodingTrees.of(java)).isEqualTo(EncodingTrees.of(jni));
         assertThat(EncodingTrees.flatBuffersHex(java)).isEqualTo(EncodingTrees.flatBuffersHex(jni));
         assertThat(dictLayouts(EncodingTrees.of(java))).isPositive();
         assertThat(readWithJni(java)).isEqualTo(readWithJni(jni));
+        List<Integer> written = new ArrayList<>();
+        for (int row = 0; row < values.length; row++) {
+            written.add(nullable && !valid[row] ? null : values[row] & (ptype.bits() == 8 ? 0xFF : 0xFFFF));
+        }
+        assertThat(readBitsWithJava(java)).isEqualTo(written);
     }
 
     /// A narrow column, nullable when `valid` is not `null`.
@@ -275,6 +283,31 @@ class DictLayoutInteropIntegrationTest {
             }
         }
         return file;
+    }
+
+    /// Every row of narrow column `v` as Java reads it, its bits zero-extended, `null` for a null row.
+    private static List<Integer> readBitsWithJava(Path file) throws IOException {
+        List<Integer> out = new ArrayList<>();
+        try (var reader = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = reader.scan(ScanOptions.all())) {
+            while (iter.hasNext()) {
+                try (var chunk = iter.next()) {
+                    MaskedArray.Unwrapped column = MaskedArray.unwrap(chunk.column(ColumnName.of("v")));
+                    for (long i = 0; i < column.inner().length(); i++) {
+                        Integer bits = switch (column.inner()) {
+                            case ByteArray b -> b.getByte(i) & 0xFF;
+                            case ShortArray s -> s.getShort(i) & 0xFFFF;
+                            default -> throw new IllegalStateException(column.inner().getClass().getName());
+                        };
+                        if (column.validity() != null && !column.validity().getBoolean(i)) {
+                            bits = null;
+                        }
+                        out.add(bits);
+                    }
+                }
+            }
+        }
+        return out;
     }
 
     /// Every row of column `v` as vortex-jni reads it, `null` for a null row.
