@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
@@ -21,27 +22,35 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 /// fixes each cardinality / ratio edge.
 class DictColumnStateTest {
 
-    // ── admitsPtype ──────────────────────────────────────────────────────────────
-
-    static Stream<Arguments> admittedPtypes() {
-        return Stream.of(
-                // exclusions: a U8/U16 code is no smaller than the value, and F16/F32 prefer ALP
-                arguments(PType.F32, false), arguments(PType.F16, false), arguments(PType.I8, false),
-                arguments(PType.U8, false), arguments(PType.I16, false), arguments(PType.U16, false),
-                arguments(PType.I32, true), arguments(PType.U32, true), arguments(PType.I64, true),
-                arguments(PType.U64, true), arguments(PType.F64, true));
-    }
+    // ── every primitive ptype ──────────────────────────────────────────────────────
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("admittedPtypes")
-    void admitsPtype(PType ptype, boolean expected) {
-        // Given — a column of `ptype`
+    @EnumSource(PType.class)
+    void ingestThenReconstruct_everyPtype_roundTripsInItsCarrier(PType ptype) {
+        // Given — a nullable chunk of 3 distinct values and a null in the ptype's own carrier. Rust's
+        // dict layout admits every primitive (#651: a nullable I16 was never probed), so each carrier
+        // must survive ingest, the dictionary entries, and a demotion's reconstruction
+        Object values = switch (ptype) {
+            case I8, U8 -> new byte[]{7, 8, 0, 7, 9};
+            case I16, U16, F16 -> new short[]{7, 8, 0, 7, 9};
+            case I32, U32 -> new int[]{7, 8, 0, 7, 9};
+            case I64, U64 -> new long[]{7, 8, 0, 7, 9};
+            case F32 -> new float[]{7, 8, 0, 7, 9};
+            case F64 -> new double[]{7, 8, 0, 7, 9};
+        };
+        boolean[] validity = {true, true, false, true, true};
+        var sut = new DictColumnState(new DType.Primitive(ptype, true));
 
         // When
-        boolean result = DictColumnState.admitsPtype(ptype);
+        int ingested = sut.ingestDictChunk(new NullableData(values, validity));
+        Object result = sut.reconstructChunk(sut.buildInverseMap(), 0);
 
-        // Then
-        assertThat(result).isEqualTo(expected);
+        // Then — every row ingested, three values plus the null entry, the chunk rebuilt exactly
+        assertThat(ingested).isEqualTo(5);
+        assertThat(java.lang.reflect.Array.getLength(sut.uniques())).isEqualTo(4);
+        assertThat(result).isInstanceOf(NullableData.class);
+        assertThat(((NullableData) result).values()).isEqualTo(values);
+        assertThat(((NullableData) result).validity()).isEqualTo(validity);
     }
 
     // ── isVarBinDictCandidate ──────────────────────────────────────────────────────

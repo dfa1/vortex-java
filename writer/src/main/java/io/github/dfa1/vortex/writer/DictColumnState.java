@@ -169,36 +169,14 @@ final class DictColumnState {
             }
             return out;
         }
-        return switch (ptype) {
-            case I32, U32 -> {
-                int[] a = new int[n];
-                for (int i = 0; i < n; i++) {
-                    if (i != nullCode) {
-                        a[i] = (Integer) inverse[i];
-                    }
-                }
-                yield a;
-            }
-            case I64, U64 -> {
-                long[] a = new long[n];
-                for (int i = 0; i < n; i++) {
-                    if (i != nullCode) {
-                        a[i] = (Long) inverse[i];
-                    }
-                }
-                yield a;
-            }
-            case F64 -> {
-                double[] a = new double[n];
-                for (int i = 0; i < n; i++) {
-                    if (i != nullCode) {
-                        a[i] = (Double) inverse[i];
-                    }
-                }
-                yield a;
-            }
-            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
-        };
+        // every code but the null entry's names a value; its slot keeps the carrier's zero
+        short[] codes = new short[n];
+        boolean[] valid = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            codes[i] = (short) i;
+            valid[i] = i != nullCode;
+        }
+        return reconstructPrimitiveValues(ptype, codes, valid, inverse);
     }
 
     /// Ingests the leading rows of a primitive chunk that fit this dictionary under Rust's constraints
@@ -262,8 +240,11 @@ final class DictColumnState {
 
     private static Object prefix(Object values, int n) {
         return switch (values) {
+            case byte[] a -> Arrays.copyOf(a, n);
+            case short[] a -> Arrays.copyOf(a, n);
             case int[] a -> Arrays.copyOf(a, n);
             case long[] a -> Arrays.copyOf(a, n);
+            case float[] a -> Arrays.copyOf(a, n);
             case double[] a -> Arrays.copyOf(a, n);
             default -> throw new IllegalStateException("not a global dict carrier: " + values.getClass());
         };
@@ -401,42 +382,48 @@ final class DictColumnState {
     }
 
     /// The chunk's values as raw bit patterns, keyed so that two rows share a pattern exactly when
-    /// their boxed values are `equals` (hence `doubleToLongBits`, which folds every NaN together
-    /// and keeps `-0.0` apart from `0.0`, just like `Double.equals`). I64/U64 arrays are used in
-    /// place; only the narrower carriers pay for a widened copy.
+    /// their boxed values are `equals` (hence `doubleToLongBits` / `floatToIntBits`, which fold every
+    /// NaN together and keep `-0.0` apart from `0.0`, just like `Double.equals`). I64/U64 arrays are
+    /// used in place; only the narrower carriers pay for a widened copy. F16 keys on its raw bits.
     private static long[] rawBits(Object values, PType ptype, int len) {
+        if (ptype == PType.I64 || ptype == PType.U64) {
+            return (long[]) values;
+        }
+        long[] out = new long[len];
         switch (ptype) {
-            case I64, U64 -> {
-                return (long[]) values;
-            }
-            case I32, U32 -> {
-                int[] src = (int[]) values;
-                long[] out = new long[len];
+            case I8, U8 -> {
+                byte[] src = (byte[]) values;
                 for (int i = 0; i < len; i++) {
                     out[i] = src[i];
                 }
-                return out;
+            }
+            case I16, U16, F16 -> {
+                short[] src = (short[]) values;
+                for (int i = 0; i < len; i++) {
+                    out[i] = src[i];
+                }
+            }
+            case I32, U32 -> {
+                int[] src = (int[]) values;
+                for (int i = 0; i < len; i++) {
+                    out[i] = src[i];
+                }
+            }
+            case F32 -> {
+                float[] src = (float[]) values;
+                for (int i = 0; i < len; i++) {
+                    out[i] = Float.floatToIntBits(src[i]);
+                }
             }
             case F64 -> {
                 double[] src = (double[]) values;
-                long[] out = new long[len];
                 for (int i = 0; i < len; i++) {
                     out[i] = Double.doubleToLongBits(src[i]);
                 }
-                return out;
             }
-            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
+            default -> throw new IllegalStateException("unreachable: " + ptype);
         }
-    }
-
-    /// Inverse of [#rawBits] for a single already-boxed dictionary key.
-    private static long valueBits(PType ptype, Object value) {
-        return switch (ptype) {
-            case I32, U32 -> (Integer) value;
-            case I64, U64 -> (Long) value;
-            case F64 -> Double.doubleToLongBits((Double) value);
-            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
-        };
+        return out;
     }
 
     /// Inverse of this column's first-seen value-to-code map: `inverse[code]` is the value with that
@@ -478,6 +465,24 @@ final class DictColumnState {
     private static Object reconstructPrimitiveValues(PType ptype, short[] codes, boolean[] validity, Object[] inverse) {
         int len = codes.length;
         return switch (ptype) {
+            case I8, U8 -> {
+                byte[] arr = new byte[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        arr[i] = (Byte) inverse[codes[i] & 0xFFFF];
+                    }
+                }
+                yield arr;
+            }
+            case I16, U16, F16 -> {
+                short[] arr = new short[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        arr[i] = (Short) inverse[codes[i] & 0xFFFF];
+                    }
+                }
+                yield arr;
+            }
             case I32, U32 -> {
                 int[] arr = new int[len];
                 for (int i = 0; i < len; i++) {
@@ -496,6 +501,15 @@ final class DictColumnState {
                 }
                 yield arr;
             }
+            case F32 -> {
+                float[] arr = new float[len];
+                for (int i = 0; i < len; i++) {
+                    if (validity == null || validity[i]) {
+                        arr[i] = (Float) inverse[codes[i] & 0xFFFF];
+                    }
+                }
+                yield arr;
+            }
             case F64 -> {
                 double[] arr = new double[len];
                 for (int i = 0; i < len; i++) {
@@ -505,7 +519,6 @@ final class DictColumnState {
                 }
                 yield arr;
             }
-            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
         };
     }
 
@@ -542,25 +555,6 @@ final class DictColumnState {
         return seen.size() * 2 < data.length;
     }
 
-    /// Whether the dict layout reads a column of `ptype`: only the carriers the reader's lazy dict
-    /// decode supports (I32/U32, I64/U64, F64) are admitted.
-    /// - I8/U8/I16/U16 excluded: dict gives little/no benefit (a U8/U16 code is no smaller than the
-    ///   value), the Rust compressor does not dict them either (verified by
-    ///   RustWritesJavaReadsIntegrationTest#jniWriter_javaReader_lowCardinalityI16), and the reader
-    ///   cannot decode a narrow-int dict -- emitting one produced an unreadable file.
-    /// - F16/F32 excluded: no measured workload; ALP usually wins.
-    ///
-    /// Whether it is worth it is Rust's probe, in the writer: the cascade must pick a dict for the
-    /// column's first 8192 rows.
-    ///
-    /// @param ptype the column's primitive type
-    /// @return `true` for a type the dict layout reads
-    static boolean admitsPtype(PType ptype) {
-        return switch (ptype) {
-            case I32, U32, I64, U64, F64 -> true;
-            default -> false;
-        };
-    }
 
     /// Whether a sample of a primitive column is dictionary material when there is no cascade to ask:
     /// Rust's dict scheme skips a sample with more than half of its values distinct, and a single
@@ -586,26 +580,28 @@ final class DictColumnState {
         return distinct > 1 && distinct * 2 < n;
     }
 
-    /// Length of a global-dict column's chunk array. Only the dict-admitted carriers ([#admitsPtype])
-    /// — I32/U32, I64/U64, F64 — reach here; narrow-int and F16/F32 ptypes are rejected upstream.
+    /// Length of a global-dict column's chunk array, the carrier of its `ptype` (F16 as its raw
+    /// `short` bits).
     static int primitiveArrayLen(Object data, PType ptype) {
         return switch (ptype) {
+            case I8, U8 -> ((byte[]) data).length;
+            case I16, U16, F16 -> ((short[]) data).length;
             case I32, U32 -> ((int[]) data).length;
             case I64, U64 -> ((long[]) data).length;
+            case F32 -> ((float[]) data).length;
             case F64 -> ((double[]) data).length;
-            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
         };
     }
 
-    /// Boxed element `i` of a global-dict column's chunk array. Only the dict-admitted carriers
-    /// ([#admitsPtype]) — I32/U32, I64/U64, F64 — reach here; narrow-int and F16/F32 ptypes are
-    /// rejected upstream.
+    /// Boxed element `i` of a global-dict column's chunk array, the carrier of its `ptype`.
     static Object readPrimitiveElement(Object data, PType ptype, int i) {
         return switch (ptype) {
+            case I8, U8 -> ((byte[]) data)[i];
+            case I16, U16, F16 -> ((short[]) data)[i];
             case I32, U32 -> ((int[]) data)[i];
             case I64, U64 -> ((long[]) data)[i];
+            case F32 -> ((float[]) data)[i];
             case F64 -> ((double[]) data)[i];
-            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
         };
     }
 
