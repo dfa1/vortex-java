@@ -34,6 +34,11 @@ final class DictValueOrder {
     ///                  reserves on every insert, so a duplicate on a full table grows it
     /// @return `rank[firstSeenCode]` = Rust's code
     static int[] ranks(PType ptype, long[] raw, int dictSize, int len, boolean fullGrows) {
+        return ranks(ptype, raw, dictSize, len, fullGrows, GROUP_WIDTH);
+    }
+
+    /// [#ranks(PType, long[], int, int, boolean)] for a given `hashbrown` group width.
+    static int[] ranks(PType ptype, long[] raw, int dictSize, int len, boolean fullGrows, int groupWidth) {
         if (dictSize == 0) {
             return new int[0];
         }
@@ -45,36 +50,15 @@ final class DictValueOrder {
         Table table;
         if (ptype.isFloating()) {
             // HashSet<NativeValue<T>>: one entry is the float itself
-            table = new Table(hashes, len / 2, ptype.byteSize());
+            table = new Table(hashes, len / 2, ptype.byteSize(), groupWidth);
             for (int c = 0; c < dictSize; c++) {
                 table.insert(c);
             }
             if (fullGrows && table.growthLeft == 0) {
                 table.grow();
             }
-        } else if (isDense(ptype, raw, dictSize, len)) {
-            // counted by offset from the min, then collected in ascending order into a new map
-            Integer[] ascending = new Integer[dictSize];
-            for (int c = 0; c < dictSize; c++) {
-                ascending[c] = c;
-            }
-            Arrays.sort(ascending, (a, b) -> compare(ptype, raw[a], raw[b]));
-            table = new Table(hashes, 0, entrySize(ptype));
-            for (int c : ascending) {
-                table.insert(c);
-            }
-        } else {
-            table = new Table(hashes, len / 2, entrySize(ptype));
-            for (int c = 0; c < dictSize; c++) {
-                table.insert(c);
-            }
+            return table.ranks();
         }
-        return table.ranks();
-    }
-
-    /// Rust's `DistinctCounter::new`: a dense counter when the valid values span at most 256
-    /// values, or at most 65,536 and no more than the array's length.
-    private static boolean isDense(PType ptype, long[] raw, int dictSize, int len) {
         long min = raw[0];
         long max = raw[0];
         for (int c = 1; c < dictSize; c++) {
@@ -85,10 +69,30 @@ final class DictValueOrder {
                 max = raw[c];
             }
         }
-        // the wrapping difference is exact: the true one is below 2^64
-        long span = max - min;
-        return Long.compareUnsigned(span, 255) <= 0
-                || (Long.compareUnsigned(span, 65_535) <= 0 && span + 1 <= len);
+        // the difference within the type's width is exact, as the true one is below 2^bits; the
+        // mask undoes the sign extension of a narrow unsigned value with its top bit set
+        long span = (max - min) & widthMask;
+        if (Long.compareUnsigned(span, 255) <= 0 || (Long.compareUnsigned(span, 65_535) <= 0 && span + 1 <= len)) {
+            // Rust's dense counter (`DistinctCounter::new`): counted by offset from the min, then
+            // collected in ascending order into a new map
+            int[] codeAt = new int[(int) span + 1];
+            Arrays.fill(codeAt, -1);
+            for (int c = 0; c < dictSize; c++) {
+                codeAt[(int) ((raw[c] - min) & widthMask)] = c;
+            }
+            table = new Table(hashes, 0, entrySize(ptype), groupWidth);
+            for (int code : codeAt) {
+                if (code >= 0) {
+                    table.insert(code);
+                }
+            }
+        } else {
+            table = new Table(hashes, len / 2, entrySize(ptype), groupWidth);
+            for (int c = 0; c < dictSize; c++) {
+                table.insert(c);
+            }
+        }
+        return table.ranks();
     }
 
     private static int compare(PType ptype, long a, long b) {
@@ -119,6 +123,7 @@ final class DictValueOrder {
 
         private final long[] hashes;
         private final int entrySize;
+        private final int groupWidth;
         private final long[] bucketOf;
         // codes in insertion order, which the dense path does not take in code order
         private final int[] inserted;
@@ -127,9 +132,10 @@ final class DictValueOrder {
         private int items;
         private long growthLeft;
 
-        Table(long[] hashes, long capacity, int entrySize) {
+        Table(long[] hashes, long capacity, int entrySize, int groupWidth) {
             this.hashes = hashes;
             this.entrySize = entrySize;
+            this.groupWidth = groupWidth;
             this.bucketOf = new long[hashes.length];
             this.inserted = new int[hashes.length];
             this.buckets = capacity == 0 ? 1 : capacityToBuckets(capacity);
@@ -191,13 +197,15 @@ final class DictValueOrder {
             bucketOf[code] = index;
         }
 
-        /// `capacity_to_buckets`.
+        /// `capacity_to_buckets`. The minimum capacities of 7 and 14 only change the table below 8
+        /// rows (an `F16` set on x86), where no dictionary is smaller than the plain array, so no
+        /// written file shows them; they are kept to replay Rust's table as it is.
         private long capacityToBuckets(long capacity) {
             if (capacity < 15) {
                 long minCapacity = 3;
-                if (GROUP_WIDTH == 16 && entrySize <= 1) {
+                if (groupWidth == 16 && entrySize <= 1) {
                     minCapacity = 14;
-                } else if ((GROUP_WIDTH == 16 && entrySize <= 3) || (GROUP_WIDTH == 8 && entrySize <= 1)) {
+                } else if ((groupWidth == 16 && entrySize <= 3) || (groupWidth == 8 && entrySize <= 1)) {
                     minCapacity = 7;
                 }
                 long cap = Math.max(minCapacity, capacity);
@@ -214,7 +222,7 @@ final class DictValueOrder {
             return bucketMask < 8 ? bucketMask : (bucketMask + 1) / 8 * 7;
         }
 
-        /// `find_insert_index`: groups of [#GROUP_WIDTH] control bytes from `hash & mask`, in
+        /// `find_insert_index`: groups of `groupWidth` control bytes from `hash & mask`, in
         /// triangular steps. A table smaller than a group reads `EMPTY` past its end, then its
         /// mirrored bytes; when that lands on a full bucket, the first empty one wins
         /// (`fix_insert_index`).
@@ -223,7 +231,7 @@ final class DictValueOrder {
             long pos = hash & mask;
             long stride = 0;
             while (true) {
-                for (int bit = 0; bit < GROUP_WIDTH; bit++) {
+                for (int bit = 0; bit < groupWidth; bit++) {
                     if (isEmptyCtrl(pos + bit)) {
                         long index = (pos + bit) & mask;
                         if (!isFull(index)) {
@@ -232,7 +240,7 @@ final class DictValueOrder {
                         return firstEmpty();
                     }
                 }
-                stride += GROUP_WIDTH;
+                stride += groupWidth;
                 pos = (pos + stride) & mask;
             }
         }
@@ -243,10 +251,10 @@ final class DictValueOrder {
             if (ctrl < buckets) {
                 return !isFull(ctrl);
             }
-            if (buckets >= GROUP_WIDTH) {
+            if (buckets >= groupWidth) {
                 return !isFull(ctrl - buckets);
             }
-            return ctrl < GROUP_WIDTH || !isFull(ctrl - GROUP_WIDTH);
+            return ctrl < groupWidth || !isFull(ctrl - groupWidth);
         }
 
         private boolean isFull(long index) {

@@ -57,6 +57,51 @@ class DictValueOrderTest {
         assertThat(sorted).isEqualTo(IntStream.range(0, raw.length).toArray());
     }
 
+    /// An unsigned byte arrives sign-extended, so 200 is -56: its span from 10 read as negative,
+    /// that is huge, and sent a narrow `U8` column down the hashed path. It must order as the same
+    /// numbers in an `I16`, which hash to the same bits and also count densely.
+    @Test
+    void unsignedByteWithTopBitSetCountsDensely() {
+        // Given
+        long[] values = new Random(9).longs(0, 256).distinct().limit(100).toArray();
+        long[] asU8 = Arrays.stream(values).map(v -> (byte) v).toArray();
+
+        // When
+        int[] result = DictValueOrder.ranks(PType.U8, asU8, asU8.length, 8192, false);
+
+        // Then
+        assertThat(result).isEqualTo(DictValueOrder.ranks(PType.I16, values, values.length, 8192, false));
+    }
+
+    /// 24 keys hashing to buckets 0 to 3 of 64 fill a run past 16 buckets: x86 then probes the
+    /// next 16, other hosts skip to the group after next. The interop test runs this input on each
+    /// CI host against its own vortex-jni.
+    @Test
+    void groupWidthPlacesARunPastSixteenBucketsDifferently() {
+        // Given
+        long[] raw = collidingInts(24, 64);
+
+        // When
+        int[] result = DictValueOrder.ranks(PType.I32, raw, raw.length, 64, false, 16);
+
+        // Then
+        assertThat(result).isNotEqualTo(DictValueOrder.ranks(PType.I32, raw, raw.length, 64, false, 8));
+    }
+
+    /// 28 distinct floats fill a set sized for 56 rows exactly; a later duplicate grows it, so
+    /// Rust iterates a table twice the size.
+    @Test
+    void duplicateOnAFullFloatSetGrowsIt() {
+        // Given
+        long[] raw = new Random(13).doubles(28).mapToLong(Double::doubleToRawLongBits).toArray();
+
+        // When
+        int[] result = DictValueOrder.ranks(PType.F64, raw, raw.length, 56, true);
+
+        // Then
+        assertThat(result).isNotEqualTo(DictValueOrder.ranks(PType.F64, raw, raw.length, 56, false));
+    }
+
     @Test
     void noValuesNoRanks() {
         // When
@@ -76,5 +121,21 @@ class DictValueOrderTest {
 
         // Then
         assertThat(result).isEqualTo(expected);
+    }
+
+    /// `count` wide `I32` values whose `FxHasher` hash falls in buckets 0 to 3 of a table of
+    /// `buckets`, as `DictValueOrderInteropIntegrationTest#zoneMinsPilingUpPastAGroup` draws them.
+    private static long[] collidingInts(int count, int buckets) {
+        Random random = new Random(17);
+        long[] out = new long[count];
+        int n = 0;
+        while (n < count) {
+            int v = random.nextInt(1 << 29);
+            long hash = Long.rotateLeft((v & 0xFFFFFFFFL) * 0xf1357aea2e62a9c5L, 26);
+            if ((hash & (buckets - 1)) < 4) {
+                out[n++] = v;
+            }
+        }
+        return out;
     }
 }
