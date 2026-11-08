@@ -968,7 +968,7 @@ class JavaWritesRustReadsIntegrationTest {
         // When
         List<Object> result = readColumnFiltered(file, "k", Expression.binary(Expression.BinaryOp.EQ,
                 Expression.column("k"), Expression.literal(target)));
-        io.github.dfa1.vortex.reader.ArrayStats stats;
+        io.github.dfa1.vortex.core.model.ArrayStats stats;
         try (var reader = io.github.dfa1.vortex.reader.VortexReader.open(file)) {
             stats = reader.columnStats().get(ColumnName.of("k"));
         }

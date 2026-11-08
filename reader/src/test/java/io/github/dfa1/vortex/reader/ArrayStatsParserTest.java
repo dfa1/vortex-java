@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -10,42 +11,15 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class ArrayStatsTest {
+class ArrayStatsParserTest {
 
     @Nested
-    class Empty {
-
-        @Test
-        void returnsCanonicalInstance() {
-            // Given / When / Then — empty() is a singleton; callers may identity-compare.
-            assertThat(ArrayStats.empty()).isSameAs(ArrayStats.empty());
-        }
-
-        @Test
-        void hasAllNullComponents() {
-            // Given / When
-            ArrayStats sut = ArrayStats.empty();
-
-            // Then
-            assertThat(sut.min()).isNull();
-            assertThat(sut.max()).isNull();
-            assertThat(sut.sum()).isNull();
-            assertThat(sut.isSorted()).isNull();
-            assertThat(sut.isStrictSorted()).isNull();
-            assertThat(sut.isConstant()).isNull();
-            assertThat(sut.nullCount()).isNull();
-            assertThat(sut.uncompressedSizeInBytes()).isNull();
-            assertThat(sut.nanCount()).isNull();
-        }
-    }
-
-    @Nested
-    class FromFbs {
+    class Parse {
 
         @Test
         void nullFbs_returnsEmpty() {
             // Given / When
-            ArrayStats sut = ArrayStats.fromFbs(null);
+            ArrayStats sut = ArrayStatsParser.parse(null);
 
             // Then — same instance as empty(), not just an equal one
             assertThat(sut).isSameAs(ArrayStats.empty());
@@ -57,7 +31,7 @@ class ArrayStatsTest {
             io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs = buildFbs(null, null);
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut).isSameAs(ArrayStats.empty());
@@ -71,7 +45,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofInt64Value(42L).encode());
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut.min()).isEqualTo(-7L);
@@ -86,7 +60,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofUint64Value(Long.MAX_VALUE).encode());
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut.min()).isEqualTo(0L);
@@ -101,7 +75,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofF32Value(3.25f).encode());
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut.min()).isEqualTo(1.5f);
@@ -116,7 +90,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofF64Value(99.875).encode());
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut.min()).isEqualTo(-0.5);
@@ -131,7 +105,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofBoolValue(true).encode());
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut.min()).isEqualTo(false);
@@ -146,7 +120,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofStringValue("omega").encode());
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut.min()).isEqualTo("alpha");
@@ -162,7 +136,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofBytesValue("zz".getBytes()).encode());
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut.min()).isEqualTo("aa");
@@ -176,7 +150,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofInt64Value(1L).encode(), null);
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut.min()).isEqualTo(1L);
@@ -189,7 +163,7 @@ class ArrayStatsTest {
             io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs = buildFbs(new byte[0], new byte[0]);
 
             // When
-            ArrayStats sut = ArrayStats.fromFbs(fbs);
+            ArrayStats sut = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(sut).isSameAs(ArrayStats.empty());
@@ -217,7 +191,7 @@ class ArrayStatsTest {
             var fbs = io.github.dfa1.vortex.core.fbs.FbsArrayStats.getRootAsFbsArrayStats(builder.dataSegment());
 
             // When
-            ArrayStats result = ArrayStats.fromFbs(fbs);
+            ArrayStats result = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(result).isEqualTo(
@@ -233,7 +207,7 @@ class ArrayStatsTest {
                     (int) io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact);
 
             // When
-            ArrayStats result = ArrayStats.fromFbs(fbs);
+            ArrayStats result = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(result.minExact()).isTrue();
@@ -249,7 +223,7 @@ class ArrayStatsTest {
                     ProtoScalarValue.ofStringValue("omega").encode());
 
             // When
-            ArrayStats result = ArrayStats.fromFbs(fbs);
+            ArrayStats result = ArrayStatsParser.parse(fbs);
 
             // Then
             assertThat(result.min()).isEqualTo("alpha");
@@ -267,7 +241,7 @@ class ArrayStatsTest {
                     2);
 
             // When / Then
-            assertThatThrownBy(() -> ArrayStats.fromFbs(fbs))
+            assertThatThrownBy(() -> ArrayStatsParser.parse(fbs))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("corrupted min_precision");
         }
@@ -278,7 +252,7 @@ class ArrayStatsTest {
             io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs = buildFbs(new byte[]{(byte) 0x80}, null);
 
             // When / Then
-            assertThatThrownBy(() -> ArrayStats.fromFbs(fbs))
+            assertThatThrownBy(() -> ArrayStatsParser.parse(fbs))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("invalid scalar value");
         }

@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.VortexReader;

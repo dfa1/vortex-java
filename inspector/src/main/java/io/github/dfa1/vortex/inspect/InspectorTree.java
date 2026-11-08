@@ -2,11 +2,12 @@ package io.github.dfa1.vortex.inspect;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.ArrayStatsParser;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -408,7 +409,7 @@ public record InspectorTree(
         }
         Set<String> nested = new LinkedHashSet<>();
         collectEncodings(root, arraySpecs, nested, new int[]{0});
-        return new Peek(resolveEncodingId(arraySpecs, root.encoding()), ArrayStats.fromFbs(root.stats()),
+        return new Peek(resolveEncodingId(arraySpecs, root.encoding()), ArrayStatsParser.parse(root.stats()),
                 Set.copyOf(nested));
     }
 

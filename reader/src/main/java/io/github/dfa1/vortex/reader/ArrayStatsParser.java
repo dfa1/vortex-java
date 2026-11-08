@@ -1,63 +1,30 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.fbs.FbsArrayStats;
+import io.github.dfa1.vortex.core.fbs.FbsPrecision;
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 
-/// Per-array statistics embedded in the encoding tree: one component per field of the wire
-/// `ArrayStats` table (Rust's `Stat` enum). A bool column's true count is its `sum`, as in Rust.
-///
-/// `min`/`max` may be inexact (Rust's `Precision::Inexact`): still a valid bound, so pruning on a
-/// range may use it, but not the true extreme (Rust's flat writer truncates a string bound longer
-/// than 64 bytes). Anything that reports the value, or needs `min == max`, requires
-/// `minExact`/`maxExact`.
-///
-/// The counts are `u64` on the wire, read as a signed `Long`.
-///
-/// @param min                     minimum value in the array, or `null` if unknown
-/// @param minExact                `true` if `min` is the exact minimum, not only a lower bound
-/// @param max                     maximum value in the array, or `null` if unknown
-/// @param maxExact                `true` if `max` is the exact maximum, not only an upper bound
-/// @param sum                     sum of values (`Long` for integer and bool columns, `Double` for floats), or `null` if unknown
-/// @param isSorted                `true` if the values are sorted ascending with nulls first (Rust orders null lowest), or `null` if unknown
-/// @param isStrictSorted          `true` if also no two neighbors are equal, two nulls included, or `null` if unknown
-/// @param isConstant              `true` if every value is null, or none is and all are equal, or `null` if unknown
-/// @param nullCount               number of null values, or `null` if unknown
-/// @param uncompressedSizeInBytes the array's uncompressed size in bytes, or `null` if unknown
-/// @param nanCount                number of `NaN` values in a float column (`min` and `max` skip them), or `null` if unknown
-public record ArrayStats(
-        Object min,
-        boolean minExact,
-        Object max,
-        boolean maxExact,
-        Object sum,
-        Boolean isSorted,
-        Boolean isStrictSorted,
-        Boolean isConstant,
-        Long nullCount,
-        Long uncompressedSizeInBytes,
-        Long nanCount) {
-    private static final ArrayStats EMPTY =
-            new ArrayStats(null, false, null, false, null, null, null, null, null, null, null);
+/// Parses the wire `ArrayStats` FlatBuffer table into an [ArrayStats]: Rust's `from_flatbuffer`.
+public final class ArrayStatsParser {
 
-    /// Returns an empty stats instance with all fields set to `null`.
-    ///
-    /// @return an empty [ArrayStats] with no known statistics
-    public static ArrayStats empty() {
-        return EMPTY;
+    private ArrayStatsParser() {
     }
 
-    /// Parses stats from a FlatBuffers [io.github.dfa1.vortex.core.fbs.FbsArrayStats] table.
-    /// Returns an empty instance when `fbs` is `null` or carries no statistic.
+    /// Parses stats from a FlatBuffers [FbsArrayStats] table.
+    /// Returns [ArrayStats#empty()] when `fbs` is `null` or carries no statistic.
     ///
     /// @param fbs the FlatBuffers stats table, or `null`
     /// @return parsed stats, or an empty instance if no usable data is present
-    public static ArrayStats fromFbs(io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs) {
+    /// @throws VortexException if a precision field or a scalar value is malformed
+    public static ArrayStats parse(FbsArrayStats fbs) {
         if (fbs == null) {
-            return EMPTY;
+            return ArrayStats.empty();
         }
         Object min = decodeScalar(fbs.minAsSegment());
         Object max = decodeScalar(fbs.maxAsSegment());
@@ -73,15 +40,15 @@ public record ArrayStats(
                 fbs.hasNullCount() ? fbs.nullCount() : null,
                 fbs.hasUncompressedSizeInBytes() ? fbs.uncompressedSizeInBytes() : null,
                 fbs.hasNanCount() ? fbs.nanCount() : null);
-        return stats.equals(EMPTY) ? EMPTY : stats;
+        return stats.equals(ArrayStats.empty()) ? ArrayStats.empty() : stats;
     }
 
     /// Rust's `from_flatbuffer`: an absent precision is the FlatBuffer default `Inexact`, and any
     /// value other than `Inexact`/`Exact` is a corrupted field. Read only when its bound is present.
     private static boolean isExact(int precision, String field) {
         return switch (precision) {
-            case io.github.dfa1.vortex.core.fbs.FbsPrecision.Inexact -> false;
-            case io.github.dfa1.vortex.core.fbs.FbsPrecision.Exact -> true;
+            case FbsPrecision.Inexact -> false;
+            case FbsPrecision.Exact -> true;
             default -> throw new VortexException("corrupted " + field + " in array stats: " + precision);
         };
     }
