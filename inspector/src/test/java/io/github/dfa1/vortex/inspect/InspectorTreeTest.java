@@ -210,7 +210,7 @@ class InspectorTreeTest {
         assertThat(sut.root().children().get(1).fieldName()).contains("value");
         assertThat(sut.usedEncodings()).isEmpty();
         assertThat(sut.root().children().get(0).usedEncodings()).isEmpty();
-        assertThat(sut.root().children().getFirst().stats()).isEqualTo(io.github.dfa1.vortex.reader.ArrayStats.empty());
+        assertThat(sut.root().children().getFirst().stats()).isEqualTo(io.github.dfa1.vortex.core.model.ArrayStats.empty());
         // rawSegment is reserved for lazy peek; shallow build must never call it
         org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).rawSegment(
                 org.mockito.Mockito.any());
@@ -223,7 +223,7 @@ class InspectorTreeTest {
         // out without slicing, so navigating to them doesn't hit the network.
         Layout structLayout = struct(0, List.of());
         InspectorTree.Node node = new InspectorTree.Node(structLayout, java.util.Optional.empty(),
-                Set.of(), io.github.dfa1.vortex.reader.ArrayStats.empty(), List.of());
+                Set.of(), io.github.dfa1.vortex.core.model.ArrayStats.empty(), List.of());
 
         // When
         InspectorTree.Peek result = InspectorTree.peek(node, handle);
@@ -240,7 +240,7 @@ class InspectorTreeTest {
         // their FlatBuffer can be parsed; peek skips them rather than slicing garbage.
         Layout flat = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
         InspectorTree.Node node = new InspectorTree.Node(flat, java.util.Optional.empty(),
-                Set.of(), io.github.dfa1.vortex.reader.ArrayStats.empty(), List.of());
+                Set.of(), io.github.dfa1.vortex.core.model.ArrayStats.empty(), List.of());
         given(handle.footer()).willReturn(new io.github.dfa1.vortex.reader.Footer(
                 List.of(EncodingId.parse("vortex.flat")), List.of(),
                 List.of(new SegmentSpec(0, 100, (byte) 0, CompressionScheme.ZSTD)),

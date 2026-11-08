@@ -13,7 +13,7 @@ import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.layout.Layout;
-import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.SegmentSpec;

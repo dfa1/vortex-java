@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import org.junit.jupiter.api.Test;

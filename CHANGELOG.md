@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `EncodeContext` has a new last component, `trace`, so code calling its canonical constructor passes `EncodeTrace.NONE`. ([#601](https://github.com/dfa1/vortex-java/issues/601))
+- **Breaking:** `ArrayStats` moves from `io.github.dfa1.vortex.reader` to `io.github.dfa1.vortex.core.model`, and `ArrayStats.fromFbs` becomes `ArrayStatsParser.parse`. ([#664](https://github.com/dfa1/vortex-java/issues/664))
 
 ### Removed
 - `CompressorBuilder#seed(long)` of the `vortex-fsst` module: training takes Rust's fixed sample, not a seeded one. ([#583](https://github.com/dfa1/vortex-java/issues/583))

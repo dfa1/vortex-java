@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Zone;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

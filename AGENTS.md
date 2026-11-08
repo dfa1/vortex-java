@@ -36,7 +36,7 @@ fsst    — io.github.dfa1.vortex.fsst: standalone FSST (Fast Static Symbol Tabl
 core    — everything lives under `io.github.dfa1.vortex.core.*`:
           core.model    DType, DTypes, PType, TimeUnit, EncodingId, LayoutId, ColumnName, ExtensionId, TimeDtype, TimestampDtype,
                         ExtensionMetadata, OpaqueMetadata, TimeUnitMetadata, TimestampMetadata,
-                        EditionId, Edition, EditionFamily, Editions
+                        EditionId, Edition, EditionFamily, Editions, ArrayStats
           core.io       IoBounds, PTypeIO, VortexFormat, MemorySize
           core.error    VortexException
           core.jfr      JFR events (FileOpened, HttpRange, SegmentDecoded, SegmentEncoded, ChunkFilter, Compress, Candidate, Winner, …)
@@ -46,7 +46,7 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
                         VectorApiSimdOperations (opt-in via --add-modules jdk.incubator.vector; Rust-parity results,
                         see docs/compatibility.md), SimdOperationsSupport#preferred() (picks one)
           core.fbs / core.proto — generated wire codecs + their runtimes
-reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats, Zone,
+reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStatsParser, Zone,
           ScanOptions, ScanFilter; file internals (Footer, Trailer, PostscriptParser, …)
           reader.array  — Array + all subtypes (decode outputs)
           reader.decode — EncodingDecoder, DecodeContext, ArrayNode + *EncodingDecoder impls

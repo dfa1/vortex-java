@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import io.github.dfa1.vortex.core.jfr.ChunkFilterEvent;
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
@@ -1510,7 +1511,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             if (root == null) {
                 return ArrayStats.empty();
             }
-            return ArrayStats.fromFbs(root.stats());
+            return ArrayStatsParser.parse(root.stats());
         } catch (VortexException _) {
             // The FlatBuffer verifier rejected the stats segment: malformed stats read as none.
             return ArrayStats.empty();
