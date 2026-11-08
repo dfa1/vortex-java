@@ -46,20 +46,44 @@ final class EncodingTrees {
             if (flat == null) {
                 throw new IllegalStateException("no flat layout in " + file);
             }
-            SegmentSpec spec = reader.footer().segmentSpecs().get(flat.segments().getFirst());
-            MemorySegment seg = reader.rawSegment(spec);
-            int fbLen = seg.get(LE_INT, seg.byteSize() - 4L);
-            FbsArray array = FbsArray.getRootAsFbsArray(seg.asSlice(seg.byteSize() - 4L - fbLen, fbLen));
-            List<byte[]> out = new ArrayList<>();
-            long offset = 0;
-            for (int i = 0; i < array.buffersLength(); i++) {
-                offset += array.buffers(i).padding();
-                long length = array.buffers(i).length();
-                out.add(seg.asSlice(offset, length).toArray(ValueLayout.JAVA_BYTE));
-                offset += length;
-            }
-            return out;
+            return buffers(reader, flat);
         }
+    }
+
+    /// The raw buffers of every flat segment, depth first, each as hex: data and zone tables
+    /// alike, byte for byte, where [#of(Path)] compares only the encodings.
+    static List<List<String>> flatBuffersHex(Path file) throws IOException {
+        List<List<String>> out = new ArrayList<>();
+        try (VortexReader reader = VortexReader.open(file)) {
+            collectFlatBuffers(reader, reader.layout(), out);
+        }
+        return out;
+    }
+
+    private static void collectFlatBuffers(VortexReader reader, Layout layout, List<List<String>> out) {
+        if (layout.isFlat() && !layout.segments().isEmpty()) {
+            out.add(buffers(reader, layout).stream().map(b -> java.util.HexFormat.of().formatHex(b)).toList());
+            return;
+        }
+        for (Layout child : layout.children()) {
+            collectFlatBuffers(reader, child, out);
+        }
+    }
+
+    private static List<byte[]> buffers(VortexReader reader, Layout flat) {
+        SegmentSpec spec = reader.footer().segmentSpecs().get(flat.segments().getFirst());
+        MemorySegment seg = reader.rawSegment(spec);
+        int fbLen = seg.get(LE_INT, seg.byteSize() - 4L);
+        FbsArray array = FbsArray.getRootAsFbsArray(seg.asSlice(seg.byteSize() - 4L - fbLen, fbLen));
+        List<byte[]> out = new ArrayList<>();
+        long offset = 0;
+        for (int i = 0; i < array.buffersLength(); i++) {
+            offset += array.buffers(i).padding();
+            long length = array.buffers(i).length();
+            out.add(seg.asSlice(offset, length).toArray(ValueLayout.JAVA_BYTE));
+            offset += length;
+        }
+        return out;
     }
 
     private static Layout firstFlat(Layout layout) {

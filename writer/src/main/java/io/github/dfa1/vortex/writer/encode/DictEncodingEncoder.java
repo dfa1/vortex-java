@@ -450,10 +450,13 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         int[] codes = new int[len];
         long[] firstSeenRaw = new long[16];
         int dictSize = 0;
+        int lastNewRow = -1;
+        int lastValidRow = -1;
         for (int i = 0; i < len; i++) {
             if (validity != null && !validity[i]) {
                 continue;
             }
+            lastValidRow = i;
             long raw = rawBits(data, ptype, i);
             int code = index.get(canonicalBits(raw, ptype));
             if (code < 0) {
@@ -464,20 +467,28 @@ public final class DictEncodingEncoder implements EncodingEncoder {
                 }
                 firstSeenRaw[dictSize] = raw;
                 dictSize++;
+                lastNewRow = i;
             }
             codes[i] = code;
         }
 
-        if (validity != null) {
-            for (int i = 0; i < len; i++) {
-                if (!validity[i]) {
-                    codes[i] = Math.max(0, index.get(canonicalBits(rawBits(data, ptype, i), ptype)));
-                }
+        // The codes so far are first-seen; Rust's are the order of its distinct-values map
+        int[] rank = DictValueOrder.ranks(ptype, firstSeenRaw, dictSize, len, lastValidRow > lastNewRow);
+        long[] rustRaw = new long[dictSize];
+        for (int c = 0; c < dictSize; c++) {
+            rustRaw[rank[c]] = firstSeenRaw[c];
+        }
+        for (int i = 0; i < len; i++) {
+            if (validity == null || validity[i]) {
+                codes[i] = rank[codes[i]];
+            } else {
+                int code = index.get(canonicalBits(rawBits(data, ptype, i), ptype));
+                codes[i] = code < 0 ? 0 : rank[code];
             }
         }
         PType codePType = codePType(dictSize);
 
-        Object uniqueArray = buildUniqueArray(ptype, firstSeenRaw, dictSize);
+        Object uniqueArray = buildUniqueArray(ptype, rustRaw, dictSize);
         MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
 
         Object codesArr = PrimitiveArrays.fromIntsArray(codes, codePType, EncodingId.VORTEX_DICT);
@@ -494,12 +505,12 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         return PType.U32;
     }
 
-    /// Builds the dictionary pool from the first-seen raw bit patterns, in order.
+    /// Builds the dictionary pool from the distinct values' raw bit patterns, in order.
     ///
     /// @param ptype    the column's primitive type
-    /// @param raw      first-seen raw bits, indexed by code
+    /// @param raw      the distinct values' raw bits, indexed by code
     /// @param dictSize number of distinct values
-    /// @return a typed primitive array of the distinct values in first-seen order
+    /// @return a typed primitive array of the distinct values in code order
     private static Object buildUniqueArray(PType ptype, long[] raw, int dictSize) {
         return PrimitiveArrays.fromBitsArray(java.util.Arrays.copyOf(raw, dictSize), ptype, EncodingId.VORTEX_DICT);
     }
