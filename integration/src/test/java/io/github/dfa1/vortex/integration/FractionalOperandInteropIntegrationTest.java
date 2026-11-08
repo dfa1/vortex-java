@@ -56,7 +56,7 @@ class FractionalOperandInteropIntegrationTest {
         // When / Then
         assertThatThrownBy(() -> scanJni(file))
                 .as("vortex-jni")
-                .hasMessageContaining("Cannot compare different DTypes i64 and f64");
+                .hasMessageContaining("Comparison requires equal dtypes ignoring nullability, got i64 and f64");
         assertThatThrownBy(() -> scanJava(file))
                 .as("vortex-java")
                 .isInstanceOf(VortexException.class)

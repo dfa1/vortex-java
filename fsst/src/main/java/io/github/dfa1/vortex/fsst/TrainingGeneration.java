@@ -1,7 +1,9 @@
 package io.github.dfa1.vortex.fsst;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,11 +20,9 @@ import java.util.Map;
 ///
 /// Make-table turns every counted code into a candidate, the symbol itself and, until the last
 /// generation, its merges with the codes seen after it, and sums the gains of candidates that are the
-/// same symbol. The candidates are popped best first from a heap that orders them by gain and length
-/// only, as Rust's `BinaryHeap` does, and the first 255 that fit become the table. Two candidates of
-/// equal gain and length leave the heap in an order that depends on the order they were pushed, which
-/// in Rust is its hash map's iteration order; here it is the order the codes were counted. A table
-/// then differs from Rust's in at most such ties.
+/// same symbol. The candidates are taken best first, by gain, then length, then the symbol's bytes
+/// (fsst-rs 0.7, whose ordering no longer depends on its hash map), and the first 255 that fit become
+/// the table.
 final class TrainingGeneration {
 
     /// Maximum number of real symbols kept per generation (codes `0..254`; `0xFF` is the escape).
@@ -141,18 +141,19 @@ final class TrainingGeneration {
             }
         }
 
-        CandidateHeap heap = new CandidateHeap(gains.size());
-        for (Map.Entry<Long, Long> candidate : gains.entrySet()) {
-            heap.push(candidate.getValue(), lengthOf(candidate.getKey()), candidate.getKey());
+        Candidate[] candidates = new Candidate[gains.size()];
+        int index = 0;
+        for (Map.Entry<Long, Long> entry : gains.entrySet()) {
+            candidates[index++] = new Candidate(entry.getValue(), lengthOf(entry.getKey()), entry.getKey());
         }
+        Arrays.sort(candidates, Candidate.BEST_FIRST);
         BitSet takenSlots = new BitSet();
         List<Symbol> result = new ArrayList<>(MAX_SYMBOLS);
-        while (!heap.isEmpty() && result.size() < MAX_SYMBOLS) {
-            heap.pop();
-            long symbol = heap.poppedSymbol();
-            int length = heap.poppedLength();
+        for (int i = 0; i < candidates.length && result.size() < MAX_SYMBOLS; i++) {
+            long symbol = candidates[i].symbol();
+            int length = candidates[i].length();
             if (prune) {
-                long saves = heap.poppedGain();
+                long saves = candidates[i].gain();
                 if (length == 1) {
                     saves /= SINGLE_BYTE_GAIN_BOOST;
                 }
@@ -192,128 +193,20 @@ final class TrainingGeneration {
         return true;
     }
 
-    /// Rust's `BinaryHeap<Candidate>`, sift for sift, ordered by `(gain, length)`: the order equal
-    /// candidates pop in is the heap's own, so it has to be the same algorithm.
-    static final class CandidateHeap {
+    /// Rust's `Candidate`: a symbol and the bytes it would save. Candidates are taken best first by
+    /// gain, then length, then the symbol's packed bytes as an unsigned `u64` (fsst-rs 0.7's
+    /// `Candidate::cmp`). The symbols are distinct, so no two candidates tie and the order is total.
+    ///
+    /// @param gain   the bytes the symbol saves over the sample
+    /// @param length the symbol's length in bytes
+    /// @param symbol the symbol's bytes, packed LSB-first
+    record Candidate(long gain, int length, long symbol) {
 
-        private final long[] gains;
-        private final int[] lengths;
-        private final long[] symbols;
-        private int size;
-        private long poppedGain;
-        private int poppedLength;
-        private long poppedSymbol;
-
-        CandidateHeap(int capacity) {
-            gains = new long[capacity];
-            lengths = new int[capacity];
-            symbols = new long[capacity];
-        }
-
-        boolean isEmpty() {
-            return size == 0;
-        }
-
-        long poppedGain() {
-            return poppedGain;
-        }
-
-        int poppedLength() {
-            return poppedLength;
-        }
-
-        long poppedSymbol() {
-            return poppedSymbol;
-        }
-
-        void push(long gain, int length, long symbol) {
-            gains[size] = gain;
-            lengths[size] = length;
-            symbols[size] = symbol;
-            siftUp(0, size);
-            size++;
-        }
-
-        /// Rust's `pop`: takes the last element, swaps it with the root, and sifts the root down to
-        /// the bottom and back up.
-        void pop() {
-            size--;
-            long gain = gains[size];
-            int length = lengths[size];
-            long symbol = symbols[size];
-            if (size > 0) {
-                long rootGain = gains[0];
-                int rootLength = lengths[0];
-                long rootSymbol = symbols[0];
-                gains[0] = gain;
-                lengths[0] = length;
-                symbols[0] = symbol;
-                gain = rootGain;
-                length = rootLength;
-                symbol = rootSymbol;
-                siftDownToBottom(0);
-            }
-            poppedGain = gain;
-            poppedLength = length;
-            poppedSymbol = symbol;
-        }
-
-        private boolean lessOrEqual(long gainA, int lengthA, long gainB, int lengthB) {
-            if (gainA != gainB) {
-                return gainA < gainB;
-            }
-            return lengthA <= lengthB;
-        }
-
-        private void siftUp(int start, int position) {
-            long gain = gains[position];
-            int length = lengths[position];
-            long symbol = symbols[position];
-            int pos = position;
-            while (pos > start) {
-                int parent = (pos - 1) / 2;
-                if (lessOrEqual(gain, length, gains[parent], lengths[parent])) {
-                    break;
-                }
-                gains[pos] = gains[parent];
-                lengths[pos] = lengths[parent];
-                symbols[pos] = symbols[parent];
-                pos = parent;
-            }
-            gains[pos] = gain;
-            lengths[pos] = length;
-            symbols[pos] = symbol;
-        }
-
-        private void siftDownToBottom(int position) {
-            int end = size;
-            int start = position;
-            long gain = gains[position];
-            int length = lengths[position];
-            long symbol = symbols[position];
-            int pos = position;
-            int child = 2 * pos + 1;
-            while (child <= Math.max(0, end - 2)) {
-                if (lessOrEqual(gains[child], lengths[child], gains[child + 1], lengths[child + 1])) {
-                    child++;
-                }
-                gains[pos] = gains[child];
-                lengths[pos] = lengths[child];
-                symbols[pos] = symbols[child];
-                pos = child;
-                child = 2 * pos + 1;
-            }
-            if (child == end - 1) {
-                gains[pos] = gains[child];
-                lengths[pos] = lengths[child];
-                symbols[pos] = symbols[child];
-                pos = child;
-            }
-            gains[pos] = gain;
-            lengths[pos] = length;
-            symbols[pos] = symbol;
-            siftUp(start, pos);
-        }
+        /// Highest gain first, then the longer symbol, then the larger packed bytes.
+        static final Comparator<Candidate> BEST_FIRST = Comparator.comparingLong(Candidate::gain)
+                .thenComparingInt(Candidate::length)
+                .thenComparing(Candidate::symbol, Long::compareUnsigned)
+                .reversed();
     }
 
     /// Match counts and adjacent-pair counts over the extended code space, flat arrays with no

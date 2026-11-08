@@ -20,6 +20,8 @@ import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.TimeUnitMetadata;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
+import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
@@ -40,6 +42,8 @@ import org.apache.arrow.vector.UInt8Vector;
 import org.apache.arrow.vector.VarBinaryVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.complex.FixedSizeListVector;
+import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.DateUnit;
@@ -70,13 +74,12 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// The file statistics in the postscript's `statistics` segment, against what vortex-jni writes for the
-/// same batches (#664): one `ArrayStats` per top-level field holding Rust's `PRUNING_STATS` (min, max,
-/// sum, null count, NaN count), each taken per batch and folded. The data hits every rule of that
-/// fold: a string min cut to 64 bytes in one batch only (inexact min, exact max), a string column
-/// with an all-null batch and a binary max that cannot be rounded up (both lose their max), an `i64`
-/// sum that overflows (no sum), decimals of two widths (the sum is wider than the values), an
-/// all-null float column, an extension (storage min/max, no sum) and a nullable struct (null count
-/// only).
+/// same batches (#664): one `ArrayStats` per top-level field holding Rust 0.91's default aggregates
+/// (min, max, null count, NaN count, uncompressed size), each accumulated batch by batch. The data
+/// hits every rule: a string min cut to 64 bytes in one batch only, a string column with an
+/// all-null batch (it keeps its max), a binary max that cannot be rounded up (no max), string and
+/// binary bounds always inexact, decimals of two widths, an all-null float column (a constant
+/// validity), an extension (storage min/max) and a nullable struct (null count and size).
 class FileStatisticsInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -150,7 +153,75 @@ class FileStatisticsInteropIntegrationTest {
         assertThat(result).isEqualTo(fileStatistics(jni));
     }
 
+    @Test
+    void noBatch_writesWhatJniWrites(@TempDir Path tmp) throws Exception {
+        // Given — a file without any batch
+        Schema arrow = new Schema(List.of(Field.nullable("i", new ArrowType.Int(64, true)), Field.nullable("s", ArrowType.Utf8.INSTANCE)));
+        Path jni = tmp.resolve("jni.vortex");
+        dev.vortex.api.VortexWriter.builder(SESSION, jni.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR)
+                .build().close();
+        Path java = tmp.resolve("java.vortex");
+        List<ColumnName> names = List.of(ColumnName.of("i"), ColumnName.of("s"));
+        DType.Struct schema = new DType.Struct(names, List.of(DTypes.I64.asNullable(), DTypes.UTF8.asNullable()), false);
+        try (FileChannel ch = FileChannel.open(java, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            VortexWriter.create(ch, schema, WriteOptions.defaults()).close();
+        }
+
+        // When
+        List<String> result = fileStatistics(java, names);
+
+        // Then
+        assertThat(result).isEqualTo(fileStatistics(jni, names));
+    }
+
+    @Test
+    void listColumns_sizeTheElementsTheirValidListsUse(@TempDir Path tmp) throws Exception {
+        // Given — a nullable list of nullable i32 with null lists and null elements, a list of
+        // strings some too long to inline, and a nullable fixed-size list: the uncompressed size
+        // counts the elements of valid lists, 16 bytes of offset and size per row, and validities
+        List<ColumnName> names = List.of(ColumnName.of("l"), ColumnName.of("ls"), ColumnName.of("fsl"));
+        Path jni = tmp.resolve("jni.vortex");
+        writeListsJni(jni);
+        Path java = tmp.resolve("java.vortex");
+        DType.Struct schema = new DType.Struct(names, List.of(
+                new DType.List(DTypes.I32.asNullable(), true),
+                new DType.List(DTypes.UTF8, false),
+                new DType.FixedSizeList(DTypes.I32, 2, true)), false);
+        try (FileChannel ch = FileChannel.open(java, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter w = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            for (int batch = 0; batch < BATCHES; batch++) {
+                w.writeChunk(javaListBatch(names, batch));
+            }
+        }
+
+        // When
+        List<String> result = fileStatistics(java, names);
+
+        // Then
+        assertThat(result).isEqualTo(fileStatistics(jni, names));
+    }
+
     // ── data ────────────────────────────────────────────────────────────────
+
+    private static boolean listValid(int row) {
+        return row % 4 != 0;
+    }
+
+    private static int listLength(int row) {
+        return row % 3;
+    }
+
+    private static boolean elementValid(int row, int k) {
+        return (row + k) % 5 != 0;
+    }
+
+    private static String listString(int row, int k) {
+        return k == 1 ? "long-enough-" + row : "s" + k;
+    }
+
+    private static boolean fslValid(int row) {
+        return row % 6 != 0;
+    }
 
     private static boolean i32Valid(int row) {
         return row % 7 != 0;
@@ -346,11 +417,121 @@ class FileStatisticsInteropIntegrationTest {
         return chunk;
     }
 
+    private static void writeListsJni(Path file) throws Exception {
+        Schema arrow = new Schema(List.of(
+                new Field("l", FieldType.nullable(ArrowType.List.INSTANCE),
+                        List.of(Field.nullable("item", new ArrowType.Int(32, true)))),
+                new Field("ls", FieldType.notNullable(ArrowType.List.INSTANCE),
+                        List.of(Field.notNullable("item", ArrowType.Utf8.INSTANCE))),
+                new Field("fsl", FieldType.nullable(new ArrowType.FixedSizeList(2)),
+                        List.of(Field.notNullable("item", new ArrowType.Int(32, true))))));
+        try (dev.vortex.api.VortexWriter w = dev.vortex.api.VortexWriter.builder(SESSION,
+                file.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR).build()) {
+            for (int batch = 0; batch < BATCHES; batch++) {
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(arrow, ALLOCATOR)) {
+                    ListVector l = (ListVector) root.getVector("l");
+                    ListVector ls = (ListVector) root.getVector("ls");
+                    FixedSizeListVector fsl = (FixedSizeListVector) root.getVector("fsl");
+                    l.allocateNew();
+                    ls.allocateNew();
+                    fsl.allocateNew();
+                    IntVector lItems = (IntVector) l.getDataVector();
+                    VarCharVector lsItems = (VarCharVector) ls.getDataVector();
+                    IntVector fslItems = (IntVector) fsl.getDataVector();
+                    int lCount = 0;
+                    int lsCount = 0;
+                    for (int i = 0; i < ROWS; i++) {
+                        int row = batch * ROWS + i;
+                        if (listValid(row)) {
+                            int start = l.startNewValue(i);
+                            for (int k = 0; k < listLength(row); k++) {
+                                if (elementValid(row, k)) {
+                                    lItems.setSafe(start + k, row + k);
+                                } else {
+                                    lItems.setNull(start + k);
+                                }
+                            }
+                            lCount = start + listLength(row);
+                            l.endValue(i, listLength(row));
+                        } else {
+                            l.setNull(i);
+                        }
+                        int start = ls.startNewValue(i);
+                        for (int k = 0; k < listLength(row); k++) {
+                            lsItems.setSafe(start + k, listString(row, k).getBytes(StandardCharsets.UTF_8));
+                        }
+                        lsCount = start + listLength(row);
+                        ls.endValue(i, listLength(row));
+                        fslItems.setSafe(i * 2, row);
+                        fslItems.setSafe(i * 2 + 1, -row);
+                        if (fslValid(row)) {
+                            fsl.setNotNull(i);
+                        } else {
+                            fsl.setNull(i);
+                        }
+                    }
+                    lItems.setValueCount(lCount);
+                    lsItems.setValueCount(lsCount);
+                    fslItems.setValueCount(ROWS * 2);
+                    root.setRowCount(ROWS);
+                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
+                         ArrowSchema exported = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, exported);
+                        w.writeBatch(array.memoryAddress(), exported.memoryAddress());
+                    }
+                }
+            }
+        }
+    }
+
+    private static Map<ColumnName, Object> javaListBatch(List<ColumnName> names, int batch) {
+        long[] lOffsets = new long[ROWS + 1];
+        long[] lsOffsets = new long[ROWS + 1];
+        boolean[] lValid = new boolean[ROWS];
+        boolean[] fslValidity = new boolean[ROWS];
+        List<Integer> lItems = new ArrayList<>();
+        List<String> lsItems = new ArrayList<>();
+        int[] fslItems = new int[ROWS * 2];
+        for (int i = 0; i < ROWS; i++) {
+            int row = batch * ROWS + i;
+            lValid[i] = listValid(row);
+            int lLength = lValid[i] ? listLength(row) : 0;
+            for (int k = 0; k < lLength; k++) {
+                lItems.add(elementValid(row, k) ? row + k : null);
+            }
+            lOffsets[i + 1] = lOffsets[i] + lLength;
+            for (int k = 0; k < listLength(row); k++) {
+                lsItems.add(listString(row, k));
+            }
+            lsOffsets[i + 1] = lsOffsets[i] + listLength(row);
+            fslItems[i * 2] = row;
+            fslItems[i * 2 + 1] = -row;
+            fslValidity[i] = fslValid(row);
+        }
+        int[] lValues = new int[lItems.size()];
+        boolean[] lElementValid = new boolean[lItems.size()];
+        for (int k = 0; k < lValues.length; k++) {
+            lElementValid[k] = lItems.get(k) != null;
+            lValues[k] = lElementValid[k] ? lItems.get(k) : 0;
+        }
+        Map<ColumnName, Object> chunk = new LinkedHashMap<>();
+        chunk.put(names.get(0), new NullableData(
+                new ListData(new NullableData(lValues, lElementValid), lOffsets, ROWS), lValid));
+        chunk.put(names.get(1), new ListData(lsItems.toArray(String[]::new), lsOffsets, ROWS));
+        chunk.put(names.get(2), new NullableData(new FixedSizeListData(fslItems, ROWS), fslValidity));
+        return chunk;
+    }
+
     // ── readers ─────────────────────────────────────────────────────────────
 
     /// Each field's `ArrayStats` table as written: every stat's presence, the raw scalar bytes and
     /// each bound's precision.
     private static List<String> fileStatistics(Path file) throws IOException {
+        return fileStatistics(file, NAMES);
+    }
+
+    /// Each field's `ArrayStats` table as written, named after `names`.
+    private static List<String> fileStatistics(Path file, List<ColumnName> names) throws IOException {
         MemorySegment seg = MemorySegment.ofArray(Files.readAllBytes(file));
         long size = seg.byteSize();
         int psLen = Short.toUnsignedInt(seg.get(VortexFormat.LE_SHORT, size - VortexFormat.TRAILER_SIZE + 2));
@@ -361,7 +542,7 @@ class FileStatisticsInteropIntegrationTest {
         List<String> fields = new ArrayList<>();
         for (int j = 0; j < fs.fieldStatsLength(); j++) {
             FbsArrayStats a = fs.fieldStats(j);
-            fields.add(NAMES.get(j) + ": min=" + hex(a.minAsSegment()) + "/" + a.minPrecision()
+            fields.add(names.get(j) + ": min=" + hex(a.minAsSegment()) + "/" + a.minPrecision()
                     + " max=" + hex(a.maxAsSegment()) + "/" + a.maxPrecision()
                     + " sum=" + hex(a.sumAsSegment())
                     + " nulls=" + (a.hasNullCount() ? a.nullCount() : "-")

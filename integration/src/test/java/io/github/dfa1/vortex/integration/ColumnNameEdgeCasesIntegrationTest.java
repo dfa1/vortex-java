@@ -80,7 +80,7 @@ class ColumnNameEdgeCasesIntegrationTest {
         // Then — the reference writer refuses to produce a duplicate-name file
         assertThat(result)
                 .isInstanceOf(IOException.class)
-                .hasRootCauseMessage("Vortex Error: Other error: StructLayout must have unique field names");
+                .hasRootCauseMessage("Vortex Error: StructLayout must have unique field names");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
