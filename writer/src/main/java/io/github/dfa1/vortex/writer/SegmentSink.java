@@ -61,6 +61,8 @@ final class SegmentSink {
     private final SegmentEncoder encoder;
     private final Executor executor;
     private final List<SegRef> segs;
+    // the column each submitted segment belongs to, by segment index
+    private final List<ColumnName> segColumns;
     private final Map<EncodingId, Integer> encodingIdx;
     private final ArrayDeque<CompletableFuture<EncodedSegment>> pending;
     private long bytesWritten;
@@ -71,6 +73,7 @@ final class SegmentSink {
         this.encoder = encoder;
         this.executor = executor;
         this.segs = new ArrayList<>();
+        this.segColumns = new ArrayList<>();
         this.encodingIdx = new LinkedHashMap<>();
         this.pending = new ArrayDeque<>();
         this.bytesWritten = 0;
@@ -88,6 +91,7 @@ final class SegmentSink {
         EncodeTrace trace = EncodeTrace.of(column.value(), segIdx);
         pending.add(CompletableFuture.supplyAsync(
                 () -> encoder.encode(trace, dtype, data, encodingOverride, excludedFromCascade), executor));
+        segColumns.add(column);
         submittedSegments++;
         drain(MAX_IN_FLIGHT_SEGMENTS);
         return segIdx;
@@ -109,7 +113,8 @@ final class SegmentSink {
     /// @param zonedLayout the layout id [LayoutTree]'s zoned nodes stand for
     /// @param fileStats   one accumulator per top-level field, in schema order; a schema with no
     ///                    field gets no statistics segment, as Rust writes none
-    void finish(LayoutId zonedLayout, ByteBuffer dtype, ByteBuffer layout, List<FileStatsAccumulator> fileStats)
+    /// @return the size of the file in bytes
+    long finish(LayoutId zonedLayout, ByteBuffer dtype, ByteBuffer layout, List<FileStatsAccumulator> fileStats)
             throws IOException {
         drain(0);
         ByteBuffer footerBuf = buildFooter(zonedLayout);
@@ -144,6 +149,19 @@ final class SegmentSink {
         trailer.put(VortexFormat.MAGIC.asByteBuffer());
         trailer.flip();
         channel.write(trailer);
+        return bytesWritten + VortexFormat.TRAILER_SIZE;
+    }
+
+    /// The bytes of each column's segments, as the footer's segment specs give them; [#finish]
+    /// first, so every segment is written.
+    ///
+    /// @return the summed segment lengths by column, in the order the columns first wrote one
+    Map<ColumnName, Long> columnSizes() {
+        Map<ColumnName, Long> sizes = new LinkedHashMap<>();
+        for (int i = 0; i < segs.size(); i++) {
+            sizes.merge(segColumns.get(i), segs.get(i).len(), Long::sum);
+        }
+        return sizes;
     }
 
     /// Rethrows a failed task's unchecked cause as the sequential path would have thrown it (encoders

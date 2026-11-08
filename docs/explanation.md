@@ -500,7 +500,7 @@ writer.writeChunk(c -> c.put(column, data[]).put(...))
   └─ write buffers to FileChannel, record SegmentSpec (offset + length)
   └─ record Layout node (encoding ID + rowCount + segment index)
 
-writer.close()
+writer.finish()  (or close())  → WriteSummary: file size, rows, per-column size + stats
   └─ write DType blob  (FlatBuffer)
   └─ write Footer blob (FlatBuffer) → SegmentSpec[] + ArraySpec[]
   └─ write Layout blob (FlatBuffer) → Struct → Zoned(Stats) → Chunked → [Flat …]

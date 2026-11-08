@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - JDK Flight Recorder events for file open, HTTP range requests, segment decode and encode, chunk filtering, writer back-pressure and the compressor's scheme choices, which mirror Rust's compressor trace. ([#601](https://github.com/dfa1/vortex-java/issues/601))
+- `VortexWriter.finish()` returns a `WriteSummary` with the file size, row count and each column's compressed size and statistics, so a write needs no read to learn them; `close()` after it does nothing. ([#664](https://github.com/dfa1/vortex-java/issues/664))
 
 ## [0.19.1] — 2026-11-07
 

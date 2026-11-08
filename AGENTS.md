@@ -53,7 +53,7 @@ reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, A
           reader.extension — ExtensionDecoder + Date/Time/Timestamp/Uuid impls
           reader.layout — Layout, LayoutDecoder, LayoutDecodeContext, LayoutRegistry
           + built-in *LayoutDecoder impls, ZonedStatsSchema
-writer  — VortexWriter, WriteRegistry, WriteOptions, ColumnEncoding, ExtensionEncoder
+writer  — VortexWriter, WriteSummary, WriteRegistry, WriteOptions, ColumnEncoding, ExtensionEncoder
           VortexWriter orchestrates package-private parts (one concern each):
             SegmentEncoder   — picks and runs encoders; immutable, the only state executor tasks touch
             SegmentSink      — ordered segment writes to the channel, footer, postscript, trailer
