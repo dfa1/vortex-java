@@ -44,7 +44,7 @@ class IntegerCascadeChoiceTest {
         List<EncodingId> encodings = encodingsOf(primitive(PType.I64, false), values);
 
         // Then
-        assertThat(encodings).doesNotContain(EncodingId.VORTEX_RUNEND);
+        assertThat(encodings).isNotEmpty().doesNotContain(EncodingId.VORTEX_RUNEND);
     }
 
     @Test
