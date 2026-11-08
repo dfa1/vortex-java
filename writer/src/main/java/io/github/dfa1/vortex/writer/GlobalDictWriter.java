@@ -85,16 +85,16 @@ final class GlobalDictWriter {
         }
         boolean candidate = false;
         if (colDtype instanceof DType.Primitive p) {
-            // Rust's DictStrategy admits a column when its probe compressor, the cascade, turns
-            // the first 8192 rows into a dict; there is no cardinality cap
-            candidate = DictColumnState.admitsPtype(p.ptype());
-            if (candidate && options.allowedCascading() == 0) {
+            // Rust's DictStrategy admits every primitive (dict_layout_supported) when its probe
+            // compressor, the cascade, turns the first 8192 rows into a dict; there is no
+            // cardinality cap and no width filter (#651: a nullable I16 was never probed)
+            if (options.allowedCascading() == 0) {
                 // no cascade to ask: the sample's distinct count decides
                 int probeRows = Math.min(Repartitioner.BLOCK_ROWS, RowCount.of(data));
                 Object head = Repartitioner.head(values, probeRows);
                 candidate = DictColumnState.isLowCardinality(p.ptype(), head,
                         validity != null ? Arrays.copyOf(validity, probeRows) : null);
-            } else if (candidate) {
+            } else {
                 candidate = encoder.probeCompressesToDict(colName, colDtype, data);
             }
         } else if (colDtype instanceof DType.Utf8 || colDtype instanceof DType.Binary) {

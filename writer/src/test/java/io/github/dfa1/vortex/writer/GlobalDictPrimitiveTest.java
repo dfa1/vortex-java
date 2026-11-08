@@ -372,12 +372,11 @@ class GlobalDictPrimitiveTest {
     }
 
     @Test
-    void lowCardinality_i16_notDicted_roundTrips(@TempDir Path tmp) throws IOException {
-        // Regression: the writer used to admit I16 to the global dict, producing a vortex.dict
-        // column the reader cannot decode ("unsupported ptype for lazy dict: I16"). I8/I16 are now
-        // excluded from dict candidacy — matching the Rust compressor, which does not dict narrow
-        // ints (RustWritesJavaReadsIntegrationTest#jniWriter_javaReader_lowCardinalityI16) — so a
-        // low-card I16 column encodes via the cascade and round-trips cleanly.
+    void lowCardinality_i16_roundTrips(@TempDir Path tmp) throws IOException {
+        // Regression: an I16 dict layout once made a file the reader could not decode
+        // ("unsupported ptype for lazy dict: I16"). Every primitive is a dict-layout candidate
+        // again, as in Rust (#651), so a low-cardinality I16 column must read back as I16
+        // whichever layout the probe picks.
         var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I16), false);
         short[] data = {1, 2, 3, 1, 2, 3, 1, 2};
         Path file = tmp.resolve("i16.vortex");
@@ -386,7 +385,7 @@ class GlobalDictPrimitiveTest {
             sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
-        // When — I16 now encodes via the cascade (a ShortArray view), not a dict
+        // When
         short[] result;
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(ColumnName.of("v")))) {

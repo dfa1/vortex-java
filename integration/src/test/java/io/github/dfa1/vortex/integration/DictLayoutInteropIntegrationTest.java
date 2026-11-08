@@ -1,5 +1,9 @@
 package io.github.dfa1.vortex.integration;
 
+import dev.vortex.api.DataSource;
+import dev.vortex.api.Expression;
+import dev.vortex.api.Partition;
+import dev.vortex.api.Scan;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
@@ -7,17 +11,24 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.FieldVector;
+import org.apache.arrow.vector.SmallIntVector;
+import org.apache.arrow.vector.TinyIntVector;
+import org.apache.arrow.vector.UInt2Vector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -25,6 +36,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -140,6 +152,131 @@ class DictLayoutInteropIntegrationTest {
         // Then — whatever Rust decides for this column, so do we, dictionary for dictionary
         assertThat(dictLayouts(EncodingTrees.of(java))).isEqualTo(dictLayouts(EncodingTrees.of(jni)));
         assertThat(readAllLongs(java)).containsExactly(values);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(value = PType.class, names = {"I8", "I16", "U16"})
+    void admitsANullableNarrowColumnAsRustDoes(PType ptype, @TempDir Path tmp) throws Exception {
+        // Given — the profile of Public BI Generico's `Disco` first 8192 rows (#651): a nullable
+        // SMALLINT, 40% valid, 62 distinct values in 5..132 with a few far more common than the
+        // rest, value runs of about 2 rows between null runs of about 12. Rust's dict layout admits
+        // every primitive and writes it as one values pool plus run-end codes; Java filtered narrow
+        // widths out before the probe and wrote a 1.44x larger bit-packed column with a validity
+        // per chunk
+        Random r = new Random(651);
+        int[] pool = new int[62];
+        for (int p = 0; p < pool.length; p++) {
+            pool[p] = 5 + p * 2;
+        }
+        int n = CHUNK * 3;
+        int[] values = new int[n];
+        boolean[] valid = new boolean[n];
+        int i = 0;
+        while (i < n) {
+            boolean isValid = r.nextInt(100) >= 22;
+            int run = isValid ? 1 + r.nextInt(3) : 1 + r.nextInt(23);
+            int value = pool[Math.min(r.nextInt(pool.length), r.nextInt(pool.length))];
+            for (int j = 0; j < run && i < n; j++, i++) {
+                values[i] = value;
+                valid[i] = isValid;
+            }
+        }
+
+        // When
+        Path java = writeJavaNullable(tmp, ptype, values, valid);
+        Path jni = writeJniNullable(tmp, ptype, values, valid);
+
+        // Then — the same layouts and encodings, node for node, and vortex-jni reads Java's file
+        // back to the same values as its own
+        assertThat(EncodingTrees.of(java)).isEqualTo(EncodingTrees.of(jni));
+        assertThat(dictLayouts(EncodingTrees.of(java))).isPositive();
+        assertThat(readWithJni(java)).isEqualTo(readWithJni(jni));
+    }
+
+    private static Path writeJavaNullable(Path tmp, PType ptype, int[] values, boolean[] valid) throws IOException {
+        Path file = tmp.resolve("java.vortex");
+        ColumnName col = ColumnName.of("v");
+        DType.Struct schema = DType.structBuilder().field(col, new DType.Primitive(ptype, true)).build();
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var w = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            for (int from = 0; from < values.length; from += CHUNK) {
+                Object chunk = switch (ptype) {
+                    case I8 -> {
+                        byte[] a = new byte[CHUNK];
+                        for (int i = 0; i < CHUNK; i++) {
+                            a[i] = (byte) values[from + i];
+                        }
+                        yield a;
+                    }
+                    default -> {
+                        short[] a = new short[CHUNK];
+                        for (int i = 0; i < CHUNK; i++) {
+                            a[i] = (short) values[from + i];
+                        }
+                        yield a;
+                    }
+                };
+                w.writeChunk(Map.of(col, new NullableData(chunk, java.util.Arrays.copyOfRange(valid, from, from + CHUNK))));
+            }
+        }
+        return file;
+    }
+
+    private static Path writeJniNullable(Path tmp, PType ptype, int[] values, boolean[] valid) throws Exception {
+        Path file = tmp.resolve("jni.vortex");
+        ArrowType type = switch (ptype) {
+            case I8 -> new ArrowType.Int(8, true);
+            case U16 -> new ArrowType.Int(16, false);
+            default -> new ArrowType.Int(16, true);
+        };
+        Schema arrow = new Schema(List.of(Field.nullable("v", type)));
+        try (VortexWriter w = VortexWriter.builder(SESSION, file.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR).build()) {
+            for (int from = 0; from < values.length; from += CHUNK) {
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(arrow, ALLOCATOR)) {
+                    FieldVector v = root.getVector("v");
+                    root.allocateNew();
+                    for (int i = 0; i < CHUNK; i++) {
+                        int at = from + i;
+                        if (!valid[at]) {
+                            v.setNull(i);
+                            continue;
+                        }
+                        switch (v) {
+                            case TinyIntVector t -> t.setSafe(i, values[at]);
+                            case UInt2Vector u -> u.setSafe(i, values[at]);
+                            case SmallIntVector s -> s.setSafe(i, values[at]);
+                            default -> throw new IllegalStateException(v.getClass().getName());
+                        }
+                    }
+                    root.setRowCount(CHUNK);
+                    try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR); ArrowSchema as = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, as);
+                        w.writeBatch(array.memoryAddress(), as.memoryAddress());
+                    }
+                }
+            }
+        }
+        return file;
+    }
+
+    /// Every row of column `v` as vortex-jni reads it, `null` for a null row.
+    private static List<Object> readWithJni(Path file) throws Exception {
+        List<Object> out = new ArrayList<>();
+        DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
+        Scan scan = ds.scan(dev.vortex.api.ScanOptions.builder()
+                .projection(Expression.select(new String[]{"v"}, Expression.root())).build());
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    FieldVector vec = reader.getVectorSchemaRoot().getVector("v");
+                    for (int i = 0; i < vec.getValueCount(); i++) {
+                        out.add(vec.getObject(i));
+                    }
+                }
+            }
+        }
+        return out;
     }
 
     private static Path writeJava(Path tmp, long[] values) throws IOException {
