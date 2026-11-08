@@ -254,8 +254,11 @@ self-describing tail. A reader bootstraps from the last 8 bytes — no scanning 
  │                                              │    leaves point into Footer's
  │                                              │    SegmentSpec[] by index.
  ├──────────────────────────────────────────────┤
+ │  Statistics (FlatBuffer)                     │  ← min/max/sum/null count per
+ │                                              │    top-level column.
+ ├──────────────────────────────────────────────┤
  │  Postscript (FlatBuffer)                     │  ← (offset,length) of Footer,
- │                                              │    DType, Layout above.
+ │                                              │    DType, Layout, Statistics.
  ├──────────────────────────────────────────────┤
  │  Trailer   (8 bytes, little-endian)          │
  │    u16 version │ u16 postscriptLen │ "VTXF"  │  ← magic confirms file type;
@@ -501,6 +504,7 @@ writer.close()
   └─ write DType blob  (FlatBuffer)
   └─ write Footer blob (FlatBuffer) → SegmentSpec[] + ArraySpec[]
   └─ write Layout blob (FlatBuffer) → Struct → Zoned(Stats) → Chunked → [Flat …]
+  └─ write Statistics  (FlatBuffer) → per-column min/max/sum/null count, folded per batch
   └─ write Postscript  (FlatBuffer) → blob offsets + lengths
   └─ write 8-byte trailer           → version · postscriptLen · magic (VTXF)
 ```

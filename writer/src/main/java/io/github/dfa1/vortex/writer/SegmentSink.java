@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.core.fbs.FbsArrayStats;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.fbs.FbsFileStatistics;
 import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
 import io.github.dfa1.vortex.core.fbs.FbsPostscriptSegment;
@@ -102,10 +103,14 @@ final class SegmentSink {
         return segs.get(segIdx).stats();
     }
 
-    /// Writes the remaining segments, then the footer, `dtype`, `layout`, postscript and trailer.
+    /// Writes the remaining segments, then the footer, `dtype`, `layout`, file statistics,
+    /// postscript and trailer.
     ///
     /// @param zonedLayout the layout id [LayoutTree]'s zoned nodes stand for
-    void finish(LayoutId zonedLayout, ByteBuffer dtype, ByteBuffer layout) throws IOException {
+    /// @param fileStats   one accumulator per top-level field, in schema order; a schema with no
+    ///                    field gets no statistics segment, as Rust writes none
+    void finish(LayoutId zonedLayout, ByteBuffer dtype, ByteBuffer layout, List<FileStatsAccumulator> fileStats)
+            throws IOException {
         drain(0);
         ByteBuffer footerBuf = buildFooter(zonedLayout);
         long footerOff = bytesWritten;
@@ -117,10 +122,19 @@ final class SegmentSink {
         long layoutOff = bytesWritten;
         write(layout);
 
+        long statsOff = bytesWritten;
+        int statsLen = 0;
+        if (!fileStats.isEmpty()) {
+            ByteBuffer statsBuf = buildFileStatistics(fileStats);
+            statsLen = statsBuf.capacity();
+            write(statsBuf);
+        }
+
         ByteBuffer psBuf = buildPostscript(
                 footerOff, footerBuf.capacity(),
                 dtypeOff, dtype.capacity(),
-                layoutOff, layout.capacity());
+                layoutOff, layout.capacity(),
+                statsOff, statsLen);
         write(psBuf);
 
         // Trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
@@ -310,6 +324,12 @@ final class SegmentSink {
         if (stats == null || stats.isEmpty()) {
             return 0;
         }
+        return buildStats(fbb, stats, true, true);
+    }
+
+    /// The `ArrayStats` table of `stats`, an empty table when it carries none, with each bound's
+    /// precision: the file statistics hold one table per field, so even a field without stats has one.
+    private static int buildStats(FbsBuilder fbb, NodeStats stats, boolean minExact, boolean maxExact) {
         // vectors first: FlatBuffers builds bottom-up
         int minVec = 0;
         if (stats.min() != null) {
@@ -329,11 +349,11 @@ final class SegmentSink {
         FbsArrayStats.startFbsArrayStats(fbb);
         if (stats.min() != null) {
             FbsArrayStats.addMin(fbb, minVec);
-            FbsArrayStats.addMinPrecision(fbb, FbsPrecision.Exact);
+            FbsArrayStats.addMinPrecision(fbb, precision(minExact));
         }
         if (stats.max() != null) {
             FbsArrayStats.addMax(fbb, maxVec);
-            FbsArrayStats.addMaxPrecision(fbb, FbsPrecision.Exact);
+            FbsArrayStats.addMaxPrecision(fbb, precision(maxExact));
         }
         if (stats.sum() != null) {
             FbsArrayStats.addSum(fbb, sumVec);
@@ -359,6 +379,26 @@ final class SegmentSink {
         int off = FbsArrayStats.endFbsArrayStats(fbb);
         fbb.forceDefaults(false);
         return off;
+    }
+
+    private static int precision(boolean exact) {
+        if (exact) {
+            return FbsPrecision.Exact;
+        }
+        return FbsPrecision.Inexact;
+    }
+
+    /// The `FileStatistics` FlatBuffer: one `ArrayStats` per top-level field, in schema order.
+    private static ByteBuffer buildFileStatistics(List<FileStatsAccumulator> fields) {
+        var fbb = new FbsBuilder(256 + 64 * fields.size());
+        int[] offsets = new int[fields.size()];
+        for (int i = 0; i < fields.size(); i++) {
+            FileStatsAccumulator field = fields.get(i);
+            offsets[i] = buildStats(fbb, field.stats(), field.minExact(), field.maxExact());
+        }
+        int vec = FbsFileStatistics.createFieldStatsVector(fbb, offsets);
+        fbb.finish(FbsFileStatistics.createFbsFileStatistics(fbb, vec));
+        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
     private int buildArrayNodeFlatBuffer(FbsBuilder fbb, EncodeNode node) {
@@ -418,7 +458,8 @@ final class SegmentSink {
     private static ByteBuffer buildPostscript(
             long footerOff, int footerLen,
             long dtypeOff, int dtypeLen,
-            long layoutOff, int layoutLen) {
+            long layoutOff, int layoutLen,
+            long statsOff, int statsLen) {
         var fbb = new FbsBuilder(256);
 
         int footerSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(
@@ -427,8 +468,12 @@ final class SegmentSink {
                 fbb, dtypeOff, dtypeLen, 0, 0, 0);
         int layoutSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(
                 fbb, layoutOff, layoutLen, 0, 0, 0);
+        int statsSegOff = 0;
+        if (statsLen > 0) {
+            statsSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(fbb, statsOff, statsLen, 0, 0, 0);
+        }
 
-        int psOff = FbsPostscript.createFbsPostscript(fbb, dtypeSegOff, layoutSegOff, 0, footerSegOff);
+        int psOff = FbsPostscript.createFbsPostscript(fbb, dtypeSegOff, layoutSegOff, statsSegOff, footerSegOff);
         FbsPostscript.finishFbsPostscriptBuffer(fbb, psOff);
         return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A struct with duplicate field names now fails with `VortexException` when it is built, at any nesting level; the writer used to check only top-level names. ([#696](https://github.com/dfa1/vortex-java/pull/696))
 - **Breaking:** a `Double`, `Float` or `BigDecimal` filter operand on an integer column fails with `VortexException`, as vortex-jni does, instead of being truncated so that `x >= 1.5` matched `x = 1`. ([#701](https://github.com/dfa1/vortex-java/issues/701))
 - A `vortex.variant` column whose shredded dtype has a control character in a field or variant name fails with `VortexException` instead of `IllegalArgumentException`. ([#694](https://github.com/dfa1/vortex-java/issues/694))
+- Written files carry the per-column file statistics (min, max, sum, null and NaN counts) in the footer, as vortex-jni writes them. ([#664](https://github.com/dfa1/vortex-java/issues/664))
 
 ### Added
 - JDK Flight Recorder events for file open, HTTP range requests, segment decode and encode, chunk filtering, writer back-pressure and the compressor's scheme choices, which mirror Rust's compressor trace. ([#601](https://github.com/dfa1/vortex-java/issues/601))

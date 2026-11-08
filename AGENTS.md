@@ -212,7 +212,8 @@ The tag push also creates the GitHub release, from the version's CHANGELOG secti
 
 8-byte trailer at EOF: `version(u16 LE) | postscriptLen(u16 LE) | magic(VTXF)`. The postscript
 (FlatBuffer, immediately before the trailer) points (offset+length) to the Footer (FlatBuffer),
-DType (FlatBuffer), and Layout (FlatBuffer) blobs elsewhere in the file.
+DType (FlatBuffer), Layout (FlatBuffer) and file statistics (FlatBuffer: one `ArrayStats` per
+top-level field, Rust 0.90's per-batch fold, `FileStatsAccumulator`) blobs elsewhere in the file.
 
 Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
 - **Flat** single encoded segment · **Chunked** sequence of Flats · **Struct** one child/column
