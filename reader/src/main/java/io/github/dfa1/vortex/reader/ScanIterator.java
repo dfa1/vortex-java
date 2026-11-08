@@ -1427,9 +1427,19 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// @param rowCount  the chunk's row count
     /// @param ct        the column's dtype, deciding the comparison mode
     /// @return `true` if no row can match and the chunk may be pruned
-    private static boolean canPrune(Predicate predicate, ArrayStats stats, long rowCount, DType ct) {
+    static boolean canPrune(Predicate predicate, ArrayStats stats, long rowCount, DType ct) {
         Object min = stats.min();
         Object max = stats.max();
+        if (ct instanceof DType.Decimal) {
+            // A flat node's stats scalar is decoded without the column's dtype, so a decimal bound
+            // arrives as text: not a bound this column can order, hence no bound at all.
+            if (!(min instanceof java.math.BigDecimal)) {
+                min = null;
+            }
+            if (!(max instanceof java.math.BigDecimal)) {
+                max = null;
+            }
+        }
         Long nullCount = stats.nullCount();
         if (ct instanceof DType.Primitive p && p.ptype().isFloating()
                 && (stats.nanCount() == null || stats.nanCount() != 0)) {
