@@ -72,6 +72,10 @@ public final class VortexWriter implements Closeable {
     // The batch being written: its columns' piece sizes, measured on the executor ahead of appendChunk.
     private final Map<ColumnName, CompletableFuture<long[]>> pieceSizes;
     private boolean firstChunkSeen;
+    private long rowCount;
+    // set when finish() starts: the file takes no more chunks, and a failed finish is not retried
+    private boolean finishing;
+    private WriteSummary summary;
 
     private VortexWriter(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings,
@@ -104,6 +108,9 @@ public final class VortexWriter implements Closeable {
         this.repartitioners = new LinkedHashMap<>();
         this.pieceSizes = new HashMap<>();
         this.firstChunkSeen = false;
+        this.rowCount = 0;
+        this.finishing = false;
+        this.summary = null;
     }
 
     /// Whether the write may emit Rust's `vortex.zoned` layout, added in `core2026.08.0`: with the
@@ -234,7 +241,12 @@ public final class VortexWriter implements Closeable {
     /// @throws IOException              if an I/O error occurs writing to the underlying channel
     /// @throws IllegalArgumentException if a schema column is missing from `columns`,
     ///         or if column arrays disagree on row count
+    /// @throws IllegalStateException    if the writer is already finished
     public void writeChunk(Map<ColumnName, Object> columns) throws IOException {
+        if (finishing) {
+            // the trailer is written: more rows would land after it, outside the file
+            throw new IllegalStateException("writer is finished");
+        }
         // Adapt each column up front so the map entry point accepts the same shapes as the
         // builder: boxed nullable arrays (Long[], Integer[], …) become NullableData,
         // raw primitive arrays pass through. Done before the row-count check so length validation
@@ -268,6 +280,7 @@ public final class VortexWriter implements Closeable {
             }
         }
 
+        rowCount += Math.max(expectedLen, 0);
         pieceSizes.clear();
         // Route extension columns first, so the columns' batches can be sized in parallel below.
         for (int i = 0; i < schema.fieldNames().size(); i++) {
@@ -355,8 +368,30 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    @Override
-    public void close() throws IOException {
+    /// Completes the file — the last chunks, zone maps, footer and trailer — and returns what it
+    /// holds, as Rust's `VortexWriter::finish` does. Later calls return the same summary; the
+    /// writer then takes no more chunks.
+    ///
+    /// ```java
+    /// WriteSummary summary;
+    /// try (VortexWriter writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
+    ///     writer.writeChunk(columns);
+    ///     summary = writer.finish();
+    /// }
+    /// ```
+    ///
+    /// @return the file's size, row count and per-column sizes and statistics
+    /// @throws IOException          if an I/O error occurs writing to the underlying channel
+    /// @throws IllegalStateException if an earlier call failed: the file is incomplete
+    public WriteSummary finish() throws IOException {
+        if (summary != null) {
+            return summary;
+        }
+        if (finishing) {
+            // writing the footer again would append a second one after the partial first
+            throw new IllegalStateException("an earlier finish failed; the file is incomplete");
+        }
+        finishing = true;
         flushRepartitioners();
         globalDict.flush();
         zoneMaps.flush(colChunks, globalDict.written());
@@ -366,8 +401,24 @@ public final class VortexWriter implements Closeable {
         if (zonedLayout) {
             zoned = LayoutId.ZONED;
         }
-        sink.finish(zoned, dtypeSerializer.buildDType(schema),
+        long fileSize = sink.finish(zoned, dtypeSerializer.buildDType(schema),
                 LayoutTree.build(schema, colChunks, globalDict.written(), zoneMaps.written()), fileStats);
+        Map<ColumnName, Long> sizes = sink.columnSizes();
+        Map<ColumnName, WriteSummary.Column> columns = new LinkedHashMap<>();
+        for (int i = 0; i < schema.fieldNames().size(); i++) {
+            ColumnName name = schema.fieldNames().get(i);
+            columns.put(name, new WriteSummary.Column(sizes.getOrDefault(name, 0L), fileStats.get(i).arrayStats()));
+        }
+        summary = new WriteSummary(fileSize, rowCount, columns);
+        return summary;
+    }
+
+    /// Finishes the file unless [#finish()] already did.
+    ///
+    /// @throws IOException if an I/O error occurs writing to the underlying channel
+    @Override
+    public void close() throws IOException {
+        finish();
     }
 
     private int writeSegment(ColumnName column, DType dtype, Object data, EncodingEncoder encodingOverride)

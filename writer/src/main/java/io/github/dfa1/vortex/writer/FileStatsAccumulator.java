@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -123,12 +124,57 @@ final class FileStatsAccumulator {
         if (summable() && !sumOverflowed) {
             sumScalar = sumScalar(sum);
         }
-        Long nans = null;
-        if (!extension && (kind == Kind.F16 || kind == Kind.FLOAT)) {
-            nans = nanCount;
+        return new NodeStats(scalar(min), scalar(maxValue()), null, null, null, nullCount, null, nans(), sumScalar);
+    }
+
+    /// The folded stats as Java values: a `Long` for an integer (a `U64` as its bits) or a bool sum,
+    /// a `Float` for an `F16`/`F32` bound and a `Double` for an `F64` one or any float sum, a
+    /// `Boolean`, a `BigDecimal`, a `String` for UTF-8 and a `byte[]` for binary.
+    ///
+    /// @return the same stats as [#stats()]; [ArrayStats#empty()] where that is [NodeStats#NONE]
+    ArrayStats arrayStats() {
+        if (!seenBatch) {
+            return ArrayStats.empty();
         }
-        Object maxValue = maxDropped ? null : max;
-        return new NodeStats(scalar(min), scalar(maxValue), null, null, null, nullCount, null, nans, sumScalar);
+        Object sumValue = null;
+        if (summable() && !sumOverflowed) {
+            sumValue = sum;
+        }
+        Object lo = javaValue(min);
+        Object hi = javaValue(maxValue());
+        return new ArrayStats(lo, lo != null && !minTruncated, hi, hi != null && !maxTruncated, sumValue,
+                null, null, null, nullCount, null, nans());
+    }
+
+    private Object maxValue() {
+        if (maxDropped) {
+            return null;
+        }
+        return max;
+    }
+
+    private Long nans() {
+        if (!extension && (kind == Kind.F16 || kind == Kind.FLOAT)) {
+            return nanCount;
+        }
+        return null;
+    }
+
+    private Object javaValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return switch (kind) {
+            case F16 -> ((Double) value).floatValue();
+            case FLOAT -> {
+                if (ptype == PType.F32) {
+                    yield ((Double) value).floatValue();
+                }
+                yield value;
+            }
+            case UTF8 -> new String((byte[]) value, StandardCharsets.UTF_8);
+            default -> value;
+        };
     }
 
     /// Whether the min is the column's exact minimum: no batch cut its bound.

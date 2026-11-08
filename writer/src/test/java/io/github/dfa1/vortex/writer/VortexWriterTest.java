@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
@@ -9,6 +10,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanOptions;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -784,5 +786,74 @@ class VortexWriterTest {
             }
         }
         return out.toByteArray();
+    }
+
+    @Nested
+    class Finish {
+
+        private final java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+
+        @Test
+        void summarizesTheFile() throws IOException {
+            // Given
+            VortexWriter sut = VortexWriter.create(java.nio.channels.Channels.newChannel(out), SCHEMA, WriteOptions.defaults());
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{3, 1, 2}, ColumnName.of("value"), new double[]{0.5, 1.5, 2.5}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{9}, ColumnName.of("value"), new double[]{-1.0}));
+
+            // When
+            WriteSummary result = sut.finish();
+
+            // Then — the stats fold both batches
+            assertThat(result.fileSize()).isEqualTo(out.size());
+            assertThat(result.rowCount()).isEqualTo(4);
+            assertThat(result.columns()).containsOnlyKeys(ColumnName.of("id"), ColumnName.of("value"));
+            ArrayStats id = result.columns().get(ColumnName.of("id")).stats();
+            assertThat(id).isEqualTo(new ArrayStats(1L, true, 9L, true, 15L, null, null, null, 0L, null, null));
+            assertThat(result.columns().get(ColumnName.of("value")).compressedSize()).isPositive();
+        }
+
+        @Test
+        void twice_returnsTheSameSummaryAndWritesNothing() throws IOException {
+            // Given — close() after finish() used to write a second footer after the first trailer
+            VortexWriter sut = VortexWriter.create(java.nio.channels.Channels.newChannel(out), SCHEMA, WriteOptions.defaults());
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{1}, ColumnName.of("value"), new double[]{1.0}));
+            WriteSummary first = sut.finish();
+            int size = out.size();
+
+            // When
+            WriteSummary result = sut.finish();
+            sut.close();
+
+            // Then
+            assertThat(result).isSameAs(first);
+            assertThat(out.size()).isEqualTo(size);
+        }
+
+        @Test
+        void writeChunkAfterFinish_throws() throws IOException {
+            // Given — rows written after the trailer would sit outside the file
+            VortexWriter sut = VortexWriter.create(java.nio.channels.Channels.newChannel(out), SCHEMA, WriteOptions.defaults());
+            sut.finish();
+            Map<ColumnName, Object> chunk = Map.of(ColumnName.of("id"), new long[]{1}, ColumnName.of("value"), new double[]{1.0});
+
+            // When / Then
+            assertThatThrownBy(() -> sut.writeChunk(chunk))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("finished");
+        }
+
+        @Test
+        void noRows_hasEmptyStats() throws IOException {
+            // Given — Rust keeps no statistic of a column it saw no batch of
+            VortexWriter sut = VortexWriter.create(java.nio.channels.Channels.newChannel(out), SCHEMA, WriteOptions.defaults());
+
+            // When
+            WriteSummary result = sut.finish();
+
+            // Then
+            assertThat(result.rowCount()).isZero();
+            assertThat(result.columns().values()).extracting(WriteSummary.Column::stats)
+                    .containsOnly(ArrayStats.empty());
+        }
     }
 }

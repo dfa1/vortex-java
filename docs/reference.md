@@ -136,7 +136,7 @@ The default `HttpClient` is a single JDK client shared across every `VortexHttpR
 
 ### `VortexWriter` (`io.github.dfa1.vortex.writer.VortexWriter`)
 
-Writes a Vortex file. Implements `Closeable`. The file is complete and readable as soon as `close()` returns.
+Writes a Vortex file. Implements `Closeable`. The file is complete and readable as soon as `finish()` or `close()` returns.
 
 | Method                                                                           | Notes                                                                                                            |
 |----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
@@ -145,7 +145,8 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 | `static create(WritableByteChannel, DType.Struct, WriteOptions, WriteRegistry)`  | Custom [`WriteRegistry`](#writeregistry-iogithubdfa1vortexwriterwriteregistry) — encoders and extension encoders together |
 | `writeChunk(Consumer<Chunk>)`                                                    | One batch of rows; typed builder validates column names + array types at each `.put`; missing columns throw `IllegalStateException` when the lambda returns. Preferred when columns are known at compile time. |
 | `writeChunk(Map<ColumnName, Object>)`                                                | One batch of rows by map. Validates that every schema column is present and that all columns share the same row count. Use when the column set is built dynamically (Parquet/JDBC importers, generic exporters). |
-| `close()`                                                                        | Finalizes file (footer, postscript, trailer)                                                                     |
+| `finish()`                                                                       | Finalizes the file (footer, postscript, trailer) and returns a `WriteSummary`: `fileSize()`, `rowCount()` and per column (schema order) its `compressedSize()` and `stats()` — the footer's file statistics (min, max, sum, null and NaN counts, folded over the batches, as vortex-jni's `VortexWriter.finish()` reports them). Later calls return the same summary; `writeChunk` afterwards throws `IllegalStateException` |
+| `close()`                                                                        | `finish()` unless it already ran                                                                                 |
 
 Batches are not chunks: as Rust's writer does, each primitive, boolean, decimal, string and binary
 column is repartitioned into chunks of whole 8192-row blocks reaching 1 MB of uncompressed data
@@ -199,7 +200,7 @@ A plain final class: start from a factory below and adjust with the `withXxx` me
 | `withGlobalDict(boolean)` | Toggle the shared cross-chunk dictionary |
 | `withCompact(boolean)` | Rust's compact preset (`with_compact`): Zstandard for strings and binary and Pco for integers and floats compete in the cascade. Requires `allowedCascading > 0`; `compact()` reads it back |
 | `withGlobalDictMaxRetainedBytes(long)` | Aggregate heap budget for buffered global-dict candidate columns |
-| `withExecutor(Executor)` | Compress segments on `executor` (e.g. the common `ForkJoinPool`); default is the calling thread. Output is byte-identical to a sequential write. The writer owns arrays passed to `writeChunk` until `close()` — do not modify them |
+| `withExecutor(Executor)` | Compress segments on `executor` (e.g. the common `ForkJoinPool`); default is the calling thread. Output is byte-identical to a sequential write. The writer owns arrays passed to `writeChunk` until `finish()` or `close()` — do not modify them |
 | `withEdition(Edition)` | Enable an [edition](#editions) for its family, replacing any edition already enabled for that family |
 | `withoutEditions()` | Turn the edition guard off, as Rust's `disable_editions()`: every encoding may be emitted, including those in no edition (`fastlanes.delta`, `vortex.patched`). Files may not be readable by other Vortex versions |
 | `withColumnEncoding(ColumnName, ColumnEncoding)` | Choose one column's encodings from `ColumnEncoding.candidates(EncodingId...)` only — the whole candidate set, children included, with canonical encodings as the fallback (Rust's `with_field_writer` over a restricted scheme set). The edition guard still applies and the column skips the global dict. An unknown column, or an encoding the writer cannot emit, fails `VortexWriter.create` |
