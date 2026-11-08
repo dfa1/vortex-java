@@ -73,6 +73,8 @@ final class SegmentEncoder {
     private static final List<EncodingId.WellKnown> WELL_KNOWN_IDS = List.of(EncodingId.WellKnown.values());
 
     private final WriteOptions options;
+    // Only the legacy vortex.stats zone map records a segment's sum: under vortex.zoned it is never read.
+    private final boolean segmentSums;
     // a copy, so a caller's list changed after create() cannot race the encoding tasks
     private final List<EncodingEncoder> encodings;
     // whether the writer was created with DEFAULT_CODECS rather than a caller's encoder list
@@ -103,8 +105,9 @@ final class SegmentEncoder {
 
     /// @throws IllegalArgumentException if a [ColumnEncoding] names a column outside `columns` or an
     ///         encoding this writer cannot produce
-    SegmentEncoder(WriteOptions options, List<EncodingEncoder> encodings, List<ColumnName> columns) {
+    SegmentEncoder(WriteOptions options, List<EncodingEncoder> encodings, List<ColumnName> columns, boolean segmentSums) {
         this.options = options;
+        this.segmentSums = segmentSums;
         this.defaultCodecs = encodings == DEFAULT_CODECS;
         this.encodings = List.copyOf(encodings);
         this.defaultRegistry = buildRegistry(this.encodings);
@@ -201,7 +204,11 @@ final class SegmentEncoder {
                 min = fallback != null ? fallback.min() : null;
                 max = fallback != null ? fallback.max() : null;
             }
-            SegmentStats stats = new SegmentStats(min, max, ZoneMapStatCodec.columnSum(dtype, data), nullCount);
+            ProtoScalarValue sum = null;
+            if (segmentSums) {
+                sum = ZoneMapStatCodec.columnSum(dtype, data);
+            }
+            SegmentStats stats = new SegmentStats(min, max, sum, nullCount);
             // the stats the flat segment's root node carries are Rust's, not the zone map's
             result = result.withRootStats(dtype, min, max, RowCount.of(data), nullCount);
             if (event.shouldCommit()) {

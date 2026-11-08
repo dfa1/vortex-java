@@ -58,6 +58,8 @@ final class DictColumnState {
     private final boolean binary;
     private final PType ptype;
     private final boolean nullable;
+    // Only the legacy vortex.stats zone map records a sum: under vortex.zoned it is never read.
+    private final boolean chunkSums;
     // First-seen value -> code map (keys are boxed primitives, String, or ByteBuffer — see varBinKey).
     private final Map<Object, Integer> valueToCode = new LinkedHashMap<>();
     // Hot-path side index for the primitive path: raw value bits -> code + 1 (0 == empty), open
@@ -84,8 +86,9 @@ final class DictColumnState {
     // Rust's `dict_bytes()`: a 16-byte view per entry plus the bytes of each value too long to inline.
     private long dictBytes;
 
-    DictColumnState(DType dtype) {
+    DictColumnState(DType dtype, boolean chunkSums) {
         this.dtype = dtype;
+        this.chunkSums = chunkSums;
         this.binary = dtype instanceof DType.Binary;
         this.varBin = binary || dtype instanceof DType.Utf8;
         this.ptype = dtype instanceof DType.Primitive p ? p.ptype() : null;
@@ -233,8 +236,11 @@ final class DictColumnState {
             values = prefix(values, consumed);
         }
         MinMax mm = PrimitiveEncodingEncoder.minMaxStats(ptype, values);
-        record(codes, validity, consumed, mm != null ? mm.min() : null, mm != null ? mm.max() : null,
-                PrimitiveEncodingEncoder.sumStat(ptype, values));
+        ProtoScalarValue sum = null;
+        if (chunkSums) {
+            sum = PrimitiveEncodingEncoder.sumStat(ptype, values);
+        }
+        record(codes, validity, consumed, mm != null ? mm.min() : null, mm != null ? mm.max() : null, sum);
         return consumed;
     }
 
