@@ -65,6 +65,10 @@ Separate from the Vector API, found while comparing against the Rust source:
   without a `nan_count` (the legacy `vortex.stats` table) may hold a `NaN`, so it is never pruned on its
   maximum. Pinned by `JavaWritesRustReadsIntegrationTest#javaWriter_jniReader_filteredFloats_matchJni`
   ([#518](https://github.com/dfa1/vortex-java/issues/518)).
+- A float or decimal filter operand on an integer column is refused (`VortexException`), as Rust's
+  compare refuses operands of different dtypes. Integer operands of any width are still accepted, a
+  deliberate leniency: Rust would refuse an `i32` literal against an `i64` column too. Pinned by
+  `FractionalOperandInteropIntegrationTest` ([#701](https://github.com/dfa1/vortex-java/issues/701)).
 - `U64` min/max and the dense-counter span in `ArrayStats` are computed in unsigned order, as Rust's
   `typed_int_stats` does.
 - The zoned float `Sum` skips `NaN`, as Rust's `skip_nans()` binding does; an all-`NaN` zone sums to `0.0`

@@ -17,6 +17,36 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CompareTest {
 
+    static Stream<Arguments> fractionalOperands() {
+        return Stream.of(
+                Arguments.of(1.5, DTypes.I64),
+                Arguments.of(1.5f, DTypes.I32),
+                Arguments.of(new BigDecimal("1.5"), DTypes.U8),
+                // a whole double is rejected too: Rust refuses the f64 dtype, not the fraction
+                Arguments.of(2.0, DTypes.I64));
+    }
+
+    @ParameterizedTest(name = "{0} vs {1}")
+    @MethodSource("fractionalOperands")
+    void integerColumn_nonIntegerOperand_throwsVortexException(Object operand, DType column) {
+        // Given an integer column value and a float/double/decimal operand. The compare used to
+        // truncate it to a long, so `x >= 1.5` matched `x = 1` (#701)
+        // When / Then
+        assertThatThrownBy(() -> Compare.values(1L, operand, column))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("an integer column compares only with an integer value");
+    }
+
+    @Test
+    void integerColumn_narrowIntegerOperands_compareByValue() {
+        // Given operands boxed at every integer width, which callers may pass for any integer column
+        // When
+        int result = Compare.values((byte) 1, (short) 2, DTypes.I64) + Compare.values(3, 3L, DTypes.I64);
+
+        // Then — 1 < 2 contributes -1, 3 == 3 contributes 0
+        assertThat(result).isEqualTo(-1);
+    }
+
     @Test
     void stringsOrderByUtf8BytesNotUtf16() {
         // Given a supplementary character (a surrogate pair in UTF-16, 4 bytes in UTF-8) and a BMP
@@ -162,11 +192,12 @@ class CompareTest {
 
     @Test
     void primitiveColumnsKeepTheirOwnOrderWhateverTheOperand() {
-        // Given a U64 value past 2^63 (a negative long), and a float column holding NaN
+        // Given a U64 value past 2^63 (a negative long), and a float column holding NaN. A decimal
+        // operand on the integer column is rejected (#701), so that side uses an integer one
         long big = -1L;
 
         // When
-        int unsigned = Compare.values(big, new BigDecimal("2"), DTypes.U64);
+        int unsigned = Compare.values(big, 2L, DTypes.U64);
         int nan = Compare.values(Double.NaN, new BigDecimal("1.5"), DTypes.F64);
 
         // Then the unsigned order and the double order hold, no decimal conversion
