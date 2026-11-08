@@ -1,9 +1,11 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Covers [PrimitiveFilter#matchDouble(double, PrimitiveFilter.DoubleOp, double, double)]'s float
 /// ordering (#406 gap 3, #518): Rust's total order, the same as `Double.compare`, where `-0.0 < 0.0`
@@ -95,6 +97,32 @@ class PrimitiveFilterTest {
                     .isEqualTo(new PrimitiveFilter.DoubleBound(PrimitiveFilter.DoubleOp.GTE, 5.0, 0.0));
             assertThat(PrimitiveFilter.lowerDouble(new Predicate.Between(0.0, 10.0)))
                     .isEqualTo(new PrimitiveFilter.DoubleBound(PrimitiveFilter.DoubleOp.BETWEEN, 0.0, 10.0));
+        }
+    }
+
+    @Nested
+    class LowerLong {
+
+        @Test
+        void fractionalBound_throwsVortexException() {
+            // Given a Between whose upper bound is a double. The fused kernels lower integer
+            // columns here, and truncating 2.5 to 2 silently changed the range (#701)
+            Predicate predicate = new Predicate.Between(1L, 2.5);
+
+            // When / Then
+            assertThatThrownBy(() -> PrimitiveFilter.lowerLong(predicate, 0L))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("an integer column compares only with an integer value");
+        }
+
+        @Test
+        void integerBound_lowersToItsRange() {
+            // Given an Integer operand, a narrower box than the column's long domain
+            // When
+            PrimitiveFilter.LongRange result = PrimitiveFilter.lowerLong(new Predicate.Gte(7), 0L);
+
+            // Then
+            assertThat(result).isEqualTo(new PrimitiveFilter.LongRange(7L, Long.MAX_VALUE, false));
         }
     }
 }

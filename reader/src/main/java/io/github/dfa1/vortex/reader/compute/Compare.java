@@ -50,9 +50,9 @@ public final class Compare {
                 // U64 values store the raw 64 bits, so a value >= 2^63 is a negative Long; an
                 // unsigned column must compare unsigned. U8/U16/U32 are zero-extended to a positive
                 // Long where signed == unsigned, so this stays correct for them too.
-                return column.isUnsigned()
-                        ? Long.compareUnsigned(na.longValue(), nb.longValue())
-                        : Long.compare(na.longValue(), nb.longValue());
+                long la = integer(a);
+                long lb = integer(b);
+                return column.isUnsigned() ? Long.compareUnsigned(la, lb) : Long.compare(la, lb);
             }
             // Column type unresolved — fall back to a width-agnostic compare keyed off the operands
             // so two valid numbers never drop into the throwing path.
@@ -85,6 +85,24 @@ public final class Compare {
             case Float f when Float.isFinite(f) -> new BigDecimal(f.toString());
             default -> throw new VortexException("compute value of type " + className(value)
                     + " (" + value + ") is not comparable to a decimal");
+        };
+    }
+
+    /// An integer-column operand as a long. Integers of any width are accepted, as everywhere in the
+    /// compute API; a float, double or decimal is rejected, as Rust's compare requires both sides to
+    /// share a dtype: truncating it would make `x >= 1.5` match `x = 1` (#701).
+    ///
+    /// @param value the operand
+    /// @return its long value
+    /// @throws VortexException if `value` is not a `Long`, `Integer`, `Short` or `Byte`
+    static long integer(Object value) {
+        return switch (value) {
+            case Long l -> l;
+            case Integer i -> i;
+            case Short s -> s;
+            case Byte b -> b;
+            default -> throw new VortexException("an integer column compares only with an integer value, got "
+                    + className(value) + " (" + value + ")");
         };
     }
 

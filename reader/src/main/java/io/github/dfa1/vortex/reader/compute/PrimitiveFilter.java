@@ -50,44 +50,44 @@ final class PrimitiveFilter {
     /// @param predicate the comparison leaf (Eq / Neq / Lt / Lte / Gt / Gte / Between)
     /// @param flip      the order-preserving XOR flip (`Long.MIN_VALUE` unsigned, `0` signed)
     /// @return the inclusive range on the flipped longs and whether to select its complement
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if an operand is not an integer
     static LongRange lowerLong(Predicate predicate, long flip) {
         // Every leaf lowers to a single inclusive range on the flipped longs; Neq is that same
         // range (the point [c, c]) tested negated, so the match is the complement of equality.
         return switch (predicate) {
             case Predicate.Eq(var value) -> {
-                long c = ((Number) value).longValue() ^ flip;
+                long c = Compare.integer(value) ^ flip;
                 yield new LongRange(c, c, false);
             }
             case Predicate.Neq(var value) -> {
-                long c = ((Number) value).longValue() ^ flip;
+                long c = Compare.integer(value) ^ flip;
                 yield new LongRange(c, c, true);
             }
             case Predicate.Lt(var value) -> {
-                long c = ((Number) value).longValue() ^ flip;
+                long c = Compare.integer(value) ^ flip;
                 yield c == Long.MIN_VALUE
                         ? new LongRange(0L, -1L, false)
                         : new LongRange(Long.MIN_VALUE, c - 1, false);
             }
             case Predicate.Lte(var value) -> {
                 // v <= c → inclusive [MIN, c]; no underflow guard needed (c is the upper bound).
-                long c = ((Number) value).longValue() ^ flip;
+                long c = Compare.integer(value) ^ flip;
                 yield new LongRange(Long.MIN_VALUE, c, false);
             }
             case Predicate.Gt(var value) -> {
-                long c = ((Number) value).longValue() ^ flip;
+                long c = Compare.integer(value) ^ flip;
                 yield c == Long.MAX_VALUE
                         ? new LongRange(0L, -1L, false)
                         : new LongRange(c + 1, Long.MAX_VALUE, false);
             }
             case Predicate.Gte(var value) -> {
                 // v >= c → inclusive [c, MAX]; no overflow guard needed (c is the lower bound).
-                long c = ((Number) value).longValue() ^ flip;
+                long c = Compare.integer(value) ^ flip;
                 yield new LongRange(c, Long.MAX_VALUE, false);
             }
             default -> {
                 Predicate.Between between = (Predicate.Between) predicate;
-                yield new LongRange(((Number) between.lo()).longValue() ^ flip,
-                        ((Number) between.hi()).longValue() ^ flip, false);
+                yield new LongRange(Compare.integer(between.lo()) ^ flip, Compare.integer(between.hi()) ^ flip, false);
             }
         };
     }

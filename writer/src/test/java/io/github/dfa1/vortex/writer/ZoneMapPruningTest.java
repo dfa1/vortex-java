@@ -503,22 +503,24 @@ class ZoneMapPruningTest {
     }
 
     /// Comparison mode keys off the *column* type, not the filter value's boxing — so an integer
-    /// column never routes through double-compare, which would lose precision past 2^53.
+    /// column never routes through double-compare, which would lose precision past 2^53. A
+    /// floating operand on an integer column is refused outright, as Rust's compare refuses an
+    /// operand of another dtype (#701).
     @Nested
     class IntegerColumnFloatFilter {
 
         @Test
-        void doubleFilterOnI64ComparesInIntegerDomain(@TempDir Path tmp) throws IOException {
-            // Given — a chunk whose max (2^53 + 1) is NOT exactly representable as a double
+        void doubleFilterOnI64_throwsVortexException(@TempDir Path tmp) throws IOException {
+            // Given — a chunk whose max (2^53 + 1) is NOT exactly representable as a double, so a
+            // double-domain compare would round it down and wrongly prune the matching row
             long max = (1L << 53) + 1;
             Path file = writeI64Chunk(tmp, max - 2, max - 1, max);
+            ScanFilter filter = ScanFilter.gt(ColumnName.of("id"), (double) (1L << 53));
 
-            // When — gt with a Double threshold of 2^53; only the row 2^53+1 satisfies it
-            List<Long> rowCounts = scanRowCounts(file, ScanFilter.gt(ColumnName.of("id"), (double) (1L << 53)));
-
-            // Then — chunk kept. A double-domain compare would round 2^53+1 down to 2^53 and wrongly
-            // prune the chunk, dropping the one matching row.
-            assertThat(rowCounts).containsExactly(3L);
+            // When / Then — refused even though 2^53 is whole: the dtype differs, not the value
+            assertThatThrownBy(() -> scanRowCounts(file, filter))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("an integer column compares only with an integer value");
         }
     }
 

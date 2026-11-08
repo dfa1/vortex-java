@@ -117,16 +117,16 @@ class FilterCommandTest {
     }
 
     @Test
-    void doubleValueAgainstLongColumn_returnsOk() {
-        // Given — a fractional literal parses as Double, compared against an I64 column
-        // (exercises parseValue's Double branch and compareNumeric's Double path)
+    void doubleValueAgainstLongColumn_returnsError() {
+        // Given — a fractional literal parses as Double, compared against an I64 column. The scan
+        // refuses it, as vortex-jni does, instead of truncating 1.5 to 1 (#701)
         // When
         CliTestSupport.Captured result = capture(() ->
                 FilterCommand.run(new String[]{"filter", file.toString(), "id", ">", "1.5"}));
 
-        // Then — id in {2, 3} match
-        assertThat(result.status()).isEqualTo(ExitStatus.OK);
-        assertThat(result.stdout()).startsWith("id");
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.ERROR);
+        assertThat(result.stderr()).contains("an integer column compares only with an integer value");
     }
 
     @Test

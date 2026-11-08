@@ -233,6 +233,10 @@ cannot match are skipped entirely; in the rest every row is tested, so a scan re
 matching rows, and a limit counts them, as Rust's scan does. A chunk with no matching row is not
 returned. The filter's columns are decoded even when they are not projected.
 
+An integer column takes an integer operand of any width (`Long`, `Integer`, `Short`, `Byte`). A
+`Double`, `Float` or `BigDecimal` operand on an integer column fails the scan with
+`VortexException`, as vortex-jni refuses it ("Cannot compare different DTypes i64 and f64").
+
 | Static factory              | Builds                            |
 |------------------------------|------------------------------------|
 | `ScanFilter.eq(col, val)`    | `Column` bound to `Predicate.Eq`   |
