@@ -20,8 +20,9 @@ import java.util.Map;
 /// The file's layout tree, and the footer's `layout_specs` list its nodes index into: every
 /// layout node the writer emits is built here.
 ///
-/// The root is a struct with one child per column: a chunked layout of flat segments, or the
-/// column's dict layout (several in a chunked layout), each wrapped in its zone map when it has one.
+/// The root is a struct with one child per column: a chunked layout of flat segments (the flat
+/// itself for one chunk), or the column's dict layout (several in a chunked layout), each wrapped in
+/// its zone map when it has one.
 final class LayoutTree {
 
     // Indices into the footer's layout_specs list, in the order specs() writes them
@@ -78,9 +79,7 @@ final class LayoutTree {
                     flats[i] = FbsLayout.createFbsLayout(fbb, FLAT, cr.rowCount(), 0, 0, segV);
                     colRows += cr.rowCount();
                 }
-                int childV = FbsLayout.createChildrenVector(fbb, flats);
-                int dataChunked = FbsLayout.createFbsLayout(fbb, CHUNKED, colRows, 0, childV, 0);
-                colLayouts[c] = zoned(fbb, zoneMaps.get(colName), dataChunked, colRows);
+                colLayouts[c] = zoned(fbb, zoneMaps.get(colName), chunked(fbb, flats, colRows), colRows);
                 if (totalRows == 0) {
                     totalRows = colRows;
                 }
@@ -106,6 +105,15 @@ final class LayoutTree {
         return FbsLayout.createFbsLayout(fbb, ZONED, colRows, metaV, childV, 0);
     }
 
+    /// A chunked layout of `children`, or the only child itself: Rust's `ChunkedLayoutStrategy`
+    /// writes no chunked node around a single chunk.
+    private static int chunked(FbsBuilder fbb, int[] children, long rows) {
+        if (children.length == 1) {
+            return children[0];
+        }
+        return FbsLayout.createFbsLayout(fbb, CHUNKED, rows, 0, FbsLayout.createChildrenVector(fbb, children), 0);
+    }
+
     /// A column's dict layout: one dictionary is the column's layout; several are a chunked layout
     /// of them.
     private static int dictLayout(FbsBuilder fbb, List<DictColRef> refs) {
@@ -113,12 +121,7 @@ final class LayoutTree {
         for (int i = 0; i < dictLayouts.length; i++) {
             dictLayouts[i] = dictColLayout(fbb, refs.get(i));
         }
-        int dictLayout = dictLayouts[0];
-        if (dictLayouts.length > 1) {
-            dictLayout = FbsLayout.createFbsLayout(fbb, CHUNKED, rows(refs), 0,
-                    FbsLayout.createChildrenVector(fbb, dictLayouts), 0);
-        }
-        return dictLayout;
+        return chunked(fbb, dictLayouts, rows(refs));
     }
 
     private static long rows(List<DictColRef> refs) {
@@ -130,7 +133,7 @@ final class LayoutTree {
     }
 
     private static int dictColLayout(FbsBuilder fbb, DictColRef ref) {
-        // Build codes Chunked layout: children are one Flat per original chunk
+        // Build the codes layout: one Flat per original chunk, chunked when there are several
         int numChunks = ref.codesSegIdxes().size();
         int[] codesFlats = new int[numChunks];
         long totalCodesRows = 0;
@@ -140,8 +143,7 @@ final class LayoutTree {
             codesFlats[j] = FbsLayout.createFbsLayout(fbb, FLAT, rowCount, 0, 0, segV);
             totalCodesRows += rowCount;
         }
-        int codesChildV = FbsLayout.createChildrenVector(fbb, codesFlats);
-        int codesChunked = FbsLayout.createFbsLayout(fbb, CHUNKED, totalCodesRows, 0, codesChildV, 0);
+        int codesChunked = chunked(fbb, codesFlats, totalCodesRows);
 
         // Build values Flat layout
         int valSegV = FbsLayout.createSegmentsVector(fbb, new long[]{ref.valuesSegIdx()});
