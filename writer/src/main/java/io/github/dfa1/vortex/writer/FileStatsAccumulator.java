@@ -190,31 +190,41 @@ final class FileStatsAccumulator {
     }
 
     private static long nanCount(Object values) {
-        long nans = 0;
-        switch (values) {
-            case short[] a -> {
-                for (short v : a) {
-                    // an F16 NaN: all exponent bits set and a non-zero mantissa
-                    if ((v & 0x7FFF) > 0x7C00) {
-                        nans++;
-                    }
-                }
-            }
-            case float[] a -> {
-                for (float v : a) {
-                    if (Float.isNaN(v)) {
-                        nans++;
-                    }
-                }
-            }
-            case double[] a -> {
-                for (double v : a) {
-                    if (Double.isNaN(v)) {
-                        nans++;
-                    }
-                }
-            }
+        return switch (values) {
+            case short[] a -> f16NanCount(a);
+            case float[] a -> nanCount(a);
+            case double[] a -> nanCount(a);
             default -> throw new IllegalStateException("not a float array: " + values.getClass().getSimpleName());
+        };
+    }
+
+    private static long f16NanCount(short[] values) {
+        long nans = 0;
+        for (short v : values) {
+            // an F16 NaN: all exponent bits set and a non-zero mantissa
+            if ((v & 0x7FFF) > 0x7C00) {
+                nans++;
+            }
+        }
+        return nans;
+    }
+
+    private static long nanCount(float[] values) {
+        long nans = 0;
+        for (float v : values) {
+            if (Float.isNaN(v)) {
+                nans++;
+            }
+        }
+        return nans;
+    }
+
+    private static long nanCount(double[] values) {
+        long nans = 0;
+        for (double v : values) {
+            if (Double.isNaN(v)) {
+                nans++;
+            }
         }
         return nans;
     }

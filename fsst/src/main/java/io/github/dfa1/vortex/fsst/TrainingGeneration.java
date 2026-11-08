@@ -108,66 +108,82 @@ final class TrainingGeneration {
 
     /// Rust's `optimize`: the candidates from the counts, then the best 255 that fit in the table.
     private static List<Symbol> optimize(Compressor current, Counts counts, int fraction, boolean prune) {
-        // keyed by the symbol's bytes: the same symbol reached through different codes (a byte
-        // that escaped and the symbol that is just that byte) adds up its gains
-        Map<Long, Long> gains = new LinkedHashMap<>();
-        // Rust's integer division: 0 at the first generation, where every count is at least 1
-        int minCount = prune ? 1 : 5 * fraction / Sample.FRACTION_DENOMINATOR;
-        for (int code1 = counts.nextSingle(0); code1 >= 0 && code1 < NO_CODE; code1 = counts.nextSingle(code1 + 1)) {
-            long symbol1 = symbolOf(current, code1);
-            int length1 = lengthOf(symbol1);
-            long count = counts.single(code1);
-            if (count < minCount) {
-                continue;
-            }
-            long gain = count * length1;
-            if (length1 == 1) {
-                gain *= SINGLE_BYTE_GAIN_BOOST;
-            }
-            gains.merge(symbol1, gain, Long::sum);
-            // no merges in the last generation, nor of a symbol that cannot grow
-            if (fraction >= Sample.FRACTION_DENOMINATOR || length1 == MAX_SYMBOL_LENGTH) {
-                continue;
-            }
-            for (int code2 = counts.nextPair(code1, 0); code2 >= 0 && code2 < NO_CODE;
-                 code2 = counts.nextPair(code1, code2 + 1)) {
-                long symbol2 = symbolOf(current, code2);
-                int length2 = lengthOf(symbol2);
-                if (length1 + length2 > MAX_SYMBOL_LENGTH) {
-                    continue;
-                }
-                long merged = symbol1 | symbol2 << (8 * length1);
-                gains.merge(merged, counts.pair(code1, code2) * lengthOf(merged), Long::sum);
-            }
-        }
-
+        Map<Long, Long> gains = gains(current, counts, fraction, prune);
         Candidate[] candidates = new Candidate[gains.size()];
         int index = 0;
         for (Map.Entry<Long, Long> entry : gains.entrySet()) {
             candidates[index++] = new Candidate(entry.getValue(), lengthOf(entry.getKey()), entry.getKey());
         }
         Arrays.sort(candidates, Candidate.BEST_FIRST);
+        return select(candidates, prune);
+    }
+
+    /// Each candidate symbol's gain, keyed by the symbol's bytes: the same symbol reached through
+    /// different codes (a byte that escaped and the symbol that is just that byte) adds up its gains.
+    private static Map<Long, Long> gains(Compressor current, Counts counts, int fraction, boolean prune) {
+        Map<Long, Long> gains = new LinkedHashMap<>();
+        // Rust's integer division: 0 at the first generation, where every count is at least 1
+        int minCount = prune ? 1 : 5 * fraction / Sample.FRACTION_DENOMINATOR;
+        // no merges in the last generation
+        boolean merge = fraction < Sample.FRACTION_DENOMINATOR;
+        for (int code1 = counts.nextSingle(0); code1 >= 0 && code1 < NO_CODE; code1 = counts.nextSingle(code1 + 1)) {
+            long count = counts.single(code1);
+            if (count >= minCount) {
+                long symbol1 = symbolOf(current, code1);
+                int length1 = lengthOf(symbol1);
+                long gain = count * length1;
+                if (length1 == 1) {
+                    gain *= SINGLE_BYTE_GAIN_BOOST;
+                }
+                gains.merge(symbol1, gain, Long::sum);
+                // nor merges of a symbol that cannot grow
+                if (merge && length1 < MAX_SYMBOL_LENGTH) {
+                    addMerges(gains, current, counts, code1, symbol1, length1);
+                }
+            }
+        }
+        return gains;
+    }
+
+    /// The gains of `code1`'s symbol merged with each code counted after it, where the two fit in 8 bytes.
+    private static void addMerges(Map<Long, Long> gains, Compressor current, Counts counts, int code1, long symbol1,
+                                  int length1) {
+        for (int code2 = counts.nextPair(code1, 0); code2 >= 0 && code2 < NO_CODE;
+             code2 = counts.nextPair(code1, code2 + 1)) {
+            long symbol2 = symbolOf(current, code2);
+            if (length1 + lengthOf(symbol2) <= MAX_SYMBOL_LENGTH) {
+                long merged = symbol1 | symbol2 << (8 * length1);
+                gains.merge(merged, counts.pair(code1, code2) * lengthOf(merged), Long::sum);
+            }
+        }
+    }
+
+    /// The first 255 candidates, best first, that are worth their table entry when `prune` is set
+    /// and whose hash slot is free.
+    private static List<Symbol> select(Candidate[] candidates, boolean prune) {
         BitSet takenSlots = new BitSet();
         List<Symbol> result = new ArrayList<>(MAX_SYMBOLS);
         for (int i = 0; i < candidates.length && result.size() < MAX_SYMBOLS; i++) {
-            long symbol = candidates[i].symbol();
-            int length = candidates[i].length();
-            if (prune) {
-                long saves = candidates[i].gain();
-                if (length == 1) {
-                    saves /= SINGLE_BYTE_GAIN_BOOST;
-                }
-                if (saves <= length + 1) {
-                    continue;
-                }
+            Candidate candidate = candidates[i];
+            if (prune && !savesMoreThanItCosts(candidate)) {
+                continue;
             }
             // a 3-8 byte symbol whose hash slot a better one holds is skipped, and the next
             // candidate takes its code
-            if (length < 3 || claimSlot(takenSlots, symbol)) {
-                result.add(new Symbol(symbol, length));
+            if (candidate.length() < 3 || claimSlot(takenSlots, candidate.symbol())) {
+                result.add(new Symbol(candidate.symbol(), candidate.length()));
             }
         }
         return result;
+    }
+
+    /// Whether a symbol saves more bytes than its table entry costs: its length plus one.
+    private static boolean savesMoreThanItCosts(Candidate candidate) {
+        long saves = candidate.gain();
+        if (candidate.length() == 1) {
+            saves /= SINGLE_BYTE_GAIN_BOOST;
+        }
+        return saves > candidate.length() + 1;
     }
 
     /// The symbol of an extended code: a byte no symbol matched, or the current table's symbol.
