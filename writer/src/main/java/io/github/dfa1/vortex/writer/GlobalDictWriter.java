@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -289,35 +290,45 @@ final class GlobalDictWriter {
     // strategy coalesces the codes like any data column, so U16 codes chunk at 512Ki rows; the
     // legacy zone map keeps one code chunk per batch, its zones.
     private void writeGlobalDictCodes(ColumnName colName, DictColumnState state, int valuesSegIdx) throws IOException {
-        DType codesDtype = new DType.Primitive(DictColumnState.CODES_PTYPE, false);
+        DType codesDtype = new DType.Primitive(state.codesPType(), false);
         List<Integer> codesSegIdxes = new ArrayList<>();
         List<Long> codesRowCounts = new ArrayList<>();
         Repartitioner repartitioner = repartitionCodes ? new Repartitioner(codesDtype) : null;
         for (int c = 0; c < state.chunkCount(); c++) {
-            short[] codes = state.chunkCodes(c);
-            List<Object> ready = repartitioner != null ? repartitioner.add(codes, codes.length) : List.of(codes);
+            short[] buffered = state.chunkCodes(c);
+            Object codes = buffered;
+            if (state.codesPType() == PType.U8) {
+                // the codes of 8-bit values are U8, as Rust's: narrow the buffered ones
+                byte[] narrow = new byte[buffered.length];
+                for (int i = 0; i < narrow.length; i++) {
+                    narrow[i] = (byte) buffered[i];
+                }
+                codes = narrow;
+            }
+            List<Object> ready = repartitioner != null ? repartitioner.add(codes, buffered.length) : List.of(codes);
             for (Object chunk : ready) {
                 codesSegIdxes.add(sink.write(colName, codesDtype, chunk, null, Set.of()));
-                codesRowCounts.add((long) ((short[]) chunk).length);
+                codesRowCounts.add((long) RowCount.of(chunk));
             }
         }
         for (Object last : repartitioner != null ? repartitioner.finish() : List.of()) {
             codesSegIdxes.add(sink.write(colName, codesDtype, last, null, Set.of()));
-            codesRowCounts.add((long) ((short[]) last).length);
+            codesRowCounts.add((long) RowCount.of(last));
         }
         dictColRefs.computeIfAbsent(colName, _ -> new ArrayList<>()).add(new DictColRef(valuesSegIdx, state.cardinality(),
                 codesSegIdxes, codesRowCounts, state.chunkRowCounts(), state.chunkNullCounts(),
-                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), false));
+                state.chunkStatsMin(), state.chunkStatsMax(), state.chunkStatsSum(), state.codesPType(), false));
     }
 
     /// One written dictionary: its values segment, its code chunks, and the per-batch stats the
     /// legacy zone map is built from.
     ///
+    /// @param codesPType    the codes' ptype, declared in the dict layout's metadata
     /// @param nullableCodes whether the codes child carries validity (Rust's `is_nullable_codes`)
     record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,
             List<Long> codesRowCounts, List<Long> chunkRowCounts, List<Long> chunkNullCounts,
             List<ProtoScalarValue> chunkStatsMin, List<ProtoScalarValue> chunkStatsMax, List<ProtoScalarValue> chunkStatsSum,
-            boolean nullableCodes) {
+            PType codesPType, boolean nullableCodes) {
         long totalRows() {
             return chunkRowCounts.stream().mapToLong(Long::longValue).sum();
         }

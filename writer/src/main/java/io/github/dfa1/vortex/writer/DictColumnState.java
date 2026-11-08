@@ -31,13 +31,19 @@ import java.util.Map;
 /// therefore the wire codes.
 final class DictColumnState {
 
-    /// The codes ptype of every global dict: Rust's `DictLayoutConstraints` derive it from the
-    /// configured maximum dictionary length, not the actual one -- U8 only when `max_len <= 255`,
-    /// and the default `max_len` is `u16::MAX` -- so a default Rust global dict always has U16
-    /// codes. The width matters beyond the bytes on disk: the cascade scores candidates against
-    /// the codes' raw width, and on U8 codes Sparse's estimate beat bit-packing where on Rust's
-    /// U16 codes it does not (taxi Airport_fee).
+    /// The codes ptype of a global dict over wider than 8-bit values: Rust's dict builder derives it
+    /// from the configured maximum dictionary length bounded by the value type's range
+    /// (`builders/dict/primitive.rs`), not the actual length, and the default `max_len` is
+    /// `u16::MAX`, so a default Rust global dict has U16 codes unless its values are 8-bit (see
+    /// [#codesPType()]). The width matters beyond the bytes on disk: the cascade scores candidates
+    /// against the codes' raw width, and on U8 codes Sparse's estimate beat bit-packing where on
+    /// Rust's U16 codes it does not (taxi Airport_fee).
     static final PType CODES_PTYPE = PType.U16;
+
+    /// The most entries an 8-bit dictionary holds, so its U8 codes fit. Rust bounds only the codes
+    /// width by the type's range, not the entry count, and panics on the 257th entry (all 256
+    /// values and a null); Java starts a new dictionary there instead.
+    private static final int MAX_U8_CODE_ENTRIES = 256;
 
     /// Rust's `DictLayoutConstraints` defaults: at most `u16::MAX` entries and 1 MiB of values (of
     /// views plus out-of-line bytes for text). A column that reaches either starts a new dictionary,
@@ -109,6 +115,12 @@ final class DictColumnState {
 
     boolean nullable() {
         return nullable;
+    }
+
+    /// The ptype of this dictionary's codes: U8 over 8-bit values, whose range bounds Rust's codes
+    /// width (`u8::MAX`), U16 otherwise.
+    PType codesPType() {
+        return ptype != null && ptype.bits() == 8 ? PType.U8 : CODES_PTYPE;
     }
 
     /// Number of dictionary entries, the null entry included.
@@ -199,6 +211,9 @@ final class DictColumnState {
         boolean[] validity = nullableData ? ((NullableData) data).validity() : null;
         int len = primitiveArrayLen(values, ptype);
         int cap = (int) Math.min(MAX_ENTRIES, MAX_DICT_BYTES / ptype.byteSize());
+        if (codesPType() == PType.U8) {
+            cap = MAX_U8_CODE_ENTRIES;
+        }
 
         short[] codes = new short[len];
         // Probe the unboxed bits index and box only when inserting a value the dictionary has not

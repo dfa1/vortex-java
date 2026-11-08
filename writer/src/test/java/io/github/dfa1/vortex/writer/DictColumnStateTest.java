@@ -211,6 +211,41 @@ class DictColumnStateTest {
         assertThat(sut.chunkStatsMax().getLast()).isEqualTo(ProtoScalarValue.ofInt64Value(6L));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "U8"})
+    void ingestDictChunk_closesAnEightBitDictionaryWhereItsU8CodesEnd(PType ptype) {
+        // Given — every byte value, then a null: a 257th entry, which U8 codes cannot name (Rust
+        // panics there; Java starts a new dictionary)
+        var sut = new DictColumnState(new DType.Primitive(ptype, true), true);
+        byte[] all = new byte[257];
+        boolean[] validity = new boolean[257];
+        for (int i = 0; i < 256; i++) {
+            all[i] = (byte) i;
+            validity[i] = true;
+        }
+
+        // When
+        int result = sut.ingestDictChunk(new NullableData(all, validity));
+
+        // Then
+        assertThat(sut.codesPType()).isEqualTo(PType.U8);
+        assertThat(result).isEqualTo(256);
+        assertThat(sut.cardinality()).isEqualTo(256);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I16", "U16", "I32", "F64"})
+    void codesPType_isU16AboveEightBits(PType ptype) {
+        // Given
+        var sut = new DictColumnState(new DType.Primitive(ptype, false), true);
+
+        // When
+        PType result = sut.codesPType();
+
+        // Then
+        assertThat(result).isEqualTo(PType.U16);
+    }
+
     // ── primitiveArrayLen / readPrimitiveElement ─────────────────────────────────
 
     static Stream<Arguments> primitiveArrayLenCases() {

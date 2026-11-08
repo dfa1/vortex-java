@@ -25,6 +25,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.SmallIntVector;
 import org.apache.arrow.vector.TinyIntVector;
+import org.apache.arrow.vector.UInt1Vector;
 import org.apache.arrow.vector.UInt2Vector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -155,7 +156,7 @@ class DictLayoutInteropIntegrationTest {
     }
 
     @ParameterizedTest(name = "{0}")
-    @EnumSource(value = PType.class, names = {"I8", "I16", "U16"})
+    @EnumSource(value = PType.class, names = {"I8", "U8", "I16", "U16"})
     void admitsANullableNarrowColumnAsRustDoes(PType ptype, @TempDir Path tmp) throws Exception {
         // Given — the profile of Public BI Generico's `Disco` first 8192 rows (#651): a nullable
         // SMALLINT, 40% valid, 62 distinct values in 5..132 with a few far more common than the
@@ -186,9 +187,11 @@ class DictLayoutInteropIntegrationTest {
         Path java = writeJavaNullable(tmp, ptype, values, valid);
         Path jni = writeJniNullable(tmp, ptype, values, valid);
 
-        // Then — the same layouts and encodings, node for node, and vortex-jni reads Java's file
-        // back to the same values as its own
+        // Then — the same layouts and encodings, node for node, the same bytes (8-bit values have
+        // U8 codes, as Rust's dict builder bounds the codes by the values' range: Java's U16 codes
+        // had the same tree), and vortex-jni reads Java's file back to the same values as its own
         assertThat(EncodingTrees.of(java)).isEqualTo(EncodingTrees.of(jni));
+        assertThat(EncodingTrees.flatBuffersHex(java)).isEqualTo(EncodingTrees.flatBuffersHex(jni));
         assertThat(dictLayouts(EncodingTrees.of(java))).isPositive();
         assertThat(readWithJni(java)).isEqualTo(readWithJni(jni));
     }
@@ -201,7 +204,7 @@ class DictLayoutInteropIntegrationTest {
              var w = io.github.dfa1.vortex.writer.VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             for (int from = 0; from < values.length; from += CHUNK) {
                 Object chunk = switch (ptype) {
-                    case I8 -> {
+                    case I8, U8 -> {
                         byte[] a = new byte[CHUNK];
                         for (int i = 0; i < CHUNK; i++) {
                             a[i] = (byte) values[from + i];
@@ -226,6 +229,7 @@ class DictLayoutInteropIntegrationTest {
         Path file = tmp.resolve("jni.vortex");
         ArrowType type = switch (ptype) {
             case I8 -> new ArrowType.Int(8, true);
+            case U8 -> new ArrowType.Int(8, false);
             case U16 -> new ArrowType.Int(16, false);
             default -> new ArrowType.Int(16, true);
         };
@@ -243,6 +247,7 @@ class DictLayoutInteropIntegrationTest {
                         }
                         switch (v) {
                             case TinyIntVector t -> t.setSafe(i, values[at]);
+                            case UInt1Vector u -> u.setSafe(i, values[at]);
                             case UInt2Vector u -> u.setSafe(i, values[at]);
                             case SmallIntVector s -> s.setSafe(i, values[at]);
                             default -> throw new IllegalStateException(v.getClass().getName());

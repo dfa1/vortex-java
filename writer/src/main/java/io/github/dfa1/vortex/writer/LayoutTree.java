@@ -150,7 +150,7 @@ final class LayoutTree {
         int valuesFlat = FbsLayout.createFbsLayout(fbb, FLAT, ref.valuesLen(), 0, 0, valSegV);
 
         // DictLayoutMetadata proto (matches Rust): field 1 = codes_ptype (PType varint)
-        byte[] metaBytes = dictLayoutMetadata(DictColumnState.CODES_PTYPE, ref.nullableCodes());
+        byte[] metaBytes = dictLayoutMetadata(ref.codesPType(), ref.nullableCodes());
         int metaVec = metaBytes.length > 0 ? FbsLayout.createMetadataVector(fbb, metaBytes) : 0;
 
         // Dict layout: child[0]=values, child[1]=codes (matches Rust DictLayout child order)
