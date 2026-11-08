@@ -63,6 +63,11 @@ class DecimalSumTest {
             "select sum(amount), avg(amount), count(amount) from vtx.t where id < 5 "
                     + "| select sum(case when id > -1 then amount end), avg(case when id > -1 then amount end), "
                     + "count(case when id > -1 then amount end) from vtx.t where id + 0 < 5",
+            "select min(amount), max(amount) from vtx.t "
+                    + "| select min(case when id > -1 then amount end), max(case when id > -1 then amount end) from vtx.t",
+            "select min(amount), max(amount) from vtx.t where id < 5 "
+                    + "| select min(case when id > -1 then amount end), max(case when id > -1 then amount end) "
+                    + "from vtx.t where id + 0 < 5",
             "select s, sum(amount), min(amount), max(amount) from vtx.t group by s order by s "
                     + "| select s, sum(case when id > -1 then amount end), min(case when id > -1 then amount end), "
                     + "max(case when id > -1 then amount end) from vtx.t group by s order by s"})

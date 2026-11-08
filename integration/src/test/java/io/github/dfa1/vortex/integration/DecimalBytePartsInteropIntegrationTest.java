@@ -193,6 +193,34 @@ class DecimalBytePartsInteropIntegrationTest {
         assertThat(fromJava).usingElementComparator(BigDecimal::compareTo).isEqualTo(expected);
     }
 
+    /// A column too small for a zone map reads its bounds from the flat node's stats, which Rust writes
+    /// for a decimal as its own scalar; Java must prune with them or not at all, never misread them.
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("shapes")
+    void smallFile_filteredReadByJava_returnsExactlyTheMatchingRows(String name, int precision, int scale,
+                                                                    IntToLongFunction unscaled, @TempDir Path tmp)
+            throws Exception {
+        // Given
+        int rows = 100;
+        Path jniFile = tmp.resolve("jni.vortex");
+        writeWithJni(jniFile, precision, scale, unscaled, null, rows);
+        List<BigDecimal> all = new ArrayList<>(rows);
+        for (int i = 0; i < rows; i++) {
+            all.add(BigDecimal.valueOf(unscaled.applyAsLong(i), scale));
+        }
+        BigDecimal median = all.stream().sorted().toList().get(rows / 2);
+        BigDecimal above = all.stream().max(BigDecimal::compareTo).orElseThrow().add(BigDecimal.ONE);
+
+        // When
+        List<BigDecimal> atLeastMedian = readWithJava(jniFile, ScanFilter.gte(D, median));
+        List<BigDecimal> aboveMax = readWithJava(jniFile, ScanFilter.gte(D, above));
+
+        // Then
+        assertThat(atLeastMedian).usingElementComparator(BigDecimal::compareTo)
+                .isEqualTo(all.stream().filter(v -> v.compareTo(median) >= 0).toList());
+        assertThat(aboveMax).isEmpty();
+    }
+
     private static List<BigDecimal> readWithJava(Path file, ScanFilter filter) throws IOException {
         List<BigDecimal> out = new ArrayList<>();
         try (var reader = VortexReader.open(file);
@@ -296,23 +324,28 @@ class DecimalBytePartsInteropIntegrationTest {
     /// `isNull` null writes a non-nullable column, any predicate a nullable one.
     private static void writeWithJni(Path path, int precision, int scale, IntToLongFunction unscaled,
                                      IntPredicate isNull) throws Exception {
+        writeWithJni(path, precision, scale, unscaled, isNull, ROWS);
+    }
+
+    private static void writeWithJni(Path path, int precision, int scale, IntToLongFunction unscaled,
+                                     IntPredicate isNull, int rows) throws Exception {
         ArrowType decimal = new ArrowType.Decimal(precision, scale, 128);
         Schema schema = new Schema(List.of(isNull == null ? Field.notNullable("d", decimal) : Field.nullable("d", decimal)));
         try (VortexWriter writer = VortexWriter.builder(SESSION, path.toAbsolutePath().toUri().toString(), schema,
                 ALLOCATOR).build();
              VectorSchemaRoot root = VectorSchemaRoot.create(schema, ALLOCATOR)) {
             DecimalVector vector = (DecimalVector) root.getVector("d");
-            vector.setInitialCapacity(ROWS);
+            vector.setInitialCapacity(rows);
             vector.allocateNew();
-            for (int i = 0; i < ROWS; i++) {
+            for (int i = 0; i < rows; i++) {
                 if (isNull != null && isNull.test(i)) {
                     vector.setNull(i);
                 } else {
                     vector.setSafe(i, BigDecimal.valueOf(unscaled.applyAsLong(i), scale));
                 }
             }
-            vector.setValueCount(ROWS);
-            root.setRowCount(ROWS);
+            vector.setValueCount(rows);
+            root.setRowCount(rows);
             try (ArrowArray array = ArrowArray.allocateNew(ALLOCATOR);
                  ArrowSchema arrowSchema = ArrowSchema.allocateNew(ALLOCATOR)) {
                 Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
