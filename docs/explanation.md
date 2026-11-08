@@ -35,7 +35,7 @@ decode work, #497–#502). The Parquet suite was re-measured 2026-10-24 on `b98b
 
 **Environment:** Apple M5, Zulu JDK 25.0.2. Reads 3 forks (`-f 3`), writes 5 forks (`-f 5`):
 the cascading write varies ~±5% from fork to fork, so fewer forks cannot resolve it. Each
-suite ran on its own; sustained multi-suite runs thermally throttle the laptop.
+suite ran on its own.
 
 ### Real files — full scans of every column (`RealFileScanBenchmark`)
 
