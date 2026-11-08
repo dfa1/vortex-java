@@ -288,9 +288,8 @@ class GlobalDictUtf8Test {
             var columnLayout = unwrapZoned(vf.layout().children().getFirst());
             assertThat(columnLayout.isDict()).as("demoted column must not be a global dict").isFalse();
             // The replayed batches coalesce like any column's (Rust's repartition, #470): well
-            // under 1 MB, so one Flat.
-            assertThat(columnLayout.children()).as("demoted rows coalesce into one chunk")
-                    .singleElement().satisfies(child -> assertThat(child.isFlat()).isTrue());
+            // under 1 MB, so one Flat, written without a chunked node around it as Rust does.
+            assertThat(columnLayout.isFlat()).as("demoted rows coalesce into one chunk").isTrue();
 
             // And every value round-trips exactly across all chunks despite the mid-file demotion.
             List<String> got = readAllStrings(vf, "status");
@@ -338,9 +337,8 @@ class GlobalDictUtf8Test {
             var columnLayout = unwrapZoned(vf.layout().children().getFirst());
             assertThat(columnLayout.isDict()).as("demoted column must not be a global dict").isFalse();
             // The replayed batches coalesce like any column's (Rust's repartition, #470): well
-            // under 1 MB, so one Flat.
-            assertThat(columnLayout.children()).as("demoted rows coalesce into one chunk")
-                    .singleElement().satisfies(child -> assertThat(child.isFlat()).isTrue());
+            // under 1 MB, so one Flat, written without a chunked node around it as Rust does.
+            assertThat(columnLayout.isFlat()).as("demoted rows coalesce into one chunk").isTrue();
 
             // And every value AND every null round-trips exactly, confirming the nullable
             // reconstruction path (validity restore + NullableData re-wrap) end-to-end.
