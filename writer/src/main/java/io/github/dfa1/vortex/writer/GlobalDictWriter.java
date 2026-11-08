@@ -67,6 +67,11 @@ final class GlobalDictWriter {
         this.dictColRefs = new LinkedHashMap<>();
     }
 
+    /// Whether the legacy `vortex.stats` zone map is written, the only reader of the chunk sums.
+    private boolean legacyZoneMap() {
+        return options.enableZoneMaps() && !repartitionCodes;
+    }
+
     /// Decides from a column's first batch whether it becomes a candidate.
     ///
     /// Candidate detection inspects raw primitive/String/byte[] arrays. Nullable columns (carried as
@@ -107,7 +112,7 @@ final class GlobalDictWriter {
                     validity != null ? Arrays.copyOf(validity, probeRows) : null);
         }
         if (candidate) {
-            dictStates.put(colName, new DictColumnState(colDtype));
+            dictStates.put(colName, new DictColumnState(colDtype, legacyZoneMap()));
         }
     }
 
@@ -170,7 +175,7 @@ final class GlobalDictWriter {
                 return;
             }
             dictRuns.computeIfAbsent(colName, _ -> new ArrayList<>()).add(state);
-            dictStates.put(colName, new DictColumnState(colDtype));
+            dictStates.put(colName, new DictColumnState(colDtype, legacyZoneMap()));
             rest = consumed == 0 ? rest : Repartitioner.tail(rest, consumed);
         }
     }

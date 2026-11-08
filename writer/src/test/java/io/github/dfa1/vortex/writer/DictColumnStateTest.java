@@ -39,7 +39,7 @@ class DictColumnStateTest {
             case F64 -> new double[]{7, 8, 0, 7, 9};
         };
         boolean[] validity = {true, true, false, true, true};
-        var sut = new DictColumnState(new DType.Primitive(ptype, true));
+        var sut = new DictColumnState(new DType.Primitive(ptype, true), true);
 
         // When
         int ingested = sut.ingestDictChunk(new NullableData(values, validity));
@@ -129,7 +129,7 @@ class DictColumnStateTest {
     @Test
     void ingestDictChunk_binary_dedupsByContentAndReconstructs() {
         // Given — a nullable Binary column whose equal values arrive as distinct byte[] instances
-        var sut = new DictColumnState(new DType.Binary(true));
+        var sut = new DictColumnState(new DType.Binary(true), true);
         byte[][] values = {{1, 2}, {3}, null, {1, 2}, {3}};
         boolean[] validity = {true, true, false, true, true};
 
@@ -155,7 +155,7 @@ class DictColumnStateTest {
         // at its first appearance. The dominant 0.0 arrives after a rare value: a frequency ranking
         // (the old remap) would make it code 0 and push null to the end, so the codes reaching the
         // cascade differed from Rust's.
-        var sut = new DictColumnState(new DType.Primitive(PType.F64, true));
+        var sut = new DictColumnState(new DType.Primitive(PType.F64, true), true);
         double[] values = {1.75, 0.0, 0.0, 0.0, 0.0, -1.75};
         boolean[] validity = {true, true, false, true, false, true};
 
@@ -173,7 +173,7 @@ class DictColumnStateTest {
     @Test
     void ingestDictChunk_stopsAtTheNullEntryThatNoLongerFits() {
         // Given — a dictionary filled to u16::MAX entries; the next chunk's first row is a null
-        var sut = new DictColumnState(new DType.Primitive(PType.I64, true));
+        var sut = new DictColumnState(new DType.Primitive(PType.I64, true), true);
         long[] full = new long[DictColumnState.MAX_ENTRIES];
         for (int i = 0; i < full.length; i++) {
             full[i] = i;
@@ -194,7 +194,7 @@ class DictColumnStateTest {
     @Test
     void ingestDictChunk_stopsAtTheValueThatNoLongerFitsAndKeepsThePrefixStats() {
         // Given — a dictionary filled to u16::MAX entries
-        var sut = new DictColumnState(new DType.Primitive(PType.I64, false));
+        var sut = new DictColumnState(new DType.Primitive(PType.I64, false), true);
         long[] full = new long[DictColumnState.MAX_ENTRIES];
         for (int i = 0; i < full.length; i++) {
             full[i] = i;
@@ -262,7 +262,7 @@ class DictColumnStateTest {
     @Test
     void ingestDictChunkReportsPerChunkStringMinMax() {
         // Given
-        DictColumnState sut = new DictColumnState(new DType.Utf8(true));
+        DictColumnState sut = new DictColumnState(new DType.Utf8(true), true);
         String emoji = new String(Character.toChars(0x1F600));
 
         // When
@@ -312,7 +312,7 @@ class DictColumnStateTest {
     @Test
     void ingestVarBinChunk_stopsAtTheEntryThatNoLongerFits() {
         // Given — a dictionary filled to u16::MAX entries
-        DictColumnState sut = new DictColumnState(new DType.Utf8(false));
+        DictColumnState sut = new DictColumnState(new DType.Utf8(false), true);
         String[] full = new String[DictColumnState.MAX_ENTRIES];
         for (int i = 0; i < full.length; i++) {
             full[i] = "v" + i;
@@ -331,7 +331,7 @@ class DictColumnStateTest {
     @Test
     void ingestVarBinChunk_countsViewsAndOutOfLineBytesAgainstTheByteLimit() {
         // Given — 20-byte values cost a 16-byte view plus themselves: 36 bytes, so 29127 fit in 1 MiB
-        DictColumnState sut = new DictColumnState(new DType.Utf8(false));
+        DictColumnState sut = new DictColumnState(new DType.Utf8(false), true);
         String[] values = new String[40_000];
         for (int i = 0; i < values.length; i++) {
             values[i] = String.format("%020d", i);
@@ -347,7 +347,7 @@ class DictColumnStateTest {
     @Test
     void ingestVarBinChunk_admitsTheFirstEntryWhateverItsSize() {
         // Given — one value past the byte limit on its own
-        DictColumnState sut = new DictColumnState(new DType.Utf8(false));
+        DictColumnState sut = new DictColumnState(new DType.Utf8(false), true);
         String huge = "x".repeat((int) DictColumnState.MAX_DICT_BYTES + 1);
 
         // When
@@ -360,7 +360,7 @@ class DictColumnStateTest {
     @Test
     void ingestVarBinChunk_aFullDictionaryTakesNothingNew() {
         // Given
-        DictColumnState sut = new DictColumnState(new DType.Utf8(false));
+        DictColumnState sut = new DictColumnState(new DType.Utf8(false), true);
         sut.ingestVarBinChunk(new String[]{"x".repeat((int) DictColumnState.MAX_DICT_BYTES + 1)});
 
         // When

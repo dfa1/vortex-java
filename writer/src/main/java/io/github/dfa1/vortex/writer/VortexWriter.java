@@ -96,7 +96,9 @@ public final class VortexWriter implements Closeable {
         this.dtypeSerializer = new DTypeFbsSerializer(extensionRegistry);
         validateExtensions(schema);
         this.zonedLayout = options.enableZoneMaps() && editionHasZonedLayout(options.editions());
-        this.segmentEncoder = new SegmentEncoder(options, encodings, schema.fieldNames());
+        // a segment's sum feeds only the legacy vortex.stats zone map
+        this.segmentEncoder = new SegmentEncoder(options, encodings, schema.fieldNames(),
+                options.enableZoneMaps() && !zonedLayout);
         this.sink = new SegmentSink(channel, segmentEncoder, options.executor());
         this.globalDict = new GlobalDictWriter(options, segmentEncoder, sink, zonedLayout, this::appendChunk);
         this.zoneMaps = new ZoneMapWriter(schema, options, zonedLayout, segmentEncoder, sink);
