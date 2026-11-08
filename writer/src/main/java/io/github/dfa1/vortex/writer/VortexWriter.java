@@ -64,6 +64,8 @@ public final class VortexWriter implements Closeable {
     private final boolean zonedLayout;
     private final GlobalDictWriter globalDict;
     private final ZoneMapWriter zoneMaps;
+    // Rust's footer file statistics, one per top-level field in schema order, fed the raw batches.
+    private final List<FileStatsAccumulator> fileStats;
     private final Map<ColumnName, List<ChunkRef>> colChunks;
     // Rust's repartition: each column's batches coalesce into ~1 MB chunks of 8192-row multiples.
     private final Map<ColumnName, Repartitioner> repartitioners;
@@ -94,6 +96,7 @@ public final class VortexWriter implements Closeable {
         this.sink = new SegmentSink(channel, segmentEncoder, options.executor());
         this.globalDict = new GlobalDictWriter(options, segmentEncoder, sink, zonedLayout, this::appendChunk);
         this.zoneMaps = new ZoneMapWriter(schema, options, zonedLayout, segmentEncoder, sink);
+        this.fileStats = schema.fieldTypes().stream().map(FileStatsAccumulator::new).toList();
         this.colChunks = new LinkedHashMap<>();
         for (ColumnName name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
@@ -309,6 +312,7 @@ public final class VortexWriter implements Closeable {
             Object data = adapted.get(colName);
 
             zoneMaps.add(colName, colDtype, data);
+            fileStats.get(i).add(data, expectedLen);
             if (!firstChunkSeen) {
                 globalDict.detect(colName, colDtype, data);
             }
@@ -363,7 +367,7 @@ public final class VortexWriter implements Closeable {
             zoned = LayoutId.ZONED;
         }
         sink.finish(zoned, dtypeSerializer.buildDType(schema),
-                LayoutTree.build(schema, colChunks, globalDict.written(), zoneMaps.written()));
+                LayoutTree.build(schema, colChunks, globalDict.written(), zoneMaps.written()), fileStats);
     }
 
     private int writeSegment(ColumnName column, DType dtype, Object data, EncodingEncoder encodingOverride)

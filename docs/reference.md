@@ -849,6 +849,8 @@ version (u16 LE) | postscriptLen (u16 LE) | magic ("VTXF")
 ```
 
 The postscript is a FlatBuffer blob immediately before the trailer. It points (offset + length) to:
-the Footer (FlatBuffer), the DType (FlatBuffer), and the Layout (FlatBuffer) — each stored elsewhere in the file.
+the Footer (FlatBuffer), the DType (FlatBuffer), the Layout (FlatBuffer) and the file statistics
+(FlatBuffer, one `ArrayStats` per top-level column: min, max, sum, null and NaN counts, as vortex-jni
+writes them) — each stored elsewhere in the file.
 
 See [explanation.md#memory-model](explanation.md#memory-model) for the mmap lifecycle.

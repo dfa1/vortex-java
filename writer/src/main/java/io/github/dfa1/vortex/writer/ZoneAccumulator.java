@@ -32,9 +32,21 @@ final class ZoneAccumulator {
     static final int ZONE_LEN = 8192;
 
     /// Rust's `default_bounded_stat_max_bytes()`.
-    private static final int BOUNDED_MAX_BYTES = 64;
+    static final int BOUNDED_MAX_BYTES = 64;
 
-    private enum Kind { INT, F16, FLOAT, BOOL, DECIMAL, UTF8, BINARY, NULL_COUNT_ONLY }
+    /// How a column's values are compared, by its storage dtype.
+    enum Kind { INT, F16, FLOAT, BOOL, DECIMAL, UTF8, BINARY, NULL_COUNT_ONLY }
+
+    /// A slice's extremes over its valid values (floats skipping NaN), as [#extremes] finds them.
+    ///
+    /// @param min   the smallest value: a `Long` (integer bits), `Double` (F16 and floats),
+    ///              `Boolean`, `BigDecimal` or `byte[]` (UTF-8 or binary, untruncated); `null`
+    ///              when no value is valid
+    /// @param max   the largest value, likewise
+    /// @param nulls the number of null rows
+    /// @param nans  the number of NaN values
+    record Extremes(Object min, Object max, long nulls, long nans) {
+    }
 
     private final DType dtype;
     private final Kind kind;
@@ -51,7 +63,12 @@ final class ZoneAccumulator {
         this.dtype = dtype;
         DType storage = dtype instanceof DType.Extension ext ? ext.storageDType() : dtype;
         this.ptype = storage instanceof DType.Primitive p ? p.ptype() : null;
-        this.kind = switch (storage) {
+        this.kind = kindOf(storage);
+    }
+
+    /// The [Kind] of a column whose storage dtype is `storage`.
+    static Kind kindOf(DType storage) {
+        return switch (storage) {
             case DType.Primitive p when p.ptype() == PType.F16 -> Kind.F16;
             case DType.Primitive p when p.ptype().isFloating() -> Kind.FLOAT;
             case DType.Primitive _ -> Kind.INT;
@@ -280,18 +297,46 @@ final class ZoneAccumulator {
 
     /// Records the zone of `len` rows starting at `off` in `data`.
     private void zone(Object data, int off, int len) {
+        Extremes extremes = extremes(kind, ptype, data, off, len);
+        Object min = extremes.min();
+        Object max = extremes.max();
+        boolean unknown = false;
+        if (min != null && kind == Kind.F16) {
+            // The F16 table column is stored as raw half-float bits like the data.
+            min = (long) Float.floatToFloat16(((Double) min).floatValue());
+            max = (long) Float.floatToFloat16(((Double) max).floatValue());
+        } else if (min != null && (kind == Kind.UTF8 || kind == Kind.BINARY)) {
+            byte[] lo = (byte[]) min;
+            byte[] hi = (byte[]) max;
+            min = kind == Kind.UTF8 ? utf8LowerBound(lo) : Arrays.copyOf(lo, Math.min(lo.length, BOUNDED_MAX_BYTES));
+            max = kind == Kind.UTF8 ? utf8UpperBound(hi) : binaryUpperBound(hi);
+            unknown = max == null;
+        }
+        mins.add(min);
+        maxs.add(max);
+        maxUnknown.add(unknown);
+        nullCounts.add(extremes.nulls());
+        nanCounts.add(extremes.nans());
+    }
+
+    /// The extremes and counts of the `len` rows starting at `off` in `data`, a carrier of `kind`.
+    static Extremes extremes(Kind kind, PType ptype, Object data, int off, int len) {
         Object values = data instanceof NullableData nd ? nd.values() : data;
         boolean[] validity = data instanceof NullableData nd ? nd.validity() : null;
         long nulls = 0;
         long nans = 0;
         Object min = null;
         Object max = null;
-        boolean unknown = false;
         // INT, FLOAT and BOOL track their bounds as primitives and box once per zone: boxing on every
         // new bound allocated a Long per row of an ascending column such as a row id.
         switch (kind) {
             case INT -> {
-                long[] longs = PrimitiveArrays.toLongs(slice(values, null, off, len), ptype, EncodingId.VORTEX_PRIMITIVE);
+                // a whole batch (the file statistics) needs no copy, and an I64/U64 one no widening either
+                Object range = values;
+                if (off != 0 || len != java.lang.reflect.Array.getLength(values)) {
+                    range = slice(values, null, off, len);
+                }
+                long[] longs = PrimitiveArrays.toLongs(range, ptype, EncodingId.VORTEX_PRIMITIVE);
                 boolean unsigned = ptype.isUnsigned();
                 boolean seen = false;
                 long lo = 0;
@@ -341,11 +386,7 @@ final class ZoneAccumulator {
                     }
                     seen = true;
                 }
-                if (seen && kind == Kind.F16) {
-                    // The F16 table column is stored as raw half-float bits like the data.
-                    min = (long) Float.floatToFloat16((float) lo);
-                    max = (long) Float.floatToFloat16((float) hi);
-                } else if (seen) {
+                if (seen) {
                     min = lo;
                     max = hi;
                 }
@@ -426,11 +467,8 @@ final class ZoneAccumulator {
                         }
                     }
                 }
-                if (lo != null) {
-                    min = kind == Kind.UTF8 ? utf8LowerBound(lo) : Arrays.copyOf(lo, Math.min(lo.length, BOUNDED_MAX_BYTES));
-                    max = kind == Kind.UTF8 ? utf8UpperBound(hi) : binaryUpperBound(hi);
-                    unknown = max == null;
-                }
+                min = lo;
+                max = hi;
             }
             case NULL_COUNT_ONLY -> {
                 if (validity != null) {
@@ -442,11 +480,7 @@ final class ZoneAccumulator {
                 }
             }
         }
-        mins.add(min);
-        maxs.add(max);
-        maxUnknown.add(unknown);
-        nullCounts.add(nulls);
-        nanCounts.add(nans);
+        return new Extremes(min, max, nulls, nans);
     }
 
     private static int compare(long a, long b, boolean unsigned) {
@@ -526,14 +560,14 @@ final class ZoneAccumulator {
 
     /// Unwraps a pre-transformed carrier (e.g. the Parquet importer's [ComparableValues]
     /// `DateTimePartsData`) to the original values its stats are taken over.
-    private static Object comparable(Object batch) {
+    static Object comparable(Object batch) {
         if (batch instanceof NullableData(ComparableValues cv, boolean[] validity)) {
             return new NullableData(cv.values(), validity);
         }
         return batch instanceof ComparableValues cv ? cv.values() : batch;
     }
 
-    private static Object validityOnly(Object batch, int rows) {
+    static Object validityOnly(Object batch, int rows) {
         boolean[] placeholder = new boolean[rows];
         return batch instanceof NullableData nd ? new NullableData(placeholder, nd.validity()) : placeholder;
     }
