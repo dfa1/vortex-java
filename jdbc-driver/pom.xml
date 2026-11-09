@@ -122,6 +122,9 @@
                         <include>**/*IT.java</include>
                     </includes>
                     <argLine>@{argLine} --sun-misc-unsafe-memory-access=allow</argLine>
+                    <!-- integration depends on this module, so `-pl integration -am -Dit.test=<an integration IT>`
+                         reaches here too, where the pattern matches nothing. -->
+                    <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
                 </configuration>
                 <executions>
                     <execution>
