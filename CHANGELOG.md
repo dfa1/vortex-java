@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FSST symbol tables are trained as Rust's `fsst-rs` 0.7 does, so a text column without a null gets Rust's FSST encoding byte for byte, its offsets a `vortex.sequence` where Rust's cascade finds one. ([#583](https://github.com/dfa1/vortex-java/issues/583))
 - `VortexReader.columnStats()` reports the min and max of a decimal column, and a decimal filter compares by value instead of by the long it truncates to. ([#583](https://github.com/dfa1/vortex-java/issues/583))
 - A nullable text column without a null is written without a validity, as Rust writes it, instead of under `vortex.masked` (with cascading on). ([#650](https://github.com/dfa1/vortex-java/issues/650))
+- The nulls of a nullable text field in a Rust-written list of structs read back as nulls instead of empty strings. ([#650](https://github.com/dfa1/vortex-java/issues/650))
 - 8-bit, 16-bit and `F32` columns get Rust's dict layout when its probe picks one, so a nullable low-cardinality `SMALLINT` is written up to 30% smaller. ([#651](https://github.com/dfa1/vortex-java/issues/651))
 - A filtered read of a decimal column whose flat node carries min/max stats no longer fails with `VortexException`; those bounds are not used for pruning. ([#583](https://github.com/dfa1/vortex-java/issues/583))
 - A struct with duplicate field names now fails with `VortexException` when it is built, at any nesting level; the writer used to check only top-level names. ([#696](https://github.com/dfa1/vortex-java/pull/696))

@@ -47,10 +47,12 @@ public final class StructEncodingDecoder implements EncodingDecoder {
                 structValidity = MaskedArray.requireBoolArray(va, EncodingId.VORTEX_STRUCT, "struct validity");
             }
 
+            // Each field with its declared dtype: a nullable text field keeps its validity in its
+            // own encoding (FSST on its codes, VarBinView), which reads it only for a nullable dtype
             if (nfields == 1) {
                 DType fieldDtype = structDtype.fieldTypes().getFirst();
                 ArrayNode fieldNode = ctx.node().children()[fieldOffset];
-                var fieldCtx = new DecodeContext(fieldNode, fieldDtype.withNullable(false),
+                var fieldCtx = new DecodeContext(fieldNode, fieldDtype,
                         ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
                 Array field = ctx.registry().decode(fieldCtx);
                 return structValidity != null ? new MaskedArray(field, structValidity) : field;
@@ -60,7 +62,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             for (int i = 0; i < nfields; i++) {
                 ArrayNode fieldNode = ctx.node().children()[fieldOffset + i];
                 DType fieldDtype = structDtype.fieldTypes().get(i);
-                var fieldCtx = new DecodeContext(fieldNode, fieldDtype.withNullable(false),
+                var fieldCtx = new DecodeContext(fieldNode, fieldDtype,
                         ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
                 Array field = ctx.registry().decode(fieldCtx);
                 fieldArrays.add(structValidity != null ? new MaskedArray(field, structValidity) : field);
