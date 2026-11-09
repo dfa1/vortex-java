@@ -317,14 +317,12 @@ final class SegmentEncoder {
         }
         // With cascading on, a nullable primitive column goes to the compressor, which keeps the
         // validity in the encoding that stores the values, as Rust does (#604)
-        // and so does a nullable struct or list, which carry it as a child of their own (#648)
+        // and so does a nullable struct, list or text column, which carry it as a child of their own (#648)
         boolean keepsValidity = options.allowedCascading() > 0
                 && (CascadingCompressor.keepsValidity(dtype) || CascadingCompressor.carriesValidity(dtype));
-        // a text column without a null has no validity to store, whatever the cascade picks
-        boolean noValidity = options.allowedCascading() > 0 && CascadingCompressor.isUnmaskedText(dtype, data);
         if (encodingOverride == null
                 && data instanceof NullableData
-                && !(dtype instanceof DType.Extension) && !keepsValidity && !noValidity) {
+                && !(dtype instanceof DType.Extension) && !keepsValidity) {
             EncodingEncoder nullableCapable = nullableCapableEncoder(dtype);
             return nullableCapable != null ? nullableCapable : new MaskedEncodingEncoder();
         }
@@ -348,9 +346,10 @@ final class SegmentEncoder {
     /// Returns the configured encoder for `dtype` that consumes a [NullableData] carrier directly
     /// (embedding its own validity), or `null` to fall back to `vortex.masked` wrapping. Only the
     /// first-match flat path is considered; with cascading enabled the compressor owns selection,
-    /// so nullable columns keep the masked layout.
+    /// so nullable columns keep the masked layout. Text stays masked too: its first match, a
+    /// dictionary, needs the compressor's distinct count to apply.
     private EncodingEncoder nullableCapableEncoder(DType dtype) {
-        if (options.allowedCascading() > 0) {
+        if (options.allowedCascading() > 0 || dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
             return null;
         }
         for (EncodingEncoder c : encodings) {
@@ -402,10 +401,10 @@ final class SegmentEncoder {
                 // value cascade, which reads ctx.registry()) sees only them.
                 EncodeContext columnCtx = EncodeContext.ofDepth(options.allowedCascading(), ctx.arena(),
                         registry, editionExcluded).withTrace(ctx.trace());
-                // a decimal, struct or list keeps its validity in its own encoding, as on the default path
+                // a decimal, struct, list or text column keeps its validity in its own encoding, as on
+                // the default path
                 boolean masked = data instanceof NullableData && !(dtype instanceof DType.Extension)
-                        && !(options.allowedCascading() > 0 && (CascadingCompressor.carriesValidity(dtype)
-                        || CascadingCompressor.isUnmaskedText(dtype, data)));
+                        && !(options.allowedCascading() > 0 && CascadingCompressor.carriesValidity(dtype));
                 if (masked) {
                     return new MaskedEncodingEncoder().encode(dtype, data, columnCtx);
                 }

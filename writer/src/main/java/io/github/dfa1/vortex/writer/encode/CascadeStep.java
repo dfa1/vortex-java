@@ -1,7 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /// One step in cascade-aware encoding: a partially-assembled node tree plus open child slots.
 ///
@@ -39,6 +44,30 @@ public record CascadeStep(
         return stats == null || !applicable
                 ? this
                 : new CascadeStep(partialRoot, ownedBuffers, openChildren, stats.min(), stats.max(), applicable);
+    }
+
+    /// This step with `validity` appended to the root as its last child, a plain `vortex.bool`, as
+    /// `EncodeResult.withValidity` does for a result: where Rust's string
+    /// encodings (FSST on its codes, OnPair) keep the validity of a nullable array. The bitmap is an
+    /// already encoded last slot, so its buffer follows the other children's, in Rust's tree order.
+    /// A step that is not applicable is returned unchanged.
+    ///
+    /// @param validity per-row validity
+    /// @param ctx      the encode context
+    /// @return a copy of this step with the validity child
+    public CascadeStep withValidity(boolean[] validity, EncodeContext ctx) {
+        if (!applicable) {
+            return this;
+        }
+        EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
+        EncodeResult validityChild = new EncodeResult(bool.rootNode().withStats(CachedNodeStats.ofValidity(validity)),
+                bool.encodedBuffers(), null, null);
+        int index = partialRoot.children().length;
+        EncodeNode root = new EncodeNode(partialRoot.encodingId(), partialRoot.metadata(),
+                Arrays.copyOf(partialRoot.children(), index + 1), partialRoot.bufferIndices());
+        List<ChildSlot> slots = new ArrayList<>(openChildren);
+        slots.add(new ChildSlot(DTypes.BOOL, validityChild, index, Set.of()));
+        return new CascadeStep(root, ownedBuffers, List.copyOf(slots), statsMin, statsMax, true);
     }
 
     /// Convenience: terminal step — no open children, result is final.

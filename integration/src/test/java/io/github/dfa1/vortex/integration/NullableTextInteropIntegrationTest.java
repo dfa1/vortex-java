@@ -50,10 +50,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// encoding tree, data and zone stats table alike. Each shape steers the cascade to a different
 /// winner.
 /// A nullable text column without a null is written without a validity, as Rust writes an all-valid
-/// string array (#650), instead of under `vortex.masked`. Columns with nulls are still masked, and
-/// differ from Rust in the text scheme itself (#650), so the encoding tree is compared with
-/// vortex-jni's for the no-null shape only; every shape is read back by Java and by vortex-jni,
-/// full, filtered and row-ranged, compact files included.
+/// string array (#650), and one with nulls keeps its validity in the text encoding (FSST on its
+/// codes, OnPair, VarBinView, a dictionary's null entry), as Rust does, instead of under
+/// `vortex.masked`. Every shape is read back by Java and by vortex-jni, full, filtered and
+/// row-ranged, compact files included.
 class NullableTextInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -83,10 +83,11 @@ class NullableTextInteropIntegrationTest {
                 shape("runs of nulls", few, i -> (i / 500) % 3 == 0));
     }
 
-    /// The shapes whose whole tree is Rust's. The others still differ beyond the validity, in the
-    /// scheme chosen for the text itself (#650: the probe applies to numbers only; FSST's lengths).
+    /// The shapes whose whole tree is Rust's. Many distinct values still differ, with or without
+    /// nulls: Java admits them to its dict layout, which Rust's does not (its probe applies to numbers
+    /// only, #650).
     static Stream<Arguments> treeShapes() {
-        return shapes().filter(a -> a.get()[0].equals("unique, no nulls") || a.get()[0].equals("few distinct, no nulls"));
+        return shapes().filter(a -> !a.get()[0].toString().startsWith("many distinct"));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -102,8 +103,10 @@ class NullableTextInteropIntegrationTest {
         // When
         writeWithJava(javaFile, values, isNull, WriteOptions.defaults());
 
-        // Then
+        // Then — byte for byte too: FSST trains on the valid rows only, as Rust's
+        // fsst_train_compressor; on the null rows' empty placeholders its symbol table differed
         assertThat(EncodingTrees.of(javaFile)).isEqualTo(expected);
+        assertThat(EncodingTrees.flatBuffersHex(javaFile)).isEqualTo(EncodingTrees.flatBuffersHex(jniFile));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -121,13 +124,8 @@ class NullableTextInteropIntegrationTest {
         assertJniReads(values, isNull, WriteOptions.defaults().withCompact(true), tmp);
     }
 
-    /// Columns without a null: those are the plain values a Java read returns as strings.
-    static Stream<Arguments> noNullShapes() {
-        return shapes().filter(a -> a.get()[0].toString().endsWith("no nulls"));
-    }
-
     @ParameterizedTest(name = "{0}")
-    @MethodSource("noNullShapes")
+    @MethodSource("shapes")
     void javaReadsItsOwnFile(String name, IntFunction<String> values, IntPredicate isNull, @TempDir Path tmp)
             throws Exception {
         // Given
@@ -140,7 +138,7 @@ class NullableTextInteropIntegrationTest {
         // Then
         List<String> expected = new ArrayList<>();
         for (int i = 0; i < ROWS; i++) {
-            expected.add(values.apply(i));
+            expected.add(isNull.test(i) ? null : values.apply(i));
         }
         assertThat(result).isEqualTo(expected);
     }
@@ -218,9 +216,11 @@ class NullableTextInteropIntegrationTest {
              var scan = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             while (scan.hasNext()) {
                 try (var chunk = scan.next()) {
-                    io.github.dfa1.vortex.reader.array.VarBinArray array = chunk.column(V);
+                    var column = io.github.dfa1.vortex.reader.array.MaskedArray.unwrap(chunk.column(V));
+                    var array = (io.github.dfa1.vortex.reader.array.VarBinArray) column.inner();
                     for (int i = 0; i < chunk.rowCount(); i++) {
-                        out.add(array.getString(i));
+                        boolean valid = column.validity() == null || column.validity().getBoolean(i);
+                        out.add(valid ? array.getString(i) : null);
                     }
                 }
             }

@@ -202,6 +202,17 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         if (constant.buffers().getFirst().byteSize() >= (long) validity.length * ptype.byteSize()) {
             return new PrimitiveEncodingEncoder().encode(dtype, data, ctx);
         }
+        return masked(constant, validity, ctx);
+    }
+
+    /// `constant` masked by `validity`, stored as a plain `vortex.bool`: Rust's `compress_constant`
+    /// for an array with some nulls.
+    ///
+    /// @param constant the encoded constant of the valid rows' value
+    /// @param validity per-row validity
+    /// @param ctx      the encode context
+    /// @return the masked constant, with the constant's bounds
+    static EncodeResult masked(EncodeResult constant, boolean[] validity, EncodeContext ctx) {
         EncodeResult bool = new BoolEncodingEncoder().encode(DTypes.BOOL, validity, ctx);
         EncodeNode validityNode = EncodeNode.remapBufferIndices(bool.rootNode(), constant.buffers().size());
         List<EncodedBuffer> buffers = new ArrayList<>(constant.encodedBuffers());

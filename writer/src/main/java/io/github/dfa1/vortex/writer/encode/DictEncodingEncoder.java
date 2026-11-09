@@ -71,10 +71,11 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Utf8;
     }
 
-    /// A nullable primitive keeps its validity on the codes, as Rust's dict schemes do.
+    /// A nullable primitive keeps its validity on the codes, as Rust's dict schemes do; nullable
+    /// text makes null one more, invalid, values entry ([#encodeNullableUtf8]).
     @Override
     public boolean acceptsNullable(DType dtype) {
-        return dtype instanceof DType.Primitive && accepts(dtype);
+        return accepts(dtype);
     }
 
     @Override
@@ -154,6 +155,13 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        if (dtype instanceof DType.Utf8 && data instanceof NullableData(Object rows, boolean[] rowValidity)) {
+            EncodeResult dict = encodeNullableUtf8(dtype, rows, rowValidity, ctx);
+            if (dict == null) {
+                return CascadeStep.notApplicable();
+            }
+            return CascadeStep.terminal(dict).withStats(ZoneMapStats.of(dtype.withNullable(false), data));
+        }
         if (dtype instanceof DType.Utf8) {
             return encodeUtf8Cascade(data);
         }
@@ -250,11 +258,9 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
     /// Dictionary-encodes a nullable Utf8 column the way Rust's dict builder does: a null row is
     /// one more dictionary entry, marked invalid in the values pool's own validity, so the codes
-    /// stay non-nullable and the column needs no row-level `vortex.masked` bitmap on top. The
-    /// masked form ([MaskedEncodingEncoder]) pays for nulls twice when Dict wins its inner cascade:
-    /// a placeholder pool entry and a one-bit-per-row validity.
+    /// stay non-nullable and the column needs no row-level bitmap on top.
     ///
-    /// The codes are cascaded like any dict's codes; the pool goes through [MaskedEncodingEncoder]
+    /// The codes are cascaded like any dict's codes, and the pool, nullable, like any nullable text
     /// with Dict excluded, so it is never wrapped in a second dict.
     ///
     /// @param dtype    the column's nullable Utf8 dtype; also the values pool's dtype, as Rust
@@ -289,7 +295,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         EncodeResult codes = new CascadingCompressor(List.copyOf(ctx.registry().encoderMap().values()))
                 .encode(new DType.Primitive(codePType, false), buildCodesArray(keys, valueMap, codePType),
                         childCtx.withExcluded(CODES_EXCLUDED));
-        EncodeResult values = new MaskedEncodingEncoder()
+        EncodeResult values = new CascadingCompressor(List.copyOf(ctx.registry().encoderMap().values()))
                 .encode(dtype, new NullableData(pool, poolValidity), childCtx.withExcluded(EncodingId.VORTEX_DICT));
 
         // is_nullable_codes must be explicit: when it is absent Rust takes the codes' nullability

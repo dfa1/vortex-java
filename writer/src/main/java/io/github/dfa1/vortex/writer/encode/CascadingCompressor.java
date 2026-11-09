@@ -223,12 +223,14 @@ public final class CascadingCompressor {
 
     /// Whether a nullable column of `dtype` carries its validity as a child of its own encoding, as
     /// Rust's `StructArray`, `ListArray` and `DecimalArray` do, rather than in a `vortex.masked`
-    /// wrapper (#648, #646).
+    /// wrapper (#648, #646), and as its text encodings do (FSST on its codes, OnPair, VarBinView,
+    /// a dictionary's null entry).
     ///
     /// @param dtype the column's dtype
-    /// @return `true` for a struct, a list or a decimal
+    /// @return `true` for a struct, a list, a decimal, utf8 or binary
     public static boolean carriesValidity(DType dtype) {
-        return dtype instanceof DType.Struct || dtype instanceof DType.List || dtype instanceof DType.Decimal;
+        return dtype instanceof DType.Struct || dtype instanceof DType.List || dtype instanceof DType.Decimal
+                || dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
     /// Whether `data` is a nullable text column without a null, which has no validity to store: as
@@ -384,6 +386,12 @@ public final class CascadingCompressor {
         // (VarBinEncodingEncoder unconditionally accepts both, so a winner always exists in
         // practice).
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
+            if (data instanceof NullableData nullable) {
+                Optional<EncodeResult> constant = nullableTextConstant(dtype, nullable, ctx);
+                if (constant.isPresent()) {
+                    return constant.get();
+                }
+            }
             return competeAndEncode(dtype, new ArrayAndStats(dtype, data, StatsOptions.defaults()), ctx,
                     sampleSize -> viewBytes(data, sampleSize, ctx.sampleSeed()));
         }
@@ -419,6 +427,32 @@ public final class CascadingCompressor {
             return new ConstantEncodingEncoder().encode(DTypes.BOOL, bools, ctx);
         }
         return CANONICAL_BOOL.encode(DTypes.BOOL, bools, ctx);
+    }
+
+    /// Rust's `choose_and_compress` for a text array with nulls, before any scheme: an all-null
+    /// array is a null constant, and one whose valid rows hold one value a `vortex.constant` masked
+    /// by the validity when that is smaller than the canonical array, which is kept otherwise
+    /// (`compress_as_constant`). Never on a sample. Otherwise the schemes compete, each with the
+    /// validity in its own array.
+    private static Optional<EncodeResult> nullableTextConstant(DType dtype, NullableData data, EncodeContext ctx) {
+        if (MaskedEncodingEncoder.isNullConstant(data.validity(), ctx)) {
+            return Optional.of(MaskedEncodingEncoder.nullConstant());
+        }
+        // Java's vortex.constant holds utf8 only
+        if (ctx.sample() || ctx.excluded().contains(EncodingId.VORTEX_CONSTANT) || !(dtype instanceof DType.Utf8)
+                || data.length() == data.nullCount()) {
+            return Optional.empty();
+        }
+        Object valid = data.validValues();
+        if (!ConstantEncodingEncoder.isConstantText(valid)) {
+            return Optional.empty();
+        }
+        EncodeResult masked = MaskedEncodingEncoder.masked(new ConstantEncodingEncoder().encode(dtype, valid, ctx),
+                data.validity(), ctx);
+        if (totalBytes(masked) < viewBytes(data, Integer.MAX_VALUE, 0L)) {
+            return Optional.of(masked);
+        }
+        return Optional.of(new VarBinViewEncodingEncoder().encode(dtype, data, ctx));
     }
 
     /// Rust's constant check for a decimal array, run in the compressor before any scheme and never
@@ -581,13 +615,23 @@ public final class CascadingCompressor {
 
     /// The size of the canonical text array of the `sampleSize` rows a trial encodes: Rust's
     /// `vortex.varbinview` is a 16-byte view per row plus the bytes of each value too long to be
-    /// inlined in it.
+    /// inlined in it (a null row is empty), plus its validity as Rust's
+    /// `validity_uncompressed_size_in_bytes` sizes it: nothing when every row is valid, the 2-byte
+    /// `false` constant when none is, else a packed bitmap.
     private static long viewBytes(Object data, int sampleSize, long seed) {
         Object sample = sampleSize < RowCount.of(data) ? stratifiedSample(data, sampleSize, seed) : data;
+        long validityBytes = 0;
         if (sample instanceof NullableData nullable) {
+            int rows = nullable.length();
+            int nulls = nullable.nullCount();
+            if (nulls == rows) {
+                validityBytes = 2;
+            } else if (nulls > 0) {
+                validityBytes = (rows + 7) / 8;
+            }
             sample = nullable.values();
         }
-        long total = 0;
+        long total = validityBytes;
         for (byte[] row : VarBinBytes.toByteArrays(sample)) {
             total += 16 + (row.length > 12 ? row.length : 0);
         }
@@ -738,7 +782,11 @@ public final class CascadingCompressor {
     private long measureStep(EncodingEncoder enc, CascadeStep step, EncodeContext ctx) {
         long total = step.ownedBytes();
         for (ChildSlot slot : step.openChildren()) {
-            total += measureBestChild(slot.childDtype(), slot.childData(), childContext(ctx, enc, slot));
+            if (slot.childData() instanceof EncodeResult encoded) {
+                total += totalBytes(encoded);
+            } else {
+                total += measureBestChild(slot.childDtype(), slot.childData(), childContext(ctx, enc, slot));
+            }
         }
         return total;
     }
@@ -795,7 +843,12 @@ public final class CascadingCompressor {
         EncodeNode[] children = step.partialRoot().children().clone();
 
         for (ChildSlot slot : step.openChildren()) {
-            EncodeResult childResult = encodeWithCtx(slot.childDtype(), slot.childData(), childContext(ctx, winner, slot));
+            EncodeResult childResult;
+            if (slot.childData() instanceof EncodeResult encoded) {
+                childResult = encoded;
+            } else {
+                childResult = encodeWithCtx(slot.childDtype(), slot.childData(), childContext(ctx, winner, slot));
+            }
 
             int bufOffset = allBuffers.size();
             children[slot.parentChildIdx()] = EncodeNode.remapBufferIndices(childResult.rootNode(), bufOffset);

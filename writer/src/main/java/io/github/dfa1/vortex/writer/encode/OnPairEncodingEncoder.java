@@ -52,8 +52,20 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
+    /// A nullable text array keeps its validity as a fifth child, a `vortex.bool`, as Rust's
+    /// `onpair_compress` does; null rows are compressed as empty ones, training included.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData nullable) {
+            return encode(dtype, nullable.values(), ctx)
+                    .withStats(ZoneMapStats.of(dtype.withNullable(false), nullable))
+                    .withValidity(nullable.validity(), ctx);
+        }
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
         if (rows == null) {
             throw new UnsupportedOperationException("vortex.onpair: chunk exceeds 2 GB of row bytes");
@@ -88,6 +100,11 @@ public final class OnPairEncodingEncoder implements EncodingEncoder {
     /// share one array: varbin, varbinview, fsst and zstd all take such a chunk.
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData nullable) {
+            return encodeCascade(dtype, nullable.values(), ctx)
+                    .withStats(ZoneMapStats.of(dtype.withNullable(false), nullable))
+                    .withValidity(nullable.validity(), ctx);
+        }
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
         if (rows == null) {
             return CascadeStep.notApplicable();

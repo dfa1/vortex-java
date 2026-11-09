@@ -193,7 +193,8 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     private EncodeResult encodeNullableVarBin(byte[][] encoded, boolean[] validity, EncodeContext ctx) {
         // Strip null positions: only valid rows reach the compressed payload (mirrors the Rust
         // reference). The decoder scatters them back over the validity mask carried by child[0].
-        byte[][] valid = stripNulls(encoded);
+        // The validity decides, not the row: a caller may hold a null row as an empty placeholder.
+        byte[][] valid = stripNulls(encoded, validity);
         MemorySegment packed = buildLengthPrefixed(valid, ctx.arena());
         return buildNullableResult(packed, varBinLayout(packed, valid.length), validity, ctx);
     }
@@ -380,25 +381,15 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         return false;
     }
 
-    private static byte[][] stripNulls(byte[][] rows) {
-        byte[][] valid = new byte[countNonNull(rows)][];
+    private static byte[][] stripNulls(byte[][] rows, boolean[] validity) {
+        byte[][] valid = new byte[countValid(validity)][];
         int j = 0;
-        for (byte[] b : rows) {
-            if (b != null) {
-                valid[j++] = b;
+        for (int i = 0; i < rows.length; i++) {
+            if (validity[i]) {
+                valid[j++] = rows[i];
             }
         }
         return valid;
-    }
-
-    private static int countNonNull(byte[][] rows) {
-        int count = 0;
-        for (byte[] b : rows) {
-            if (b != null) {
-                count++;
-            }
-        }
-        return count;
     }
 
     private static MemorySegment buildLengthPrefixed(byte[][] encoded, Arena arena) {

@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import java.util.Arrays;
+
 /// Writer-side carrier for nullable column data: a packed values array paired with a
 /// per-row validity bitmap.
 ///
@@ -45,10 +47,20 @@ public record NullableData(Object values, boolean[] validity) {
     /// Returns the values of the valid rows, in row order: the array Rust's stats see, since
     /// they skip nulls (`vortex-compressor` `stats/integer.rs`).
     ///
-    /// @return a new primitive array of the same type as `values`, one element per valid row
+    /// @return a new primitive (or text: `String[]`, `byte[][]`) array of the same type as `values`,
+    ///         one element per valid row
     public Object validValues() {
         int count = validity.length - nullCount();
         return switch (values) {
+            case Object[] a -> {
+                Object[] out = Arrays.copyOf(a, count);
+                for (int i = 0, j = 0; j < count; i++) {
+                    if (validity[i]) {
+                        out[j++] = a[i];
+                    }
+                }
+                yield out;
+            }
             case byte[] a -> {
                 byte[] out = new byte[count];
                 for (int i = 0, j = 0; j < count; i++) {

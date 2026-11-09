@@ -19,7 +19,8 @@ import java.util.Set;
 /// exclusion this replaces, previously applied generically by the compressor.
 ///
 /// @param childDtype     logical type of the child data
-/// @param childData      the raw child data to be encoded (type depends on the child encoding)
+/// @param childData      the raw child data to be encoded (type depends on the child encoding), or
+///                       an [EncodeResult] the child already is, taken as it is (a validity bitmap)
 /// @param parentChildIdx index in the parent node's children array where the result will be placed
 /// @param excluded       encoding ids barred from competing for this child
 public record ChildSlot(DType childDtype, Object childData, int parentChildIdx, Set<EncodingId> excluded) {

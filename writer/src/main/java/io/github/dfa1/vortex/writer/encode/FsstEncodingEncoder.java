@@ -13,6 +13,7 @@ import io.github.dfa1.vortex.fsst.CompressorBuilder;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.List;
 
@@ -56,11 +57,24 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
+    /// A nullable text array keeps its validity as a third child, a `vortex.bool`, as Rust's
+    /// `fsst_compress` keeps it on the codes; the symbol table is trained on the valid rows only
+    /// (`fsst_train_compressor`), and a null row is compressed as an empty one.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         Arena arena = ctx.arena();
+        if (data instanceof NullableData nullable) {
+            VarBinBytes.Rows rows = VarBinBytes.toContiguous(nullable.values());
+            return toEncodeResult(compress(nullable.values(), nullable.validity(), rows, arena), arena,
+                    ZoneMapStats.of(dtype.withNullable(false), nullable)).withValidity(nullable.validity(), ctx);
+        }
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
-        return toEncodeResult(compress(data, rows, arena), arena, VarBinEncodingEncoder.textMinMax(dtype, data, rows));
+        return toEncodeResult(compress(data, null, rows, arena), arena, VarBinEncodingEncoder.textMinMax(dtype, data, rows));
     }
 
     /// Lays out a compression product in the terminal `vortex.fsst` wire format: the per-row
@@ -121,9 +135,18 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         if (ctx.allowedCascading() == 0) {
             return CascadeStep.terminal(encode(dtype, data, ctx));
         }
+        if (data instanceof NullableData nullable) {
+            VarBinBytes.Rows rows = VarBinBytes.toContiguous(nullable.values());
+            Fsst c = compress(nullable.values(), nullable.validity(), rows, ctx.arena());
+            return cascadeStep(c, ZoneMapStats.of(dtype.withNullable(false), nullable))
+                    .withValidity(nullable.validity(), ctx);
+        }
         VarBinBytes.Rows rows = VarBinBytes.toContiguous(data);
-        Fsst c = compress(data, rows, ctx.arena());
-        MinMax stats = VarBinEncodingEncoder.textMinMax(dtype, data, rows);
+        return cascadeStep(compress(data, null, rows, ctx.arena()), VarBinEncodingEncoder.textMinMax(dtype, data, rows));
+    }
+
+    /// The cascade step of a compression product: the two offset children left open.
+    private static CascadeStep cascadeStep(Fsst c, MinMax stats) {
         Object uncompLens = PrimitiveArrays.fromIntsArray(c.uncompLens(), c.uncompLenPType(), EncodingId.VORTEX_FSST);
         Object codesOffsets = PrimitiveArrays.fromLongsArray(c.codesOffsets(), c.codesOffPType(), EncodingId.VORTEX_FSST);
         EncodeNode partialRoot = new EncodeNode(
@@ -149,14 +172,15 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             PType uncompLenPType, PType codesOffPType, int n) {
     }
 
-    private static Fsst compress(Object data, VarBinBytes.Rows rows, Arena arena) {
+    /// @param validity per-row validity, or `null` when every row is valid
+    private static Fsst compress(Object data, boolean[] validity, VarBinBytes.Rows rows, Arena arena) {
         // Contiguous rows (one shared byte[] plus offsets) rather than one byte[] per row: a 50k-row
         // chunk otherwise holds 50k live objects for the whole encode, which the collector must
         // trace, and that was profiled as this write path's single largest allocation source. Above
         // 2 GB of row bytes the rows cannot share one array, and toContiguous returns null — fall
         // back to the per-row shape, which has no such ceiling.
         if (rows == null) {
-            return compressPerRow(VarBinBytes.toByteArrays(data), arena);
+            return compressPerRow(VarBinBytes.toByteArrays(data), validity, arena);
         }
         byte[] rowBytes = rows.bytes();
         int[] rowOffsets = rows.offsets();
@@ -170,7 +194,12 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             maxUncompLen = Math.max(maxUncompLen, uncompLens[i]);
         }
 
-        Compressor trained = new CompressorBuilder().train(rowBytes, rowOffsets, n);
+        Compressor trained;
+        if (validity == null) {
+            trained = new CompressorBuilder().train(rowBytes, rowOffsets, n);
+        } else {
+            trained = trainOnValidRows(rowBytes, rowOffsets, validity);
+        }
 
         // byte[]-input overload over the shared row buffer: the intrinsified VarHandle word load
         // is faster than wrapping each row in a MemorySegment first, and the row is addressed as
@@ -186,6 +215,10 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     /// its own array. Package-private (rather than `private`) so a test can drive this path
     /// directly — the public path only reaches it past a >2 GB corpus.
     static Fsst compressPerRow(byte[][] byteArrays, Arena arena) {
+        return compressPerRow(byteArrays, null, arena);
+    }
+
+    private static Fsst compressPerRow(byte[][] byteArrays, boolean[] validity, Arena arena) {
         int n = byteArrays.length;
 
         long totalInput = 0;
@@ -197,13 +230,37 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             maxUncompLen = Math.max(maxUncompLen, uncompLens[i]);
         }
 
-        Compressor trained = new CompressorBuilder().train(byteArrays);
+        byte[][] trainingRows = byteArrays;
+        if (validity != null) {
+            List<byte[]> valid = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                if (validity[i]) {
+                    valid.add(byteArrays[i]);
+                }
+            }
+            trainingRows = valid.toArray(new byte[0][]);
+        }
+        Compressor trained = new CompressorBuilder().train(trainingRows);
 
         return finishCompress(trained, n, totalInput, maxUncompLen, uncompLens, arena,
                 (compressor, i, scratch, destOffset) -> {
                     byte[] row = byteArrays[i];
                     return compressor.compress(row, 0, row.length, scratch, destOffset);
                 });
+    }
+
+    /// Rust's `fsst_train_compressor` trains on the valid rows only. A null row is empty in
+    /// `rowBytes`, so the valid rows stay back to back there and only their offsets are picked out.
+    private static Compressor trainOnValidRows(byte[] rowBytes, int[] rowOffsets, boolean[] validity) {
+        int[] validOffsets = new int[validity.length + 1];
+        int valid = 0;
+        for (int i = 0; i < validity.length; i++) {
+            if (validity[i]) {
+                validOffsets[valid++] = rowOffsets[i];
+            }
+        }
+        validOffsets[valid] = rowOffsets[validity.length];
+        return new CompressorBuilder().train(rowBytes, validOffsets, valid);
     }
 
     /// Shared tail of `compress`/`compressPerRow`: renumbers the trained symbol table to wire

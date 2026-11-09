@@ -23,8 +23,9 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// A nullable text column without a null has no validity to store, as Rust's all-valid string array
-/// has none (#650): with cascading on it is never written under a `vortex.masked`.
+/// With cascading on, a nullable text column is never written under a `vortex.masked`: without a
+/// null it has no validity to store, as Rust's all-valid string array has none (#650), and with
+/// nulls its text encoding keeps the validity, as Rust's FSST, OnPair and VarBinView do.
 class NullableTextMaskTest {
 
     private static final ColumnName V = ColumnName.of("v");
@@ -38,16 +39,17 @@ class NullableTextMaskTest {
         return Stream.of(
                 Arguments.of("no null, cascading", DTypes.UTF8.asNullable(), 0, defaults, false),
                 Arguments.of("binary, no null, cascading", DTypes.BINARY.asNullable(), 0, defaults, false),
-                Arguments.of("one null, cascading", DTypes.UTF8.asNullable(), 1, defaults, true),
+                // with nulls, the validity lives in the text encoding, as Rust keeps it
+                Arguments.of("one null, cascading", DTypes.UTF8.asNullable(), 1, defaults, false),
                 Arguments.of("no null, depth 0", DTypes.UTF8.asNullable(), 0, WriteOptions.cascading(0).withGlobalDict(false), true),
                 Arguments.of("no null, column override", DTypes.UTF8.asNullable(), 0, fsst, false),
-                Arguments.of("one null, column override", DTypes.UTF8.asNullable(), 1, fsst, true));
+                Arguments.of("one null, column override", DTypes.UTF8.asNullable(), 1, fsst, false));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("writes")
-    void write_masksOnlyWhenThereIsValidityToStore(String name, DType dtype, int nulls, WriteOptions options,
-                                                   boolean masked, @TempDir Path tmp) throws IOException {
+    void write_masksTextOnlyWithoutCascading(String name, DType dtype, int nulls, WriteOptions options,
+                                             boolean masked, @TempDir Path tmp) throws IOException {
         // Given
         boolean binary = dtype instanceof DType.Binary;
         boolean[] validity = new boolean[ROWS];

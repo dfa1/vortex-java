@@ -32,8 +32,20 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
+    /// A nullable text array keeps its validity as a `vortex.bool` child after the offsets, as
+    /// Rust's `VarBinArray` does; a null row is an empty slot.
+    @Override
+    public boolean acceptsNullable(DType dtype) {
+        return accepts(dtype);
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData nullable) {
+            return encode(dtype, nullable.values(), ctx)
+                    .withStats(ZoneMapStats.of(dtype.withNullable(false), nullable))
+                    .withValidity(nullable.validity(), ctx);
+        }
         // Binary arrives as raw byte[][] and round-trips byte-for-byte; Utf8 arrives as String[]
         // (UTF-8 encoded here) or as its UTF-8 bytes. Either way a null entry (this encoder is the
         // values child of a masked/nullable layout, where validity carries nullity) contributes a

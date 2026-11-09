@@ -177,7 +177,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
     }
 
     /// Whether a non-empty `String[]` or UTF-8 `byte[][]` repeats one value.
-    private static boolean isConstantText(Object data) {
+    static boolean isConstantText(Object data) {
         if (data instanceof byte[][] utf8) {
             for (int i = 1; i < utf8.length; i++) {
                 if (!Arrays.equals(utf8[i], utf8[0])) {
