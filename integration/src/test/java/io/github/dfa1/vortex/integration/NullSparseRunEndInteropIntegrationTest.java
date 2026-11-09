@@ -62,9 +62,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Gate-running interop cover for null-fill Sparse (#226), null-run RunEnd (#225), and
 /// null-scalar Constant (#246) validity.
 ///
-/// These fixes are exercised by the weekly Raincloud conformance corpus only; this test
-/// reproduces each shape on every `verify` run from a JNI-written (Rust reference) file,
-/// so a validity regression reddens the per-PR gate rather than surfacing a week later.
+/// These fixes are exercised by the Raincloud conformance corpus only, which runs locally; this
+/// test reproduces each shape on every `verify` run from a JNI-written (Rust reference) file,
+/// so a validity regression reddens the per-PR gate rather than surfacing at the next corpus run.
 ///
 /// The bundled `vortex-jni` compressor is version-pinned, so its encoding choice for a crafted
 /// input is deterministic — verified by probing: a mostly-null column with a small fraction of

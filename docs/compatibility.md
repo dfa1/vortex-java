@@ -93,8 +93,8 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
 `untriaged` runs and reports without failing the build; `missing_auth` marks a slug that can't
 even be hydrated without credentials this environment lacks — Kaggle, gated HuggingFace, etc. —
-distinguishing "blocked on a credential" from plain `untriaged`). A scheduled workflow
-(`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
+distinguishing "blocked on a credential" from plain `untriaged`). No CI job runs it: the corpus is
+hydrated and checked locally. Current triage —
 252 `ok`, 0 known gaps, 33 `missing_auth`, 145 untriaged (mostly large datasets and the
 `tpcgen-rs-*` family, which needs `tpcgen-cli` to build). On the v0.3.0 corpus, 172 hydrated
 datasets match their Parquet sibling exactly. Every gap found so far is fixed
