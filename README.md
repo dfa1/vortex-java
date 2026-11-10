@@ -11,7 +11,7 @@ Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) 
 for zero-copy memory-mapped reads — good performance out of the box, without native dependencies.
 
 Checked against the Rust reference in both directions (Rust writes, Java reads and vice versa),
-and against 172 real-world [Raincloud](docs/compatibility.md#real-world-conformance-the-raincloud-corpus) datasets, each matching its Parquet copy value for value.
+and against 398 real-world [Raincloud](docs/compatibility.md#real-world-conformance-the-raincloud-corpus) datasets, each matching its Parquet copy value for value.
 
 ## Who is this for
 
