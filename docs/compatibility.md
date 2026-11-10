@@ -100,6 +100,24 @@ git clone https://github.com/clflushopt/tpchgen-rs tpcgen-rs && git -C tpcgen-rs
 ~/.cache/raincloud/conformance-venv-v0.3.0/bin/python -m raincloud.pipeline.generators.install_tpcgen --source tpcgen-rs
 ```
 
+The conformance test proves values match; `scripts/RaincloudCompare.java` reports what they cost.
+Per hydrated slug it prints the Parquet size, two Rust sizes (Raincloud's file, from the
+`vortex-data` its release pins, and that file rewritten by vortex-jni at the Rust version
+vortex-java mirrors), the Java size with default and compact write options, the import time,
+and the full-scan time of the Rust file and of Java's, flagging a Java file over 2% larger than
+vortex-jni's. It reports and never fails: size is information, not a reason to diverge from
+Rust. vortex-jni rewrites the batches its scan yields, not the Parquet row groups Java imports,
+so its chunk boundaries can differ slightly. It needs vortex-jni and Arrow, so it runs with the
+`integration` module's test class path and Arrow's JVM flags:
+
+```bash
+./mvnw -q -pl integration -am -DskipTests package dependency:build-classpath \
+    -Dmdep.includeScope=test -Dmdep.outputFile=target/test-classpath.txt
+java --enable-native-access=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED \
+    --sun-misc-unsafe-memory-access=allow -cp "$(cat integration/target/test-classpath.txt)" \
+    scripts/RaincloudCompare.java [slug ...]   # no slug: the last manifest
+```
+
 Per-slug status lives in `integration/src/test/resources/raincloud/expected-status.csv`
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
 `untriaged` runs and reports without failing the build; `missing_auth` marks a slug that can't
