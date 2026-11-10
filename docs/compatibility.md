@@ -101,21 +101,26 @@ git clone https://github.com/clflushopt/tpchgen-rs tpcgen-rs && git -C tpcgen-rs
 ```
 
 The conformance test proves values match; `scripts/RaincloudCompare.java` reports what they cost.
-Per hydrated slug it prints the Parquet size, two Rust sizes (Raincloud's file, from the
-`vortex-data` its release pins, and that file rewritten by vortex-jni at the Rust version
-vortex-java mirrors), the Java size with default and compact write options, the import time,
-and the full-scan time of the Rust file and of Java's, flagging a Java file over 2% larger than
-vortex-jni's. It reports and never fails: size is information, not a reason to diverge from
-Rust. vortex-jni rewrites the batches its scan yields, not the Parquet row groups Java imports,
-so its chunk boundaries can differ slightly. It needs vortex-jni and Arrow, so it runs with the
-`integration` module's test class path and Arrow's JVM flags:
+Per hydrated slug it prints the Parquet size, Raincloud's `.vortex` (from the `vortex-data` its
+release pins), that file rewritten by vortex-jni, Python `vortex-data` at the Rust version
+vortex-java mirrors writing the Parquet with its default and compact options, and vortex-java
+importing it with both; then the import and rewrite times and the full-scan time of Raincloud's
+file and of Java's. It flags a Java file over 2% larger than Rust's, default (`BIGGER`) or
+compact (`BIGGER_COMPACT`), and never fails: size is information, not a reason to diverge from
+Rust. The Python writer is the baseline: vortex-jni has no compact option
+([vortex-data/vortex#11374](https://github.com/vortex-data/vortex/issues/11374)), and its rewrite
+takes the batches its scan yields, which vary between runs, and its size with them (by 6% on
+`openpowerlifting`), so `jni` is for reference only. Without `VORTEX_PYTHON` there is no
+baseline and nothing is flagged. It needs vortex-jni and Arrow, so it runs with the `integration` module's test
+class path and Arrow's JVM flags:
 
 ```bash
+python3 -m venv /tmp/vx && /tmp/vx/bin/pip install pyarrow vortex-data==0.91.0   # = vortex-jni.version
 ./mvnw -q -pl integration -am -DskipTests package dependency:build-classpath \
     -Dmdep.includeScope=test -Dmdep.outputFile=target/test-classpath.txt
-java --enable-native-access=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED \
-    --sun-misc-unsafe-memory-access=allow -cp "$(cat integration/target/test-classpath.txt)" \
-    scripts/RaincloudCompare.java [slug ...]   # no slug: the last manifest
+VORTEX_PYTHON=/tmp/vx/bin/python java --enable-native-access=ALL-UNNAMED \
+    --add-opens java.base/java.nio=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow \
+    -cp "$(cat integration/target/test-classpath.txt)" scripts/RaincloudCompare.java [slug ...]
 ```
 
 Per-slug status lives in `integration/src/test/resources/raincloud/expected-status.csv`
