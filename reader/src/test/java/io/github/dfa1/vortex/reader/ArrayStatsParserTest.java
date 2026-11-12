@@ -3,9 +3,22 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ArrayStats;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.OpaqueMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.stream.Stream;
 
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -255,6 +268,131 @@ class ArrayStatsParserTest {
             assertThatThrownBy(() -> ArrayStatsParser.parse(fbs))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("invalid scalar value");
+        }
+    }
+
+    @Nested
+    class ParseDecimal {
+
+        // Rust writes a decimal bound as the little-endian two's-complement bytes of its unscaled
+        // value, at the storage width: negative values and every width catch a sign or byte-order slip.
+        @ParameterizedTest
+        @ValueSource(ints = {1, 2, 4, 8, 16, 32})
+        void bound_decodesAtEveryStorageWidth(int width) {
+            // Given
+            BigInteger min = BigInteger.valueOf(-100);
+            BigInteger max = BigInteger.valueOf(99);
+            var fbs = buildFbs(
+                    ProtoScalarValue.ofBytesValue(littleEndian(min, width)).encode(),
+                    ProtoScalarValue.ofBytesValue(littleEndian(max, width)).encode());
+
+            // When
+            ArrayStats result = ArrayStatsParser.parse(fbs, new DType.Decimal((byte) 9, (byte) 2, false));
+
+            // Then
+            assertThat(result.min()).isEqualTo(new BigDecimal("-1.00"));
+            assertThat(result.max()).isEqualTo(new BigDecimal("0.99"));
+        }
+
+        @Test
+        void negativeScale_keepsTheUnscaledValue() {
+            // Given
+            var fbs = buildFbs(
+                    ProtoScalarValue.ofBytesValue(littleEndian(BigInteger.valueOf(5), 4)).encode(),
+                    ProtoScalarValue.ofBytesValue(littleEndian(BigInteger.valueOf(7), 4)).encode());
+
+            // When
+            ArrayStats result = ArrayStatsParser.parse(fbs, new DType.Decimal((byte) 9, (byte) -3, false));
+
+            // Then
+            assertThat(result.min()).isEqualTo(new BigDecimal("5E+3"));
+            assertThat(result.max()).isEqualTo(new BigDecimal("7E+3"));
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = {0, 3, 5, 33})
+        void bound_ofAnInvalidWidth_isRejected(int width) {
+            // Given
+            var fbs = buildFbs(ProtoScalarValue.ofBytesValue(new byte[width]).encode(), null);
+
+            // When / Then
+            assertThatThrownBy(() -> ArrayStatsParser.parse(fbs, new DType.Decimal((byte) 9, (byte) 2, false)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("invalid decimal byte length");
+        }
+
+        // Rust reads only a BytesValue for a decimal (bytes_from_proto): a crafted file with another kind
+        // must raise VortexException, not an NPE, and never reach a fold ordering it against a BigDecimal.
+        @ParameterizedTest
+        @MethodSource("nonBytesScalars")
+        void bound_thatIsNotBytes_isRejected(ProtoScalarValue scalar) {
+            // Given
+            var fbs = buildFbs(scalar.encode(), null);
+
+            // When / Then
+            assertThatThrownBy(() -> ArrayStatsParser.parse(fbs, new DType.Decimal((byte) 9, (byte) 2, false)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("not a byte string");
+        }
+
+        static Stream<ProtoScalarValue> nonBytesScalars() {
+            return Stream.of(
+                    ProtoScalarValue.ofStringValue("1.5"),
+                    ProtoScalarValue.ofInt64Value(7L),
+                    ProtoScalarValue.ofBoolValue(true));
+        }
+
+        // The small values above fit one byte; past a long only the 16- and 32-byte widths carry them.
+        @ParameterizedTest
+        @ValueSource(ints = {16, 32})
+        void bound_beyondALong_decodes(int width) {
+            // Given
+            BigInteger max = BigInteger.TWO.pow(100);
+            var fbs = buildFbs(
+                    ProtoScalarValue.ofBytesValue(littleEndian(max.negate(), width)).encode(),
+                    ProtoScalarValue.ofBytesValue(littleEndian(max, width)).encode());
+
+            // When
+            ArrayStats result = ArrayStatsParser.parse(fbs, new DType.Decimal((byte) 38, (byte) 0, false));
+
+            // Then
+            assertThat(result.min()).isEqualTo(new BigDecimal(max.negate()));
+            assertThat(result.max()).isEqualTo(new BigDecimal(max));
+        }
+
+        @Test
+        void bound_ofAnExtensionOverADecimal_decodesAsTheStorage() {
+            // Given
+            DType storage = new DType.Decimal((byte) 9, (byte) 2, false);
+            DType extension = new DType.Extension(ExtensionId.parse("acme.money"), storage, OpaqueMetadata.EMPTY, false);
+            var fbs = buildFbs(ProtoScalarValue.ofBytesValue(littleEndian(BigInteger.valueOf(150), 4)).encode(), null);
+
+            // When
+            ArrayStats result = ArrayStatsParser.parse(fbs, extension);
+
+            // Then
+            assertThat(result.min()).isEqualTo(new BigDecimal("1.50"));
+        }
+
+        @Test
+        void bound_withoutADtype_staysTheRawText() {
+            // Given
+            var fbs = buildFbs(ProtoScalarValue.ofBytesValue(new byte[]{'1'}).encode(), null);
+
+            // When
+            ArrayStats result = ArrayStatsParser.parse(fbs);
+
+            // Then
+            assertThat(result.min()).isEqualTo("1");
+        }
+
+        private static byte[] littleEndian(BigInteger value, int width) {
+            // The shifts are arithmetic, so the limbs sign-extend and the truncation is two's complement.
+            ByteBuffer buffer = ByteBuffer.allocate(32).order(ByteOrder.LITTLE_ENDIAN);
+            for (int limb = 0; limb < 4; limb++) {
+                buffer.putLong(value.shiftRight(64 * limb).longValue());
+            }
+            return Arrays.copyOf(buffer.array(), width);
         }
     }
 
