@@ -163,7 +163,9 @@ Docs follow the [Diátaxis](https://diataxis.fr/) framework.
 **Requirements:** Java 25+. Build: `./mvnw verify`.
 
 Forks welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for full build reference,
-coding conventions, and how to add a new encoding.
+coding conventions, and how to add a new encoding. Looking for a place to start? Try a
+[`good first issue`](https://github.com/dfa1/vortex-java/labels/good%20first%20issue); questions go to
+[Discussions](https://github.com/dfa1/vortex-java/discussions).
 
 This project uses [Claude Code](https://claude.ai/code) for implementation work.
 Architecture, API design, and all decisions are human-driven.
