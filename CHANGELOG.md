@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - A decimal min or max in a flat node's stats is decoded as a `BigDecimal` instead of text, so a filtered scan can prune on it and `columnStats()` reports it. ([#710](https://github.com/dfa1/vortex-java/issues/710))
 - A `vortex.uuid` column's file statistics carry its min and max, as Rust writes them from 0.92, and `WriteSummary` reports them as `UUID`s. ([#730](https://github.com/dfa1/vortex-java/pull/730))
+- Opening a file over HTTP follows redirects (`Redirect.NORMAL`), so hosts that answer with a 302/307 to their storage CDN (e.g. Hugging Face's `/resolve/`) work. ([#742](https://github.com/dfa1/vortex-java/issues/742))
+- A `416` to the opening suffix `Range` retries once with the total from `Content-Range: bytes */<total>`, so files smaller than 65 KiB open from servers (e.g. Hugging Face's storage) that reject over-long suffix ranges. ([#741](https://github.com/dfa1/vortex-java/issues/741))
 
 ### Changed
 - A struct column is written as Rust's `vortex.struct` layout, each field chunked and compressed on its own, so files are smaller and a reader can prune one field. ([#724](https://github.com/dfa1/vortex-java/issues/724))

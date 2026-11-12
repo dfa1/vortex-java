@@ -40,7 +40,12 @@ public final class VortexHttpReader implements VortexHandle {
     /// Package-private and non-final purely as a unit-test seam: tests substitute a mocked
     /// client to drive the default-client [#open(URI, ReadRegistry)] overload without real
     /// network I/O. Production code never reassigns it.
-    static HttpClient defaultHttpClient = HttpClient.newHttpClient();
+    ///
+    /// Follows redirects (`Redirect.NORMAL`): hosts like Hugging Face answer their
+    /// `/resolve/` URLs with a 302/307 to the storage CDN, which serves the Range.
+    static HttpClient defaultHttpClient = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
 
     private final URI uri;
     private final HttpClient client;
@@ -223,16 +228,14 @@ public final class VortexHttpReader implements VortexHandle {
     /// Parses `Content-Range: bytes start-end/total` to extract file size and tail offset,
     /// avoiding a separate HEAD round trip.
     private static TailFetch fetchTail(URI uri, HttpClient client) throws IOException {
-        HttpRequest req = HttpRequest.newBuilder(uri)
-                              .header("Range", "bytes=-" + TAIL_SIZE.bytes())
-                              .GET()
-                              .build();
-        HttpResponse<byte[]> resp;
-        try {
-            resp = sendRange(req, client, uri, -1, TAIL_SIZE.bytes());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted fetching tail of " + uri, e);
+        HttpResponse<byte[]> resp = sendTailRequest(uri, client, TAIL_SIZE.bytes());
+        if (resp.statusCode() == 416) {
+            // A suffix range longer than the file is valid (RFC 9110 §14.1.3) and S3 or nginx
+            // answer with the whole file, but some servers (e.g. Hugging Face's storage) reject
+            // it with 416 + `Content-Range: bytes */<total>`. Retry once with that total.
+            long total = parseUnsatisfiedRange(resp.headers().firstValue("Content-Range")
+                    .orElseThrow(() -> new VortexException("416 response missing Content-Range from " + uri)), uri);
+            resp = sendTailRequest(uri, client, total);
         }
 
         byte[] body = resp.body();
@@ -251,6 +254,40 @@ public final class VortexHttpReader implements VortexHandle {
         }
 
         throw new VortexException("HTTP " + status + " fetching tail of " + uri);
+    }
+
+    /// Sends one suffix-Range request for the last `suffixLength` bytes of `uri`.
+    private static HttpResponse<byte[]> sendTailRequest(URI uri, HttpClient client, long suffixLength)
+            throws IOException {
+        HttpRequest req = HttpRequest.newBuilder(uri)
+                              .header("Range", "bytes=-" + suffixLength)
+                              .GET()
+                              .build();
+        try {
+            return sendRange(req, client, uri, -1, suffixLength);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted fetching tail of " + uri, e);
+        }
+    }
+
+    /// Parses a `bytes */<total>` unsatisfied-range Content-Range header (RFC 9110 §14.2)
+    /// from an untrusted server. Any structural defect (missing `bytes */` prefix,
+    /// non-numeric or negative total) surfaces as a [VortexException].
+    private static long parseUnsatisfiedRange(String contentRange, URI uri) {
+        try {
+            String prefix = "bytes */";
+            if (!contentRange.startsWith(prefix)) {
+                throw new VortexException("malformed Content-Range '" + contentRange + "' from " + uri);
+            }
+            long total = Long.parseLong(contentRange.substring(prefix.length()));
+            if (total < 0) {
+                throw new VortexException("malformed Content-Range '" + contentRange + "' from " + uri);
+            }
+            return total;
+        } catch (NumberFormatException e) {
+            throw new VortexException("malformed Content-Range '" + contentRange + "' from " + uri, e);
+        }
     }
 
     /// Parses a `bytes <start>-<end>/<total>` Content-Range header from an untrusted server.
