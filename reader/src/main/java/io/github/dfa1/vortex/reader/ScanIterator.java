@@ -626,12 +626,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             if (layout != null && layout.isDict() && !layout.children().isEmpty()) {
                 // child[0] = values, child[1] = codes — the order DictLayoutDecoder decodes.
                 Layout values = layout.children().getFirst();
-                ArrayStats pool = values.isFlat() ? readFlatStats(values) : ArrayStats.empty();
+                ArrayStats pool = values.isFlat() ? readFlatStats(values, columnDType(name)) : ArrayStats.empty();
                 out.add(new ArrayStats(pool.min(), pool.minExact(), pool.max(), pool.maxExact(),
                         null, null, null, null, null, null, null));
                 continue;
             }
-            out.add(layout == null || !layout.isFlat() ? ArrayStats.empty() : readFlatStats(layout));
+            out.add(layout == null || !layout.isFlat() ? ArrayStats.empty() : readFlatStats(layout, columnDType(name)));
         }
         return out;
     }
@@ -1165,7 +1165,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 // zones in a larger chunk), and the IS NOT NULL test compares nullCount against it.
                 List<Zone> zones = zonesOverlapping(chunk, col);
                 if (zones == null) {
-                    yield canPrune(predicate, readFlatStats(flat), flat.rowCount(), columnDType(col))
+                    yield canPrune(predicate, readFlatStats(flat, columnDType(col)), flat.rowCount(), columnDType(col))
                             || dictMatchesNothing(flat, col, predicate);
                 }
                 // The window has no matching row iff none of the zones covering it has one.
@@ -1266,7 +1266,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// Returns the zones of `col` that together cover `chunk`'s window, in row order, or `null` when
     /// the column has no usable zone map or its zones do not reach the window's end — in which case
     /// the caller falls back to the chunk's own embedded stats. Reading here decodes (and caches) one
-    /// small zone-map segment per column for the whole scan, instead of [#readFlatStats(Layout)]'s
+    /// small zone-map segment per column for the whole scan, instead of [#readFlatStats(Layout, DType)]'s
     /// per-chunk read of the chunk's full data segment — the difference that makes pruning over
     /// HTTP actually cheaper than not pruning.
     private List<Zone> zonesOverlapping(ChunkSpec chunk, ColumnName col) {
@@ -1432,8 +1432,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Object min = stats.min();
         Object max = stats.max();
         if (ct instanceof DType.Decimal) {
-            // A flat node's stats scalar is decoded without the column's dtype, so a decimal bound
-            // arrives as text: not a bound this column can order, hence no bound at all.
+            // Only a BigDecimal orders against a decimal column: a bound of any other type (a stats
+            // scalar decoded without its dtype) is no bound at all.
             if (!(min instanceof java.math.BigDecimal)) {
                 min = null;
             }
@@ -1482,7 +1482,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         };
     }
 
-    private ArrayStats readFlatStats(Layout flat) {
+    private ArrayStats readFlatStats(Layout flat, DType dtype) {
         if (flat.segments().isEmpty()) {
             return ArrayStats.empty();
         }
@@ -1511,7 +1511,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             if (root == null) {
                 return ArrayStats.empty();
             }
-            return ArrayStatsParser.parse(root.stats());
+            return ArrayStatsParser.parse(root.stats(), dtype);
         } catch (VortexException _) {
             // The FlatBuffer verifier rejected the stats segment: malformed stats read as none.
             return ArrayStats.empty();
