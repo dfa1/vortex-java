@@ -37,6 +37,8 @@ final class ZoneMapWriter {
     private final boolean zonedLayout;
     private final SegmentEncoder encoder;
     private final SegmentSink sink;
+    // leaves that carry no zone map (under a nullable struct)
+    private final Set<ColumnName> unzoned;
     // Per-column zone-maps, populated by flush() in close().
     private final Map<ColumnName, ZoneMapRef> zoneMaps;
     private final Map<ColumnName, ZoneAccumulator> zoneAccumulators;
@@ -45,12 +47,13 @@ final class ZoneMapWriter {
     private final Map<ColumnName, CompletableFuture<Void>> zoneTails;
 
     ZoneMapWriter(DType.Struct schema, WriteOptions options, boolean zonedLayout, SegmentEncoder encoder,
-            SegmentSink sink) {
+            SegmentSink sink, Set<ColumnName> unzoned) {
         this.schema = schema;
         this.options = options;
         this.zonedLayout = zonedLayout;
         this.encoder = encoder;
         this.sink = sink;
+        this.unzoned = unzoned;
         this.zoneMaps = new LinkedHashMap<>();
         this.zoneAccumulators = new LinkedHashMap<>();
         this.zoneTails = new LinkedHashMap<>();
@@ -93,7 +96,7 @@ final class ZoneMapWriter {
         for (Map.Entry<ColumnName, List<ChunkRef>> e : colChunks.entrySet()) {
             ColumnName colName = e.getKey();
             List<ChunkRef> chunks = e.getValue();
-            if (chunks.isEmpty()) {
+            if (chunks.isEmpty() || unzoned.contains(colName)) {
                 continue;
             }
             DType colDtype = columnDtype(colName);
@@ -114,6 +117,9 @@ final class ZoneMapWriter {
         // values (computed at dict-build time); NULL_COUNT always. Matches Rust, whose zone-map
         // stats are computed on the logical column dtype, independent of the dict encoding.
         for (Map.Entry<ColumnName, List<DictColRef>> e : dicts.entrySet()) {
+            if (unzoned.contains(e.getKey())) {
+                continue;
+            }
             DType colDtype = columnDtype(e.getKey());
             DType minMaxDtype = ZoneMapStatCodec.zoneMinMaxDtype(colDtype);
             List<ProtoScalarValue> mins = new ArrayList<>();

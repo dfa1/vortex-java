@@ -3,18 +3,22 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.DTypes;
 import io.github.dfa1.vortex.core.model.Edition;
 import io.github.dfa1.vortex.core.model.EditionFamily;
 import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.RowCount;
+import io.github.dfa1.vortex.writer.encode.StructData;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -50,6 +54,7 @@ public final class VortexWriter implements Closeable {
     private static final WriteRegistry DEFAULT_EXTENSIONS = WriteRegistry.builder().registerDefaultExtensions().build();
 
     private final DType.Struct schema;
+    private final StructColumns structColumns;
     private final WriteOptions options;
     // The only writer state the encoding tasks on WriteOptions#executor() touch; immutable.
     private final SegmentEncoder segmentEncoder;
@@ -66,7 +71,11 @@ public final class VortexWriter implements Closeable {
     private final ZoneMapWriter zoneMaps;
     // Rust's footer file statistics, one per top-level field in schema order, fed the raw batches.
     private final List<FileStatsAccumulator> fileStats;
+    // Every leaf column's chunks: a struct column's fields (see StructColumns) are columns of their own.
     private final Map<ColumnName, List<ChunkRef>> colChunks;
+    // Each nullable struct's validity, buffered as the batches arrive and written whole at finish
+    // (Rust's struct layout holds it in one flat child), by the struct's leaf-style key.
+    private final Map<ColumnName, StructValidity> structValidities;
     // Rust's repartition: each column's batches coalesce into ~1 MB chunks of 8192-row multiples.
     private final Map<ColumnName, Repartitioner> repartitioners;
     // The batch being written: its columns' piece sizes, measured on the executor ahead of appendChunk.
@@ -101,12 +110,15 @@ public final class VortexWriter implements Closeable {
                 options.enableZoneMaps() && !zonedLayout);
         this.sink = new SegmentSink(channel, segmentEncoder, options.executor());
         this.globalDict = new GlobalDictWriter(options, segmentEncoder, sink, zonedLayout, this::appendChunk);
-        this.zoneMaps = new ZoneMapWriter(schema, options, zonedLayout, segmentEncoder, sink);
+        this.structColumns = new StructColumns(schema);
+        this.zoneMaps = new ZoneMapWriter(structColumns.leafSchema(), options, zonedLayout, segmentEncoder, sink,
+                structColumns.unzoned());
         this.fileStats = schema.fieldTypes().stream().map(FileStatsAccumulator::new).toList();
         this.colChunks = new LinkedHashMap<>();
-        for (ColumnName name : schema.fieldNames()) {
+        for (ColumnName name : structColumns.leafSchema().fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
+        this.structValidities = new LinkedHashMap<>();
         this.repartitioners = new LinkedHashMap<>();
         this.pieceSizes = new HashMap<>();
         this.firstChunkSeen = false;
@@ -326,18 +338,61 @@ public final class VortexWriter implements Closeable {
             DType colDtype = schema.fieldTypes().get(i);
             Object data = adapted.get(colName);
 
-            zoneMaps.add(colName, colDtype, data);
             fileStats.get(i).add(data, expectedLen);
-            if (!firstChunkSeen) {
-                globalDict.detect(colName, colDtype, data);
-            }
-            if (globalDict.isCandidate(colName)) {
-                globalDict.ingest(colName, colDtype, data);
-            } else {
-                appendChunk(colName, colDtype, data);
-            }
+            writeColumn(colName, colName, colDtype, data, true);
         }
         firstChunkSeen = true;
+    }
+
+    /// Writes one batch of `key`: a struct is split into its fields, each written as a column of its
+    /// own, and its validity buffered; any other column is a leaf, written whole.
+    ///
+    /// @param column the top-level column `key` belongs to
+    /// @param zoned  whether Rust zones this column: no struct above it is nullable
+    private void writeColumn(ColumnName column, ColumnName key, DType dtype, Object data, boolean zoned)
+            throws IOException {
+        if (!StructColumns.isLayoutStruct(dtype)) {
+            if (zoned) {
+                zoneMaps.add(key, dtype, data);
+            }
+            if (!firstChunkSeen) {
+                globalDict.detect(key, dtype, data);
+            }
+            if (globalDict.isCandidate(key)) {
+                globalDict.ingest(key, dtype, data);
+            } else {
+                appendChunk(key, dtype, data);
+            }
+            return;
+        }
+        DType.Struct struct = (DType.Struct) dtype;
+        StructData fields;
+        if (data instanceof NullableData nullable) {
+            fields = (StructData) nullable.values();
+            structValidities.computeIfAbsent(key, _ -> new StructValidity(column)).batches().add(nullable.validity());
+        } else {
+            fields = (StructData) data;
+            if (struct.nullable()) {
+                boolean[] allValid = new boolean[RowCount.of(data)];
+                Arrays.fill(allValid, true);
+                structValidities.computeIfAbsent(key, _ -> new StructValidity(column)).batches().add(allValid);
+            }
+        }
+        for (int i = 0; i < struct.fieldNames().size(); i++) {
+            writeColumn(column, StructColumns.fieldKey(key, struct.fieldNames().get(i)), struct.fieldTypes().get(i),
+                    fields.fieldArrays().get(i), zoned && !struct.nullable());
+        }
+    }
+
+    /// Writes each nullable struct's validity as one segment, a flat bool child of its layout.
+    private Map<ColumnName, ChunkRef> flushStructValidities() throws IOException {
+        Map<ColumnName, ChunkRef> written = new LinkedHashMap<>();
+        for (Map.Entry<ColumnName, StructValidity> e : structValidities.entrySet()) {
+            boolean[] all = e.getValue().concat();
+            written.put(e.getKey(), new ChunkRef(
+                    sink.write(e.getValue().column(), DTypes.BOOL, all, null, Set.of()), all.length));
+        }
+        return written;
     }
 
     /// Hands one batch of a column to its [Repartitioner], writing every chunk it completes; a
@@ -395,6 +450,7 @@ public final class VortexWriter implements Closeable {
         }
         finishing = true;
         flushRepartitioners();
+        Map<ColumnName, ChunkRef> validities = flushStructValidities();
         globalDict.flush();
         zoneMaps.flush(colChunks, globalDict.written());
         // the zoned layout: Rust's "vortex.zoned" when the edition has it, else the legacy
@@ -404,8 +460,9 @@ public final class VortexWriter implements Closeable {
             zoned = LayoutId.ZONED;
         }
         long fileSize = sink.finish(zoned, dtypeSerializer.buildDType(schema),
-                LayoutTree.build(schema, colChunks, globalDict.written(), zoneMaps.written()), fileStats);
-        Map<ColumnName, Long> sizes = sink.columnSizes();
+                LayoutTree.build(schema, rowCount, colChunks, validities, globalDict.written(), zoneMaps.written()), fileStats);
+        Map<ColumnName, Long> sizes = new LinkedHashMap<>();
+        sink.columnSizes().forEach((column, bytes) -> sizes.merge(structColumns.owner(column), bytes, Long::sum));
         Map<ColumnName, WriteSummary.Column> columns = new LinkedHashMap<>();
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             ColumnName name = schema.fieldNames().get(i);
@@ -429,7 +486,29 @@ public final class VortexWriter implements Closeable {
     }
 
     private DType columnDtype(ColumnName colName) {
-        return schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
+        DType.Struct leaves = structColumns.leafSchema();
+        return leaves.fieldTypes().get(leaves.fieldNames().indexOf(colName));
+    }
+
+    /// A nullable struct's validity batches so far, and the top-level column its bytes count towards.
+    private record StructValidity(ColumnName column, List<boolean[]> batches) {
+        StructValidity(ColumnName column) {
+            this(column, new ArrayList<>());
+        }
+
+        boolean[] concat() {
+            int rows = 0;
+            for (boolean[] batch : batches) {
+                rows += batch.length;
+            }
+            boolean[] all = new boolean[rows];
+            int at = 0;
+            for (boolean[] batch : batches) {
+                System.arraycopy(batch, 0, all, at, batch.length);
+                at += batch.length;
+            }
+            return all;
+        }
     }
 
     /// One written chunk of a column: its segment and row count.

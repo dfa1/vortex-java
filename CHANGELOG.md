@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- A struct column is written as Rust's `vortex.struct` layout, each field chunked and compressed on its own, so files are smaller and a reader can prune one field. ([#724](https://github.com/dfa1/vortex-java/issues/724))
+
 ## [0.20.0] — 2026-11-10
 
 ### Changed
