@@ -44,17 +44,16 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
 import org.apache.arrow.vector.DateDayVector;
-import org.apache.arrow.vector.FixedSizeBinaryVector;
 import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.TimeMilliVector;
 import org.apache.arrow.vector.TimeStampMilliVector;
 import org.apache.arrow.vector.ValueVector;
+import org.apache.arrow.vector.UuidVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -2537,12 +2536,9 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
-    @Disabled("vortex-jni 0.74.0 uses the non-plugin-aware DType.to_arrow_schema() which bails "
-            + "for any extension type other than parquet.variant — including vortex.uuid. "
-            + "Re-enable when the JNI is updated to use ArrowSession.to_arrow_schema().")
     void javaWriter_rustReader_nullable_uuid(@TempDir Path tmp) throws IOException {
-        // Given — nullable vortex.uuid column; row 1 is null.
-        // UUID stored as big-endian 16-byte FixedSizeBinary → Arrow FixedSizeBinary(16) on read.
+        // Given — nullable vortex.uuid column; row 1 is null. Rust exports vortex.uuid as Arrow's
+        // arrow.uuid extension (vortex-data/vortex#11224; before 0.92 it could not export it at all).
         Path file = tmp.resolve("java_nullable_uuid.vtx");
         UUID u0 = UUID.fromString("12345678-1234-5678-9abc-def012345678");
         UUID u2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -2554,7 +2550,7 @@ class JavaWritesRustReadsIntegrationTest {
             sut.writeChunk(Map.of(ColumnName.of("u"), Arrays.asList(u0, null, u2)));
         }
 
-        // Then — Rust reads FixedSizeBinary(16) vector; row 1 null, rows 0/2 round-trip as UUID
+        // Then — Rust reads an arrow.uuid vector; row 1 null, rows 0/2 round-trip
         String uri = file.toAbsolutePath().toUri().toString();
         DataSource ds = DataSource.open(SESSION, uri);
         Scan scan = ds.scan(ScanOptions.of());
@@ -2564,9 +2560,9 @@ class JavaWritesRustReadsIntegrationTest {
             try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
                 while (reader.loadNextBatch()) {
                     VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    FixedSizeBinaryVector vec = (FixedSizeBinaryVector) root.getVector("u");
+                    UuidVector vec = (UuidVector) root.getVector("u");
                     for (int i = 0; i < root.getRowCount(); i++) {
-                        uuids.add(vec.isNull(i) ? null : uuidFromBytes(vec.get(i)));
+                        uuids.add(vec.getObject(i));
                     }
                 }
             }
@@ -2798,15 +2794,5 @@ class JavaWritesRustReadsIntegrationTest {
         } finally {
             deleteDir(tmp);
         }
-    }
-
-    private static UUID uuidFromBytes(byte[] b) {
-        long msb = 0;
-        long lsb = 0;
-        for (int k = 0; k < 8; k++) {
-            msb = (msb << 8) | (b[k] & 0xFFL);
-            lsb = (lsb << 8) | (b[8 + k] & 0xFFL);
-        }
-        return new UUID(msb, lsb);
     }
 }

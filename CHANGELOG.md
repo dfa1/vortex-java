@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A `vortex.uuid` column's file statistics carry its min and max, as Rust writes them from 0.92, and `WriteSummary` reports them as `UUID`s. ([#730](https://github.com/dfa1/vortex-java/pull/730))
+
 ### Changed
 - A struct column is written as Rust's `vortex.struct` layout, each field chunked and compressed on its own, so files are smaller and a reader can prune one field. ([#724](https://github.com/dfa1/vortex-java/issues/724))
+- Tested against vortex-jni 0.93.0, up from 0.91.0. ([#730](https://github.com/dfa1/vortex-java/pull/730))
 
 ## [0.20.0] — 2026-11-10
 

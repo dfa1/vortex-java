@@ -1,10 +1,18 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.model.DTypes;
+import io.github.dfa1.vortex.core.proto.ProtoListValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.encode.NodeStats;
 import io.github.dfa1.vortex.writer.encode.NullableData;
+import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
 import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -117,5 +125,80 @@ class FileStatsAccumulatorTest {
 
         // Then
         assertThat(result).isEqualTo(new NodeStats(null, null, null, null, null, 4L, 0L, null));
+    }
+
+    @Test
+    void uuid_minAndMaxInUnsignedByteOrder() {
+        // Given — 0x80… sorts above 0x7f… as unsigned bytes, though it is the smaller signed long,
+        // which is how UUID.compareTo would order them
+        UUID high = UUID.fromString("80000000-0000-0000-0000-000000000000");
+        UUID low = UUID.fromString("7fffffff-ffff-ffff-ffff-ffffffffffff");
+        FileStatsAccumulator sut = new FileStatsAccumulator(UuidExtensionEncoder.INSTANCE.dtype(false));
+        sut.add(UuidExtensionEncoder.INSTANCE.encodeAll(UuidExtensionEncoder.INSTANCE.dtype(false), List.of(high, low)), 2);
+
+        // When
+        ArrayStats result = sut.arrayStats();
+
+        // Then
+        assertThat(result.min()).isEqualTo(low);
+        assertThat(result.max()).isEqualTo(high);
+        assertThat(result.minExact()).isTrue();
+        assertThat(result.maxExact()).isTrue();
+    }
+
+    @Test
+    void uuid_boundIsAListOfSixteenU8Scalars() {
+        // Given
+        UUID value = UUID.fromString("00010203-0405-0607-0809-0a0b0c0d0eff");
+        FileStatsAccumulator sut = new FileStatsAccumulator(UuidExtensionEncoder.INSTANCE.dtype(false));
+        sut.add(UuidExtensionEncoder.INSTANCE.encodeAll(UuidExtensionEncoder.INSTANCE.dtype(false), List.of(value)), 1);
+
+        // When
+        NodeStats result = sut.stats();
+
+        // Then — Rust's FixedSizeList(U8, 16) scalar: one u8 per byte, big-endian as stored
+        List<ProtoScalarValue> expected = new ArrayList<>();
+        for (int b : new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 255}) {
+            expected.add(ProtoScalarValue.ofUint64Value((long) b));
+        }
+        assertThat(result.min()).isEqualTo(ProtoScalarValue.ofListValue(new ProtoListValue(expected)));
+        assertThat(result.max()).isEqualTo(result.min());
+    }
+
+    @Test
+    void uuid_nullsCountAndKeepTheOtherBatchesBounds() {
+        // Given — a nullable column: an all-null batch adds no bound
+        UUID a = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        UUID b = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID c = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
+        var dtype = UuidExtensionEncoder.INSTANCE.dtype(true);
+        FileStatsAccumulator sut = new FileStatsAccumulator(dtype);
+        sut.add(UuidExtensionEncoder.INSTANCE.encodeAll(dtype, Arrays.asList(a, null)), 2);
+        sut.add(UuidExtensionEncoder.INSTANCE.encodeAll(dtype, Arrays.asList(null, null)), 2);
+        sut.add(UuidExtensionEncoder.INSTANCE.encodeAll(dtype, Arrays.asList(c, b)), 2);
+
+        // When
+        ArrayStats result = sut.arrayStats();
+
+        // Then
+        assertThat(result.min()).isEqualTo(b);
+        assertThat(result.max()).isEqualTo(c);
+        assertThat(result.nullCount()).isEqualTo(3L);
+    }
+
+    @Test
+    void uuidAllNull_hasNoBound() {
+        // Given
+        var dtype = UuidExtensionEncoder.INSTANCE.dtype(true);
+        FileStatsAccumulator sut = new FileStatsAccumulator(dtype);
+        sut.add(UuidExtensionEncoder.INSTANCE.encodeAll(dtype, Arrays.asList(null, null, null)), 3);
+
+        // When
+        NodeStats result = sut.stats();
+
+        // Then
+        assertThat(result.min()).isNull();
+        assertThat(result.max()).isNull();
+        assertThat(result.nullCount()).isEqualTo(3L);
     }
 }
