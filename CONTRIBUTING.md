@@ -2,6 +2,18 @@
 
 Thanks for your interest. This guide covers everything needed to contribute code.
 
+Design rationale and the full conventions agents and humans follow are in [AGENTS.md](AGENTS.md).
+
+## Questions, issues, and where to start
+
+- **Questions and ideas:** [GitHub Discussions](https://github.com/dfa1/vortex-java/discussions).
+- **Bugs:** open an issue with a minimal reproduction; a Vortex file that fails to read is ideal.
+- **Looking for something to work on:** issues labeled
+  [`good first issue`](https://github.com/dfa1/vortex-java/labels/good%20first%20issue) are
+  self-contained and a good way to learn the codebase;
+  [`help wanted`](https://github.com/dfa1/vortex-java/labels/help%20wanted) marks work the maintainer
+  would welcome a contribution for. Comment on the issue before starting so nobody duplicates effort.
+
 ## Prerequisites
 
 - Java 25+ (build and tests require it — FFM API is finalized in JDK 22, Java 25 is the first LTS)
