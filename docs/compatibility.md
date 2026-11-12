@@ -1,6 +1,6 @@
 # Compatibility
 
-Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.91.0.
+Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.93.0.
 For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](reference.md).
 
 ## Read-only deployment
@@ -318,7 +318,7 @@ guarantee once frozen (ADR 0023) — a write-time/read-time policy, not part of 
 | `preview2026.08.0` | `preview` | nothing yet |
 | `zstd2026.02.0` | `zstd` | `vortex.zstd_buffers` (read only; buffer-level Zstd for GPU decode; declared by Rust's `vortex-zstd` plugin, opt-in) |
 
-Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.91.0);
+Mirrors Rust's `vortex-edition` declarations at the pinned vortex-jni release (0.93.0);
 `EditionCatalogParityIntegrationTest` fails the build on drift. `core` editions are frozen with a
 forever read-compatibility guarantee; `preview` holds opt-in components not yet adopted by `core`;
 `zstd` is declared by Rust's `vortex-zstd` plugin crate rather than the core declarations, and is
@@ -403,7 +403,7 @@ As in Rust, opening a file with any other extension id that has no registered de
 (`VortexException`; Rust: "No such DType extension ID"), unless
 `ReadRegistry.Builder#allowUnknown()` is set — then the id round-trips verbatim through
 `DType.Extension`'s raw `String` field and the column reads as its storage array, Rust's
-`ForeignExtDType`. vortex-jni 0.91.0 exposes no `allow_unknown`, so it cannot read a file with a
+`ForeignExtDType`. vortex-jni 0.93.0 exposes no `allow_unknown`, so it cannot read a file with a
 custom extension id at all. A blank id, or one with a control character, fails the read with
 `VortexException` (Rust accepts any string).
 

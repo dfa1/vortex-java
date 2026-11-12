@@ -145,7 +145,7 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 | `static create(WritableByteChannel, DType.Struct, WriteOptions, WriteRegistry)`  | Custom [`WriteRegistry`](#writeregistry-iogithubdfa1vortexwriterwriteregistry) — encoders and extension encoders together |
 | `writeChunk(Consumer<Chunk>)`                                                    | One batch of rows; typed builder validates column names + array types at each `.put`; missing columns throw `IllegalStateException` when the lambda returns. Preferred when columns are known at compile time. |
 | `writeChunk(Map<ColumnName, Object>)`                                                | One batch of rows by map. Validates that every schema column is present and that all columns share the same row count. Use when the column set is built dynamically (Parquet/JDBC importers, generic exporters). |
-| `finish()`                                                                       | Finalizes the file (footer, postscript, trailer) and returns a `WriteSummary`: `fileSize()`, `rowCount()` and per column (schema order) its `compressedSize()` and `stats()` — the footer's file statistics (min, max, null and NaN counts and uncompressed size, accumulated over the batches, as vortex-jni's `VortexWriter.finish()` reports them; a UTF-8 or binary min/max is a 64-byte bound, never exact). Later calls return the same summary; `writeChunk` afterwards throws `IllegalStateException` |
+| `finish()`                                                                       | Finalizes the file (footer, postscript, trailer) and returns a `WriteSummary`: `fileSize()`, `rowCount()` and per column (schema order) its `compressedSize()` and `stats()` — the footer's file statistics (min, max, null and NaN counts and uncompressed size, accumulated over the batches, as vortex-jni's `VortexWriter.finish()` reports them; a UTF-8 or binary min/max is a 64-byte bound, never exact; a `vortex.uuid` min/max is a `java.util.UUID`, in unsigned byte order). Later calls return the same summary; `writeChunk` afterwards throws `IllegalStateException` |
 | `close()`                                                                        | `finish()` unless it already ran                                                                                 |
 
 Batches are not chunks: as Rust's writer does, each primitive, boolean, decimal, string and binary
@@ -362,7 +362,7 @@ always be written. See [how-to.md § Add a custom extension type](how-to.md#add-
 
 Frozen, named, additive sets of encoding IDs, each carrying a forever read-compatibility
 guarantee once frozen (see ADR 0023). vortex-java mirrors Rust's `vortex-edition` declarations at
-the pinned vortex-jni release (0.91.0); `EditionCatalogParityIntegrationTest` fails the build if the
+the pinned vortex-jni release (0.93.0); `EditionCatalogParityIntegrationTest` fails the build if the
 two drift. Editions are a **write/read policy, not part of the wire format**: nothing about a
 targeted edition is ever persisted into a `.vortex` file.
 

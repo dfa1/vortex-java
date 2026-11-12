@@ -25,6 +25,7 @@ import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
+import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -39,6 +40,7 @@ import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.UInt1Vector;
 import org.apache.arrow.vector.UInt8Vector;
+import org.apache.arrow.vector.UuidVector;
 import org.apache.arrow.vector.VarBinaryVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -48,6 +50,7 @@ import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
+import org.apache.arrow.vector.extension.UuidType;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -70,6 +73,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -151,6 +155,47 @@ class FileStatisticsInteropIntegrationTest {
 
         // Then
         assertThat(result).isEqualTo(fileStatistics(jni));
+    }
+
+    @Test
+    void uuidColumn_writesTheStatisticsJniWrites(@TempDir Path tmp) throws Exception {
+        // Given — a nullable uuid column, unsorted with every fourth row null: from 0.92 Rust
+        // imports arrow.uuid as vortex.uuid and records its min and max (vortex-data/vortex#11299)
+        List<UUID> values = new ArrayList<>(ROWS);
+        for (int i = 0; i < ROWS; i++) {
+            values.add(i % 4 == 0 ? null : new UUID(i * 0x9E3779B97F4A7C15L, ~i * 31L));
+        }
+        Schema arrow = new Schema(List.of(Field.nullable("u", UuidType.INSTANCE)));
+        Path jni = tmp.resolve("jni.vortex");
+        try (dev.vortex.api.VortexWriter w = dev.vortex.api.VortexWriter.builder(SESSION,
+                jni.toAbsolutePath().toUri().toString(), arrow, ALLOCATOR).build();
+             VectorSchemaRoot root = VectorSchemaRoot.create(arrow, ALLOCATOR);
+             ArrowArray array = ArrowArray.allocateNew(ALLOCATOR); ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+            UuidVector vec = (UuidVector) root.getVector("u");
+            for (int i = 0; i < ROWS; i++) {
+                if (values.get(i) == null) {
+                    vec.setNull(i);
+                } else {
+                    vec.setSafe(i, values.get(i));
+                }
+            }
+            root.setRowCount(ROWS);
+            Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, schema);
+            w.writeBatch(array.memoryAddress(), schema.memoryAddress());
+        }
+        Path java = tmp.resolve("java.vortex");
+        List<ColumnName> names = List.of(ColumnName.of("u"));
+        DType.Struct schema = new DType.Struct(names, List.of(UuidExtensionEncoder.INSTANCE.dtype(true)), false);
+        try (FileChannel ch = FileChannel.open(java, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter w = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            w.writeChunk(Map.of(ColumnName.of("u"), values));
+        }
+
+        // When
+        List<String> result = fileStatistics(java, names);
+
+        // Then
+        assertThat(result).isEqualTo(fileStatistics(jni, names));
     }
 
     @Test

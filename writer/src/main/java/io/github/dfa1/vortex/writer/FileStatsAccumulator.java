@@ -2,21 +2,27 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.model.ArrayStats;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.proto.ProtoListValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 import io.github.dfa1.vortex.writer.ZoneAccumulator.Extremes;
 import io.github.dfa1.vortex.writer.ZoneAccumulator.Kind;
+import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
 import io.github.dfa1.vortex.writer.encode.NodeStats;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
 
 /// One top-level column's file statistics, written into the postscript's `statistics` segment:
-/// Rust 0.91.0's `FileStatsAccumulator` (`vortex-layout/src/layouts/file_stats.rs`) over its default
+/// Rust 0.93.0's `FileStatsAccumulator` (`vortex-layout/src/layouts/file_stats.rs`) over its default
 /// aggregates (max, min, null count, NaN count, uncompressed size), as vortex-jni writes them.
 ///
 /// Rust accumulates every aggregate batch by batch, so this does too:
@@ -27,7 +33,10 @@ import java.util.Arrays;
 /// - the uncompressed size is the sum of each batch's ([UncompressedSize]).
 ///
 /// An extension column has its storage's min and max but no NaN count, a struct, list or
-/// fixed-size list only its null count and size, and a variant column no statistic at all.
+/// fixed-size list only its null count and size, and a variant column no statistic at all. A
+/// `vortex.uuid` column, though its storage is a `FixedSizeList(U8, 16)`, has an exact min and max:
+/// its 16 bytes in unsigned lexicographic order, written as a list of `u8` scalars (Rust from 0.92,
+/// vortex-data/vortex#11299).
 final class FileStatsAccumulator {
 
     private final DType dtype;
@@ -37,6 +46,7 @@ final class FileStatsAccumulator {
     private final boolean extension;
     private final boolean nullDtype;
     private final boolean variant;
+    private final boolean uuid;
     private Object min;
     private Object max;
     private boolean maxDropped;
@@ -53,6 +63,7 @@ final class FileStatsAccumulator {
         this.extension = dtype instanceof DType.Extension;
         this.nullDtype = storage instanceof DType.Null;
         this.variant = storage instanceof DType.Variant;
+        this.uuid = dtype instanceof DType.Extension ext && ext.extensionId() == ExtensionId.VORTEX_UUID;
         this.min = null;
         this.max = null;
         this.maxDropped = false;
@@ -73,6 +84,10 @@ final class FileStatsAccumulator {
         uncompressedSize += UncompressedSize.of(dtype, batch, n);
         if (nullDtype) {
             nullCount += rows;
+            return;
+        }
+        if (uuid) {
+            addUuids(batch, n);
             return;
         }
         Object data = kind == Kind.NULL_COUNT_ONLY ? ZoneAccumulator.validityOnly(batch, n) : ZoneAccumulator.comparable(batch);
@@ -104,7 +119,7 @@ final class FileStatsAccumulator {
 
     /// The folded stats as Java values: a `Long` for an integer (a `U64` as its bits), a `Float` for
     /// an `F16`/`F32` bound and a `Double` for an `F64` one, a `Boolean`, a `BigDecimal`, a `String`
-    /// for UTF-8 and a `byte[]` for binary.
+    /// for UTF-8, a `byte[]` for binary and a `UUID` for `vortex.uuid`.
     ///
     /// @return the same stats as [#stats()]; [ArrayStats#empty()] where that is [NodeStats#NONE]
     ArrayStats arrayStats() {
@@ -144,8 +159,56 @@ final class FileStatsAccumulator {
                 yield value;
             }
             case UTF8 -> new String((byte[]) value, StandardCharsets.UTF_8);
+            case NULL_COUNT_ONLY -> uuid((byte[]) value);
             default -> value;
         };
+    }
+
+    private static UUID uuid(byte[] bytes) {
+        long msb = 0;
+        long lsb = 0;
+        for (int b = 0; b < 8; b++) {
+            msb = (msb << 8) | (bytes[b] & 0xFFL);
+            lsb = (lsb << 8) | (bytes[8 + b] & 0xFFL);
+        }
+        return new UUID(msb, lsb);
+    }
+
+    /// A batch of a `vortex.uuid` column: its null rows, and its valid rows' extremes as unsigned
+    /// 16-byte strings, the order Rust compares a `FixedSizeList(U8, 16)` scalar in.
+    private void addUuids(Object batch, int rows) {
+        boolean[] validity = null;
+        Object storage = batch;
+        if (batch instanceof NullableData nd) {
+            validity = nd.validity();
+            storage = nd.values();
+        }
+        byte[] flat = (byte[]) ((FixedSizeListData) storage).elements();
+        int lo = -1;
+        int hi = -1;
+        for (int row = 0; row < rows; row++) {
+            if (validity != null && !validity[row]) {
+                nullCount++;
+                continue;
+            }
+            int off = row * 16;
+            if (lo < 0 || Arrays.compareUnsigned(flat, off, off + 16, flat, lo, lo + 16) < 0) {
+                lo = off;
+            }
+            if (hi < 0 || Arrays.compareUnsigned(flat, off, off + 16, flat, hi, hi + 16) > 0) {
+                hi = off;
+            }
+        }
+        if (lo >= 0) {
+            byte[] batchMin = Arrays.copyOfRange(flat, lo, lo + 16);
+            byte[] batchMax = Arrays.copyOfRange(flat, hi, hi + 16);
+            if (min == null || Arrays.compareUnsigned(batchMin, (byte[]) min) < 0) {
+                min = batchMin;
+            }
+            if (max == null || Arrays.compareUnsigned(batchMax, (byte[]) max) > 0) {
+                max = batchMax;
+            }
+        }
     }
 
     /// Whether the min and max are the column's exact extremes: they are, but for a UTF-8 or binary
@@ -278,8 +341,22 @@ final class FileStatsAccumulator {
             case DECIMAL -> ProtoScalarValue.ofBytesValue(littleEndian(((BigDecimal) value).unscaledValue(), decimal.byteWidth()));
             case UTF8 -> ProtoScalarValue.ofStringValue(new String((byte[]) value, StandardCharsets.UTF_8));
             case BINARY -> ProtoScalarValue.ofBytesValue((byte[]) value);
-            case NULL_COUNT_ONLY -> throw new IllegalStateException("no min or max for " + kind);
+            case NULL_COUNT_ONLY -> {
+                if (!uuid) {
+                    throw new IllegalStateException("no min or max for " + kind);
+                }
+                yield ProtoScalarValue.ofListValue(u8List((byte[]) value));
+            }
         };
+    }
+
+    /// A `vortex.uuid` bound as Rust writes its `FixedSizeList(U8, 16)` scalar: one `u8` per byte.
+    private static ProtoListValue u8List(byte[] bytes) {
+        List<ProtoScalarValue> elements = new ArrayList<>(bytes.length);
+        for (byte b : bytes) {
+            elements.add(ProtoScalarValue.ofUint64Value(Byte.toUnsignedLong(b)));
+        }
+        return new ProtoListValue(elements);
     }
 
     private static byte[] littleEndian(BigInteger unscaled, int width) {
