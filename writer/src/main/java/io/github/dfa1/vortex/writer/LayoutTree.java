@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.writer.ZoneMapWriter.ZoneMapRef;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -22,7 +23,7 @@ import java.util.Map;
 ///
 /// The root is a struct with one child per column: a chunked layout of flat segments (the flat
 /// itself for one chunk), or the column's dict layout (several in a chunked layout), each wrapped in
-/// its zone map when it has one.
+/// its zone map when it has one. A struct column is a struct layout of its fields in turn.
 final class LayoutTree {
 
     // Indices into the footer's layout_specs list, in the order specs() writes them
@@ -49,47 +50,63 @@ final class LayoutTree {
 
     /// The serialized layout tree of a file with `schema`'s columns.
     ///
-    /// @param chunks   each column's written chunks, for the columns not in `dicts`
-    /// @param dicts    the columns written as global dictionaries
-    /// @param zoneMaps the columns that carry a zone map
-    static ByteBuffer build(DType.Struct schema, Map<ColumnName, List<ChunkRef>> chunks,
-            Map<ColumnName, List<DictColRef>> dicts, Map<ColumnName, ZoneMapRef> zoneMaps) {
+    /// @param rows       the file's row count
+    /// @param chunks     each leaf column's written chunks, for the leaves not in `dicts`
+    /// @param validities the written validity of each nullable struct, by its key
+    /// @param dicts      the leaf columns written as global dictionaries
+    /// @param zoneMaps   the leaf columns that carry a zone map
+    static ByteBuffer build(DType.Struct schema, long rows, Map<ColumnName, List<ChunkRef>> chunks,
+            Map<ColumnName, ChunkRef> validities, Map<ColumnName, List<DictColRef>> dicts,
+            Map<ColumnName, ZoneMapRef> zoneMaps) {
         var fbb = new FbsBuilder(256);
         int colCount = schema.fieldNames().size();
 
         int[] colLayouts = new int[colCount];
-        long totalRows = 0;
-
         for (int c = 0; c < colCount; c++) {
-            ColumnName colName = schema.fieldNames().get(c);
-            List<DictColRef> refs = dicts.get(colName);
-            if (refs != null) {
-                long colRows = rows(refs);
-                colLayouts[c] = zoned(fbb, zoneMaps.get(colName), dictLayout(fbb, refs), colRows);
-                if (totalRows == 0) {
-                    totalRows = colRows;
-                }
-            } else {
-                List<ChunkRef> colChunks = chunks.get(colName);
-                long colRows = 0;
-                int[] flats = new int[colChunks.size()];
-                for (int i = 0; i < colChunks.size(); i++) {
-                    ChunkRef cr = colChunks.get(i);
-                    int segV = FbsLayout.createSegmentsVector(fbb, new long[]{cr.segIdx()});
-                    flats[i] = FbsLayout.createFbsLayout(fbb, FLAT, cr.rowCount(), 0, 0, segV);
-                    colRows += cr.rowCount();
-                }
-                colLayouts[c] = zoned(fbb, zoneMaps.get(colName), chunked(fbb, flats, colRows), colRows);
-                if (totalRows == 0) {
-                    totalRows = colRows;
-                }
-            }
+            colLayouts[c] = column(fbb, schema.fieldNames().get(c), schema.fieldTypes().get(c), rows, chunks,
+                    validities, dicts, zoneMaps);
         }
 
         int rootChildV = FbsLayout.createChildrenVector(fbb, colLayouts);
-        int rootLayout = FbsLayout.createFbsLayout(fbb, STRUCT, totalRows, 0, rootChildV, 0);
+        int rootLayout = FbsLayout.createFbsLayout(fbb, STRUCT, rows, 0, rootChildV, 0);
         FbsLayout.finishFbsLayoutBuffer(fbb, rootLayout);
         return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+    }
+
+    /// A column's layout: a struct is Rust's struct layout, a validity child (when nullable) then one
+    /// child per field; any other column is its zoned, chunked or dict layout.
+    private static int column(FbsBuilder fbb, ColumnName key, DType dtype, long rows,
+            Map<ColumnName, List<ChunkRef>> chunks, Map<ColumnName, ChunkRef> validities,
+            Map<ColumnName, List<DictColRef>> dicts, Map<ColumnName, ZoneMapRef> zoneMaps) {
+        if (StructColumns.isLayoutStruct(dtype)) {
+            DType.Struct struct = (DType.Struct) dtype;
+            List<Integer> children = new ArrayList<>();
+            if (struct.nullable()) {
+                ChunkRef validity = validities.get(key);
+                int segV = FbsLayout.createSegmentsVector(fbb, new long[]{validity.segIdx()});
+                children.add(FbsLayout.createFbsLayout(fbb, FLAT, validity.rowCount(), 0, 0, segV));
+            }
+            for (int i = 0; i < struct.fieldNames().size(); i++) {
+                children.add(column(fbb, StructColumns.fieldKey(key, struct.fieldNames().get(i)),
+                        struct.fieldTypes().get(i), rows, chunks, validities, dicts, zoneMaps));
+            }
+            int childV = FbsLayout.createChildrenVector(fbb, children.stream().mapToInt(Integer::intValue).toArray());
+            return FbsLayout.createFbsLayout(fbb, STRUCT, rows, 0, childV, 0);
+        }
+        List<DictColRef> refs = dicts.get(key);
+        if (refs != null) {
+            return zoned(fbb, zoneMaps.get(key), dictLayout(fbb, refs), rows(refs));
+        }
+        List<ChunkRef> colChunks = chunks.get(key);
+        long colRows = 0;
+        int[] flats = new int[colChunks.size()];
+        for (int i = 0; i < colChunks.size(); i++) {
+            ChunkRef cr = colChunks.get(i);
+            int segV = FbsLayout.createSegmentsVector(fbb, new long[]{cr.segIdx()});
+            flats[i] = FbsLayout.createFbsLayout(fbb, FLAT, cr.rowCount(), 0, 0, segV);
+            colRows += cr.rowCount();
+        }
+        return zoned(fbb, zoneMaps.get(key), chunked(fbb, flats, colRows), colRows);
     }
 
     /// Wraps a column's data layout in a zoned layout when a zone-map was emitted for it (`zm`

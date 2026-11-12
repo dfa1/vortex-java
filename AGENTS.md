@@ -218,6 +218,9 @@ top-level field, Rust 0.90's per-batch fold, `FileStatsAccumulator`) blobs elsew
 
 Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
 - **Flat** single encoded segment · **Chunked** sequence of Flats · **Struct** one child/column
+- **Struct** also stands for a struct *column*: a validity child when nullable, then one child per field, each its own
+  Chunked/Zoned/Dict layout (`StructColumns` flattens fields to `parent/field` leaf columns). Rust zones the fields only
+  while no struct above them is nullable
 - **Zoned** wraps a child with a per-zone stats table for zone-map pruning. By default the writer
   emits Rust's `vortex.zoned`: fixed 8192-row zones independent of `writeChunk` batches
   (`ZoneAccumulator`), Rust's per-dtype aggregate set, no zone sum (#447). Targets before
