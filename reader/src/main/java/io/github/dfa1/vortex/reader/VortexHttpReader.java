@@ -18,6 +18,18 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 /// Handle to a remote Vortex file read via HTTP Range requests.
 ///
@@ -32,6 +44,20 @@ public final class VortexHttpReader implements VortexHandle {
     /// Tail window fetched on open. 65 KB covers the trailer, postscript, and
     /// all metadata blobs for typical Vortex files.
     static final MemorySize TAIL_SIZE = MemorySize.ofKiB(65);
+
+    /// Cap on concurrent prefetch requests: enough to hide a ~200 ms round trip across a
+    /// screenful of columns without opening a connection per segment.
+    private static final int MAX_IN_FLIGHT = 8;
+
+    /// Most heap one [#prefetch(Collection)] call queues: a fetched response waits as a `byte[]`
+    /// until its segments are read, unlike the off-heap arena a read copies it into.
+    private static final long MAX_PREFETCH_BYTES = MemorySize.ofMiB(64).bytes();
+
+    /// Rust's `CoalesceConfig::object_storage()`: merge two segments at most 1 MiB apart.
+    private static final long COALESCE_DISTANCE = MemorySize.ofMiB(1).bytes();
+
+    /// Rust's `CoalesceConfig::object_storage()`: a merged request spans at most 16 MiB.
+    private static final long COALESCE_MAX_SIZE = MemorySize.ofMiB(16).bytes();
 
     /// Shared across all instances. JDK HttpClient is heavyweight and designed for reuse;
     /// per-reader instantiation would create redundant connection pools and selector threads.
@@ -57,6 +83,16 @@ public final class VortexHttpReader implements VortexHandle {
     private final Layout layout;
     private final ReadRegistry registry;
     private final LayoutRegistry layoutRegistry;
+    /// Range requests started by [#prefetch(Collection)] and not yet consumed by [#rawSegment].
+    private final Map<SegmentSpec, Pending> prefetched;
+    /// Every segment already read, so reading it again (scrolling back) costs no request. Never
+    /// evicted and never expired: the file is immutable for the life of this handle, and the bytes
+    /// live in [#arena] until close anyway, so keeping the reference adds no memory. Bounded by the
+    /// file size. Touched only from the arena's owning thread, like [#rawSegment].
+    private final Map<SegmentSpec, MemorySegment> fetched;
+    private final Semaphore inFlight;
+    private final ExecutorService fetcher;
+    private boolean closed;
 
     private VortexHttpReader(
         URI uri, HttpClient client, long fileSize,
@@ -72,6 +108,11 @@ public final class VortexHttpReader implements VortexHandle {
         this.layout = layout;
         this.registry = registry;
         this.layoutRegistry = layoutRegistry;
+        this.prefetched = new ConcurrentHashMap<>();
+        this.fetched = new HashMap<>();
+        this.closed = false;
+        this.inFlight = new Semaphore(MAX_IN_FLIGHT);
+        this.fetcher = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /// Opens a remote Vortex file with the default encoding registry and HTTP client.
@@ -405,18 +446,128 @@ public final class VortexHttpReader implements VortexHandle {
     /// @return a read-only [MemorySegment] containing the fetched bytes
     @Override
     public MemorySegment rawSegment(SegmentSpec spec) {
+        MemorySegment cached = fetched.get(spec);
+        if (cached != null) {
+            return cached;
+        }
         long offset = spec.offset();
         long length = spec.length();
         byte[] bytes;
+        long from = 0;
         try {
-            bytes = fetchRange(uri, offset, offset + length - 1, client);
-        } catch (IOException e) {
+            Pending started = prefetched.remove(spec);
+            if (started != null) {
+                bytes = started.bytes().get();
+                from = started.from();
+            } else {
+                bytes = fetchRange(uri, offset, offset + length - 1, client);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new VortexException("interrupted fetching [%d, %d) from %s".formatted(offset, offset + length, uri));
+        } catch (ExecutionException | IOException e) {
+            Throwable cause = e;
+            if (e instanceof ExecutionException && e.getCause() != null) {
+                cause = e.getCause();
+            }
+            if (cause instanceof VortexException vortex) {
+                throw vortex;
+            }
             throw new VortexException(
-                "failed to fetch [%d, %d) from %s: %s".formatted(offset, offset + length, uri, e.getMessage()));
+                "failed to fetch [%d, %d) from %s: %s".formatted(offset, offset + length, uri, cause.getMessage()));
         }
         MemorySegment seg = arena.allocate(length);
-        MemorySegment.copy(MemorySegment.ofArray(bytes), 0, seg, 0, length);
-        return seg.asReadOnly();
+        MemorySegment.copy(MemorySegment.ofArray(bytes), from, seg, 0, length);
+        MemorySegment readOnly = seg.asReadOnly();
+        fetched.put(spec, readOnly);
+        return readOnly;
+    }
+
+    /// Starts the range requests for `specs` on virtual threads, at most [#MAX_IN_FLIGHT] at a
+    /// time, so the [#rawSegment(SegmentSpec)] calls that follow find their bytes already on the
+    /// way instead of paying one round trip each. Allocation still happens on the calling
+    /// thread, in the reader's confined arena.
+    ///
+    /// Segments close together in the file share one request, as Rust's object-storage
+    /// `CoalesceConfig` does: at most [#COALESCE_DISTANCE] of unwanted bytes between two, and at
+    /// most [#COALESCE_MAX_SIZE] per request. A round trip costs far more than the bytes between
+    /// neighboring segments, which are mostly alignment padding.
+    ///
+    /// A hint only: a call queues at most [#MAX_PREFETCH_BYTES] on the heap, and the segments past
+    /// that are left to be read on demand. Call it from the thread that opened this handle, the
+    /// one that calls [#rawSegment(SegmentSpec)]; it does nothing once the handle is closed.
+    ///
+    /// @param specs the segments about to be read
+    @Override
+    public void prefetch(Collection<SegmentSpec> specs) {
+        if (closed) {
+            return;
+        }
+        List<SegmentSpec> wanted = specs.stream()
+                .filter(s -> !fetched.containsKey(s) && !prefetched.containsKey(s))
+                .toList();
+        long queued = 0;
+        for (List<SegmentSpec> group : coalesce(wanted)) {
+            long start = group.getFirst().offset();
+            long end = start;
+            for (SegmentSpec spec : group) {
+                end = Math.max(end, spec.offset() + spec.length());
+            }
+            if (queued > 0 && queued + (end - start) > MAX_PREFETCH_BYTES) {
+                break;
+            }
+            queued += end - start;
+            fetchGroup(group, start, end);
+        }
+    }
+
+    /// Groups `specs` into the requests that fetch them: sorted by offset, de-duplicated, with
+    /// zero-length segments dropped, and each group at most [#COALESCE_DISTANCE] of gap between
+    /// neighbors and [#COALESCE_MAX_SIZE] long. Package-private for the boundary tests.
+    static List<List<SegmentSpec>> coalesce(Collection<SegmentSpec> specs) {
+        List<SegmentSpec> sorted = specs.stream()
+                .filter(s -> s.length() > 0)
+                .distinct()
+                .sorted(Comparator.comparingLong(SegmentSpec::offset))
+                .toList();
+        List<List<SegmentSpec>> groups = new ArrayList<>();
+        int first = 0;
+        while (first < sorted.size()) {
+            long start = sorted.get(first).offset();
+            long end = start + sorted.get(first).length();
+            int next = first + 1;
+            while (next < sorted.size()) {
+                SegmentSpec candidate = sorted.get(next);
+                long candidateEnd = Math.max(end, candidate.offset() + candidate.length());
+                if (candidate.offset() - end > COALESCE_DISTANCE || candidateEnd - start > COALESCE_MAX_SIZE) {
+                    break;
+                }
+                end = candidateEnd;
+                next++;
+            }
+            groups.add(sorted.subList(first, next));
+            first = next;
+        }
+        return groups;
+    }
+
+    /// One request for `[start, end)`; each of `group` reads its own slice of the response, which is
+    /// held on the heap until the last of them is read.
+    private void fetchGroup(List<SegmentSpec> group, long start, long end) {
+        CompletableFuture<byte[]> whole = CompletableFuture.supplyAsync(() -> {
+            inFlight.acquireUninterruptibly();
+            try {
+                return fetchRange(uri, start, end - 1, client);
+            } catch (IOException e) {
+                throw new VortexException("failed to fetch [%d, %d) from %s: %s"
+                        .formatted(start, end, uri, e.getMessage()));
+            } finally {
+                inFlight.release();
+            }
+        }, fetcher);
+        for (SegmentSpec spec : group) {
+            prefetched.put(spec, new Pending(whole, spec.offset() - start));
+        }
     }
 
     @Override
@@ -436,7 +587,17 @@ public final class VortexHttpReader implements VortexHandle {
 
     @Override
     public void close() {
+        // The arena first: a close from the wrong thread throws here, before anything is torn down.
+        // The fetcher tasks only produce heap arrays, they never touch the arena.
         arena.close();
+        closed = true;
+        fetcher.shutdownNow();
+        prefetched.clear();
+        fetched.clear();
+    }
+
+    /// A started range request and where one segment's bytes begin in its response.
+    private record Pending(CompletableFuture<byte[]> bytes, long from) {
     }
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.

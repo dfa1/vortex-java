@@ -28,6 +28,33 @@ class ChunkLazyDecodeTest {
 
     private final Arena arena = Arena.ofAuto();
     private final List<Integer> decodes = new ArrayList<>();
+    private final List<List<Integer>> prefetches = new ArrayList<>();
+
+    @Test
+    void prefetch_hintsTheColumnsWithoutDecodingAny() {
+        // Given
+        Chunk sut = chunk();
+
+        // When
+        sut.prefetch(List.of(B, A));
+
+        // Then
+        assertThat(prefetches).containsExactly(List.of(1, 0));
+        assertThat(decodes).isEmpty();
+    }
+
+    @Test
+    void prefetch_unknownName_throws() {
+        // Given
+        Chunk sut = chunk();
+        List<ColumnName> unknown = List.of(ColumnName.of("c"));
+
+        // When / Then
+        assertThatThrownBy(() -> sut.prefetch(unknown))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("unknown column");
+        assertThat(prefetches).isEmpty();
+    }
 
     @Test
     void column_decodesOnlyTheColumnRead_once() {
@@ -106,6 +133,6 @@ class ChunkLazyDecodeTest {
                 segment.setAtIndex(VortexFormat.LE_LONG, r, i * 100L + r);
             }
             return new Chunk.Column(new MaterializedLongArray(DTypes.I64, ROWS, segment), DTypes.I64);
-        }, Arena.ofConfined(), ReadRegistry.loadAll(), _ -> { });
+        }, prefetches::add, Arena.ofConfined(), ReadRegistry.loadAll(), _ -> { });
     }
 }

@@ -2,7 +2,9 @@ package io.github.dfa1.vortex.cli.tui;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -27,6 +29,30 @@ class IoWorkerTest {
             // Then — the task executed off the caller thread, on the named worker
             assertThat(ranOn.get()).isNotNull().isNotSameAs(Thread.currentThread());
             assertThat(ranOn.get().getName()).isEqualTo("test-io");
+        }
+    }
+
+    @Test
+    void runAndAwaitWithTimeout_returnsFalseWhileTheWorkerIsBusy_andTrueOnceItIsFree() throws InterruptedException {
+        // Given — the worker is held by a task that outlasts the wait
+        try (IoWorker sut = new IoWorker("test-io")) {
+            CountDownLatch release = new CountDownLatch(1);
+            sut.submit(() -> {
+                try {
+                    release.await();
+                } catch (InterruptedException _) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
+            // When
+            boolean busy = sut.runAndAwait(() -> { }, Duration.ofMillis(20));
+            release.countDown();
+            boolean result = sut.runAndAwait(() -> { }, Duration.ofSeconds(5));
+
+            // Then — the timed-out task stayed queued, and the next wait saw the worker free again
+            assertThat(busy).isFalse();
+            assertThat(result).isTrue();
         }
     }
 

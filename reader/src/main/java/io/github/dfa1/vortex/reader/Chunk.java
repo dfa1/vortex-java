@@ -9,6 +9,8 @@ import io.github.dfa1.vortex.reader.array.SelectedArrays;
 import io.github.dfa1.vortex.reader.extension.ExtensionDecoder;
 
 import java.lang.foreign.Arena;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -53,6 +55,7 @@ public final class Chunk implements AutoCloseable {
     private final List<ColumnName> names;
     private final Map<ColumnName, Integer> positions;
     private final IntFunction<Column> decoder;
+    private final Consumer<List<Integer>> prefetcher;
     /// Per column, its decoded value once read, else `null`.
     private final Column[] decoded;
     private SequencedMap<ColumnName, Column> columns;
@@ -65,19 +68,21 @@ public final class Chunk implements AutoCloseable {
     Chunk(long rowCount, SequencedMap<ColumnName, Column> columns,
             Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
         this(rowCount, List.copyOf(columns.keySet()), positions(List.copyOf(columns.keySet())),
-                List.copyOf(columns.values())::get, arena, registry, onClose);
+                List.copyOf(columns.values())::get, _ -> { }, arena, registry, onClose);
     }
 
     /// A chunk whose column `i`, of `names`, is decoded by `decoder` the first time it is read.
     ///
     /// @param positions each of `names` to its index, shared by the chunks of one scan
-    /// @param arena     the arena to release on close, or `null` for a slice of another chunk
+    /// @param prefetcher starts fetching what the columns at these positions will need, all in one call so a remote file can merge their requests; does nothing for a local file
+    /// @param arena      the arena to release on close, or `null` for a slice of another chunk
     Chunk(long rowCount, List<ColumnName> names, Map<ColumnName, Integer> positions, IntFunction<Column> decoder,
-          Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
+          Consumer<List<Integer>> prefetcher, Arena arena, ReadRegistry registry, Consumer<Chunk> onClose) {
         this.rowCount = rowCount;
         this.names = names;
         this.positions = positions;
         this.decoder = Objects.requireNonNull(decoder);
+        this.prefetcher = Objects.requireNonNull(prefetcher);
         this.decoded = new Column[names.size()];
         this.arena = arena;
         this.registry = Objects.requireNonNull(registry);
@@ -106,7 +111,7 @@ public final class Chunk implements AutoCloseable {
             Column column = column(i);
             return new Column(ScanIterator.sliceArray(column.array(), offset, length, column.dtype()), column.dtype());
         };
-        return new Chunk(length, names, positions, sliced, null, registry, _ -> { });
+        return new Chunk(length, names, positions, sliced, prefetcher, null, registry, _ -> { });
     }
 
     /// The rows `rows` keeps, of the columns `names`: the chunk a filtered scan returns.
@@ -123,7 +128,9 @@ public final class Chunk implements AutoCloseable {
             Column column = column(position(names.get(i)));
             return new Column(SelectedArrays.select(column.array(), rows, arena), column.dtype());
         };
-        return new Chunk(rows.trueCount(), names, positions, selected, arena, registry, onClose);
+        Consumer<List<Integer>> selectedPrefetcher = columns -> prefetcher.accept(
+                columns.stream().map(i -> position(names.get(i))).toList());
+        return new Chunk(rows.trueCount(), names, positions, selected, selectedPrefetcher, arena, registry, onClose);
     }
 
     /// One decoded column: its zero-copy [Array] view and the [DType] it was declared with in the
@@ -176,6 +183,20 @@ public final class Chunk implements AutoCloseable {
     @SuppressWarnings("unchecked")
     public <T extends Array> T column(ColumnName name) {
         return (T) column(position(name)).array();
+    }
+
+    /// Hints that the named columns are about to be read, so a remote file can fetch them
+    /// concurrently instead of one round trip per column. Reading a column afterwards works as
+    /// before; the hint changes timing only, and is a no-op on a local file.
+    ///
+    /// @param names columns about to be read
+    /// @throws VortexException if a name is not a column of this chunk
+    public void prefetch(Collection<ColumnName> names) {
+        List<Integer> columns = new ArrayList<>(names.size());
+        for (ColumnName name : names) {
+            columns.add(position(name));
+        }
+        prefetcher.accept(columns);
     }
 
     private int position(ColumnName name) {

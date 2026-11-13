@@ -83,7 +83,9 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 Interface common to both handle implementations below — everything scan-shaped
 (`dtype()`, `layout()`, `scan(ScanOptions)`, `rawSegment(SegmentSpec)`, …) is declared here so code
 that only reads (e.g. `ParquetExporter.exportParquet(VortexHandle, Path)`) doesn't care whether the
-source is a local file or a remote URL. Implements `Closeable`.
+source is a local file or a remote URL. Implements `Closeable`. `prefetch(Collection<SegmentSpec>)` is
+a read-ahead hint for the segments about to be read: a no-op on `VortexReader`, concurrent merged range
+requests on `VortexHttpReader`. Call it from the thread that opened the handle.
 
 | Implementation    | Backing storage                              |
 |--------------------|-----------------------------------------------|
@@ -116,7 +118,14 @@ Handle to a remote Vortex file read via HTTP Range requests — no full-file dow
 `VortexHandle`. On open, fetches the last 65 KB (`TAIL_SIZE`) in one request to locate the trailer,
 postscript, and metadata blobs, parsing `Content-Range` for the file size instead of a separate
 `HEAD` round trip; each subsequent `rawSegment(SegmentSpec)` call during a scan fires one targeted
-Range request. All fetched bytes share a single confined `Arena`, released on `close()`.
+Range request. `Chunk.prefetch(columns)` (or `VortexHandle.prefetch(specs)`) starts those requests
+together, at most 8 in flight, merging segments up to 1 MiB apart (at most 16 MiB per request, as Rust's
+object-storage `CoalesceConfig`), so a screenful of columns costs about one round trip instead of one each.
+A call queues at most 64 MiB on the heap; segments past that are read on demand. A no-op on a
+memory-mapped file or after `close()`. Every segment read is kept for the life of the handle (no eviction or
+TTL: the file is immutable, and the bytes stay in the `Arena` anyway), so reading it again costs no
+request. All fetched bytes share a single confined `Arena`, released on
+`close()`.
 
 | Method                                                                     | Notes                                                    |
 |------------------------------------------------------------------------------|-----------------------------------------------------------|
@@ -282,6 +291,7 @@ never desync.
 | `columns()`                                 | `SequencedMap<ColumnName, Chunk.Column>`, schema order, unmodifiable |
 | `<T extends Array> column(ColumnName name)` | Typed column lookup; throws `VortexException` if absent  |
 | `as(ColumnName name, Class<T> domainType)` | Extension column → typed `List<T>`, via the registered `ExtensionDecoder` |
+| `prefetch(Collection<ColumnName> names)`    | Hint that these columns are about to be read, so a remote file fetches them concurrently, in merged requests (see `VortexHttpReader`); changes timing only, a no-op on a local file |
 | `slice(long offset, long length)`           | Zero-copy view of a row range; valid while this chunk is open, closing it does nothing |
 | `isClosed()`                                | Whether `close()` has run                                |
 | `close()`                                   | Releases the chunk's arena. Idempotent.                  |

@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.layout.LayoutRegistry;
 import java.io.Closeable;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Collection;
 
 /// Common interface for handles to a Vortex file, regardless of storage backend.
 ///
@@ -59,6 +60,15 @@ public interface VortexHandle extends Closeable {
     /// @return a read-only [MemorySegment] covering exactly `spec.offset()` to
     ///         `spec.offset() + spec.length()`
     MemorySegment rawSegment(SegmentSpec spec);
+
+    /// Hints that `specs` are about to be read with [#rawSegment(SegmentSpec)], so a remote handle
+    /// can fetch them concurrently instead of one round trip each. Does nothing on a
+    /// memory-mapped handle, where a read is already free. Call it from the thread that reads the
+    /// segments, the one that opened the handle.
+    ///
+    /// @param specs the segments about to be read
+    default void prefetch(Collection<SegmentSpec> specs) {
+    }
 
     /// Starts a scan of the file, yielding one [Chunk] at a time. Close the iterator when done.
     ///
