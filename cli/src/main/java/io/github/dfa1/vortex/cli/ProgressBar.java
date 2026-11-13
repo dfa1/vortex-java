@@ -17,10 +17,19 @@ final class ProgressBar {
     /// @param done  rows processed so far
     /// @param total total rows expected
     static void render(long done, long total) {
+        render(done, total, "rows");
+    }
+
+    /// Renders the same bar counting `unit` instead of rows.
+    ///
+    /// @param done  units processed so far
+    /// @param total units expected
+    /// @param unit  what is counted, e.g. `segments`
+    static void render(long done, long total, String unit) {
         int pct = total > 0 ? (int) (done * 100L / total) : 100;
         int filled = pct * WIDTH / 100;
         String bar = "=".repeat(filled) + (filled < WIDTH ? ">" : "") + " ".repeat(Math.max(0, WIDTH - 1 - filled));
-        System.err.printf("\r  [%s] %3d%%  %,d / %,d rows", bar, pct, done, total);
+        System.err.printf("\r  [%s] %3d%%  %,d / %,d %s", bar, pct, done, total, unit);
         System.err.flush();
     }
 

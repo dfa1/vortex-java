@@ -162,6 +162,22 @@ class VortexHttpReaderTailFetchTest {
                 .hasMessageContaining("HTTP 416");
     }
 
+    @Test
+    void open_429_reportsTheServersExplanationAndRetryAfter() throws Exception {
+        // Given — Hugging Face's anonymous rate limit answers with a message saying what to do
+        // and when to retry; the bare status code hides both from the user.
+        doReturn(responseWithHeaders(429, Map.of(
+                "x-error-message", List.of("We had to rate limit your IP. Pass a HF_TOKEN."),
+                "retry-after", List.of("31")), new byte[0])).when(client).send(any(), any());
+
+        // When / Then
+        assertThatThrownBy(() -> VortexHttpReader.open(URI, ReadRegistry.empty(), client))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("HTTP 429")
+                .hasMessageContaining("Pass a HF_TOKEN.")
+                .hasMessageContaining("Retry-After: 31");
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static byte[] fixtureBytes() throws IOException {
@@ -174,8 +190,16 @@ class VortexHttpReaderTailFetchTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static HttpResponse<byte[]> response(int status, String contentRange, byte[] body) {
+        Map<String, List<String>> headers = Map.of();
+        if (contentRange != null) {
+            headers = Map.of("content-range", List.of(contentRange));
+        }
+        return responseWithHeaders(status, headers, body);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static HttpResponse<byte[]> responseWithHeaders(int status, Map<String, List<String>> headers, byte[] body) {
         return new HttpResponse<>() {
             @Override
             public int statusCode() {
@@ -189,10 +213,7 @@ class VortexHttpReaderTailFetchTest {
 
             @Override
             public HttpHeaders headers() {
-                Map<String, List<String>> map = contentRange == null
-                        ? Map.of()
-                        : Map.of("content-range", List.of(contentRange));
-                return HttpHeaders.of(map, (k, v) -> true);
+                return HttpHeaders.of(headers, (k, v) -> true);
             }
 
             @Override

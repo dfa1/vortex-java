@@ -149,7 +149,7 @@ public record InspectorTree(
     /// compression, or missing data.
     ///
     /// Callers should cache the result — every call triggers a fresh
-    /// [io.github.dfa1.vortex.reader.VortexHandle#rawSegment], which is a network round-trip on remote handles.
+    /// [io.github.dfa1.vortex.reader.VortexHandle#segmentTail], which is a network round-trip on remote handles.
     ///
     /// @param node   node to resolve
     /// @param handle open file handle
@@ -164,7 +164,7 @@ public record InspectorTree(
         if (spec.compression().code != 0) {
             return Peek.EMPTY;
         }
-        MemorySegment seg = handle.rawSegment(spec);
+        MemorySegment seg = handle.segmentTail(spec);
         return peekFlatRoot(seg, handle.footer().arraySpecs());
     }
 
@@ -180,7 +180,13 @@ public record InspectorTree(
         Layout layout = handle.layout();
         DType dtype = handle.dtype();
 
-        int total = countPeekableSegments(layout, footer);
+        List<SegmentSpec> peekable = new ArrayList<>();
+        collectPeekableSegments(layout, footer, peekable);
+        int total = peekable.size();
+        handle.prefetchTails(peekable);
+        List<SegmentSpec> zoneTables = new ArrayList<>();
+        collectZoneTableSegments(layout, footer, zoneTables);
+        handle.prefetch(zoneTables);
         int[] counter = {0};
 
         List<String> colNames = rootChildLabels(dtype);
@@ -332,7 +338,7 @@ public record InspectorTree(
             int segIdx = layout.segments().getFirst();
             SegmentSpec spec = handle.footer().segmentSpecs().get(segIdx);
             if (spec.compression().code == 0) {
-                MemorySegment seg = handle.rawSegment(spec);
+                MemorySegment seg = handle.segmentTail(spec);
                 Peek peek = peekFlatRoot(seg, arraySpecs);
                 if (peek.encoding() != null) {
                     localUsed.addAll(peek.nestedEncodings());
@@ -354,18 +360,28 @@ public record InspectorTree(
         return new Node(layout, fieldName, Set.copyOf(localUsed), stats, List.copyOf(children));
     }
 
-    private static int countPeekableSegments(Layout layout, Footer footer) {
-        int n = 0;
-        if (layout.isFlat() && !layout.segments().isEmpty()) {
-            SegmentSpec spec = footer.segmentSpecs().get(layout.segments().getFirst());
-            if (spec.compression().code == 0) {
-                n++;
+    /// The segments of every zone-map table, which `columnZones` reads one by one after the peeks.
+    private static void collectZoneTableSegments(Layout layout, Footer footer, List<SegmentSpec> out) {
+        if (layout.isZoned() && layout.children().size() >= 2) {
+            for (int segment : layout.children().get(1).segments()) {
+                out.add(footer.segmentSpecs().get(segment));
             }
         }
         for (Layout child : layout.children()) {
-            n += countPeekableSegments(child, footer);
+            collectZoneTableSegments(child, footer, out);
         }
-        return n;
+    }
+
+    private static void collectPeekableSegments(Layout layout, Footer footer, List<SegmentSpec> out) {
+        if (layout.isFlat() && !layout.segments().isEmpty()) {
+            SegmentSpec spec = footer.segmentSpecs().get(layout.segments().getFirst());
+            if (spec.compression().code == 0) {
+                out.add(spec);
+            }
+        }
+        for (Layout child : layout.children()) {
+            collectPeekableSegments(child, footer, out);
+        }
     }
 
     /// Callback used by [#build(VortexHandle, Progress)] to report how many
