@@ -211,8 +211,8 @@ class InspectorTreeTest {
         assertThat(sut.usedEncodings()).isEmpty();
         assertThat(sut.root().children().get(0).usedEncodings()).isEmpty();
         assertThat(sut.root().children().getFirst().stats()).isEqualTo(io.github.dfa1.vortex.core.model.ArrayStats.empty());
-        // rawSegment is reserved for lazy peek; shallow build must never call it
-        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).rawSegment(
+        // segmentTail is reserved for lazy peek; shallow build must never call it
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).segmentTail(
                 org.mockito.Mockito.any());
     }
 
@@ -230,7 +230,7 @@ class InspectorTreeTest {
 
         // Then
         assertThat(result).isSameAs(InspectorTree.Peek.EMPTY);
-        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).rawSegment(
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).segmentTail(
                 org.mockito.Mockito.any());
     }
 
@@ -251,7 +251,7 @@ class InspectorTreeTest {
 
         // Then
         assertThat(result).isSameAs(InspectorTree.Peek.EMPTY);
-        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).rawSegment(
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).segmentTail(
                 org.mockito.Mockito.any());
     }
 
@@ -287,7 +287,7 @@ class InspectorTreeTest {
             SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
             givenHandle(dtype, root, arraySpecs, List.of(spec));
             byte[] fb = nestedArrayFlatBuffer(0, 1);
-            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+            given(handle.segmentTail(spec)).willReturn(wrapAsSegment(fb, arena));
 
             // When
             InspectorTree sut = InspectorTree.build(handle);
@@ -308,7 +308,7 @@ class InspectorTreeTest {
             SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
             givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
             byte[] fb = deeplyNestedArrayFlatBuffer(62);
-            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+            given(handle.segmentTail(spec)).willReturn(wrapAsSegment(fb, arena));
 
             // When
             InspectorTree sut = InspectorTree.build(handle);
@@ -329,7 +329,7 @@ class InspectorTreeTest {
             SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
             givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
             byte[] fb = deeplyNestedArrayFlatBuffer(63);
-            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+            given(handle.segmentTail(spec)).willReturn(wrapAsSegment(fb, arena));
 
             // When / Then
             assertThatThrownBy(() -> InspectorTree.build(handle))
@@ -350,7 +350,7 @@ class InspectorTreeTest {
             SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
             givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
             byte[] fb = nestedArrayFlatBuffer(0, 999);
-            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+            given(handle.segmentTail(spec)).willReturn(wrapAsSegment(fb, arena));
 
             // When / Then
             assertThatThrownBy(() -> InspectorTree.build(handle))
@@ -373,7 +373,7 @@ class InspectorTreeTest {
             SegmentSpec spec = new SegmentSpec(0, 100, (byte) 0, CompressionScheme.NONE);
             givenHandle(dtype, root, List.of("vortex.flat"), List.of(spec));
             byte[] fb = wideArrayFlatBuffer(InspectorTree.MAX_ENCODING_TREE_NODES + 1);
-            given(handle.rawSegment(spec)).willReturn(wrapAsSegment(fb, arena));
+            given(handle.segmentTail(spec)).willReturn(wrapAsSegment(fb, arena));
 
             // When / Then
             assertThatThrownBy(() -> InspectorTree.build(handle))

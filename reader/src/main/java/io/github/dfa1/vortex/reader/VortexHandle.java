@@ -61,6 +61,24 @@ public interface VortexHandle extends Closeable {
     ///         `spec.offset() + spec.length()`
     MemorySegment rawSegment(SegmentSpec spec);
 
+    /// Returns the end of the given segment: at least its array-node FlatBuffer and the 4-byte
+    /// length that follows it, which is all the inspector reads to name an encoding and its stats.
+    /// May be the whole segment. On an HTTP handle it fetches a few KiB instead of the segment.
+    ///
+    /// @param spec the segment to read the end of
+    /// @return a read-only [MemorySegment] ending at the same byte as the segment
+    default MemorySegment segmentTail(SegmentSpec spec) {
+        return rawSegment(spec);
+    }
+
+    /// Hints that `specs` are about to be read with [#segmentTail(SegmentSpec)], so a remote
+    /// handle can fetch them concurrently. Does nothing on a memory-mapped handle. Call it from
+    /// the thread that reads the segments, the one that opened the handle.
+    ///
+    /// @param specs the segments whose ends are about to be read
+    default void prefetchTails(Collection<SegmentSpec> specs) {
+    }
+
     /// Hints that `specs` are about to be read with [#rawSegment(SegmentSpec)], so a remote handle
     /// can fetch them concurrently instead of one round trip each. Does nothing on a
     /// memory-mapped handle, where a read is already free. Call it from the thread that reads the

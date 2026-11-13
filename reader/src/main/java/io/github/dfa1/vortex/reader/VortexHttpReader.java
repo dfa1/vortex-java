@@ -18,6 +18,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -45,9 +47,17 @@ public final class VortexHttpReader implements VortexHandle {
     /// all metadata blobs for typical Vortex files.
     static final MemorySize TAIL_SIZE = MemorySize.ofKiB(65);
 
+    /// First guess for [#segmentTail(SegmentSpec)]: an array-node FlatBuffer is a few hundred
+    /// bytes, so one request nearly always gets it with its length.
+    private static final MemorySize TAIL_PEEK_SIZE = MemorySize.ofKiB(4);
+
     /// Cap on concurrent prefetch requests: enough to hide a ~200 ms round trip across a
     /// screenful of columns without opening a connection per segment.
     private static final int MAX_IN_FLIGHT = 8;
+
+    /// Cap on concurrent [#prefetchTails(Collection)] requests: a tail is a few KiB, so the
+    /// round trip dominates and a deeper queue than [#MAX_IN_FLIGHT] pays off.
+    private static final int MAX_TAILS_IN_FLIGHT = 32;
 
     /// Most heap one [#prefetch(Collection)] call queues: a fetched response waits as a `byte[]`
     /// until its segments are read, unlike the off-heap arena a read copies it into.
@@ -85,12 +95,16 @@ public final class VortexHttpReader implements VortexHandle {
     private final LayoutRegistry layoutRegistry;
     /// Range requests started by [#prefetch(Collection)] and not yet consumed by [#rawSegment].
     private final Map<SegmentSpec, Pending> prefetched;
+
+    /// Tail requests started by [#prefetchTails(Collection)] and not yet consumed by [#segmentTail].
+    private final Map<SegmentSpec, CompletableFuture<byte[]>> tails;
     /// Every segment already read, so reading it again (scrolling back) costs no request. Never
     /// evicted and never expired: the file is immutable for the life of this handle, and the bytes
     /// live in [#arena] until close anyway, so keeping the reference adds no memory. Bounded by the
     /// file size. Touched only from the arena's owning thread, like [#rawSegment].
     private final Map<SegmentSpec, MemorySegment> fetched;
     private final Semaphore inFlight;
+    private final Semaphore tailInFlight;
     private final ExecutorService fetcher;
     private boolean closed;
 
@@ -109,9 +123,11 @@ public final class VortexHttpReader implements VortexHandle {
         this.registry = registry;
         this.layoutRegistry = layoutRegistry;
         this.prefetched = new ConcurrentHashMap<>();
+        this.tails = new ConcurrentHashMap<>();
         this.fetched = new HashMap<>();
         this.closed = false;
         this.inFlight = new Semaphore(MAX_IN_FLIGHT);
+        this.tailInFlight = new Semaphore(MAX_TAILS_IN_FLIGHT);
         this.fetcher = Executors.newVirtualThreadPerTaskExecutor();
     }
 
@@ -294,7 +310,22 @@ public final class VortexHttpReader implements VortexHandle {
             return new TailFetch(body, 0L, body.length);
         }
 
-        throw new VortexException("HTTP " + status + " fetching tail of " + uri);
+        throw new VortexException(httpError(resp, "fetching tail of " + uri));
+    }
+
+    /// The message for an unexpected status: the code, and for the server's own explanation, as
+    /// Hugging Face gives on a `429` (who is limited, what to do), `x-error-message` and
+    /// `Retry-After` when present. Both come from an untrusted server, so the text is capped.
+    private static String httpError(HttpResponse<?> resp, String what) {
+        StringBuilder message = new StringBuilder("HTTP ").append(resp.statusCode()).append(' ').append(what);
+        resp.headers().firstValue("x-error-message").ifPresent(m -> message.append(": ").append(cap(m)));
+        resp.headers().firstValue("Retry-After")
+                .ifPresent(seconds -> message.append(" (Retry-After: ").append(cap(seconds)).append(')'));
+        return message.toString();
+    }
+
+    private static String cap(String text) {
+        return text.length() <= 300 ? text : text.substring(0, 300) + "…";
     }
 
     /// Sends one suffix-Range request for the last `suffixLength` bytes of `uri`.
@@ -371,7 +402,7 @@ public final class VortexHttpReader implements VortexHandle {
             HttpResponse<byte[]> resp = sendRange(req, client, uri, from, to - from + 1);
             int status = resp.statusCode();
             if (status != 206 && status != 200) {
-                throw new VortexException("HTTP " + status + " fetching range from " + uri);
+                throw new VortexException(httpError(resp, "fetching range from " + uri));
             }
             byte[] body = resp.body();
             long expected = to - from + 1;
@@ -481,6 +512,76 @@ public final class VortexHttpReader implements VortexHandle {
         MemorySegment readOnly = seg.asReadOnly();
         fetched.put(spec, readOnly);
         return readOnly;
+    }
+
+    /// Fetches only the end of the segment: a first guess of [#TAIL_PEEK_SIZE] covers the
+    /// array-node FlatBuffer of almost every segment, and a second request completes it when the
+    /// trailing length says it is larger. Uses the request [#prefetchTails(Collection)] started
+    /// for this segment, if any.
+    ///
+    /// @param spec the segment to read the end of
+    /// @return a read-only [MemorySegment] ending at the same byte as the segment
+    @Override
+    public MemorySegment segmentTail(SegmentSpec spec) {
+        CompletableFuture<byte[]> started = tails.remove(spec);
+        byte[] tail;
+        if (started == null) {
+            tail = fetchTail(spec);
+        } else {
+            try {
+                tail = started.get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new VortexException("interrupted fetching the end of a segment from " + uri);
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof VortexException vortex) {
+                    throw vortex;
+                }
+                throw new VortexException("failed to fetch the end of a segment from " + uri, e.getCause());
+            }
+        }
+        return MemorySegment.ofArray(tail).asReadOnly();
+    }
+
+    /// Starts the [#segmentTail(SegmentSpec)] requests for `specs` on virtual threads, at most
+    /// [#MAX_TAILS_IN_FLIGHT] at a time. A tail is a few KiB, so queueing one per segment of a large
+    /// file stays small on the heap. Call it from the thread that opened this handle; it does
+    /// nothing once the handle is closed.
+    ///
+    /// @param specs the segments whose ends are about to be read
+    @Override
+    public void prefetchTails(Collection<SegmentSpec> specs) {
+        if (closed) {
+            return;
+        }
+        for (SegmentSpec spec : specs) {
+            tails.computeIfAbsent(spec, s -> CompletableFuture.supplyAsync(() -> fetchTail(s), fetcher));
+        }
+    }
+
+    private byte[] fetchTail(SegmentSpec spec) {
+        long end = spec.offset() + spec.length();
+        long first = Math.min(spec.length(), TAIL_PEEK_SIZE.bytes());
+        byte[] tail = fetchBounded(end - first, end);
+        if (tail.length >= Integer.BYTES) {
+            long needed = Integer.BYTES + Integer.toUnsignedLong(
+                    ByteBuffer.wrap(tail).order(ByteOrder.LITTLE_ENDIAN).getInt(tail.length - Integer.BYTES));
+            if (needed > tail.length && needed <= spec.length()) {
+                tail = fetchBounded(end - needed, end);
+            }
+        }
+        return tail;
+    }
+
+    private byte[] fetchBounded(long from, long end) {
+        tailInFlight.acquireUninterruptibly();
+        try {
+            return fetchRange(uri, from, end - 1, client);
+        } catch (IOException e) {
+            throw new VortexException("failed to fetch [%d, %d) from %s: %s".formatted(from, end, uri, e.getMessage()));
+        } finally {
+            tailInFlight.release();
+        }
     }
 
     /// Starts the range requests for `specs` on virtual threads, at most [#MAX_IN_FLIGHT] at a
@@ -593,6 +694,7 @@ public final class VortexHttpReader implements VortexHandle {
         closed = true;
         fetcher.shutdownNow();
         prefetched.clear();
+        tails.clear();
         fetched.clear();
     }
 

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.inspect.HtmlReport;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.inspect.VortexInspector;
@@ -24,13 +25,19 @@ final class InspectCommand {
             if (handle == null) {
                 return ExitStatus.FILE_NOT_FOUND;
             }
+            InspectorTree tree = InspectorTree.build(handle, (done, total) -> ProgressBar.render(done, total, "segments"));
+            ProgressBar.clear();
             System.out.print(html
-                    ? HtmlReport.render(InspectorTree.build(handle), lastSegment(target))
-                    : VortexInspector.inspect(handle));
+                    ? HtmlReport.render(tree, lastSegment(target))
+                    : VortexInspector.render(tree));
             return ExitStatus.OK;
         } catch (IOException | RuntimeException e) {
             System.err.println("error: " + CliHandles.describe(e));
-            e.printStackTrace(System.err);
+            // a VortexException is an expected failure (bad file, HTTP error) already fully described
+            // above; only an unexpected error needs its stack
+            if (!(e instanceof VortexException)) {
+                e.printStackTrace(System.err);
+            }
             return ExitStatus.ERROR;
         }
     }

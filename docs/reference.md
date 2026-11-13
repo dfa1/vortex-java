@@ -85,7 +85,9 @@ Interface common to both handle implementations below — everything scan-shaped
 that only reads (e.g. `ParquetExporter.exportParquet(VortexHandle, Path)`) doesn't care whether the
 source is a local file or a remote URL. Implements `Closeable`. `prefetch(Collection<SegmentSpec>)` is
 a read-ahead hint for the segments about to be read: a no-op on `VortexReader`, concurrent merged range
-requests on `VortexHttpReader`. Call it from the thread that opened the handle.
+requests on `VortexHttpReader`. Call it from the thread that opened the handle. `segmentTail(SegmentSpec)`
+reads only the end of a segment (its array node, which is all the inspector needs); over HTTP that is one
+small range request, with `prefetchTails(Collection<SegmentSpec>)` as its read-ahead hint.
 
 | Implementation    | Backing storage                              |
 |--------------------|-----------------------------------------------|
