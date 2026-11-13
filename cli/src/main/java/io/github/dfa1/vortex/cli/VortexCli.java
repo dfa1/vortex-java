@@ -68,6 +68,7 @@ public final class VortexCli {
             case "select" -> SelectCommand.run(args);
             case "stats" -> StatsCommand.run(args);
             case "filter" -> FilterCommand.run(args);
+            case "rewrite" -> RewriteCommand.run(args);
             default -> {
                 System.err.println("unknown subcommand: " + args[0]);
                 printUsage(System.err);
@@ -92,6 +93,7 @@ public final class VortexCli {
         out.println("  select  <file.vortex> <col> [...] [--where <expr>]  project columns to CSV on stdout, optionally filtered");
         out.println("  stats   <file.vortex>               print per-column min/max statistics");
         out.println("  filter  <file.vortex> <expr>        filter rows to CSV (e.g. \"price >= 100\")");
+        out.println("  rewrite [options] <file.vortex|url> <out.vortex>  re-encode a file (--compact --no-zone-maps --no-global-dict --edition <id>)");
         out.println("Any subcommand also takes --timing: print the elapsed time to stderr, JVM start-up excluded.");
         out.println("Any subcommand also takes --allow-unknown: open a file whose extension types have no decoder,");
         out.println("  reading those columns as their storage.");

@@ -508,6 +508,40 @@ forces the encodings of one column.
 
 ---
 
+## Re-encode a Vortex file
+
+`rewrite` reads every chunk of a file and writes it again with the current writer, so the
+output is what today's writer picks, not what the writer that made the file picked. Use it to
+repack a file with `--compact`, to target an older edition, or to pick up a newer writer's
+encodings:
+
+```bash
+java -jar cli/target/vortex-cli-*-all.jar rewrite --compact in.vortex out.vortex
+
+# straight from a URL
+java -jar cli/target/vortex-cli-*-all.jar rewrite https://example.com/data.vortex out.vortex
+```
+
+| Option | Effect |
+|---|---|
+| `--compact` | Rust's compact preset (Zstandard for text, Pco for numbers), as for `import` |
+| `--no-zone-maps` | write no per-zone statistics, so filtered scans cannot prune |
+| `--no-global-dict` | no shared dictionary across chunks |
+| `--edition <id>` | write only the encodings of that edition, e.g. `core2025.10.0`; an edition too old for the data fails and names the one to enable |
+
+On the OpenPowerlifting sample (4.1M rows) a default rewrite wrote 161.6 MB and `--compact`
+104.8 MB. The rewrite of that file from a local copy took 8 s.
+
+Limits of this first version:
+
+- The file must be a flat struct of primitive (not `f16`), bool and utf8 columns, nullable or
+  not. Any other column (nested, decimal, binary, extension) fails before the output is created.
+- The output must not exist, so a rewrite can never overwrite its source. A failed run deletes its
+  partial output.
+- A URL source is read whole, chunk by chunk.
+
+---
+
 ## Import from a JDBC source
 
 **API:**

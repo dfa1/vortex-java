@@ -812,6 +812,7 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | `export`   | `export <file.vortex\|url> [out.csv\|out.parquet\|-]` | All columns to CSV (default) or Parquet, by output extension; `-` for CSV on stdout. A `url` source requires an explicit `out.parquet` path — CSV/stdout from a URL isn't supported |
 | `select`   | `select <file.vortex> <col> [col2 ...] [--where "<expr>" ...]` | Project columns to CSV; each `--where` is a `filter` expression and all must hold (the filtered columns need not be printed) |
 | `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
+| `rewrite`  | `rewrite [--compact] [--no-zone-maps] [--no-global-dict] [--edition <id>] <file.vortex\|url> <out.vortex>` | Re-encode a file with the current writer (`<id>` as in `Editions`, e.g. `core2026.08.0`); flat struct of primitive, bool and utf8 columns |
 | `import`   | `import [--delimiter <char>] [--compact] <file.csv\|file.parquet\|url> [out.vortex\|out.parquet]` | CSV or Parquet (local or remote) source to Vortex; a `.parquet` output is CSV-only (chains through a temp Vortex file internally) — a Parquet source always produces Vortex, `.parquet` output is rejected; `--compact` is Rust's compact preset (Zstandard for text, Pco for numbers), see [Convert CSV to Vortex](how-to.md#convert-csv-to-vortex) |
 
 Any subcommand also takes `--timing`, anywhere on the command line, including before the subcommand: it prints
