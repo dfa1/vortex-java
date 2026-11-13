@@ -13,8 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
-/// Unit tests for [LazyGridSource] row decoding: column metadata, windowed reads,
-/// single-row access, out-of-range handling, and closed-source rejection. All
+/// Unit tests for [LazyGridSource] row decoding: column metadata, non-blocking windowed reads,
+/// out-of-range handling, superseded and failed loads, and closed-source rejection. All
 /// handle I/O is routed through a real [IoWorker]; the handle is opened on the
 /// worker thread to satisfy the reader's confined-arena threading contract.
 class LazyGridSourceTest {
@@ -28,7 +28,7 @@ class LazyGridSourceTest {
         Path file = TuiTestSupport.writeGridVortex(tmp, "src.vortex", 25);
 
         // When / Then
-        withSource(file, source -> {
+        withSource(file, (source, _) -> {
             assertThat(source.columns()).containsExactly("a", "b", "c");
             assertThat(source.totalRows()).isEqualTo(25L);
             assertThat(source.chunkCount()).isGreaterThanOrEqualTo(1);
@@ -41,8 +41,8 @@ class LazyGridSourceTest {
         Path file = TuiTestSupport.writeGridVortex(tmp, "src.vortex", 25);
 
         // When
-        withSource(file, source -> {
-            String[][] window = source.readRows(2, 3);
+        withSource(file, (source, worker) -> {
+            String[][] window = read(source, worker, 2, 3);
 
             // Then
             assertThat(window).hasNumberOfRows(3);
@@ -152,8 +152,8 @@ class LazyGridSourceTest {
         Path file = TuiTestSupport.writeGridVortex(tmp, "src.vortex", 5);
 
         // When
-        withSource(file, source -> {
-            String[][] window = source.readRows(3, 4);
+        withSource(file, (source, worker) -> {
+            String[][] window = read(source, worker, 3, 4);
 
             // Then — rows 3,4 present; rows 5,6 are empty (one slot per column)
             assertThat(window).hasNumberOfRows(4);
@@ -163,33 +163,7 @@ class LazyGridSourceTest {
     }
 
     @Test
-    void rowReturnsSingleFormattedRow() throws Exception {
-        // Given
-        Path file = TuiTestSupport.writeGridVortex(tmp, "src.vortex", 10);
-
-        // When
-        withSource(file, source -> {
-            String[] row = source.row(7);
-
-            // Then
-            assertThat(row).containsExactly("7", "107", "207");
-        });
-    }
-
-    @Test
-    void rowOutOfBoundsThrows() throws Exception {
-        // Given
-        Path file = TuiTestSupport.writeGridVortex(tmp, "src.vortex", 3);
-
-        // When / Then
-        withSource(file, source ->
-                assertThatThrownBy(() -> source.row(99))
-                        .isInstanceOf(VortexException.class)
-                        .hasMessageContaining("out of bounds"));
-    }
-
-    @Test
-    void readRowsAfterCloseThrows() throws Exception {
+    void peekRowsAfterCloseThrows() throws Exception {
         // Given
         Path file = TuiTestSupport.writeGridVortex(tmp, "src.vortex", 3);
 
@@ -202,7 +176,7 @@ class LazyGridSourceTest {
                 source.close(); // idempotent
 
                 // Then
-                assertThatThrownBy(() -> source.readRows(0, 1))
+                assertThatThrownBy(() -> source.peekRows(0, 1, 0, 1))
                         .isInstanceOf(VortexException.class)
                         .hasMessageContaining("closed");
             } finally {
@@ -217,9 +191,9 @@ class LazyGridSourceTest {
         Path file = TuiTestSupport.writeMultiTypeVortex(tmp, "typed.vortex");
 
         // When
-        withSource(file, source -> {
+        withSource(file, (source, worker) -> {
             assertThat(source.columns()).containsExactly("i", "d", "flag", "name");
-            String[] row = source.row(1);
+            String[] row = read(source, worker, 1, 1)[0];
 
             // Then — long, double, boolean, utf8 each rendered with its formatter
             assertThat(row).containsExactly("1", "1.5", "false", "b");
@@ -233,24 +207,19 @@ class LazyGridSourceTest {
         Path file = TuiTestSupport.writeMultiTypeVortex(tmp, "typed.vortex");
 
         // When
-        withSource(file, source -> {
+        withSource(file, (source, worker) -> {
             assertThat(source.totalRows()).isEqualTo(5L);
             assertThat(source.chunkCount()).isEqualTo(2);
 
             // window straddling the chunk boundary (rows 2,3,4 -> chunk0 tail + chunk1)
-            String[][] straddle = source.readRows(2, 3);
+            String[][] straddle = read(source, worker, 2, 3);
             assertThat(straddle[0]).containsExactly("2", "2.5", "true", "c");
             assertThat(straddle[1]).containsExactly("3", "3.5", "false", "d");
 
             // now scroll back to the head -> reopen scan from chunk 0
-            String[] first = source.row(0);
+            String[] first = read(source, worker, 0, 1)[0];
             assertThat(first).containsExactly("0", "0.5", "true", "a");
         });
-    }
-
-    @FunctionalInterface
-    private interface SourceAction {
-        void run(LazyGridSource source) throws InterruptedException;
     }
 
     @FunctionalInterface
@@ -258,8 +227,13 @@ class LazyGridSourceTest {
         void run(LazyGridSource source, IoWorker worker) throws InterruptedException;
     }
 
-    private static void withSource(Path file, SourceAction action) throws InterruptedException {
-        withSource(file, (source, _) -> action.run(source));
+    /// All columns of the window, once the worker has loaded it.
+    private static String[][] read(LazyGridSource source, IoWorker worker, long start, int count)
+            throws InterruptedException {
+        int columns = source.columns().size();
+        source.peekRows(start, count, 0, columns);
+        awaitWorker(worker);
+        return source.peekRows(start, count, 0, columns).rows();
     }
 
     private static void withSource(Path file, WorkerAction action) throws InterruptedException {

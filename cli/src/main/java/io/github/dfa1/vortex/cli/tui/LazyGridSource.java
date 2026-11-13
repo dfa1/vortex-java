@@ -146,51 +146,12 @@ public final class LazyGridSource implements AutoCloseable {
         return currentChunkIdx;
     }
 
-    /// Returns formatted rows for the absolute-row window `[startAbsRow, startAbsRow + count)`.
+    /// Returns the formatted rows of the absolute-row window `[startAbsRow, startAbsRow + count)`
+    /// that are already loaded, and asks the worker for the rest, without ever waiting for it.
     ///
-    /// The window may straddle a chunk boundary; this method handles the chunk
-    /// transitions transparently. Returned rows are independent `String[]`
-    /// arrays — safe to keep after the underlying chunk is closed.
-    ///
-    /// @param startAbsRow first absolute row in the window
-    /// @param count       number of rows to read; rows past `totalRows()` are
-    ///                    returned as empty `String[]`
-    /// @return array of length `count`, one row per slot
-    /// @throws InterruptedException if the calling thread is interrupted while
-    ///                              waiting for the worker
-    /// @throws VortexException      if this source has already been closed
-    public String[][] readRows(long startAbsRow, int count) throws InterruptedException {
-        if (closed) {
-            throw new VortexException("LazyGridSource closed");
-        }
-        String[][] out = new String[count][];
-        if (count == 0 || startAbsRow >= totalRows) {
-            for (int i = 0; i < count; i++) {
-                out[i] = emptyRow();
-            }
-            return out;
-        }
-        AtomicReference<RuntimeException> failure = new AtomicReference<>();
-        worker.runAndAwait(() -> {
-            try {
-                fillWindow(out, startAbsRow, count, 0, columns.size());
-            } catch (RuntimeException e) {
-                failure.set(e);
-            }
-        });
-        if (failure.get() != null) {
-            throw failure.get();
-        }
-        for (int i = 0; i < count; i++) {
-            if (out[i] == null) {
-                out[i] = emptyRow();
-            }
-        }
-        return out;
-    }
-
-    /// Non-blocking variant of [#readRows(long, int)] for the render loop: returns what is
-    /// already formatted and asks the worker for the rest.
+    /// A window may straddle a chunk boundary; the worker handles the chunk transitions. Returned
+    /// rows are independent `String[]` arrays, safe to keep after the underlying chunk is closed,
+    /// and rows past `totalRows()` are empty.
     ///
     /// Rows the worker has not delivered yet come back as `…` cells with
     /// [Rows#complete()] false; the caller redraws later. A request superseded by a newer
@@ -286,21 +247,6 @@ public final class LazyGridSource implements AutoCloseable {
                 row++;
             }
         }
-    }
-
-    /// Returns a single formatted row at absolute index `absRow`.
-    ///
-    /// @param absRow row index in `[0, totalRows())`
-    /// @return one cell per column
-    /// @throws InterruptedException if the calling thread is interrupted while
-    ///                              waiting for the worker
-    /// @throws VortexException      if `absRow` is out of bounds or this source
-    ///                              has already been closed
-    public String[] row(long absRow) throws InterruptedException {
-        if (absRow < 0 || absRow >= totalRows) {
-            throw new VortexException("row index out of bounds: " + absRow);
-        }
-        return readRows(absRow, 1)[0];
     }
 
     private int findChunk(long absRow) {
