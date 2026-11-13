@@ -5,7 +5,9 @@ import io.github.dfa1.vortex.cli.tui.term.Key;
 import io.github.dfa1.vortex.cli.tui.term.Terminal;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 /// Excel-like scrollable grid viewer over a [LazyGridSource].
 ///
@@ -45,6 +47,8 @@ public final class VortexGridTui {
         private static final int MIN_COL_WIDTH = 4;
         private static final int MAX_COL_WIDTH = 24;
         private static final int ROW_INDEX_PAD = 2;
+        private static final Duration LOADING_TICK = Duration.ofMillis(50);
+        private static final String[] SPINNER = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"};
 
         private final Terminal term;
         private final String source;
@@ -59,6 +63,8 @@ public final class VortexGridTui {
         private long rowOffset;
         private int colOffset;
         private boolean dirty = true;
+        private boolean loading;
+        private int spinnerFrame;
         private String errorMessage;
 
         Loop(Terminal term, String source, LazyGridSource data) {
@@ -81,7 +87,19 @@ public final class VortexGridTui {
                         render();
                         dirty = false;
                     }
-                    Key key = term.readKey();
+                    Key key;
+                    if (loading) {
+                        // The worker is still filling the window: poll keys so `q` stays live,
+                        // and redraw on a tick to pick up what has arrived.
+                        Optional<Key> polled = term.readKey(LOADING_TICK);
+                        if (polled.isEmpty()) {
+                            dirty = true;
+                            continue;
+                        }
+                        key = polled.get();
+                    } else {
+                        key = term.readKey();
+                    }
                     if (!handle(key)) {
                         return;
                     }
@@ -190,7 +208,7 @@ public final class VortexGridTui {
             ensureCursorVisible(termRows, termCols);
 
             int viewportRows = Math.max(0, termRows - 3);
-            String[][] window = fetchWindow(rowOffset, viewportRows);
+            String[][] window = fetchWindow(rowOffset, viewportRows, visibleColsEnd(termCols));
 
             StringBuilder out = new StringBuilder(termCols * termRows);
             out.append(Ansi.CURSOR_HOME);
@@ -203,14 +221,24 @@ public final class VortexGridTui {
             term.flush();
         }
 
-        private String[][] fetchWindow(long startAbsRow, int viewportRows) {
+        /// One past the last column drawn, by the same fit rule as [#renderHeader].
+        private int visibleColsEnd(int termCols) {
+            int width = rowNumberWidth;
+            int c = colOffset;
+            while (c < totalCols && width + colWidths[c] + 1 <= termCols) {
+                width += colWidths[c] + 1;
+                c++;
+            }
+            return c;
+        }
+
+        private String[][] fetchWindow(long startAbsRow, int viewportRows, int colEnd) {
             try {
-                return data.readRows(startAbsRow, viewportRows);
-            } catch (InterruptedException _) {
-                Thread.currentThread().interrupt();
-                errorMessage = "interrupted";
-                return placeholderWindow(viewportRows);
+                LazyGridSource.Rows rows = data.peekRows(startAbsRow, viewportRows, colOffset, colEnd);
+                loading = !rows.complete();
+                return rows.rows();
             } catch (RuntimeException e) {
+                loading = false;
                 errorMessage = e.getClass().getSimpleName()
                         + (e.getMessage() != null ? ": " + e.getMessage() : "");
                 return placeholderWindow(viewportRows);
@@ -267,13 +295,23 @@ public final class VortexGridTui {
                     : "";
             String title = err != null
                     ? " Vortex View  " + source + "  ERROR: " + err
-                    : " Vortex View  " + source
+                    : " Vortex View  " + loadingLabel() + source
                             + "  rows " + totalRows
                             + "  cols " + totalCols
                             + chunkLabel;
             out.append(Ansi.bg(err != null ? 41 : 44)).append(Ansi.fg(97));
             appendPadded(out, title, termCols);
             out.append(Ansi.RESET).append("\r\n");
+        }
+
+        /// Leads the title so a long source URL cannot push it off screen; the spinner
+        /// advances once per tick to show the view is alive while a fetch is slow.
+        private String loadingLabel() {
+            if (!loading) {
+                return "";
+            }
+            spinnerFrame = (spinnerFrame + 1) % SPINNER.length;
+            return SPINNER[spinnerFrame] + " loading…  ";
         }
 
         private void renderHeader(StringBuilder out, int termCols) {

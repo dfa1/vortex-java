@@ -488,7 +488,41 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         // columns (a sort key, a filter column) skips decoding the rest of the chunk. The decode
         // runs while the chunk is open, before next() can evict the flats it slices.
         return new Chunk(chunkRows, projectedNames, projectedPositions,
-                i -> decodeColumn(spec, i, chunkRows, arena), arena, file.registry(), this::onChunkClosed);
+                i -> decodeColumn(spec, i, chunkRows, arena),
+                columns -> file.prefetch(segmentSpecs(spec, columns)),
+                arena, file.registry(), this::onChunkClosed);
+    }
+
+    /// The segments a decode of `layout` reads, for [VortexHandle#prefetch(Collection)]. A zoned
+    /// layout reads only its data child; the stats table beside it is read by pruning, not decode.
+    /// An out-of-range index is skipped: the decode itself rejects it.
+    private List<SegmentSpec> segmentSpecs(ChunkSpec spec, List<Integer> columns) {
+        List<SegmentSpec> all = file.footer().segmentSpecs();
+        List<SegmentSpec> found = new ArrayList<>();
+        for (int column : columns) {
+            collectSegmentSpecs(spec.columnLayouts()[column], all, found);
+        }
+        return found;
+    }
+
+    private static void collectSegmentSpecs(Layout layout, List<SegmentSpec> all, List<SegmentSpec> into) {
+        for (int index : layout.segments()) {
+            if (index >= 0 && index < all.size()) {
+                into.add(all.get(index));
+            }
+        }
+        if (layout.isZoned() && !layout.children().isEmpty()) {
+            collectSegmentSpecs(layout.children().getFirst(), all, into);
+            return;
+        }
+        // A chunked layout's stats child is read by pruning, never by decode, like a zoned one's.
+        int firstChild = 0;
+        if (layout.isChunked()) {
+            firstChild = chunkedDataStart(layout);
+        }
+        for (int i = firstChild; i < layout.children().size(); i++) {
+            collectSegmentSpecs(layout.children().get(i), all, into);
+        }
     }
 
     private Chunk.Column decodeColumn(ChunkSpec spec, int i, long chunkRows, Arena arena) {

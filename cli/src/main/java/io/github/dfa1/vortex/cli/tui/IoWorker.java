@@ -1,8 +1,10 @@
 package io.github.dfa1.vortex.cli.tui;
 
+import java.time.Duration;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /// Single-threaded I/O executor that owns one [io.github.dfa1.vortex.reader.VortexHandle].
@@ -15,6 +17,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 /// [#pending()] drives the status-line counter; callers should check it
 /// when computing UI state.
 public final class IoWorker implements AutoCloseable {
+
+    /// How long teardown waits for the worker before giving up on a task stalled on the network;
+    /// the worker is a daemon thread, so the process can exit without it.
+    public static final Duration TEARDOWN_WAIT = Duration.ofMillis(250);
 
     private final BlockingQueue<Runnable> queue;
     private final AtomicInteger pending;
@@ -61,6 +67,25 @@ public final class IoWorker implements AutoCloseable {
         if (closed) {
             return;
         }
+        enqueueWithLatch(task).await();
+    }
+
+    /// Runs a task on the worker thread and waits for it to complete, but at most `timeout`.
+    /// The task stays queued after a timeout and still runs once the worker reaches it. For
+    /// teardown, which must not hang behind a load stalled on the network.
+    ///
+    /// @param task    task to execute
+    /// @param timeout longest time to wait for it
+    /// @return true if the task finished within `timeout`, false if the wait timed out
+    /// @throws InterruptedException if the calling thread is interrupted while waiting
+    public boolean runAndAwait(Runnable task, Duration timeout) throws InterruptedException {
+        if (closed) {
+            return true;
+        }
+        return enqueueWithLatch(task).await(timeout.toNanos(), TimeUnit.NANOSECONDS);
+    }
+
+    private CountDownLatch enqueueWithLatch(Runnable task) {
         // Count down only after pending is decremented, so a caller that reads pending()
         // immediately after this returns never observes the in-flight task still counted.
         CountDownLatch done = new CountDownLatch(1);
@@ -73,7 +98,7 @@ public final class IoWorker implements AutoCloseable {
                 done.countDown();
             }
         });
-        done.await();
+        return done;
     }
 
     /// Number of submitted tasks that have not yet finished.

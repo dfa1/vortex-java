@@ -56,7 +56,8 @@ final class CliHandles {
     /// @param handle the handle to close
     static void closeOnWorker(IoWorker worker, VortexHandle handle) {
         try {
-            worker.runAndAwait(handle::close);
+            // Bounded: a view quit while a load is stalled on the network must not hang here.
+            worker.runAndAwait(handle::close, IoWorker.TEARDOWN_WAIT);
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }

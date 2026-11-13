@@ -9,6 +9,8 @@ import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.array.Array;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -25,6 +27,8 @@ import java.util.concurrent.atomic.AtomicReference;
 /// reader's confined `Arena` is never crossed from the render thread.
 public final class LazyGridSource implements AutoCloseable {
 
+    private static final int COLUMN_MARGIN = 2;
+
     private final VortexHandle handle;
     private final IoWorker worker;
     private final List<String> columns;
@@ -36,9 +40,34 @@ public final class LazyGridSource implements AutoCloseable {
     private ScanIterator iter;
     private int iterNextChunk;
     private Chunk currentChunk;
-    private int currentChunkIdx = -1;
+    private volatile int currentChunkIdx = -1;
     private Array[] currentColumns;
-    private boolean closed;
+    private volatile boolean closed;
+    private volatile Request latest;
+    private volatile Loaded loaded;
+    private volatile Failure failure;
+
+    /// A window the render thread asked [#peekRows(long, int, int, int)] for.
+    private record Request(long start, int count, int colFrom, int colTo) {
+    }
+
+    /// Why the load of `request` failed.
+    private record Failure(Request request, RuntimeException cause) {
+    }
+
+    /// The window the worker last finished formatting; rows are immutable once published and
+    /// hold text only in columns `[colFrom, colTo)`.
+    @SuppressWarnings("java:S6218") // internal data carrier; the rows are never compared.
+    private record Loaded(long start, int colFrom, int colTo, String[][] rows) {
+    }
+
+    /// Result of [#peekRows(long, int, int, int)].
+    ///
+    /// @param rows     one slot per requested row; rows not loaded yet are filled with `…`
+    /// @param complete true when no row is a placeholder, so nothing is left to wait for
+    @SuppressWarnings("java:S6218") // internal data carrier; the rows are never compared.
+    public record Rows(String[][] rows, boolean complete) {
+    }
 
     /// Builds a lazy source over `handle`, walking the layout once up front to
     /// derive chunk boundaries.
@@ -144,7 +173,7 @@ public final class LazyGridSource implements AutoCloseable {
         AtomicReference<RuntimeException> failure = new AtomicReference<>();
         worker.runAndAwait(() -> {
             try {
-                fillWindow(out, startAbsRow, count);
+                fillWindow(out, startAbsRow, count, 0, columns.size());
             } catch (RuntimeException e) {
                 failure.set(e);
             }
@@ -160,7 +189,85 @@ public final class LazyGridSource implements AutoCloseable {
         return out;
     }
 
-    private void fillWindow(String[][] out, long startAbsRow, int count) {
+    /// Non-blocking variant of [#readRows(long, int)] for the render loop: returns what is
+    /// already formatted and asks the worker for the rest.
+    ///
+    /// Rows the worker has not delivered yet come back as `…` cells with
+    /// [Rows#complete()] false; the caller redraws later. A request superseded by a newer
+    /// one before the worker reaches it is dropped. Call from one thread only.
+    ///
+    /// Only columns `[colFrom, colTo)` are decoded, widened by a small margin so a one-column
+    /// scroll finds its data already loaded; a cell outside that range is `null`.
+    ///
+    /// @param startAbsRow first absolute row in the window
+    /// @param count       number of rows to read
+    /// @param colFrom     first visible column
+    /// @param colTo       one past the last visible column
+    /// @return the cached rows plus whether any visible cell is still loading
+    /// @throws VortexException if this source is closed or a background load failed
+    public Rows peekRows(long startAbsRow, int count, int colFrom, int colTo) {
+        if (closed) {
+            throw new VortexException("LazyGridSource closed");
+        }
+        Request wanted = new Request(startAbsRow, count,
+                Math.max(0, colFrom - COLUMN_MARGIN), Math.min(columns.size(), colTo + COLUMN_MARGIN));
+        Failure failed = failure;
+        if (failed != null && failed.request.equals(wanted)) {
+            throw failed.cause;
+        }
+        Loaded snapshot = loaded;
+        boolean columnsLoaded = snapshot != null && colFrom >= snapshot.colFrom && colTo <= snapshot.colTo;
+        String[][] out = new String[count][];
+        boolean complete = true;
+        for (int i = 0; i < count; i++) {
+            long row = startAbsRow + i;
+            if (row >= totalRows) {
+                out[i] = emptyRow();
+            } else if (columnsLoaded && row >= snapshot.start && row - snapshot.start < snapshot.rows.length) {
+                out[i] = snapshot.rows[(int) (row - snapshot.start)];
+            } else {
+                out[i] = loadingRow();
+                complete = false;
+            }
+        }
+        if (!complete) {
+            request(wanted);
+        }
+        return new Rows(out, complete);
+    }
+
+    private void request(Request request) {
+        if (request.equals(latest)) {
+            return;
+        }
+        latest = request;
+        failure = null;
+        worker.submit(() -> {
+            // A load superseded by a newer window, or queued before close, is skipped: each one
+            // costs round trips over HTTP.
+            if (closed || latest != request) {
+                return;
+            }
+            String[][] rows = new String[request.count][];
+            try {
+                fillWindow(rows, request.start, request.count, request.colFrom, request.colTo);
+                loaded = new Loaded(request.start, request.colFrom, request.colTo, rows);
+            } catch (RuntimeException e) {
+                // Tied to its window, so one failed load (a transient 503) does not poison the rest.
+                if (latest == request) {
+                    failure = new Failure(request, e);
+                }
+            }
+        });
+    }
+
+    private String[] loadingRow() {
+        String[] row = new String[columns.size()];
+        Arrays.fill(row, "…");
+        return row;
+    }
+
+    private void fillWindow(String[][] out, long startAbsRow, int count, int colFrom, int colTo) {
         long row = startAbsRow;
         int slot = 0;
         while (slot < count) {
@@ -170,11 +277,12 @@ public final class LazyGridSource implements AutoCloseable {
             }
             int chunkIdx = findChunk(row);
             loadChunk(chunkIdx);
+            prefetchColumns(colFrom, colTo);
             long chunkStart = chunkStartRows[chunkIdx];
             long chunkEnd = chunkStartRows[chunkIdx + 1];
             long limit = Math.min(chunkEnd, startAbsRow + count);
             while (row < limit && slot < count) {
-                out[slot++] = formatRow(currentColumns, row - chunkStart);
+                out[slot++] = formatRow(row - chunkStart, colFrom, colTo);
                 row++;
             }
         }
@@ -235,9 +343,18 @@ public final class LazyGridSource implements AutoCloseable {
         currentChunk = chunk;
         currentChunkIdx = chunkIdx;
         currentColumns = new Array[columns.size()];
-        for (int c = 0; c < columns.size(); c++) {
-            currentColumns[c] = chunk.column(ColumnName.of(columns.get(c)));
+    }
+
+    /// Worker-thread-only. Starts the range requests of the columns about to be formatted all
+    /// at once, so over HTTP they cost one round trip together rather than one each.
+    private void prefetchColumns(int colFrom, int colTo) {
+        List<ColumnName> wanted = new ArrayList<>();
+        for (int c = colFrom; c < colTo; c++) {
+            if (currentColumns[c] == null) {
+                wanted.add(ColumnName.of(columns.get(c)));
+            }
         }
+        currentChunk.prefetch(wanted);
     }
 
     private void closeCurrentChunk() {
@@ -249,11 +366,15 @@ public final class LazyGridSource implements AutoCloseable {
         }
     }
 
-    private String[] formatRow(Array[] arrays, long inChunk) {
-        int n = columns.size();
-        String[] row = new String[n];
-        for (int c = 0; c < n; c++) {
-            row[c] = GridRender.formatCell(arrays[c], inChunk, columnDtypes.get(c));
+    /// Worker-thread-only. Formats columns `[colFrom, colTo)` of one row; the others stay
+    /// `null`. A column is decoded (one range request over HTTP) the first time it is formatted.
+    private String[] formatRow(long inChunk, int colFrom, int colTo) {
+        String[] row = new String[columns.size()];
+        for (int c = colFrom; c < colTo; c++) {
+            if (currentColumns[c] == null) {
+                currentColumns[c] = currentChunk.column(ColumnName.of(columns.get(c)));
+            }
+            row[c] = GridRender.formatCell(currentColumns[c], inChunk, columnDtypes.get(c));
         }
         return row;
     }
@@ -269,13 +390,15 @@ public final class LazyGridSource implements AutoCloseable {
         }
         closed = true;
         try {
+            // Bounded: a load stalled on the network must not keep `q` from quitting. The cleanup
+            // stays queued and runs when the worker gets to it.
             worker.runAndAwait(() -> {
                 closeCurrentChunk();
                 if (iter != null) {
                     iter.close();
                     iter = null;
                 }
-            });
+            }, IoWorker.TEARDOWN_WAIT);
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }

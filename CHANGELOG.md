@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `Chunk.prefetch` and `VortexHandle.prefetch` start the range requests of several columns together over HTTP, merged into few requests, and an HTTP handle keeps the segments it has read. ([#744](https://github.com/dfa1/vortex-java/issues/744))
+
 ### Fixed
+- `vortex view` no longer freezes while it fetches data over HTTP: it shows a loading spinner, `q` quits at once, and it fetches only the columns on screen. ([#744](https://github.com/dfa1/vortex-java/issues/744))
 - A decimal min or max in a flat node's stats is decoded as a `BigDecimal` instead of text, so a filtered scan can prune on it and `columnStats()` reports it. ([#710](https://github.com/dfa1/vortex-java/issues/710))
 - A `vortex.uuid` column's file statistics carry its min and max, as Rust writes them from 0.92, and `WriteSummary` reports them as `UUID`s. ([#730](https://github.com/dfa1/vortex-java/pull/730))
 - Opening a file over HTTP follows redirects (`Redirect.NORMAL`), so hosts that answer with a 302/307 to their storage CDN (e.g. Hugging Face's `/resolve/`) work. ([#742](https://github.com/dfa1/vortex-java/issues/742))

@@ -58,6 +58,28 @@ class VortexGridTuiTest {
     }
 
     @Test
+    void titleShowsLoadingBeforeAnyRowArrives() throws Exception {
+        // Given — the first frame is drawn before the worker has delivered a window;
+        // a long source label must not push the marker off the title line
+        Path file = TuiTestSupport.writeGridVortex(tmp, "grid.vortex", 5);
+        FakeTerminal term = new FakeTerminal(new Terminal.Size(24, 80),
+                List.of(new Key.Char('q')));
+
+        // When
+        try (IoWorker worker = new IoWorker("grid-test-io")) {
+            VortexHandle handle = TuiTestSupport.openOnWorker(worker, file);
+            try (LazyGridSource source = LazyGridSource.open(handle, worker)) {
+                VortexGridTui.run(term, "https://example.com/" + "x".repeat(100), source);
+            } finally {
+                TuiTestSupport.closeOnWorker(worker, handle);
+            }
+        }
+
+        // Then
+        assertThat(term.output()).contains("loading…");
+    }
+
+    @Test
     void quitsImmediatelyOnEscape() throws Exception {
         // Given — Escape is one of three quit keys; the loop must exit on the
         // first key without throwing on an otherwise-untouched grid
