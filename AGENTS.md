@@ -116,7 +116,7 @@ Split work into PRs that each stand alone on `main`.
 scripts/simd-benchmark.sh                  # auto-vectorized vs Vector API kernels, table of speedups (also a CI job)
 scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conformance corpus (#205), then:
 ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test="RaincloudConformanceIntegrationTest"
-java --add-opens java.base/java.nio=ALL-UNNAMED -cp "$(cat integration/target/test-classpath.txt)" scripts/RaincloudCompare.java [slug ...]  # size/speed vs Rust and vortex-jni per slug (classpath: docs/compatibility.md)
+VORTEX_PYTHON=<venv>/bin/python java --add-opens java.base/java.nio=ALL-UNNAMED -cp "$(cat integration/target/test-classpath.txt)" scripts/RaincloudCompare.java [slug ...]  # size/speed vs Rust (default + compact) per slug (setup: docs/compatibility.md)
 JAZZER_FUZZ=1 JAZZER_MAX_DURATION=5m ./mvnw test -pl fuzz -am -Dtest='VortexReaderFuzzTest#scanMalformedFile' -Dsurefire.failIfNoSpecifiedTests=false  # fuzz one target (ADR 0020)
 JAZZER_FUZZ=1 JAZZER_MAX_DURATION=5m ./mvnw verify -pl integration -am -Dvortex.it.excludedGroups= -Dit.test='WriteReadFuzzIntegrationTest#jniReadsJavaWrite' -Dtest=none -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false
 ./mvnw test -pl fuzz -am -Dtest=SeedCorpusGenerator -Dsurefire.failIfNoSpecifiedTests=false -Dvortex.fuzz.regenerateSeeds=true  # rewrite per-encoding seeds
