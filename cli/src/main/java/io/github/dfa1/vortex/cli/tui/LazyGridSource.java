@@ -43,9 +43,9 @@ public final class LazyGridSource implements AutoCloseable {
     private volatile int currentChunkIdx = -1;
     private Array[] currentColumns;
     private volatile boolean closed;
-    private volatile Request latest;
-    private volatile Loaded loaded;
-    private volatile Failure failure;
+    private final AtomicReference<Request> latest;
+    private final AtomicReference<Loaded> loaded;
+    private final AtomicReference<Failure> failure;
 
     /// A window the render thread asked [#peekRows(long, int, int, int)] for.
     private record Request(long start, int count, int colFrom, int colTo) {
@@ -85,6 +85,9 @@ public final class LazyGridSource implements AutoCloseable {
     private LazyGridSource(VortexHandle handle, IoWorker worker) throws InterruptedException {
         this.handle = handle;
         this.worker = worker;
+        this.latest = new AtomicReference<>();
+        this.loaded = new AtomicReference<>();
+        this.failure = new AtomicReference<>();
         if (!(handle.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("view requires struct root dtype, got " + handle.dtype());
         }
@@ -92,7 +95,7 @@ public final class LazyGridSource implements AutoCloseable {
         this.columnDtypes = schema.fieldTypes();
 
         AtomicReference<long[]> rowCountsRef = new AtomicReference<>();
-        AtomicReference<RuntimeException> failure = new AtomicReference<>();
+        AtomicReference<RuntimeException> probeFailure = new AtomicReference<>();
         worker.runAndAwait(() -> {
             try {
                 ScanIterator probe = handle.scan(ScanOptions.all());
@@ -100,11 +103,11 @@ public final class LazyGridSource implements AutoCloseable {
                 this.iter = probe;
                 this.iterNextChunk = 0;
             } catch (RuntimeException e) {
-                failure.set(e);
+                probeFailure.set(e);
             }
         });
-        if (failure.get() != null) {
-            throw failure.get();
+        if (probeFailure.get() != null) {
+            throw probeFailure.get();
         }
         long[] chunkRowCounts = rowCountsRef.get();
         this.chunkCount = chunkRowCounts.length;
@@ -172,11 +175,11 @@ public final class LazyGridSource implements AutoCloseable {
         }
         Request wanted = new Request(startAbsRow, count,
                 Math.max(0, colFrom - COLUMN_MARGIN), Math.min(columns.size(), colTo + COLUMN_MARGIN));
-        Failure failed = failure;
+        Failure failed = failure.get();
         if (failed != null && failed.request.equals(wanted)) {
             throw failed.cause;
         }
-        Loaded snapshot = loaded;
+        Loaded snapshot = loaded.get();
         boolean columnsLoaded = snapshot != null && colFrom >= snapshot.colFrom && colTo <= snapshot.colTo;
         String[][] out = new String[count][];
         boolean complete = true;
@@ -198,25 +201,25 @@ public final class LazyGridSource implements AutoCloseable {
     }
 
     private void request(Request request) {
-        if (request.equals(latest)) {
+        if (request.equals(latest.get())) {
             return;
         }
-        latest = request;
-        failure = null;
+        latest.set(request);
+        failure.set(null);
         worker.submit(() -> {
             // A load superseded by a newer window, or queued before close, is skipped: each one
             // costs round trips over HTTP.
-            if (closed || latest != request) {
+            if (closed || latest.get() != request) {
                 return;
             }
             String[][] rows = new String[request.count][];
             try {
                 fillWindow(rows, request.start, request.count, request.colFrom, request.colTo);
-                loaded = new Loaded(request.start, request.colFrom, request.colTo, rows);
+                loaded.set(new Loaded(request.start, request.colFrom, request.colTo, rows));
             } catch (RuntimeException e) {
                 // Tied to its window, so one failed load (a transient 503) does not poison the rest.
-                if (latest == request) {
-                    failure = new Failure(request, e);
+                if (latest.get() == request) {
+                    failure.set(new Failure(request, e));
                 }
             }
         });
