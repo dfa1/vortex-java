@@ -307,16 +307,20 @@ class ColumnBuilderTest {
         }
 
         @Test
-        void nonNullableStruct_rejectsNullRow() {
-            // Given
+        void nonNullableStruct_takesTheNullOfANullStructAbove_asNullFields() {
+            // Given — a REQUIRED struct inside an OPTIONAL one receives null where the outer is
+            // null (#721); the outer struct's validity masks the row, so it must not throw
             DType.Struct dtype = new DType.Struct(
                     List.of(ColumnName.of("bytes")), List.of(new DType.Binary(true)), false);
             ColumnBuilder sut = ColumnBuilder.forType(dtype);
 
-            // When / Then
-            assertThatThrownBy(() -> sut.append(null))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("null value for non-nullable struct column");
+            // When
+            sut.append(null);
+            Object result = sut.build();
+
+            // Then
+            StructData struct = (StructData) result;
+            assertThat(((NullableData) struct.fieldArrays().getFirst()).validity()).containsExactly(false);
         }
     }
 
@@ -379,14 +383,17 @@ class ColumnBuilderTest {
         }
 
         @Test
-        void nonNullableList_rejectsNullRow() {
-            // Given
+        void nonNullableList_takesTheNullOfANullStructAbove_asEmptyList() {
+            // Given — a REQUIRED list inside an OPTIONAL struct receives null where the struct is
+            // null (#721); the struct's validity masks the row, so it must not throw
             ColumnBuilder sut = ColumnBuilder.forType(new DType.List(new DType.Utf8(false), false));
 
-            // When / Then
-            assertThatThrownBy(() -> sut.append(null))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("null value for non-nullable list column");
+            // When
+            sut.append(null);
+            Object result = sut.build();
+
+            // Then
+            assertThat(((ListData) result).offsets()).containsExactly(0L, 0L);
         }
     }
 }
