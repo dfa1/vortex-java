@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.function.IntConsumer;
 
@@ -17,11 +18,19 @@ import java.util.function.IntConsumer;
 /// @param length         number of variable-length elements
 /// @param bytesSegment   concatenated raw byte data for all elements
 /// @param offsetsSegment offsets segment of length `length + 1`
-/// @param offsetsPtype   physical type of the offsets values (I32/U32 or I64/U64)
+/// @param offsetsPtype   physical type of the offsets values, any integer width: Rust narrows them
+///                       to the smallest one holding the data buffer's length
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record VarBinOffsetArray(DType dtype, long length, MemorySegment bytesSegment,
                                 MemorySegment offsetsSegment, PType offsetsPtype)
         implements VarBinArray {
+
+    /// Rejects a non-integer offsets type, which comes from untrusted metadata.
+    public VarBinOffsetArray {
+        if (!offsetsPtype.isInteger()) {
+            throw new VortexException("varbin offsets must be integers, got " + offsetsPtype);
+        }
+    }
 
     @Override
     public byte[] getBytes(long i) {
@@ -53,11 +62,22 @@ public record VarBinOffsetArray(DType dtype, long length, MemorySegment bytesSeg
         long n = length;
         // The loop reads offsets[0..n] at a fixed stride and must stay uniform to
         // vectorize (AGENTS.md hot-loop rule), so the untrusted offsets segment is
-        // sized once here rather than bounds-checked per row. A non-monotonic pair
-        // still yields a negative length to the consumer; the typed accessors
+        // sized once here rather than bounds-checked per row. A non-monotonic pair or a
+        // negative narrow offset still yields a wrong length to the consumer; the typed accessors
         // ([#getBytes(long)], [#getByteLength(long)]) reject it when the row is read.
         checkOffsetsExtent(n);
-        if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
+        // A narrow offset widens unsigned: exact for every valid (non-negative) one, signed or not
+        if (offsetWidth() == Byte.BYTES) {
+            for (long i = 0; i < n; i++) {
+                c.accept(Byte.toUnsignedInt(offsetsSegment.get(ValueLayout.JAVA_BYTE, i + 1))
+                        - Byte.toUnsignedInt(offsetsSegment.get(ValueLayout.JAVA_BYTE, i)));
+            }
+        } else if (offsetWidth() == Short.BYTES) {
+            for (long i = 0; i < n; i++) {
+                c.accept(Short.toUnsignedInt(offsetsSegment.getAtIndex(VortexFormat.LE_SHORT, i + 1))
+                        - Short.toUnsignedInt(offsetsSegment.getAtIndex(VortexFormat.LE_SHORT, i)));
+            }
+        } else if (offsetWidth() == Integer.BYTES) {
             for (long i = 0; i < n; i++) {
                 c.accept(offsetsSegment.getAtIndex(VortexFormat.LE_INT, i + 1)
                         - offsetsSegment.getAtIndex(VortexFormat.LE_INT, i));
@@ -99,7 +119,7 @@ public record VarBinOffsetArray(DType dtype, long length, MemorySegment bytesSeg
     }
 
     private int offsetWidth() {
-        return (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) ? Integer.BYTES : Long.BYTES;
+        return offsetsPtype.byteSize();
     }
 
     /// Reads offset `i` at the width of [#offsetsPtype].
@@ -109,17 +129,19 @@ public record VarBinOffsetArray(DType dtype, long length, MemorySegment bytesSeg
     /// `IndexOutOfBoundsException` (ADR 0003).
     ///
     /// @param i zero-based offset index, in `[0, length]`
-    /// @return the offset value widened to a long, unsigned for `U32`
+    /// @return the offset value widened to a long, unsigned for an unsigned type
     private long readOffset(long i) {
         try {
-            if (offsetsPtype == PType.U32) {
+            return switch (offsetsPtype) {
+                case U8 -> Byte.toUnsignedLong(offsetsSegment.get(ValueLayout.JAVA_BYTE, i));
+                case I8 -> offsetsSegment.get(ValueLayout.JAVA_BYTE, i);
+                case U16 -> Short.toUnsignedLong(offsetsSegment.getAtIndex(VortexFormat.LE_SHORT, i));
+                case I16 -> offsetsSegment.getAtIndex(VortexFormat.LE_SHORT, i);
                 // a u32 offset passes Integer.MAX_VALUE once the data buffer does (#633)
-                return Integer.toUnsignedLong(offsetsSegment.getAtIndex(VortexFormat.LE_INT, i));
-            }
-            if (offsetsPtype == PType.I32) {
-                return offsetsSegment.getAtIndex(VortexFormat.LE_INT, i);
-            }
-            return offsetsSegment.getAtIndex(VortexFormat.LE_LONG, i);
+                case U32 -> Integer.toUnsignedLong(offsetsSegment.getAtIndex(VortexFormat.LE_INT, i));
+                case I32 -> offsetsSegment.getAtIndex(VortexFormat.LE_INT, i);
+                default -> offsetsSegment.getAtIndex(VortexFormat.LE_LONG, i);
+            };
         } catch (IndexOutOfBoundsException e) {
             throw new VortexException("varbin offset index " + i + " (" + offsetsPtype
                     + ") out of range for an offsets segment of "
