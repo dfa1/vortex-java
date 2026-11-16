@@ -84,6 +84,59 @@ class VarBinArrayTest {
         }
     }
 
+    /// Rust narrows varbin offsets to the smallest integer holding the data buffer's length, so a
+    /// Rust-written file carries u8/u16 offsets; read at 64 bits they came back as garbage (#721).
+    @Nested
+    class OffsetWidths {
+
+        @ParameterizedTest
+        @EnumSource(value = PType.class, names = {"U8", "I8", "U16", "I16", "U32", "I32", "U64", "I64"})
+        void everyIntegerWidth_readsItsOffsets(PType ptype) {
+            // Given — "ab", "", "cde" over offsets 0, 2, 2, 5 at the width of `ptype`
+            MemorySegment offsets = MemorySegment.ofArray(new byte[4 * ptype.byteSize()]);
+            long[] values = {0, 2, 2, 5};
+            for (int i = 0; i < values.length; i++) {
+                for (int b = 0; b < ptype.byteSize(); b++) {
+                    offsets.set(java.lang.foreign.ValueLayout.JAVA_BYTE, (long) i * ptype.byteSize() + b,
+                            (byte) (values[i] >>> (8 * b)));
+                }
+            }
+            var sut = new VarBinOffsetArray(UTF8, 3, MemorySegment.ofArray("abcde".getBytes(StandardCharsets.UTF_8)),
+                    offsets, ptype);
+            List<Integer> lengths = new ArrayList<>();
+
+            // When
+            sut.forEachByteLength(lengths::add);
+
+            // Then
+            assertThat(List.of(sut.getString(0), sut.getString(1), sut.getString(2))).containsExactly("ab", "", "cde");
+            assertThat(lengths).containsExactly(2, 0, 3);
+            assertThat(sut.limited(2).getString(1)).isEmpty();
+        }
+
+        @Test
+        void u8OffsetPast127_readsUnsigned() {
+            // Given — 200 bytes, the second offset 0xC8 negative as a signed byte
+            var sut = new VarBinOffsetArray(DTypes.BINARY, 1, MemorySegment.ofArray(new byte[200]),
+                    MemorySegment.ofArray(new byte[]{0, (byte) 200}), PType.U8);
+
+            // When
+            int result = sut.getByteLength(0);
+
+            // Then
+            assertThat(result).isEqualTo(200);
+        }
+
+        @Test
+        void floatOffsets_throwVortexException() {
+            // Given / When / Then — the offsets ptype comes from untrusted metadata
+            assertThatThrownBy(() -> new VarBinOffsetArray(DTypes.BINARY, 0, MemorySegment.NULL,
+                    MemorySegment.ofArray(new byte[4]), PType.F32))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("F32");
+        }
+    }
+
     @Nested
     class Regular {
 
