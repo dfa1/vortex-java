@@ -410,8 +410,9 @@ this project does not configure, so give such a file 8 GB. Files with narrow col
 
 ## Convert Vortex to Parquet
 
-Flat schemas only (`Bool`, `Primitive` including `F16`, `Utf8`, `Binary`, `vortex.timestamp`); a
-`Struct`/`List`/`Map` top-level column throws `UnsupportedOperationException`.
+Leaves of `Bool`, `Primitive` including `F16`, `Decimal`, `Utf8`, `Binary` and `vortex.timestamp`,
+flat or nested in `Struct`, `List`, `FixedSizeList` and `Map` columns (exported as Parquet groups,
+`LIST` and `MAP`); any other type throws `VortexException` naming the column.
 
 **API:**
 

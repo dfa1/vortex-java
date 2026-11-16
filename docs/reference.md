@@ -570,11 +570,14 @@ Final class (private constructor); `chunkSize` and `maxChunkBytes` bound the row
 
 ### `ParquetExporter` (`io.github.dfa1.vortex.parquet.ParquetExporter`)
 
-Supports flat schemas only: `Bool`, `Primitive` (`F16` as Parquet's `FLOAT16`), `Utf8`, `Binary`, `Decimal` (Parquet `DECIMAL` on
+Supports leaves of `Bool`, `Primitive` (`F16` as Parquet's `FLOAT16`), `Utf8`, `Binary`, `Decimal` (Parquet `DECIMAL` on
 `INT32`, `INT64` or `FIXED_LEN_BYTE_ARRAY` by precision), and the
-`vortex.timestamp` extension over MILLIS/MICROS/NANOS resolution. `Struct`/`List`/`Map` top-level
-columns throw `UnsupportedOperationException` — the inverse of `ParquetImporter`'s nested
-`LIST`/`STRUCT` support does not exist yet.
+`vortex.timestamp` extension over MILLIS/MICROS/NANOS resolution, flat or nested in `Struct` (a Parquet group),
+`List` and `FixedSizeList` (`LIST`) and `Map` (`MAP`, its key `REQUIRED`) columns, composable to any depth. Any other
+type throws `VortexException` naming the column (e.g. `emb.list.element`). A `FixedSizeList` re-imports as a `List`,
+since Parquet has no fixed-size list. A present struct whose every field is null exports as a null struct: the reader
+folds a struct's validity into its fields, so the two read the same. A struct, list or map whose name holds a `.`
+throws, since Parquet writers address those groups by dotted path.
 
 | Method                                                   | Notes                                                    |
 |------------------------------------------------------------|-----------------------------------------------------------|
