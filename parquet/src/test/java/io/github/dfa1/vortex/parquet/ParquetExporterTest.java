@@ -8,6 +8,7 @@ import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
@@ -31,6 +32,11 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
+import io.github.dfa1.vortex.writer.encode.ListData;
+import io.github.dfa1.vortex.writer.encode.ListViewData;
+import io.github.dfa1.vortex.writer.encode.NullableData;
+import io.github.dfa1.vortex.writer.encode.StructData;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -207,7 +213,7 @@ class ParquetExporterTest {
             DType.Extension ts = TimestampDtype.of(unit, null, false);
 
             // When / Then
-            assertThatThrownBy(() -> schemaOf("ts", ts)).isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> schemaOf("ts", ts)).isInstanceOf(VortexException.class).hasMessageContaining("column: ts");
         }
 
         @Test
@@ -217,25 +223,90 @@ class ParquetExporterTest {
                     io.github.dfa1.vortex.core.model.OpaqueMetadata.EMPTY, false);
 
             // When / Then
-            assertThatThrownBy(() -> schemaOf("u", ext)).isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> schemaOf("u", ext)).isInstanceOf(VortexException.class).hasMessageContaining("column: u");
         }
 
         @Test
-        void struct_throws() {
-            // Given — nested schemas are out of scope for this exporter
-            DType.Struct nested = new DType.Struct(List.of(ColumnName.of("x")), List.of(DTypes.I32), false);
-
-            // When / Then
-            assertThatThrownBy(() -> schemaOf("s", nested)).isInstanceOf(UnsupportedOperationException.class);
-        }
-
-        @Test
-        void list_throws() {
+        void nullableStruct_mapsToOptionalGroup_ofItsFields() {
             // Given
-            DType.List list = new DType.List(DTypes.I32, false);
+            DType.Struct struct = new DType.Struct(List.of(ColumnName.of("x"), ColumnName.of("y")),
+                    List.of(DTypes.I32, new DType.Utf8(true)), true);
+
+            // When
+            FileSchema result = schemaOf("s", struct);
+
+            // Then — the group's nullability raises the leaves' definition level, not their repetition
+            assertThat(result.getColumn("s.x").repetitionType()).isEqualTo(RepetitionType.REQUIRED);
+            assertThat(result.getColumn("s.x").maxDefinitionLevel()).isEqualTo(1);
+            assertThat(result.getColumn("s.y").logicalType()).isEqualTo(new LogicalType.StringType());
+            assertThat(result.getColumn("s.y").maxDefinitionLevel()).isEqualTo(2);
+        }
+
+        @Test
+        void listAndFixedSizeList_mapToRepeatedListElement() {
+            // Given — Parquet has no fixed-size list, so both become LIST
+            DType.List list = new DType.List(DTypes.F32, true);
+            DType.FixedSizeList fixed = new DType.FixedSizeList(DTypes.I32, 4, false);
+            FileSchema.Builder builder = FileSchema.builder("schema");
+            ParquetExporter.addColumn(builder, "l", list);
+            ParquetExporter.addColumn(builder, "f", fixed);
+
+            // When
+            FileSchema result = builder.build();
+
+            // Then
+            assertThat(result.getColumn("l.list.element").type()).isEqualTo(PhysicalType.FLOAT);
+            assertThat(result.getColumn("l.list.element").maxRepetitionLevel()).isEqualTo(1);
+            assertThat(result.getColumn("f.list.element").type()).isEqualTo(PhysicalType.INT32);
+            assertThat(result.getColumn("f.list.element").maxRepetitionLevel()).isEqualTo(1);
+        }
+
+        @Test
+        void map_mapsToRequiredKeyAndValue() {
+            // Given
+            DType.Map map = new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), false, true);
+
+            // When
+            FileSchema result = schemaOf("m", map);
+
+            // Then
+            assertThat(result.getColumn("m.key_value.key").repetitionType()).isEqualTo(RepetitionType.REQUIRED);
+            assertThat(result.getColumn("m.key_value.key").logicalType()).isEqualTo(new LogicalType.StringType());
+            assertThat(result.getColumn("m.key_value.value").repetitionType()).isEqualTo(RepetitionType.OPTIONAL);
+        }
+
+        @Test
+        void dottedNestedColumnName_throws() {
+            // Given — Hardwood addresses a struct by its dotted path, which "a.b" would misdirect
+            DType.Struct struct = new DType.Struct(List.of(ColumnName.of("x")), List.of(DTypes.I32), false);
 
             // When / Then
-            assertThatThrownBy(() -> schemaOf("l", list)).isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> schemaOf("a.b", struct))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("a.b");
+        }
+
+        @Test
+        void dottedLeafName_isKept() {
+            // Given — a leaf is addressed by index, so a dot in its name is harmless
+            DType.Struct struct = new DType.Struct(List.of(ColumnName.of("x.y")), List.of(DTypes.I32), false);
+
+            // When
+            FileSchema result = schemaOf("s", struct);
+
+            // Then
+            assertThat(result.getColumn(0).fieldPath().elements()).containsExactly("s", "x.y");
+        }
+
+        @Test
+        void unsupportedNestedLeaf_throws_namingItsPath() {
+            // Given — a Null dtype has no Parquet leaf; the message must point at the nested column
+            DType.List list = new DType.List(new DType.Null(true), false);
+
+            // When / Then
+            assertThatThrownBy(() -> schemaOf("l", list))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("column: l.list.element");
         }
     }
 
@@ -347,11 +418,11 @@ class ParquetExporterTest {
         }
 
         @Test
-        void structColumn_throws(@TempDir Path tmp) throws Exception {
-            // Given — a top-level Struct column, out of scope for this exporter; the schema
+        void structWithUnsupportedField_throwsVortexException_namingTheField(@TempDir Path tmp) throws Exception {
+            // Given — a struct holding a Variant, which has no Parquet mapping here; the schema
             // alone triggers the rejection (at FileSchema-building time, before any chunk is
             // read), so the file needs no rows
-            DType.Struct fieldSchema = new DType.Struct(List.of(ColumnName.of("x")), List.of(DTypes.I32), false);
+            DType.Struct fieldSchema = new DType.Struct(List.of(ColumnName.of("x")), List.of(DTypes.VARIANT), false);
             DType.Struct schema = new DType.Struct(List.of(ColumnName.of("s")), List.of(fieldSchema), false);
             Path vortex = tmp.resolve("in.vortex");
             try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -363,7 +434,8 @@ class ParquetExporterTest {
 
             // When / Then
             assertThatThrownBy(() -> ParquetExporter.exportParquet(vortex, parquet))
-                    .isInstanceOf(UnsupportedOperationException.class);
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("column: s.x");
         }
     }
 
@@ -583,6 +655,167 @@ class ParquetExporterTest {
                     }
                     assertThat(result).containsExactlyElementsOf(values);
                 }
+            }
+        }
+    }
+
+    @Nested
+    class NestedColumns {
+
+        private static final DType.Struct IMAGE = new DType.Struct(
+                List.of(ColumnName.of("bytes"), ColumnName.of("path")),
+                List.of(DTypes.BINARY, new DType.Utf8(true)), true);
+        private static final DType.Struct TURN = new DType.Struct(
+                List.of(ColumnName.of("question"), ColumnName.of("answer")),
+                List.of(DTypes.UTF8, new DType.Utf8(true)), false);
+        private static final DType.Struct DOC = new DType.Struct(
+                List.of(ColumnName.of("tags"), ColumnName.of("n")),
+                List.of(new DType.List(DTypes.UTF8, false), DTypes.I32), true);
+        private static final List<ColumnName> NAMES = List.of(ColumnName.of("img"), ColumnName.of("emb"),
+                ColumnName.of("vec"), ColumnName.of("conv"), ColumnName.of("doc"));
+        private static final List<DType> TYPES = List.of(IMAGE, new DType.List(DTypes.F32, true),
+                new DType.FixedSizeList(DTypes.I32, 2, false), new DType.List(TURN, false), DOC);
+
+        /// The column shapes of #721's Raincloud datasets (`mnist`'s image struct,
+        /// `cohere-wikipedia-simple-embed`'s embedding list, `coig`'s list of structs), plus the two
+        /// shapes Parquet forbids entries under: row 1's null `emb` list still spans one element, and
+        /// row 1's null `doc` struct holds a `tags` list spanning one, so both must be dropped.
+        private Path writeNested(Path tmp) throws Exception {
+            boolean[] row1Null = {true, false, true};
+            return writeVortex(tmp, "nested.vortex", NAMES, TYPES, Map.of(
+                    ColumnName.of("img"), new NullableData(new StructData(List.of(
+                            new byte[][]{{1}, {}, {2, 3}},
+                            new NullableData(new String[]{"a.png", "", ""}, new boolean[]{true, false, false}))), row1Null),
+                    ColumnName.of("emb"), new NullableData(
+                            new ListData(new float[]{1f, 2f, 9f}, new long[]{0, 2, 3, 3}, 3), row1Null),
+                    ColumnName.of("vec"), new FixedSizeListData(new int[]{1, 2, 3, 4, 5, 6}, 3),
+                    ColumnName.of("conv"), new ListData(new StructData(List.of(
+                            new String[]{"q1", "q2", "q3"},
+                            new NullableData(new String[]{"a1", "", "a3"}, new boolean[]{true, false, true}))),
+                            new long[]{0, 2, 2, 3}, 3),
+                    ColumnName.of("doc"), new NullableData(new StructData(List.of(
+                            new ListData(new String[]{"a", "x", "b"}, new long[]{0, 1, 2, 3}, 3),
+                            new int[]{1, 2, 3})), row1Null)));
+        }
+
+        @Test
+        void structAndListColumns_exportAsParquetGroups(@TempDir Path tmp) throws Exception {
+            // Given
+            Path vortex = writeNested(tmp);
+            Path parquet = tmp.resolve("out.parquet");
+
+            // When
+            ParquetExporter.exportParquet(vortex, parquet);
+
+            // Then
+            try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquet));
+                 RowReader rows = reader.buildRowReader().build()) {
+                rows.next();
+                assertThat(rows.getStruct("img").getBinary("bytes")).isEqualTo(new byte[]{1});
+                assertThat(rows.getStruct("img").getString("path")).isEqualTo("a.png");
+                assertThat(rows.getList("emb").floats()).containsExactly(1f, 2f);
+                assertThat(rows.getList("vec").values()).containsExactly(1, 2);
+                List<dev.hardwood.row.PqStruct> turns = rows.getList("conv").structs();
+                assertThat(turns).hasSize(2);
+                assertThat(turns.get(0).getString("question")).isEqualTo("q1");
+                assertThat(turns.get(0).getString("answer")).isEqualTo("a1");
+                assertThat(turns.get(1).getString("question")).isEqualTo("q2");
+                assertThat(turns.get(1).isNull("answer")).isTrue();
+                assertThat(rows.getStruct("doc").getList("tags").strings()).containsExactly("a");
+                assertThat(rows.getStruct("doc").getInt("n")).isEqualTo(1);
+
+                rows.next();
+                assertThat(rows.isNull("img")).isTrue();
+                assertThat(rows.isNull("emb")).isTrue();
+                assertThat(rows.getList("vec").values()).containsExactly(3, 4);
+                assertThat(rows.getList("conv").isEmpty()).isTrue();
+                assertThat(rows.isNull("doc")).isTrue();
+
+                rows.next();
+                assertThat(rows.getStruct("img").getBinary("bytes")).isEqualTo(new byte[]{2, 3});
+                assertThat(rows.getStruct("img").isNull("path")).isTrue();
+                assertThat(rows.getList("emb").isEmpty()).isTrue();
+                assertThat(rows.getList("vec").values()).containsExactly(5, 6);
+                assertThat(rows.getList("conv").structs().getFirst().getString("answer")).isEqualTo("a3");
+                assertThat(rows.getStruct("doc").getList("tags").strings()).containsExactly("b");
+                assertThat(rows.getStruct("doc").getInt("n")).isEqualTo(3);
+                assertThat(rows.hasNext()).isFalse();
+            }
+        }
+
+        @Test
+        void structAndListColumns_roundTripTheirDtypesThroughParquet(@TempDir Path tmp) throws Exception {
+            // Given
+            Path vortex = writeNested(tmp);
+            Path parquet = tmp.resolve("out.parquet");
+            Path reimported = tmp.resolve("reimported.vortex");
+
+            // When
+            ParquetExporter.exportParquet(vortex, parquet);
+            ParquetImporter.importParquet(parquet, reimported);
+
+            // Then — every dtype survives, except that Parquet has no fixed-size list to keep `vec` one
+            try (VortexReader reader = VortexReader.open(reimported)) {
+                List<DType> result = ((DType.Struct) reader.dtype()).fieldTypes();
+                assertThat(result).containsExactly(TYPES.get(0), TYPES.get(1),
+                        new DType.List(DTypes.I32, false), TYPES.get(3), TYPES.get(4));
+            }
+        }
+
+        /// Pins a known limitation: the reader folds a struct's validity into its fields, so a
+        /// present struct whose every field is null cannot be told from a null struct, and exports
+        /// as one (the reading `CsvExporter` takes too).
+        @Test
+        void presentStructWithEveryFieldNull_exportsAsNullStruct(@TempDir Path tmp) throws Exception {
+            // Given — row 0 is a present struct holding {null, null}
+            DType.Struct type = new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")),
+                    List.of(new DType.Utf8(true), DTypes.I32.asNullable()), true);
+            Path vortex = writeVortex(tmp, "allnull.vortex", List.of(ColumnName.of("s")), List.of(type),
+                    Map.of(ColumnName.of("s"), new NullableData(new StructData(List.of(
+                            new NullableData(new String[]{"", "x"}, new boolean[]{false, true}),
+                            new NullableData(new int[]{0, 1}, new boolean[]{false, true}))),
+                            new boolean[]{true, true})));
+            Path parquet = tmp.resolve("out.parquet");
+
+            // When
+            ParquetExporter.exportParquet(vortex, parquet);
+
+            // Then
+            try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquet));
+                 RowReader rows = reader.buildRowReader().build()) {
+                rows.next();
+                assertThat(rows.isNull("s")).isTrue();
+                rows.next();
+                assertThat(rows.getStruct("s").getString("a")).isEqualTo("x");
+            }
+        }
+
+        @Test
+        void mapColumn_exportsAsParquetMap(@TempDir Path tmp) throws Exception {
+            // Given — a nullable map<utf8, i64?>: {a: 1, b: null}, null, {}
+            DType.Map type = new DType.Map(DTypes.UTF8, DTypes.I64.asNullable(), false, true);
+            ListViewData entries = new ListViewData(new StructData(List.of(new String[]{"a", "b"},
+                    new NullableData(new long[]{1, 0}, new boolean[]{true, false}))),
+                    new int[]{0, 2, 2}, new int[]{2, 0, 0}, 3);
+            Path vortex = writeVortex(tmp, "map.vortex", List.of(ColumnName.of("m")), List.of(type),
+                    Map.of(ColumnName.of("m"), new NullableData(entries, new boolean[]{true, false, true})));
+            Path parquet = tmp.resolve("out.parquet");
+
+            // When
+            ParquetExporter.exportParquet(vortex, parquet);
+
+            // Then
+            try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquet));
+                 RowReader rows = reader.buildRowReader().build()) {
+                rows.next();
+                assertThat(rows.getMap("m").size()).isEqualTo(2);
+                assertThat(rows.getMap("m").getValue("a")).isEqualTo(1L);
+                assertThat(rows.getMap("m").containsKey("b")).isTrue();
+                assertThat(rows.getMap("m").getValue("b")).isNull();
+                rows.next();
+                assertThat(rows.isNull("m")).isTrue();
+                rows.next();
+                assertThat(rows.getMap("m").isEmpty()).isTrue();
             }
         }
     }
