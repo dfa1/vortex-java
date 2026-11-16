@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A Rust-written `vortex.varbin` column with 8- or 16-bit offsets, as Rust writes a data buffer under 64 KiB, reads its values instead of failing. ([#721](https://github.com/dfa1/vortex-java/issues/721))
+- A Parquet import no longer fails on a null struct holding a required list or struct field. ([#721](https://github.com/dfa1/vortex-java/issues/721))
 - An unexpected HTTP status now reports the server's own explanation and `Retry-After`, so a Hugging Face rate limit (`429`) says what to do instead of just the code. ([#743](https://github.com/dfa1/vortex-java/issues/743))
 - `vortex inspect` over HTTP fetches only the end of each segment, several at a time, instead of the whole file, and shows a progress bar. ([#743](https://github.com/dfa1/vortex-java/issues/743))
 - `vortex view` no longer freezes while it fetches data over HTTP: it shows a loading spinner, `q` quits at once, and it fetches only the columns on screen. ([#744](https://github.com/dfa1/vortex-java/issues/744))

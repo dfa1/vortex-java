@@ -84,14 +84,15 @@ final class StructColumnBuilder implements ColumnBuilder {
 
     @Override
     public void append(Object value) {
+        // A null reaching a non-nullable struct comes from a null struct above it, whose validity
+        // masks the row, as LeafColumnBuilder#append explains
         if (value == null) {
-            if (validity == null) {
-                throw new IllegalArgumentException("null value for non-nullable struct column");
-            }
             for (ColumnBuilder fieldBuilder : fieldBuilders) {
                 fieldBuilder.append(null);
             }
-            validity.add(false);
+            if (validity != null) {
+                validity.add(false);
+            }
             return;
         }
         PqStruct struct = (PqStruct) value;
@@ -137,12 +138,13 @@ final class ListColumnBuilder implements ColumnBuilder {
 
     @Override
     public void append(Object value) {
+        // A null reaching a non-nullable list comes from a null struct above it, whose validity
+        // masks the row; it stays an empty list, as LeafColumnBuilder#append explains
         if (value == null) {
-            if (validity == null) {
-                throw new IllegalArgumentException("null value for non-nullable list column");
-            }
             offsets.add(runningCount);
-            validity.add(false);
+            if (validity != null) {
+                validity.add(false);
+            }
             return;
         }
         PqList list = (PqList) value;
