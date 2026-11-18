@@ -29,6 +29,9 @@ import java.util.function.Function;
 /// rows return the identity (`0`), while `MIN` and `MAX` return `null`.
 public final class Compute {
 
+    private static final String CHUNK_PARAMETER_NAME = "chunk";
+    private static final String FILTER_PARAMETER_NAME = "filter";
+
     private Compute() {
     }
 
@@ -52,8 +55,8 @@ public final class Compute {
     /// @param aggColumn the column to reduce over the selected rows, or `null` to count rows only
     /// @return the fold over the rows `filter` selects
     public static FilteredAggregate filteredAggregate(Chunk chunk, ScanFilter filter, ColumnName aggColumn) {
-        Objects.requireNonNull(chunk, "chunk");
-        Objects.requireNonNull(filter, "filter");
+        Objects.requireNonNull(chunk, CHUNK_PARAMETER_NAME);
+        Objects.requireNonNull(filter, FILTER_PARAMETER_NAME);
         return FusedFilterAggregate.aggregate(chunk, filter, aggColumn);
     }
 
@@ -72,8 +75,8 @@ public final class Compute {
     /// @param row    the zero-based row to test
     /// @return `true` if `row` satisfies `filter`
     public static boolean matches(Chunk chunk, ScanFilter filter, long row) {
-        Objects.requireNonNull(chunk, "chunk");
-        Objects.requireNonNull(filter, "filter");
+        Objects.requireNonNull(chunk, CHUNK_PARAMETER_NAME);
+        Objects.requireNonNull(filter, FILTER_PARAMETER_NAME);
         return evaluate(chunk, filter, row);
     }
 
@@ -90,7 +93,7 @@ public final class Compute {
     /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
     /// @return the rows of `chunk` that `filter` selects, valid while `chunk` is open
     public static RowSelection matcher(Chunk chunk, ScanFilter filter) {
-        Objects.requireNonNull(chunk, "chunk");
+        Objects.requireNonNull(chunk, CHUNK_PARAMETER_NAME);
         return matcher(filter).apply(chunk);
     }
 
@@ -101,9 +104,9 @@ public final class Compute {
     /// @param filter the whole predicate: an n-ary `AND` of column-bound leaves, or a single leaf
     /// @return a function from a chunk to the rows it selects, each valid while its chunk is open
     public static Function<Chunk, RowSelection> matcher(ScanFilter filter) {
-        Objects.requireNonNull(filter, "filter");
+        Objects.requireNonNull(filter, FILTER_PARAMETER_NAME);
         FusedFilterAggregate.DictMemo memo = new FusedFilterAggregate.DictMemo();
-        return chunk -> FusedFilterAggregate.rowTest(Objects.requireNonNull(chunk, "chunk"), filter, memo);
+        return chunk -> FusedFilterAggregate.rowTest(Objects.requireNonNull(chunk, CHUNK_PARAMETER_NAME), filter, memo);
     }
 
     /// Folds `aggColumn` per value of `groupColumn` over the rows `filter` selects: the per-group
@@ -129,7 +132,7 @@ public final class Compute {
     /// @return the fold per group value, or empty when the columns do not qualify
     public static Optional<Map<Object, FilteredAggregate>> groupedAggregate(Chunk chunk, ColumnName groupColumn,
                                                                             ScanFilter filter, ColumnName aggColumn) {
-        Objects.requireNonNull(chunk, "chunk");
+        Objects.requireNonNull(chunk, CHUNK_PARAMETER_NAME);
         Objects.requireNonNull(groupColumn, "groupColumn");
         return GroupedAggregate.aggregate(chunk, groupColumn, filter, aggColumn);
     }
