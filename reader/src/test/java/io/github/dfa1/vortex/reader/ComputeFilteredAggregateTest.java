@@ -114,7 +114,7 @@ class ComputeFilteredAggregateTest {
         // Then nothing is selected and the sum is the additive identity, min/max are null
         assertThat(result.selectedRows()).isZero();
         assertThat(result.aggNonNullCount()).isZero();
-        assertThat(result.sum()).isEqualTo(0L);
+        assertThat(result.sum().longValue()).isZero();
         assertThat(result.min()).isNull();
         assertThat(result.max()).isNull();
     }
@@ -131,7 +131,7 @@ class ComputeFilteredAggregateTest {
 
         // Then no row is selected and the aggregate is empty
         assertThat(result.selectedRows()).isZero();
-        assertThat(result.sum()).isEqualTo(0L);
+        assertThat(result.sum().longValue()).isZero();
         assertThat(result.min()).isNull();
         assertThat(result.max()).isNull();
     }
@@ -168,7 +168,7 @@ class ComputeFilteredAggregateTest {
         // Then all rows are selected, none contribute to the aggregate, sum is the identity
         assertThat(result.selectedRows()).isEqualTo(4L);
         assertThat(result.aggNonNullCount()).isZero();
-        assertThat(result.sum()).isEqualTo(0L);
+        assertThat(result.sum().longValue()).isZero();
         assertThat(result.min()).isNull();
         assertThat(result.max()).isNull();
     }
