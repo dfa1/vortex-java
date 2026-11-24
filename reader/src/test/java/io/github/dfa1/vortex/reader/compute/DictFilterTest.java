@@ -103,7 +103,7 @@ class DictFilterTest {
         Number result = filteredSum(filter, new Predicate.Gt(100L), agg);
 
         // Then the sum is the additive identity
-        assertThat(result).isEqualTo(0L);
+        assertThat(result.longValue()).isZero();
         assertFusedMatchesReference(filter, new Predicate.Gt(100L), agg);
     }
 
@@ -244,7 +244,7 @@ class DictFilterTest {
         Number result = filteredSum(filter, new Predicate.Gt(0L), agg);
 
         // Then it is the additive identity
-        assertThat(result).isEqualTo(0L);
+        assertThat(result.longValue()).isZero();
         assertFusedMatchesReference(filter, new Predicate.Gt(0L), agg);
     }
 
