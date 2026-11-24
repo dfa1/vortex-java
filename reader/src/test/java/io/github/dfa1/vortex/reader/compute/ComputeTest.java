@@ -602,9 +602,9 @@ class ComputeTest {
                     .orElseThrow();
 
             // Then — a: rows 0, 2, 5 with row 2 null; b: rows 1, 4; null group: row 3
-            assertThat(result.get("a")).isEqualTo(new FilteredAggregate(3, 2, 14L, 5L, 9L));
-            assertThat(result.get("b")).isEqualTo(new FilteredAggregate(2, 2, 6L, -1L, 7L));
-            assertThat(result.get(null)).isEqualTo(new FilteredAggregate(1, 1, 2L, 2L, 2L));
+            assertThat(result).containsEntry("a", new FilteredAggregate(3, 2, 14L, 5L, 9L));
+            assertThat(result).containsEntry("b", new FilteredAggregate(2, 2, 6L, -1L, 7L));
+            assertThat(result).containsEntry(null, new FilteredAggregate(1, 1, 2L, 2L, 2L));
         }
 
         @Test
@@ -634,8 +634,8 @@ class ComputeTest {
 
             // Then — groups with no selected row do not appear
             assertThat(result).containsOnlyKeys("a", "b");
-            assertThat(result.get("a")).isEqualTo(new FilteredAggregate(2, 2, 14L, 5L, 9L));
-            assertThat(result.get("b")).isEqualTo(new FilteredAggregate(1, 1, 7L, 7L, 7L));
+            assertThat(result).containsEntry("a", new FilteredAggregate(2, 2, 14L, 5L, 9L));
+            assertThat(result).containsEntry("b", new FilteredAggregate(1, 1, 7L, 7L, 7L));
         }
 
         /// A dictionary spanning many chunks reaches the kernel as a slice; codes are read at its offset.
@@ -664,7 +664,7 @@ class ComputeTest {
             Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, null, V).orElseThrow();
 
             // Then
-            assertThat(result.get("x")).isEqualTo(new FilteredAggregate(3, 3, 1011L, 1L, 1000L));
+            assertThat(result).containsEntry("x", new FilteredAggregate(3, 3, 1011L, 1L, 1000L));
         }
 
         @Test
@@ -705,9 +705,9 @@ class ComputeTest {
 
             // Then
             assertThat(result).containsOnlyKeys(true, false, null);
-            assertThat(result.get(true)).isEqualTo(new FilteredAggregate(2, 2, 4L, 1L, 3L));
-            assertThat(result.get(false)).isEqualTo(new FilteredAggregate(1, 1, 2L, 2L, 2L));
-            assertThat(result.get(null)).isEqualTo(new FilteredAggregate(1, 1, 4L, 4L, 4L));
+            assertThat(result).containsEntry(true, new FilteredAggregate(2, 2, 4L, 1L, 3L));
+            assertThat(result).containsEntry(false, new FilteredAggregate(1, 1, 2L, 2L, 2L));
+            assertThat(result).containsEntry(null, new FilteredAggregate(1, 1, 4L, 4L, 4L));
         }
 
         @Test
@@ -722,8 +722,8 @@ class ComputeTest {
 
             // Then
             assertThat(result).containsOnlyKeys(7L, -3L);
-            assertThat(result.get(7L)).isEqualTo(new FilteredAggregate(2, 2, 7L, 3L, 4L));
-            assertThat(result.get(-3L)).isEqualTo(new FilteredAggregate(2, 2, 7L, 2L, 5L));
+            assertThat(result).containsEntry(7L, new FilteredAggregate(2, 2, 7L, 3L, 4L));
+            assertThat(result).containsEntry(-3L, new FilteredAggregate(2, 2, 7L, 2L, 5L));
         }
 
         /// A u64 key past 2^63 has no signed-long home, so the kernel declines rather than group it
@@ -764,7 +764,7 @@ class ComputeTest {
             Map<Object, FilteredAggregate> result = Compute.groupedAggregate(chunk(group, v), G, null, V).orElseThrow();
 
             // Then
-            assertThat(result.get("a")).isEqualTo(new FilteredAggregate(2, 2, new BigDecimal("3.25"),
+            assertThat(result).containsEntry("a", new FilteredAggregate(2, 2, new BigDecimal("3.25"),
                     new BigDecimal("1.25"), new BigDecimal("2.00")));
             assertThat(result.get("b").sum()).isEqualTo(new BigDecimal("-0.50"));
         }
