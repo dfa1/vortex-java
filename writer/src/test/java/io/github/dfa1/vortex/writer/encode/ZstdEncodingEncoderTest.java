@@ -354,7 +354,7 @@ class ZstdEncodingEncoderTest {
         }
 
         private static byte[] compressWithDict(byte[] input, byte[] dict) {
-            try (ZstdCompressContext cctx = new ZstdCompressContext()) {
+            try (ZstdCompressContext cctx = Zstd.newCompressContext()) {
                 return cctx.compress(input, ZstdDictionary.of(dict));
             }
         }

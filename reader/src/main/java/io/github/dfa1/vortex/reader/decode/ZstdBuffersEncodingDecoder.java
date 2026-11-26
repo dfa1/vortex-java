@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoZstdBuffersMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.zstd.Zstd;
 import io.github.dfa1.zstd.ZstdDecompressContext;
 
 import java.io.IOException;
@@ -71,7 +72,7 @@ public final class ZstdBuffersEncodingDecoder implements EncodingDecoder {
         int base = ctx.segmentBuffers().length;
         MemorySegment[] segments = Arrays.copyOf(ctx.segmentBuffers(), base + nBuffers);
         int[] innerBuffers = new int[nBuffers];
-        try (ZstdDecompressContext dctx = new ZstdDecompressContext();
+        try (ZstdDecompressContext dctx = Zstd.newDecompressContext();
              Arena scratch = Arena.ofConfined()) {
             for (int i = 0; i < nBuffers; i++) {
                 int size = IoBounds.toIntSize(meta.uncompressed_sizes().get(i));

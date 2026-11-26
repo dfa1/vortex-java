@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.zstd.Zstd;
 import io.github.dfa1.zstd.ZstdCompressContext;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.DTypes;
@@ -336,7 +337,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         List<EncodedBuffer> compressed = new ArrayList<>(frameCount);
         List<ProtoZstdFrameMetadata> metas = new ArrayList<>(frameCount);
         long offset = 0;
-        try (ZstdCompressContext cctx = new ZstdCompressContext()) {
+        try (ZstdCompressContext cctx = Zstd.newCompressContext()) {
             for (int f = 0; f < frameCount; f++) {
                 long len = layout.byteLengths()[f];
                 compressed.add(EncodedBuffer.bytes(cctx.compress(arena, raw.asSlice(offset, len))));

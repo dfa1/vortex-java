@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.array.VarBinOffsetArray;
 
+import io.github.dfa1.zstd.Zstd;
 import io.github.dfa1.zstd.ZstdDecompressContext;
 import io.github.dfa1.zstd.ZstdDecompressDictionary;
 import io.github.dfa1.zstd.ZstdException;
@@ -195,7 +196,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         boolean hasDictionary = meta.dictionary_size() != 0;
         int frameBufferBase = hasDictionary ? 1 : 0;
         MemorySegment out = ctx.arena().allocate(totalUncompressed);
-        try (ZstdDecompressContext dctx = new ZstdDecompressContext();
+        try (ZstdDecompressContext dctx = Zstd.newDecompressContext();
              Arena scratch = Arena.ofConfined()) {
             try (ZstdDecompressDictionary dictionary = hasDictionary
                                                            ? digestDictionary(asNative(ctx.buffer(0), scratch), meta.dictionary_size())
@@ -229,7 +230,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
                     "dictionary size metadata " + declaredSize
                             + " does not match buffer size " + dictBuffer.byteSize());
         }
-        return new ZstdDecompressDictionary(dictBuffer);
+        return Zstd.newDecompressDictionary(dictBuffer);
     }
 
     /// Returns `seg` unchanged when it is already native (the production mmap path); otherwise
