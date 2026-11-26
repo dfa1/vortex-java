@@ -120,6 +120,33 @@ class DictLayoutInteropIntegrationTest {
         assertThat(readAll(java)).containsExactly(values);
     }
 
+    @ParameterizedTest(name = "constant \"{0}\"")
+    @ValueSource(strings = {"", "train"})
+    void rejectsAColumnWhoseFirstRowsAreConstant(String constant, @TempDir Path tmp) throws Exception {
+        // Given — Raincloud coig's `instruction` (#722): the first 8192 rows are one value, the rest
+        // draw from 100 values. Rust probes only the first 8192 rows, which compress to Constant
+        // rather than Dict, so it writes plain chunks; a "not more than half distinct" check alone
+        // admits them
+        Random r = new Random(722);
+        String[] pool = new String[100];
+        for (int i = 0; i < pool.length; i++) {
+            pool[i] = "instruction " + Long.toString(r.nextLong() & 0xffffffffffL, 36);
+        }
+        String[] values = new String[CHUNK * 3];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = i < 8_192 ? constant : pool[r.nextInt(pool.length)];
+        }
+
+        // When
+        Path java = writeJava(tmp, values);
+        Path jni = writeJni(tmp, values);
+
+        // Then
+        assertThat(dictLayouts(EncodingTrees.of(jni))).isZero();
+        assertThat(dictLayouts(EncodingTrees.of(java))).isZero();
+        assertThat(readAll(java)).containsExactly(values);
+    }
+
     @ParameterizedTest(name = "pool of {0} values")
     @ValueSource(ints = {100, 3_000, 20_000, 150_000})
     void admitsTheNumericColumnsRustAdmits(int poolSize, @TempDir Path tmp) throws Exception {

@@ -546,16 +546,14 @@ final class DictColumnState {
     /// per-chunk encoders' convention that null placeholders occupy a row like any other value.
     ///
     /// Rust's `StringDictScheme` skips a sample with more than half its values distinct, and has no
-    /// cap on the count: a column that outgrows one dictionary starts another.
+    /// cap on the count: a column that outgrows one dictionary starts another. A single value is a
+    /// constant, not a dictionary.
     ///
     /// @param data     the Utf8 (`String[]`) or Binary (`byte[][]`) values; null elements at invalid
     ///                 positions are skipped
     /// @param validity per-row validity bitmap, or `null` meaning every row is valid
-    /// @return `true` if the sample's distinct valid-value count is low enough to dictionary-encode
+    /// @return `true` if the sample's valid values are under half distinct, and more than one
     static boolean isVarBinDictCandidate(Object[] data, boolean[] validity) {
-        if (data.length == 0) {
-            return false;
-        }
         var seen = HashSet.newHashSet(data.length);
         for (int i = 0; i < data.length; i++) {
             if ((validity != null && !validity[i]) || data[i] == null) {
@@ -563,10 +561,9 @@ final class DictColumnState {
             }
             seen.add(varBinKey(data[i]));
         }
-        if (seen.isEmpty()) {
-            return false;
-        }
-        return seen.size() * 2 < data.length;
+        // a single value is a constant, not a dictionary: Rust's probe compresses it to Constant
+        // and writes plain chunks (#722)
+        return seen.size() > 1 && seen.size() * 2 < data.length;
     }
 
 
