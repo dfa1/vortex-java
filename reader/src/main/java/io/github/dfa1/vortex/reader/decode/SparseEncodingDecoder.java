@@ -34,6 +34,7 @@ import io.github.dfa1.vortex.reader.array.VarBinSparseArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /// Read-only decoder for `vortex.sparse`.
 public final class SparseEncodingDecoder implements EncodingDecoder {
@@ -128,6 +129,10 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             Array result = new LazySparseBoolArray(ctx.dtype(), n, fillValue, boolValues, decoded.indices(), offset);
             return withSparseValidity(ctx, result, fillValid, decoded.validity(), decoded.indices(), numPatches, n,
                     offset);
+        }
+
+        if (ScalarArrays.isNested(ctx.dtype())) {
+            return decodeNested(ctx, n, numPatches, offset, indicesPtype, fillScalar);
         }
 
         if (!(ctx.dtype() instanceof DType.Primitive)) {
@@ -225,6 +230,28 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         checkPatchChild(indices, numPatches, ROLE_INDICES);
         checkPatchChild(values.inner(), numPatches, ROLE_VALUES);
         return new Patches(indices, values.inner(), values.validity());
+    }
+
+    /// A sparse list, fixed-size list, map or struct, as Rust 0.95 writes them: every row the
+    /// fill, a patched row its patch value, nulls at any depth kept.
+    private static Array decodeNested(DecodeContext ctx, long n, long numPatches, long offset, PType indicesPtype,
+                                      ProtoScalarValue fill) {
+        Array indices = MaskedArray.innerOrSelf(
+                ctx.decodeChild(0, new DType.Primitive(indicesPtype, false), numPatches));
+        Array values = ctx.decodeChild(1, ctx.dtype(), numPatches);
+        checkPatchChild(indices, numPatches, ROLE_INDICES);
+        checkPatchChild(values, numPatches, ROLE_VALUES);
+        ProtoScalarValue[] rows = new ProtoScalarValue[Math.toIntExact(n)];
+        Arrays.fill(rows, fill);
+        for (long p = 0; p < numPatches; p++) {
+            long row = ScalarArrays.index(indices, p) - offset;
+            if (row < 0 || row >= n) {
+                throw new VortexException(EncodingId.VORTEX_SPARSE,
+                        "patch index " + (row + offset) + " out of range for " + n + " row(s)");
+            }
+            rows[(int) row] = ScalarArrays.scalarAt(values, p);
+        }
+        return ScalarArrays.build(ctx.arena(), ctx.dtype(), rows);
     }
 
     private static void checkPatchChild(Array child, long numPatches, String role) {

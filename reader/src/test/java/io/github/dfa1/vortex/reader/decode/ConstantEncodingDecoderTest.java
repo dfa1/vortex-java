@@ -151,12 +151,33 @@ class ConstantEncodingDecoderTest {
         static Stream<DType> unmaskableTypes() {
             return Stream.of(
                     new DType.Null(true),
+                    new DType.Variant(true),
+                    new DType.Extension(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DTypes.U8, 16, false), OpaqueMetadata.EMPTY, true));
+        }
+
+        @ParameterizedTest
+        @MethodSource("nestedTypes")
+        void aNullNestedConstantIsMaskedOverItsOwnArray(DType dtype) {
+            // Given: Rust 0.95 writes an all-null chunk of a nested column as a null constant; a
+            // reader casting the column to its list or struct array must not meet a NullArray
+
+            // When
+            Array result = decode(NULL, dtype, ROWS);
+
+            // Then
+            MaskedArray masked = (MaskedArray) result;
+            assertThat(masked.length()).isEqualTo(ROWS);
+            assertThat(masked.validity().getBoolean(0)).isFalse();
+            assertThat(masked.validity().getBoolean(ROWS - 1)).isFalse();
+            assertThat(masked.inner().dtype()).isEqualTo(dtype.withNullable(false));
+        }
+
+        static Stream<DType> nestedTypes() {
+            return Stream.of(
                     new DType.List(DTypes.I64, true),
                     new DType.FixedSizeList(DTypes.I32, 3, true),
                     new DType.Struct(List.of(ColumnName.of("a")), List.of(DTypes.I64), true),
-                    new DType.Map(DTypes.I64, DTypes.I64, false, true),
-                    new DType.Variant(true),
-                    new DType.Extension(ExtensionId.VORTEX_UUID, new DType.FixedSizeList(DTypes.U8, 16, false), OpaqueMetadata.EMPTY, true));
+                    new DType.Map(DTypes.I64, DTypes.I64, false, true));
         }
 
         @Test

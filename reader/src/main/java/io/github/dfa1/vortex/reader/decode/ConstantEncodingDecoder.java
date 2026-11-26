@@ -24,14 +24,14 @@ import io.github.dfa1.vortex.reader.array.VarBinConstantArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 /// Read-only decoder for `vortex.constant`.
 public final class ConstantEncodingDecoder implements EncodingDecoder {
 
     /// A scalar with no value set: decodes as `0`, `false` or empty bytes, the placeholder under
     /// a null constant's all-invalid validity.
-    private static final ProtoScalarValue NO_VALUE = ProtoScalarValue.ofNullValue(null);
+    private static final ProtoScalarValue NO_VALUE = ScalarArrays.NO_VALUE;
 
     /// Creates the decoder.
     public ConstantEncodingDecoder() {
@@ -91,6 +91,10 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         if (dtype instanceof DType.Decimal) {
             return decodeDecimal(dtype, scalar, n);
         }
+        if (ScalarArrays.isNested(dtype)) {
+            // Rust 0.95 writes a constant chunk of a list, fixed-size list, map or struct column
+            return ScalarArrays.build(ctx.arena(), dtype, repeat(scalar, n));
+        }
         if (dtype instanceof DType.Extension ext) {
             if (!(ext.storageDType() instanceof DType.Primitive sp)) {
                 throw new VortexException(EncodingId.VORTEX_CONSTANT,
@@ -131,10 +135,11 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
     }
 
     /// The value under a null constant's all-invalid validity: a constant `0`, `false`, `""` or
-    /// zero decimal of `dtype`, or `null` for a dtype with no such scalar.
+    /// zero decimal of `dtype`, empty lists and zeroed fixed-size lists and structs, or `null` for
+    /// a dtype with no such scalar.
     ///
-    /// ponytail: lists, structs, variants and extensions over non-primitive storage (uuid) have
-    /// no placeholder yet and stay a NullArray; add one when a consumer needs them masked.
+    /// ponytail: variants and extensions over non-primitive storage (uuid) have no placeholder
+    /// yet and stay a NullArray; add one when a consumer needs them masked.
     private static Array placeholder(DecodeContext ctx, DType dtype, long n) {
         return switch (dtype) {
             case DType.Bool _, DType.Primitive _, DType.Utf8 _, DType.Binary _ -> arrayFromScalar(ctx, NO_VALUE, dtype, n);
@@ -142,8 +147,15 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
                     BigDecimal.ZERO.setScale(decimal.scale()), decimal.byteWidth());
             case DType.Extension ext when ext.storageDType() instanceof DType.Primitive ->
                     arrayFromScalar(ctx, NO_VALUE, dtype, n);
+            case DType d when ScalarArrays.isNested(d) -> ScalarArrays.build(ctx.arena(), d, repeat(NO_VALUE, n));
             default -> null;
         };
+    }
+
+    private static ProtoScalarValue[] repeat(ProtoScalarValue scalar, long n) {
+        ProtoScalarValue[] rows = new ProtoScalarValue[Math.toIntExact(n)];
+        Arrays.fill(rows, scalar);
+        return rows;
     }
 
     private static Array decodeDecimal(DType dtype, ProtoScalarValue scalar, long n) {
@@ -176,10 +188,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
     /// @param n      row count
     /// @return a lazy constant array of length `n`
     private static Array decodeString(ProtoScalarValue scalar, DType dtype, long n) {
-        byte[] strBytes = scalar.string_value() != null
-                              ? scalar.string_value().getBytes(StandardCharsets.UTF_8)
-                              : (scalar.bytes_value() != null ? scalar.bytes_value() : new byte[0]);
-        return new VarBinConstantArray(dtype, n, strBytes);
+        return new VarBinConstantArray(dtype, n, ScalarArrays.bytes(scalar));
     }
 
     /// Raw bits of a primitive scalar as a `long`: floats by their IEEE bit pattern, `0` when the
