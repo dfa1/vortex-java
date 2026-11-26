@@ -53,7 +53,9 @@ import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.UuidVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.ListVector;
+import org.apache.arrow.vector.extension.UuidType;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.arrow.vector.types.pojo.ExtensionTypeRegistry;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -2550,7 +2552,11 @@ class JavaWritesRustReadsIntegrationTest {
             sut.writeChunk(Map.of(ColumnName.of("u"), Arrays.asList(u0, null, u2)));
         }
 
-        // Then — Rust reads an arrow.uuid vector; row 1 null, rows 0/2 round-trip
+        // Then — Rust reads an arrow.uuid vector; row 1 null, rows 0/2 round-trip.
+        // Arrow Java adds arrow.uuid to its registry only when UuidType is initialized; without
+        // this the import yields a plain FixedSizeBinaryVector unless an earlier test in the same
+        // JVM happened to touch UuidType, so the test passed or failed by test order.
+        ExtensionTypeRegistry.register(UuidType.INSTANCE);
         String uri = file.toAbsolutePath().toUri().toString();
         DataSource ds = DataSource.open(SESSION, uri);
         Scan scan = ds.scan(ScanOptions.of());
