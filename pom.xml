@@ -65,7 +65,7 @@
              this with all,-missing: undocumented members are fine there, broken references are not. -->
         <javadoc.doclint>all</javadoc.doclint>
         <!-- production -->
-        <zstd.version>0.15</zstd.version>
+        <zstd.version>0.16</zstd.version>
 
 
         <fastcsv.version>4.4.1</fastcsv.version>

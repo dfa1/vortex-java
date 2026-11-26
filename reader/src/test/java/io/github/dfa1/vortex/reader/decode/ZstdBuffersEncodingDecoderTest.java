@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.testing.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.zstd.Zstd;
 import io.github.dfa1.zstd.ZstdCompressContext;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -189,7 +190,7 @@ class ZstdBuffersEncodingDecoderTest {
     }
 
     private static byte[] compress(byte[] raw) {
-        try (ZstdCompressContext cctx = new ZstdCompressContext()) {
+        try (ZstdCompressContext cctx = Zstd.newCompressContext()) {
             return cctx.compress(raw);
         }
     }
