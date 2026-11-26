@@ -60,6 +60,8 @@ class DictColumnStateTest {
                 arguments("empty", new String[0], false),
                 arguments("ratio exactly 50%", new String[]{"a", "b", "a", "b"}, false),
                 arguments("ratio under 50%", new String[]{"a", "b", "a", "b", "a"}, true),
+                // Rust's probe compresses a one-value sample to Constant, not Dict (#722)
+                arguments("constant", new String[]{"", "", "", ""}, false),
                 // no cardinality cap as for numbers: Rust skips a sample only above half distinct, and a
                 // column that outgrows one dictionary starts another
                 arguments("Utf8 admitted above numeric cap", repeated(2_049), true),
@@ -90,6 +92,9 @@ class DictColumnStateTest {
                         new boolean[]{true, true, false, true, true}, true),
                 arguments("all-null not a candidate",
                         new String[]{null, null, null}, new boolean[]{false, false, false}, false),
+                arguments("one valid value is a constant, not a candidate",
+                        new String[]{"a", null, "a", null, "a"},
+                        new boolean[]{true, false, true, false, true}, false),
                 arguments("null-heavy but low cardinality still passes",
                         new String[]{"a", null, null, "b", null, "a", null, "b"},
                         new boolean[]{true, false, false, true, false, true, false, true}, true),

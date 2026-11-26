@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Chunk.prefetch` and `VortexHandle.prefetch` start the range requests of several columns together over HTTP, merged into few requests, and an HTTP handle keeps the segments it has read. ([#744](https://github.com/dfa1/vortex-java/issues/744))
 
 ### Fixed
+- A string column whose first 8192 rows hold a single value is written as plain chunks, as Rust does, instead of a dict layout up to 9% bigger. ([#722](https://github.com/dfa1/vortex-java/issues/722))
 - A Rust-written `vortex.varbin` column with 8- or 16-bit offsets, as Rust writes a data buffer under 64 KiB, reads its values instead of failing. ([#721](https://github.com/dfa1/vortex-java/issues/721))
 - A Parquet import no longer fails on a null struct holding a required list or struct field. ([#721](https://github.com/dfa1/vortex-java/issues/721))
 - An unexpected HTTP status now reports the server's own explanation and `Retry-After`, so a Hugging Face rate limit (`429`) says what to do instead of just the code. ([#743](https://github.com/dfa1/vortex-java/issues/743))
