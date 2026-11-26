@@ -80,7 +80,7 @@
         <assertj.version>3.27.7</assertj.version>
         <mockito.version>5.24.0</mockito.version>
         <vortex-jni.version>0.93.0</vortex-jni.version>
-        <arrow.version>19.0.0</arrow.version>
+        <arrow.version>20.0.0</arrow.version>
         <slf4j.version>2.0.20</slf4j.version>
         <!-- coverage -->
         <jacoco-maven-plugin.version>0.8.16</jacoco-maven-plugin.version>
@@ -328,6 +328,15 @@
                 <artifactId>vortex-jni</artifactId>
                 <version>${vortex-jni.version}</version>
                 <scope>test</scope>
+            </dependency>
+            <!-- every Arrow artifact at one version: vortex-jni brings arrow-memory-core and
+                 arrow-memory-netty at its own, which arrow-vector of another version cannot run on -->
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-bom</artifactId>
+                <version>${arrow.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>org.apache.arrow</groupId>
