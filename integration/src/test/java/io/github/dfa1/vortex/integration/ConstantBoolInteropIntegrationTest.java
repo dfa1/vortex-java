@@ -30,9 +30,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// A bool array of one value becomes `vortex.constant` only when that is smaller than its packed
-/// bits: Rust's compressor keeps a short one as `vortex.bool`, so the three flags of a zone table,
-/// and a handful of rows, stay bool while a long constant column does not (#583).
+/// A bool column of one value is one flat `vortex.constant` at any length: Rust 0.95's
+/// `ConstantStrategy` writes it before the compressor sees it. Inside a column, the compressor
+/// still keeps a short constant bool as `vortex.bool` when that is smaller, as the three flags of a
+/// zone table show (#583).
 class ConstantBoolInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();

@@ -132,6 +132,15 @@ final class SegmentEncoder {
         this.columnEncoders = Map.copyOf(resolved);
     }
 
+    /// Whether `column` is written as Rust's `ConstantStrategy` writes a column with one value:
+    /// with the default encoders (a caller's list is the whole set this writer may emit), no
+    /// [ColumnEncoding] override (Rust's field writers replace the strategy), and `vortex.constant`
+    /// inside the targeted editions.
+    boolean writesConstantRuns(ColumnName column) {
+        return defaultCodecs && !columnEncoders.containsKey(column)
+                && (editionAllowed.isEmpty() || editionAllowed.contains(EncodingId.VORTEX_CONSTANT));
+    }
+
     /// The encoder a column's [ColumnEncoding] override resolved to, or `null` when the column has none.
     EncodingEncoder columnEncoder(ColumnName column) {
         return columnEncoders.get(column);

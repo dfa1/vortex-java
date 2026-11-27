@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Chunk.prefetch` and `VortexHandle.prefetch` start the range requests of several columns together over HTTP, merged into few requests, and an HTTP handle keeps the segments it has read. ([#744](https://github.com/dfa1/vortex-java/issues/744))
 
 ### Fixed
+- A column whose rows all hold one value, null included, is written as one constant chunk, as Rust 0.95 writes it, instead of zoned 8192-row chunks. ([#768](https://github.com/dfa1/vortex-java/pull/768))
 - A decimal column that Rust 0.95 writes as a dict layout now reads its values instead of failing. ([#763](https://github.com/dfa1/vortex-java/pull/763))
 - A list, fixed-size list, map or struct column that Rust 0.95 writes as a constant or sparse chunk now reads its values instead of failing. ([#762](https://github.com/dfa1/vortex-java/pull/762))
 - A string column whose first 8192 rows hold a single value is written as plain chunks, as Rust does, instead of a dict layout up to 9% bigger. ([#722](https://github.com/dfa1/vortex-java/issues/722))

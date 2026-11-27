@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,7 +81,10 @@ public final class VortexWriter implements Closeable {
     private final Map<ColumnName, Repartitioner> repartitioners;
     // The batch being written: its columns' piece sizes, measured on the executor ahead of appendChunk.
     private final Map<ColumnName, CompletableFuture<long[]>> pieceSizes;
-    private boolean firstChunkSeen;
+    // Rust's ConstantStrategy: each leaf is held back while all its rows hold one value.
+    private final ConstantRunDetector constantRuns;
+    // the leaves whose first batch has reached the dict detection
+    private final Set<ColumnName> dictDetected;
     private long rowCount;
     // set when finish() starts: the file takes no more chunks, and a failed finish is not retried
     private boolean finishing;
@@ -121,7 +125,8 @@ public final class VortexWriter implements Closeable {
         this.structValidities = new LinkedHashMap<>();
         this.repartitioners = new LinkedHashMap<>();
         this.pieceSizes = new HashMap<>();
-        this.firstChunkSeen = false;
+        this.constantRuns = new ConstantRunDetector();
+        this.dictDetected = new HashSet<>();
         this.rowCount = 0;
         this.finishing = false;
         this.summary = null;
@@ -321,8 +326,10 @@ public final class VortexWriter implements Closeable {
 
             // Sizing a string batch reads every string and was the caller thread's largest cost
             // of an import. Columns are independent, so the pool sizes them all at once.
+            // A held column's batch may be released behind its run, which these sizes do not measure.
             if (zonedLayout && Repartitioner.supports(colDtype) && Repartitioner.sizeReadsValues(data)
-                    && !globalDict.isCandidate(colName)) {
+                    && !globalDict.isCandidate(colName)
+                    && (!holdsConstantRuns(colName) || constantRuns.isReleased(colName))) {
                 // Only read the column's own Repartitioner: creating it here would change the order
                 // flushRepartitioners writes the last chunks in.
                 Repartitioner own = repartitioners.get(colName);
@@ -341,7 +348,12 @@ public final class VortexWriter implements Closeable {
             fileStats.get(i).add(data, expectedLen);
             writeColumn(colName, colName, colDtype, data, true);
         }
-        firstChunkSeen = true;
+    }
+
+    /// Whether `key` goes through Rust's `ConstantStrategy`: only under `vortex.zoned`, whose targets
+    /// are Rust's current writer (the legacy `vortex.stats` ones keep one chunk per batch).
+    private boolean holdsConstantRuns(ColumnName key) {
+        return zonedLayout && segmentEncoder.writesConstantRuns(key);
     }
 
     /// Writes one batch of `key`: a struct is split into its fields, each written as a column of its
@@ -352,16 +364,12 @@ public final class VortexWriter implements Closeable {
     private void writeColumn(ColumnName column, ColumnName key, DType dtype, Object data, boolean zoned)
             throws IOException {
         if (!StructColumns.isLayoutStruct(dtype)) {
-            if (zoned) {
-                zoneMaps.add(key, dtype, data);
+            if (!holdsConstantRuns(key)) {
+                writeLeaf(key, dtype, data, zoned);
+                return;
             }
-            if (!firstChunkSeen) {
-                globalDict.detect(key, dtype, data);
-            }
-            if (globalDict.isCandidate(key)) {
-                globalDict.ingest(key, dtype, data);
-            } else {
-                appendChunk(key, dtype, data);
+            for (Object batch : constantRuns.add(key, dtype, data)) {
+                writeLeaf(key, dtype, batch, zoned);
             }
             return;
         }
@@ -381,6 +389,37 @@ public final class VortexWriter implements Closeable {
         for (int i = 0; i < struct.fieldNames().size(); i++) {
             writeColumn(column, StructColumns.fieldKey(key, struct.fieldNames().get(i)), struct.fieldTypes().get(i),
                     fields.fieldArrays().get(i), zoned && !struct.nullable());
+        }
+    }
+
+    /// Writes one batch of a leaf column through its zone map, dictionary and chunks: Rust's
+    /// pipeline below `ConstantStrategy`.
+    private void writeLeaf(ColumnName key, DType dtype, Object data, boolean zoned) throws IOException {
+        if (zoned) {
+            zoneMaps.add(key, dtype, data);
+        }
+        if (dictDetected.add(key)) {
+            globalDict.detect(key, dtype, data);
+        }
+        if (globalDict.isCandidate(key)) {
+            globalDict.ingest(key, dtype, data);
+        } else {
+            appendChunk(key, dtype, data);
+        }
+    }
+
+    /// Writes each column still held by [ConstantRunDetector]: a constant one as its single
+    /// `vortex.constant` chunk, a flat layout of its own; one that never got a row through its
+    /// normal pipeline, as before.
+    private void flushConstantRuns() throws IOException {
+        for (Map.Entry<ColumnName, ConstantRunDetector.Run> e : constantRuns.held().entrySet()) {
+            ColumnName key = e.getKey();
+            ConstantRunDetector.Run run = e.getValue();
+            if (run.rows() == 0) {
+                writeLeaf(key, columnDtype(key), run.first(), !structColumns.unzoned().contains(key));
+            } else {
+                colChunks.get(key).add(new ChunkRef(sink.writeConstant(key, run.scalar()), run.rows()));
+            }
         }
     }
 
@@ -449,6 +488,8 @@ public final class VortexWriter implements Closeable {
             throw new IllegalStateException("an earlier finish failed; the file is incomplete");
         }
         finishing = true;
+        // first: a column that never got a row still goes through its repartitioner
+        flushConstantRuns();
         flushRepartitioners();
         Map<ColumnName, ChunkRef> validities = flushStructValidities();
         globalDict.flush();

@@ -166,6 +166,14 @@ count from the column's first row, whatever the batches, and are measured as Rus
 string of at most 12 bytes costs only its 16-byte view, and a block without nulls no validity. Nested
 columns, and targets before `core2026.08.0` (legacy `vortex.stats` zones), keep one chunk per batch.
 
+A column whose rows all hold one value, null included, is one flat `vortex.constant` with no
+chunks, zone map or dictionary, as Rust 0.95's `ConstantStrategy` writes it. The writer holds a
+column's batches while they stay constant (only the first batch and a row count), and the first
+batch with another value sends the held rows, then itself, through the repartition above. This
+applies to primitive, boolean, decimal, string and binary columns and the extensions over them,
+under `vortex.zoned`, with the default encoders and no `ColumnEncoding` override. Nested columns
+always go through the normal pipeline.
+
 ### `Chunk` (`io.github.dfa1.vortex.writer.Chunk`)
 
 Builder handed to the `writeChunk(Consumer<Chunk>)` lambda. Validates each `.put`

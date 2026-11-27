@@ -17,6 +17,7 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.SegmentEncoder.EncodedSegment;
 import io.github.dfa1.vortex.writer.SegmentEncoder.SegmentStats;
 import io.github.dfa1.vortex.writer.encode.EncodeNode;
@@ -91,6 +92,25 @@ final class SegmentSink {
         EncodeTrace trace = EncodeTrace.of(column.value(), segIdx);
         pending.add(CompletableFuture.supplyAsync(
                 () -> encoder.encode(trace, dtype, data, encodingOverride, excludedFromCascade), executor));
+        segColumns.add(column);
+        submittedSegments++;
+        drain(MAX_IN_FLIGHT_SEGMENTS);
+        return segIdx;
+    }
+
+    /// Queues a `vortex.constant` segment of `scalar` for `column`, as Rust's `ConstantStrategy`
+    /// writes a constant column: straight to its flat layout, uncompressed, with no stats (Rust's
+    /// flat writer keeps only stats an array already holds, and a new constant array holds none).
+    /// The row count lives in the layout, so the segment is the same however many rows it stands for.
+    ///
+    /// @return the index of the written segment
+    /// @throws IOException if writing an earlier, completed segment to the channel fails
+    int writeConstant(ColumnName column, ProtoScalarValue scalar) throws IOException {
+        int segIdx = submittedSegments;
+        EncodeResult result = EncodeResult.simple(EncodingId.VORTEX_CONSTANT,
+                EncodedBuffer.bytes(MemorySegment.ofArray(scalar.encode())));
+        pending.add(CompletableFuture.completedFuture(
+                new EncodedSegment(result, Arena.ofShared(), new SegmentStats(null, null, null, 0))));
         segColumns.add(column);
         submittedSegments++;
         drain(MAX_IN_FLIGHT_SEGMENTS);

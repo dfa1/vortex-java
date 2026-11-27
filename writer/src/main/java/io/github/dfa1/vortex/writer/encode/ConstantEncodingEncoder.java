@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoNullValue;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.simd.SimdOperationsSupport;
 
@@ -85,20 +86,112 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
     /// @param values the decimals, none `null`
     /// @return the constant array, or empty when `values` is empty or the values differ
     static Optional<EncodeResult> encodeDecimalIfConstant(DType.Decimal dtype, BigDecimal[] values) {
-        if (values.length == 0) {
+        if (!isConstantDecimal(values)) {
             return Optional.empty();
+        }
+        ProtoScalarValue scalar = decimalScalar(dtype, values[0]);
+        return Optional.of(EncodeResult.simple(EncodingId.VORTEX_CONSTANT,
+                EncodedBuffer.bytes(MemorySegment.ofArray(scalar.encode())), scalar, scalar));
+    }
+
+    /// The value every row of a column batch holds, as Rust's `ConstantStrategy` asks of each chunk
+    /// (`is_constant`): a null scalar when every row is null, else the value when every row is valid
+    /// and equal (floats by raw bits). Empty when the rows differ, the batch is empty, or the dtype
+    /// has no scalar this writer builds: nested, null, union and variant columns.
+    ///
+    /// @param dtype the column's dtype
+    /// @param data  one batch of the column, in a carrier the writer accepts for `dtype`
+    /// @return the one value of the batch, or empty
+    public static Optional<ProtoScalarValue> runScalar(DType dtype, Object data) {
+        // ponytail: flat dtypes only; Rust also detects nested (List, FSL, Map, Struct) constants,
+        // which needs a nested-scalar builder here and nested carriers in the replay (#723)
+        DType storage = dtype instanceof DType.Extension ext ? ext.storageDType() : dtype;
+        if (!(storage instanceof DType.Primitive || storage instanceof DType.Bool || storage instanceof DType.Utf8
+                || storage instanceof DType.Binary || storage instanceof DType.Decimal)) {
+            return Optional.empty();
+        }
+        if (data instanceof NullableData nd) {
+            boolean[] validity = nd.validity();
+            if (validity.length == 0 || !SimdOperationsSupport.preferred().allEqual(validity)) {
+                return Optional.empty();
+            }
+            if (!validity[0]) {
+                return Optional.of(ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE));
+            }
+            return runScalar(dtype, nd.values());
+        }
+        Object values = data instanceof ComparableValues cv ? cv.values() : data;
+        if (dtype instanceof DType.Extension ext) {
+            return runScalar(ext.storageDType(), values);
+        }
+        if (RowCount.of(values) == 0) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(switch (dtype) {
+            case DType.Primitive p -> primitiveRunScalar(p.ptype(), values);
+            case DType.Bool _ -> boolRunScalar((boolean[]) values);
+            case DType.Utf8 _ -> textRunScalar(values);
+            case DType.Binary _ -> binaryRunScalar((byte[][]) values);
+            case DType.Decimal d -> decimalRunScalar(d, (BigDecimal[]) values);
+            default -> null;
+        });
+    }
+
+    private static ProtoScalarValue primitiveRunScalar(PType ptype, Object values) {
+        OptionalLong bits = constantBits(values, ptype);
+        if (bits.isEmpty()) {
+            return null;
+        }
+        return buildScalar(ptype, bits.getAsLong());
+    }
+
+    private static ProtoScalarValue boolRunScalar(boolean[] values) {
+        if (!SimdOperationsSupport.preferred().allEqual(values)) {
+            return null;
+        }
+        return ProtoScalarValue.ofBoolValue(values[0]);
+    }
+
+    private static ProtoScalarValue textRunScalar(Object values) {
+        if (!isConstantText(values)) {
+            return null;
+        }
+        return ProtoScalarValue.ofStringValue(firstText(values));
+    }
+
+    private static ProtoScalarValue binaryRunScalar(byte[][] values) {
+        for (byte[] value : values) {
+            if (!Arrays.equals(value, values[0])) {
+                return null;
+            }
+        }
+        return ProtoScalarValue.ofBytesValue(values[0]);
+    }
+
+    private static ProtoScalarValue decimalRunScalar(DType.Decimal dtype, BigDecimal[] values) {
+        if (!isConstantDecimal(values)) {
+            return null;
+        }
+        return decimalScalar(dtype, values[0]);
+    }
+
+    private static boolean isConstantDecimal(BigDecimal[] values) {
+        if (values.length == 0) {
+            return false;
         }
         for (BigDecimal value : values) {
             if (value == null || value.compareTo(values[0]) != 0) {
-                return Optional.empty();
+                return false;
             }
         }
-        int width = dtype.byteWidth();
-        byte[] le = DecimalEncodingEncoder.pack(new BigDecimal[]{values[0]}, width, Arena.ofAuto())
+        return true;
+    }
+
+    /// Rust's decimal scalar: the unscaled value little-endian at the column's storage width.
+    private static ProtoScalarValue decimalScalar(DType.Decimal dtype, BigDecimal value) {
+        byte[] le = DecimalEncodingEncoder.pack(new BigDecimal[]{value}, dtype.byteWidth(), Arena.ofAuto())
                 .toArray(ValueLayout.JAVA_BYTE);
-        ProtoScalarValue scalar = ProtoScalarValue.ofBytesValue(le);
-        return Optional.of(EncodeResult.simple(EncodingId.VORTEX_CONSTANT,
-                EncodedBuffer.bytes(MemorySegment.ofArray(scalar.encode())), scalar, scalar));
+        return ProtoScalarValue.ofBytesValue(le);
     }
 
     /// Encodes `data` as a `vortex.constant` when every value is equal (floats by raw bits), in
@@ -163,17 +256,18 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         if (!isConstantText(data)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
         }
-        String value;
-        if (data instanceof byte[][] utf8) {
-            value = new String(utf8[0], StandardCharsets.UTF_8);
-        } else {
-            value = ((String[]) data)[0];
-        }
-        ProtoScalarValue scalar = ProtoScalarValue.ofStringValue(value);
+        ProtoScalarValue scalar = ProtoScalarValue.ofStringValue(firstText(data));
         byte[] scalarBytes = scalar.encode();
         // Both extremes are the one repeated value, by construction
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, EncodedBuffer.bytes(MemorySegment.ofArray(scalarBytes)),
                 scalar, scalar);
+    }
+
+    private static String firstText(Object data) {
+        if (data instanceof byte[][] utf8) {
+            return new String(utf8[0], StandardCharsets.UTF_8);
+        }
+        return ((String[]) data)[0];
     }
 
     /// Whether a non-empty `String[]` or UTF-8 `byte[][]` repeats one value.
