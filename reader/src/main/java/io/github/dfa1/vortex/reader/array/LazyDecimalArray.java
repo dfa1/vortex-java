@@ -9,6 +9,7 @@ import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.LongConsumer;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
@@ -86,5 +87,43 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
     @Override
     public Optional<MemorySegment> segmentIfPresent() {
         return Optional.of(buf);
+    }
+
+    /// Expands a decimal dictionary: row `i` holds the pool entry its code names, at the dtype's
+    /// storage width. The pool entries the codes reach are written flat once, then each row copies
+    /// its entry's bytes.
+    ///
+    /// @param dtype      the column's [DType.Decimal]
+    /// @param n          row count, the number of codes
+    /// @param pool       the dictionary values
+    /// @param poolExtent how many pool entries the codes reach; every code is below it
+    /// @param codes      per-row unsigned codes into `pool`, one of the integer array types
+    /// @param arena      allocator for the pool and row buffers
+    /// @return a flat array of `n` rows
+    /// @throws VortexException if `codes` is not an integer array
+    // ponytail: eager gather of n rows; a lazy carrier like DictLongArray if decimal dicts profile hot
+    public static LazyDecimalArray ofDict(DType dtype, long n, DecimalArray pool, long poolExtent, Array codes,
+            SegmentAllocator arena) {
+        int width = ((DType.Decimal) dtype).byteWidth();
+        long align = Math.min(width, 16);
+        MemorySegment entries = arena.allocate(Math.max(width, poolExtent * width), align);
+        for (long e = 0; e < poolExtent; e++) {
+            DecimalMantissas.writeSignedLe(pool, e, entries, e * width, width);
+        }
+        MemorySegment out = arena.allocate(Math.max(width, n * width), align);
+        long[] at = {0};
+        LongConsumer copy = code -> {
+            MemorySegment.copy(entries, code * width, out, at[0], width);
+            at[0] += width;
+        };
+        switch (codes) {
+            case ByteArray a -> a.forEachByte(c -> copy.accept(Byte.toUnsignedLong(c)));
+            case ShortArray a -> a.forEachShort(c -> copy.accept(Short.toUnsignedLong(c)));
+            case IntArray a -> a.forEachInt(c -> copy.accept(Integer.toUnsignedLong(c)));
+            case LongArray a -> a.forEachLong(copy);
+            default -> throw new VortexException("decimal dict: invalid codes type: "
+                    + codes.getClass().getSimpleName());
+        }
+        return new LazyDecimalArray(dtype, n, out.asReadOnly(), width);
     }
 }

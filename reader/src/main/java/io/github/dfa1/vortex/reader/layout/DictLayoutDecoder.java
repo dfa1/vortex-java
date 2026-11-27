@@ -13,6 +13,8 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.CanonicalArrays;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictDoubleArray;
 import io.github.dfa1.vortex.reader.array.DictFloat16Array;
@@ -79,7 +81,8 @@ final class DictLayoutDecoder implements LayoutDecoder {
         Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
         BoolArray codesValidity = codes instanceof MaskedArray mc ? mc.validity() : null;
         Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;
-        if (valuesData instanceof VarBinArray vb) {
+        boolean decimal = dtype instanceof DType.Decimal && valuesData instanceof DecimalArray;
+        if (valuesData instanceof VarBinArray || decimal) {
             // Zip-bomb guard: read the codes as a segment so we can validate the buffer
             // before building the dict carrier. For direct-mapped encodings (e.g.
             // vortex.primitive), the codes buffer is mmap-bounded and can be much smaller
@@ -95,7 +98,15 @@ final class DictLayoutDecoder implements LayoutDecoder {
                 throw new VortexException(EncodingId.VORTEX_DICT,
                         "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
             }
-            Array dict = buildLazyDictVarBin(dtype, n, vb, codesSeg, codesPType, arena);
+            Array dict;
+            if (valuesData instanceof DecimalArray pool) {
+                // Rust 0.95 dict-encodes decimals too. Every code is checked against the pool
+                // here: the gather copies by code, with no carrier left to catch one on access.
+                long poolExtent = checkedPoolExtent(codesSeg, codesPType, n, pool.length());
+                dict = LazyDecimalArray.ofDict(dtype, n, pool, poolExtent, flatCodes, arena);
+            } else {
+                dict = buildLazyDictVarBin(dtype, n, (VarBinArray) valuesData, codesSeg, codesPType, arena);
+            }
             if (poolValidity == null && codesValidity == null) {
                 return dict;
             }

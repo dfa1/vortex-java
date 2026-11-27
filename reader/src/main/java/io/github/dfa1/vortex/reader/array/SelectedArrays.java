@@ -279,21 +279,7 @@ public final class SelectedArrays {
         MemorySegment out = arena.allocate(Math.max(width, (long) rows.length * width), Math.min(width, 16));
         long at = 0;
         for (int row : rows) {
-            long r = row + offset;
-            switch (width) {
-                case 1 -> out.set(ValueLayout.JAVA_BYTE, at, (byte) a.getUnscaledLong(r));
-                case 2 -> out.set(VortexFormat.LE_SHORT, at, (short) a.getUnscaledLong(r));
-                case 4 -> out.set(VortexFormat.LE_INT, at, (int) a.getUnscaledLong(r));
-                case 8 -> out.set(VortexFormat.LE_LONG, at, a.getUnscaledLong(r));
-                default -> {
-                    // big-endian minimal bytes, reversed and sign-extended to the width
-                    byte[] be = a.getDecimal(r).unscaledValue().toByteArray();
-                    byte sign = (byte) (be[0] < 0 ? -1 : 0);
-                    for (int b = 0; b < width; b++) {
-                        out.set(ValueLayout.JAVA_BYTE, at + b, b < be.length ? be[be.length - 1 - b] : sign);
-                    }
-                }
-            }
+            DecimalMantissas.writeSignedLe(a, row + offset, out, at, width);
             at += width;
         }
         return new LazyDecimalArray(a.dtype(), rows.length, out, width);

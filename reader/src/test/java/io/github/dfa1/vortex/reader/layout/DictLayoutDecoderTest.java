@@ -13,10 +13,13 @@ import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictShortArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
@@ -37,6 +40,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.stream.Stream;
@@ -336,7 +340,81 @@ class DictLayoutDecoderTest {
                 .hasMessageContaining("unsupported dict values shape: FixedSizeListArray");
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("decimalPools")
+    void decimalPool_gathersEachRowByCode(String name, DType.Decimal dtype, Array values, String[] expected) {
+        // Given — Rust 0.95 dict-encodes decimal columns; the pool shapes are the ones its
+        // children decode to (flat, a broadcast constant), and the i128 width takes the
+        // BigInteger path with a negative value that must stay sign-extended
+        Array codes = byteCodes(2, 0, 2, 1);
+
+        // When
+        Array result = decode(4, dtype, values, codes);
+
+        // Then
+        DecimalArray decimals = (DecimalArray) result;
+        for (int i = 0; i < expected.length; i++) {
+            assertThat(decimals.getDecimal(i)).as("%s row %d", name, i).isEqualByComparingTo(expected[i]);
+        }
+    }
+
+    @Test
+    void nullableDecimalPool_appliesPoolValidity() {
+        // Given — a null pool entry (slot 1) must null every row whose code points at it
+        DType.Decimal dtype = new DType.Decimal((byte) 9, (byte) 2, true);
+        Array values = new MaskedArray(decimalPool(dtype, 100, 200, 300), boolArray(true, false, true));
+        Array codes = byteCodes(1, 0, 2, 1);
+
+        // When
+        Array result = decode(4, dtype, values, codes);
+
+        // Then
+        MaskedArray masked = assertMasked(result);
+        assertValidity(masked, false, true, true, false);
+        assertThat(((DecimalArray) masked.inner()).getDecimal(2)).isEqualByComparingTo("3.00");
+    }
+
+    @Test
+    void codeOutsideDecimalPool_throwsVortexException() {
+        // Given — the decimal gather copies bytes by code, so code 7 against 2 entries must be
+        // rejected up front as malformed input, not run off the pool buffer
+        DType.Decimal dtype = new DType.Decimal((byte) 9, (byte) 2, false);
+        Array values = decimalPool(dtype, 1, 2);
+        Array codes = byteCodes(0, 7);
+
+        // When / Then
+        assertThatThrownBy(() -> decode(2, dtype, values, codes))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("dict code 7 out of range for a values pool of 2 entries");
+    }
+
     // ── harness ─────────────────────────────────────────────────────────────────
+
+    private static Stream<Arguments> decimalPools() {
+        DType.Decimal narrow = new DType.Decimal((byte) 9, (byte) 2, false);
+        DType.Decimal wide = new DType.Decimal((byte) 38, (byte) 2, false);
+        return Stream.of(
+                Arguments.of("i32 flat pool", narrow, decimalPool(narrow, 150, -25, 999),
+                        new String[]{"9.99", "1.50", "9.99", "-0.25"}),
+                Arguments.of("i128 flat pool", wide, decimalPool(wide, 150, -25, 999),
+                        new String[]{"9.99", "1.50", "9.99", "-0.25"}),
+                Arguments.of("constant pool", narrow,
+                        new LazyConstantDecimalArray(narrow, 3, new BigDecimal("4.20"), narrow.byteWidth()),
+                        new String[]{"4.20", "4.20", "4.20", "4.20"}));
+    }
+
+    /// Flat `vortex.decimal` pool of the given unscaled values at the dtype's storage width,
+    /// little-endian and sign-extended.
+    private static DecimalArray decimalPool(DType.Decimal dtype, long... unscaled) {
+        int width = dtype.byteWidth();
+        byte[] bytes = new byte[unscaled.length * width];
+        for (int i = 0; i < unscaled.length; i++) {
+            for (int b = 0; b < width; b++) {
+                bytes[i * width + b] = (byte) (b < Long.BYTES ? unscaled[i] >> (8 * b) : unscaled[i] >> 63);
+            }
+        }
+        return new LazyDecimalArray(dtype, unscaled.length, MemorySegment.ofArray(bytes), width);
+    }
 
     private static Stream<Arguments> varBinPools() {
         DType utf8Extension = new DType.Extension(ExtensionId.parse("ip.address"), DTypes.UTF8, OpaqueMetadata.EMPTY, false);
