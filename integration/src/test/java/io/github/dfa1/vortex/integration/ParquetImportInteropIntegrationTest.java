@@ -176,7 +176,8 @@ class ParquetImportInteropIntegrationTest {
         }
         Path parquet = tmp.resolve("text.parquet");
         FileSchema schema = FileSchema.builder("schema")
-                .addColumn("s", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL, new LogicalType.StringType())
+                .primitive("s", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL,
+                        primitive -> primitive.logicalType(new LogicalType.StringType()))
                 .build();
         try (ParquetFileWriter writer = ParquetFileWriter.create(OutputFile.of(parquet), schema)) {
             writer.columnWriter().writeBatch(batch -> batch.bytes(0, bytes, nulls));
@@ -212,11 +213,12 @@ class ParquetImportInteropIntegrationTest {
                                        BigInteger[] unscaled, IntPredicate isNull) throws IOException {
         FileSchema.Builder builder = FileSchema.builder("schema");
         LogicalType decimal = new LogicalType.DecimalType(precision, scale);
-        if (length > 0) {
-            builder.addColumn("d", type, RepetitionType.OPTIONAL, length, decimal);
-        } else {
-            builder.addColumn("d", type, RepetitionType.OPTIONAL, decimal);
-        }
+        builder.primitive("d", type, RepetitionType.OPTIONAL, primitive -> {
+            primitive.logicalType(decimal);
+            if (length > 0) {
+                primitive.typeLength(length);
+            }
+        });
         boolean[] nulls = new boolean[unscaled.length];
         for (int i = 0; i < nulls.length; i++) {
             nulls[i] = isNull.test(i);
