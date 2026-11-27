@@ -225,6 +225,16 @@ public final class ParquetExporter {
     /// A Parquet primitive: its physical type, the length of a `FIXED_LEN_BYTE_ARRAY` (else `0`)
     /// and its annotation (`null` for none).
     private record Leaf(PhysicalType type, int typeLength, LogicalType logical) {
+
+        /// The logical type and fixed length Hardwood takes on a primitive's builder, each only when set.
+        void configure(FileSchema.PrimitiveBuilder primitive) {
+            if (logical != null) {
+                primitive.logicalType(logical);
+            }
+            if (typeLength != 0) {
+                primitive.typeLength(typeLength);
+            }
+        }
     }
 
     private static Leaf leafOf(String path, DType type) {
@@ -316,11 +326,7 @@ public final class ParquetExporter {
 
         @Override
         public void leaf(Leaf leaf, RepetitionType rep) {
-            if (leaf.typeLength() == 0) {
-                builder.addColumn(name, leaf.type(), rep, leaf.logical());
-            } else {
-                builder.addColumn(name, leaf.type(), rep, leaf.typeLength(), leaf.logical());
-            }
+            builder.primitive(name, leaf.type(), rep, leaf::configure);
         }
 
         @Override
@@ -335,11 +341,7 @@ public final class ParquetExporter {
 
         @Override
         public void map(Leaf key, RepetitionType rep, Consumer<FileSchema.ElementBuilder> value) {
-            if (key.typeLength() == 0) {
-                builder.map(name, rep, key.type(), key.logical(), value);
-            } else {
-                builder.map(name, rep, key.type(), key.typeLength(), key.logical(), value);
-            }
+            builder.map(name, rep, key.type(), key::configure, value);
         }
     }
 
@@ -347,11 +349,7 @@ public final class ParquetExporter {
 
         @Override
         public void leaf(Leaf leaf, RepetitionType rep) {
-            if (leaf.typeLength() == 0) {
-                builder.addColumn(name, leaf.type(), rep, leaf.logical());
-            } else {
-                builder.addColumn(name, leaf.type(), rep, leaf.typeLength(), leaf.logical());
-            }
+            builder.primitive(name, leaf.type(), rep, leaf::configure);
         }
 
         @Override
@@ -366,11 +364,7 @@ public final class ParquetExporter {
 
         @Override
         public void map(Leaf key, RepetitionType rep, Consumer<FileSchema.ElementBuilder> value) {
-            if (key.typeLength() == 0) {
-                builder.map(name, rep, key.type(), key.logical(), value);
-            } else {
-                builder.map(name, rep, key.type(), key.typeLength(), key.logical(), value);
-            }
+            builder.map(name, rep, key.type(), key::configure, value);
         }
     }
 
@@ -378,11 +372,7 @@ public final class ParquetExporter {
 
         @Override
         public void leaf(Leaf leaf, RepetitionType rep) {
-            if (leaf.typeLength() == 0) {
-                builder.primitive(leaf.type(), rep, leaf.logical());
-            } else {
-                builder.primitive(leaf.type(), rep, leaf.typeLength(), leaf.logical());
-            }
+            builder.primitive(leaf.type(), rep, leaf::configure);
         }
 
         @Override
@@ -397,11 +387,7 @@ public final class ParquetExporter {
 
         @Override
         public void map(Leaf key, RepetitionType rep, Consumer<FileSchema.ElementBuilder> value) {
-            if (key.typeLength() == 0) {
-                builder.map(rep, key.type(), key.logical(), value);
-            } else {
-                builder.map(rep, key.type(), key.typeLength(), key.logical(), value);
-            }
+            builder.map(rep, key.type(), key::configure, value);
         }
     }
 

@@ -48,12 +48,12 @@ import static org.mockito.BDDMockito.given;
 class ParquetImporterTest {
 
     private static ColumnSchema col(String name, PhysicalType type, RepetitionType rep, LogicalType logical) {
-        return new ColumnSchema(FieldPath.of(name), type, rep, null, 0, 0, 0, logical);
+        return new ColumnSchema(FieldPath.of(name), type, rep, null, 0, 0, 0, logical, null);
     }
 
     private static SchemaNode.PrimitiveNode primitiveNode(
             String name, PhysicalType type, RepetitionType rep, LogicalType logical) {
-        return new SchemaNode.PrimitiveNode(name, type, rep, logical, 0, 0, 0);
+        return new SchemaNode.PrimitiveNode(col(name, type, rep, logical));
     }
 
     @Nested
@@ -233,7 +233,7 @@ class ParquetImporterTest {
                             primitiveNode("bytes", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL, null),
                             primitiveNode("path", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL,
                                     new LogicalType.StringType())),
-                    0, 0);
+                    0, 0, null);
 
             // When
             DType result = ParquetImporter.mapDType(group);
@@ -253,7 +253,7 @@ class ParquetImporterTest {
                     "chunks", RepetitionType.OPTIONAL, ConvertedType.LIST, null,
                     List.of(primitiveNode("chunks_tuple", PhysicalType.BYTE_ARRAY, RepetitionType.REPEATED,
                             new LogicalType.StringType())),
-                    0, 0);
+                    0, 0, null);
 
             // When
             DType result = ParquetImporter.mapDType(list);
@@ -273,12 +273,12 @@ class ParquetImporterTest {
                                     new LogicalType.StringType()),
                             primitiveNode("role", PhysicalType.BYTE_ARRAY, RepetitionType.OPTIONAL,
                                     new LogicalType.StringType())),
-                    0, 0);
+                    0, 0, null);
             SchemaNode.GroupNode wrapper = new SchemaNode.GroupNode(
-                    "list", RepetitionType.REPEATED, null, null, List.of(element), 0, 0);
+                    "list", RepetitionType.REPEATED, null, null, List.of(element), 0, 0, null);
             SchemaNode.GroupNode messages = new SchemaNode.GroupNode(
                     "messages", RepetitionType.OPTIONAL, null, new LogicalType.ListType(),
-                    List.of(wrapper), 0, 0);
+                    List.of(wrapper), 0, 0, null);
 
             // When
             DType result = ParquetImporter.mapDType(messages);
@@ -300,10 +300,10 @@ class ParquetImporterTest {
                             primitiveNode("key", PhysicalType.BYTE_ARRAY, RepetitionType.REQUIRED,
                                     new LogicalType.StringType()),
                             primitiveNode("value", PhysicalType.INT32, RepetitionType.OPTIONAL, null)),
-                    0, 0);
+                    0, 0, null);
             SchemaNode.GroupNode map = new SchemaNode.GroupNode(
                     "counts", RepetitionType.OPTIONAL, null, new LogicalType.MapType(),
-                    List.of(keyValue), 0, 0);
+                    List.of(keyValue), 0, 0, null);
 
             // When / Then
             assertThatThrownBy(() -> ParquetImporter.mapDType(map))
@@ -513,11 +513,12 @@ class ParquetImporterTest {
                 RepetitionType repetition, List<BigDecimal> values) throws Exception {
             FileSchema.Builder builder = FileSchema.builder("schema");
             LogicalType decimal = new LogicalType.DecimalType(precision, scale);
-            if (length > 0) {
-                builder.addColumn("d", type, repetition, length, decimal);
-            } else {
-                builder.addColumn("d", type, repetition, decimal);
-            }
+            builder.primitive("d", type, repetition, primitive -> {
+                primitive.logicalType(decimal);
+                if (length > 0) {
+                    primitive.typeLength(length);
+                }
+            });
             int n = values.size();
             boolean[] nulls = new boolean[n];
             BigInteger[] unscaled = new BigInteger[n];
