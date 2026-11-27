@@ -101,6 +101,21 @@ final class Repartitioner {
         return concat(List.of(new Piece(data, from, RowCount.of(data) - from, 0)));
     }
 
+    /// `rows` rows cycling through a batch's rows, in the batch's carrier shape: a constant batch
+    /// stretched or cut to any length.
+    ///
+    /// @param data a non-empty batch of a column [#supports(DType)] accepts
+    /// @param rows how many rows to return
+    /// @return the repeated rows
+    static Object repeat(Object data, int rows) {
+        int len = RowCount.of(data);
+        List<Piece> parts = new ArrayList<>();
+        for (int at = 0; at < rows; at += len) {
+            parts.add(new Piece(data, 0, Math.min(len, rows - at), 0));
+        }
+        return concat(parts);
+    }
+
     /// Whether sizing a batch of `data` reads its values, as for strings and binaries -- the
     /// only batches worth [#sizePieces(Object,long,long)] ahead of time.
     ///

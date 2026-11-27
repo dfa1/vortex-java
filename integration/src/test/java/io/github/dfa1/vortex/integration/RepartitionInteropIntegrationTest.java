@@ -103,8 +103,9 @@ class RepartitionInteropIntegrationTest {
                 Arguments.of("no nulls", (IntPredicate) row -> false),
                 Arguments.of("sparse nulls", (IntPredicate) row -> row % 50_000 == 7),
                 Arguments.of("null blocks", (IntPredicate) row -> row / 8192 % 3 == 0),
-                Arguments.of("null runs across blocks", (IntPredicate) row -> row / 5000 % 2 == 0),
-                Arguments.of("all null", (IntPredicate) row -> true));
+                // an all-null column is a constant one: Rust 0.95 writes it as one constant chunk,
+                // not through the repartition (ConstantColumnInteropIntegrationTest)
+                Arguments.of("null runs across blocks", (IntPredicate) row -> row / 5000 % 2 == 0));
     }
 
     @ParameterizedTest(name = "{0}")
