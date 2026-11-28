@@ -51,9 +51,10 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         return EncodingId.VORTEX_SPARSE;
     }
 
+    /// Primitives, and text, which only Rust's null-dominated string scheme sparse-encodes.
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive;
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8;
     }
 
     /// A nullable array keeps its nulls in the fill or the patch values, as Rust's
@@ -70,6 +71,9 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
 
     @Override
     public Estimate expectedRatio(DType dtype, ArrayAndStats data, EncodeContext ctx) {
+        if (dtype instanceof DType.Utf8) {
+            return NullDominatedText.estimate(data, ctx);
+        }
         if (!(dtype instanceof DType.Primitive p)) {
             return Estimate.COMPLETE;
         }
@@ -110,6 +114,9 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     /// Airport_fee / congestion_surcharge.
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        if (dtype instanceof DType.Utf8) {
+            return NullDominatedText.encodeCascade(dtype, data, ctx);
+        }
         if (!(dtype instanceof DType.Primitive p)) {
             return CascadeStep.notApplicable();
         }
@@ -216,29 +223,29 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     /// values as open children, so the cascade compresses both.
     private static CascadeStep cascadeStep(DType dtype, ProtoScalarValue fillScalar, int[] patchIdx, PType idxPtype,
                                            Object patchValues, MinMax stats, EncodeContext ctx) {
+        // Rust's float sparse scheme compresses only the indices: the values stay as they are
+        Set<EncodingId> valuesExcluded = ((DType.Primitive) dtype).ptype().isFloating() ? ALL_BUT_PRIMITIVE : SELF;
+        return cascadeStep(dtype, fillScalar, patchIdx, idxPtype, SELF, patchValues, valuesExcluded, stats, ctx);
+    }
+
+    /// [#cascadeStep(DType, ProtoScalarValue, int[], PType, Object, MinMax, EncodeContext)] with the
+    /// encodings each child bars.
+    private static CascadeStep cascadeStep(DType dtype, ProtoScalarValue fillScalar, int[] patchIdx, PType idxPtype,
+                                           Set<EncodingId> idxExcluded, Object patchValues,
+                                           Set<EncodingId> valuesExcluded, MinMax stats, EncodeContext ctx) {
         int numPatches = patchIdx.length;
         byte[] fillBytes = fillScalar.encode();
         MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
         MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
         Object idxArr = PrimitiveArrays.fromIntsArray(patchIdx, idxPtype, EncodingId.VORTEX_SPARSE);
-
-
-        ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(
-                numPatches,
-                0L,
-                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxPtype.ordinal()),
-                null,
-                null,
-                null
-        );
+        ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(numPatches, 0L,
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxPtype.ordinal()), null, null, null);
         byte[] metaBytes = new ProtoSparseMetadata(patchesMeta).encode();
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_SPARSE,
                 MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{null, null}, new int[]{0});
         DType idxDtype = new DType.Primitive(idxPtype, false);
-        ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0, SELF);
-        // Rust's float sparse scheme compresses only the indices: the values stay as they are
-        Set<EncodingId> valuesExcluded = ((DType.Primitive) dtype).ptype().isFloating() ? ALL_BUT_PRIMITIVE : SELF;
+        ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0, idxExcluded);
         ChildSlot valSlot = new ChildSlot(dtype, patchValues, 1, valuesExcluded);
         return new CascadeStep(partialRoot, List.of(EncodedBuffer.bytes(fillBuf)), List.of(idxSlot, valSlot), ZoneMapStats.minOf(stats), ZoneMapStats.maxOf(stats), true);
     }
@@ -410,5 +417,119 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             PTypeIO.set(seg, (long) i * elemBytes, ptype, patchBits.get(i));
         }
         return seg;
+    }
+
+    /// Rust 0.95's `NullDominatedSparseScheme` for text (`schemes/string/sparse.rs`): a column more
+    /// than 90% null keeps only its valid rows, as patches under a null fill, and the other text
+    /// schemes compress those values.
+    private static final class NullDominatedText {
+
+        /// Rust's `BinaryView`: the bytes a row costs in a canonical text array.
+        private static final int VIEW_BYTES = 16;
+        /// `SAMPLE_RUNS` runs of `SAMPLE_RUN_LEN` valid values make the trial's sample.
+        private static final int SAMPLE_RUNS = 16;
+        private static final int SAMPLE_RUN_LEN = 64;
+        /// The indices bar sparse and dict, pointless on increasing unique positions; the values
+        /// bar nothing, as being all valid no sparse estimate takes them.
+        private static final Set<EncodingId> INDICES_EXCLUDED = Set.of(EncodingId.VORTEX_SPARSE, EncodingId.VORTEX_DICT);
+
+        private NullDominatedText() {
+        }
+
+        /// `expected_compression_ratio`: sparse drops the views of the null rows and adds an index per
+        /// value. Past the cascade the values keep their bytes; otherwise a trial compresses a sample
+        /// of them, unless the indices alone cannot beat the best estimate so far.
+        static Estimate estimate(ArrayAndStats data, EncodeContext ctx) {
+            if (!(data.data() instanceof NullableData nullable)) {
+                return Estimate.SKIP;
+            }
+            int len = nullable.length();
+            int nulls = nullable.nullCount();
+            int valueCount = len - nulls;
+            if (valueCount == 0 || (double) nulls / len <= 0.9) {
+                return Estimate.SKIP;
+            }
+            long before = CascadingCompressor.viewBytes(nullable, Integer.MAX_VALUE, 0L);
+            long values = before - (long) nulls * VIEW_BYTES;
+            long indices = (long) valueCount * PType.narrowestUnsigned(len).byteSize();
+            if (ctx.finishedCascading()) {
+                return Estimate.ratio((double) before / (values + indices));
+            }
+            return new TrialEstimate((compressor, dtype, input, trialCtx, bestRatio, sampled) -> {
+                double maxRatio = (double) before / indices;
+                if (bestRatio != null && maxRatio <= bestRatio) {
+                    return Estimate.SKIP;
+                }
+                NullableData sample = sampleValues(validRows(nullable));
+                long sampleBefore = CascadingCompressor.viewBytes(sample, Integer.MAX_VALUE, 0L);
+                long sampleAfter = CascadingCompressor.totalBytes(
+                        compressor.encode(dtype, sample, valuesContext(trialCtx)));
+                if (sampleBefore == 0 || sampleAfter == 0) {
+                    return Estimate.SKIP;
+                }
+                double compressedValues = values * (double) sampleAfter / sampleBefore;
+                return Estimate.ratio(before / (compressedValues + indices));
+            });
+        }
+
+        /// `Sparse::encode` with no fill on a null-dominated array: a null fill, the valid rows'
+        /// positions narrowed to their largest, and the valid values as an all-valid array.
+        static CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+            if (!(data instanceof NullableData nullable) || nullable.nullCount() <= 0.9 * nullable.length()
+                    || nullable.nullCount() == nullable.length()) {
+                return CascadeStep.notApplicable();
+            }
+            boolean[] validity = nullable.validity();
+            int[] idx = new int[nullable.length() - nullable.nullCount()];
+            for (int i = 0, p = 0; i < validity.length; i++) {
+                if (validity[i]) {
+                    idx[p++] = i;
+                }
+            }
+            MinMax stats = ZoneMapStats.of(dtype.withNullable(false), nullable);
+            return cascadeStep(dtype, ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE), idx,
+                    PType.narrowestUnsigned(idx[idx.length - 1]), INDICES_EXCLUDED, validRows(nullable), Set.of(),
+                    stats, ctx);
+        }
+
+        /// The valid rows alone, all valid, as Rust's filter of the array leaves them.
+        private static NullableData validRows(NullableData nullable) {
+            byte[][] rows = VarBinBytes.toByteArrays(nullable.values());
+            boolean[] validity = nullable.validity();
+            byte[][] valid = new byte[rows.length - nullable.nullCount()][];
+            for (int i = 0, p = 0; i < rows.length; i++) {
+                if (validity[i]) {
+                    valid[p++] = rows[i];
+                }
+            }
+            return allValid(valid);
+        }
+
+        /// `sample_values`: `SAMPLE_RUNS` evenly spaced runs of the values, or all of them if they
+        /// are few.
+        private static NullableData sampleValues(NullableData values) {
+            byte[][] rows = (byte[][]) values.values();
+            if (rows.length <= SAMPLE_RUNS * SAMPLE_RUN_LEN) {
+                return values;
+            }
+            byte[][] sample = new byte[SAMPLE_RUNS * SAMPLE_RUN_LEN][];
+            for (int run = 0; run < SAMPLE_RUNS; run++) {
+                int start = (int) ((long) run * rows.length / SAMPLE_RUNS);
+                System.arraycopy(rows, start, sample, run * SAMPLE_RUN_LEN, SAMPLE_RUN_LEN);
+            }
+            return allValid(sample);
+        }
+
+        private static NullableData allValid(byte[][] rows) {
+            boolean[] validity = new boolean[rows.length];
+            Arrays.fill(validity, true);
+            return new NullableData(rows, validity);
+        }
+
+        /// The context the values child is compressed under (Rust's `compress_child` of child 0),
+        /// as the cascade derives it for the values slot.
+        private static EncodeContext valuesContext(EncodeContext ctx) {
+            return ctx.withDecrementedDepth().withTrace(ctx.trace().child(EncodingId.VORTEX_SPARSE, 1));
+        }
     }
 }

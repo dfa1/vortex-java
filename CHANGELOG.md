@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Chunk.prefetch` and `VortexHandle.prefetch` start the range requests of several columns together over HTTP, merged into few requests, and an HTTP handle keeps the segments it has read. ([#744](https://github.com/dfa1/vortex-java/issues/744))
 
 ### Fixed
+- A text column more than 90% null is written as `vortex.sparse` when Rust 0.95 would write it so, keeping only its valid rows. ([#772](https://github.com/dfa1/vortex-java/pull/772))
 - A nullable text column written as FSST keeps its validity as a plain bitmap, as Rust 0.95 writes it, instead of compressing it. ([#772](https://github.com/dfa1/vortex-java/pull/772))
 - The values of a text dict layout can dictionary-encode their own parts, such as FSST's lengths, as Rust 0.95 does. ([#772](https://github.com/dfa1/vortex-java/pull/772))
 - A malformed `vortex.decimal` node that Rust 0.95 rejects now fails the read too: a buffer that is not exactly one value per row, an under-aligned buffer, a validity child on a non-nullable column, or a value outside the precision at a non-canonical width. ([#662](https://github.com/dfa1/vortex-java/issues/662))
