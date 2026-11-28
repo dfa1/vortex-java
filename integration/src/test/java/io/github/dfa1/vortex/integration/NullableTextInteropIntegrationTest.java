@@ -231,7 +231,10 @@ class NullableTextInteropIntegrationTest {
     /// Partitions come back in vortex-jni's order, which is the file's for a single-chunk column (all
     /// the shapes here); a multi-chunk shape would need them ordered.
     private static List<String> readWithJni(Path file, ImmutableScanOptions.Builder options) throws IOException {
-        ScanOptions opts = options.projection(Expression.select(new String[]{"v"}, Expression.root())).build();
+        // vortex-jni scans unordered by default: a file of several chunks can come back in the order
+        // its splits finish, which the row-for-row comparison would read as wrong values
+        ScanOptions opts = options.projection(Expression.select(new String[]{"v"}, Expression.root()))
+                .ordered(true).build();
         List<String> out = new ArrayList<>();
         DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
         Scan scan = ds.scan(opts);
