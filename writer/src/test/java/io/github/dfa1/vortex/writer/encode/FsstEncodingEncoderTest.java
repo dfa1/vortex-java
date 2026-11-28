@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -624,6 +625,40 @@ class FsstEncodingEncoderTest {
                 rows[i] = "x";
             }
             return rows;
+        }
+    }
+
+    /// Rust's `fsst_compress` rebuilds the codes' validity from the rows' mask, so the sparse a
+    /// lone null would compress to does not survive: the child is a plain bitmap, and an all-valid
+    /// array has none.
+    @Nested
+    class Validity {
+
+        @ParameterizedTest(name = "nulls at {0}")
+        @ValueSource(ints = {0, -1})
+        void validityChild_isAPlainBitmapOrAbsent(int nullRow) {
+            // Given — 400 rows, one null (which bitmap compression makes a sparse), or none
+            String[] values = new String[400];
+            boolean[] validity = new boolean[400];
+            for (int i = 0; i < values.length; i++) {
+                validity[i] = i != nullRow;
+                values[i] = "some repeated text " + i % 7;
+            }
+
+            // When
+            CascadeStep result = ENCODER.encodeCascade(DTypes.UTF8, new NullableData(values, validity),
+                    EncodeTestHelper.cascadingCtx());
+
+            // Then
+            EncodeNode root = result.partialRoot();
+            if (nullRow < 0) {
+                assertThat(root.children()).hasSize(2);
+            } else {
+                assertThat(root.children()).hasSize(3);
+                ChildSlot bitmap = result.openChildren().getLast();
+                assertThat(((EncodeResult) bitmap.childData()).rootNode().encodingId())
+                        .isEqualTo(EncodingId.VORTEX_BOOL);
+            }
         }
     }
 }

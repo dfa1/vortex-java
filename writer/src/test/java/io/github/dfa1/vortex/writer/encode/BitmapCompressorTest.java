@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -79,6 +81,40 @@ class BitmapCompressorTest {
         // Then — Rust keeps the run values a plain bitmap
         assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_RUNEND);
         assertThat(result.rootNode().children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_BOOL);
+    }
+
+    /// Rust's FSST rebuilds its validity from the mask of the bitmap it compressed, so the padding
+    /// bits past the last row are what decoding that compressed bitmap left: an all-set buffer for
+    /// a sparse with a `true` fill or a run-end prefilled with `true`, zeroed bytes otherwise. Each
+    /// shape's last row is valid, so bit 0 of the last byte is set and the rest is padding.
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({
+            // one null: sparse, fill true
+            "'sparse, fill true', 4001, 1, 0xff",
+            // a valid row in every 1000: sparse with a false fill decodes from zeroed bytes
+            "'sparse, fill false', 4001, 0, 0x01",
+            // runs of 1000, 5 of them: run-end under 32 runs appends to zeroed bytes
+            "'run-end, few runs', 4001, 2, 0x01",
+            // runs of 1000, 41 of them, 21 true: run-end over 32 runs prefills true
+            "'run-end, many runs', 40001, 2, 0xff"})
+    void aMaskBitmapPadsAsRustDecodesItsCompressedForm(String name, int rows, int pattern, int lastByte) {
+        // Given
+        boolean[] validity = new boolean[rows];
+        for (int i = 0; i < rows; i++) {
+            validity[i] = switch (pattern) {
+                case 0 -> i % 1000 == 0;
+                case 1 -> i != 10;
+                default -> i / 1000 % 2 == 0;
+            };
+        }
+
+        // When
+        EncodeResult result = BitmapCompressor.maskBitmap(validity, EncodeTestHelper.testCtx());
+
+        // Then — always a plain bitmap; only the padding of the last byte depends on the decode
+        assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_BOOL);
+        MemorySegment bits = result.buffers().getFirst();
+        assertThat(Byte.toUnsignedInt(bits.get(ValueLayout.JAVA_BYTE, bits.byteSize() - 1))).isEqualTo(lastByte);
     }
 
     @Test
