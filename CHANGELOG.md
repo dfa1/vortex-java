@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A nullable text column written as FSST keeps its validity as a plain bitmap, as Rust 0.95 writes it, instead of compressing it. ([#772](https://github.com/dfa1/vortex-java/pull/772))
+- The values of a text dict layout can dictionary-encode their own parts, such as FSST's lengths, as Rust 0.95 does. ([#772](https://github.com/dfa1/vortex-java/pull/772))
 - A malformed `vortex.decimal` node that Rust 0.95 rejects now fails the read too: a buffer that is not exactly one value per row, an under-aligned buffer, a validity child on a non-nullable column, or a value outside the precision at a non-canonical width. ([#662](https://github.com/dfa1/vortex-java/issues/662))
 - A column whose rows all hold one value, null included, is written as one constant chunk, as Rust 0.95 writes it, instead of zoned 8192-row chunks. ([#768](https://github.com/dfa1/vortex-java/pull/768))
 - A dict layout holds up to 2 MiB of values before the writer starts the next dictionary, as in Rust 0.95, instead of 1 MiB. ([#768](https://github.com/dfa1/vortex-java/pull/768))

@@ -277,14 +277,15 @@ final class GlobalDictWriter {
     private void writeGlobalDictVarBinColumn(ColumnName colName, DictColumnState state) throws IOException {
         // Compress the distinct-values pool through the normal Utf8/Binary competition
         // (FSST/VarBin/Zstd) so it captures substring redundancy across dictionary entries (#299),
-        // but exclude Dict so the cascade never wraps the (all-unique-by-construction) dictionary in
-        // another dict the reader cannot unwrap. At cascade depth 0 there is no competition to run,
-        // so force flat VarBin as before; a pool with a null entry is masked there instead, its
-        // values still VarBin.
+        // excluding nothing, as Rust's dict layout writes its values: barring Dict here barred it
+        // from the pool's children too, such as FSST's lengths, which Rust dict-encodes. The pool
+        // itself never becomes a dict, its values being distinct. At cascade depth 0 there is no
+        // competition to run, so force flat VarBin as before; a pool with a null entry is masked
+        // there instead, its values still VarBin.
         Object pool = dictPool(state);
         int valuesSegIdx;
         if (options.allowedCascading() > 0) {
-            valuesSegIdx = sink.write(colName, state.dtype(), pool, null, Set.of(EncodingId.VORTEX_DICT));
+            valuesSegIdx = sink.write(colName, state.dtype(), pool, null, Set.of());
         } else if (state.nullCode() >= 0) {
             valuesSegIdx = sink.write(colName, state.dtype(), pool, new MaskedEncodingEncoder(), Set.of(EncodingId.VORTEX_DICT));
         } else {

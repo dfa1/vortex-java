@@ -83,6 +83,9 @@ class NullableTextInteropIntegrationTest {
                 // a dict layout whose FSST values keep a plain bitmap for their one null entry:
                 // Rust's fsst_compress rebuilds it from the mask, the sparse it compressed to lost
                 shape("unique, 99% null", unique, i -> Math.floorMod(RANDOM[i] >>> 20, 100) < 99),
+                // a dict layout whose FSST values dict-encode their lengths, as Rust compresses a
+                // dict layout's values with nothing barred
+                shape("unique, 85% null", unique, i -> Math.floorMod(RANDOM[i] >>> 20, 100) < 85),
                 shape("runs of nulls", few, i -> (i / 500) % 3 == 0));
     }
 
