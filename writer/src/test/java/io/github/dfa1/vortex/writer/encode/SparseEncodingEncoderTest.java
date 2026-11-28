@@ -463,4 +463,104 @@ class SparseEncodingEncoderTest {
             }
         }
     }
+
+    /// Rust 0.95's `NullDominatedSparseScheme` for text: only a column more than 90% null, its
+    /// valid rows kept as patches under a null fill.
+    @Nested
+    class NullDominatedText {
+
+        private final SparseEncodingEncoder sut = new SparseEncodingEncoder();
+
+        @ParameterizedTest(name = "{0} of 1000 null")
+        @ValueSource(ints = {0, 500, 900, 1000})
+        void estimate_skipsUnlessOver90PercentNullAndNotAllNull(int nulls) {
+            // Given
+            NullableData data = text(1000, nulls);
+
+            // When
+            Estimate result = sut.expectedRatio(DTypes.UTF8, new ArrayAndStats(DTypes.UTF8, data,
+                    StatsOptions.defaults()), EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result).isEqualTo(Estimate.SKIP);
+        }
+
+        @Test
+        void estimate_pastTheCascade_dropsTheNullViewsAndAddsAnIndexPerValue() {
+            // Given — 950 null of 1000 short rows: 16,000 view bytes and a 125-byte bitmap, of
+            // which the 50 valid views and the bitmap stay, plus 50 u16 indices
+            NullableData data = text(1000, 950);
+
+            // When
+            Estimate result = sut.expectedRatio(DTypes.UTF8, new ArrayAndStats(DTypes.UTF8, data,
+                    StatsOptions.defaults()), EncodeTestHelper.testCtx());
+
+            // Then
+            assertThat(result).isEqualTo(Estimate.ratio(16_125.0 / (925 + 100)));
+        }
+
+        @Test
+        void estimate_whileCascading_trialSkipsWhenTheIndicesAloneCannotBeatTheBest() {
+            // Given — the indices alone bound the ratio at 16,125 / 100
+            NullableData data = text(1000, 950);
+            ArrayAndStats input = new ArrayAndStats(DTypes.UTF8, data, StatsOptions.defaults());
+            Estimate estimate = sut.expectedRatio(DTypes.UTF8, input, EncodeTestHelper.cascadingCtx());
+            CascadingCompressor compressor = new CascadingCompressor(
+                    List.copyOf(io.github.dfa1.vortex.writer.WriteRegistry.loadAll().encoderMap().values()));
+
+            // When
+            Estimate result = ((TrialEstimate) estimate).trial().run(compressor, DTypes.UTF8, input,
+                    EncodeTestHelper.cascadingCtx(), 161.25, () -> Double.NaN);
+
+            // Then
+            assertThat(result).isEqualTo(Estimate.SKIP);
+        }
+
+        @Test
+        void encodeCascade_keepsTheValidRowsUnderANullFill() {
+            // Given — 300 rows, valid at 0, 100 and 200: the indices narrow to u8 by their largest
+            NullableData data = text(300, 0);
+            boolean[] validity = data.validity();
+            for (int i = 0; i < 300; i++) {
+                validity[i] = i % 100 == 0;
+            }
+
+            // When
+            CascadeStep result = sut.encodeCascade(DTypes.UTF8, data, EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.ownedBuffers().getFirst().data().toArray(java.lang.foreign.ValueLayout.JAVA_BYTE))
+                    .isEqualTo(ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE).encode());
+            ChildSlot indices = result.openChildren().get(0);
+            assertThat(indices.childDtype()).isEqualTo(new DType.Primitive(PType.U8, false));
+            assertThat((byte[]) indices.childData()).containsExactly(0, 100, (byte) 200);
+            assertThat(indices.excluded()).containsExactlyInAnyOrder(EncodingId.VORTEX_SPARSE, EncodingId.VORTEX_DICT);
+            ChildSlot values = result.openChildren().get(1);
+            NullableData patchValues = (NullableData) values.childData();
+            assertThat(patchValues.validity()).containsExactly(true, true, true);
+            assertThat(new String(((byte[][]) patchValues.values())[2], StandardCharsets.UTF_8)).isEqualTo("row-200");
+            assertThat(values.excluded()).isEmpty();
+        }
+
+        @Test
+        void encodeCascade_notOver90PercentNull_isNotApplicable() {
+            // When
+            CascadeStep result = sut.encodeCascade(DTypes.UTF8, text(1000, 900), EncodeTestHelper.cascadingCtx());
+
+            // Then
+            assertThat(result.applicable()).isFalse();
+        }
+
+        /// `rows` short values `row-<i>`, the first `nulls` of them null.
+        private static NullableData text(int rows, int nulls) {
+            String[] values = new String[rows];
+            boolean[] validity = new boolean[rows];
+            for (int i = 0; i < rows; i++) {
+                validity[i] = i >= nulls;
+                values[i] = validity[i] ? "row-" + i : null;
+            }
+            return new NullableData(values, validity);
+        }
+    }
 }
