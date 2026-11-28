@@ -55,6 +55,12 @@ public final class CascadingCompressor {
     /// Rows per sample stride: Rust's `SAMPLE_SIZE`.
     private static final int SAMPLE_STRIDE = 64;
 
+    /// Rows in each chunk of a long array's sample, one FastLanes chunk: Rust's `SAMPLE_CHUNK_LEN`.
+    private static final int SAMPLE_CHUNK_LEN = 1024;
+
+    /// The fewest chunks a sample takes as aligned chunks: Rust's `MIN_SAMPLE_CHUNKS`.
+    private static final int MIN_SAMPLE_CHUNKS = 8;
+
     /// Strides are taken in multiples of this many: Rust rounds its sample count up to a multiple
     /// of 16 (`next_multiple_of(.., 16)`), so `16 * SAMPLE_STRIDE` keeps every sample a multiple of
     /// 1024 rows.
@@ -163,11 +169,40 @@ public final class CascadingCompressor {
     /// slack: the sample picks the winner on borderline arrays, so it has to be the same sample.
     private static void forEachStride(int n, int sampleSize, long seed, StrideCopy copier) {
         int dstOff = 0;
-        for (int[] slice : slices(n, sampleSize, Math.max(1, sampleSize / SAMPLE_STRIDE), seed)) {
+        for (int[] slice : compressionSlices(n, sampleSize, seed)) {
             int len = slice[1] - slice[0];
             copier.copy(slice[0], dstOff, len);
             dstOff += len;
         }
+    }
+
+    /// Rust 0.95's `sample_rows`: once the sample spans at least [#MIN_SAMPLE_CHUNKS] FastLanes
+    /// chunks, it takes them whole and aligned, one from each equal partition of the array's full
+    /// chunks (`sample_aligned_chunks`), so a sampled chunk holds the rows the FastLanes encodings
+    /// would encode together. Shorter samples, or arrays with no more full chunks than that, take
+    /// [#SAMPLE_STRIDE]-row strides from across the array.
+    ///
+    /// @param n          the array's length
+    /// @param sampleSize the rows the sample holds, [#sampleSize(int, EncodeContext)]
+    /// @param seed       the sampling seed
+    /// @return `{start, end}` pairs, half-open, in order
+    static List<int[]> compressionSlices(int n, int sampleSize, long seed) {
+        int chunkCount = sampleSize / SAMPLE_CHUNK_LEN;
+        int fullChunks = n / SAMPLE_CHUNK_LEN;
+        if (chunkCount < MIN_SAMPLE_CHUNKS || fullChunks <= chunkCount) {
+            return slices(n, sampleSize, Math.max(1, sampleSize / SAMPLE_STRIDE), seed);
+        }
+        SampleRng rng = new SampleRng(seed);
+        int remainder = fullChunks % chunkCount;
+        int shortStep = fullChunks / chunkCount;
+        List<int[]> out = new ArrayList<>(chunkCount);
+        for (int p = 0; p < chunkCount; p++) {
+            int start = p * shortStep + Math.min(p, remainder);
+            int len = p < remainder ? shortStep + 1 : shortStep;
+            int chunk = rng.nextIntInclusive(start, start + len - 1);
+            out.add(new int[]{chunk * SAMPLE_CHUNK_LEN, (chunk + 1) * SAMPLE_CHUNK_LEN});
+        }
+        return out;
     }
 
     /// Rust's `sample_slices`: `count` slices of `sliceLen` rows, one from each of `count` equal
