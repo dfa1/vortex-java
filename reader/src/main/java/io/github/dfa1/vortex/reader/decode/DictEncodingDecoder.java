@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.CanonicalArrays;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictDoubleArray;
 import io.github.dfa1.vortex.reader.array.DictFloat16Array;
@@ -23,6 +24,7 @@ import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
@@ -120,8 +122,11 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         PType codePType = PType.fromOrdinal(meta.codes_ptype().value());
         long valuesLen = meta.values_len();
         long rowCount = ctx.rowCount();
-        PType valPType = valuePType(ctx.dtype());
         requireUnsignedCodePType(codePType);
+        if (ctx.dtype() instanceof DType.Decimal decimal) {
+            return decodeDecimal(ctx, decimal, codePType, valuesLen);
+        }
+        PType valPType = valuePType(ctx.dtype());
 
         // Row validity mirrors the Rust reference: a DictArray row is null when its CODE
         // is null (codes-side validity child) or when the code points at an invalid pool
@@ -168,6 +173,31 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     /// @param values   dictionary pool, already mask-unwrapped
     /// @param codes    per-row codes, already mask-unwrapped
     /// @return the lazy dict array
+    /// Rust 0.95's `DecimalDictScheme` writes a decimal pool, a null as one invalid entry and its
+    /// codes never null. The rows are gathered as the dict layout gathers a decimal pool
+    /// ([LazyDecimalArray#ofDict]), every code checked against the pool first.
+    private static Array decodeDecimal(DecodeContext ctx, DType.Decimal dtype, PType codePType, long valuesLen) {
+        long rowCount = ctx.rowCount();
+        MaskedArray.Unwrapped codes = MaskedArray.unwrap(
+                ctx.decodeChild(0, new DType.Primitive(codePType, dtype.nullable()), rowCount));
+        MaskedArray.Unwrapped values = MaskedArray.unwrap(ctx.decodeChild(1, dtype, valuesLen));
+        if (!(values.inner() instanceof DecimalArray pool)) {
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "values child is not a decimal array: " + values.inner().getClass().getSimpleName());
+        }
+        if (rowCount > 0 && pool.length() == 0) {
+            throw new VortexException(EncodingId.VORTEX_DICT, "empty decimal pool for " + rowCount + " rows");
+        }
+        validateCodesInRange(codes.inner(), codePType, pool.length());
+        Array rows = LazyDecimalArray.ofDict(dtype, rowCount, pool, pool.length(), codes.inner(), ctx.arena());
+        BoolArray rowValidity = codes.validity();
+        if (values.validity() != null) {
+            rowValidity = rowValidity(ctx, ctx.materialize(codes.inner()), codePType, codes.validity(),
+                    values.validity(), rowCount);
+        }
+        return rowValidity == null ? rows : new MaskedArray(rows, rowValidity);
+    }
+
     private static PType valuePType(DType dtype) {
         if (!(dtype instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_DICT, "unsupported dict dtype: " + dtype);
