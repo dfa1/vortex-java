@@ -425,10 +425,11 @@ class RleEncodingEncoderTest {
             assertThat(((byte[]) indices.childData())[600]).isEqualTo((byte) 1);
             assertThat(offsets.childDtype()).isEqualTo(new DType.Primitive(io.github.dfa1.vortex.core.model.PType.U8, false));
             assertThat((byte[]) offsets.childData()).containsExactly(0, 2);
-            for (ChildSlot positions : List.of(indices, offsets)) {
-                assertThat(positions.excluded()).containsExactlyInAnyOrder(EncodingId.FASTLANES_RLE,
-                        EncodingId.VORTEX_DICT, EncodingId.VORTEX_SPARSE);
-            }
+            // the indices also bar run-end, as Rust 0.95 does: they are already run-length encoded
+            assertThat(indices.excluded()).containsExactlyInAnyOrder(EncodingId.FASTLANES_RLE,
+                    EncodingId.VORTEX_DICT, EncodingId.VORTEX_SPARSE, EncodingId.VORTEX_RUNEND);
+            assertThat(offsets.excluded()).containsExactlyInAnyOrder(EncodingId.FASTLANES_RLE,
+                    EncodingId.VORTEX_DICT, EncodingId.VORTEX_SPARSE);
         }
 
         @Test
