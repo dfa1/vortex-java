@@ -5,6 +5,9 @@ import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -19,19 +22,24 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.function.IntToLongFunction;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Decimal columns whose chunks or zone tables Rust 0.95 may dictionary-encode: its
-/// `DecimalDictScheme` competes with byte parts, so a dictionary shows wherever few values repeat,
-/// as in a zone table whose zones share bounds.
+/// Rust 0.95 compresses a decimal chunk by competing its decimal dictionary against byte parts,
+/// the default, which no longer wins outright but is measured on a sample. A dictionary
+/// therefore shows in a chunk whose dict-layout probe (the first 8192 rows) found no dictionary:
+/// here those rows are unique and the rest repeat a few values.
 class DecimalChunkSchemeInteropIntegrationTest {
 
     private static final Session SESSION = Session.create();
@@ -60,6 +68,23 @@ class DecimalChunkSchemeInteropIntegrationTest {
             }
         }
         return cases.stream();
+    }
+
+    @ParameterizedTest(name = "{0} p{1} nullable={2}")
+    @MethodSource("shapes")
+    void javaWritesTheEncodingTreeJniWrites(String name, int precision, boolean nullable, IntToLongFunction unscaled,
+                                            @TempDir Path tmp) throws Exception {
+        // Given
+        Path jniFile = tmp.resolve("jni.vortex");
+        Path javaFile = tmp.resolve("java.vortex");
+        writeWithJni(jniFile, precision, nullable, unscaled);
+        List<String> expected = EncodingTrees.of(jniFile);
+
+        // When
+        writeWithJava(javaFile, precision, nullable, unscaled);
+
+        // Then
+        assertThat(EncodingTrees.of(javaFile)).isEqualTo(expected);
     }
 
     /// A filter reads the zone table, whose decimal bounds Rust 0.95 dictionary-encodes when a
@@ -139,6 +164,22 @@ class DecimalChunkSchemeInteropIntegrationTest {
                 Data.exportVectorSchemaRoot(ALLOCATOR, root, null, array, arrowSchema);
                 writer.writeBatch(array.memoryAddress(), arrowSchema.memoryAddress());
             }
+        }
+    }
+
+    private static void writeWithJava(Path path, int precision, boolean nullable, IntToLongFunction unscaled)
+            throws IOException {
+        BigDecimal[] values = new BigDecimal[ROWS];
+        boolean[] validity = new boolean[ROWS];
+        for (int i = 0; i < ROWS; i++) {
+            validity[i] = !isNull(nullable, i);
+            values[i] = validity[i] ? BigDecimal.valueOf(unscaled.applyAsLong(i), 2) : null;
+        }
+        Object data = nullable ? new NullableData(values, validity) : values;
+        DType.Struct schema = new DType.Struct(List.of(D), List.of(DType.Decimal.of(precision, 2, nullable)), false);
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var writer = io.github.dfa1.vortex.writer.VortexWriter.create(channel, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(D, data));
         }
     }
 }
