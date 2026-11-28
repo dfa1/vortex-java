@@ -35,7 +35,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     /// are tried first. Deliberately separate from [io.github.dfa1.vortex.writer.VortexWriter]'s
     /// general per-column cascade codec list, which excludes both: adding them there would change
     /// selection for every dense Primitive column, not just this narrow index-compression case.
-    static final List<EncodingEncoder> INDEX_CASCADE_CANDIDATES = List.of(
+    private static final List<EncodingEncoder> INDEX_CASCADE_CANDIDATES = List.of(
             new SequenceEncodingEncoder(),
             new DeltaEncodingEncoder(),
             new FrameOfReferenceEncodingEncoder(),
