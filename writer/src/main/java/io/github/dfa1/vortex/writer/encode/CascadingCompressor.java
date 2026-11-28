@@ -771,7 +771,9 @@ public final class CascadingCompressor {
                         enc.encodingId(), "cascade_exhausted", true, baseline, Double.NaN, -1));
                 continue;
             }
-            long size = measureStep(enc, step, sampleCtx);
+            long[] childBytes = new long[step.openChildren().size()];
+            long size = amortized(measureStep(enc, step, sampleCtx, childBytes), fixedBytes(enc, step, childBytes),
+                    RowCount.of(measured), RowCount.of(input.data()));
             CompressorEvents.candidate(event, ctx, new CompressorEvents.Evaluation(
                     enc.encodingId(), "measured", true, baseline, Double.NaN, size));
             if (size < bestSize) {
@@ -792,15 +794,55 @@ public final class CascadingCompressor {
     }
 
     private long measureStep(EncodingEncoder enc, CascadeStep step, EncodeContext ctx) {
+        return measureStep(enc, step, ctx, new long[step.openChildren().size()]);
+    }
+
+    /// [#measureStep(EncodingEncoder, CascadeStep, EncodeContext)], recording each open child's
+    /// size in `childBytes`, in slot order.
+    private long measureStep(EncodingEncoder enc, CascadeStep step, EncodeContext ctx, long[] childBytes) {
         long total = step.ownedBytes();
-        for (ChildSlot slot : step.openChildren()) {
+        List<ChildSlot> slots = step.openChildren();
+        for (int i = 0; i < slots.size(); i++) {
+            ChildSlot slot = slots.get(i);
             if (slot.childData() instanceof EncodeResult encoded) {
-                total += totalBytes(encoded);
+                childBytes[i] = totalBytes(encoded);
             } else {
-                total += measureBestChild(slot.childDtype(), slot.childData(), childContext(ctx, enc, slot));
+                childBytes[i] = measureBestChild(slot.childDtype(), slot.childData(), childContext(ctx, enc, slot));
             }
+            total += childBytes[i];
         }
         return total;
+    }
+
+    /// Rust's `Scheme::fixed_nbytes`: the bytes of a trial that do not grow with its rows, FSST's
+    /// symbol table (symbols and their lengths) and OnPair's token dictionary (its bytes and the
+    /// offsets child into them). Every other scheme reports none.
+    private static long fixedBytes(EncodingEncoder enc, CascadeStep step, long[] childBytes) {
+        if (enc.encodingId().equals(EncodingId.VORTEX_FSST)) {
+            return step.ownedBuffers().get(0).data().byteSize() + step.ownedBuffers().get(1).data().byteSize();
+        }
+        if (enc.encodingId().equals(EncodingId.VORTEX_ONPAIR)) {
+            long fixed = step.ownedBuffers().getFirst().data().byteSize();
+            List<ChildSlot> slots = step.openChildren();
+            for (int i = 0; i < slots.size(); i++) {
+                if (slots.get(i).parentChildIdx() == 0) {
+                    fixed += childBytes[i];
+                }
+            }
+            return fixed;
+        }
+        return 0;
+    }
+
+    /// Rust 0.95's `amortize_fixed_nbytes`: a sample pays its `fixed` bytes only at the share its
+    /// `sampleLen` rows make up of the array's `fullLen`, rounded up, so a large table is not
+    /// ranked by a cost that vanishes at full size. A sample of the whole array pays them in full.
+    static long amortized(long total, long fixed, int sampleLen, int fullLen) {
+        if (sampleLen >= fullLen) {
+            return total;
+        }
+        long charged = Math.min(fixed, total);
+        return total - charged + Math.ceilDiv(charged * sampleLen, (long) fullLen);
     }
 
     /// Smallest size any candidate encodes the (already sampled) child `data` to: the same
