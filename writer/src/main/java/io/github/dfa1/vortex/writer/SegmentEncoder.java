@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.core.model.Editions;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.EncodeNode;
 import io.github.dfa1.vortex.writer.encode.AlpRdEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
@@ -253,8 +254,19 @@ final class SegmentEncoder {
             EncodeContext ctx = EncodeContext.ofDepth(options.allowedCascading(), arena, probeRegistry, editionExcluded)
                     .withTrace(EncodeTrace.of(column.value(), -1));
             EncodeResult result = new CascadingCompressor(probeCodecs).encode(colDtype, block, ctx);
-            return result.rootNode().encodingId().equals(EncodingId.VORTEX_DICT);
+            return probeChoseDict(result.rootNode());
         }
+    }
+
+    /// Rust 0.95's `probe_dict_codes`: the probe chose a dictionary, or decimal byte parts whose only
+    /// part, the most significant one, is a dictionary of the unscaled decimals (lower parts would
+    /// make one part's dictionary say little about the distinct decimals).
+    private static boolean probeChoseDict(EncodeNode root) {
+        if (root.encodingId().equals(EncodingId.VORTEX_DICT)) {
+            return true;
+        }
+        return root.encodingId().equals(EncodingId.VORTEX_DECIMAL_BYTE_PARTS) && root.children().length == 1
+                && root.children()[0].encodingId().equals(EncodingId.VORTEX_DICT);
     }
 
     /// Encodes a `vortex.zoned` stats table through the cascade at any depth and with any encoder

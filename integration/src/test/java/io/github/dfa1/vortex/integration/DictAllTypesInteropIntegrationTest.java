@@ -87,11 +87,11 @@ class DictAllTypesInteropIntegrationTest {
     /// renders after the Java read (an empty string is a null row), and whether Rust dict-encodes
     /// it at all.
     ///
-    /// Rust's dict layout only admits `Primitive | Utf8 | Binary` (`dict_layout_supported` in
-    /// `vortex-layout/src/layouts/dict/writer.rs`) and its compressor's dict schemes are
-    /// integer/float/string only, so the other types never reach a dictionary. The flag is asserted
-    /// both ways: a vortex-jni bump that starts dict-encoding, say, dates fails here and points at
-    /// the reader's still-missing dict-over-extension pool path.
+    /// Rust 0.95's dict layout admits `Primitive | Decimal | Utf8 | Binary` (`dict_layout_supported`
+    /// in `vortex-layout/src/layouts/dict/writer.rs`), and its compressor's dict schemes also reach
+    /// the primitive storage of dates, times and timestamps and the bytes of a uuid; bools and the
+    /// other nested types never reach a dictionary. The flag is asserted both ways: a vortex-jni bump that starts
+    /// dict-encoding another type fails here and points at the reader's pool path for it.
     private record Case(String name, Field field, Setter setter, List<String> expected, boolean rustDicts) {
 
         Case notDictedByRust() {
@@ -159,20 +159,20 @@ class DictAllTypesInteropIntegrationTest {
                         "x", "yy", "zzz", "wwww"),
                 primitive("decimal(10,2)", new ArrowType.Decimal(10, 2, 128),
                         (v, i, j) -> ((DecimalVector) v).setSafe(i, new BigDecimal(new String[]{"-99999999.99", "0.00", "12.34", "99999999.99"}[j])),
-                        "-99999999.99", "0.00", "12.34", "99999999.99").notDictedByRust(),
+                        "-99999999.99", "0.00", "12.34", "99999999.99"),
                 // Extensions render their storage value: days / micros since epoch / midnight.
                 primitive("date", new ArrowType.Date(DateUnit.DAY),
                         (v, i, j) -> ((DateDayVector) v).setSafe(i, new int[]{-1, 0, 19_000, 20_000}[j]),
-                        "-1", "0", "19000", "20000").notDictedByRust(),
+                        "-1", "0", "19000", "20000"),
                 primitive("time", new ArrowType.Time(TimeUnit.MICROSECOND, 64),
                         (v, i, j) -> ((TimeMicroVector) v).setSafe(i, new long[]{0, 1, 3_600_000_000L, 86_399_999_999L}[j]),
-                        "0", "1", "3600000000", "86399999999").notDictedByRust(),
+                        "0", "1", "3600000000", "86399999999"),
                 primitive("timestamp", new ArrowType.Timestamp(TimeUnit.MICROSECOND, null),
                         (v, i, j) -> ((TimeStampMicroVector) v).setSafe(i, new long[]{-1, 0, 1_700_000_000_000_000L, 1_800_000_000_000_000L}[j]),
-                        "-1", "0", "1700000000000000", "1800000000000000").notDictedByRust(),
+                        "-1", "0", "1700000000000000", "1800000000000000"),
                 primitive("uuid", UuidType.INSTANCE,
                         (v, i, j) -> ((UuidVector) v).setSafe(i, UUIDS[j]),
-                        uuidCells()).notDictedByRust(),
+                        uuidCells()),
                 nested("fixed_size_list<i32,2>",
                         new Field("v", FieldType.notNullable(new ArrowType.FixedSizeList(2)),
                                 List.of(Field.notNullable("item", new ArrowType.Int(32, true)))),

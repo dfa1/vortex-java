@@ -111,6 +111,17 @@ final class GlobalDictWriter {
             candidate = DictColumnState.isVarBinDictCandidate(
                     Arrays.copyOf((Object[]) values, probeRows),
                     validity != null ? Arrays.copyOf(validity, probeRows) : null);
+        } else if (colDtype instanceof DType.Decimal && repartitionCodes) {
+            // Rust 0.95 admits decimals too, by its probe: a dictionary, or byte parts whose one part
+            // is one. Its dict layouts held no decimals before, so the legacy targets keep theirs out.
+            if (options.allowedCascading() == 0) {
+                int probeRows = Math.min(Repartitioner.BLOCK_ROWS, ((Object[]) values).length);
+                candidate = DictColumnState.isVarBinDictCandidate(
+                        Arrays.copyOf((Object[]) values, probeRows),
+                        validity != null ? Arrays.copyOf(validity, probeRows) : null);
+            } else {
+                candidate = encoder.probeCompressesToDict(colName, colDtype, data);
+            }
         }
         if (candidate) {
             dictStates.put(colName, new DictColumnState(colDtype, legacyZoneMap()));
@@ -170,7 +181,11 @@ final class GlobalDictWriter {
         Object rest = data;
         while (true) {
             DictColumnState state = dictStates.get(colName);
-            int consumed = colDtype instanceof DType.Primitive ? state.ingestDictChunk(rest) : state.ingestVarBinChunk(rest);
+            int consumed = switch (colDtype) {
+                case DType.Primitive _ -> state.ingestDictChunk(rest);
+                case DType.Decimal _ -> state.ingestDecimalChunk(rest);
+                default -> state.ingestVarBinChunk(rest);
+            };
             long length = RowCount.of(rest);
             if (consumed == length) {
                 return;

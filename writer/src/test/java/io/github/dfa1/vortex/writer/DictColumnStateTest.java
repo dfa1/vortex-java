@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -423,5 +424,48 @@ class DictColumnStateTest {
         // Then
         assertThat(consumed).isZero();
         assertThat(sut.chunkCount()).isEqualTo(1);
+    }
+
+    @Test
+    void ingestDecimalChunk_codesEachValueOnceAndNullsAsOneEntry() {
+        // Given — Rust 0.95 dict-encodes decimals: equal values share a code, every null the null entry
+        DType.Decimal dtype = new DType.Decimal((byte) 15, (byte) 2, true);
+        DictColumnState sut = new DictColumnState(dtype, false);
+        BigDecimal[] values = {new BigDecimal("1.50"), null, new BigDecimal("2.00"), new BigDecimal("1.50"), null};
+        boolean[] validity = {true, false, true, true, false};
+
+        // When
+        int consumed = sut.ingestDecimalChunk(new NullableData(values, validity));
+
+        // Then
+        assertThat(consumed).isEqualTo(5);
+        assertThat(sut.cardinality()).isEqualTo(3);
+        assertThat(sut.chunkCodes(0)).containsExactly(0, 1, 2, 0, 1);
+        assertThat((BigDecimal[]) sut.uniques()).containsExactly(new BigDecimal("1.50"), null, new BigDecimal("2.00"));
+        // a demoted column must rebuild exactly the rows it buffered
+        NullableData rebuilt = (NullableData) sut.reconstructChunk(sut.buildInverseMap(), 0);
+        assertThat((BigDecimal[]) rebuilt.values()).containsExactly(values);
+    }
+
+    @ParameterizedTest(name = "precision {0}, nullable {1}: {2}")
+    @MethodSource("decimalCodes")
+    void decimalCodesAreU8OnlyOverNonNullableByteValues(int precision, boolean nullable, PType expected) {
+        // Given — a decimal's values are those of the integer it is stored in: a non-nullable i8 has at
+        // most 256, which U8 codes name; a nullable one may need a 257th entry for null
+        DictColumnState sut = new DictColumnState(new DType.Decimal((byte) precision, (byte) 0, nullable), false);
+
+        // When
+        PType result = sut.codesPType();
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
+    static Stream<Arguments> decimalCodes() {
+        return Stream.of(
+                arguments(2, false, PType.U8),
+                arguments(2, true, PType.U16),
+                arguments(9, false, PType.U16),
+                arguments(38, false, PType.U16));
     }
 }
