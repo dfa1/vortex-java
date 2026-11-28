@@ -106,10 +106,14 @@ final class GlobalDictWriter {
             } else {
                 candidate = encoder.probeCompressesToDict(colName, colDtype, data);
             }
+        } else if (colDtype instanceof DType.Utf8 && options.allowedCascading() > 0) {
+            // Rust 0.95 probes text as it probes primitives: the cascade, its string dictionary
+            // estimated on a trial of the complete probe rows, must pick vortex.dict
+            candidate = encoder.probeCompressesToDict(colName, colDtype, data);
         } else if (colDtype instanceof DType.Utf8 || colDtype instanceof DType.Binary) {
-            // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported), by what
-            // its first 8192 rows do: not more than half distinct. The cascade probe stays with
-            // primitives: ours picks OnPair for strings where Rust's StringDictScheme wins.
+            // Rust's dict layout admits Primitive | Utf8 | Binary (dict_layout_supported). Without
+            // a cascade to ask, or for binary, which our cascade has no dictionary for, not more
+            // than half of the first 8192 rows distinct decides.
             int probeRows = Math.min(Repartitioner.BLOCK_ROWS, ((Object[]) values).length);
             candidate = DictColumnState.isVarBinDictCandidate(
                     Arrays.copyOf((Object[]) values, probeRows),
