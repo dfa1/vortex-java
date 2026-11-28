@@ -489,8 +489,7 @@ class CsvExporterTest {
 
     @Test
     void rendersFixedSizeListColumnAsJsonArray(@TempDir Path tmp) throws Exception {
-        // Given a FixedSizeList of type F32 and size 3 column — the glove vector shape (issue #257);
-        // each row is 3 consecutive floats from the flat elements array.
+        // A three-float vector models the glove shape from issue #257; CSV should preserve each row.
         Path vortex = tmp.resolve("fsl.vortex");
         DType.FixedSizeList vecDtype = new DType.FixedSizeList(DTypes.F32, 3, false);
         DType.Struct schema = new DType.Struct(
