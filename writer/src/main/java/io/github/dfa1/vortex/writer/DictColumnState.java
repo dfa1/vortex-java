@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -58,6 +59,8 @@ final class DictColumnState {
     private final boolean varBin;
     private final boolean binary;
     private final PType ptype;
+    // A decimal's storage width in bytes (keyed by BigDecimal, all at the column's scale), 0 otherwise.
+    private final int decimalWidth;
     private final boolean nullable;
     // Only the legacy vortex.stats zone map records a sum: under vortex.zoned it is never read.
     private final boolean chunkSums;
@@ -93,6 +96,7 @@ final class DictColumnState {
         this.binary = dtype instanceof DType.Binary;
         this.varBin = binary || dtype instanceof DType.Utf8;
         this.ptype = dtype instanceof DType.Primitive p ? p.ptype() : null;
+        this.decimalWidth = dtype instanceof DType.Decimal d ? d.byteWidth() : 0;
         this.nullable = dtype.nullable();
     }
 
@@ -114,9 +118,11 @@ final class DictColumnState {
 
     /// The ptype of this dictionary's codes: U8 over non-nullable 8-bit values, whose 256 entries
     /// at most U8 codes name, U16 otherwise: a nullable 8-bit column may need a 257th entry for
-    /// null (Rust 0.91, `primitive_dict_builder`).
+    /// null (Rust 0.91, `primitive_dict_builder`). A decimal's values are those of the integer it is
+    /// stored in, so an 8-bit decimal takes U8 codes the same way (Rust 0.95).
     PType codesPType() {
-        return ptype != null && ptype.bits() == 8 && !nullable ? PType.U8 : CODES_PTYPE;
+        int valueBits = ptype != null ? ptype.bits() : decimalWidth * 8;
+        return valueBits == 8 && !nullable ? PType.U8 : CODES_PTYPE;
     }
 
     /// Number of dictionary entries, the null entry included.
@@ -176,6 +182,15 @@ final class DictColumnState {
             for (int i = 0; i < n; i++) {
                 if (i != nullCode) {
                     out[i] = binary ? ((ByteBuffer) inverse[i]).array() : inverse[i];
+                }
+            }
+            return out;
+        }
+        if (decimalWidth > 0) {
+            BigDecimal[] out = new BigDecimal[n];
+            for (int i = 0; i < n; i++) {
+                if (i != nullCode) {
+                    out[i] = (BigDecimal) inverse[i];
                 }
             }
             return out;
@@ -344,6 +359,53 @@ final class DictColumnState {
         return consumed;
     }
 
+    /// Ingests the leading rows of a decimal chunk that fit this dictionary, as Rust 0.95's decimal
+    /// dict builder does: [#MAX_ENTRIES] entries and [#MAX_DICT_BYTES] of values at the storage
+    /// width, the first entry always admitted, the null entry counted like any other. Per-chunk stats
+    /// stay empty: they feed only the legacy zone map, whose targets never dict-encode a decimal.
+    ///
+    /// @param data the chunk data (a `BigDecimal[]` at the column's scale, or a [NullableData] wrapper)
+    /// @return how many leading rows were ingested, `0` when the first row already needs a new
+    ///         dictionary
+    int ingestDecimalChunk(Object data) {
+        boolean nullableData = data instanceof NullableData;
+        BigDecimal[] values = (BigDecimal[]) (nullableData ? ((NullableData) data).values() : data);
+        boolean[] validity = nullableData ? ((NullableData) data).validity() : null;
+        int len = values.length;
+        int cap = (int) Math.min(MAX_ENTRIES, MAX_DICT_BYTES / decimalWidth);
+        short[] codes = new short[len];
+        int consumed = len;
+        for (int i = 0; i < len; i++) {
+            if ((validity != null && !validity[i]) || values[i] == null) {
+                if (nullCode < 0 && !addNullEntry(cap)) {
+                    consumed = i;
+                    break;
+                }
+                codes[i] = (short) nullCode;
+                continue;
+            }
+            Integer code = valueToCode.get(values[i]);
+            if (code == null) {
+                if (!valueToCode.isEmpty() && valueToCode.size() >= cap) {
+                    consumed = i;
+                    break;
+                }
+                code = valueToCode.size();
+                valueToCode.put(values[i], code);
+            }
+            codes[i] = code.shortValue();
+        }
+        if (consumed == 0) {
+            return 0;
+        }
+        if (consumed < len) {
+            codes = Arrays.copyOf(codes, consumed);
+            validity = validity != null ? Arrays.copyOf(validity, consumed) : null;
+        }
+        record(codes, validity, consumed, null, null, null);
+        return consumed;
+    }
+
     // The bytes a new entry adds to the dictionary: its view, and the value itself when too long to inline.
     private long entryBytes(Object key) {
         int length = key instanceof String s ? s.getBytes(StandardCharsets.UTF_8).length : ((ByteBuffer) key).remaining();
@@ -457,10 +519,26 @@ final class DictColumnState {
     Object reconstructChunk(Object[] inverse, int c) {
         short[] codes = chunkCodes.get(c);
         boolean[] validity = chunkValidity.get(c);
-        Object values = varBin
-                ? reconstructVarBinValues(binary, codes, validity, inverse)
-                : reconstructPrimitiveValues(ptype, codes, validity, inverse);
+        Object values;
+        if (varBin) {
+            values = reconstructVarBinValues(binary, codes, validity, inverse);
+        } else if (decimalWidth > 0) {
+            values = reconstructDecimalValues(codes, validity, inverse);
+        } else {
+            values = reconstructPrimitiveValues(ptype, codes, validity, inverse);
+        }
         return validity != null ? new NullableData(values, validity) : values;
+    }
+
+    private static BigDecimal[] reconstructDecimalValues(short[] codes, boolean[] validity, Object[] inverse) {
+        BigDecimal[] arr = new BigDecimal[codes.length];
+        for (int i = 0; i < codes.length; i++) {
+            Object key = inverse[codes[i] & 0xFFFF];
+            if ((validity == null || validity[i]) && key != NULL_KEY) {
+                arr[i] = (BigDecimal) key;
+            }
+        }
+        return arr;
     }
 
     private static Object reconstructVarBinValues(boolean binary, short[] codes, boolean[] validity, Object[] inverse) {

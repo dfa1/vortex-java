@@ -98,7 +98,7 @@ class DecimalBytePartsInteropIntegrationTest {
         writeWithJava(javaFile, precision, scale, unscaled);
 
         // Then
-        assertThat(dataColumn(expected).getFirst()).contains("vortex.decimal_byte_parts");
+        assertThat(dataColumn(expected)).anyMatch(line -> line.contains("vortex.decimal_byte_parts"));
         assertThat(EncodingTrees.of(javaFile)).isEqualTo(expected);
     }
 
@@ -308,12 +308,10 @@ class DecimalBytePartsInteropIntegrationTest {
         assertThat(range).isEqualTo(expected.subList(1000, 20_000));
     }
 
-    /// The data column's encoding subtree: the lines under the zoned layout's first flat, up to the
-    /// stats table's flat.
+    /// The data column's subtree: the lines under the zoned layout up to the stats table's flat, its
+    /// last child; the data is a flat or, since Rust 0.95 dict-encodes decimals, a dict layout.
     private static List<String> dataColumn(List<String> tree) {
-        int start = tree.indexOf("    vortex.flat") + 1;
-        int end = tree.subList(start, tree.size()).indexOf("    vortex.flat");
-        return tree.subList(start, end < 0 ? tree.size() : start + end);
+        return tree.subList(2, tree.lastIndexOf("    vortex.flat"));
     }
 
     private static void writeWithJni(Path path, int precision, int scale, IntToLongFunction unscaled)
